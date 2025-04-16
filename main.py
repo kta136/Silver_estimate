@@ -2,7 +2,7 @@
 import sys
 import os
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QShortcut,
-                             QMenuBar, QMenu, QAction, QMessageBox, QDialog)
+                             QMenuBar, QMenu, QAction, QMessageBox, QDialog, QStatusBar) # Added QStatusBar
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtCore import Qt
 
@@ -28,13 +28,18 @@ class MainWindow(QMainWindow):
         # Set up menu bar
         self.setup_menu_bar()
 
+        # Set up status bar
+        self.statusBar = QStatusBar()
+        self.setStatusBar(self.statusBar)
+        self.statusBar.showMessage("Ready") # Initial message
+
         # Central widget
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         self.layout = QVBoxLayout(self.central_widget)
 
-        # Initialize widgets
-        self.estimate_widget = EstimateEntryWidget(self.db)
+        # Initialize widgets, passing main window to EstimateEntryWidget
+        self.estimate_widget = EstimateEntryWidget(self.db, self) # Pass main window instance
         self.item_master_widget = ItemMasterWidget(self.db)
 
         # Add widgets to layout
@@ -46,7 +51,7 @@ class MainWindow(QMainWindow):
         self.estimate_widget.show()
 
         # Set up shortcuts
-        self.setup_shortcuts()
+#        self.setup_shortcuts()
 
     def setup_menu_bar(self):
         """Set up the main menu bar."""
@@ -103,19 +108,19 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
 
-    def setup_shortcuts(self):
-        """Set up keyboard shortcuts."""
+    #def setup_shortcuts(self):
+      #  """Set up keyboard shortcuts."""
         # Alt+E for Estimate Entry
-        self.shortcut_estimate = QShortcut(QKeySequence("Alt+E"), self)
-        self.shortcut_estimate.activated.connect(self.show_estimate)
+        #self.shortcut_estimate = QShortcut(QKeySequence("Alt+E"), self)
+        #self.shortcut_estimate.activated.connect(self.show_estimate)
 
         # Alt+I for Item Master
-        self.shortcut_item = QShortcut(QKeySequence("Alt+I"), self)
-        self.shortcut_item.activated.connect(self.show_item_master)
+        #self.shortcut_item = QShortcut(QKeySequence("Alt+I"), self)
+        #self.shortcut_item.activated.connect(self.show_item_master)
 
         # Alt+X for Exit
-        self.shortcut_exit = QShortcut(QKeySequence("Alt+X"), self)
-        self.shortcut_exit.activated.connect(self.close)
+        #self.shortcut_exit = QShortcut(QKeySequence("Alt+X"), self)
+        #self.shortcut_exit.activated.connect(self.close)
 
     def show_estimate(self):
         """Switch to Estimate Entry screen."""

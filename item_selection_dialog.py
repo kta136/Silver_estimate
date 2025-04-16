@@ -28,9 +28,10 @@ class ItemSelectionDialog(QDialog):
 
         # Search box
         search_layout = QHBoxLayout()
-        search_layout.addWidget(QLabel("Search:"))
+        search_layout.addWidget(QLabel("Search (Code or Name):")) # Clarify search scope
         self.search_edit = QLineEdit()
-        self.search_edit.textChanged.connect(self.jump_to_item)
+        self.search_edit.setPlaceholderText("Type to filter...") # Add placeholder
+        self.search_edit.textChanged.connect(self.filter_items) # Connect to filter method
         search_layout.addWidget(self.search_edit)
         layout.addLayout(search_layout)
 
@@ -76,20 +77,39 @@ class ItemSelectionDialog(QDialog):
         # Select the first row if available
         if self.items_table.rowCount() > 0:
             self.items_table.selectRow(0)
+        # Set initial search text if provided
+        if self.search_term:
+            self.search_edit.setText(self.search_term)
+            self.filter_items(self.search_term) # Apply initial filter
 
-    def jump_to_item(self, text):
-        """Jump to the first item that starts with the entered text."""
-        if not text:
-            return
+    def filter_items(self, text):
+        """Filter table rows based on search text in Code or Name columns."""
+        search_text = text.lower().strip()
+        first_visible_row = -1
 
-        # Search the Name column (column 1) for items starting with the text
         for row in range(self.items_table.rowCount()):
-            item_name = self.items_table.item(row, 1).text()
-            if item_name.lower().startswith(text.lower()):
-                # Found a match, select this row and scroll to it
-                self.items_table.selectRow(row)
-                self.items_table.scrollToItem(self.items_table.item(row, 0))
-                break
+            code_item = self.items_table.item(row, 0)
+            name_item = self.items_table.item(row, 1)
+
+            # Ensure items exist before accessing text
+            code_matches = code_item and search_text in code_item.text().lower()
+            name_matches = name_item and search_text in name_item.text().lower()
+
+            if code_matches or name_matches:
+                self.items_table.setRowHidden(row, False)
+                if first_visible_row == -1:
+                    first_visible_row = row
+            else:
+                self.items_table.setRowHidden(row, True)
+
+        # Select the first visible row after filtering
+        if first_visible_row != -1:
+            self.items_table.selectRow(first_visible_row)
+        else:
+            # If no rows are visible, clear selection
+            self.items_table.clearSelection()
+
+    # Removed jump_to_item method
 
     def get_selected_item(self):
         """Get the selected item after dialog is accepted."""

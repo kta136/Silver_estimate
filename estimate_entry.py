@@ -1,36 +1,52 @@
 #!/usr/bin/env python
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QPushButton, QShortcut, QTableWidgetItem, QCheckBox
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QKeySequence, QColor
-
-from estimate_entry_ui import EstimateUI
+# Added QStyledItemDelegate, QLineEdit, QMessageBox
+from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QShortcut, QTableWidgetItem, QCheckBox,
+                             QMessageBox, QStyledItemDelegate, QLineEdit)
+from PyQt5.QtCore import Qt, QTimer, QLocale # Added QLocale
+# Added QKeySequence, QColor, QDoubleValidator, QIntValidator
+from PyQt5.QtGui import QKeySequence, QColor, QDoubleValidator, QIntValidator
+# Import the UI class AND the Delegate class AND the Constants
+from estimate_entry_ui import EstimateUI, NumericDelegate, COL_CODE, COL_GROSS, COL_POLY, COL_PURITY, COL_WAGE_RATE, COL_PIECES
 from estimate_entry_logic import EstimateLogic
 
 
 class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
     """Widget for silver estimate entry and management.
 
-    This class combines the UI components and business logic for
-    the silver estimation screen.
+    Combines UI and logic, uses validation delegate, interacts with status bar.
     """
 
-    def __init__(self, db_manager):
+    def __init__(self, db_manager, main_window): # Accept main_window
         super().__init__()
 
-        # Set up database manager
+        # Set up database manager and main window reference
         self.db_manager = db_manager
+        self.main_window = main_window # Store reference
 
         # Initialize tracking variables
-        self.current_row = 0
-        self.current_column = 0
-        self.processing_cell = False  # Flag to prevent recursive processing
-        self.return_mode = False  # Flag to track if we're adding return items
-        self.silver_bar_mode = False  # Flag to track if we're adding silver bars
+        # Use COL_CODE for initialization consistency
+        self.current_row = -1
+        self.current_column = COL_CODE
 
-        # Set up UI
+        self.processing_cell = False
+        self.return_mode = False
+        self.silver_bar_mode = False
+
+        # Set up UI (this creates self.item_table)
         self.setup_ui(self)
 
-        # Connect signals
+        # --- Set Delegates for Table Validation ---
+        numeric_delegate = NumericDelegate(parent=self.item_table)
+
+        # Apply the delegate to relevant numeric columns using constants
+        self.item_table.setItemDelegateForColumn(COL_GROSS, numeric_delegate)
+        self.item_table.setItemDelegateForColumn(COL_POLY, numeric_delegate)
+        self.item_table.setItemDelegateForColumn(COL_PURITY, numeric_delegate)
+        self.item_table.setItemDelegateForColumn(COL_WAGE_RATE, numeric_delegate)
+        self.item_table.setItemDelegateForColumn(COL_PIECES, numeric_delegate)
+        # -------------------------------------------
+
+        # Connect signals AFTER setting delegates
         self.connect_signals()
 
         # Generate a voucher number when the widget is first created
@@ -38,246 +54,188 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
 
         # Make sure we start with exactly one empty row
         self.clear_all_rows()
-        self.add_empty_row()
+        self.add_empty_row() # This now focuses correctly
 
-        # Set up delete row shortcut
+        # Set up keyboard shortcuts
         self.delete_row_shortcut = QShortcut(QKeySequence("Ctrl+D"), self)
         self.delete_row_shortcut.activated.connect(self.delete_current_row)
 
-        # Set up return items toggle shortcut
-        self.return_toggle_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
-        self.return_toggle_shortcut.activated.connect(self.toggle_return_mode)
+        #self.return_toggle_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
+        #self.return_toggle_shortcut.activated.connect(self.toggle_return_mode)
 
-        # Set up silver bar toggle shortcut
-        self.silver_bar_toggle_shortcut = QShortcut(QKeySequence("Ctrl+B"), self)
-        self.silver_bar_toggle_shortcut.activated.connect(self.toggle_silver_bar_mode)
+        #self.silver_bar_toggle_shortcut = QShortcut(QKeySequence("Ctrl+B"), self)
+        #self.silver_bar_toggle_shortcut.activated.connect(self.toggle_silver_bar_mode)
 
-        # Force focus to the first cell after initialization
+        # Force focus to the first cell (Code column) after initialization
         QTimer.singleShot(100, self.force_focus_to_first_cell)
+
+
+    # --- Add helper to show status messages via main window ---
+    def show_status(self, message, timeout=3000):
+        if self.main_window:
+            self.main_window.statusBar.showMessage(message, timeout)
+        else:
+            print(f"Status: {message}") # Fallback if no main window
+    # --------------------------------------------------------
+
 
     def force_focus_to_first_cell(self):
         """Force the cursor to the first cell (code column) and start editing."""
         if self.item_table.rowCount() > 0:
-            self.item_table.setCurrentCell(0, 0)
+            # Use constant
+            self.item_table.setCurrentCell(0, COL_CODE)
             self.current_row = 0
-            self.current_column = 0
-            if self.item_table.item(0, 0):
-                self.item_table.editItem(self.item_table.item(0, 0))
+            self.current_column = COL_CODE # Use constant
+            if self.item_table.item(0, COL_CODE): # Use constant
+                self.item_table.editItem(self.item_table.item(0, COL_CODE)) # Use constant
 
+    # ... (rest of EstimateEntryWidget methods remain the same,
+    #      as they inherit the constant-updated logic from EstimateLogic) ...
     def clear_all_rows(self):
         """Clear all rows from the table."""
+        # Block signals while clearing
+        self.item_table.blockSignals(True)
         while self.item_table.rowCount() > 0:
             self.item_table.removeRow(0)
+        self.item_table.blockSignals(False)
+        self.current_row = -1 # Reset position
+        self.current_column = -1
+
 
     def toggle_return_mode(self):
-        """Toggle between regular and return item entry modes."""
-        # Turn off silver bar mode if it's on
-        if self.silver_bar_mode:
+        """Toggle return item entry mode and update UI."""
+        print(">>> toggle_return_mode called via CLICK/SHORTCUT <<<")
+        # If switching TO return mode, ensure silver bar mode is OFF
+        if not self.return_mode and self.silver_bar_mode:
             self.silver_bar_mode = False
             self.silver_bar_toggle_button.setChecked(False)
+            # Use the tooltip text directly if needed, or just reset
             self.silver_bar_toggle_button.setText("Toggle Silver Bars (Ctrl+B)")
             self.silver_bar_toggle_button.setStyleSheet("")
+            # Mode label updated below
 
+        # Toggle the mode
         self.return_mode = not self.return_mode
         self.return_toggle_button.setChecked(self.return_mode)
 
-        # Update button text and style
+        # Update button appearance and Mode Label
         if self.return_mode:
             self.return_toggle_button.setText("Return Items Mode Active (Ctrl+R)")
-            self.return_toggle_button.setStyleSheet("background-color: #ffdddd;")
+            self.return_toggle_button.setStyleSheet("background-color: #ffdddd; font-weight: bold;") # Added bold
+            self.mode_indicator_label.setText("Mode: Return Items")
+            self.mode_indicator_label.setStyleSheet("font-weight: bold; color: #c00000; margin-top: 5px; margin-bottom: 5px;") # Red color
+            self.show_status("Return Items mode activated", 2000)
         else:
             self.return_toggle_button.setText("Toggle Return Items (Ctrl+R)")
             self.return_toggle_button.setStyleSheet("")
+            # Only reset mode label if silver bar mode is also off
+            if not self.silver_bar_mode:
+                 self.mode_indicator_label.setText("Mode: Regular")
+                 self.mode_indicator_label.setStyleSheet("font-weight: bold; color: #333; margin-top: 5px; margin-bottom: 5px;") # Default color
+            self.show_status("Return Items mode deactivated", 2000)
 
-        # Focus on the first cell of the next empty row
-        self.focus_on_empty_row()
+        # Update the current or next empty row's type column visually
+        self.focus_on_empty_row(update_visuals=True)
+
 
     def toggle_silver_bar_mode(self):
-        """Toggle between regular and silver bar entry modes."""
-        # Turn off return mode if it's on
-        if self.return_mode:
+        """Toggle silver bar entry mode and update UI."""
+        print(">>> toggle_silver_bar_mode called via CLICK/SHORTCUT <<<")  # Modified print
+        # If switching TO silver bar mode, ensure return mode is OFF
+        if not self.silver_bar_mode and self.return_mode:
             self.return_mode = False
             self.return_toggle_button.setChecked(False)
             self.return_toggle_button.setText("Toggle Return Items (Ctrl+R)")
             self.return_toggle_button.setStyleSheet("")
+             # Mode label updated below
 
+        # Toggle the mode
         self.silver_bar_mode = not self.silver_bar_mode
         self.silver_bar_toggle_button.setChecked(self.silver_bar_mode)
 
-        # Update button text and style
+        # Update button appearance and Mode Label
         if self.silver_bar_mode:
             self.silver_bar_toggle_button.setText("Silver Bar Mode Active (Ctrl+B)")
-            self.silver_bar_toggle_button.setStyleSheet("background-color: #d0f0d0;")
+            self.silver_bar_toggle_button.setStyleSheet("background-color: #d0f0d0; font-weight: bold;") # Added bold
+            self.mode_indicator_label.setText("Mode: Silver Bars")
+            self.mode_indicator_label.setStyleSheet("font-weight: bold; color: #006400; margin-top: 5px; margin-bottom: 5px;") # Dark green color
+            self.show_status("Silver Bars mode activated", 2000)
         else:
             self.silver_bar_toggle_button.setText("Toggle Silver Bars (Ctrl+B)")
             self.silver_bar_toggle_button.setStyleSheet("")
+            # Only reset mode label if return mode is also off
+            if not self.return_mode:
+                 self.mode_indicator_label.setText("Mode: Regular")
+                 self.mode_indicator_label.setStyleSheet("font-weight: bold; color: #333; margin-top: 5px; margin-bottom: 5px;") # Default color
+            self.show_status("Silver Bars mode deactivated", 2000)
 
-        # Focus on the first cell of the next empty row
-        self.focus_on_empty_row()
+        # Update the current or next empty row's type column visually
+        self.focus_on_empty_row(update_visuals=True)
 
-    def focus_on_empty_row(self):
-        """Focus on the first empty row in the table."""
-        # Look for the first empty row
-        found = False
+
+    def focus_on_empty_row(self, update_visuals=False):
+        """Find and focus the first empty row's code column. Optionally update its type visuals."""
+        empty_row_index = -1
         for row in range(self.item_table.rowCount()):
-            if (not self.item_table.item(row, 0) or
-                    not self.item_table.item(row, 0).text().strip()):
-                self.focus_on_code_column(row)
-                found = True
+            code_item = self.item_table.item(row, 0)
+            if not code_item or not code_item.text().strip():
+                empty_row_index = row
                 break
 
-        # If no empty row found, add one
-        if not found:
-            self.add_empty_row()
+        if empty_row_index != -1:
+            if update_visuals:
+                # Delegate logic to the logic class method
+                 self._update_row_type_visuals(empty_row_index)
+                 self.calculate_totals() # Recalculate if visuals/type might change interpretation
+            self.focus_on_code_column(empty_row_index)
+        else:
+            # No empty row found, add one
+            self.add_empty_row() # This sets visuals and focuses
+
 
     def keyPressEvent(self, event):
         """Handle key press events for navigation and shortcuts."""
-        if event.key() == Qt.Key_Escape:
-            # Confirm exit on Escape key
+        key = event.key()
+        modifiers = event.modifiers()
+
+        # --- Shortcut Handlers (already connected via QShortcut, but can intercept here too) ---
+        if modifiers == Qt.ControlModifier:
+            if key == Qt.Key_R:
+                self.toggle_return_mode()
+                event.accept()
+                return
+            elif key == Qt.Key_B:
+                self.toggle_silver_bar_mode()
+                event.accept()
+                return
+            elif key == Qt.Key_D:
+                self.delete_current_row()
+                event.accept()
+                return
+
+        # --- Standard Navigation ---
+        if key in [Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right, Qt.Key_PageUp, Qt.Key_PageDown, Qt.Key_Home, Qt.Key_End]:
+             super().keyPressEvent(event) # Let QTableWidget handle standard navigation
+             return
+
+        # --- Enter/Tab Key Navigation ---
+        if key in [Qt.Key_Return, Qt.Key_Enter, Qt.Key_Tab]:
+            # Delegate navigation logic to the logic class method
+            self.move_to_next_cell()
+            event.accept()
+            return
+        if key == Qt.Key_Backtab: # Shift+Tab
+            # Delegate navigation logic to the logic class method
+            self.move_to_previous_cell()
+            event.accept()
+            return
+
+        # --- Escape Key ---
+        if key == Qt.Key_Escape:
+            # Delegate exit confirmation to the logic class method (or main window)
             self.confirm_exit()
+            event.accept()
             return
 
-        # Toggle return mode with Ctrl+R
-        if event.key() == Qt.Key_R and event.modifiers() & Qt.ControlModifier:
-            self.toggle_return_mode()
-            return
-
-        # Toggle silver bar mode with Ctrl+B
-        if event.key() == Qt.Key_B and event.modifiers() & Qt.ControlModifier:
-            self.toggle_silver_bar_mode()
-            return
-
-        # Handle arrow key navigation
-        if event.key() in [Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down]:
-            current_row = self.item_table.currentRow()
-            current_col = self.item_table.currentColumn()
-
-            if event.key() == Qt.Key_Left:
-                next_col = max(0, current_col - 1)
-                next_row = current_row if next_col != current_col else max(0, current_row - 1)
-                next_col = self.item_table.columnCount() - 1 if next_row != current_row else next_col
-            elif event.key() == Qt.Key_Right:
-                next_col = min(self.item_table.columnCount() - 1, current_col + 1)
-                next_row = current_row if next_col != current_col else min(self.item_table.rowCount() - 1,
-                                                                           current_row + 1)
-                next_col = 0 if next_row != current_row else next_col
-            elif event.key() == Qt.Key_Up:
-                next_row = max(0, current_row - 1)
-                next_col = current_col
-            elif event.key() == Qt.Key_Down:
-                next_row = min(self.item_table.rowCount() - 1, current_row + 1)
-                next_col = current_col
-
-            self.item_table.setCurrentCell(next_row, next_col)
-
-            # If the cell is editable, start editing
-            if self.item_table.item(next_row, next_col) and \
-                    self.item_table.item(next_row, next_col).flags() & Qt.ItemIsEditable:
-                self.item_table.editItem(self.item_table.item(next_row, next_col))
-
-            return
-
-        # Existing Enter key handling
-        if event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
-            # Process Enter key manually to support keyboard navigation
-            if not self.processing_cell:
-                column = self.current_column
-                row = self.current_row
-
-                if column == 0:  # Code column
-                    self.process_item_code()
-                elif column in [2, 3]:  # Gross or Poly
-                    self.calculate_net_weight()
-                    self.move_to_next_cell()
-                elif column == 5:  # P%
-                    self.calculate_fine()
-                    self.move_to_next_cell()
-                elif column == 6:  # W.Rate
-                    self.calculate_wage()
-                    self.move_to_next_cell()
-                elif column == 7:  # P/Q
-                    self.calculate_wage()
-
-                    # If this is the last column of the last row, add a new row
-                    if row == self.item_table.rowCount() - 1:
-                        self.add_empty_row()
-                    else:
-                        # Move to the first column of the next row
-                        self.focus_on_code_column(row + 1)
-
-                return
-
-        # Let the parent handle other key events
+        # Let the parent handle other key events (like character input)
         super().keyPressEvent(event)
-
-    def delete_current_row(self):
-        """Delete the currently selected row from the table."""
-        current_row = self.item_table.currentRow()
-
-        # Don't delete if it's the only row
-        if self.item_table.rowCount() <= 1:
-            return
-
-        # Remove the row
-        self.item_table.removeRow(current_row)
-
-        # Update current position
-        if current_row >= self.item_table.rowCount():
-            current_row = self.item_table.rowCount() - 1
-
-        # Focus on code column of current row
-        self.focus_on_code_column(current_row)
-
-        # Update calculations
-        self.calculate_totals()
-
-    def add_empty_row(self):
-        """Add an empty row to the item table."""
-        # Prevent adding more than one empty row at the end
-        if self.item_table.rowCount() > 0:
-            last_row = self.item_table.rowCount() - 1
-            last_row_empty = True
-
-            for col in range(self.item_table.columnCount()):
-                if self.item_table.item(last_row, col) and self.item_table.item(last_row, col).text().strip():
-                    last_row_empty = False
-                    break
-
-            if last_row_empty:
-                return
-
-        # Stop processing to prevent unexpected focus changes
-        self.processing_cell = True
-
-        row = self.item_table.rowCount()
-        self.item_table.insertRow(row)
-
-        # Create a new item for each cell with appropriate flags
-        for col in range(self.item_table.columnCount()):
-            item = QTableWidgetItem("")
-
-            # Only make specific columns non-editable (Net Wt, Wage, Fine)
-            if col in [4, 8, 9]:  # Net Wt, Wage, Fine
-                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-            # For the Return/Silver Bar column, create a more visual indicator
-            elif col == 10:  # Return/Silver Bar column
-                if self.return_mode:
-                    item.setText("Return")
-                    item.setBackground(QColor(255, 200, 200))
-                elif self.silver_bar_mode:
-                    item.setText("Silver Bar")
-                    item.setBackground(QColor(200, 255, 200))
-                else:
-                    item.setText("No")
-                item.setTextAlignment(Qt.AlignCenter)
-            else:
-                # Ensure all other columns are editable
-                item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
-
-            self.item_table.setItem(row, col, item)
-
-        # Reset processing flag
-        self.processing_cell = False
-
-        # Use a timer to ensure UI has updated before setting focus
-        QTimer.singleShot(50, lambda: self.focus_on_code_column(row))

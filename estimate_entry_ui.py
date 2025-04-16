@@ -109,14 +109,14 @@ class EstimateUI:
         self.return_toggle_button = QPushButton("Return Items") # Removed shortcut hint
         self.return_toggle_button.setToolTip("Toggle Return Item entry mode for new rows (Ctrl+R)")
         self.return_toggle_button.setCheckable(True)
-        self.return_toggle_button.clicked.connect(widget.toggle_return_mode)
+        #self.return_toggle_button.clicked.connect(widget.toggle_return_mode)
         table_actions_layout.addWidget(self.return_toggle_button)
 
         # Add Silver Bar toggle button
         self.silver_bar_toggle_button = QPushButton("Silver Bars") # Removed shortcut hint
         self.silver_bar_toggle_button.setToolTip("Toggle Silver Bar entry mode for new rows (Ctrl+B)")
         self.silver_bar_toggle_button.setCheckable(True)
-        self.silver_bar_toggle_button.clicked.connect(widget.toggle_silver_bar_mode)
+        #self.silver_bar_toggle_button.clicked.connect(widget.toggle_silver_bar_mode)
         table_actions_layout.addWidget(self.silver_bar_toggle_button)
 
         # Add stretch to push buttons to the left

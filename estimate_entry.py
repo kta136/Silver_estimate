@@ -60,11 +60,11 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         self.delete_row_shortcut = QShortcut(QKeySequence("Ctrl+D"), self)
         self.delete_row_shortcut.activated.connect(self.delete_current_row)
 
-        #self.return_toggle_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
-        #self.return_toggle_shortcut.activated.connect(self.toggle_return_mode)
+        self.return_toggle_shortcut = QShortcut(QKeySequence(" Ctrl+R"), self)
+        self.return_toggle_shortcut.activated.connect(self.toggle_return_mode)
 
-        #self.silver_bar_toggle_shortcut = QShortcut(QKeySequence("Ctrl+B"), self)
-        #self.silver_bar_toggle_shortcut.activated.connect(self.toggle_silver_bar_mode)
+        self.silver_bar_toggle_shortcut = QShortcut(QKeySequence("Ctrl+B"), self)
+        self.silver_bar_toggle_shortcut.activated.connect(self.toggle_silver_bar_mode)
 
         # Force focus to the first cell (Code column) after initialization
         QTimer.singleShot(100, self.force_focus_to_first_cell)
@@ -104,7 +104,6 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
 
     def toggle_return_mode(self):
         """Toggle return item entry mode and update UI."""
-        print(">>> toggle_return_mode called via CLICK/SHORTCUT <<<")
         # If switching TO return mode, ensure silver bar mode is OFF
         if not self.return_mode and self.silver_bar_mode:
             self.silver_bar_mode = False
@@ -140,7 +139,6 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
 
     def toggle_silver_bar_mode(self):
         """Toggle silver bar entry mode and update UI."""
-        print(">>> toggle_silver_bar_mode called via CLICK/SHORTCUT <<<")  # Modified print
         # If switching TO silver bar mode, ensure return mode is OFF
         if not self.silver_bar_mode and self.return_mode:
             self.return_mode = False

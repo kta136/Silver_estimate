@@ -6,10 +6,12 @@ from PyQt5.QtCore import Qt, QDate
 
 class EstimateHistoryDialog(QDialog):
     """Dialog for browsing and selecting past estimates."""
-    
-    def __init__(self, db_manager, parent=None):
-        super().__init__(parent)
+
+    # Accept db_manager, an explicit main_window_ref, and the standard parent
+    def __init__(self, db_manager, main_window_ref, parent=None):
+        super().__init__(parent) # Use standard parent for QDialog
         self.db_manager = db_manager
+        self.main_window = main_window_ref # Store the explicit reference to MainWindow
         self.selected_voucher = None
         self.init_ui()
         self.load_estimates()
@@ -153,9 +155,15 @@ class EstimateHistoryDialog(QDialog):
             QMessageBox.warning(self, "Selection Error", "Please select an estimate first.")
             return
 
-        # Create print manager instance and print the selected estimate
-        print_manager = PrintManager(self.db_manager)
-        success = print_manager.print_estimate(voucher_no, self)
+        # --- Get the print font from the explicitly stored main window reference ---
+        print_font_setting = None
+        if self.main_window and hasattr(self.main_window, 'print_font'):
+            print_font_setting = self.main_window.print_font
+        # ---------------------------------------------------------
+
+        # Create print manager instance, passing the font, and print the selected estimate
+        print_manager = PrintManager(self.db_manager, print_font=print_font_setting)
+        success = print_manager.print_estimate(voucher_no, self) # 'self' is the dialog, used for parent QMessageBox
 
         if not success:
             QMessageBox.warning(self, "Print Error", f"Failed to print estimate {voucher_no}.")

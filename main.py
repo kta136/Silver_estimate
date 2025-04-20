@@ -4,9 +4,12 @@ import os
 import traceback
 
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QShortcut,
-                             QMenuBar, QMenu, QAction, QMessageBox, QDialog, QStatusBar) # Added QStatusBar
-from PyQt5.QtGui import QKeySequence
-from PyQt5.QtCore import Qt
+                             QMenuBar, QMenu, QAction, QMessageBox, QDialog, QStatusBar) # Removed QFontDialog
+from PyQt5.QtGui import QKeySequence, QFont
+from PyQt5.QtCore import Qt, QSettings
+
+# Import the custom dialog
+from custom_font_dialog import CustomFontDialog
 
 from estimate_entry import EstimateEntryWidget
 from item_master import ItemMasterWidget
@@ -29,6 +32,9 @@ class MainWindow(QMainWindow):
 
         # Set up menu bar
         self.setup_menu_bar()
+
+        # Load settings (including font) before setting up UI elements that use them
+        self.load_settings()
 
         # Set up status bar
         self.statusBar = QStatusBar()
@@ -94,6 +100,13 @@ class MainWindow(QMainWindow):
         silver_bars_action.setStatusTip("Add, view, transfer, or assign silver bars to lists")
         silver_bars_action.triggered.connect(self.show_silver_bars)  # Connect to MainWindow's method
         tools_menu.addAction(silver_bars_action)
+
+        # Font settings action
+        tools_menu.addSeparator()
+        font_action = QAction("&Font Settings...", self)
+        font_action.setStatusTip("Change application font settings")
+        font_action.triggered.connect(self.show_font_dialog)
+        tools_menu.addAction(font_action)
 
         # Reports menu
         reports_menu = menu_bar.addMenu("&Reports")
@@ -174,7 +187,8 @@ class MainWindow(QMainWindow):
     def show_estimate_history(self):
         """Show estimate history dialog."""
         from estimate_history import EstimateHistoryDialog
-        history_dialog = EstimateHistoryDialog(self.db, self)
+        # Pass db_manager, the explicit main_window_ref (self), and parent (self)
+        history_dialog = EstimateHistoryDialog(self.db, main_window_ref=self, parent=self)
         if history_dialog.exec_() == QDialog.Accepted:
             voucher_no = history_dialog.selected_voucher
             if voucher_no:
@@ -191,6 +205,84 @@ class MainWindow(QMainWindow):
                           "item inventory, and silver bars.\n\n"
                           "© 2023 Silver Estimation App")
 
+    def show_font_dialog(self):
+        """Show the font selection dialog and store the chosen print font."""
+        # Use the currently stored print_font to initialize the dialog
+        # Ensure the float_size attribute exists on it from loading/previous setting
+        if not hasattr(self.print_font, 'float_size'):
+             # If missing (e.g., first run before saving), initialize from pointSize
+             self.print_font.float_size = float(self.print_font.pointSize())
+
+        dialog = CustomFontDialog(self.print_font, self)
+        # Connect the custom signal
+        # dialog.fontSelected.connect(self.handle_font_selected) # Alternative way
+
+        if dialog.exec_() == QDialog.Accepted:
+            selected_font = dialog.get_selected_font()
+            # The dialog ensures min size 5.0 internally via spinbox range
+            # Store the selected font for printing, don't apply to UI
+            self.print_font = selected_font
+            self.save_settings(selected_font) # Pass the selected font to save
+            print(f"Stored print font: {self.print_font.family()}, Size: {getattr(self.print_font, 'float_size', self.print_font.pointSize())}pt, Bold={self.print_font.bold()}") # For debugging
+
+    # Removed apply_font_settings as we no longer apply to UI directly from here
+
+    def load_settings(self):
+        """Load application settings, including font."""
+        settings = QSettings("YourCompany", "SilverEstimateApp") # Use consistent names
+        default_family = QApplication.font().family()
+        default_size = float(QApplication.font().pointSize())
+        default_bold = QApplication.font().bold()
+
+        # Read values explicitly checking types
+        font_family_raw = settings.value("font/family")
+        font_size_raw = settings.value("font/size_float")
+        font_bold_raw = settings.value("font/bold")
+
+        font_family = font_family_raw if isinstance(font_family_raw, str) else default_family
+        # Use the type hint in settings.value for loading float
+        font_size_float = settings.value("font/size_float", default_size, type=float)
+        # Explicit boolean conversion check
+        if isinstance(font_bold_raw, str): # Handle 'true'/'false' strings if saved that way
+             font_bold = font_bold_raw.lower() == 'true'
+        elif isinstance(font_bold_raw, bool):
+             font_bold = font_bold_raw
+        else: # Fallback for other types or None
+             font_bold = default_bold
+
+        # Ensure minimum size on load
+        if font_size_float < 5.0:
+            font_size_float = 5.0
+
+        # Create the font using the integer size for QFont, but store the float size
+        loaded_font = QFont(font_family, int(round(font_size_float)))
+        loaded_font.setBold(font_bold)
+        loaded_font.float_size = font_size_float # Store the float size
+
+        # Apply the loaded font settings during initialization
+        # We need to ensure widgets exist before applying.
+        # Applying here might be too early. Let's apply after widgets are created.
+        # Store the loaded font settings for printing
+        self.print_font = loaded_font
+
+
+    def save_settings(self, font_to_save):
+        """Save application settings, specifically the print font."""
+        settings = QSettings("YourCompany", "SilverEstimateApp") # Use consistent names
+        # Use the font passed (which is intended for printing)
+        float_size = getattr(font_to_save, 'float_size', float(font_to_save.pointSize()))
+        # Ensure we save as float
+        settings.setValue("font/family", font_to_save.family())
+        settings.setValue("font/size_float", float(float_size)) # Explicitly save as float
+        settings.setValue("font/bold", bool(font_to_save.bold())) # Explicitly save as bool
+        settings.sync() # Ensure settings are written immediately
+
+    def closeEvent(self, event):
+        """Handle window close event."""
+        # Optional: Add confirmation dialog if needed
+        # self.save_settings() # Save settings on close if desired, though saving after change is often better
+        super().closeEvent(event)
+
 
 if __name__ == "__main__":
     # Create the application
@@ -198,6 +290,10 @@ if __name__ == "__main__":
 
     # Create and show the main window
     main_window = MainWindow()
+
+    # No longer applying font settings globally on startup
+    # main_window.apply_font_settings(main_window.print_font) # Removed this line
+
     main_window.show()
 
     # Run the application

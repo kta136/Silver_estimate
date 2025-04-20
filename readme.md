@@ -54,10 +54,16 @@ Designed for silver shops to:
 - *Note: Advanced list management (grouping bars under a named list) planned for v1.1.*
 
 ### Printing
-- Print Preview for estimates using a fixed-width `Courier New` font, mimicking a specific format.
+- Print Preview for estimates using a fixed-width format. Font size and style (bold) are configurable via "Tools" -> "Font Settings...". Font family is fixed to monospace (`Courier New`) to maintain alignment.
 - Separate sections on estimate printout for Regular, Silver Bar, Return Goods, Return Silver Bar items.
 - Calculates and prints Net Fine, Silver Cost, Labour, and Total amounts.
 - Print Preview for Silver Bar Inventory using a standard HTML table format.
+
+### Font Settings (via Tools Menu)
+- Allows selection of font family, style (bold), and size (decimal, min 5.0pt) using a custom dialog (`custom_font_dialog.py`).
+- Selected font size and style are applied **only** to the printed estimate slip (`print_manager.py`). The font family is ignored for estimate printing to maintain fixed-width alignment.
+- Settings are saved and loaded between sessions using `QSettings` (`main.py`).
+- *Known Issue:* Printing from "Estimate History" currently does not apply the selected font settings (See TODO).
 
 ---
 
@@ -133,10 +139,29 @@ AttributeError: 'MainWindow' object has no attribute 'estimate_widget': Fixed by
 Import Errors: Fixed by importing classes (QLocale, QValidators) from the correct Qt module (QtCore, QtGui).
 Column Indices: Replaced magic numbers with named constants (e.g., COL_CODE) for clarity and maintainability.
 Net Wt Calculation (Locale Issue): If Net Wt stops calculating, check `_get_cell_float` in `estimate_entry_logic.py`. A previous issue was caused by a missing `from PyQt5.QtCore import QLocale` import, preventing locale-based number parsing. The fix involved adding the import and ensuring the fallback `float()` conversion handles potential errors.
-Potential Future Debugging Areas:
-Complex Interactions: Focus changes, signal blocking (blockSignals(True/False)), and QTimer.singleShot usage in estimate_entry_logic.py manage complex interactions but could be prone to subtle bugs if modified carelessly.
-Data Conversion/Validation: Ensure all numeric conversions (float(), int(), locale.toDouble()) handle edge cases (empty strings, invalid formats) robustly, especially when reading from the UI before saving or calculation.
-Database Schema Migrations: The current setup_database attempts simple ALTER TABLE commands which might fail on older SQLite versions or complex changes. A more robust migration system might be needed for production deployment if the schema evolves significantly.
-Silver Bar Inventory Linking: The current link between an estimate "Silver Bar" entry and the silver_bars inventory relies on matching the item_code to the bar_no. This could be fragile. A future version might need a more explicit linking mechanism or separate handling.
+
+Font Settings Implementation & Debugging (April 2025):
+- **Goal:** Add configurable font (family, size >= 5pt, bold) via Tools menu for printing.
+- **Initial Steps:** Added "Font Settings..." QAction in `main.py`. Used standard `QFontDialog`. Applied selected font directly to `estimate_widget.item_table`. Saved settings using `QSettings`.
+- **Issue 1:** `QFontDialog` limitations (min size 8pt, no decimals).
+- **Fix 1:** Created `custom_font_dialog.py` with `QFontComboBox`, `QDoubleSpinBox` (min 5.0, decimals), `QCheckBox`. Updated `main.py` to use this dialog.
+- **Issue 2:** Font was changing UI table, requirement was to change *print* font only.
+- **Fix 2:** Modified `main.py` to store selection in `self.print_font` instead of applying to UI. Modified `print_manager.py` `__init__` to accept `print_font` and `_print_html` / `_generate_estimate_manual_format` to use it for estimate CSS/font setting.
+- **Issue 3:** Print preview format broke (alignment lost) when using non-monospace families.
+- **Fix 3:** Modified `print_manager.py` (`_generate_estimate_manual_format`) to *force* `font-family: 'Courier New', Courier, monospace;` in CSS, but still use the selected `font-size` (float pt) and `font-weight` (bold/normal) from settings.
+- **Issue 4:** Settings persistence failed for float size (reverted to integer on reload).
+- **Fix 4:** Modified `main.py` `load_settings` and `save_settings` to explicitly use `type=float` when reading and `float()` / `bool()` when writing to `QSettings`. Added `settings.sync()`.
+- **Issue 5:** Printing from Estimate History dialog didn't use the selected font.
+- **Fix 5 (Attempt 1):** Modified `estimate_history.py` `print_estimate` to get font from `self.parent()`. Failed because `self.parent()` was `EstimateEntryWidget`, not `MainWindow`.
+- **Fix 5 (Attempt 2):** Modified `estimate_history.py` `__init__` to accept explicit `main_window_ref`. Modified `main.py` `show_estimate_history` call to pass `self` as `main_window_ref`. Modified `estimate_history.py` `print_estimate` to use `self.main_window.print_font`.
+- **Current Status:** Font settings persist and apply correctly to print preview from main estimate screen. Custom dialog shows current setting. **However, printing from Estimate History still doesn't apply the font.**
+
+Potential Future Debugging Areas & TODO:
+- **TODO:** Fix print font application when printing from Estimate History dialog (`estimate_history.py`). The `main_window_ref` passed seems correct, but the `PrintManager` initialized from there isn't using the font. Investigate `PrintManager` initialization or font object state when called from the history dialog context.
+- Complex Interactions: Focus changes, signal blocking (blockSignals(True/False)), and QTimer.singleShot usage in estimate_entry_logic.py manage complex interactions but could be prone to subtle bugs if modified carelessly.
+- Data Conversion/Validation: Ensure all numeric conversions (float(), int(), locale.toDouble()) handle edge cases (empty strings, invalid formats) robustly, especially when reading from the UI before saving or calculation.
+- Database Schema Migrations: The current setup_database attempts simple ALTER TABLE commands which might fail on older SQLite versions or complex changes. A more robust migration system might be needed for production deployment if the schema evolves significantly.
+- Silver Bar Inventory Linking: The current link between an estimate "Silver Bar" entry and the silver_bars inventory relies on matching the item_code to the bar_no. This could be fragile. A future version might need a more explicit linking mechanism or separate handling.
+
 👤 Author
 This project is managed and maintained by Kartikey Agarwal.

@@ -7,12 +7,22 @@ from PyQt5.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog
 import traceback # Keep for debugging
 
 
+from PyQt5.QtGui import QFont, QTextCursor, QPageSize, QTextDocument, QFontDatabase # Added QFontDatabase
+
 class PrintManager:
     """Class to handle print functionality using manual formatting."""
 
-    def __init__(self, db_manager):
-        """Initialize the print manager."""
+    def __init__(self, db_manager, print_font=None):
+        """Initialize the print manager, accepting an optional print font."""
         self.db_manager = db_manager
+        # Store the custom print font if provided, otherwise use a default
+        if print_font:
+            self.print_font = print_font
+        else:
+            # Default font if none is provided via settings
+            self.print_font = QFont("Courier New", 5)
+            self.print_font.float_size = 5.0 # Set default float size
+
         self.printer = QPrinter(QPrinter.HighResolution)
         self.printer.setPageSize(QPageSize(QPageSize.A4))
         self.printer.setOrientation(QPrinter.Portrait)
@@ -90,12 +100,16 @@ class PrintManager:
         document = QTextDocument()
         if table_mode:
             # Font for tables - Use a readable size
-            font = QFont("Arial", 8) # Increased size for table readability
-            document.setDefaultFont(font)
+            # Font for tables (Inventory, List Details) - Use a readable size, independent of print_font setting
+            table_font = QFont("Arial", 8)
+            document.setDefaultFont(table_font)
         else:
-            # Font for the fixed-width estimate slip - Kept original small size
-            font = QFont("Courier New", 5)
-            document.setDefaultFont(font)
+            # Font for the fixed-width estimate slip - Use the stored print_font
+            # QFont needs integer size, use rounded value from stored float size
+            font_size_int = int(round(getattr(self.print_font, 'float_size', 5.0)))
+            font_to_use = QFont(self.print_font.family(), font_size_int)
+            font_to_use.setBold(self.print_font.bold())
+            document.setDefaultFont(font_to_use)
 
         document.setHtml(html_content)
         # Match document size to printer paper Rect for potentially better scaling
@@ -207,11 +221,27 @@ class PrintManager:
         note = "Note :-  G O O D S   N O T   R E T U R N"; pad=(TOTAL_WIDTH-len(note))//2; output.append(" "*pad+note); output.append(" \f")
 
         # --- Combine into HTML ---
+        # Use the stored print font SIZE and WEIGHT, but FORCE MONOSPACE family for alignment
+        # font_family = self.print_font.family() # Ignore selected family for estimate print
+        font_size_pt = getattr(self.print_font, 'float_size', 5.0) # Use selected size
+        font_weight = "bold" if self.print_font.bold() else "normal" # Use selected weight
+
         html_content = "\n".join(output)
+        # Update CSS: Force Courier New / monospace, but use selected size and weight
         html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-                   pre{{font-family:'Courier New',Courier,monospace;font-size:5pt;line-height:1.0;white-space:pre;margin:0;padding:0;page-break-inside:avoid;}}
-                   body{{margin:10mm;}}</style></head><body><pre>{html_content}</pre></body></html>"""
-        return html
+                    pre {{
+                        font-family: 'Courier New', Courier, monospace; /* FORCE monospace */
+                        font-size: {font_size_pt}pt; /* Use selected size */
+                        font-weight: {font_weight}; /* Use selected weight */
+                        line-height: 1.0;
+                        white-space: pre;
+                        margin: 0;
+                        padding: 0;
+                        page-break-inside: avoid;
+                    }}
+                    body {{ margin: 10mm; }}
+                    </style></head><body><pre>{html_content}</pre></body></html>"""
+        return html # Correct indentation
 
     def _generate_silver_bars_html_table(self, bars, status_filter=None):
         """Generates HTML table for the general INVENTORY report."""

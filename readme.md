@@ -1,4 +1,4 @@
-# Silver Estimation App v1.0
+# Silver Estimation App v1.1
 
 A desktop application built using **PyQt5** and **SQLite** for managing silver sales estimates, including item-wise entries, silver bar inventory, returns, and print-ready formatted outputs.
 
@@ -15,7 +15,7 @@ Designed for silver shops to:
 
 ---
 
-## ✅ Features (v1.0)
+## ✅ Features (v1.1)
 
 ### Estimate Entry
 - Fast, keyboard-friendly item entry grid.
@@ -122,7 +122,7 @@ python main.py
 
 On the first run, a database folder and the estimation.db SQLite file will be created automatically if they don't exist. The necessary tables will also be created.
 📝 Development & Debugging Notes for AI
-This file serves as a stable checkpoint (v1.0).
+This file reflects the state after v1.1 feature additions/fixes.
 Key Concepts & Logic Flow:
 Estimate Entry: The core logic resides in estimate_entry_logic.py but is executed within the context of the EstimateEntryWidget instance (estimate_entry.py). EstimateUI defines the widgets.
 Calculations: calculate_net_weight, calculate_fine, calculate_wage are triggered by handle_cell_changed. calculate_totals aggregates row data based on the "Type" column.

@@ -1,199 +1,141 @@
-# Silver Estimation App
+# Silver Estimation App v1.0
 
-## Overview
+A desktop application built using **PyQt5** and **SQLite** for managing silver sales estimates, including item-wise entries, silver bar inventory, returns, and print-ready formatted outputs.
 
-The Silver Estimation App is a comprehensive tool designed for silver jewelers and traders to manage silver item estimations, inventory, and silver bar tracking. It provides functionality for:
+---
 
-- Creating and managing silver item estimations
-- Maintaining a catalog of silver items
-- Tracking silver bar inventory
-- Creating and managing silver bar lists for assignment and transfer
-- Generating printable reports and estimates
+## 💡 Purpose
+Designed for silver shops to:
+- Generate detailed silver item estimates.
+- Track gross/net/fine silver.
+- Manage silver bar inventory.
+- Handle return goods and silver bar entries.
+- Print estimate slips in a specific, structured format.
+- Print silver bar inventory reports.
 
-## System Requirements
+---
 
-- Python 3.x
-- PyQt5
-- SQLite3
-
-## Application Structure
-
-The application follows a modular architecture with separate components for different functionalities:
-
-### Main Application
-
-- **main.py**: Entry point for the application with the main window setup
-
-### Database Management
-
-- **database_manager.py**: Handles all database operations using SQLite
-  - Manages tables for items, estimates, silver bars, and silver bar lists
-  - Provides methods for CRUD operations on all entities
-  - Handles database schema setup and migrations
-
-### Estimation Module
-
-- **estimate_entry.py**: Widget for entering and managing silver estimations
-- **estimate_entry_ui.py**: UI layout for the estimation widget
-- **estimate_entry_logic.py**: Business logic for estimate calculations
-- **estimate_history.py**: Dialog for viewing and managing past estimates
-
-### Item Management
-
-- **item_master.py**: Widget for managing the item catalog
-- **item_selection_dialog.py**: Dialog for selecting items during estimate entry
-
-### Silver Bar Management
-
-- **silver_bar_management.py**: Dialog for managing silver bar inventory and lists
-
-### Printing
-
-- **print_manager.py**: Manages printing functionality for estimates and reports
-
-## Database Schema
-
-The application uses SQLite with the following main tables:
-
-### items
-- `code` (TEXT, PRIMARY KEY): Unique identifier for each item
-- `name` (TEXT): Descriptive name
-- `purity` (REAL): Default silver purity percentage (0-100)
-- `wage_type` (TEXT): Wage calculation method ('P' for per piece, 'WT' for weight-based)
-- `wage_rate` (REAL): Default wage rate
-
-### estimates
-- `voucher_no` (TEXT, PRIMARY KEY): Unique identifier for each estimate
-- `date` (TEXT): Date of the estimate
-- `silver_rate` (REAL): Silver rate used for calculations
-- `total_gross` (REAL): Total gross weight
-- `total_net` (REAL): Total net weight
-- `total_fine` (REAL): Total net fine weight
-- `total_wage` (REAL): Total net wage
-
-### estimate_items
-- `id` (INTEGER, PRIMARY KEY): Unique identifier
-- `voucher_no` (TEXT): Reference to estimates table
-- `item_code` (TEXT): Reference to items table
-- `item_name` (TEXT): Item name
-- `gross` (REAL): Gross weight
-- `poly` (REAL): Poly/stone weight
-- `net_wt` (REAL): Net weight (gross - poly)
-- `purity` (REAL): Purity percentage
-- `wage_rate` (REAL): Wage rate
-- `pieces` (INTEGER): Number of pieces
-- `wage` (REAL): Calculated wage
-- `fine` (REAL): Fine weight
-- `is_return` (INTEGER): Flag for return items (1 = return)
-- `is_silver_bar` (INTEGER): Flag for silver bars (1 = silver bar)
-
-### silver_bars
-- `id` (INTEGER, PRIMARY KEY): Unique identifier
-- `bar_no` (TEXT): Bar number
-- `weight` (REAL): Bar weight
-- `purity` (REAL): Purity percentage
-- `fine_weight` (REAL): Fine weight (weight * purity/100)
-- `date_added` (TEXT): Date added to inventory
-- `status` (TEXT): Status ('In Stock', 'Assigned', 'Transferred', 'Sold', 'Melted')
-- `list_id` (INTEGER): Reference to silver_bar_lists table
-
-### silver_bar_lists
-- `list_id` (INTEGER, PRIMARY KEY): Unique identifier
-- `list_identifier` (TEXT): Human-readable identifier
-- `creation_date` (TEXT): Creation date
-- `list_note` (TEXT): Notes for the list
-
-### bar_transfers
-- `id` (INTEGER, PRIMARY KEY): Unique identifier
-- `transfer_no` (TEXT): Transfer reference
-- `date` (TEXT): Transfer date
-- `bar_id` (INTEGER): Reference to silver_bars table
-- `list_id` (INTEGER): Reference to silver_bar_lists table
-- `from_status` (TEXT): Previous status
-- `to_status` (TEXT): New status
-- `notes` (TEXT): Transfer notes
-
-## Features
+## ✅ Features (v1.0)
 
 ### Estimate Entry
-- Create new estimates with auto-generated voucher numbers
-- Add items to estimates with automatic calculation of net weight, fine weight, and wage
-- Support for regular items, return items, and silver bars in a single estimate
-- Separate tracking of regular, return, and silver bar totals
-- Net calculations automatically subtracting return items
-- Save and load estimates
+- Fast, keyboard-friendly item entry grid.
+- Supports gross weight, poly weight, purity %, wage rate, pieces.
+- Calculates Net Wt, Fine Wt, Labour Amt based on Item Master settings (Wage Type PC/WT).
+- Toggle modes for entering **Return Items** or **Silver Bars** (affects calculations and identification).
+- Uses `NumericDelegate` for proactive numeric input validation in the table.
+- Auto-fills item name, purity, wage rate based on entered item code.
+- Provides `ItemSelectionDialog` with filtering if an entered code is not found.
+- Auto-row generation upon completing the 'Pieces' column in the last row.
+- Navigation using `Enter`/`Tab` and `Shift+Tab`.
+- Calculates and displays detailed totals for Regular, Return, Silver Bar, and Net categories.
+- Save, Load, and Print Preview estimates.
+- Status bar feedback for operations.
 
 ### Item Master
-- Manage silver item catalog
-- Define default purity and wage rates for items
-- Search and filter items
+- Add/edit/delete items with code, name, default purity, wage type (`PC`=Per Piece, `WT`=Per Weight), and rate.
+- Uses validated `QLineEdit` widgets for numeric inputs (Purity, Wage Rate).
+- Live search filtering by code or name.
+- Prevents editing the `code` of existing items.
+- Prevents adding items with duplicate codes.
+- Warns on deleting items potentially used in estimates.
 
-### Silver Bar Management
-- Add new silver bars to inventory
-- Track bar status ('In Stock', 'Assigned', 'Transferred', 'Sold', 'Melted')
-- Transfer bars between statuses
-- Create lists of silver bars for tracking
-- Assign and unassign bars to/from lists
-- View detailed list contents
+### Estimate History
+- Browse past estimates.
+- Filter by date range or voucher number search.
+- View summary totals in the list.
+- Open selected estimate back into the main entry screen.
+- Print selected estimate directly from history.
+
+### Silver Bar Management (v1.0 - Basic)
+- Add silver bars with Bar Number, Weight, Purity.
+- View inventory, filterable by Status (All, In Stock, Transferred, Sold, Melted).
+- Transfer selected bar(s) to a new status with optional notes.
+- Print inventory list based on current filter.
+- *Note: Advanced list management (grouping bars under a named list) planned for v1.1.*
 
 ### Printing
-- Print estimates in a traditional format
-- Print silver bar inventory reports
-- Print silver bar list details
+- Print Preview for estimates using a fixed-width `Courier New` font, mimicking a specific format.
+- Separate sections on estimate printout for Regular, Silver Bar, Return Goods, Return Silver Bar items.
+- Calculates and prints Net Fine, Silver Cost, Labour, and Total amounts.
+- Print Preview for Silver Bar Inventory using a standard HTML table format.
 
-## Calculations
+---
 
-### Weight Calculations
-- Net Weight = Gross Weight - Poly Weight
-- Fine Weight = Net Weight * (Purity / 100)
-- Fine Value = Fine Weight * Silver Rate
+## 🛠 Tech Stack
+- **Language:** Python 3.x
+- **GUI:** PyQt5
+- **Database:** SQLite 3
 
-### Wage Calculations
-- Per Weight: Wage = Net Weight * Wage Rate
-- Per Piece: Wage = Pieces * Wage Rate
+---
 
-### Net Calculations
-- Net Fine = (Regular Fine + Bar Fine) - Return Fine
-- Net Wage = (Regular Wage + Bar Wage) - Return Wage
-- Net Value = Net Fine * Silver Rate
+## 🔁 Project Structure
+Use code with caution.
+Markdown
+.
+├── main.py # App entry point, MainWindow, Menu Bar
+├── estimate_entry.py # Estimate screen main widget (combines UI/Logic)
+├── estimate_entry_ui.py # Estimate screen UI layout class, NumericDelegate
+├── estimate_entry_logic.py # Estimate screen calculation logic, event handlers
+├── item_master.py # Item management screen UI and logic
+├── estimate_history.py # Estimate history browser dialog UI and logic
+├── silver_bar_management.py # Silver bar inventory dialog UI and logic (v1.0)
+├── item_selection_dialog.py # Dialog to select items when code not found
+├── print_manager.py # Handles print formatting and preview dialogs
+├── database_manager.py # All SQLite database operations and schema setup
+├── readme.md # This file
+└── database/
+└── estimation.db # SQLite database file (auto-created)
+---
 
-## Usage Guide
+## 🚀 Getting Started
 
-### Starting the Application
-Run the application using:
+### Prerequisites
+- Python 3 (recommended 3.8+)
+- `pip` (Python package installer)
+
+### Installation
+1.  **Clone or download** the project files.
+2.  **Navigate** to the project directory in your terminal.
+3.  **(Recommended)** Create and activate a virtual environment:
+    ```bash
+    python -m venv .venv
+    # Windows:
+    .\.venv\Scripts\activate
+    # macOS/Linux:
+    source .venv/bin/activate
+    ```
+4.  **Install dependencies:**
+    ```bash
+    pip install PyQt5
+    ```
+
+### Running the Application
 ```bash
 python main.py
-```
 
-### Creating a New Estimate
-1. Navigate to the Estimate Entry screen
-2. The system generates a new voucher number automatically
-3. Set the date and silver rate
-4. Add items by entering item codes and weights
-5. Toggle between regular, return, and silver bar modes as needed
-6. Save the estimate when complete
 
-### Managing Items
-1. Navigate to the Item Master screen
-2. Add new items with code, name, purity, wage type, and rate
-3. Search for existing items to edit or delete
-
-### Managing Silver Bars
-1. Open Silver Bar Management from the Tools menu
-2. Add new bars with bar number, weight, and purity
-3. Select bars and transfer to different statuses
-4. Create lists to group bars
-5. View, edit, or delete existing lists
-
-### Viewing Estimate History
-1. Open Estimate History from the Reports menu
-2. Filter by date range or voucher number
-3. Select an estimate to load or print
-
-## Project Notes
-
-- The application uses a single SQLite database file ('database/estimation.db')
-- The UI is built using PyQt5 with a custom style
-- The application handles validation for numeric inputs
-- The printing system uses HTML formatting with fixed-width fonts for estimates
-- Silver bar lists provide a way to group and track collections of bars
+On the first run, a database folder and the estimation.db SQLite file will be created automatically if they don't exist. The necessary tables will also be created.
+📝 Development & Debugging Notes for AI
+This file serves as a stable checkpoint (v1.0).
+Key Concepts & Logic Flow:
+Estimate Entry: The core logic resides in estimate_entry_logic.py but is executed within the context of the EstimateEntryWidget instance (estimate_entry.py). EstimateUI defines the widgets.
+Calculations: calculate_net_weight, calculate_fine, calculate_wage are triggered by handle_cell_changed. calculate_totals aggregates row data based on the "Type" column.
+Item Lookup: Entering a code in COL_CODE triggers process_item_code, which uses db_manager.get_item_by_code. If not found, ItemSelectionDialog is shown.
+Saving Estimates: save_estimate (in estimate_entry_logic.py) collects data, recalculates totals for accuracy, separates items based on flags (is_return, is_silver_bar), adds relevant silver bars to inventory, and calls db_manager.save_estimate_with_returns.
+Database: Uses sqlite3.Row factory. Foreign keys are enabled. DatabaseManager handles all SQL. Schema includes flags (is_return, is_silver_bar) in estimate_items.
+Silver Bars (v1.0): Managed independently via SilverBarDialog, though bars can be entered on estimates using the toggle mode. Saving an estimate adds "Silver Bar" type items to the silver_bars inventory table via db_manager.add_silver_bar (using item code as bar number - potential future enhancement needed here for more robust bar tracking independent of item codes).
+Common Issues & Fixes Applied:
+Net Wt Calculation: Fixed by ensuring calculate_net_weight is called from handle_cell_changed for both COL_GROSS and COL_POLY, and ensuring Poly field defaults to "0.000" if left blank before moving focus (keyPressEvent modifications were tested but final logic relies on handle_cell_changed).
+Double Clicks/Executions: Fixed by ensuring signal connections (.clicked.connect) are made only once, typically in the dedicated connect_signals method, not in the UI setup methods.
+Shortcut Conflicts: Fixed by removing redundant QShortcut objects when the same shortcut was also defined on a QAction in the menu bar. Rely on QAction.setShortcut for menu items.
+AttributeError: ... no attribute 'get': Fixed by replacing .get() calls on sqlite3.Row objects with direct dictionary-style access row['column_name'] and checking for None.
+AttributeError: 'MainWindow' object has no attribute 'estimate_widget': Fixed by ensuring setup_menu_bar() is called after self.estimate_widget is initialized in MainWindow.__init__.
+Import Errors: Fixed by importing classes (QLocale, QValidators) from the correct Qt module (QtCore, QtGui).
+Column Indices: Replaced magic numbers with named constants (e.g., COL_CODE) for clarity and maintainability.
+Potential Future Debugging Areas:
+Complex Interactions: Focus changes, signal blocking (blockSignals(True/False)), and QTimer.singleShot usage in estimate_entry_logic.py manage complex interactions but could be prone to subtle bugs if modified carelessly.
+Data Conversion/Validation: Ensure all numeric conversions (float(), int(), locale.toDouble()) handle edge cases (empty strings, invalid formats) robustly, especially when reading from the UI before saving or calculation.
+Database Schema Migrations: The current setup_database attempts simple ALTER TABLE commands which might fail on older SQLite versions or complex changes. A more robust migration system might be needed for production deployment if the schema evolves significantly.
+Silver Bar Inventory Linking: The current link between an estimate "Silver Bar" entry and the silver_bars inventory relies on matching the item_code to the bar_no. This could be fragile. A future version might need a more explicit linking mechanism or separate handling.
+👤 Author
+This project is managed and maintained by Kartikey Agarwal.

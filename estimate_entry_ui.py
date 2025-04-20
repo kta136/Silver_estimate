@@ -2,9 +2,10 @@
 from PyQt5.QtWidgets import (QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
                              QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
                              QHeaderView, QDoubleSpinBox, QDateEdit, QAbstractItemView,
-                             QCheckBox, QStyledItemDelegate, QFrame) # Added QFrame
-from PyQt5.QtGui import QDoubleValidator, QIntValidator # Added import from QtGui
-from PyQt5.QtCore import Qt, QDate, QLocale
+                              QCheckBox, QStyledItemDelegate, QFrame) # Added QFrame
+# Removed QFocusEvent, QValidator. Added QEvent
+from PyQt5.QtGui import QDoubleValidator, QIntValidator
+from PyQt5.QtCore import Qt, QDate, QLocale, QModelIndex, QEvent # Keep QModelIndex, Add QEvent
 
 # --- Column Constants (defined here for UI setup & Delegate) ---
 COL_CODE = 0
@@ -20,16 +21,21 @@ COL_FINE_WT = 9
 COL_TYPE = 10
 # --- End Constants ---
 
+# Removed ZeroHandlingLineEdit class
+
 # Custom Delegate for Numeric Input Validation
 class NumericDelegate(QStyledItemDelegate):
     def createEditor(self, parent, option, index):
+        # Use standard QLineEdit for all editable columns we handle
         editor = QLineEdit(parent)
+        # Store index for use in eventFilter
+        editor.setProperty("modelIndex", index)
         col = index.column()
         locale = QLocale.system()
 
-        # Use constants for column checks
+        # Apply standard validators
         if col in [COL_GROSS, COL_POLY, COL_PURITY, COL_WAGE_RATE]:
-            decimals = 2 if col == COL_PURITY or col == COL_WAGE_RATE else 3
+            decimals = 3 if col in [COL_GROSS, COL_POLY] else 2
             validator = QDoubleValidator(0.0, 999999.999, decimals, editor)
             validator.setNotation(QDoubleValidator.StandardNotation)
             validator.setLocale(locale)
@@ -37,36 +43,108 @@ class NumericDelegate(QStyledItemDelegate):
         elif col == COL_PIECES:
             validator = QIntValidator(0, 999999, editor)
             editor.setValidator(validator)
+        else:
+             # If column is not one we explicitly handle with validation,
+             # return standard editor without installing filter or validator.
+             # Or potentially return super().createEditor if base class handles others.
+             # For now, just return the basic QLineEdit for Code/Name/Type if needed.
+             # Calculated columns won't be edited directly.
+             return editor # Return basic editor for Code/Name/Type
+
+        # Install event filter ONLY on editors with validators we manage
+        editor.installEventFilter(self)
         return editor
 
     def setEditorData(self, editor, index):
+        # Ensure editor is a QLineEdit before proceeding
+        if not isinstance(editor, QLineEdit):
+            super().setEditorData(editor, index)
+            return
+
         value = index.model().data(index, Qt.EditRole)
-        editor.setText(str(value))
+        col = index.column()
+
+        # For Gross/Poly, display "" if value is 0 or 0.0
+        if col in [COL_GROSS, COL_POLY]:
+            try:
+                if value is not None and float(value) == 0.0:
+                    display_text = ""
+                else:
+                    display_text = str(value) if value is not None else ""
+            except (ValueError, TypeError):
+                 display_text = str(value) if value is not None else ""
+        else:
+             # Default behavior for other columns
+             display_text = str(value) if value is not None else ""
+
+        editor.setText(display_text)
+
 
     def setModelData(self, editor, model, index):
+         # Ensure editor is a QLineEdit before proceeding
+        if not isinstance(editor, QLineEdit):
+            super().setModelData(editor, model, index)
+            return
+
         col = index.column()
-        value = editor.text()
+        value = editor.text().strip()
         locale = QLocale.system()
-        try:
-            # Use constants for column checks
-            if col in [COL_GROSS, COL_POLY, COL_PURITY, COL_WAGE_RATE]:
-                double_val, ok = locale.toDouble(value)
-                if ok:
-                    model.setData(index, double_val, Qt.EditRole)
-                else:
-                    model.setData(index, 0.0, Qt.EditRole)
-            elif col == COL_PIECES:
-                model.setData(index, int(value) if value else 0, Qt.EditRole) # Default to 0 if empty
+
+        # Handle Gross and Poly: Convert empty to 0.0
+        if col in [COL_GROSS, COL_POLY]:
+            if not value: # Empty string directly becomes 0.0
+                model.setData(index, 0.0, Qt.EditRole)
             else:
+                double_val, ok = locale.toDouble(value)
+                # Also treat explicit "0" as 0.0 if needed, though locale.toDouble might handle it
+                if ok and double_val == 0.0:
+                     model.setData(index, 0.0, Qt.EditRole)
+                elif ok:
+                     model.setData(index, double_val, Qt.EditRole)
+                else: # Conversion failed
+                    model.setData(index, 0.0, Qt.EditRole) # Default to 0.0 on error
+            return # Processed
+
+        # Handle other numeric columns
+        try:
+            if col in [COL_PURITY, COL_WAGE_RATE]:
+                double_val, ok = locale.toDouble(value)
+                model.setData(index, double_val if ok else 0.0, Qt.EditRole)
+            elif col == COL_PIECES:
+                model.setData(index, int(value) if value else 0, Qt.EditRole)
+            else: # Handle non-numeric columns
                 model.setData(index, value, Qt.EditRole)
-        except ValueError:
+        except ValueError: # Catch int conversion error
              if col == COL_PIECES:
                  model.setData(index, 0, Qt.EditRole)
-             else:
-                 model.setData(index, value, Qt.EditRole)
+             else: # Fallback for others
+                 model.setData(index, value, Qt.EditRole) # Keep original text
 
     def updateEditorGeometry(self, editor, option, index):
-        editor.setGeometry(option.rect)
+         # Ensure editor is a QLineEdit before proceeding
+        if isinstance(editor, QLineEdit):
+            editor.setGeometry(option.rect)
+        else:
+            super().updateEditorGeometry(editor, option, index)
+
+    # Override eventFilter to handle Enter/Tab on empty Gross/Poly
+    def eventFilter(self, editor, event):
+        if event.type() == QEvent.KeyPress and isinstance(editor, QLineEdit):
+            index = editor.property("modelIndex")
+            if index and index.isValid():
+                col = index.column()
+                # Check for Enter/Return/Tab press
+                if event.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Tab):
+                    # If it's Gross/Poly and the editor is empty...
+                    if col in [COL_GROSS, COL_POLY] and editor.text() == "":
+                        # Directly set model data to 0.0
+                        index.model().setData(index, 0.0, Qt.EditRole)
+                        # Emit closeEditor signal to close the editor properly
+                        self.closeEditor.emit(editor, QStyledItemDelegate.SubmitModelCache)
+                        return True # Event handled, stop further processing
+
+        # For all other events or conditions, use the default behavior
+        return super().eventFilter(editor, event)
 
 
 class EstimateUI:

@@ -132,6 +132,7 @@ AttributeError: ... no attribute 'get': Fixed by replacing .get() calls on sqlit
 AttributeError: 'MainWindow' object has no attribute 'estimate_widget': Fixed by ensuring setup_menu_bar() is called after self.estimate_widget is initialized in MainWindow.__init__.
 Import Errors: Fixed by importing classes (QLocale, QValidators) from the correct Qt module (QtCore, QtGui).
 Column Indices: Replaced magic numbers with named constants (e.g., COL_CODE) for clarity and maintainability.
+Net Wt Calculation (Locale Issue): If Net Wt stops calculating, check `_get_cell_float` in `estimate_entry_logic.py`. A previous issue was caused by a missing `from PyQt5.QtCore import QLocale` import, preventing locale-based number parsing. The fix involved adding the import and ensuring the fallback `float()` conversion handles potential errors.
 Potential Future Debugging Areas:
 Complex Interactions: Focus changes, signal blocking (blockSignals(True/False)), and QTimer.singleShot usage in estimate_entry_logic.py manage complex interactions but could be prone to subtle bugs if modified carelessly.
 Data Conversion/Validation: Ensure all numeric conversions (float(), int(), locale.toDouble()) handle edge cases (empty strings, invalid formats) robustly, especially when reading from the UI before saving or calculation.

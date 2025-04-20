@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from PyQt5.QtWidgets import (QTableWidgetItem, QMessageBox, QDialog)
-from PyQt5.QtCore import Qt, QDate, QTimer
+from PyQt5.QtCore import Qt, QDate, QTimer, QLocale # Import QLocale
 from PyQt5.QtGui import QColor
 
 from item_selection_dialog import ItemSelectionDialog
@@ -316,13 +316,30 @@ class EstimateLogic:
         """Safely get float value from a cell."""
         item = self.item_table.item(row, col)
         text = item.text().strip() if item else ""
+        value = default
+        ok = False
+        # 1. Try parsing using system locale
         try:
-            # Use system locale to parse float potentially containing comma
             locale = QLocale.system()
             f_val, ok = locale.toDouble(text)
-            return f_val if ok else default
-        except Exception: # Catch any parsing error broadly
-            return default
+            if ok:
+                value = f_val
+        except Exception:
+            ok = False # Ensure ok is false if exception occurs
+
+        # 2. If locale parsing failed or returned not ok, try standard float conversion
+        if not ok and text:
+            try:
+                # Replace comma with period for standard float conversion
+                text_for_float = text.replace(',', '.')
+                value = float(text_for_float)
+                ok = True
+            except ValueError:
+                ok = False # Explicitly set ok to False on error
+            except Exception: # Catch other potential errors
+                 ok = False
+
+        return value if ok else default
 
     def _get_cell_int(self, row, col, default=1):
         """Safely get integer value from a cell."""

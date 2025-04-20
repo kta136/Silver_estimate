@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 import sys
 import os
+import traceback
+
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QShortcut,
                              QMenuBar, QMenu, QAction, QMessageBox, QDialog, QStatusBar) # Added QStatusBar
 from PyQt5.QtGui import QKeySequence
@@ -88,8 +90,9 @@ class MainWindow(QMainWindow):
         tools_menu.addAction(db_reset_action)
 
         # Silver bar management
-        silver_bars_action = QAction("&Silver Bar Management", self)
-        silver_bars_action.triggered.connect(self.show_silver_bars)
+        silver_bars_action = QAction("&Silver Bar Management", self)  # Keep original name maybe?
+        silver_bars_action.setStatusTip("Add, view, transfer, or assign silver bars to lists")
+        silver_bars_action.triggered.connect(self.show_silver_bars)  # Connect to MainWindow's method
         tools_menu.addAction(silver_bars_action)
 
         # Reports menu
@@ -157,11 +160,16 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to reset database: {str(e)}")
 
-    def show_silver_bars(self):
+    def show_silver_bars(self):  # Keep this method name for consistency
         """Show silver bar management dialog."""
+        # Import the MODIFIED dialog class
         from silver_bar_management import SilverBarDialog
-        silver_dialog = SilverBarDialog(self.db, self)
-        silver_dialog.exec_()
+        try:
+            silver_dialog = SilverBarDialog(self.db, self)
+            silver_dialog.exec_()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to open Silver Bar Management: {e}")
+            print(traceback.format_exc())
 
     def show_estimate_history(self):
         """Show estimate history dialog."""

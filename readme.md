@@ -158,6 +158,9 @@ Font Settings Implementation & Debugging (April 2025):
 
 Potential Future Debugging Areas & TODO:
 - **TODO:** Fix print font application when printing from Estimate History dialog (`estimate_history.py`). The `main_window_ref` passed seems correct, but the `PrintManager` initialized from there isn't using the font. Investigate `PrintManager` initialization or font object state when called from the history dialog context.
+- **TODO:** Add Hotkeys: Implement keyboard shortcuts (e.g., Ctrl+S for Save, Ctrl+P for Print, Ctrl+H for History) for common actions in the estimate entry screen (`main.py`, `estimate_entry_logic.py`).
+- **TODO:** Improve Readability: Adjust UI spacing in the estimate entry screen (`estimate_entry_ui.py`) for better visual separation between elements (e.g., using `addSpacing`).
+- **TODO:** Conditional Column Logic: Implement logic in `estimate_entry_logic.py` to disable and skip navigation for the "Pieces" column if an item's wage type is "WT" (Weight), and disable/skip the "Wage Rate" column if the type is "PC" (Piece). This involves modifying `populate_item_row`, `move_to_next_cell`, and `move_to_previous_cell`.
 - Complex Interactions: Focus changes, signal blocking (blockSignals(True/False)), and QTimer.singleShot usage in estimate_entry_logic.py manage complex interactions but could be prone to subtle bugs if modified carelessly.
 - Data Conversion/Validation: Ensure all numeric conversions (float(), int(), locale.toDouble()) handle edge cases (empty strings, invalid formats) robustly, especially when reading from the UI before saving or calculation.
 - Database Schema Migrations: The current setup_database attempts simple ALTER TABLE commands which might fail on older SQLite versions or complex changes. A more robust migration system might be needed for production deployment if the schema evolves significantly.

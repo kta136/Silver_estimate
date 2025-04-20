@@ -75,8 +75,7 @@ Designed for silver shops to:
 ---
 
 ## 🔁 Project Structure
-Use code with caution.
-Markdown
+```
 .
 ├── main.py # App entry point, MainWindow, Menu Bar
 ├── estimate_entry.py # Estimate screen main widget (combines UI/Logic)
@@ -90,7 +89,8 @@ Markdown
 ├── database_manager.py # All SQLite database operations and schema setup
 ├── readme.md # This file
 └── database/
-└── estimation.db # SQLite database file (auto-created)
+    └── estimation.db # SQLite database file (auto-created)
+```
 ---
 
 ## 🚀 Getting Started
@@ -118,10 +118,13 @@ Markdown
 ### Running the Application
 ```bash
 python main.py
-
+```
 
 On the first run, a database folder and the estimation.db SQLite file will be created automatically if they don't exist. The necessary tables will also be created.
-📝 Development & Debugging Notes for AI
+
+---
+
+## 📝 Development & Debugging Notes for AI
 This file reflects the state after v1.1 feature additions/fixes.
 Key Concepts & Logic Flow:
 Estimate Entry: The core logic resides in estimate_entry_logic.py but is executed within the context of the EstimateEntryWidget instance (estimate_entry.py). EstimateUI defines the widgets.
@@ -196,3 +199,253 @@ Printing: `PrintManager` handles formatting. Estimate slips use manual fixed-wid
 
 👤 Author
 This project is managed and maintained by Kartikey Agarwal.
+
+---
+
+## 📋 Additional Code Analysis and Enhancement Suggestions (April 2025)
+
+### Core Architecture Understanding
+
+#### Column Constants System
+The application uses a consistent column index constants system defined in `estimate_entry_ui.py`:
+```python
+COL_CODE = 0
+COL_ITEM_NAME = 1
+COL_GROSS = 2
+COL_POLY = 3
+COL_NET_WT = 4
+# ... more constants
+```
+These constants are used throughout the codebase for table operations, making the code more maintainable. When adding new columns, update these constants and all references.
+
+#### Signal Flow and Event Handling
+The application follows a consistent pattern for event handling:
+1. UI Events (keypress, cell edit) trigger methods in `estimate_entry_logic.py`
+2. These methods update calculated values and UI elements
+3. `calculate_totals()` is called to refresh all summary values
+
+Understanding this signal flow is crucial when debugging UI responsiveness issues.
+
+### Identified Issues and Enhancement Opportunities
+
+#### 1. Font Settings in History Dialog Printing
+**Problem:** Font settings don't apply when printing from Estimate History.
+
+**Root Cause Analysis:**
+The print font isn't correctly transferred from `main_window` to `PrintManager` when accessed from the history dialog context.
+
+**Suggested Fix:**
+```python
+# In estimate_history.py, ensure print_font access is working
+def print_estimate(self):
+    # Debug verification
+    if hasattr(self.main_window, 'print_font'):
+        print(f"Using font: {self.main_window.print_font.family()}, "
+              f"size: {getattr(self.main_window.print_font, 'float_size', 0)}")
+    else:
+        print("main_window.print_font not available!")
+        
+    # Use getattr with fallback to safely access print_font
+    print_font = getattr(self.main_window, 'print_font', None)
+    print_manager = PrintManager(self.db_manager, print_font=print_font)
+    # Continue with existing code...
+```
+
+#### 2. Refactoring Opportunity: Table Navigation Logic
+**Problem:** Navigation logic for table cells is complex and doesn't handle conditional columns.
+
+**Suggestion:** Extract navigation logic to dedicated methods with wage-type awareness:
+```python
+def _find_next_cell(self, current_row, current_col):
+    """Determine the next logical cell based on current position and row data."""
+    wage_type = self._get_row_wage_type(current_row)
+    
+    # Custom navigation logic based on column and wage type
+    if current_col == COL_PURITY:
+        # For PC wage type, go to wage rate
+        if wage_type == "PC":
+            return current_row, COL_WAGE_RATE
+        # For WT wage type, potentially skip to pieces
+        else:
+            return current_row, COL_PIECES
+    
+    # Handle other column transitions
+    # ...
+    
+    return next_row, next_col
+```
+
+#### 3. Input Validation Enhancement
+**Problem:** `NumericDelegate` provides validation but limited visual feedback.
+
+**Suggestion:** Add visual cues for validation status:
+```python
+# In NumericDelegate.createEditor
+def createEditor(self, parent, option, index):
+    editor = QLineEdit(parent)
+    
+    # Add visual styling for validation feedback
+    editor.setStyleSheet("""
+        QLineEdit { background-color: white; }
+        QLineEdit:focus:invalid { background-color: #FFDDDD; }
+    """)
+    
+    # Continue with existing validation logic...
+```
+
+#### 4. Database Schema Migration Framework
+**Problem:** The current database migration approach is fragile for complex changes.
+
+**Suggestion:** Implement proper version-based migration system:
+```python
+def _apply_migrations(self):
+    """Apply database migrations based on current schema version."""
+    # Create version tracking table if needed
+    self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS db_version (
+            version INTEGER PRIMARY KEY,
+            applied_date TEXT
+        )
+    """)
+    
+    # Get current version
+    self.cursor.execute("SELECT MAX(version) as current_version FROM db_version")
+    result = self.cursor.fetchone()
+    current_version = result['current_version'] if result and result['current_version'] else 0
+    
+    # Define migrations to apply
+    migrations = [
+        # Migration 1: Initial schema (already in setup_database)
+        None,
+        # Migration 2: Add list_id to bar_transfers
+        """ALTER TABLE bar_transfers 
+           ADD COLUMN list_id INTEGER REFERENCES silver_bar_lists(list_id)""",
+        # Migration 3: Future migration
+        # Add more migrations here
+    ]
+    
+    # Apply needed migrations
+    for version, sql in enumerate(migrations[1:], start=1):
+        if version > current_version and sql:
+            try:
+                self.cursor.execute("BEGIN TRANSACTION")
+                self.cursor.execute(sql)
+                applied_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                self.cursor.execute(
+                    "INSERT INTO db_version (version, applied_date) VALUES (?, ?)",
+                    (version, applied_date)
+                )
+                self.cursor.execute("COMMIT")
+                print(f"Applied migration {version}")
+            except sqlite3.Error as e:
+                self.cursor.execute("ROLLBACK")
+                print(f"Migration {version} failed: {e}")
+                break
+```
+
+#### 5. Silver Bar Inventory Integration
+**Problem:** The link between estimate-entered silver bars and inventory is fragile.
+
+**Suggestion:** Create robust bar number generation when adding from estimates:
+```python
+# In save_estimate when adding silver bars to inventory
+if is_silver_bar and not is_return:
+    # Generate a unique bar number if code is empty
+    bar_no = item_dict['code'].strip()
+    if not bar_no:
+        # Format: SB-YYYYMMDD-NNNNN
+        timestamp = datetime.now().strftime('%Y%m%d')
+        sequence = self._get_next_bar_sequence()
+        bar_no = f"SB-{timestamp}-{sequence:05d}"
+        # Update the item code for display in the UI
+        self.item_table.blockSignals(True)
+        try:
+            self.item_table.item(row, COL_CODE).setText(bar_no)
+        finally:
+            self.item_table.blockSignals(False)
+    
+    # Add to inventory with the properly formatted bar_no
+    silver_bars_for_inventory.append({**item_dict, 'bar_no': bar_no})
+```
+
+#### 6. Error Handling Improvements
+**Problem:** Generic exception handlers can mask specific issues.
+
+**Suggestion:** Add more granular exception handling:
+```python
+try:
+    # Existing calculation code
+except ValueError as e:
+    # Specific handling for value errors (e.g., format issues)
+    self._status(f"Invalid value format: {e}", 3000)
+    return default_value
+except ZeroDivisionError:
+    # Specific handling for division by zero
+    self._status("Cannot divide by zero", 3000)
+    return 0.0
+except Exception as e:
+    # Log unexpected errors with traceback
+    print(f"Unexpected error in calculation: {e}")
+    print(traceback.format_exc())
+    self._status(f"Calculation error: {e}", 5000)
+    return default_value
+```
+
+#### 7. UI Spacing and Layout Improvements
+**Problem:** The UI could use better visual separation between sections.
+
+**Suggestion:** Add strategic spacing in the UI:
+```python
+# In estimate_entry_ui.py, _setup_ui method
+def setup_ui(self, widget):
+    # After header section
+    self.layout.addSpacing(10)
+    
+    # After header form
+    self._setup_header_form(widget)
+    self.layout.addSpacing(8)
+    
+    # After table
+    self._setup_item_table(widget)
+    self.layout.addWidget(self.item_table)
+    self.layout.addSpacing(12)
+    
+    # After totals
+    self._setup_totals()
+    self.layout.addSpacing(15)
+```
+
+#### 8. Performance Optimization for Large Datasets
+**Problem:** Table operations might slow down with many rows.
+
+**Suggestion:** Batch operations for multi-row updates:
+```python
+# When loading many rows or calculating totals
+def update_multiple_rows(self, start_row, end_row):
+    """Update calculations for a range of rows efficiently."""
+    self.item_table.blockSignals(True)
+    try:
+        # Process all rows first
+        for row in range(start_row, end_row + 1):
+            self.calculate_net_weight_for_row(row)
+            self.calculate_fine_for_row(row)
+            self.calculate_wage_for_row(row)
+        
+        # Calculate totals once after all rows are updated
+        self.calculate_totals()
+    finally:
+        self.item_table.blockSignals(False)
+```
+
+### Implementation Priority Suggestions
+
+In order of importance, consider addressing:
+
+1. **Font Settings Bug**: Fix the history dialog print font issue
+2. **Navigation Logic**: Implement conditional column handling based on wage type
+3. **Database Migrations**: Add proper versioning before schema changes become more complex
+4. **Input Validation**: Improve error handling and visual feedback
+5. **UI Spacing**: Enhance visual experience with better layout
+6. **Silver Bar Integration**: Strengthen the inventory linking system
+
+These targeted improvements will enhance the application's robustness while maintaining its core functionality and user experience.

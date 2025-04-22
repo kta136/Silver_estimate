@@ -74,7 +74,9 @@ class EstimateLogic:
             return
 
         self._status(f"Generating print preview for {voucher_no}...")
-        print_manager = PrintManager(self.db_manager)
+        # Pass the stored main window font setting
+        current_print_font = getattr(self.main_window, 'print_font', None)
+        print_manager = PrintManager(self.db_manager, print_font=current_print_font)
         success = print_manager.print_estimate(voucher_no, self)
         if success:
              self._status(f"Print preview for {voucher_no} generated.", 3000)
@@ -745,7 +747,8 @@ class EstimateLogic:
     def show_history(self):
         """Show the estimate history dialog."""
         from estimate_history import EstimateHistoryDialog
-        history_dialog = EstimateHistoryDialog(self.db_manager, self)
+        # Pass the stored main_window reference, not self (EstimateEntryWidget)
+        history_dialog = EstimateHistoryDialog(self.db_manager, main_window_ref=self.main_window, parent=self)
         if history_dialog.exec_() == QDialog.Accepted:
             voucher_no = history_dialog.selected_voucher
             if voucher_no:

@@ -246,6 +246,13 @@ class EstimateUI:
         self.clear_button = QPushButton("New Estimate")
         self.clear_button.setToolTip("Clear the form to start a new estimate")
         table_actions_layout.addWidget(self.clear_button)
+
+        # Add Delete This Estimate button
+        table_actions_layout.addSpacing(10) # Space before delete
+        self.delete_estimate_button = QPushButton("Delete This Estimate")
+        self.delete_estimate_button.setToolTip("Delete the currently loaded/displayed estimate")
+        # Connection will be added in EstimateLogic
+        table_actions_layout.addWidget(self.delete_estimate_button)
         # ------------------------------------
 
         # Table Font Size Control Removed - Moved to Tools Menu

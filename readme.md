@@ -1,4 +1,4 @@
-# 🧾 Silver Estimation App — v1.12
+# 🧾 Silver Estimation App — v1.14
 
 A desktop application built using **PyQt5** and **SQLite** for managing silver sales estimates, including item-wise entries, silver bar inventory, returns, and print-ready formatted outputs.
 
@@ -16,7 +16,7 @@ This app is designed for silver shops to:
 
 ---
 
-## ✅ Features (v1.12)
+## ✅ Features (v1.14)
 
 ### 🔢 Estimate Entry
 
@@ -36,6 +36,7 @@ This app is designed for silver shops to:
 - Backspace in an empty editable cell navigates to the previous cell.
 - Improved readability with better spacing, separators, and right-aligned totals.
 - Table background uses alternating light colors (off-white/light gray).
+- Option to delete the currently loaded estimate.
 
 ### 📦 Item Master
 
@@ -52,9 +53,10 @@ This app is designed for silver shops to:
 ### 🕓 Estimate History
 
 - Browse past estimates by date or voucher number.
-- View summary totals.
+- View summary totals (includes Net Fine, Net Wage, Grand Total).
 - Reload selected estimate for editing.
-- Print directly from history.
+- Print directly from history (uses selected print font settings).
+- Option to delete the selected estimate.
 
 ### 🧱 Silver Bar Management (Basic v1.0)
 
@@ -67,13 +69,13 @@ This app is designed for silver shops to:
 ### 🖨️ Printing
 
 - Print Preview opens maximized and zoomed to 125% by default.
-- Estimate slip uses fixed-width formatting (no `|` separators, relies on spacing).
-- Printed sections with individual totals for:
+- Estimate slip uses fixed-width formatting (no `|` separators, relies on spacing) with S.No. column per section.
+- Printed sections with individual totals (aligned, Labour/Poly rounded) for:
   - Regular Items
   - Silver Bars
   - Return Goods
   - Return Bars
-- Final summary displays Net Fine, Silver Cost, Labour, Total (Net calculated as Regular - Bars - Returns).
+- Final summary displays Net Fine, Silver Cost, Labour, Total (Net calculated as Regular - Bars - Returns; Labour, Cost, Total rounded to 0 decimals).
 - Silver Bar Inventory printing via HTML table format.
 
 ### 🔤 Font Settings
@@ -81,7 +83,10 @@ This app is designed for silver shops to:
 - Configure **Print Font** (family, size min 5pt, bold) via "Tools -> Print Font Settings...". Applies only to estimate slip print output. Persists via `QSettings`.
 - Configure **Table Font Size** (7-16pt) via "Tools -> Table Font Size...". Applies to the estimate entry table UI. Persists via `QSettings`.
 
----
+### 🛠️ Data Management (Tools Menu)
+
+- **DELETE ALL DATA:** Replaces "Reset Database Tables". Drops and recreates all tables, deleting all items, estimates, bars, etc. Requires confirmation.
+- **Delete All Estimates:** Deletes all estimate headers and line items. Requires confirmation.
 
 ## 🛠️ Tech Stack
 
@@ -260,18 +265,41 @@ This file reflects the state after v1.1 feature additions/fixes.
 - **Implementation:** Modified `format_line`, `format_totals_line`, `header_line`, and `final_line` construction in `print_manager._generate_estimate_manual_format` to use f-string padding and spacing instead of joining with `|`. Added calls to `format_totals_line` after each section loop. Removed the old combined total line.
 - **Note:** Alignment now relies purely on fixed-width spacing and the chosen print font. Non-monospace fonts might cause minor misalignments.
 
-#### 6. ⏪ Reverted Features (Previously Numbered 3)
+#### 6. 💅 Print Format Update (v1.14)
 
-- **Hotkeys (Ctrl+S/P/H)**  
-- **UI spacing improvements**  
+- **Change:** Added Serial Number (S.No) column, resetting for each section. Removed decimals from Poly column. Rounded Labour in section totals. Rounded Labour, S.Cost, Total in final summary. Ensured section totals align under headers.
+- **Implementation:** Modified `format_line` and `format_totals_line` in `print_manager.py` for formatting and alignment. Added `sno_counter` reset logic before each section loop.
+
+#### 7. 🗑️ Estimate Deletion Features (v1.14)
+
+- **Change:** Added ability to delete all estimates or a single estimate.
+- **Implementation:**
+    - Added `delete_all_estimates` and `delete_single_estimate` methods to `DatabaseManager`.
+    - Renamed "Reset Database Tables" menu action to "DELETE ALL DATA" and connected to `delete_all_data` handler in `MainWindow` (which calls `db.drop_tables`).
+    - Added "Delete All Estimates..." menu action connected to `delete_all_estimates` handler in `MainWindow`.
+    - Added "Delete This Estimate" button and logic to `EstimateEntryWidget`/`EstimateLogic`.
+    - Added "Delete Selected" button and logic to `EstimateHistoryDialog`.
+    - All deletion actions include confirmation dialogs.
+
+#### 8. ⏪ Reverted Features (Previously Numbered 6)
+
+- **Hotkeys (Ctrl+S/P/H)**
+- **UI spacing improvements**
 - **Conditional column behavior** (hide/show Wage/Pieces based on wage type)
 
 ---
 
 ### 🧪 Known Issues / TODO
 
-- [x] ~~Fix font settings not applying in Estimate History print~~ (Fixed in v1.12: Corrected `main_window_ref` passed from `estimate_entry_logic.py`)
-- [ ] Re-add UI spacing improvements (partially addressed via manual spacing in v1.12, but original dynamic spacing was reverted).
+- [x] ~~Print: Add Serial number column to item lines & Round off printed amounts (e.g., Labour, S.Cost, Total) to nearest integer or 0 decimal places.~~ (Completed in v1.14)
+- [x] ~~Tools Menu: Rename "Reset Database Tables" action to "DELETE ALL DATA".~~ (Completed in v1.14)
+- [x] ~~Estimate History: Change "Total Value" column to display Grand Total (Value + Wage); Add a new column for "Net Fine".~~ (Completed in v1.14)
+- [x] ~~Tools Menu: Add "Delete All Estimates" option (requires DB function and confirmation dialog).~~ (Completed in v1.14)
+- [x] ~~Delete Single Estimate: Add option/button (with confirmation) to delete the currently loaded estimate (on estimate screen) or the selected estimate (in history dialog). Requires DB function.~~ (Completed in v1.14)
+- [ ] Estimate Screen: Allow table column widths to be resized by the user and persist the sizes between sessions (using `QSettings`).
+- [ ] Estimate Notes: Add a text box (e.g., next to Silver Rate) to add notes to an estimate; save/load notes with estimate; display notes in Estimate History.
+- [ ] Encryption/Password: Implement password protection on startup (hash/salt storage, login dialog, first-time setup, reset option that deletes data).
+- [ ] Re-add UI spacing improvements (original dynamic spacing was reverted).
 - [ ] Re-add conditional column navigation/visibility based on Wage Type.
 - [ ] Improve signal handling and float parsing for edge cases.
 - [ ] Replace fragile `item_code == bar_no` logic for bar tracking.
@@ -309,7 +337,8 @@ pip install --upgrade --force-reinstall PyQt5
 - For major DB schema changes, consider dumping data and recreating `estimation.db` with updated schema.
 - **Backspace Navigation:** Pressing Backspace in an empty, editable cell in the estimate table moves focus to the previous cell. This is handled within the `NumericDelegate.eventFilter` in `estimate_entry_ui.py`, which is more reliable for intercepting events within the cell editor than using the parent widget's `keyPressEvent`.
 - **Passing Window References:** When needing access to main window properties (like settings) from dialogs or child widgets, ensure the actual `MainWindow` instance is passed during instantiation, not just `self` from the calling widget (as seen in the history print font fix).
-- **Print Formatting:** The estimate slip format relies on fixed-width spacing and `<pre>` tags. While the selected print font (family, size, bold) is now applied via `setDefaultFont`, non-monospace fonts might cause minor alignment issues in the printout compared to the previous hardcoded 'Courier New'.
+- **Print Formatting:** The estimate slip format relies on fixed-width spacing and `<pre>` tags. Alignment depends heavily on the calculated widths (`W_SNO`, `W_FINE`, etc.) and the use of a monospace or near-monospace font for the print output. Adjust widths carefully if changing fonts significantly. The `format_totals_line` function now explicitly calculates padding based on column widths to align totals.
+- **Database Transactions:** Deletion operations (single estimate, all estimates, all data via drop tables) are wrapped in `BEGIN TRANSACTION`/`COMMIT`/`ROLLBACK` blocks in `DatabaseManager` for safety.
 
 ---
 
@@ -588,11 +617,11 @@ def update_multiple_rows(self, start_row, end_row):
 
 In order of importance, consider addressing:
 
-1. **Font Settings Bug**: Fix the history dialog print font issue
+1. ~~**Font Settings Bug**~~: Fix the history dialog print font issue (Completed in v1.12)
 2. **Navigation Logic**: Implement conditional column handling based on wage type
 3. **Database Migrations**: Add proper versioning before schema changes become more complex
 4. **Input Validation**: Improve error handling and visual feedback
-5. **UI Spacing**: Enhance visual experience with better layout
+5. **UI Spacing**: Enhance visual experience with better layout (Partially addressed in v1.12 with manual spacing/separators)
 6. **Silver Bar Integration**: Strengthen the inventory linking system
 
 These targeted improvements will enhance the application's robustness while maintaining its core functionality and user experience.

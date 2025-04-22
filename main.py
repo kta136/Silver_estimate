@@ -91,9 +91,22 @@ class MainWindow(QMainWindow):
         tools_menu = menu_bar.addMenu("&Tools")
 
         # Database actions
-        db_reset_action = QAction("&Reset Database Tables", self)
-        db_reset_action.triggered.connect(self.reset_database)
-        tools_menu.addAction(db_reset_action)
+        # Delete All Estimates Action
+        db_delete_estimates_action = QAction("Delete All &Estimates...", self)
+        db_delete_estimates_action.setStatusTip("WARNING: Deletes all saved estimates!")
+        db_delete_estimates_action.triggered.connect(self.delete_all_estimates) # Connect to new handler
+        tools_menu.addAction(db_delete_estimates_action)
+
+        tools_menu.addSeparator() # Separator before delete all data
+
+        # Delete All Data Action
+        db_delete_all_action = QAction("&DELETE ALL DATA", self) # Renamed action
+        db_delete_all_action.setStatusTip("WARNING: Deletes all items, estimates, bars, and lists!") # Added status tip
+        # Optionally make text red (might not work reliably across platforms/styles)
+        # db_delete_all_action.setFont(QFont("Arial", weight=QFont.Bold)) # Example: Bold
+        # db_delete_all_action.setData(QColor("red")) # Example: Store color data (doesn't directly style menu)
+        db_delete_all_action.triggered.connect(self.delete_all_data) # Renamed connected method
+        tools_menu.addAction(db_delete_all_action)
 
         # Silver bar management
         silver_bars_action = QAction("&Silver Bar Management", self)  # Keep original name maybe?
@@ -154,30 +167,53 @@ class MainWindow(QMainWindow):
         self.estimate_widget.hide()
         self.item_master_widget.show()
 
-    def reset_database(self):
-        """Drop and recreate all database tables."""
-        reply = QMessageBox.question(self, "Reset Database",
-                                     "Are you sure you want to reset the database? This will delete ALL data.",
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+    def delete_all_data(self): # Renamed method
+        """Drop and recreate all database tables, effectively deleting all data."""
+        # Use QMessageBox.warning for more emphasis
+        reply = QMessageBox.warning(self, "CONFIRM DELETE ALL DATA", # Changed title
+                                     "Are you absolutely sure you want to delete ALL data?\n"
+                                     "This includes all items, estimates, silver bars, and lists.\n"
+                                     "THIS ACTION CANNOT BE UNDONE.", # Updated message
+                                     QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel) # Changed buttons
 
         if reply == QMessageBox.Yes:
             try:
                 # Use the drop_tables method instead of removing the file
-                success = self.db.drop_tables()
+                success = self.db.drop_tables() # This method drops all tables
 
                 if success:
                     # Recreate tables
                     self.db.setup_database()
 
-                    # Refresh the widgets
+                    # Refresh the widgets to reflect empty state
                     self.item_master_widget.load_items()
-                    self.estimate_widget.clear_form()
+                    self.estimate_widget.clear_form(confirm=False) # Clear estimate form without confirmation
 
-                    QMessageBox.information(self, "Success", "Database tables have been reset successfully.")
+                    QMessageBox.information(self, "Success", "All data has been deleted successfully.") # Updated success message
                 else:
-                    QMessageBox.critical(self, "Error", "Failed to reset database tables.")
+                    QMessageBox.critical(self, "Error", "Failed to delete all data (dropping tables failed).") # Updated error message
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to reset database: {str(e)}")
+                QMessageBox.critical(self, "Error", f"Failed to delete all data: {str(e)}") # Updated error message
+
+    def delete_all_estimates(self):
+        """Handle the 'Delete All Estimates' action."""
+        reply = QMessageBox.warning(self, "Confirm Delete All Estimates",
+                                     "Are you absolutely sure you want to delete ALL estimates?\n"
+                                     "This action cannot be undone.",
+                                     QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
+
+        if reply == QMessageBox.Yes:
+            try:
+                success = self.db.delete_all_estimates()
+                if success:
+                    QMessageBox.information(self, "Success", "All estimates have been deleted successfully.")
+                    # Clear the current estimate form as well
+                    if hasattr(self, 'estimate_widget'):
+                        self.estimate_widget.clear_form(confirm=False)
+                else:
+                    QMessageBox.critical(self, "Error", "Failed to delete all estimates (database error).")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"An unexpected error occurred: {str(e)}")
 
     def show_silver_bars(self):  # Keep this method name for consistency
         """Show silver bar management dialog."""
@@ -206,7 +242,7 @@ class MainWindow(QMainWindow):
         """Show about dialog."""
         QMessageBox.about(self, "About Silver Estimation App",
                           "Silver Estimation App\n\n"
-                          "Version 1.12\n\n"
+                          "Version 1.14\n\n" # Updated version
                           "A comprehensive tool for managing silver estimations, "
                           "item inventory, and silver bars.\n\n"
                           "© 2023 Silver Estimation App")

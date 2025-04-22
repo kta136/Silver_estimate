@@ -62,20 +62,21 @@ class EstimateHistoryDialog(QDialog):
         
         # Estimates table
         self.estimates_table = QTableWidget()
-        self.estimates_table.setColumnCount(7)
+        self.estimates_table.setColumnCount(8) # Increased column count
         self.estimates_table.setHorizontalHeaderLabels([
-            "Voucher No", "Date", "Silver Rate", "Total Gross", 
-            "Total Net", "Total Fine", "Total Value"
+            "Voucher No", "Date", "Silver Rate", "Total Gross",
+            "Total Net", "Net Fine", "Net Wage", "Grand Total" # Added Net Fine, Renamed Total Value, Added Net Wage for clarity
         ])
-        
-        # Set column widths
-        self.estimates_table.setColumnWidth(0, 120)  # Voucher No
-        self.estimates_table.setColumnWidth(1, 100)  # Date
-        self.estimates_table.setColumnWidth(2, 100)  # Silver Rate
-        self.estimates_table.setColumnWidth(3, 100)  # Total Gross
-        self.estimates_table.setColumnWidth(4, 100)  # Total Net
-        self.estimates_table.setColumnWidth(5, 100)  # Total Fine
-        self.estimates_table.setColumnWidth(6, 120)  # Total Value
+
+        # Set column widths (adjusting for new columns)
+        self.estimates_table.setColumnWidth(0, 110)  # Voucher No
+        self.estimates_table.setColumnWidth(1, 90)   # Date
+        self.estimates_table.setColumnWidth(2, 90)   # Silver Rate
+        self.estimates_table.setColumnWidth(3, 90)   # Total Gross
+        self.estimates_table.setColumnWidth(4, 90)   # Total Net
+        self.estimates_table.setColumnWidth(5, 90)   # Net Fine (New)
+        self.estimates_table.setColumnWidth(6, 90)   # Net Wage (New - needed for Grand Total calc)
+        self.estimates_table.setColumnWidth(7, 110)  # Grand Total (Renamed)
         
         # Table properties
         self.estimates_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -95,7 +96,14 @@ class EstimateHistoryDialog(QDialog):
         self.print_button = QPushButton("Print Selected")
         self.print_button.clicked.connect(self.print_estimate)
         button_layout.addWidget(self.print_button)
-        
+
+        self.delete_button = QPushButton("Delete Selected") # New button
+        self.delete_button.setToolTip("Permanently delete the selected estimate")
+        self.delete_button.clicked.connect(self.delete_selected_estimate) # Connect to new handler
+        button_layout.addWidget(self.delete_button)
+
+        button_layout.addStretch(1) # Add stretch before close
+
         self.close_button = QPushButton("Close")
         self.close_button.clicked.connect(self.reject)
         button_layout.addWidget(self.close_button)
@@ -122,11 +130,19 @@ class EstimateHistoryDialog(QDialog):
             self.estimates_table.setItem(row, 2, QTableWidgetItem(f"{estimate['silver_rate']:.2f}"))
             self.estimates_table.setItem(row, 3, QTableWidgetItem(f"{estimate['total_gross']:.3f}"))
             self.estimates_table.setItem(row, 4, QTableWidgetItem(f"{estimate['total_net']:.3f}"))
-            self.estimates_table.setItem(row, 5, QTableWidgetItem(f"{estimate['total_fine']:.3f}"))
-            
-            # Calculate total value (Fine × Silver Rate)
-            total_value = estimate['total_fine'] * estimate['silver_rate']
-            self.estimates_table.setItem(row, 6, QTableWidgetItem(f"{total_value:.2f}"))
+            # Column 5: Net Fine
+            net_fine = estimate['total_fine'] if estimate['total_fine'] is not None else 0.0
+            self.estimates_table.setItem(row, 5, QTableWidgetItem(f"{net_fine:.3f}"))
+
+            # Column 6: Net Wage
+            net_wage = estimate['total_wage'] if estimate['total_wage'] is not None else 0.0
+            self.estimates_table.setItem(row, 6, QTableWidgetItem(f"{net_wage:.2f}"))
+
+            # Column 7: Grand Total (Net Value + Net Wage)
+            silver_rate = estimate['silver_rate'] if estimate['silver_rate'] is not None else 0.0
+            net_value = net_fine * silver_rate
+            grand_total = net_value + net_wage
+            self.estimates_table.setItem(row, 7, QTableWidgetItem(f"{grand_total:.2f}"))
     
     def get_selected_voucher(self):
         """Get the selected voucher number."""
@@ -167,3 +183,26 @@ class EstimateHistoryDialog(QDialog):
 
         if not success:
             QMessageBox.warning(self, "Print Error", f"Failed to print estimate {voucher_no}.")
+
+    def delete_selected_estimate(self):
+        """Handle deletion of the selected estimate."""
+        voucher_no = self.get_selected_voucher()
+        if not voucher_no:
+            QMessageBox.warning(self, "Selection Error", "Please select an estimate to delete.")
+            return
+
+        reply = QMessageBox.warning(self, "Confirm Delete Estimate",
+                                     f"Are you sure you want to permanently delete estimate '{voucher_no}'?\n"
+                                     "This action cannot be undone.",
+                                     QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
+
+        if reply == QMessageBox.Yes:
+            try:
+                success = self.db_manager.delete_single_estimate(voucher_no)
+                if success:
+                    QMessageBox.information(self, "Success", f"Estimate '{voucher_no}' deleted successfully.")
+                    self.load_estimates() # Refresh the list
+                else:
+                    QMessageBox.warning(self, "Delete Error", f"Estimate '{voucher_no}' could not be deleted (might already be deleted).")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"An unexpected error occurred during deletion: {str(e)}")

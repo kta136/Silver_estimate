@@ -382,6 +382,47 @@ class DatabaseManager:
             self.conn.commit(); return True
         except sqlite3.Error as e: self.conn.rollback(); print(f"DB error transferring bar {bar_id}: {e}"); return False
 
+    def delete_all_estimates(self):
+        """Deletes all records from estimates and estimate_items tables."""
+        try:
+            self.conn.execute('BEGIN TRANSACTION')
+            # Delete items first due to foreign key constraint (if ON DELETE CASCADE isn't used/reliable)
+            self.cursor.execute('DELETE FROM estimate_items')
+            deleted_items_count = self.cursor.rowcount
+            self.cursor.execute('DELETE FROM estimates')
+            deleted_estimates_count = self.cursor.rowcount
+            self.conn.commit()
+            print(f"Deleted {deleted_estimates_count} estimates and {deleted_items_count} estimate items.")
+            return True
+        except sqlite3.Error as e:
+            self.conn.rollback()
+            print(f"DB error deleting all estimates: {e}")
+            return False
+
+    def delete_single_estimate(self, voucher_no):
+        """Deletes a specific estimate and its items by voucher number."""
+        if not voucher_no:
+            print("Error: No voucher number provided for deletion.")
+            return False
+        try:
+            self.conn.execute('BEGIN TRANSACTION')
+            # Delete items first (optional if ON DELETE CASCADE works reliably, but safer)
+            self.cursor.execute('DELETE FROM estimate_items WHERE voucher_no = ?', (voucher_no,))
+            # Delete the estimate header
+            self.cursor.execute('DELETE FROM estimates WHERE voucher_no = ?', (voucher_no,))
+            deleted_count = self.cursor.rowcount # Check if the estimate header was found and deleted
+            self.conn.commit()
+            if deleted_count > 0:
+                print(f"Deleted estimate {voucher_no} successfully.")
+                return True
+            else:
+                print(f"Estimate {voucher_no} not found for deletion.")
+                return False # Indicate estimate wasn't found
+        except sqlite3.Error as e:
+            self.conn.rollback()
+            print(f"DB error deleting estimate {voucher_no}: {e}")
+            return False
+
     # --- Utility Methods ---
     def drop_tables(self):
         tables = ['estimate_items', 'estimates', 'items', 'bar_transfers', 'silver_bars', 'silver_bar_lists']

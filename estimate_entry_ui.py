@@ -133,8 +133,9 @@ class NumericDelegate(QStyledItemDelegate):
             index = editor.property("modelIndex")
             if index and index.isValid():
                 col = index.column()
+                key = event.key()
                 # Check for Enter/Return/Tab press
-                if event.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Tab):
+                if key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Tab):
                     # If it's Gross/Poly and the editor is empty...
                     if col in [COL_GROSS, COL_POLY] and editor.text() == "":
                         # Directly set model data to 0.0
@@ -142,6 +143,19 @@ class NumericDelegate(QStyledItemDelegate):
                         # Emit closeEditor signal to close the editor properly
                         self.closeEditor.emit(editor, QStyledItemDelegate.SubmitModelCache)
                         return True # Event handled, stop further processing
+                # --- Add Backspace handling ---
+                elif key == Qt.Key_Backspace and editor.text() == "":
+                    # Close the current editor without submitting data
+                    self.closeEditor.emit(editor, QStyledItemDelegate.NoHint)
+                    # Get the main estimate widget (parent of the table)
+                    table_widget = self.parent()
+                    if table_widget:
+                        estimate_widget = table_widget.parent()
+                        if estimate_widget and hasattr(estimate_widget, 'move_to_previous_cell'):
+                            # Use QTimer to ensure focus change happens after editor closes
+                            from PyQt5.QtCore import QTimer
+                            QTimer.singleShot(0, estimate_widget.move_to_previous_cell)
+                    return True # Event handled
 
         # For all other events or conditions, use the default behavior
         return super().eventFilter(editor, event)
@@ -158,15 +172,15 @@ class EstimateUI:
 
         # Header
         header_layout = QHBoxLayout()
-        header_label = QLabel("Silver Estimation")
-        header_label.setStyleSheet("font-size: 16pt; font-weight: bold;")
-        header_layout.addWidget(header_label)
-        header_layout.addStretch()
+        # header_label = QLabel("Silver Estimation") # Removed Title
+        # header_label.setStyleSheet("font-size: 16pt; font-weight: bold;")
+        # header_layout.addWidget(header_label)
+        header_layout.addStretch() # Keep stretch to push mode label right
         # ---- Add Mode Status Label ----
-        self.mode_indicator_label = QLabel("Mode: Regular Items") # Changed name
-        self.mode_indicator_label.setStyleSheet("font-weight: bold; color: green;")
-        self.mode_indicator_label.setToolTip("Indicates whether Return Items or Silver Bar entry mode is active.")
-        header_layout.addWidget(self.mode_indicator_label)
+        # self.mode_indicator_label = QLabel("Mode: Regular Items") # Moved to header form
+        # self.mode_indicator_label.setStyleSheet("font-weight: bold; color: green;")
+        # self.mode_indicator_label.setToolTip("Indicates whether Return Items or Silver Bar entry mode is active.")
+        # header_layout.addWidget(self.mode_indicator_label) # Moved to header form
         # ------------------------------
         self.layout.addLayout(header_layout)
 
@@ -197,6 +211,35 @@ class EstimateUI:
         #self.silver_bar_toggle_button.clicked.connect(widget.toggle_silver_bar_mode)
         table_actions_layout.addWidget(self.silver_bar_toggle_button)
 
+        # --- Add other action buttons here ---
+        table_actions_layout.addSpacing(20) # Add some space
+
+        # Save button
+        self.save_button = QPushButton("Save Estimate")
+        self.save_button.setToolTip("Save the current estimate details (Ctrl+S - standard shortcut often works)")
+        table_actions_layout.addWidget(self.save_button)
+
+        # Print button
+        self.print_button = QPushButton("Print Preview")
+        self.print_button.setToolTip("Preview and print the current estimate (requires saving first)")
+        table_actions_layout.addWidget(self.print_button)
+
+        # History button
+        self.history_button = QPushButton("Estimate History")
+        self.history_button.setToolTip("View, load, or print past estimates")
+        table_actions_layout.addWidget(self.history_button)
+
+        # Silver Bars button
+        self.silver_bars_button = QPushButton("Manage Silver Bars")
+        self.silver_bars_button.setToolTip("View and manage silver bar inventory")
+        table_actions_layout.addWidget(self.silver_bars_button)
+
+        # Clear button
+        self.clear_button = QPushButton("New Estimate")
+        self.clear_button.setToolTip("Clear the form to start a new estimate")
+        table_actions_layout.addWidget(self.clear_button)
+        # ------------------------------------
+
         # Add stretch to push buttons to the left
         table_actions_layout.addStretch()
 
@@ -215,12 +258,19 @@ class EstimateUI:
         line.setFrameShadow(QFrame.Sunken)
         self.layout.addWidget(line)
 
-        # Buttons layout
-        self._setup_buttons(widget) # Pass widget for tooltips
+        # Buttons layout moved to table_actions_layout
+        # self._setup_buttons(widget) # Removed call
 
 
     def _setup_header_form(self, widget):
         """Set up the header form for voucher details."""
+        # ---- Create Mode Status Label Here ----
+        # (Moved from setup_ui)
+        self.mode_indicator_label = QLabel("Mode: Regular Items")
+        self.mode_indicator_label.setStyleSheet("font-weight: bold; color: green;")
+        self.mode_indicator_label.setToolTip("Indicates whether Return Items or Silver Bar entry mode is active.")
+        # ------------------------------------
+
         form_layout = QGridLayout()
 
         # Voucher No
@@ -254,8 +304,11 @@ class EstimateUI:
         self.silver_rate_spin.setToolTip("Silver rate for calculating fine value.")
         form_layout.addWidget(self.silver_rate_spin, 0, 6)
 
+        # Add Mode Indicator Label here
+        form_layout.addWidget(self.mode_indicator_label, 0, 7, alignment=Qt.AlignLeft | Qt.AlignVCenter) # Add mode label
+
         # Add some spacing
-        form_layout.setColumnStretch(7, 1) # Add stretch to push elements left
+        form_layout.setColumnStretch(8, 1) # Adjust stretch column index
 
         # Add the form layout to the main layout
         self.layout.addLayout(form_layout)
@@ -423,36 +476,4 @@ class EstimateUI:
 
         self.layout.addLayout(totals_layout)
 
-    def _setup_buttons(self, widget):
-        """Set up the action buttons."""
-        button_layout = QHBoxLayout()
-        button_layout.addStretch() # Push buttons to the right
-
-        # Save button
-        self.save_button = QPushButton("Save Estimate")
-        self.save_button.setToolTip("Save the current estimate details (Ctrl+S - standard shortcut often works)")
-        button_layout.addWidget(self.save_button)
-
-        # Print button
-        self.print_button = QPushButton("Print Preview")
-        self.print_button.setToolTip("Preview and print the current estimate (requires saving first)")
-        button_layout.addWidget(self.print_button)
-
-        # History button
-        self.history_button = QPushButton("Estimate History")
-        self.history_button.setToolTip("View, load, or print past estimates")
-        button_layout.addWidget(self.history_button)
-
-        # Silver Bars button (perhaps rename for clarity?)
-        self.silver_bars_button = QPushButton("Manage Silver Bars")
-        self.silver_bars_button.setToolTip("View and manage silver bar inventory")
-        button_layout.addWidget(self.silver_bars_button)
-
-        # Clear button
-        self.clear_button = QPushButton("New Estimate")
-        self.clear_button.setToolTip("Clear the form to start a new estimate")
-        button_layout.addWidget(self.clear_button)
-
-        button_layout.addStretch() # Push buttons to the left
-
-        self.layout.addLayout(button_layout)
+    # Removed _setup_buttons method as buttons are now created directly in setup_ui

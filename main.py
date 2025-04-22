@@ -200,7 +200,7 @@ class MainWindow(QMainWindow):
         """Show about dialog."""
         QMessageBox.about(self, "About Silver Estimation App",
                           "Silver Estimation App\n\n"
-                          "Version 1.1\n\n"
+                          "Version 1.11\n\n"
                           "A comprehensive tool for managing silver estimations, "
                           "item inventory, and silver bars.\n\n"
                           "© 2023 Silver Estimation App")

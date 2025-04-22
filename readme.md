@@ -1,4 +1,4 @@
-# 🧾 Silver Estimation App — v1.1
+# 🧾 Silver Estimation App — v1.11
 
 A desktop application built using **PyQt5** and **SQLite** for managing silver sales estimates, including item-wise entries, silver bar inventory, returns, and print-ready formatted outputs.
 
@@ -31,6 +31,7 @@ This app is designed for silver shops to:
 - Summary sections for Regular, Return, Silver Bar, and Net totals (including a Grand Total = Net Value + Net Wage).
 - Save, load, and print estimates.
 - Status bar for real-time feedback.
+- Keyboard shortcuts: Ctrl+S (Save), Ctrl+P (Print Preview), Ctrl+H (History), Ctrl+N (New Estimate), Ctrl+D (Delete Row), Ctrl+R (Toggle Return), Ctrl+B (Toggle Silver Bar).
 
 ### 📦 Item Master
 
@@ -239,7 +240,22 @@ This file reflects the state after v1.1 feature additions/fixes.
 - Font applied only to estimate print via `PrintManager`
 
 - **Known Issue:**  
-  - Font settings are not applied when printing from Estimate History.
+  - ~~Font settings are not applied when printing from Estimate History.~~ (Fixed)
+
+#### 3. 🛠️ Font Settings in History Print Fix
+
+- **Symptom:** Custom font settings (family, size, bold) selected via "Tools -> Font Settings..." were not applied when printing an estimate initiated from the "Estimate History" dialog (either via the main menu or the button on the estimate screen). Printing directly from the estimate screen worked correctly.
+- **Debugging:**
+    - Initial checks confirmed `PrintManager` was intended to use the stored font setting (`self.print_font`) from the `MainWindow` instance.
+    - Attempts to modify CSS within `PrintManager._generate_estimate_manual_format` to force font application failed, suggesting the issue was earlier in the process.
+    - Debug `print()` statements were added to `estimate_entry_logic.py` and `estimate_history.py` where `PrintManager` was instantiated.
+    - Output revealed that when the history dialog was launched from the *estimate screen button* (`estimate_entry_logic.show_history`), the `main_window_ref` passed to `EstimateHistoryDialog` was incorrectly referencing the `EstimateEntryWidget` instance (`self`) instead of the actual `MainWindow` instance (`self.main_window`).
+    - This caused an `AttributeError` in `EstimateHistoryDialog.print_estimate` when trying to access `self.main_window.print_font`, resulting in `print_font_setting` being `None` and `PrintManager` using its default font.
+- **Fix:**
+    - Modified `estimate_entry_logic.py` -> `show_history()` method.
+    - Changed the instantiation of `EstimateHistoryDialog` from `EstimateHistoryDialog(self.db_manager, self)` to `EstimateHistoryDialog(self.db_manager, main_window_ref=self.main_window, parent=self)`.
+    - This ensures the correct `MainWindow` instance (which holds the `print_font` attribute) is passed to the dialog, allowing the `PrintManager` to receive the correct font settings.
+- **Learning:** When passing references between widgets/dialogs, especially for accessing shared state like settings stored in the main window, ensure the correct object instance is being passed. Using `self` isn't always correct if the method is called from a child widget that needs a reference to the top-level window.
 
 #### 3. ⏪ Reverted Features
 
@@ -251,8 +267,8 @@ This file reflects the state after v1.1 feature additions/fixes.
 
 ### 🧪 Known Issues / TODO
 
-- [ ] Fix font settings not applying in Estimate History print
-- [ ] Re-add UI spacing, hotkeys, conditional columns
+- [x] ~~Fix font settings not applying in Estimate History print~~ (Fixed: Corrected `main_window_ref` passed from `estimate_entry_logic.py`)
+- [ ] Re-add UI spacing, ~~hotkeys~~, conditional columns (**Hotkeys partially re-added**: Ctrl+S/P/H/N/D/R/B now active in Estimate Entry)
 - [ ] Improve signal handling and float parsing for edge cases
 - [ ] Replace fragile `item_code == bar_no` logic for bar tracking
 
@@ -287,6 +303,7 @@ pip install --upgrade --force-reinstall PyQt5
 - When working with table cell updates, use `blockSignals(True/False)` with care.
 - Check `QSettings` output for font storage under Windows Registry (`regedit`) if settings don't persist.
 - For major DB schema changes, consider dumping data and recreating `estimation.db` with updated schema.
+- **Backspace Navigation:** Pressing Backspace in an empty, editable cell in the estimate table moves focus to the previous cell. This is handled within the `NumericDelegate.eventFilter` in `estimate_entry_ui.py`, not the main widget's `keyPressEvent`.
 
 ---
 
@@ -318,11 +335,11 @@ Custom logic for keyboard-only navigation.
 
 ## 📎 Appendix: Reverted Features Recap (for AI / future devs)
 
-| Feature               | Reason Reverted | File(s) Involved |
-|----------------------|------------------|------------------|
-| Keyboard Shortcuts   | Conflicted with other `QActions` | `main.py` |
-| UI Spacing Changes   | Overlapped or broke compact layout | `estimate_entry_ui.py` |
-| Conditional Columns  | Navigation bugs & blank entries | `estimate_entry_logic.py`, `estimate_entry_ui.py` |
+| Feature               | Status          | File(s) Involved | Notes |
+|----------------------|-----------------|------------------|-------|
+| Keyboard Shortcuts   | Partially Re-added | `estimate_entry.py` | Ctrl+S/P/H/N/D/R/B added via `QShortcut` in `EstimateEntryWidget`. Original `main.py` shortcuts remain reverted due to potential conflicts. |
+| UI Spacing Changes   | Reverted        | `estimate_entry_ui.py` | Overlapped or broke compact layout. |
+| Conditional Columns  | Reverted        | `estimate_entry_logic.py`, `estimate_entry_ui.py` | Navigation bugs & blank entries. |
 
 ---
 

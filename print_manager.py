@@ -227,12 +227,12 @@ class PrintManager:
         font_weight = "bold" if self.print_font.bold() else "normal" # Use selected weight
 
         html_content = "\n".join(output)
-        # Update CSS: Force Courier New / monospace, but use selected size and weight
+        # Removed font styles from CSS, relying on setDefaultFont in _print_html
         html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
                     pre {{
-                        font-family: 'Courier New', Courier, monospace; /* FORCE monospace */
-                        font-size: {font_size_pt}pt; /* Use selected size */
-                        font-weight: {font_weight}; /* Use selected weight */
+                        /* font-family: 'Courier New', Courier, monospace; */ /* Removed */
+                        /* font-size: {font_size_pt}pt; */ /* Removed */
+                        /* font-weight: {font_weight}; */ /* Removed */
                         line-height: 1.0;
                         white-space: pre;
                         margin: 0;

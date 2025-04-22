@@ -470,8 +470,9 @@ class EstimateLogic:
         reg_fine_value = reg_fine * silver_rate
         return_value = return_fine * silver_rate
         bar_value = bar_fine * silver_rate
-        net_fine_calc = (reg_fine + bar_fine) - return_fine
-        net_wage_calc = (reg_wage + bar_wage) - return_wage
+        # Subtract both Silver Bars and Returns from Regular items
+        net_fine_calc = reg_fine - bar_fine - return_fine
+        net_wage_calc = reg_wage - bar_wage - return_wage # Note: bar_wage is usually 0
         net_value_calc = net_fine_calc * silver_rate
         grand_total_calc = net_value_calc + net_wage_calc # Calculate Grand Total
 

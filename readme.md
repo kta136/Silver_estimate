@@ -1,4 +1,4 @@
-# 🧾 Silver Estimation App — v1.11
+# 🧾 Silver Estimation App — v1.12
 
 A desktop application built using **PyQt5** and **SQLite** for managing silver sales estimates, including item-wise entries, silver bar inventory, returns, and print-ready formatted outputs.
 
@@ -16,7 +16,7 @@ This app is designed for silver shops to:
 
 ---
 
-## ✅ Features (v1.1)
+## ✅ Features (v1.12)
 
 ### 🔢 Estimate Entry
 
@@ -28,10 +28,14 @@ This app is designed for silver shops to:
 - Auto-fill item details via item code (code is automatically converted to uppercase).
 - Code not found? Opens filtered `ItemSelectionDialog`.
 - Auto-add new rows upon completing entry in the last column.
-- Summary sections for Regular, Return, Silver Bar, and Net totals (including a Grand Total = Net Value + Net Wage).
-- Save, load, and print estimates.
+- Summary sections for Regular, Return, Silver Bar, and Net totals (Silver Bars and Returns are subtracted from Regular to calculate Net totals, including a Grand Total = Net Value + Net Wage).
+- Save workflow: Saving an estimate now automatically opens Print Preview and then clears the form for a new estimate.
+- Load and print estimates.
 - Status bar for real-time feedback.
 - Keyboard shortcuts: Ctrl+S (Save), Ctrl+P (Print Preview), Ctrl+H (History), Ctrl+N (New Estimate), Ctrl+D (Delete Row), Ctrl+R (Toggle Return), Ctrl+B (Toggle Silver Bar).
+- Backspace in an empty editable cell navigates to the previous cell.
+- Improved readability with better spacing, separators, and right-aligned totals.
+- Table background uses alternating light colors (off-white/light gray).
 
 ### 📦 Item Master
 
@@ -62,22 +66,20 @@ This app is designed for silver shops to:
 
 ### 🖨️ Printing
 
-- Print Preview of estimates with fixed-width formatting.
-- Uses `Courier New` font for alignment.
-- Printed sections for:
-  - Regular
+- Print Preview opens maximized and zoomed to 125% by default.
+- Estimate slip uses fixed-width formatting (no `|` separators, relies on spacing).
+- Printed sections with individual totals for:
+  - Regular Items
   - Silver Bars
   - Return Goods
   - Return Bars
-- Displays Net Fine, Silver Cost, Labour, Total.
+- Final summary displays Net Fine, Silver Cost, Labour, Total (Net calculated as Regular - Bars - Returns).
 - Silver Bar Inventory printing via HTML table format.
 
 ### 🔤 Font Settings
 
-- Configure font size (min 5pt), bold option via custom dialog.
-- Applies only to **print output**.
-- Font settings persist via `QSettings`.
-- Known issue: History printout doesn't reflect settings (*see TODO*).
+- Configure **Print Font** (family, size min 5pt, bold) via "Tools -> Print Font Settings...". Applies only to estimate slip print output. Persists via `QSettings`.
+- Configure **Table Font Size** (7-16pt) via "Tools -> Table Font Size...". Applies to the estimate entry table UI. Persists via `QSettings`.
 
 ---
 
@@ -171,12 +173,6 @@ On the first run, a database folder and the estimation.db SQLite file will be cr
 ## 🐞 Key Fixes & Enhancements (April 2025)
 
 ### 1. ✅ **Net Weight Calculation Bug Fix**
-...
-
-## 👤 Author
-This project is managed and maintained by Kartikey Agarwal.
-
----
 
 ## 📝 Development & Debugging Notes for AI
 
@@ -239,10 +235,6 @@ This file reflects the state after v1.1 feature additions/fixes.
 - Saved settings via `QSettings`
 - Font applied only to estimate print via `PrintManager`
 
-- **Known Issue:**  
-  - ~~Font settings are not applied when printing from Estimate History.~~ (Fixed)
-
-#### 3. 🛠️ Font Settings in History Print Fix
 
 - **Symptom:** Custom font settings (family, size, bold) selected via "Tools -> Font Settings..." were not applied when printing an estimate initiated from the "Estimate History" dialog (either via the main menu or the button on the estimate screen). Printing directly from the estimate screen worked correctly.
 - **Debugging:**
@@ -257,7 +249,18 @@ This file reflects the state after v1.1 feature additions/fixes.
     - This ensures the correct `MainWindow` instance (which holds the `print_font` attribute) is passed to the dialog, allowing the `PrintManager` to receive the correct font settings.
 - **Learning:** When passing references between widgets/dialogs, especially for accessing shared state like settings stored in the main window, ensure the correct object instance is being passed. Using `self` isn't always correct if the method is called from a child widget that needs a reference to the top-level window.
 
-#### 3. ⏪ Reverted Features
+#### 4. 📉 Silver Bar Calculation Correction
+
+- **Symptom:** Silver bars entered in the estimate were being added to the regular item totals instead of being subtracted.
+- **Fix:** Modified `calculate_totals` in `estimate_entry_logic.py` and the final summary calculation in `print_manager.py` to subtract `bar_fine` and `bar_wage` along with return values from the regular item totals when calculating `net_fine_calc` and `net_wage_calc`.
+
+#### 5. 💅 Print Format Update
+
+- **Change:** Removed all vertical pipe (`|`) separators from the estimate slip printout. Added individual total lines under each section (Regular, Bars, Returns).
+- **Implementation:** Modified `format_line`, `format_totals_line`, `header_line`, and `final_line` construction in `print_manager._generate_estimate_manual_format` to use f-string padding and spacing instead of joining with `|`. Added calls to `format_totals_line` after each section loop. Removed the old combined total line.
+- **Note:** Alignment now relies purely on fixed-width spacing and the chosen print font. Non-monospace fonts might cause minor misalignments.
+
+#### 6. ⏪ Reverted Features (Previously Numbered 3)
 
 - **Hotkeys (Ctrl+S/P/H)**  
 - **UI spacing improvements**  
@@ -267,10 +270,11 @@ This file reflects the state after v1.1 feature additions/fixes.
 
 ### 🧪 Known Issues / TODO
 
-- [x] ~~Fix font settings not applying in Estimate History print~~ (Fixed: Corrected `main_window_ref` passed from `estimate_entry_logic.py`)
-- [ ] Re-add UI spacing, ~~hotkeys~~, conditional columns (**Hotkeys partially re-added**: Ctrl+S/P/H/N/D/R/B now active in Estimate Entry)
-- [ ] Improve signal handling and float parsing for edge cases
-- [ ] Replace fragile `item_code == bar_no` logic for bar tracking
+- [x] ~~Fix font settings not applying in Estimate History print~~ (Fixed in v1.12: Corrected `main_window_ref` passed from `estimate_entry_logic.py`)
+- [ ] Re-add UI spacing improvements (partially addressed via manual spacing in v1.12, but original dynamic spacing was reverted).
+- [ ] Re-add conditional column navigation/visibility based on Wage Type.
+- [ ] Improve signal handling and float parsing for edge cases.
+- [ ] Replace fragile `item_code == bar_no` logic for bar tracking.
 
 ---
 
@@ -303,7 +307,9 @@ pip install --upgrade --force-reinstall PyQt5
 - When working with table cell updates, use `blockSignals(True/False)` with care.
 - Check `QSettings` output for font storage under Windows Registry (`regedit`) if settings don't persist.
 - For major DB schema changes, consider dumping data and recreating `estimation.db` with updated schema.
-- **Backspace Navigation:** Pressing Backspace in an empty, editable cell in the estimate table moves focus to the previous cell. This is handled within the `NumericDelegate.eventFilter` in `estimate_entry_ui.py`, not the main widget's `keyPressEvent`.
+- **Backspace Navigation:** Pressing Backspace in an empty, editable cell in the estimate table moves focus to the previous cell. This is handled within the `NumericDelegate.eventFilter` in `estimate_entry_ui.py`, which is more reliable for intercepting events within the cell editor than using the parent widget's `keyPressEvent`.
+- **Passing Window References:** When needing access to main window properties (like settings) from dialogs or child widgets, ensure the actual `MainWindow` instance is passed during instantiation, not just `self` from the calling widget (as seen in the history print font fix).
+- **Print Formatting:** The estimate slip format relies on fixed-width spacing and `<pre>` tags. While the selected print font (family, size, bold) is now applied via `setDefaultFont`, non-monospace fonts might cause minor alignment issues in the printout compared to the previous hardcoded 'Courier New'.
 
 ---
 

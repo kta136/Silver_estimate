@@ -50,9 +50,10 @@ class ItemMasterWidget(QWidget):
         form_layout.addWidget(QLabel("Purity (%):"))
         self.purity_edit = QLineEdit() # Changed from spin box
         self.purity_edit.setMaximumWidth(80) # Set a reasonable width
-        self.purity_edit.setToolTip("Default silver purity percentage (0-100).")
+        self.purity_edit.setToolTip("Default silver purity percentage.") # Updated tooltip
         # Apply Validator
-        purity_validator = QDoubleValidator(0.00, 100.00, 2, self.purity_edit) # Range 0-100, 2 decimals
+        # Removed upper limit (set to a large number)
+        purity_validator = QDoubleValidator(0.00, 999999.99, 2, self.purity_edit)
         purity_validator.setNotation(QDoubleValidator.StandardNotation)
         purity_validator.setLocale(QLocale.system()) # Use system locale for decimal separator
         self.purity_edit.setValidator(purity_validator)
@@ -231,11 +232,11 @@ class ItemMasterWidget(QWidget):
         wage_type = self.wage_type_combo.currentText()
         wage_rate = self._parse_float(self.wage_rate_edit.text(), 0.0)
 
-        # Validate purity range (validator enforces format, but check value)
-        if not (0 <= purity <= 100):
-            QMessageBox.warning(self, "Input Error", "Purity must be between 0 and 100.")
-            self.show_status("Add Item Error: Invalid purity value.", 3000)
-            return
+        # Removed explicit purity range check (validator handles format)
+        # if not (0 <= purity <= 100):
+        #     QMessageBox.warning(self, "Input Error", "Purity must be between 0 and 100.")
+        #     self.show_status("Add Item Error: Invalid purity value.", 3000)
+        #     return
 
         if not code or not name:
             QMessageBox.warning(self, "Input Error", "Item Code and Name are required.")
@@ -266,11 +267,11 @@ class ItemMasterWidget(QWidget):
         wage_type = self.wage_type_combo.currentText()
         wage_rate = self._parse_float(self.wage_rate_edit.text(), 0.0)
 
-        # Validate purity range
-        if not (0 <= purity <= 100):
-            QMessageBox.warning(self, "Input Error", "Purity must be between 0 and 100.")
-            self.show_status("Update Item Error: Invalid purity value.", 3000)
-            return
+        # Removed explicit purity range check (validator handles format)
+        # if not (0 <= purity <= 100):
+        #     QMessageBox.warning(self, "Input Error", "Purity must be between 0 and 100.")
+        #     self.show_status("Update Item Error: Invalid purity value.", 3000)
+        #     return
 
         if not code:
             QMessageBox.warning(self, "Update Error", "No item selected to update.")

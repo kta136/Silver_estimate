@@ -320,7 +320,7 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
 
     # Create and show the main window
-    main_window = MainWi    ndow()
+    main_window = MainWindow()
 
     # No longer applying font settings globally on startup
     # main_window.apply_font_settings(main_window.print_font) # Removed this line

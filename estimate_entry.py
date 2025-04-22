@@ -66,6 +66,19 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         self.silver_bar_toggle_shortcut = QShortcut(QKeySequence("Ctrl+B"), self)
         self.silver_bar_toggle_shortcut.activated.connect(self.toggle_silver_bar_mode)
 
+        # Add shortcuts for main actions
+        self.save_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
+        self.save_shortcut.activated.connect(self.save_estimate)
+
+        self.print_shortcut = QShortcut(QKeySequence("Ctrl+P"), self)
+        self.print_shortcut.activated.connect(self.print_estimate)
+
+        self.history_shortcut = QShortcut(QKeySequence("Ctrl+H"), self)
+        self.history_shortcut.activated.connect(self.show_history)
+
+        self.new_shortcut = QShortcut(QKeySequence("Ctrl+N"), self)
+        self.new_shortcut.activated.connect(self.clear_form)
+
         # Force focus to the first cell (Code column) after initialization
         QTimer.singleShot(100, self.force_focus_to_first_cell)
 

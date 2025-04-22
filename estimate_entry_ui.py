@@ -400,7 +400,19 @@ class EstimateUI:
         totals_layout.addWidget(self.return_wage_label, 5, col4)
 
         # (Silver bars typically have 0 wage, no label needed)
-        # (Net totals already have wage)
+
+        # --- Row 6: Grand Total ---
+        totals_layout.addWidget(QLabel(""), 5, col1) # Spacer
+        totals_layout.addWidget(QLabel(""), 5, col2) # Spacer
+        totals_layout.addWidget(QLabel(""), 5, col3) # Spacer
+        totals_layout.addWidget(QLabel(""), 5, col4) # Spacer
+        totals_layout.addWidget(QLabel(""), 5, col5) # Spacer
+        totals_layout.addWidget(QLabel(""), 5, col6) # Spacer
+
+        totals_layout.addWidget(QLabel("<b>Grand Total:</b>"), 5, col7)
+        self.grand_total_label = QLabel("0.00")
+        self.grand_total_label.setStyleSheet("font-weight: bold; color: blue;") # Make it stand out
+        totals_layout.addWidget(self.grand_total_label, 5, col8)
 
 
         # Set column stretch factors for spacing

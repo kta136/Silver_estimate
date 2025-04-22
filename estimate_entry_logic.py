@@ -245,7 +245,10 @@ class EstimateLogic:
         # Use constant
         if self.current_row < 0 or not self.item_table.item(self.current_row, COL_CODE): return
 
-        code = self.item_table.item(self.current_row, COL_CODE).text().strip() # Use constant
+        code_item = self.item_table.item(self.current_row, COL_CODE)
+        code = code_item.text().strip().upper() # Convert to uppercase
+        code_item.setText(code) # Update cell visually
+
         if not code:
             QTimer.singleShot(0, self.move_to_next_cell)
             return
@@ -464,6 +467,7 @@ class EstimateLogic:
         net_fine_calc = (reg_fine + bar_fine) - return_fine
         net_wage_calc = (reg_wage + bar_wage) - return_wage
         net_value_calc = net_fine_calc * silver_rate
+        grand_total_calc = net_value_calc + net_wage_calc # Calculate Grand Total
 
         # Update UI labels
         self.total_gross_label.setText(f"{reg_gross:.3f}")
@@ -483,6 +487,7 @@ class EstimateLogic:
         self.net_fine_label.setText(f"{net_fine_calc:.3f}")
         self.net_value_label.setText(f"{net_value_calc:.2f}")
         self.net_wage_label.setText(f"{net_wage_calc:.2f}")
+        self.grand_total_label.setText(f"{grand_total_calc:.2f}") # Update Grand Total label
 
 
     def generate_voucher(self):

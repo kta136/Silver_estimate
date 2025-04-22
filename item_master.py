@@ -281,18 +281,15 @@ class ItemMasterWidget(QWidget):
             self.show_status("Update Item Error: Name required", 3000)
             return
 
-        reply = QMessageBox.question(self, "Confirm Update",
-                                     f"Are you sure you want to update item '{code}'?",
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if reply == QMessageBox.Yes:
-            success = self.db_manager.update_item(code, name, purity, wage_type, wage_rate)
-            if success:
-                self.show_status(f"Item '{code}' updated successfully.", 3000)
-                self.clear_form()
-                self.load_items()
-            else:
-                QMessageBox.critical(self, "Database Error", "Failed to update item. See console/logs.")
-                self.show_status(f"Update Item Error: Database operation failed for '{code}'.", 4000)
+        # Confirmation removed as per request
+        success = self.db_manager.update_item(code, name, purity, wage_type, wage_rate)
+        if success:
+            self.show_status(f"Item '{code}' updated successfully.", 3000)
+            self.clear_form()
+            self.load_items()
+        else:
+            QMessageBox.critical(self, "Database Error", "Failed to update item. See console/logs.")
+            self.show_status(f"Update Item Error: Database operation failed for '{code}'.", 4000)
 
     def delete_item(self):
         """Delete an item from the database."""

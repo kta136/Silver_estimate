@@ -103,10 +103,16 @@ class MainWindow(QMainWindow):
 
         # Font settings action
         tools_menu.addSeparator()
-        font_action = QAction("&Font Settings...", self)
-        font_action.setStatusTip("Change application font settings")
+        font_action = QAction("&Print Font Settings...", self) # Renamed for clarity
+        font_action.setStatusTip("Change font settings for printing estimates")
         font_action.triggered.connect(self.show_font_dialog)
         tools_menu.addAction(font_action)
+
+        # Table Font Size action
+        table_font_action = QAction("&Table Font Size...", self)
+        table_font_action.setStatusTip("Change font size for the estimate entry table")
+        table_font_action.triggered.connect(self.show_table_font_size_dialog) # Connect to new handler
+        tools_menu.addAction(table_font_action)
 
         # Reports menu
         reports_menu = menu_bar.addMenu("&Reports")
@@ -282,6 +288,31 @@ class MainWindow(QMainWindow):
         # Optional: Add confirmation dialog if needed
         # self.save_settings() # Save settings on close if desired, though saving after change is often better
         super().closeEvent(event)
+
+    def show_table_font_size_dialog(self):
+        """Show dialog to change estimate table font size."""
+        from table_font_size_dialog import TableFontSizeDialog
+        from PyQt5.QtGui import QFont
+        from PyQt5.QtCore import QSettings
+
+        # 1. Load current setting
+        settings = QSettings("YourCompany", "SilverEstimateApp")
+        current_size = settings.value("ui/table_font_size", defaultValue=9, type=int)
+
+        # 2. Show dialog
+        dialog = TableFontSizeDialog(current_size=current_size, parent=self)
+        if dialog.exec_() == QDialog.Accepted:
+            new_size = dialog.get_selected_size()
+
+            # 3. Save new setting
+            settings.setValue("ui/table_font_size", new_size)
+            settings.sync()
+
+            # 4. Apply to estimate widget's table (if widget exists)
+            if hasattr(self, 'estimate_widget') and hasattr(self.estimate_widget, '_apply_table_font_size'):
+                self.estimate_widget._apply_table_font_size(new_size)
+            else:
+                 print("Warning: Estimate widget or apply method not found.")
 
 
 if __name__ == "__main__":

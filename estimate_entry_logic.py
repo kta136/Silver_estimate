@@ -63,6 +63,10 @@ class EstimateLogic:
         if hasattr(self, 'silver_bars_button'):
             self.silver_bars_button.clicked.connect(self.show_silver_bars)
 
+        # Removed connection for table_font_size_spinbox as it's moved to menu
+        # if hasattr(self, 'table_font_size_spinbox'):
+        #     self.table_font_size_spinbox.valueChanged.connect(self._apply_table_font_size)
+
     def print_estimate(self):
         """Print the current estimate."""
         from print_manager import PrintManager
@@ -703,6 +707,11 @@ class EstimateLogic:
             final_message = " ".join(message_parts)
             self._status(final_message, 5000)
             QMessageBox.information(self, "Success", final_message)
+
+            # --- Open print preview and clear form for new estimate ---
+            self.print_estimate()
+            self.clear_form(confirm=False) # Clear without asking confirmation
+            # ---------------------------------------------------------
         else:
             err_msg = f"Failed to save estimate '{voucher_no}'. Check logs."
             QMessageBox.critical(self, "Error", err_msg)

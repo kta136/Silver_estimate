@@ -2,7 +2,7 @@
 # Added QStyledItemDelegate, QLineEdit, QMessageBox
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QShortcut, QTableWidgetItem, QCheckBox,
                              QMessageBox, QStyledItemDelegate, QLineEdit)
-from PyQt5.QtCore import Qt, QTimer, QLocale # Added QLocale
+from PyQt5.QtCore import Qt, QTimer, QLocale, QSettings # Added QSettings
 # Added QKeySequence, QColor, QDoubleValidator, QIntValidator
 from PyQt5.QtGui import QKeySequence, QColor, QDoubleValidator, QIntValidator
 # Import the UI class AND the Delegate class AND the Constants
@@ -81,6 +81,9 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
 
         # Force focus to the first cell (Code column) after initialization
         QTimer.singleShot(100, self.force_focus_to_first_cell)
+
+        # Load initial table font size
+        self._load_table_font_size_setting()
 
 
     # --- Add helper to show status messages via main window ---
@@ -250,3 +253,40 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
 
         # Let the parent handle other key events (like character input)
         super().keyPressEvent(event)
+
+    # --- Font Size Handling ---
+    def _apply_table_font_size(self, size):
+        """Applies the selected font size to the item table. Called by MainWindow."""
+        if hasattr(self, 'item_table'):
+            # Import QFont if not already imported at the top
+            from PyQt5.QtGui import QFont
+            font = self.item_table.font() # Get current font
+            font.setPointSize(size)      # Set new point size
+            self.item_table.setFont(font)
+            # Adjust row heights and column widths if necessary (optional)
+            self.item_table.resizeRowsToContents()
+            # self.item_table.resizeColumnsToContents() # Might make columns too wide
+            # Saving is now handled by MainWindow
+
+    def _load_table_font_size_setting(self):
+        """Loads the table font size from settings and applies it on init."""
+        settings = QSettings("YourCompany", "SilverEstimateApp")
+        # Use a reasonable default font size (e.g., 9)
+        # Define default min/max here in case spinbox doesn't exist yet or range changes
+        default_size = 9
+        min_size = 7
+        max_size = 16
+        size = settings.value("ui/table_font_size", defaultValue=default_size, type=int)
+        # Clamp value to a reasonable range
+        size = max(min_size, min(size, max_size))
+
+        # Apply the loaded/default size initially
+        # Need to ensure item_table exists before applying
+        if hasattr(self, 'item_table'):
+             self._apply_table_font_size(size)
+        else:
+             # Should not happen if called at end of __init__, but as fallback:
+             print("Warning: item_table not ready during font size load.")
+
+
+    # Removed _save_table_font_size_setting as saving is handled by MainWindow

@@ -2,9 +2,9 @@
 from PyQt5.QtWidgets import (QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
                              QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
                              QHeaderView, QDoubleSpinBox, QDateEdit, QAbstractItemView,
-                              QCheckBox, QStyledItemDelegate, QFrame) # Added QFrame
+                              QCheckBox, QStyledItemDelegate, QFrame, QSpinBox) # Added QSpinBox
 # Removed QFocusEvent, QValidator. Added QEvent
-from PyQt5.QtGui import QDoubleValidator, QIntValidator
+from PyQt5.QtGui import QDoubleValidator, QIntValidator, QFont # Added QFont
 from PyQt5.QtCore import Qt, QDate, QLocale, QModelIndex, QEvent # Keep QModelIndex, Add QEvent
 
 # --- Column Constants (defined here for UI setup & Delegate) ---
@@ -187,6 +187,14 @@ class EstimateUI:
 
         # Form layout for voucher details
         self._setup_header_form(widget) # Pass widget for tooltips
+        self.layout.addSpacing(5) # Add small spacing after header form
+
+        # Add a separator line after header form
+        line_header = QFrame()
+        line_header.setFrameShape(QFrame.HLine)
+        line_header.setFrameShadow(QFrame.Sunken)
+        self.layout.addWidget(line_header)
+        self.layout.addSpacing(8) # Add spacing after separator
 
         # Item table actions layout
         table_actions_layout = QHBoxLayout()
@@ -240,10 +248,13 @@ class EstimateUI:
         table_actions_layout.addWidget(self.clear_button)
         # ------------------------------------
 
+        # Table Font Size Control Removed - Moved to Tools Menu
+
         # Add stretch to push buttons to the left
         table_actions_layout.addStretch()
 
         self.layout.addLayout(table_actions_layout)
+        self.layout.addSpacing(8) # Add spacing after action buttons
 
         # Create Table for Item Entry
         self._setup_item_table(widget) # Pass widget for tooltips
@@ -352,6 +363,14 @@ class EstimateUI:
         self.item_table.setSelectionBehavior(QAbstractItemView.SelectItems)
         self.item_table.setSelectionMode(QTableWidget.SingleSelection)
         self.item_table.setAlternatingRowColors(True)
+        # Apply custom background colors via stylesheet
+        self.item_table.setStyleSheet("""
+            QTableWidget {
+                background-color: #f8f8f8; /* Base color: Off-white */
+                alternate-background-color: #eeeeee; /* Alternate color: Light Gray */
+                gridline-color: #d0d0d0; /* Optional: Adjust gridline color */
+            }
+        """)
 
         # Delegate application moved to EstimateEntryWidget __init__
 
@@ -370,17 +389,17 @@ class EstimateUI:
 
 
         # --- Row 1: Gross/Net ---
-        totals_layout.addWidget(QLabel("Gross:"), 1, col1)
+        totals_layout.addWidget(QLabel("Gross:"), 1, col1, alignment=Qt.AlignRight | Qt.AlignVCenter)
         self.total_gross_label = QLabel("0.000")
-        totals_layout.addWidget(self.total_gross_label, 1, col2)
+        totals_layout.addWidget(self.total_gross_label, 1, col2, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
-        totals_layout.addWidget(QLabel("Gross:"), 1, col3)
+        totals_layout.addWidget(QLabel("Gross:"), 1, col3, alignment=Qt.AlignRight | Qt.AlignVCenter)
         self.return_gross_label = QLabel("0.000")
-        totals_layout.addWidget(self.return_gross_label, 1, col4)
+        totals_layout.addWidget(self.return_gross_label, 1, col4, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
-        totals_layout.addWidget(QLabel("Gross:"), 1, col5)
+        totals_layout.addWidget(QLabel("Gross:"), 1, col5, alignment=Qt.AlignRight | Qt.AlignVCenter)
         self.bar_gross_label = QLabel("0.000")
-        totals_layout.addWidget(self.bar_gross_label, 1, col6)
+        totals_layout.addWidget(self.bar_gross_label, 1, col6, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
         # (Net totals don't usually show Gross/Net)
         totals_layout.addWidget(QLabel(""), 1, col7) # Spacer
@@ -388,69 +407,69 @@ class EstimateUI:
 
 
         # --- Row 2: Net/Fine ---
-        totals_layout.addWidget(QLabel("Net:"), 2, col1)
+        totals_layout.addWidget(QLabel("Net:"), 2, col1, alignment=Qt.AlignRight | Qt.AlignVCenter)
         self.total_net_label = QLabel("0.000")
-        totals_layout.addWidget(self.total_net_label, 2, col2)
+        totals_layout.addWidget(self.total_net_label, 2, col2, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
-        totals_layout.addWidget(QLabel("Net:"), 2, col3)
+        totals_layout.addWidget(QLabel("Net:"), 2, col3, alignment=Qt.AlignRight | Qt.AlignVCenter)
         self.return_net_label = QLabel("0.000")
-        totals_layout.addWidget(self.return_net_label, 2, col4)
+        totals_layout.addWidget(self.return_net_label, 2, col4, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
-        totals_layout.addWidget(QLabel("Net:"), 2, col5)
+        totals_layout.addWidget(QLabel("Net:"), 2, col5, alignment=Qt.AlignRight | Qt.AlignVCenter)
         self.bar_net_label = QLabel("0.000")
-        totals_layout.addWidget(self.bar_net_label, 2, col6)
+        totals_layout.addWidget(self.bar_net_label, 2, col6, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
-        totals_layout.addWidget(QLabel("<b>Net Fine:</b>"), 2, col7)
+        totals_layout.addWidget(QLabel("<b>Net Fine:</b>"), 2, col7, alignment=Qt.AlignRight | Qt.AlignVCenter)
         self.net_fine_label = QLabel("0.000")
         self.net_fine_label.setStyleSheet("font-weight: bold;")
-        totals_layout.addWidget(self.net_fine_label, 2, col8)
+        totals_layout.addWidget(self.net_fine_label, 2, col8, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
 
         # --- Row 3: Fine/Value ---
-        totals_layout.addWidget(QLabel("Fine:"), 3, col1)
+        totals_layout.addWidget(QLabel("Fine:"), 3, col1, alignment=Qt.AlignRight | Qt.AlignVCenter)
         self.total_fine_label = QLabel("0.000")
-        totals_layout.addWidget(self.total_fine_label, 3, col2)
+        totals_layout.addWidget(self.total_fine_label, 3, col2, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
-        totals_layout.addWidget(QLabel("Fine:"), 3, col3)
+        totals_layout.addWidget(QLabel("Fine:"), 3, col3, alignment=Qt.AlignRight | Qt.AlignVCenter)
         self.return_fine_label = QLabel("0.000")
-        totals_layout.addWidget(self.return_fine_label, 3, col4)
+        totals_layout.addWidget(self.return_fine_label, 3, col4, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
-        totals_layout.addWidget(QLabel("Fine:"), 3, col5)
+        totals_layout.addWidget(QLabel("Fine:"), 3, col5, alignment=Qt.AlignRight | Qt.AlignVCenter)
         self.bar_fine_label = QLabel("0.000")
-        totals_layout.addWidget(self.bar_fine_label, 3, col6)
+        totals_layout.addWidget(self.bar_fine_label, 3, col6, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
-        totals_layout.addWidget(QLabel("<b>Net Value:</b>"), 3, col7)
+        totals_layout.addWidget(QLabel("<b>Net Value:</b>"), 3, col7, alignment=Qt.AlignRight | Qt.AlignVCenter)
         self.net_value_label = QLabel("0.00")
         self.net_value_label.setStyleSheet("font-weight: bold;")
-        totals_layout.addWidget(self.net_value_label, 3, col8)
+        totals_layout.addWidget(self.net_value_label, 3, col8, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
 
         # --- Row 4: Value/Wage ---
-        totals_layout.addWidget(QLabel("Value:"), 4, col1)
+        totals_layout.addWidget(QLabel("Value:"), 4, col1, alignment=Qt.AlignRight | Qt.AlignVCenter)
         self.fine_value_label = QLabel("0.00")
-        totals_layout.addWidget(self.fine_value_label, 4, col2)
+        totals_layout.addWidget(self.fine_value_label, 4, col2, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
-        totals_layout.addWidget(QLabel("Value:"), 4, col3)
+        totals_layout.addWidget(QLabel("Value:"), 4, col3, alignment=Qt.AlignRight | Qt.AlignVCenter)
         self.return_value_label = QLabel("0.00")
-        totals_layout.addWidget(self.return_value_label, 4, col4)
+        totals_layout.addWidget(self.return_value_label, 4, col4, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
-        totals_layout.addWidget(QLabel("Value:"), 4, col5)
+        totals_layout.addWidget(QLabel("Value:"), 4, col5, alignment=Qt.AlignRight | Qt.AlignVCenter)
         self.bar_value_label = QLabel("0.00")
-        totals_layout.addWidget(self.bar_value_label, 4, col6)
+        totals_layout.addWidget(self.bar_value_label, 4, col6, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
-        totals_layout.addWidget(QLabel("<b>Net Wage:</b>"), 4, col7)
+        totals_layout.addWidget(QLabel("<b>Net Wage:</b>"), 4, col7, alignment=Qt.AlignRight | Qt.AlignVCenter)
         self.net_wage_label = QLabel("0.00")
         self.net_wage_label.setStyleSheet("font-weight: bold;")
-        totals_layout.addWidget(self.net_wage_label, 4, col8)
+        totals_layout.addWidget(self.net_wage_label, 4, col8, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
         # --- Row 5: Wage ---
-        totals_layout.addWidget(QLabel("Wage:"), 5, col1)
+        totals_layout.addWidget(QLabel("Wage:"), 5, col1, alignment=Qt.AlignRight | Qt.AlignVCenter)
         self.total_wage_label = QLabel("0.00")
-        totals_layout.addWidget(self.total_wage_label, 5, col2)
+        totals_layout.addWidget(self.total_wage_label, 5, col2, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
-        totals_layout.addWidget(QLabel("Wage:"), 5, col3)
+        totals_layout.addWidget(QLabel("Wage:"), 5, col3, alignment=Qt.AlignRight | Qt.AlignVCenter)
         self.return_wage_label = QLabel("0.00")
-        totals_layout.addWidget(self.return_wage_label, 5, col4)
+        totals_layout.addWidget(self.return_wage_label, 5, col4, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
         # (Silver bars typically have 0 wage, no label needed)
 
@@ -462,10 +481,10 @@ class EstimateUI:
         totals_layout.addWidget(QLabel(""), 5, col5) # Spacer
         totals_layout.addWidget(QLabel(""), 5, col6) # Spacer
 
-        totals_layout.addWidget(QLabel("<b>Grand Total:</b>"), 5, col7)
+        totals_layout.addWidget(QLabel("<b>Grand Total:</b>"), 5, col7, alignment=Qt.AlignRight | Qt.AlignVCenter)
         self.grand_total_label = QLabel("0.00")
         self.grand_total_label.setStyleSheet("font-weight: bold; color: blue;") # Make it stand out
-        totals_layout.addWidget(self.grand_total_label, 5, col8)
+        totals_layout.addWidget(self.grand_total_label, 5, col8, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
 
         # Set column stretch factors for spacing

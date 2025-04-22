@@ -3,7 +3,8 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QPushButton, QTextEdit,
                              QLabel, QMessageBox, QApplication)
 from PyQt5.QtGui import QFont, QTextCursor, QPageSize, QTextDocument
 from PyQt5.QtCore import Qt, QDate
-from PyQt5.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog
+# Import QPrintPreviewWidget
+from PyQt5.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog, QPrintPreviewWidget
 import traceback # Keep for debugging
 
 
@@ -44,6 +45,21 @@ class PrintManager:
             preview = QPrintPreviewDialog(self.printer, parent_widget)
             preview.setWindowTitle(f"Print Preview - Estimate {voucher_no}")
             preview.paintRequested.connect(lambda printer: self._print_html(printer, html_text))
+
+            # --- Set initial zoom and maximize ---
+            try:
+                # Find the internal preview widget
+                preview_widget = preview.findChild(QPrintPreviewWidget)
+                if preview_widget:
+                    preview_widget.setZoomFactor(1.25) # Set zoom to 125%
+                else:
+                    print("Warning: Could not find QPrintPreviewWidget to set zoom.")
+            except Exception as zoom_err:
+                print(f"Warning: Error setting initial zoom: {zoom_err}")
+
+            preview.showMaximized() # Show maximized
+            # ------------------------------------
+
             preview.exec_()
             return True
         except Exception as e:

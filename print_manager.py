@@ -3,7 +3,8 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QPushButton, QTextEdit,
                              QLabel, QMessageBox, QApplication)
 from PyQt5.QtGui import QFont, QTextCursor, QPageSize, QTextDocument
 from PyQt5.QtCore import Qt, QDate
-from PyQt5.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog
+# Import QPrintPreviewWidget
+from PyQt5.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog, QPrintPreviewWidget
 import traceback # Keep for debugging
 
 
@@ -44,6 +45,21 @@ class PrintManager:
             preview = QPrintPreviewDialog(self.printer, parent_widget)
             preview.setWindowTitle(f"Print Preview - Estimate {voucher_no}")
             preview.paintRequested.connect(lambda printer: self._print_html(printer, html_text))
+
+            # --- Set initial zoom and maximize ---
+            try:
+                # Find the internal preview widget
+                preview_widget = preview.findChild(QPrintPreviewWidget)
+                if preview_widget:
+                    preview_widget.setZoomFactor(1.25) # Set zoom to 125%
+                else:
+                    print("Warning: Could not find QPrintPreviewWidget to set zoom.")
+            except Exception as zoom_err:
+                print(f"Warning: Error setting initial zoom: {zoom_err}")
+
+            preview.showMaximized() # Show maximized
+            # ------------------------------------
+
             preview.exec_()
             return True
         except Exception as e:
@@ -141,27 +157,42 @@ class PrintManager:
                 else: regular_items.append(item)
 
         # --- Column Widths ---
-        W_FINE=7; W_LABOUR=8; W_QTY=9; W_POLY=7; W_NAME=19; W_SPER=7; W_PCS=8; W_WRATE=8
-        TOTAL_WIDTH = W_FINE+1+W_LABOUR+1+W_QTY+1+W_POLY+1+W_NAME+1+W_SPER+1+W_PCS+1+W_WRATE
+        # Define widths including space for separators (even though separators are removed)
+        S = 1 # Separator space (used for spacing calculation)
+        W_SNO=3; W_FINE=7; W_LABOUR=8; W_QTY=9; W_POLY=7; W_NAME=19; W_SPER=7; W_PCS=8; W_WRATE=8
+        # Add SNo width and its separator space to total
+        TOTAL_WIDTH = W_SNO+S+W_FINE+S+W_LABOUR+S+W_QTY+S+W_POLY+S+W_NAME+S+W_SPER+S+W_PCS+S+W_WRATE
 
         # --- Format Helpers ---
         def format_line(*args):
+            # args[0] is now sno
             try:
-                fine = f"{args[0]:>{W_FINE}.3f}"; labour = f"{args[1]:>{W_LABOUR}.2f}"
-                qty = f"{args[2]:>{W_QTY}.3f}"; poly = f"{args[3]:>{W_POLY}.3f}"
-                name = f"{str(args[4] or ''):<{W_NAME}.{W_NAME}}"; sper = f"{args[5]:>{W_SPER}.2f}"
-                pcs_val = args[6]; pcs_display = str(pcs_val) if pcs_val and pcs_val > 0 else ""
-                pcs = pcs_display.rjust(W_PCS); wrate = f"{args[7]:>{W_WRATE}.2f}"
-                line = "|".join([fine, labour, qty, poly, name, sper, pcs, wrate])
-                return line[:TOTAL_WIDTH]
+                sno = f"{args[0]:>{W_SNO}}"; fine = f"{args[1]:>{W_FINE}.3f}"; labour = f"{args[2]:>{W_LABOUR}.2f}"
+                qty = f"{args[3]:>{W_QTY}.3f}"; poly = f"{args[4]:>{W_POLY}.0f}" # Changed poly format to .0f
+                name = f"{str(args[5] or ''):<{W_NAME}.{W_NAME}}"; sper = f"{args[6]:>{W_SPER}.2f}"
+                pcs_val = args[7]; pcs_display = str(pcs_val) if pcs_val and pcs_val > 0 else ""
+                pcs = pcs_display.rjust(W_PCS); wrate = f"{args[8]:>{W_WRATE}.2f}"
+                # Construct line with padding instead of pipes, including SNo
+                line = (f"{sno} {fine} {labour} {qty} {poly} {name} {sper} {pcs} {wrate}")
+                # Ensure total width is maintained
+                return f"{line:<{TOTAL_WIDTH}}"[:TOTAL_WIDTH]
             except Exception as e: print(f"Error formatting line: {e}, Data: {args}"); return " " * TOTAL_WIDTH
 
         def format_totals_line(fine, labour, qty, poly):
-            fine_str=f"{fine:{W_FINE}.3f}"; labour_str=f"{labour:{W_LABOUR}.2f}"
-            qty_str=str(int(round(qty))).rjust(W_QTY); poly_str=f"{poly:{W_POLY}.3f}"
-            line_part="|".join([fine_str, labour_str, qty_str, poly_str])
-            rem_w = TOTAL_WIDTH - len(line_part)
-            return line_part + (" " * rem_w if rem_w > 0 else "")
+            # Format values, including Poly as integer
+            fine_str=f"{fine:{W_FINE}.3f}"; labour_str=f"{labour:{W_LABOUR}.0f}" # Labour also rounded in image
+            qty_str=str(int(round(qty))).rjust(W_QTY); poly_str=f"{poly:{W_POLY}.0f}" # Poly as integer
+
+            # Construct the line with correct spacing to align under headers
+            # SNo column needs space
+            sno_space = " " * (W_SNO + S)
+            # Space after Poly before Item Name column starts
+            space_after_poly = " " * (S + W_NAME + S + W_SPER + S + W_PCS + S + W_WRATE)
+
+            line = f"{sno_space}{fine_str} {labour_str} {qty_str} {poly_str}{space_after_poly}"
+
+            # Ensure total width, padding if necessary (shouldn't be needed if widths are correct)
+            return f"{line:<{TOTAL_WIDTH}}"[:TOTAL_WIDTH]
 
         # --- Build Output ---
         output = []; title = "* * ESTIMATE SLIP ONLY * *"; pad = (TOTAL_WIDTH - len(title)) // 2
@@ -169,54 +200,87 @@ class PrintManager:
         voucher_str = str(voucher_no).ljust(15); rate_str = f"S.Rate :{silver_rate:9.2f}"
         pad = max(1, TOTAL_WIDTH - len(voucher_str) - len(rate_str)); output.append(f"{voucher_str}" + " " * pad + rate_str)
         sep_eq = "=" * TOTAL_WIDTH; sep_dash = "-" * TOTAL_WIDTH; output.append(sep_eq)
-        h_fine="Fine".center(W_FINE); h_labour="Labour".center(W_LABOUR); h_qty="Quantity".center(W_QTY); h_poly="Poly".center(W_POLY)
+        h_sno="SNo".center(W_SNO); h_fine="Fine".center(W_FINE); h_labour="Labour".center(W_LABOUR); h_qty="Quantity".center(W_QTY); h_poly="Poly".center(W_POLY)
         h_name="Item Name".center(W_NAME); h_sper="S.Per%".center(W_SPER); h_pcs="Pcs/Doz.".center(W_PCS); h_wrate="W.Rate".center(W_WRATE)
-        header_line = "|".join([h_fine, h_labour, h_qty, h_poly, h_name, h_sper, h_pcs, h_wrate]); output.append(header_line[:TOTAL_WIDTH]); output.append(sep_eq)
+        # Construct header with spaces, including SNo
+        header_line = f"{h_sno} {h_fine} {h_labour} {h_qty} {h_poly} {h_name} {h_sper} {h_pcs} {h_wrate}"
+        output.append(f"{header_line:<{TOTAL_WIDTH}}"[:TOTAL_WIDTH]); output.append(sep_eq)
 
         # Totals vars
         reg_f, reg_w, reg_g, reg_p = 0.0,0.0,0.0,0.0; sb_f, sb_w, sb_g, sb_p = 0.0,0.0,0.0,0.0
         ret_gf, ret_gw, ret_gg, ret_gp = 0.0,0.0,0.0,0.0; ret_sf, ret_sw, ret_sg, ret_sp = 0.0,0.0,0.0,0.0
 
         # Process Sections
+        # sno_counter = 1 # Removed single initialization
         if regular_items:
+            sno_counter = 1 # Reset counter for this section
             for item in regular_items:
                 reg_f+=item['fine']; reg_w+=item['wage']; reg_g+=item['gross']; reg_p+=item['poly']
-                output.append(format_line(item['fine'],item['wage'],item['gross'],item['poly'],item['item_name'],item['purity'],item['pieces'],item['wage_rate']))
+                # Pass sno_counter as the first argument
+                output.append(format_line(sno_counter, item['fine'],item['wage'],item['gross'],item['poly'],item['item_name'],item['purity'],item['pieces'],item['wage_rate']))
+                sno_counter += 1
+            # Add totals for regular items
+            output.append(sep_dash)
+            output.append(format_totals_line(reg_f, reg_w, reg_g, reg_p))
+            output.append(sep_dash)
         else: output.append(" " * ((TOTAL_WIDTH - 22)//2) + "-- No Regular Items --")
 
         if silver_bar_items:
             output.append(" "); sb_title="* * Silver Bars * *"; pad=(TOTAL_WIDTH-len(sb_title))//2; output.append(" "*pad+sb_title); output.append(sep_dash); output.append(header_line[:TOTAL_WIDTH]); output.append(sep_dash)
+            sno_counter = 1 # Reset counter for this section
             for item in silver_bar_items:
                 sb_f+=item['fine']; sb_w+=item['wage']; sb_g+=item['gross']; sb_p+=item['poly']
-                output.append(format_line(item['fine'],item['wage'],item['gross'],item['poly'],item['item_name'],item['purity'],0,0))
+                # Pass sno_counter as the first argument
+                output.append(format_line(sno_counter, item['fine'],item['wage'],item['gross'],item['poly'],item['item_name'],item['purity'],0,0))
+                sno_counter += 1
             output.append(sep_dash); output.append(format_totals_line(sb_f,sb_w,sb_g,sb_p)); output.append(sep_dash)
 
-        output.append(sep_eq); comb_f=reg_f+sb_f; comb_w=reg_w+sb_w; comb_g=reg_g+sb_g; comb_p=reg_p+sb_p; output.append(format_totals_line(comb_f,comb_w,comb_g,comb_p)); output.append(sep_eq)
+        # Removed combined total row (line 210) - totals are now per section
+        # output.append(sep_eq); comb_f=reg_f+sb_f; comb_w=reg_w+sb_w; comb_g=reg_g+sb_g; comb_p=reg_p+sb_p; output.append(format_totals_line(comb_f,comb_w,comb_g,comb_p)); output.append(sep_eq)
 
         if return_goods:
             output.append(" "); rg_title="* * Return Goods * *"; pad=(TOTAL_WIDTH-len(rg_title))//2; output.append(" "*pad+rg_title); output.append(sep_dash); output.append(header_line[:TOTAL_WIDTH]); output.append(sep_dash)
+            sno_counter = 1 # Reset counter for this section
             for item in return_goods:
                 ret_gf+=item['fine']; ret_gw+=item['wage']; ret_gg+=item['gross']; ret_gp+=item['poly']
-                output.append(format_line(item['fine'],item['wage'],item['gross'],item['poly'],item['item_name'],item['purity'],item['pieces'],item['wage_rate']))
+                # Pass sno_counter as the first argument
+                output.append(format_line(sno_counter, item['fine'],item['wage'],item['gross'],item['poly'],item['item_name'],item['purity'],item['pieces'],item['wage_rate']))
+                sno_counter += 1
             output.append(sep_dash); output.append(format_totals_line(ret_gf,ret_gw,ret_gg,ret_gp)); output.append(sep_dash)
 
         if return_silver_bars:
             output.append(" "); rsb_title="* * Return Silver Bar * *"; pad=(TOTAL_WIDTH-len(rsb_title))//2; output.append(" "*pad+rsb_title); output.append(sep_dash); output.append(header_line[:TOTAL_WIDTH]); output.append(sep_dash)
+            sno_counter = 1 # Reset counter for this section
             for item in return_silver_bars:
                 ret_sf+=item['fine']; ret_sw+=item['wage']; ret_sg+=item['gross']; ret_sp+=item['poly']
-                output.append(format_line(item['fine'],item['wage'],item['gross'],item['poly'],item['item_name'],item['purity'],0,0))
-            output.append(sep_dash); output.append(format_totals_line(ret_sf,ret_sw,ret_sg,ret_sp)); output.append(sep_dash)
+                # Pass sno_counter as the first argument
+                output.append(format_line(sno_counter, item['fine'],item['wage'],item['gross'],item['poly'],item['item_name'],item['purity'],0,0))
+                sno_counter += 1
+            # Add totals for return silver bars
+            output.append(sep_dash)
+            output.append(format_totals_line(ret_sf, ret_sw, ret_sg, ret_sp))
+            output.append(sep_dash)
 
         # Final Summary
         output.append(" "); final_title="Final Silver & Amount"; pad=(TOTAL_WIDTH-len(final_title))//2; output.append(" "*pad+final_title); output.append(sep_eq)
-        net_fine = comb_f - (ret_gf + ret_sf); net_wage = comb_w - (ret_gw + ret_sw)
+        # Calculate net by subtracting Bars and Returns from Regular
+        net_fine = reg_f - sb_f - ret_gf - ret_sf
+        net_wage = reg_w - sb_w - ret_gw - ret_sw # Note: sb_w, ret_sw usually 0
         silver_cost = net_fine * silver_rate; total_cost = net_wage + silver_cost
-        fine_str = f"{net_fine:{W_FINE}.3f}"; wage_str = f"{net_wage:{W_LABOUR}.2f}"
-        scost_str = f"S.Cost : {silver_cost:,.2f}"; total_str = f"Total: {total_cost:,.2f}"
-        part1_len=W_FINE+1+W_LABOUR; tfw=18; scfw=22; total_pad=total_str.rjust(tfw); scost_pad=scost_str.rjust(scfw)
+        # Round amounts for final summary display
+        net_wage_rounded = round(net_wage)
+        silver_cost_rounded = round(silver_cost)
+        total_cost_rounded = round(total_cost)
+        fine_str = f"{net_fine:{W_FINE}.3f}"; wage_str = f"{net_wage_rounded:{W_LABOUR}.0f}" # Format as integer (0 decimals)
+        scost_str = f"S.Cost : {silver_cost_rounded:,.0f}"; total_str = f"Total: {total_cost_rounded:,.0f}" # Format as integer
+        # Adjust lengths and padding for no pipes
+        part1_len=W_FINE+1+W_LABOUR; # Length of fine + space + labour
+        tfw=18; scfw=22; # Field widths for total and cost (adjust as needed)
+        total_pad=total_str.rjust(tfw); scost_pad=scost_str.rjust(scfw)
         space_before = TOTAL_WIDTH - part1_len - len(scost_pad) - len(total_pad)
-        pad_after_labour=max(1, space_before - 1); pad_between=1
-        final_line = f"{fine_str}|{wage_str}" + (" "*pad_after_labour) + scost_pad + (" "*pad_between) + total_pad
+        pad_after_labour=max(1, space_before - 1); pad_between=1 # Keep 1 space between cost/total
+        # Construct final line with spaces
+        final_line = f"{fine_str} {wage_str}" + (" "*pad_after_labour) + scost_pad + (" "*pad_between) + total_pad
         output.append(final_line[:TOTAL_WIDTH]); output.append(sep_eq); output.append(" ")
         note = "Note :-  G O O D S   N O T   R E T U R N"; pad=(TOTAL_WIDTH-len(note))//2; output.append(" "*pad+note); output.append(" \f")
 

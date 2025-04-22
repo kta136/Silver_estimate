@@ -63,6 +63,14 @@ class EstimateLogic:
         if hasattr(self, 'silver_bars_button'):
             self.silver_bars_button.clicked.connect(self.show_silver_bars)
 
+        # Removed connection for table_font_size_spinbox as it's moved to menu
+        # if hasattr(self, 'table_font_size_spinbox'):
+        #     self.table_font_size_spinbox.valueChanged.connect(self._apply_table_font_size)
+
+        # Connect Delete This Estimate button
+        if hasattr(self, 'delete_estimate_button'):
+            self.delete_estimate_button.clicked.connect(self.delete_current_estimate)
+
     def print_estimate(self):
         """Print the current estimate."""
         from print_manager import PrintManager
@@ -466,8 +474,9 @@ class EstimateLogic:
         reg_fine_value = reg_fine * silver_rate
         return_value = return_fine * silver_rate
         bar_value = bar_fine * silver_rate
-        net_fine_calc = (reg_fine + bar_fine) - return_fine
-        net_wage_calc = (reg_wage + bar_wage) - return_wage
+        # Subtract both Silver Bars and Returns from Regular items
+        net_fine_calc = reg_fine - bar_fine - return_fine
+        net_wage_calc = reg_wage - bar_wage - return_wage # Note: bar_wage is usually 0
         net_value_calc = net_fine_calc * silver_rate
         grand_total_calc = net_value_calc + net_wage_calc # Calculate Grand Total
 
@@ -703,6 +712,11 @@ class EstimateLogic:
             final_message = " ".join(message_parts)
             self._status(final_message, 5000)
             QMessageBox.information(self, "Success", final_message)
+
+            # --- Open print preview and clear form for new estimate ---
+            self.print_estimate()
+            self.clear_form(confirm=False) # Clear without asking confirmation
+            # ---------------------------------------------------------
         else:
             err_msg = f"Failed to save estimate '{voucher_no}'. Check logs."
             QMessageBox.critical(self, "Error", err_msg)
@@ -872,3 +886,39 @@ class EstimateLogic:
                  item_to_edit = self.item_table.item(prev_row, prev_col)
                  if item_to_edit:
                      QTimer.singleShot(10, lambda: self.item_table.editItem(item_to_edit)) # Delay edit
+
+    def delete_current_estimate(self):
+        """Handle deletion of the currently loaded estimate."""
+        voucher_no = self.voucher_edit.text().strip()
+        if not voucher_no:
+            QMessageBox.warning(self, "Delete Error", "No estimate voucher number entered/loaded.")
+            self._status("Delete Error: No voucher number", 3000)
+            return
+
+        # Check if the estimate actually exists before confirming deletion
+        # (Optional but good practice)
+        # estimate_exists = self.db_manager.get_estimate_by_voucher(voucher_no)
+        # if not estimate_exists:
+        #     QMessageBox.warning(self, "Delete Error", f"Estimate '{voucher_no}' not found in the database.")
+        #     self._status(f"Delete Error: Estimate {voucher_no} not found", 4000)
+        #     return
+
+        reply = QMessageBox.warning(self, "Confirm Delete Estimate",
+                                     f"Are you sure you want to permanently delete estimate '{voucher_no}'?\n"
+                                     "This action cannot be undone.",
+                                     QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
+
+        if reply == QMessageBox.Yes:
+            try:
+                success = self.db_manager.delete_single_estimate(voucher_no)
+                if success:
+                    QMessageBox.information(self, "Success", f"Estimate '{voucher_no}' deleted successfully.")
+                    self._status(f"Estimate {voucher_no} deleted.", 3000)
+                    self.clear_form(confirm=False) # Clear form after deletion
+                else:
+                    # This might happen if the estimate was deleted between load and delete click
+                    QMessageBox.warning(self, "Delete Error", f"Estimate '{voucher_no}' could not be deleted (might already be deleted).")
+                    self._status(f"Delete Error: Failed for {voucher_no}", 4000)
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"An unexpected error occurred during deletion: {str(e)}")
+                self._status(f"Delete Error: Unexpected error for {voucher_no}", 5000)

@@ -320,16 +320,16 @@ class PrintManager:
                    .header-title{{text-align:center;font-size:12pt;font-weight:bold;margin-bottom:10px}}.list-info{{margin-bottom:15px}}
                    .list-info span{{display:inline-block;margin-right:20px}}.list-note{{margin-top:5px;border:1px solid #eee;padding:5px;background-color:#f9f9f9}}
                    .totals{{margin-top:15px;font-weight:bold;border-top:1px double #000;padding-top:5px;text-align:right}}.right{{text-align:right}}</style></head><body>
-                   <div class="header-title">Silver Bar List Details</div><div class="list-info"><span><b>List ID:</b> {li}</span><span><b>Created:</b> {cd}</span><span><b>Printed:</b> {pd}</span></div>
+                   <div class="header-title">Silver Bar List Details</div><div class="list-info"><span><b>List ID:</b> {li}</span></div>
                    <div class="list-note"><b>Note:</b> {ln if ln else 'N/A'}</div>
-                   <table><thead><tr><th>#</th><th>Bar Number</th><th class="right">Weight (g)</th><th class="right">Purity (%)</th><th class="right">Fine Wt (g)</th><th>Status</th></tr></thead><tbody>"""
+                   <table><thead><tr><th>#</th><th class="right">Weight (g)</th><th class="right">Purity (%)</th><th class="right">Fine Wt (g)</th></tr></thead><tbody>"""
         tw=0.0; tf=0.0; bc=0
         if bars_in_list:
             for idx, bar in enumerate(bars_in_list):
                 bw=bar['weight'] if bar['weight'] is not None else 0.0; bfw=bar['fine_weight'] if bar['fine_weight'] is not None else 0.0
                 bp=bar['purity'] if bar['purity'] is not None else 0.0; bno=bar['bar_no'] if bar['bar_no'] is not None else 'N/A'; st=bar['status'] if bar['status'] is not None else 'N/A'
                 bc+=1; tw+=bw; tf+=bfw
-                html += f"""<tr><td>{idx+1}</td><td>{bno}</td><td class="right">{bw:.3f}</td><td class="right">{bp:.2f}</td><td class="right">{bfw:.3f}</td><td>{st}</td></tr>"""
-        else: html += '<tr><td colspan="6" style="text-align:center;padding:10px 0;">-- No bars assigned --</td></tr>'
+                html += f"""<tr><td>{idx+1}</td><td class="right">{bw:.3f}</td><td class="right">{bp:.2f}</td><td class="right">{bfw:.3f}</td></tr>"""
+        else: html += '<tr><td colspan="4" style="text-align:center;padding:10px 0;">-- No bars assigned --</td></tr>'
         html += f"""</tbody></table><div class="totals">TOTAL Bars: {bc} | TOTAL Weight: {tw:,.3f} g | TOTAL Fine Wt: {tf:,.3f} g</div></body></html>"""
         return html

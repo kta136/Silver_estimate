@@ -1,17 +1,12 @@
-# --- START OF FILE print_manager.py ---
-
 #!/usr/bin/env python
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QPushButton, QTextEdit,
                              QLabel, QMessageBox, QApplication)
-from PyQt5.QtGui import QFont, QTextCursor, QPageSize, QTextDocument
+from PyQt5.QtGui import QFont, QTextCursor, QPageSize, QTextDocument, QFontDatabase
 from PyQt5.QtCore import Qt, QDate
 # Import QPrintPreviewWidget
 from PyQt5.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog, QPrintPreviewWidget
 import traceback # Keep for debugging
-import math # Import math for floor
-
-# Import QFontDatabase if needed, though not used in current snippet
-# from PyQt5.QtGui import QFontDatabase
+import math # For rounding
 
 class PrintManager:
     """Class to handle print functionality using manual formatting."""
@@ -19,62 +14,55 @@ class PrintManager:
     def __init__(self, db_manager, print_font=None):
         """Initialize the print manager, accepting an optional print font."""
         self.db_manager = db_manager
+        # Store the custom print font if provided, otherwise use a default
         if print_font:
             self.print_font = print_font
         else:
-            self.print_font = QFont("Courier New", 7) # Default font size 7pt
-            setattr(self.print_font, 'float_size', 7.0)
+            # Default font if none is provided via settings
+            # Force Courier New for estimate slip, but use size/bold from settings
+            default_size = 7.0 # Default size if setting unavailable
+            font_size_int = int(round(getattr(print_font, 'float_size', default_size)))
+            is_bold = getattr(print_font, 'bold', lambda: False)() # Check if bold exists and call
+            self.print_font = QFont("Courier New", font_size_int)
+            self.print_font.setBold(is_bold)
+            # Store float size for consistency if needed elsewhere, though not used directly here
+            self.print_font.float_size = float(font_size_int) if not hasattr(print_font, 'float_size') else print_font.float_size
+
 
         self.printer = QPrinter(QPrinter.HighResolution)
         self.printer.setPageSize(QPageSize(QPageSize.A4))
         self.printer.setOrientation(QPrinter.Portrait)
-        self.printer.setPageMargins(3, 5, 3, 5, QPrinter.Millimeter)
+        # Use margins appropriate for the fixed-width text format
+        self.printer.setPageMargins(10, 10, 10, 10, QPrinter.Millimeter)
 
-    # --- HELPER FUNCTION FOR INDIAN NUMBER FORMATTING ---
     def format_indian_rupees(self, number):
-        """Formats a number according to the Indian numbering system (lakhs, crores)."""
-        try:
-            # Round to nearest integer first as per the latest preview image
-            num_int = int(round(number))
-            s = str(abs(num_int)) # Work with absolute value string
-            l = len(s)
-            if l < 4:
-                formatted_num = s
-            else:
-                last_three = s[-3:]
-                other_digits = s[:-3]
-                other_digits_len = len(other_digits)
-                formatted_other = ""
-                i = other_digits_len - 1
-                while i >= 0:
-                    if len(formatted_other) > 0: # Add comma before groups (except first)
-                         formatted_other = "," + formatted_other
-                    # Group in pairs
-                    if i > 0:
-                         formatted_other = other_digits[i-1:i+1] + formatted_other
-                         i -= 2
-                    else:
-                         formatted_other = other_digits[i] + formatted_other
-                         i -= 1
+        """Formats a number into Indian Rupees notation (Lakhs, Crores)."""
+        # Ensure number is integer after rounding
+        num = int(round(number))
+        s = str(num)
+        n = len(s)
+        if n <= 3:
+            return s
+        # Format the last three digits
+        last_three = s[-3:]
+        # Format the remaining digits in groups of two
+        other_digits = s[:-3]
+        formatted_other = ""
+        i = len(other_digits) - 1
+        while i >= 0:
+            if len(formatted_other) % 3 == 0 and len(formatted_other) != 0:
+                formatted_other = "," + formatted_other
+            formatted_other = other_digits[i] + formatted_other
+            i -= 1
+        return formatted_other + "," + last_three
 
-                formatted_num = formatted_other + "," + last_three
-
-            # Add sign back if negative
-            if num_int < 0:
-                return "-" + formatted_num
-            else:
-                return formatted_num
-        except (ValueError, TypeError):
-            # Handle cases where number might not be valid
-            return str(number) # Return original string representation
-    # --- END HELPER FUNCTION ---
 
     def print_estimate(self, voucher_no, parent_widget=None):
         """Print an estimate using manual formatting and preview."""
         estimate_data = self.db_manager.get_estimate_by_voucher(voucher_no)
         if not estimate_data:
             QMessageBox.warning(parent_widget, "Print Error",
-                               f"Estimate {voucher_no} not found.")
+                                f"Estimate {voucher_no} not found.")
             return False
         try:
             html_text = self._generate_estimate_manual_format(estimate_data)
@@ -83,16 +71,19 @@ class PrintManager:
             preview.setWindowTitle(f"Print Preview - Estimate {voucher_no}")
             preview.paintRequested.connect(lambda printer: self._print_html(printer, html_text))
 
+            # --- Set initial zoom and maximize ---
             try:
                 preview_widget = preview.findChild(QPrintPreviewWidget)
                 if preview_widget:
-                    preview_widget.setZoomFactor(1.0)
+                    preview_widget.setZoomFactor(1.25) # Set zoom to 125%
                 else:
                     print("Warning: Could not find QPrintPreviewWidget to set zoom.")
             except Exception as zoom_err:
                 print(f"Warning: Error setting initial zoom: {zoom_err}")
 
-            preview.showMaximized()
+            preview.showMaximized() # Show maximized
+            # ------------------------------------
+
             preview.exec_()
             return True
         except Exception as e:
@@ -146,10 +137,11 @@ class PrintManager:
             table_font = QFont("Arial", 8)
             document.setDefaultFont(table_font)
         else:
+            # Estimate slip: Use the stored print_font settings
             font_size_int = int(round(getattr(self.print_font, 'float_size', 7.0))) # Default 7pt
-            font_to_use = QFont("Courier New", font_size_int) # Force Courier New
-            # Check if bold attribute exists and is callable before calling it
-            is_bold = getattr(self.print_font, 'bold', lambda: False)()
+            # Force Courier New for alignment, but use stored size/bold
+            font_to_use = QFont("Courier New", font_size_int)
+            is_bold = getattr(self.print_font, 'bold', lambda: False)() # Safely check bold
             font_to_use.setBold(is_bold)
             document.setDefaultFont(font_to_use)
 
@@ -166,32 +158,42 @@ class PrintManager:
 
         regular_items, silver_bar_items, return_goods, return_silver_bars = [], [], [], []
         for item in items:
+            # Use the flags stored in the database item data
             is_return = item.get('is_return', 0) == 1
-            is_silver_bar_flag = "SILVER BAR" in item.get('item_name', '').upper()
+            is_silver_bar = item.get('is_silver_bar', 0) == 1 # Use the flag directly
+
             if is_return:
-                if is_silver_bar_flag: return_silver_bars.append(item)
-                else: return_goods.append(item)
-            else:
-                if is_silver_bar_flag: silver_bar_items.append(item)
-                else: regular_items.append(item)
+                if is_silver_bar:
+                    return_silver_bars.append(item)
+                else:
+                    return_goods.append(item)
+            else: # Not a return item
+                if is_silver_bar:
+                    silver_bar_items.append(item)
+                else:
+                    regular_items.append(item)
 
         S = 1; W_SNO=3; W_FINE=9; W_LABOUR=8; W_QTY=10; W_POLY=7; W_NAME=18; W_SPER=7; W_PCS=8; W_WRATE=8
         TOTAL_WIDTH = W_SNO+S+W_FINE+S+W_LABOUR+S+W_QTY+S+W_POLY+S+W_NAME+S+W_SPER+S+W_PCS+S+W_WRATE
 
         def format_line(*args):
+            # args[0] is now sno
             try:
-                sno=f"{args[0]:>{W_SNO}}"; fine=f"{args[1]:>{W_FINE}.3f}"; labour=f"{args[2]:>{W_LABOUR}.2f}"
-                qty=f"{args[3]:>{W_QTY}.3f}"; poly=f"{args[4]:>{W_POLY}.0f}"
-                name=f"{str(args[5] or ''):<{W_NAME}.{W_NAME}}"; sper=f"{args[6]:>{W_SPER}.2f}"
+                sno = f"{args[0]:>{W_SNO}}"; fine = f"{args[1]:>{W_FINE}.3f}"; labour = f"{args[2]:>{W_LABOUR}.2f}"
+                qty = f"{args[3]:>{W_QTY}.3f}"; poly = f"{args[4]:>{W_POLY}.0f}" # Poly as integer
+                name = f"{str(args[5] or ''):<{W_NAME}.{W_NAME}}"; sper = f"{args[6]:>{W_SPER}.2f}"
                 pcs_val = args[7]; pcs_display = str(pcs_val) if pcs_val and pcs_val > 0 else ""
-                pcs=pcs_display.rjust(W_PCS); wrate=f"{args[8]:>{W_WRATE}.2f}"
+                pcs = pcs_display.rjust(W_PCS); wrate = f"{args[8]:>{W_WRATE}.2f}"
+                # Construct line with padding
                 line = (f"{sno} {fine} {labour} {qty} {poly} {name} {sper} {pcs} {wrate}")
                 return f"{line:<{TOTAL_WIDTH}}"[:TOTAL_WIDTH]
             except Exception as e: print(f"Error formatting line: {e}, Data: {args}"); return " " * TOTAL_WIDTH
 
         def format_totals_line(fine, labour, qty, poly):
-            fine_str=f"{fine:{W_FINE}.3f}"; labour_str=f"{labour:{W_LABOUR}.0f}";
+            # Format values, including Poly and Labour as integer
+            fine_str=f"{fine:{W_FINE}.3f}"; labour_str=f"{labour:{W_LABOUR}.0f}"
             qty_str=str(int(round(qty))).rjust(W_QTY); poly_str=f"{poly:{W_POLY}.0f}"
+            # Construct the line with correct spacing
             sno_space=" "*(W_SNO+S); space_after_poly=" "*(S+W_NAME+S+W_SPER+S+W_PCS+S+W_WRATE)
             line = f"{sno_space}{fine_str} {labour_str} {qty_str} {poly_str}{space_after_poly}"
             return f"{line:<{TOTAL_WIDTH}}"[:TOTAL_WIDTH]
@@ -241,13 +243,12 @@ class PrintManager:
             output.append(sep_dash); output.append(format_totals_line(ret_sf,ret_sw,ret_sg,ret_sp)); output.append(sep_dash)
 
         output.append(" "); final_title="Final Silver & Amount"; pad=(TOTAL_WIDTH-len(final_title))//2; output.append(" "*pad+final_title); output.append(sep_eq)
-        net_fine=reg_f+sb_f-ret_gf-ret_sf; net_wage=reg_w+sb_w-ret_gw-ret_sw
+        net_fine=reg_f-sb_f-ret_gf-ret_sf; net_wage=reg_w-sb_w-ret_gw-ret_sw
         silver_cost=net_fine*silver_rate; total_cost=net_wage+silver_cost
         net_wage_r=round(net_wage); silver_cost_r=round(silver_cost); total_cost_r=round(total_cost)
 
-        # --- USE INDIAN FORMATTING FOR FINAL VALUES ---
         fine_str=f"{net_fine:{W_FINE}.3f}"
-        wage_str=f"{net_wage_r:{W_LABOUR}.0f}" # Labour remains integer
+        wage_str=f"{net_wage_r:{W_LABOUR}.0f}"
         scost_label="S.Cost : "
         scost_value_formatted = self.format_indian_rupees(silver_cost_r)
         scost_display = scost_label + scost_value_formatted
@@ -255,44 +256,41 @@ class PrintManager:
         total_value_formatted = self.format_indian_rupees(total_cost_r)
         total_display = total_label + total_value_formatted
 
-        # Calculate padding for final line dynamically based on formatted string lengths
-        # Target widths for the fields including labels
-        tfw = 18 # Target width for Total field
-        scfw = 22 # Target width for S.Cost field
-
-        # Right-justify the combined label + value within the target field widths
+        tfw = 18; scfw = 22
         total_pad = total_display.rjust(tfw)
         scost_pad = scost_display.rjust(scfw)
 
-        part1_len=W_SNO+S+W_FINE+S+W_LABOUR # Length of sno+fine+labour+spaces
-        space_before=TOTAL_WIDTH - part1_len - len(scost_pad) - len(total_pad) - 2 # -2 for single spaces around fields
-        pad_after_labour=max(1, space_before // 2 + space_before % 2)
-        pad_between=max(1, space_before // 2)
-        sno_placeholder = " " * (W_SNO + S)
-        final_line=f"{sno_placeholder}{fine_str} {wage_str}"+(" "*pad_after_labour)+scost_pad+(" "*pad_between)+total_pad
-        # --- END INDIAN FORMATTING ---
-
+        part1_len=W_SNO+S+W_FINE+S+W_LABOUR
+        space_before=TOTAL_WIDTH - part1_len - len(scost_pad) - len(total_pad) - 2
+        pad_after_labour=max(1, space_before - 1); pad_between=1
+        final_line = f"{' '*(W_SNO+S)}{fine_str} {wage_str}" + (" "*pad_after_labour) + scost_pad + (" "*pad_between) + total_pad
         output.append(final_line[:TOTAL_WIDTH]); output.append(sep_eq); output.append(" ")
-        note="Note :-  G O O D S   N O T   R E T U R N"; pad=(TOTAL_WIDTH-len(note))//2; output.append(" "*pad+note); output.append(" \f")
+        note = "Note :-  G O O D S   N O T   R E T U R N"; pad=(TOTAL_WIDTH-len(note))//2; output.append(" "*pad+note); output.append(" \f")
 
-        html_content="\n".join(output)
-        font_family = "Courier New"; font_size_pt = getattr(self.print_font,'float_size',7.0)
-        font_weight="bold" if getattr(self.print_font,'bold',lambda: False)() else "normal"
+        html_content = "\n".join(output)
+        # Rely on _print_html's setDefaultFont for styling
         html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-                   pre {{font-family:'{font_family}',monospace; font-size:{font_size_pt}pt; font-weight:{font_weight}; line-height:1.0; white-space:pre; margin:0; padding:0; page-break-inside:avoid;}}
-                   body {{ margin:0; }} </style></head><body><pre>{html_content}</pre></body></html>"""
+                    pre {{
+                        line-height: 1.0;
+                        white-space: pre;
+                        margin: 0;
+                        padding: 0;
+                        page-break-inside: avoid;
+                    }}
+                    body {{ margin: 10mm; }}
+                    </style></head><body><pre>{html_content}</pre></body></html>"""
         return html
 
     def _generate_silver_bars_html_table(self, bars, status_filter=None):
         """Generates HTML table for the general INVENTORY report."""
         status_text = f" - {status_filter}" if status_filter else " - All"; current_date = QDate.currentDate().toString("yyyy-MM-dd")
         html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Silver Bar Inventory</title><style>
-                   body{{font-family:Arial,sans-serif;font-size:8pt;margin:0;}}
+                   body{{font-family:Arial,sans-serif;font-size:8pt;margin:10mm;}} /* Increased font size */
                    table{{border-collapse:collapse;width:100%;margin-bottom:10px;page-break-inside:auto}}
                    th,td{{border:1px solid #ccc;padding:4px 6px;text-align:left;word-wrap:break-word}}
                    tr{{page-break-inside:avoid;page-break-after:auto}} thead{{display:table-header-group}}
                    th{{border-bottom:1px solid #000;background-color:#f0f0f0;font-weight:bold}}
-                   .header-title{{text-align:center;font-size:10pt;font-weight:bold;margin-bottom:5px}}
+                   .header-title{{text-align:center;font-size:10pt;font-weight:bold;margin-bottom:5px}} /* Increased font size */
                    .sub-header{{display:flex;justify-content:space-between;margin-bottom:10px;font-weight:bold}}
                    .totals{{margin-top:10px;font-weight:bold;border-top:1px double #000;padding-top:5px;text-align:right}}
                    .right{{text-align:right}}</style></head><body>
@@ -302,23 +300,21 @@ class PrintManager:
                    <th class="right">Fine Wt(g)</th><th>Date Added</th><th>Status</th></tr></thead><tbody>"""
         total_weight = 0.0; total_fine = 0.0; bar_count = 0
         if bars:
-            for bar in bars:
-                bw=bar.get('weight',0.0); bfw=bar.get('fine_weight',0.0); bp=bar.get('purity',0.0); bno=bar.get('bar_no',''); da=bar.get('date_added',''); st=bar.get('status','')
+            for bar in bars: # Assume bar is sqlite3.Row
+                bw=bar['weight'] if bar['weight'] is not None else 0.0; bfw=bar['fine_weight'] if bar['fine_weight'] is not None else 0.0
+                bp=bar['purity'] if bar['purity'] is not None else 0.0; bno=bar['bar_no'] if bar['bar_no'] is not None else ''
+                da=bar['date_added'] if bar['date_added'] is not None else ''; st=bar['status'] if bar['status'] is not None else ''
                 bar_count+=1; total_weight+=bw; total_fine+=bfw
                 html += f"""<tr><td>{bno}</td><td class="right">{bw:.3f}</td><td class="right">{bp:.2f}</td><td class="right">{bfw:.3f}</td><td>{da}</td><td>{st}</td></tr>"""
         else: html += '<tr><td colspan="6" style="text-align:center;padding:5px 0;">-- No Bars Found --</td></tr>'
-        # Format totals using Indian system for currency-like values if needed, otherwise standard formatting
-        total_weight_str = self.format_indian_rupees(total_weight) if total_weight > 1000 else f"{total_weight:,.3f}" # Example threshold
-        total_fine_str = self.format_indian_rupees(total_fine) if total_fine > 1000 else f"{total_fine:,.3f}"
-        html += f"""</tbody></table><div class="totals">TOTAL Bars: {bar_count} | TOTAL Weight: {total_weight_str} g | TOTAL Fine Wt: {total_fine_str} g</div></body></html>"""
+        html += f"""</tbody></table><div class="totals">TOTAL Bars: {bar_count} | TOTAL Weight: {total_weight:,.3f} g | TOTAL Fine Wt: {total_fine:,.3f} g</div></body></html>"""
         return html
 
     def _generate_list_details_html(self, list_info, bars_in_list):
         """Generates HTML content for printing a single list's details."""
         li=list_info.get('list_identifier','N/A'); cd=list_info.get('creation_date','N/A'); ln=list_info.get('list_note',''); pd=QDate.currentDate().toString("yyyy-MM-dd")
         html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Silver Bar List - {li}</title><style>
-                   body{{font-family:Arial,sans-serif;font-size:8pt;margin:0;}}
-                   table{{border-collapse:collapse;width:100%;margin-top:15px;page-break-inside:auto}}
+                   body{{font-family:Arial,sans-serif;font-size:8pt;margin:10mm}}table{{border-collapse:collapse;width:100%;margin-top:15px;page-break-inside:auto}}
                    th,td{{border:1px solid #ccc;padding:4px 6px;text-align:left;word-wrap:break-word}}tr{{page-break-inside:avoid;page-break-after:auto}}
                    thead{{display:table-header-group}}th{{border-bottom:1px solid #000;background-color:#f0f0f0;font-weight:bold}}
                    .header-title{{text-align:center;font-size:12pt;font-weight:bold;margin-bottom:10px}}.list-info{{margin-bottom:15px}}
@@ -330,14 +326,10 @@ class PrintManager:
         tw=0.0; tf=0.0; bc=0
         if bars_in_list:
             for idx, bar in enumerate(bars_in_list):
-                bw=bar.get('weight',0.0); bfw=bar.get('fine_weight',0.0); bp=bar.get('purity',0.0); bno=bar.get('bar_no','N/A'); st=bar.get('status','N/A')
+                bw=bar['weight'] if bar['weight'] is not None else 0.0; bfw=bar['fine_weight'] if bar['fine_weight'] is not None else 0.0
+                bp=bar['purity'] if bar['purity'] is not None else 0.0; bno=bar['bar_no'] if bar['bar_no'] is not None else 'N/A'; st=bar['status'] if bar['status'] is not None else 'N/A'
                 bc+=1; tw+=bw; tf+=bfw
                 html += f"""<tr><td>{idx+1}</td><td>{bno}</td><td class="right">{bw:.3f}</td><td class="right">{bp:.2f}</td><td class="right">{bfw:.3f}</td><td>{st}</td></tr>"""
         else: html += '<tr><td colspan="6" style="text-align:center;padding:10px 0;">-- No bars assigned --</td></tr>'
-        # Format totals using Indian system if desired
-        tw_str = self.format_indian_rupees(tw) if tw > 1000 else f"{tw:,.3f}"
-        tf_str = self.format_indian_rupees(tf) if tf > 1000 else f"{tf:,.3f}"
-        html += f"""</tbody></table><div class="totals">TOTAL Bars: {bc} | TOTAL Weight: {tw_str} g | TOTAL Fine Wt: {tf_str} g</div></body></html>"""
+        html += f"""</tbody></table><div class="totals">TOTAL Bars: {bc} | TOTAL Weight: {tw:,.3f} g | TOTAL Fine Wt: {tf:,.3f} g</div></body></html>"""
         return html
-
-# --- END OF FILE print_manager.py ---

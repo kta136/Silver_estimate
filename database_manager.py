@@ -74,9 +74,19 @@ class DatabaseManager:
                     total_gross REAL DEFAULT 0,
                     total_net REAL DEFAULT 0,
                     total_fine REAL DEFAULT 0, -- Note: Stores NET fine
-                    total_wage REAL DEFAULT 0  -- Note: Stores NET wage
+                    total_wage REAL DEFAULT 0, -- Note: Stores NET wage
+                    note TEXT DEFAULT '' -- Added note column
                 )''')
             if not self._table_exists('estimates'): print("Created 'estimates' table.")
+            # Add 'note' column if it doesn't exist (for existing databases)
+            if not self._column_exists('estimates', 'note'):
+                try:
+                    self.cursor.execute('ALTER TABLE estimates ADD COLUMN note TEXT DEFAULT ""')
+                    self.conn.commit()
+                    print("Added 'note' column to 'estimates' table.")
+                except sqlite3.Error as e:
+                    print(f"Warning: Could not add 'note' column to 'estimates': {e}")
+                    self.conn.rollback()
 
             # --- Estimate Items Table ---
             self.cursor.execute('''
@@ -235,8 +245,9 @@ class DatabaseManager:
         except sqlite3.Error as e: print(f"DB Error getting estimate {voucher_no}: {e}"); return None
 
     def get_estimates(self, date_from=None, date_to=None, voucher_search=None):
-        """Fetches estimate headers and their associated items based on filters."""
-        query = "SELECT * FROM estimates WHERE 1=1"; params = []
+        """Fetches estimate headers (including note) and their associated items based on filters."""
+        # Select specific columns including 'note'
+        query = "SELECT voucher_no, date, silver_rate, total_gross, total_net, total_fine, total_wage, note FROM estimates WHERE 1=1"; params = []
         if date_from: query += " AND date >= ?"; params.append(date_from)
         if date_to: query += " AND date <= ?"; params.append(date_to)
         if voucher_search: query += " AND voucher_no LIKE ?"; params.append(f"%{voucher_search}%")
@@ -266,11 +277,12 @@ class DatabaseManager:
             return f"{today}{seq}"
         except sqlite3.Error as e: print(f"DB error gen voucher: {e}"); return f"ERR{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-    def save_estimate_with_returns(self, voucher_no, date, silver_rate, regular_items, return_items, totals):
+    def save_estimate_with_returns(self, voucher_no, date, silver_rate, note, regular_items, return_items, totals): # Added 'note' parameter
         try:
             self.conn.execute('BEGIN TRANSACTION')
-            self.cursor.execute('INSERT OR REPLACE INTO estimates (voucher_no, date, silver_rate, total_gross, total_net, total_fine, total_wage) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                                (voucher_no, date, silver_rate, totals.get('total_gross', 0.0), totals.get('total_net', 0.0), totals.get('net_fine', 0.0), totals.get('net_wage', 0.0)))
+            # Added 'note' to the INSERT statement and parameters
+            self.cursor.execute('INSERT OR REPLACE INTO estimates (voucher_no, date, silver_rate, total_gross, total_net, total_fine, total_wage, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                                (voucher_no, date, silver_rate, totals.get('total_gross', 0.0), totals.get('total_net', 0.0), totals.get('net_fine', 0.0), totals.get('net_wage', 0.0), note))
             self.cursor.execute('DELETE FROM estimate_items WHERE voucher_no = ?', (voucher_no,))
             for item in regular_items: self._save_estimate_item(voucher_no, item)
             for item in return_items: self._save_estimate_item(voucher_no, item)

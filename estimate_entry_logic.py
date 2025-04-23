@@ -36,7 +36,7 @@ class EstimateLogic:
         """Connect UI signals to their handlers."""
         # Connect header signals
         self.voucher_edit.editingFinished.connect(self.load_estimate)
-        self.generate_button.clicked.connect(self.generate_voucher)
+        # self.generate_button.clicked.connect(self.generate_voucher) # Removed connection for deleted button
         self.silver_rate_spin.valueChanged.connect(self.calculate_totals)
 
         # Connect table signals
@@ -53,8 +53,8 @@ class EstimateLogic:
         # Connect the return toggle button
         self.return_toggle_button.clicked.connect(self.toggle_return_mode)
 
-        # Connect the silver bar toggle button
-        self.silver_bar_toggle_button.clicked.connect(self.toggle_silver_bar_mode)
+        # Connect the silver bar toggle button - REMOVED
+        # self.silver_bar_toggle_button.clicked.connect(self.toggle_silver_bar_mode)
 
         # Connect the new buttons if they exist
         if hasattr(self, 'history_button'):
@@ -563,6 +563,7 @@ class EstimateLogic:
                 self.date_edit.setDate(QDate.currentDate())
 
             self.silver_rate_spin.setValue(header.get('silver_rate', 0.0))
+            self.note_edit.setText(header.get('note', '')) # Load note
 
             for item in estimate_data['items']:
                 row = self.item_table.rowCount()
@@ -640,6 +641,7 @@ class EstimateLogic:
         self._status(f"Saving estimate {voucher_no}...", 2000)
         date = self.date_edit.date().toString("yyyy-MM-dd")
         silver_rate = self.silver_rate_spin.value()
+        note = self.note_edit.text().strip() # Get note from UI
 
         items_to_save = []
         silver_bars_for_inventory = []
@@ -744,8 +746,8 @@ class EstimateLogic:
         # --- Save Estimate Data ---
         regular_items_for_db = [item for item in items_to_save if not item['is_return']]
         return_items_for_db = [item for item in items_to_save if item['is_return']]
-        save_success = self.db_manager.save_estimate_with_returns(
-            voucher_no, date, silver_rate,
+        save_success = self.db_manager.save_estimate_with_returns( # Pass note to DB function
+            voucher_no, date, silver_rate, note,
             regular_items_for_db, return_items_for_db, recalculated_totals
         )
 
@@ -784,6 +786,7 @@ class EstimateLogic:
                 self.generate_voucher()
                 self.date_edit.setDate(QDate.currentDate())
                 self.silver_rate_spin.setValue(0)
+                self.note_edit.clear() # Clear note field
                 if self.return_mode: self.toggle_return_mode()
                 if self.silver_bar_mode: self.toggle_silver_bar_mode()
                 self.mode_indicator_label.setText("Mode: Regular")

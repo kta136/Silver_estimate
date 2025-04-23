@@ -63,10 +63,10 @@ class EstimateHistoryDialog(QDialog):
 
         # Estimates table
         self.estimates_table = QTableWidget()
-        self.estimates_table.setColumnCount(8) # Increased column count
+        self.estimates_table.setColumnCount(9) # Increased column count for Note
         self.estimates_table.setHorizontalHeaderLabels([
             "Voucher No", "Date", "Silver Rate", "Total Gross",
-            "Total Net", "Net Fine", "Net Wage", "Grand Total" # Added Net Fine, Renamed Total Value, Added Net Wage for clarity
+            "Total Net", "Net Fine", "Net Wage", "Grand Total", "Note" # Added Note column header
         ])
 
         # Set column widths (adjusting for new columns)
@@ -75,9 +75,12 @@ class EstimateHistoryDialog(QDialog):
         self.estimates_table.setColumnWidth(2, 90)   # Silver Rate
         self.estimates_table.setColumnWidth(3, 90)   # Total Gross
         self.estimates_table.setColumnWidth(4, 90)   # Total Net
-        self.estimates_table.setColumnWidth(5, 90)   # Net Fine (New)
-        self.estimates_table.setColumnWidth(6, 90)   # Net Wage (New - needed for Grand Total calc)
-        self.estimates_table.setColumnWidth(7, 110)  # Grand Total (Renamed)
+        self.estimates_table.setColumnWidth(5, 90)   # Net Fine
+        self.estimates_table.setColumnWidth(6, 90)   # Net Wage
+        self.estimates_table.setColumnWidth(7, 110)  # Grand Total
+        self.estimates_table.setColumnWidth(8, 150)  # Note (New) - Give it some width
+        # Allow the Note column to stretch if needed
+        self.estimates_table.horizontalHeader().setSectionResizeMode(8, QHeaderView.Stretch)
 
         # Table properties
         self.estimates_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -160,6 +163,9 @@ class EstimateHistoryDialog(QDialog):
             net_value = net_fine * silver_rate
             grand_total = net_value + net_wage
             self.estimates_table.setItem(row, 7, QTableWidgetItem(f"{grand_total:.2f}"))
+            # Column 8: Note
+            note = header.get('note', '') # Get note from header
+            self.estimates_table.setItem(row, 8, QTableWidgetItem(note))
 
     def get_selected_voucher(self):
         """Get the selected voucher number."""

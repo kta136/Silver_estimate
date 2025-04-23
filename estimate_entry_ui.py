@@ -212,12 +212,12 @@ class EstimateUI:
         #self.return_toggle_button.clicked.connect(widget.toggle_return_mode)
         table_actions_layout.addWidget(self.return_toggle_button)
 
-        # Add Silver Bar toggle button
-        self.silver_bar_toggle_button = QPushButton("&Silver Bars") # Added &
-        self.silver_bar_toggle_button.setToolTip("Toggle Silver Bar entry mode for new rows (Ctrl+B)")
-        self.silver_bar_toggle_button.setCheckable(True)
-        #self.silver_bar_toggle_button.clicked.connect(widget.toggle_silver_bar_mode)
-        table_actions_layout.addWidget(self.silver_bar_toggle_button)
+        # Add Silver Bar toggle button - REMOVED
+        # self.silver_bar_toggle_button = QPushButton("&Silver Bars") # Added &
+        # self.silver_bar_toggle_button.setToolTip("Toggle Silver Bar entry mode for new rows (Ctrl+B)")
+        # self.silver_bar_toggle_button.setCheckable(True)
+        # #self.silver_bar_toggle_button.clicked.connect(widget.toggle_silver_bar_mode)
+        # table_actions_layout.addWidget(self.silver_bar_toggle_button)
 
         # --- Add other action buttons here ---
         table_actions_layout.addSpacing(20) # Add some space
@@ -237,10 +237,10 @@ class EstimateUI:
         self.history_button.setToolTip("View, load, or print past estimates")
         table_actions_layout.addWidget(self.history_button)
 
-        # Silver Bars button
-        self.silver_bars_button = QPushButton("Manage Silver &Bars") # Added &
-        self.silver_bars_button.setToolTip("View and manage silver bar inventory")
-        table_actions_layout.addWidget(self.silver_bars_button)
+        # Silver Bars button - REMOVED
+        # self.silver_bars_button = QPushButton("Manage Silver &Bars") # Added &
+        # self.silver_bars_button.setToolTip("View and manage silver bar inventory")
+        # table_actions_layout.addWidget(self.silver_bars_button)
 
         # Clear button
         self.clear_button = QPushButton("&New Estimate") # Added &
@@ -249,7 +249,7 @@ class EstimateUI:
 
         # Add Delete This Estimate button
         table_actions_layout.addSpacing(10) # Space before delete
-        self.delete_estimate_button = QPushButton("D&elete This Estimate") # Added &
+        self.delete_estimate_button = QPushButton("D&elete Estimate") # Renamed & Added &
         self.delete_estimate_button.setToolTip("Delete the currently loaded/displayed estimate")
         # Connection will be added in EstimateLogic
         table_actions_layout.addWidget(self.delete_estimate_button)
@@ -312,35 +312,43 @@ class EstimateUI:
         self.voucher_edit.setToolTip("Enter an existing voucher number to load or leave blank/generate new.")
         form_layout.addWidget(self.voucher_edit, 0, 1)
 
-        # Generate button
-        self.generate_button = QPushButton("Generate")
-        self.generate_button.setToolTip("Generate a new voucher number based on today's date.")
-        form_layout.addWidget(self.generate_button, 0, 2)
+        # Generate button - REMOVED
+        # self.generate_button = QPushButton("Generate")
+        # self.generate_button.setToolTip("Generate a new voucher number based on today's date.")
+        # form_layout.addWidget(self.generate_button, 0, 2) # Removed from grid
 
         # Date
-        form_layout.addWidget(QLabel("Date:"), 0, 3)
+        form_layout.addWidget(QLabel("Date:"), 0, 2) # Corrected column index
         self.date_edit = QDateEdit()
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDate(QDate.currentDate())
         self.date_edit.setMaximumWidth(120)
         self.date_edit.setToolTip("Date of the estimate.")
-        form_layout.addWidget(self.date_edit, 0, 4)
+        form_layout.addWidget(self.date_edit, 0, 3) # Corrected column index
 
         # Silver Rate
-        form_layout.addWidget(QLabel("Silver Rate:"), 0, 5)
+        form_layout.addWidget(QLabel("Silver Rate:"), 0, 4) # Corrected column index
         self.silver_rate_spin = QDoubleSpinBox()
         self.silver_rate_spin.setRange(0, 1000000)
         self.silver_rate_spin.setDecimals(2)
         self.silver_rate_spin.setPrefix("₹ ") # Optional: Add currency prefix
         self.silver_rate_spin.setValue(0)
         self.silver_rate_spin.setToolTip("Silver rate for calculating fine value.")
-        form_layout.addWidget(self.silver_rate_spin, 0, 6)
+        form_layout.addWidget(self.silver_rate_spin, 0, 5) # Corrected column index
+
+        # --- Add Note Field ---
+        form_layout.addWidget(QLabel("Note:"), 0, 6) # Added Note label
+        self.note_edit = QLineEdit()
+        self.note_edit.setToolTip("Add an optional note for this estimate.")
+        self.note_edit.setPlaceholderText("Optional Note") # Add placeholder text
+        form_layout.addWidget(self.note_edit, 0, 7) # Added Note field
+        # ----------------------
 
         # Add Mode Indicator Label here
-        form_layout.addWidget(self.mode_indicator_label, 0, 7, alignment=Qt.AlignLeft | Qt.AlignVCenter) # Add mode label
+        form_layout.addWidget(self.mode_indicator_label, 0, 8, alignment=Qt.AlignLeft | Qt.AlignVCenter) # Corrected column index
 
         # Add some spacing
-        form_layout.setColumnStretch(8, 1) # Adjust stretch column index
+        form_layout.setColumnStretch(9, 1) # Corrected stretch column index
 
         # Add the form layout to the main layout
         self.layout.addLayout(form_layout)

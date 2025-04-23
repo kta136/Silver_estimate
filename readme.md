@@ -187,22 +187,22 @@ On the first run, a database folder and the estimation.db SQLite file will be cr
 #### 4. 📉 Silver Bar Calculation Correction (v1.14)
 
 - **Symptom:** Silver bars entered in the estimate were being added to totals instead of subtracted.
-- **Fix:** Modified `calculate_totals` (screen display) and `save_estimate` (DB storage) in `estimate_entry_logic.py`, and print summary calculation in `print_manager.py` to subtract Bar values along with Return values from Regular values for Net Fine/Wage.
+- **Fix:** Modified `calculate_totals` (screen display) and `save_estimate` (DB storage) in `estimate_entry_logic.py`, and print summary calculation in `print_manager.py` to subtract Bar values along with Return values from Regular values for Net Fine/Wage. Ensured correct net values are stored in DB via `save_estimate`.
 
 #### 5. 💅 Print Format Update (v1.14)
 
 - **Change:** Added Serial Number (S.No) column (resets per section). Removed all vertical pipe (`|`) separators. Added individual total lines under each section (Regular, Bars, Returns). Removed decimals from Poly column. Rounded Labour in section totals. Rounded Labour, S.Cost, Total in final summary. Ensured section totals align under headers.
-- **Implementation:** Modified `format_line`, `format_totals_line`, `header_line`, and `final_line` construction in `print_manager._generate_estimate_manual_format`. Added `sno_counter` reset logic.
+- **Implementation:** Modified `format_line`, `format_totals_line`, `header_line`, and `final_line` construction in `print_manager._generate_estimate_manual_format`. Added `sno_counter` reset logic. Corrected alignment in `format_totals_line`.
 
 #### 6. ✨ UI/UX Improvements (v1.14)
 
 - **Print Preview:** Opens maximized and zoomed to 125%.
 - **Save Workflow:** Save button now triggers print preview and then clears the form.
-- **Estimate Screen Readability:** Added spacing, separators, right-aligned totals, and alternating background colors to the table.
+- **Estimate Screen Readability:** Added spacing, separators, right-aligned totals, and alternating background colors (`#f8f8f8`/`#eeeeee`) to the table.
 - **Table Font Size:** Added option in "Tools -> Table Font Size..." menu (persists via `QSettings`).
-- **Backspace Navigation:** Backspace in empty editable table cell moves to previous cell (handled in `NumericDelegate`).
+- **Backspace Navigation:** Backspace in empty editable table cell moves to previous cell (handled in `NumericDelegate.eventFilter`).
 - **Item Master:** Removed confirmation dialog on item update. Purity % validation limit removed.
-- **Estimate History:** Columns updated to show Regular Gross/Net, Net Fine, Net Wage, Grand Total. Calculation logic updated to fetch line items for Regular Gross/Net.
+- **Estimate History:** Columns updated to show Regular Gross/Net, Net Fine, Net Wage, Grand Total. Calculation logic updated to fetch line items for Regular Gross/Net and use correct header values for Net totals.
 
 #### 7. 🗑️ Data Deletion Features (v1.14)
 
@@ -215,7 +215,13 @@ On the first run, a database folder and the estimation.db SQLite file will be cr
     - Added "Delete Selected" button and logic to `EstimateHistoryDialog`.
     - All deletion actions include confirmation dialogs.
 
-#### 8. ⏪ Reverted Features (Status as of v1.14)
+#### 8. 🖨️ Print Section Separation Fix (v1.14)
+
+- **Symptom:** Silver Bar items were appearing under the Regular Items section in the printout.
+- **Debugging:** Revealed classification was incorrectly based on checking `item_name` instead of the reliable database flag.
+- **Fix:** Modified the classification logic in `print_manager._generate_estimate_manual_format` to use the `item.get('is_silver_bar', 0) == 1` flag.
+
+#### 9. ⏪ Reverted Features (Status as of v1.14)
 
 - **Hotkeys (Ctrl+S/P/H)** (Note: Ctrl+S/P/H/N/D/R/B were re-added in v1.12 via `QShortcut` in `EstimateEntryWidget`)
 - **UI spacing improvements** (Note: Some manual spacing added in v1.14, but original dynamic/reverted spacing not restored)
@@ -284,6 +290,7 @@ pip install --upgrade --force-reinstall PyQt5
 - **Database Transactions:** Deletion operations (single estimate, all estimates, all data via drop tables) are wrapped in `BEGIN TRANSACTION`/`COMMIT`/`ROLLBACK` blocks in `DatabaseManager` for safety.
 - **Net Total Calculation:** Net Fine/Wage values stored in the `estimates` table header represent `Regular - Bars - Returns`. This calculation happens in `estimate_entry_logic.save_estimate` before saving. Ensure consistency if `calculate_totals` logic changes.
 - **Estimate History Totals:** The history dialog calculates Regular Gross/Net by summing line items but displays Net Fine/Wage/Grand Total based on the values stored in the estimate header (which are already net values).
+- **Item Classification Consistency:** Ensure that logic classifying items (e.g., Regular vs Silver Bar vs Return) uses consistent flags (`is_return`, `is_silver_bar`) across different parts of the application (on-screen display, saving, printing) rather than relying on potentially inconsistent string checks (like item names). This was the cause of the print section separation bug fixed in v1.14.
 
 ---
 

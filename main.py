@@ -10,11 +10,199 @@ from PyQt5.QtCore import Qt, QSettings
 
 # Import the custom dialog
 from custom_font_dialog import CustomFontDialog
+from settings_dialog import SettingsDialog # Import the new settings dialog
 
 from estimate_entry import EstimateEntryWidget
 from item_master import ItemMasterWidget
 from database_manager import DatabaseManager
 
+
+# Define Stylesheets
+MODERN_LIGHT_STYLESHEET = """
+QMainWindow, QDialog, QWidget {
+    background-color: #ffffff;
+    color: #333333;
+    font-family: "Segoe UI", Arial, sans-serif;
+}
+QMenuBar, QMenu {
+    background-color: #f0f0f0;
+    color: #333333;
+}
+QMenuBar::item:selected, QMenu::item:selected {
+    background-color: #d0d0d0;
+}
+QPushButton {
+    background-color: #e0e0e0;
+    border: 1px solid #c0c0c0;
+    padding: 5px 10px;
+    border-radius: 3px;
+}
+QPushButton:hover {
+    background-color: #d0d0d0;
+}
+QPushButton:pressed {
+    background-color: #c0c0c0;
+}
+QLineEdit, QDoubleSpinBox, QSpinBox, QComboBox, QDateEdit, QTextEdit {
+    background-color: #ffffff;
+    border: 1px solid #c0c0c0;
+    padding: 3px;
+    border-radius: 3px;
+}
+QTableWidget {
+    background-color: #ffffff;
+    border: 1px solid #c0c0c0;
+    gridline-color: #d0d0d0;
+}
+QHeaderView::section {
+    background-color: #f0f0f0;
+    border: 1px solid #c0c0c0;
+    padding: 4px;
+}
+QStatusBar {
+    background-color: #f0f0f0;
+}
+QGroupBox {
+    border: 1px solid #c0c0c0;
+    margin-top: 10px;
+    padding: 10px 5px 5px 5px;
+    border-radius: 3px;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 3px;
+    left: 10px;
+}
+/* Add specific styles for DangerButton if needed */
+QPushButton[styleSheet*="color: red"] { /* Target the specific danger button */
+    background-color: #f8d7da;
+    color: #721c24;
+    border-color: #f5c6cb;
+}
+QPushButton[styleSheet*="color: red"]:hover {
+    background-color: #f1b0b7;
+}
+QPushButton[styleSheet*="color: red"]:pressed {
+    background-color: #ec8c98;
+}
+"""
+
+CLASSIC_BLUE_STYLESHEET = """
+QMainWindow, QDialog, QWidget {
+    background-color: #003366;
+    color: yellow;
+    /* Use fixed-width font */
+    font-family: "Courier New", Consolas, monospace;
+    font-weight: bold;
+}
+QMenuBar, QMenu {
+    background-color: #002244;
+    color: yellow;
+    font-weight: bold;
+}
+QMenuBar::item:selected, QMenu::item:selected {
+    background-color: #004488;
+}
+QPushButton {
+    background-color: #004488;
+    color: yellow;
+    /* Dimmer border */
+    border: 1px solid #0055AA;
+    /* Consistent padding */
+    padding: 6px 12px;
+    border-radius: 0px; /* Sharp corners */
+    font-weight: bold;
+}
+QPushButton:hover {
+    /* Lighter hover feedback */
+    background-color: #0055AA;
+    color: #ffffcc; /* Lighter yellow text on hover */
+    border: 1px solid yellow; /* Brighter border on hover */
+}
+QPushButton:pressed {
+    background-color: #0066CC;
+}
+QLineEdit, QDoubleSpinBox, QSpinBox, QComboBox, QDateEdit, QTextEdit {
+    background-color: #002244;
+    color: yellow;
+    /* Dimmer border */
+    border: 1px solid #0055AA;
+    /* Consistent padding */
+    padding: 4px;
+    border-radius: 0px;
+    font-weight: bold;
+}
+QTableWidget {
+    background-color: #002244;
+    /* Dimmer border */
+    border: 1px solid #0055AA;
+    gridline-color: #004488; /* Keep grid lines subtle */
+    color: yellow;
+    font-weight: bold;
+}
+QTableWidget::item {
+    /* Consistent padding */
+    padding: 5px;
+    /* Dimmer border for cells */
+    border-bottom: 1px solid #004488;
+    border-right: 1px solid #004488;
+}
+QTableWidget::item:selected {
+    /* Brighter blue highlight */
+    background-color: #0055cc;
+    color: #ffffff; /* White text for contrast */
+}
+QHeaderView::section {
+    /* Header emphasis */
+    background-color: #002855;
+    color: #ffff33; /* Brighter yellow for header text */
+    /* Dimmer border */
+    border: 1px solid #0055AA;
+    border-bottom: 1px solid yellow; /* Keep bottom border distinct */
+    /* Consistent padding */
+    padding: 5px;
+    font-weight: bold;
+}
+QStatusBar {
+    background-color: #002244;
+    color: yellow;
+    font-weight: bold;
+    /* Consistent padding */
+    padding: 3px;
+}
+QGroupBox {
+    /* Dimmer border */
+    border: 1px solid #0055AA;
+    color: yellow;
+    margin-top: 10px;
+    padding: 10px 5px 5px 5px;
+    border-radius: 0px;
+    font-weight: bold;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 3px;
+    left: 10px;
+    color: yellow;
+    font-weight: bold;
+}
+/* Override specific danger button style */
+QPushButton[styleSheet*="color: red"] {
+    background-color: #8B0000; /* Dark red */
+    color: yellow;
+    border-color: #CD5C5C; /* Indian Red border */
+}
+QPushButton[styleSheet*="color: red"]:hover {
+    background-color: #A52A2A; /* Brown */
+    color: #ffffcc;
+    border-color: yellow;
+}
+QPushButton[styleSheet*="color: red"]:pressed {
+    background-color: #B22222; /* Firebrick */
+}
+"""
 
 class MainWindow(QMainWindow):
     """Main application window for the Silver Estimation App."""
@@ -90,48 +278,24 @@ class MainWindow(QMainWindow):
         # Tools menu
         tools_menu = menu_bar.addMenu("&Tools")
 
-        # Database actions
-        # Delete All Estimates Action
-        db_delete_estimates_action = QAction("Delete All &Estimates...", self)
-        db_delete_estimates_action.setStatusTip("WARNING: Deletes all saved estimates!")
-        db_delete_estimates_action.triggered.connect(self.delete_all_estimates) # Connect to new handler
-        tools_menu.addAction(db_delete_estimates_action)
-
-        tools_menu.addSeparator() # Separator before delete all data
-
-        # Delete All Data Action
-        db_delete_all_action = QAction("&DELETE ALL DATA", self) # Renamed action
-        db_delete_all_action.setStatusTip("WARNING: Deletes all items, estimates, bars, and lists!") # Added status tip
-        # Optionally make text red (might not work reliably across platforms/styles)
-        # db_delete_all_action.setFont(QFont("Arial", weight=QFont.Bold)) # Example: Bold
-        # db_delete_all_action.setData(QColor("red")) # Example: Store color data (doesn't directly style menu)
-        db_delete_all_action.triggered.connect(self.delete_all_data) # Renamed connected method
-        tools_menu.addAction(db_delete_all_action)
-
         # Silver bar management
-        silver_bars_action = QAction("&Silver Bar Management", self)  # Keep original name maybe?
+        silver_bars_action = QAction("Silver &Bar Management", self) # Changed &
         silver_bars_action.setStatusTip("Add, view, transfer, or assign silver bars to lists")
-        silver_bars_action.triggered.connect(self.show_silver_bars)  # Connect to MainWindow's method
+        silver_bars_action.triggered.connect(self.show_silver_bars)
         tools_menu.addAction(silver_bars_action)
 
-        # Font settings action
+        # Settings Action (replaces other tool actions)
         tools_menu.addSeparator()
-        font_action = QAction("&Print Font Settings...", self) # Renamed for clarity
-        font_action.setStatusTip("Change font settings for printing estimates")
-        font_action.triggered.connect(self.show_font_dialog)
-        tools_menu.addAction(font_action)
-
-        # Table Font Size action
-        table_font_action = QAction("&Table Font Size...", self)
-        table_font_action.setStatusTip("Change font size for the estimate entry table")
-        table_font_action.triggered.connect(self.show_table_font_size_dialog) # Connect to new handler
-        tools_menu.addAction(table_font_action)
+        settings_action = QAction("&Settings...", self) # Kept &
+        settings_action.setStatusTip("Open application settings")
+        settings_action.triggered.connect(self.show_settings_dialog) # Connect to new handler
+        tools_menu.addAction(settings_action)
 
         # Reports menu
         reports_menu = menu_bar.addMenu("&Reports")
 
         # Estimate history
-        history_action = QAction("Estimate &History", self)
+        history_action = QAction("Estimate &History", self) # Kept &
         history_action.triggered.connect(self.show_estimate_history)
         reports_menu.addAction(history_action)
 
@@ -217,10 +381,10 @@ class MainWindow(QMainWindow):
 
     def show_silver_bars(self):  # Keep this method name for consistency
         """Show silver bar management dialog."""
-        # Import the MODIFIED dialog class
-        from silver_bar_management import SilverBarDialog
+        # Import the new dialog class
+        from silver_management import SilverManagementDialog
         try:
-            silver_dialog = SilverBarDialog(self.db, self)
+            silver_dialog = SilverManagementDialog(self.db, self)
             silver_dialog.exec_()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to open Silver Bar Management: {e}")
@@ -307,17 +471,43 @@ class MainWindow(QMainWindow):
         # Store the loaded font settings for printing
         self.print_font = loaded_font
 
+        # Load and apply theme
+        theme = settings.value("ui/theme", "Modern Light")
+        self._apply_theme_stylesheet(theme) # Apply theme without saving again
 
-    def save_settings(self, font_to_save):
+
+    def save_settings(self, font_to_save=None, theme_to_save=None):
         """Save application settings, specifically the print font."""
         settings = QSettings("YourCompany", "SilverEstimateApp") # Use consistent names
-        # Use the font passed (which is intended for printing)
-        float_size = getattr(font_to_save, 'float_size', float(font_to_save.pointSize()))
-        # Ensure we save as float
-        settings.setValue("font/family", font_to_save.family())
-        settings.setValue("font/size_float", float(float_size)) # Explicitly save as float
-        settings.setValue("font/bold", bool(font_to_save.bold())) # Explicitly save as bool
+
+        if font_to_save:
+            # Use the font passed (which is intended for printing)
+            float_size = getattr(font_to_save, 'float_size', float(font_to_save.pointSize()))
+            # Ensure we save as float
+            settings.setValue("font/family", font_to_save.family())
+            settings.setValue("font/size_float", float(float_size)) # Explicitly save as float
+            settings.setValue("font/bold", bool(font_to_save.bold())) # Explicitly save as bool
+
+        if theme_to_save:
+            settings.setValue("ui/theme", theme_to_save)
+
         settings.sync() # Ensure settings are written immediately
+
+    def _apply_theme_stylesheet(self, theme_name):
+        """Applies the selected theme's stylesheet."""
+        if theme_name == "Classic Blue":
+            self.setStyleSheet(CLASSIC_BLUE_STYLESHEET)
+        else: # Default to Modern Light
+            self.setStyleSheet(MODERN_LIGHT_STYLESHEET)
+        # Force style refresh (might be needed for some complex widgets)
+        QApplication.instance().processEvents()
+
+
+    def apply_theme(self, theme_name):
+        """Applies the selected theme and saves the setting."""
+        self._apply_theme_stylesheet(theme_name)
+        self.save_settings(theme_to_save=theme_name) # Save only the theme setting
+
 
     def closeEvent(self, event):
         """Handle window close event."""
@@ -349,6 +539,11 @@ class MainWindow(QMainWindow):
                 self.estimate_widget._apply_table_font_size(new_size)
             else:
                  print("Warning: Estimate widget or apply method not found.")
+
+    def show_settings_dialog(self):
+        """Show the application settings dialog."""
+        dialog = SettingsDialog(self, self) # Pass main window instance
+        dialog.exec_()
 
 
 if __name__ == "__main__":

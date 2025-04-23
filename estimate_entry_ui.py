@@ -200,20 +200,20 @@ class EstimateUI:
         table_actions_layout = QHBoxLayout()
 
         # Add delete row button
-        self.delete_row_button = QPushButton("Delete Row") # Removed shortcut hint from text
+        self.delete_row_button = QPushButton("&Delete Row") # Added &
         self.delete_row_button.setToolTip("Delete the currently selected row (Ctrl+D)")
         self.delete_row_button.clicked.connect(widget.delete_current_row)
         table_actions_layout.addWidget(self.delete_row_button)
 
         # Add Return Items toggle button
-        self.return_toggle_button = QPushButton("Return Items") # Removed shortcut hint
+        self.return_toggle_button = QPushButton("&Return Items") # Added &
         self.return_toggle_button.setToolTip("Toggle Return Item entry mode for new rows (Ctrl+R)")
         self.return_toggle_button.setCheckable(True)
         #self.return_toggle_button.clicked.connect(widget.toggle_return_mode)
         table_actions_layout.addWidget(self.return_toggle_button)
 
         # Add Silver Bar toggle button
-        self.silver_bar_toggle_button = QPushButton("Silver Bars") # Removed shortcut hint
+        self.silver_bar_toggle_button = QPushButton("&Silver Bars") # Added &
         self.silver_bar_toggle_button.setToolTip("Toggle Silver Bar entry mode for new rows (Ctrl+B)")
         self.silver_bar_toggle_button.setCheckable(True)
         #self.silver_bar_toggle_button.clicked.connect(widget.toggle_silver_bar_mode)
@@ -223,33 +223,33 @@ class EstimateUI:
         table_actions_layout.addSpacing(20) # Add some space
 
         # Save button
-        self.save_button = QPushButton("Save Estimate")
+        self.save_button = QPushButton("&Save Estimate") # Added &
         self.save_button.setToolTip("Save the current estimate details (Ctrl+S - standard shortcut often works)")
         table_actions_layout.addWidget(self.save_button)
 
         # Print button
-        self.print_button = QPushButton("Print Preview")
+        self.print_button = QPushButton("&Print Preview") # Added &
         self.print_button.setToolTip("Preview and print the current estimate (requires saving first)")
         table_actions_layout.addWidget(self.print_button)
 
         # History button
-        self.history_button = QPushButton("Estimate History")
+        self.history_button = QPushButton("Estimate &History") # Added &
         self.history_button.setToolTip("View, load, or print past estimates")
         table_actions_layout.addWidget(self.history_button)
 
         # Silver Bars button
-        self.silver_bars_button = QPushButton("Manage Silver Bars")
+        self.silver_bars_button = QPushButton("Manage Silver &Bars") # Added &
         self.silver_bars_button.setToolTip("View and manage silver bar inventory")
         table_actions_layout.addWidget(self.silver_bars_button)
 
         # Clear button
-        self.clear_button = QPushButton("New Estimate")
+        self.clear_button = QPushButton("&New Estimate") # Added &
         self.clear_button.setToolTip("Clear the form to start a new estimate")
         table_actions_layout.addWidget(self.clear_button)
 
         # Add Delete This Estimate button
         table_actions_layout.addSpacing(10) # Space before delete
-        self.delete_estimate_button = QPushButton("Delete This Estimate")
+        self.delete_estimate_button = QPushButton("D&elete This Estimate") # Added &
         self.delete_estimate_button.setToolTip("Delete the currently loaded/displayed estimate")
         # Connection will be added in EstimateLogic
         table_actions_layout.addWidget(self.delete_estimate_button)
@@ -263,9 +263,23 @@ class EstimateUI:
         self.layout.addLayout(table_actions_layout)
         self.layout.addSpacing(8) # Add spacing after action buttons
 
+        # Add separator before table
+        line_before_table = QFrame()
+        line_before_table.setFrameShape(QFrame.HLine)
+        line_before_table.setFrameShadow(QFrame.Sunken)
+        self.layout.addWidget(line_before_table)
+        self.layout.addSpacing(5) # Spacing after separator
+
         # Create Table for Item Entry
         self._setup_item_table(widget) # Pass widget for tooltips
         self.layout.addWidget(self.item_table)
+
+        # Add separator after table
+        line_after_table = QFrame()
+        line_after_table.setFrameShape(QFrame.HLine)
+        line_after_table.setFrameShadow(QFrame.Sunken)
+        self.layout.addWidget(line_after_table)
+        self.layout.addSpacing(5) # Spacing after separator
 
         # Set up totals section
         self._setup_totals()

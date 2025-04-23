@@ -112,30 +112,58 @@ class EstimateLogic:
         for col in range(self.item_table.columnCount()):
             item = QTableWidgetItem("")
             # Use constants for column checks
-            if col in [COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT]:
+            is_classic_theme = "background-color: #003366" in self.styleSheet() # Use 'in' operator
+            non_editable_cols = [COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT, COL_TYPE]
+
+            if col in non_editable_cols:
                 item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-            elif col == COL_TYPE:
-                 self._update_row_type_visuals_direct(item)
-                 item.setTextAlignment(Qt.AlignCenter)
-                 item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                if col == COL_TYPE:
+                    # The _update_row_type_visuals_direct method now takes row index
+                    # We'll call it after the loop, but set alignment here
+                    item.setTextAlignment(Qt.AlignCenter)
+                # Dim border for non-editable cols in classic theme by matching background
+                if is_classic_theme:
+                     # Setting background might be more effective than foreground for borders
+                     item.setBackground(QColor("#002244"))
             else:
                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
             self.item_table.setItem(row, col, item)
 
+        # Update visuals for the type column after all items are created
+        self._update_row_type_visuals_direct(row)
+
         self.processing_cell = False
         QTimer.singleShot(50, lambda: self.focus_on_code_column(row))
 
-    # Helper to set item visuals based on mode (used in add_empty_row)
-    def _update_row_type_visuals_direct(self, type_item):
-         if self.return_mode:
-             type_item.setText("Return")
-             type_item.setBackground(QColor(255, 200, 200))
-         elif self.silver_bar_mode:
-             type_item.setText("Silver Bar")
-             type_item.setBackground(QColor(200, 255, 200))
-         else:
-             type_item.setText("No")
-             type_item.setBackground(QColor(255, 255, 255))
+    # Helper to set item visuals based on mode (used in add_empty_row and populate_item_row)
+    def _update_row_type_visuals_direct(self, row):
+        """Sets the type text and applies foreground color to the entire row."""
+        if not (0 <= row < self.item_table.rowCount()):
+            return
+
+        type_item = self._ensure_cell_exists(row, COL_TYPE, editable=False)
+        type_text = "No"
+        text_color = QColor("#000000") # Default black for regular items in light mode
+        # Adjust default color based on current theme if possible
+        # This is a simplification; a better approach might involve theme manager
+        if "background-color: #003366" in self.styleSheet(): # Use 'in' operator
+             text_color = QColor("yellow") # Default yellow for classic theme
+
+        if self.return_mode:
+            type_text = "Return"
+            text_color = QColor("red")
+        elif self.silver_bar_mode:
+            type_text = "Silver Bar"
+            text_color = QColor("lime") # Use lime green for better visibility on blue
+
+        type_item.setText(type_text)
+        type_item.setTextAlignment(Qt.AlignCenter)
+
+        # Apply text color to all cells in the row
+        for col in range(self.item_table.columnCount()):
+            item = self.item_table.item(row, col)
+            if item: # Ensure item exists
+                item.setForeground(text_color)
 
     def cell_clicked(self, row, column):
         """Update current position when a cell is clicked."""
@@ -313,9 +341,9 @@ class EstimateLogic:
             if not pcs_item.text().strip():
                 pcs_item.setText("1")
 
-            type_item = self.item_table.item(self.current_row, COL_TYPE)
-            self._update_row_type_visuals_direct(type_item)
-            type_item.setTextAlignment(Qt.AlignCenter)
+            # Call the updated method which now takes the row index
+            self._update_row_type_visuals_direct(self.current_row)
+            # type_item.setTextAlignment(Qt.AlignCenter) # Alignment is set within the method now
 
             self.calculate_net_weight()
 
@@ -554,20 +582,36 @@ class EstimateLogic:
                 self.item_table.setItem(row, COL_WAGE_AMT, QTableWidgetItem(str(item.get('wage', 0.0))))
                 self.item_table.setItem(row, COL_FINE_WT, QTableWidgetItem(str(item.get('fine', 0.0))))
 
-                # Set Type column visuals
-                if is_return: type_text, bg_color = "Return", QColor(255, 200, 200)
-                elif is_silver_bar: type_text, bg_color = "Silver Bar", QColor(200, 255, 200)
-                else: type_text, bg_color = "No", QColor(255, 255, 255)
+                # Set Type column text and apply row foreground color
+                if is_return:
+                    type_text = "Return"
+                    text_color = QColor("red")
+                elif is_silver_bar:
+                    type_text = "Silver Bar"
+                    text_color = QColor("lime") # Lime green for visibility
+                else:
+                    type_text = "No"
+                    # Default color depends on theme (simplistic check)
+                    text_color = QColor("yellow") if "background-color: #003366" in self.styleSheet() else QColor("#000000")
+
                 type_item = QTableWidgetItem(type_text)
-                type_item.setBackground(bg_color)
                 type_item.setTextAlignment(Qt.AlignCenter)
                 type_item.setFlags(type_item.flags() & ~Qt.ItemIsEditable)
-                self.item_table.setItem(row, COL_TYPE, type_item) # Use constant
+                self.item_table.setItem(row, COL_TYPE, type_item)
 
-                # Ensure calculated fields non-editable using constants
-                for col in [COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT]:
+                # Apply text color and dim non-editable borders in classic theme
+                is_classic_theme = "background-color: #003366" in self.styleSheet() # Use 'in' operator
+                non_editable_cols = [COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT, COL_TYPE] # Include Type
+
+                for col in range(self.item_table.columnCount()):
                     cell = self.item_table.item(row, col)
-                    if cell: cell.setFlags(cell.flags() & ~Qt.ItemIsEditable)
+                    if cell:
+                        cell.setForeground(text_color) # Apply text color first
+                        if col in non_editable_cols:
+                            cell.setFlags(cell.flags() & ~Qt.ItemIsEditable)
+                            # Dim border for non-editable cols in classic theme
+                            if is_classic_theme:
+                                 cell.setBackground(QColor("#002244")) # Match table background
 
             self.add_empty_row()
             self.calculate_totals()
@@ -776,23 +820,24 @@ class EstimateLogic:
 
     def show_silver_bars(self):
         """Show the silver bar management dialog."""
-        from silver_bar_management import SilverBarDialog
-        silver_dialog = SilverBarDialog(self.db_manager, self)
+        from silver_management import SilverManagementDialog
+        silver_dialog = SilverManagementDialog(self.db_manager, self)
         silver_dialog.exec_()
         self._status("Closed Silver Bar Management.", 2000)
 
 
-    def _update_row_type_visuals(self, row):
-        """Update the visual style of the Type column for a specific row."""
-        if 0 <= row < self.item_table.rowCount():
-             # Use constant
-             type_item = self._ensure_cell_exists(row, COL_TYPE, editable=False)
-             self.item_table.blockSignals(True)
-             try:
-                 self._update_row_type_visuals_direct(type_item)
-                 type_item.setTextAlignment(Qt.AlignCenter)
-             finally:
-                 self.item_table.blockSignals(False)
+    # This method is now redundant as _update_row_type_visuals_direct handles the row directly
+    # def _update_row_type_visuals(self, row):
+    #     """Update the visual style of the Type column for a specific row."""
+    #     if 0 <= row < self.item_table.rowCount():
+    #          # Use constant
+    #          # type_item = self._ensure_cell_exists(row, COL_TYPE, editable=False) # Method now takes row
+    #          self.item_table.blockSignals(True)
+    #          try:
+    #              self._update_row_type_visuals_direct(row) # Pass row index
+    #              # type_item.setTextAlignment(Qt.AlignCenter) # Done inside the method
+    #          finally:
+    #              self.item_table.blockSignals(False)
 
     # toggle_return_mode and toggle_silver_bar_mode are now in EstimateEntryWidget
 

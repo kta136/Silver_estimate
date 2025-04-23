@@ -670,11 +670,12 @@ class EstimateLogic:
                 calc_reg_fine += item['fine']
                 calc_reg_wage += item['wage']
 
-        calc_net_fine = (calc_reg_fine + calc_bar_fine) - calc_ret_fine
-        calc_net_wage = (calc_reg_wage + calc_bar_wage) - calc_ret_wage
+        # Corrected net calculation: Subtract both Bars and Returns from Regular
+        calc_net_fine = calc_reg_fine - calc_bar_fine - calc_ret_fine
+        calc_net_wage = calc_reg_wage - calc_bar_wage - calc_ret_wage # Note: bar_wage usually 0
         recalculated_totals = {
-            'total_gross': calc_total_gross,
-            'total_net': calc_total_net,
+            'total_gross': calc_total_gross, # This still represents overall gross
+            'total_net': calc_total_net,     # This still represents overall net
             'net_fine': calc_net_fine,
             'net_wage': calc_net_wage
         }

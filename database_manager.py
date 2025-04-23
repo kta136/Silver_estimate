@@ -235,13 +235,25 @@ class DatabaseManager:
         except sqlite3.Error as e: print(f"DB Error getting estimate {voucher_no}: {e}"); return None
 
     def get_estimates(self, date_from=None, date_to=None, voucher_search=None):
+        """Fetches estimate headers and their associated items based on filters."""
         query = "SELECT * FROM estimates WHERE 1=1"; params = []
         if date_from: query += " AND date >= ?"; params.append(date_from)
         if date_to: query += " AND date <= ?"; params.append(date_to)
         if voucher_search: query += " AND voucher_no LIKE ?"; params.append(f"%{voucher_search}%")
         query += " ORDER BY date DESC, voucher_no DESC"
-        try: self.cursor.execute(query, params); return self.cursor.fetchall()
-        except sqlite3.Error as e: print(f"DB Error getting estimates: {e}"); return []
+        results = []
+        try:
+            self.cursor.execute(query, params)
+            estimate_headers = self.cursor.fetchall()
+            for header in estimate_headers:
+                voucher_no = header['voucher_no']
+                self.cursor.execute('SELECT * FROM estimate_items WHERE voucher_no = ? ORDER BY id', (voucher_no,))
+                items = self.cursor.fetchall()
+                results.append({'header': dict(header), 'items': [dict(item) for item in items]})
+            return results
+        except sqlite3.Error as e:
+            print(f"DB Error getting estimates: {e}")
+            return []
 
     def generate_voucher_no(self):
         today = datetime.now().strftime('%Y%m%d'); seq = 1

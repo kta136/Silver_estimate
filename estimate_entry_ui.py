@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from PyQt5.QtWidgets import (QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QFormLayout, # Added QWidget, QFormLayout
                              QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
                              QHeaderView, QDoubleSpinBox, QDateEdit, QAbstractItemView,
                               QCheckBox, QStyledItemDelegate, QFrame, QSpinBox) # Added QSpinBox
@@ -20,8 +20,6 @@ COL_WAGE_AMT = 8
 COL_FINE_WT = 9
 COL_TYPE = 10
 # --- End Constants ---
-
-# Removed ZeroHandlingLineEdit class
 
 # Custom Delegate for Numeric Input Validation
 class NumericDelegate(QStyledItemDelegate):
@@ -166,149 +164,82 @@ class EstimateUI:
 
     def setup_ui(self, widget):
         """Set up the user interface for the estimate entry widget."""
-        # ... (Main layout, Header, Header Form - unchanged) ...
         # Main layout
         self.layout = QVBoxLayout(widget)
 
-        # Header
-        header_layout = QHBoxLayout()
-        # header_label = QLabel("Silver Estimation") # Removed Title
-        # header_label.setStyleSheet("font-size: 16pt; font-weight: bold;")
-        # header_layout.addWidget(header_label)
-        header_layout.addStretch() # Keep stretch to push mode label right
-        # ---- Add Mode Status Label ----
-        # self.mode_indicator_label = QLabel("Mode: Regular Items") # Moved to header form
-        # self.mode_indicator_label.setStyleSheet("font-weight: bold; color: green;")
-        # self.mode_indicator_label.setToolTip("Indicates whether Return Items or Silver Bar entry mode is active.")
-        # header_layout.addWidget(self.mode_indicator_label) # Moved to header form
-        # ------------------------------
-        self.layout.addLayout(header_layout)
-
-
-        # Form layout for voucher details
-        self._setup_header_form(widget) # Pass widget for tooltips
-        self.layout.addSpacing(5) # Add small spacing after header form
-
-        # Add a separator line after header form
+        # Header Form
+        self._setup_header_form(widget)
+        self.layout.addSpacing(5)
         line_header = QFrame()
         line_header.setFrameShape(QFrame.HLine)
         line_header.setFrameShadow(QFrame.Sunken)
         self.layout.addWidget(line_header)
-        self.layout.addSpacing(8) # Add spacing after separator
+        self.layout.addSpacing(8)
 
-        # Item table actions layout
+        # Table Actions
         table_actions_layout = QHBoxLayout()
-
-        # Add delete row button
-        self.delete_row_button = QPushButton("Delete Row") # Removed shortcut hint from text
+        self.delete_row_button = QPushButton("Delete Row")
         self.delete_row_button.setToolTip("Delete the currently selected row (Ctrl+D)")
         self.delete_row_button.clicked.connect(widget.delete_current_row)
         table_actions_layout.addWidget(self.delete_row_button)
-
-        # Add Return Items toggle button
-        self.return_toggle_button = QPushButton("Return Items") # Removed shortcut hint
+        self.return_toggle_button = QPushButton("Return Items")
         self.return_toggle_button.setToolTip("Toggle Return Item entry mode for new rows (Ctrl+R)")
         self.return_toggle_button.setCheckable(True)
-        #self.return_toggle_button.clicked.connect(widget.toggle_return_mode)
         table_actions_layout.addWidget(self.return_toggle_button)
-
-        # Add Silver Bar toggle button
-        self.silver_bar_toggle_button = QPushButton("Silver Bars") # Removed shortcut hint
+        self.silver_bar_toggle_button = QPushButton("Silver Bars")
         self.silver_bar_toggle_button.setToolTip("Toggle Silver Bar entry mode for new rows (Ctrl+B)")
         self.silver_bar_toggle_button.setCheckable(True)
-        #self.silver_bar_toggle_button.clicked.connect(widget.toggle_silver_bar_mode)
         table_actions_layout.addWidget(self.silver_bar_toggle_button)
-
-        # --- Add other action buttons here ---
-        table_actions_layout.addSpacing(20) # Add some space
-
-        # Last Balance button
+        table_actions_layout.addSpacing(20)
         self.last_balance_button = QPushButton("LB")
         self.last_balance_button.setToolTip("Add Last Balance to this estimate")
         table_actions_layout.addWidget(self.last_balance_button)
-        
-        # Save button
         self.save_button = QPushButton("Save Estimate")
         self.save_button.setToolTip("Save the current estimate details (Ctrl+S - standard shortcut often works)")
         table_actions_layout.addWidget(self.save_button)
-
-        # Print button
         self.print_button = QPushButton("Print Preview")
         self.print_button.setToolTip("Preview and print the current estimate (requires saving first)")
         table_actions_layout.addWidget(self.print_button)
-
-        # History button
         self.history_button = QPushButton("Estimate History")
         self.history_button.setToolTip("View, load, or print past estimates")
         table_actions_layout.addWidget(self.history_button)
-
-        # Silver Bars button
         self.silver_bars_button = QPushButton("Manage Silver Bars")
         self.silver_bars_button.setToolTip("View and manage silver bar inventory")
         table_actions_layout.addWidget(self.silver_bars_button)
-
-        # Clear button
         self.clear_button = QPushButton("New Estimate")
         self.clear_button.setToolTip("Clear the form to start a new estimate")
         table_actions_layout.addWidget(self.clear_button)
-
-        # Add Delete This Estimate button
-        table_actions_layout.addSpacing(10) # Space before delete
+        table_actions_layout.addSpacing(10)
         self.delete_estimate_button = QPushButton("Delete This Estimate")
         self.delete_estimate_button.setToolTip("Delete the currently loaded/displayed estimate")
-        # Connection will be added in EstimateLogic
         table_actions_layout.addWidget(self.delete_estimate_button)
-        # ------------------------------------
-
-        # Table Font Size Control Removed - Moved to Tools Menu
-
-        # Add stretch to push buttons to the left
         table_actions_layout.addStretch()
-
         self.layout.addLayout(table_actions_layout)
-        self.layout.addSpacing(8) # Add spacing after action buttons
+        self.layout.addSpacing(8)
 
-        # Create Table for Item Entry
-        self._setup_item_table(widget) # Pass widget for tooltips
+        # Item Table
+        self._setup_item_table(widget)
         self.layout.addWidget(self.item_table)
 
-        # Set up totals section
-        self._setup_totals()
-
-        # Add a visual separator
-        line = QFrame()
-        line.setFrameShape(QFrame.HLine)
-        line.setFrameShadow(QFrame.Sunken)
-        self.layout.addWidget(line)
-
-        # Buttons layout moved to table_actions_layout
-        # self._setup_buttons(widget) # Removed call
+        # Totals Section
+        self._setup_totals() # Call the redesigned totals setup
 
 
     def _setup_header_form(self, widget):
         """Set up the header form for voucher details."""
-        # ---- Create Mode Status Label Here ----
-        # (Moved from setup_ui)
         self.mode_indicator_label = QLabel("Mode: Regular Items")
         self.mode_indicator_label.setStyleSheet("font-weight: bold; color: green;")
         self.mode_indicator_label.setToolTip("Indicates whether Return Items or Silver Bar entry mode is active.")
-        # ------------------------------------
 
         form_layout = QGridLayout()
-
-        # Voucher No
         form_layout.addWidget(QLabel("Voucher No:"), 0, 0)
         self.voucher_edit = QLineEdit()
         self.voucher_edit.setMaximumWidth(150)
         self.voucher_edit.setToolTip("Enter an existing voucher number to load or leave blank/generate new.")
         form_layout.addWidget(self.voucher_edit, 0, 1)
-
-        # Generate button
         self.generate_button = QPushButton("Generate")
         self.generate_button.setToolTip("Generate a new voucher number based on today's date.")
         form_layout.addWidget(self.generate_button, 0, 2)
-
-        # Date
         form_layout.addWidget(QLabel("Date:"), 0, 3)
         self.date_edit = QDateEdit()
         self.date_edit.setCalendarPopup(True)
@@ -316,38 +247,28 @@ class EstimateUI:
         self.date_edit.setMaximumWidth(120)
         self.date_edit.setToolTip("Date of the estimate.")
         form_layout.addWidget(self.date_edit, 0, 4)
-
-        # Silver Rate
         form_layout.addWidget(QLabel("Silver Rate:"), 0, 5)
         self.silver_rate_spin = QDoubleSpinBox()
         self.silver_rate_spin.setRange(0, 1000000)
         self.silver_rate_spin.setDecimals(2)
-        self.silver_rate_spin.setPrefix("₹ ") # Optional: Add currency prefix
+        self.silver_rate_spin.setPrefix("₹ ")
         self.silver_rate_spin.setValue(0)
         self.silver_rate_spin.setToolTip("Silver rate for calculating fine value.")
         form_layout.addWidget(self.silver_rate_spin, 0, 6)
-        
-        # Note
         form_layout.addWidget(QLabel("Note:"), 0, 7)
         self.note_edit = QLineEdit()
         self.note_edit.setMinimumWidth(200)
         self.note_edit.setToolTip("Add a note for this estimate (will be saved with the estimate)")
         form_layout.addWidget(self.note_edit, 0, 8)
-
-        # Add Mode Indicator Label here
-        form_layout.addWidget(self.mode_indicator_label, 0, 9, alignment=Qt.AlignLeft | Qt.AlignVCenter) # Add mode label
-
-        # Add some spacing
-        form_layout.setColumnStretch(10, 1) # Adjust stretch column index
-
-        # Add the form layout to the main layout
+        form_layout.addWidget(self.mode_indicator_label, 0, 9, alignment=Qt.AlignLeft | Qt.AlignVCenter)
+        form_layout.setColumnStretch(10, 1)
         self.layout.addLayout(form_layout)
 
 
     def _setup_item_table(self, widget):
         """Set up the table for item entry."""
         self.item_table = QTableWidget()
-        self.item_table.setColumnCount(11) # Consistent column count
+        self.item_table.setColumnCount(11)
         headers = [
             "Code", "Item Name", "Gross Wt", "Poly Wt", "Net Wt",
             "Purity %", "Wage Rate", "Pieces", "Wage Amt", "Fine Wt", "Type"
@@ -359,11 +280,9 @@ class EstimateUI:
             "Total Wage Amount (calculated)", "Fine Silver Weight (calculated)", "Item Type (Regular/Return/Silver Bar)"
         ]
         self.item_table.setHorizontalHeaderLabels(headers)
-
         for i, tooltip in enumerate(header_tooltips):
             self.item_table.horizontalHeaderItem(i).setToolTip(tooltip)
 
-        # Use constants for setting column widths and properties
         self.item_table.setColumnWidth(COL_CODE, 80)
         self.item_table.horizontalHeader().setSectionResizeMode(COL_ITEM_NAME, QHeaderView.Stretch)
         self.item_table.setColumnWidth(COL_GROSS, 85)
@@ -382,7 +301,6 @@ class EstimateUI:
         self.item_table.setSelectionBehavior(QAbstractItemView.SelectItems)
         self.item_table.setSelectionMode(QTableWidget.SingleSelection)
         self.item_table.setAlternatingRowColors(True)
-        # Apply custom background colors via stylesheet
         self.item_table.setStyleSheet("""
             QTableWidget {
                 background-color: #f8f8f8; /* Base color: Off-white */
@@ -391,127 +309,117 @@ class EstimateUI:
             }
         """)
 
-        # Delegate application moved to EstimateEntryWidget __init__
-
-    # ... (_setup_totals and _setup_buttons remain the same) ...
     def _setup_totals(self):
-        """Set up the totals section."""
-        totals_layout = QGridLayout()
+        """Set up the totals section with Breakdown | [Stretch] | Final layout."""
 
-        col1, col2, col3, col4, col5, col6, col7, col8 = 0, 1, 2, 3, 4, 5, 6, 7
+        main_totals_layout = QHBoxLayout()
+        main_totals_layout.setSpacing(15) # Spacing between sections
 
-        # --- Row 0: Headers ---
-        totals_layout.addWidget(QLabel("<u>Regular Items</u>"), 0, col1, 1, col2+1, alignment=Qt.AlignCenter)
-        totals_layout.addWidget(QLabel("<u>Return Items</u>"), 0, col3, 1, col2+1, alignment=Qt.AlignCenter)
-        totals_layout.addWidget(QLabel("<u>Silver Bars</u>"), 0, col5, 1, col2+1, alignment=Qt.AlignCenter)
-        totals_layout.addWidget(QLabel("<u><b>Net Totals</b></u>"), 0, col7, 1, col2+1, alignment=Qt.AlignCenter)
+        # Helper function to create a form layout for a breakdown section
+        def create_breakdown_form(title, labels_attrs):
+            form = QFormLayout()
+            form.setSpacing(5)
+            form.addRow(QLabel(f"<b><u>{title}</u></b>"))
+            for label_text, attr_name, default_value in labels_attrs:
+                label = QLabel(default_value)
+                label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                setattr(self, attr_name, label)
+                form.addRow(label_text, label)
+            # REMOVED Spacer row and QVBoxLayout wrapper
+            return form # Return the QFormLayout directly
 
+        # Regular Items
+        regular_labels = [
+            ("Gross Wt:", 'total_gross_label', "0.000"),
+            ("Net Wt:", 'total_net_label', "0.000"),
+            ("Fine Wt:", 'total_fine_label', "0.000"),
+        ]
+        main_totals_layout.addLayout(create_breakdown_form("Regular", regular_labels))
 
-        # --- Row 1: Gross/Net ---
-        totals_layout.addWidget(QLabel("Gross:"), 1, col1, alignment=Qt.AlignRight | Qt.AlignVCenter)
-        self.total_gross_label = QLabel("0.000")
-        totals_layout.addWidget(self.total_gross_label, 1, col2, alignment=Qt.AlignRight | Qt.AlignVCenter)
+        # Vertical Separator 1
+        sep1 = QFrame()
+        sep1.setFrameShape(QFrame.VLine)
+        sep1.setFrameShadow(QFrame.Sunken)
+        main_totals_layout.addWidget(sep1)
 
-        totals_layout.addWidget(QLabel("Gross:"), 1, col3, alignment=Qt.AlignRight | Qt.AlignVCenter)
-        self.return_gross_label = QLabel("0.000")
-        totals_layout.addWidget(self.return_gross_label, 1, col4, alignment=Qt.AlignRight | Qt.AlignVCenter)
+        # Return Items
+        return_labels = [
+            ("Gross Wt:", 'return_gross_label', "0.000"),
+            ("Net Wt:", 'return_net_label', "0.000"),
+            ("Fine Wt:", 'return_fine_label', "0.000"),
+        ]
+        main_totals_layout.addLayout(create_breakdown_form("Return", return_labels))
 
-        totals_layout.addWidget(QLabel("Gross:"), 1, col5, alignment=Qt.AlignRight | Qt.AlignVCenter)
-        self.bar_gross_label = QLabel("0.000")
-        totals_layout.addWidget(self.bar_gross_label, 1, col6, alignment=Qt.AlignRight | Qt.AlignVCenter)
+        # Vertical Separator 2
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.VLine)
+        sep2.setFrameShadow(QFrame.Sunken)
+        main_totals_layout.addWidget(sep2)
 
-        # (Net totals don't usually show Gross/Net)
-        totals_layout.addWidget(QLabel(""), 1, col7) # Spacer
-        totals_layout.addWidget(QLabel(""), 1, col8) # Spacer
+        # Silver Bars
+        bar_labels = [
+            ("Gross Wt:", 'bar_gross_label', "0.000"),
+            ("Net Wt:", 'bar_net_label', "0.000"),
+            ("Fine Wt:", 'bar_fine_label', "0.000"),
+        ]
+        main_totals_layout.addLayout(create_breakdown_form("Silver Bar", bar_labels))
 
+        # Add stretch to push Final Calculation to the right
+        main_totals_layout.addStretch(1)
 
-        # --- Row 2: Net/Fine ---
-        totals_layout.addWidget(QLabel("Net:"), 2, col1, alignment=Qt.AlignRight | Qt.AlignVCenter)
-        self.total_net_label = QLabel("0.000")
-        totals_layout.addWidget(self.total_net_label, 2, col2, alignment=Qt.AlignRight | Qt.AlignVCenter)
+        # Vertical Separator 3 (Before Final Calc)
+        sep3 = QFrame()
+        sep3.setFrameShape(QFrame.VLine)
+        sep3.setFrameShadow(QFrame.Sunken)
+        main_totals_layout.addWidget(sep3)
 
-        totals_layout.addWidget(QLabel("Net:"), 2, col3, alignment=Qt.AlignRight | Qt.AlignVCenter)
-        self.return_net_label = QLabel("0.000")
-        totals_layout.addWidget(self.return_net_label, 2, col4, alignment=Qt.AlignRight | Qt.AlignVCenter)
+        # Final Calculation Section (using QFormLayout directly)
+        final_calc_form = QFormLayout()
+        final_calc_form.setSpacing(8)
+        final_title_label = QLabel("<b><u>Final Calculation</u></b>")
+        # Increase title font size
+        final_title_font = final_title_label.font()
+        final_title_font.setPointSize(final_title_font.pointSize() + 1) # Increase by 1pt
+        final_title_label.setFont(final_title_font)
+        final_calc_form.addRow(final_title_label) # Title for the section
 
-        totals_layout.addWidget(QLabel("Net:"), 2, col5, alignment=Qt.AlignRight | Qt.AlignVCenter)
-        self.bar_net_label = QLabel("0.000")
-        totals_layout.addWidget(self.bar_net_label, 2, col6, alignment=Qt.AlignRight | Qt.AlignVCenter)
-
-        totals_layout.addWidget(QLabel("<b>Net Fine:</b>"), 2, col7, alignment=Qt.AlignRight | Qt.AlignVCenter)
+        # Net Fine
         self.net_fine_label = QLabel("0.000")
         self.net_fine_label.setStyleSheet("font-weight: bold;")
-        totals_layout.addWidget(self.net_fine_label, 2, col8, alignment=Qt.AlignRight | Qt.AlignVCenter)
+        self.net_fine_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        net_fine_header = QLabel("<b>Net Fine Wt:</b>")
+        # Increase font size
+        net_fine_font = self.net_fine_label.font(); net_fine_font.setPointSize(net_fine_font.pointSize() + 1); self.net_fine_label.setFont(net_fine_font)
+        net_fine_header_font = net_fine_header.font(); net_fine_header_font.setPointSize(net_fine_header_font.pointSize() + 1); net_fine_header.setFont(net_fine_header_font)
+        final_calc_form.addRow(net_fine_header, self.net_fine_label)
 
-
-        # --- Row 3: Fine/Value ---
-        totals_layout.addWidget(QLabel("Fine:"), 3, col1, alignment=Qt.AlignRight | Qt.AlignVCenter)
-        self.total_fine_label = QLabel("0.000")
-        totals_layout.addWidget(self.total_fine_label, 3, col2, alignment=Qt.AlignRight | Qt.AlignVCenter)
-
-        totals_layout.addWidget(QLabel("Fine:"), 3, col3, alignment=Qt.AlignRight | Qt.AlignVCenter)
-        self.return_fine_label = QLabel("0.000")
-        totals_layout.addWidget(self.return_fine_label, 3, col4, alignment=Qt.AlignRight | Qt.AlignVCenter)
-
-        totals_layout.addWidget(QLabel("Fine:"), 3, col5, alignment=Qt.AlignRight | Qt.AlignVCenter)
-        self.bar_fine_label = QLabel("0.000")
-        totals_layout.addWidget(self.bar_fine_label, 3, col6, alignment=Qt.AlignRight | Qt.AlignVCenter)
-
-        totals_layout.addWidget(QLabel("<b>Net Value:</b>"), 3, col7, alignment=Qt.AlignRight | Qt.AlignVCenter)
-        self.net_value_label = QLabel("0.00")
-        self.net_value_label.setStyleSheet("font-weight: bold;")
-        totals_layout.addWidget(self.net_value_label, 3, col8, alignment=Qt.AlignRight | Qt.AlignVCenter)
-
-
-        # --- Row 4: Value/Wage ---
-        totals_layout.addWidget(QLabel("Value:"), 4, col1, alignment=Qt.AlignRight | Qt.AlignVCenter)
-        self.fine_value_label = QLabel("0.00")
-        totals_layout.addWidget(self.fine_value_label, 4, col2, alignment=Qt.AlignRight | Qt.AlignVCenter)
-
-        totals_layout.addWidget(QLabel("Value:"), 4, col3, alignment=Qt.AlignRight | Qt.AlignVCenter)
-        self.return_value_label = QLabel("0.00")
-        totals_layout.addWidget(self.return_value_label, 4, col4, alignment=Qt.AlignRight | Qt.AlignVCenter)
-
-        totals_layout.addWidget(QLabel("Value:"), 4, col5, alignment=Qt.AlignRight | Qt.AlignVCenter)
-        self.bar_value_label = QLabel("0.00")
-        totals_layout.addWidget(self.bar_value_label, 4, col6, alignment=Qt.AlignRight | Qt.AlignVCenter)
-
-        totals_layout.addWidget(QLabel("<b>Net Wage:</b>"), 4, col7, alignment=Qt.AlignRight | Qt.AlignVCenter)
+        # Net Wage
         self.net_wage_label = QLabel("0.00")
         self.net_wage_label.setStyleSheet("font-weight: bold;")
-        totals_layout.addWidget(self.net_wage_label, 4, col8, alignment=Qt.AlignRight | Qt.AlignVCenter)
+        self.net_wage_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        net_wage_header = QLabel("<b>Net Wage:</b>")
+        # Increase font size
+        net_wage_font = self.net_wage_label.font(); net_wage_font.setPointSize(net_wage_font.pointSize() + 1); self.net_wage_label.setFont(net_wage_font)
+        net_wage_header_font = net_wage_header.font(); net_wage_header_font.setPointSize(net_wage_header_font.pointSize() + 1); net_wage_header.setFont(net_wage_header_font)
+        final_calc_form.addRow(net_wage_header, self.net_wage_label)
 
-        # --- Row 5: Wage ---
-        totals_layout.addWidget(QLabel("Wage:"), 5, col1, alignment=Qt.AlignRight | Qt.AlignVCenter)
-        self.total_wage_label = QLabel("0.00")
-        totals_layout.addWidget(self.total_wage_label, 5, col2, alignment=Qt.AlignRight | Qt.AlignVCenter)
+        # Separator before Grand Total
+        line_before_grand = QFrame()
+        line_before_grand.setFrameShape(QFrame.HLine)
+        line_before_grand.setFrameShadow(QFrame.Sunken)
+        final_calc_form.addRow(line_before_grand)
 
-        totals_layout.addWidget(QLabel("Wage:"), 5, col3, alignment=Qt.AlignRight | Qt.AlignVCenter)
-        self.return_wage_label = QLabel("0.00")
-        totals_layout.addWidget(self.return_wage_label, 5, col4, alignment=Qt.AlignRight | Qt.AlignVCenter)
-
-        # (Silver bars typically have 0 wage, no label needed)
-
-        # --- Row 6: Grand Total ---
-        totals_layout.addWidget(QLabel(""), 5, col1) # Spacer
-        totals_layout.addWidget(QLabel(""), 5, col2) # Spacer
-        totals_layout.addWidget(QLabel(""), 5, col3) # Spacer
-        totals_layout.addWidget(QLabel(""), 5, col4) # Spacer
-        totals_layout.addWidget(QLabel(""), 5, col5) # Spacer
-        totals_layout.addWidget(QLabel(""), 5, col6) # Spacer
-
-        totals_layout.addWidget(QLabel("<b>Grand Total:</b>"), 5, col7, alignment=Qt.AlignRight | Qt.AlignVCenter)
+        # Grand Total
         self.grand_total_label = QLabel("0.00")
-        self.grand_total_label.setStyleSheet("font-weight: bold; color: blue;") # Make it stand out
-        totals_layout.addWidget(self.grand_total_label, 5, col8, alignment=Qt.AlignRight | Qt.AlignVCenter)
+        self.grand_total_label.setStyleSheet("font-weight: bold; color: blue; font-size: 10pt;")
+        self.grand_total_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        final_calc_form.addRow("<b>Grand Total:</b>", self.grand_total_label)
 
+        # REMOVED QVBoxLayout wrapper for Final Calc
+        # Add Final Calc form layout directly to the main horizontal layout
+        main_totals_layout.addLayout(final_calc_form)
 
-        # Set column stretch factors for spacing
-        totals_layout.setColumnStretch(col2, 1)
-        totals_layout.setColumnStretch(col4, 1)
-        totals_layout.setColumnStretch(col6, 1)
-        totals_layout.setColumnStretch(col8, 1)
-
-        self.layout.addLayout(totals_layout)
+        # Add the main horizontal layout to the widget's main vertical layout
+        self.layout.addLayout(main_totals_layout)
 
     # Removed _setup_buttons method as buttons are now created directly in setup_ui

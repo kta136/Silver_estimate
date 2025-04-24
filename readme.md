@@ -1,4 +1,4 @@
-# 🧾 Silver Estimation App — v1.58
+# 🧾 Silver Estimation App — v1.59
 
 A desktop application built using **PyQt5** and **SQLite** for managing silver sales estimates, including item-wise entries, silver bar inventory, returns, and print-ready formatted outputs.
 
@@ -16,7 +16,7 @@ This app is designed for silver shops to:
 
 ---
 
-## ✅ Features (v1.58)
+## ✅ Features (v1.59)
 
 ### 🔢 Estimate Entry
 
@@ -38,6 +38,7 @@ This app is designed for silver shops to:
 - **UI Readability:** Improved with better spacing, separators, right-aligned totals, and alternating row colors (off-white/light gray).
 - **Delete Option:** Button added to delete the currently loaded estimate (with confirmation).
 - **Last Balance:** Add previous balance in silver weight and amount to estimates with the "LB" button.
+- **Improved Totals UI:** Redesigned the totals section below the estimate table using a grid layout with clear headers and separators for better readability.
 
 ### 📦 Item Master
 
@@ -173,6 +174,14 @@ On the first run, a database folder and the estimation.db SQLite file will be cr
 - **Printing:** `PrintManager` handles formats. Estimate slip uses `<pre>` and fixed-width spacing. Preview via `QPrintPreviewDialog`.
 
 ---
+
+## 🐞 Key Fixes & Enhancements (v1.59 - April 2025)
+
+### 1. ✨ Totals Section UI Redesign
+- Replaced the previous totals layout with a structured `QGridLayout`.
+- Added clear row headers (Gross Wt, Net Wt, etc.) and column headers (Regular, Return, Bar, Net).
+- Included vertical separators between sections and a horizontal separator before the Grand Total.
+- Improved alignment and bolded Net totals for better readability.
 
 ## 🐞 Key Fixes & Enhancements (v1.58 - April 2025)
 

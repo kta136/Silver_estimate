@@ -159,3 +159,5 @@ cython_debug/
 # Specific files/folders from this project
 database/estimation.db # Assuming this is generated/user-specific
 database/estimation.db-journal # If it exists
+# Database file
+database/estimation.db

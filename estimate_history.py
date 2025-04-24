@@ -158,11 +158,13 @@ class EstimateHistoryDialog(QDialog):
             # Explicitly using header variable
             net_wage = header.get('total_wage', 0.0)
             self.estimates_table.setItem(row, 7, QTableWidgetItem(f"{net_wage:.2f}"))
-            # Column 8: Grand Total (Net Value + Net Wage)
+            
+            # Column 8: Grand Total (Net Value + Net Wage + Last Balance Amount)
             # Explicitly using header variable
             silver_rate = header.get('silver_rate', 0.0)
             net_value = net_fine * silver_rate
-            grand_total = net_value + net_wage
+            last_balance_amount = header.get('last_balance_amount', 0.0)
+            grand_total = net_value + net_wage + last_balance_amount
             self.estimates_table.setItem(row, 8, QTableWidgetItem(f"{grand_total:.2f}"))
 
     def get_selected_voucher(self):

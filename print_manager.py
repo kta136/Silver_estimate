@@ -47,13 +47,20 @@ class PrintManager:
         last_three = s[-3:]
         # Format the remaining digits in groups of two
         other_digits = s[:-3]
-        formatted_other = ""
-        i = len(other_digits) - 1
-        while i >= 0:
-            if len(formatted_other) % 3 == 0 and len(formatted_other) != 0:
-                formatted_other = "," + formatted_other
-            formatted_other = other_digits[i] + formatted_other
-            i -= 1
+        if not other_digits:
+             return last_three # Handle cases like 123
+
+        # Reverse the other_digits string for easier processing
+        other_digits_rev = other_digits[::-1]
+        formatted_other_rev = ""
+        for i, digit in enumerate(other_digits_rev):
+            formatted_other_rev += digit
+            # Add comma after every second digit (except at the end)
+            if (i + 1) % 2 == 0 and (i + 1) != len(other_digits_rev):
+                formatted_other_rev += ","
+
+        # Reverse the formatted string back
+        formatted_other = formatted_other_rev[::-1]
         return formatted_other + "," + last_three
 
 

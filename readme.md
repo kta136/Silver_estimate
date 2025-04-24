@@ -1,4 +1,4 @@
-# 🧾 Silver Estimation App — v1.14
+# 🧾 Silver Estimation App — v1.51
 
 A desktop application built using **PyQt5** and **SQLite** for managing silver sales estimates, including item-wise entries, silver bar inventory, returns, and print-ready formatted outputs.
 
@@ -16,7 +16,7 @@ This app is designed for silver shops to:
 
 ---
 
-## ✅ Features (v1.14)
+## ✅ Features (v1.51)
 
 ### 🔢 Estimate Entry
 
@@ -57,13 +57,16 @@ This app is designed for silver shops to:
 - Print directly from history (uses selected print font settings).
 - **Delete Option:** Button added to delete the selected estimate (with confirmation).
 
-### 🧱 Silver Bar Management (Basic v1.0)
+### 🧱 Silver Bar Management (v2.0)
 
-- Add bars with Bar No, Weight, and Purity.
-- Filter inventory by status: In Stock, Transferred, Sold, Melted.
-- Transfer bars with notes.
-- Print inventory list.
-- *(Advanced grouping planned for v1.1)*
+- Completely overhauled system with unique bar IDs and list-based management
+- Bars are linked to source estimates via `estimate_voucher_no`
+- Create and manage lists of silver bars with notes
+- Add/remove bars to/from lists with automatic status tracking
+- Filter available bars by weight with real-time search
+- View detailed list information including total weight and fine weight
+- Print inventory lists with comprehensive details
+- Automatic tracking of bar transfers between statuses
 
 ### 🖨️ Printing
 
@@ -106,7 +109,7 @@ This app is designed for silver shops to:
 ├── estimate_entry_logic.py # Estimate screen calculation logic, event handlers
 ├── item_master.py # Item management screen UI and logic
 ├── estimate_history.py # Estimate history browser dialog UI and logic
-├── silver_bar_management.py # Silver bar inventory dialog UI and logic (v1.0)
+├── silver_bar_management.py # Silver bar inventory dialog UI and logic (v2.0)
 ├── item_selection_dialog.py # Dialog to select items when code not found
 ├── print_manager.py # Handles print formatting and preview dialogs
 ├── database_manager.py # All SQLite database operations and schema setup
@@ -164,6 +167,57 @@ On the first run, a database folder and the estimation.db SQLite file will be cr
 - **Printing:** `PrintManager` handles formats. Estimate slip uses `<pre>` and fixed-width spacing. Preview via `QPrintPreviewDialog`.
 
 ---
+
+## 🐞 Key Fixes & Enhancements (v1.51 - April 2025)
+
+### 1. 🧱 Silver Bar Management Overhaul (v2.0)
+
+- **Objective:** Completely rewrote the silver bar tracking and management system
+- **Implementation:**
+  - New database schema with `silver_bars`, `silver_bar_lists`, and `bar_transfers` tables
+  - Bars now have unique `bar_id` and are linked to source estimates
+  - List-based grouping/assignment system for organizing bars
+  - Comprehensive UI redesign with separate views for available and listed bars
+  - Enhanced printing capabilities for lists and inventory
+
+### 2. 💰 Currency Formatting Fix
+
+- **File:** `print_manager.py`
+- **Change:** Corrected the `format_indian_rupees` function to properly implement comma separation according to the Indian numbering system (lakhs, crores)
+- **Impact:** Correctly formatted Silver Cost and Total Cost on printed estimate slips
+
+### 3. 🐛 Critical Database Schema Versioning
+
+- **Issue:** Silver bars were being deleted when the program was restarted
+- **Fix:** Implemented a schema versioning system with a new `schema_version` table
+- **Impact:** Prevents data loss by only performing schema migrations when necessary
+
+### 4. 🔄 Silver Bar Lifecycle Management
+
+- **Issue:** Multiple issues with silver bars being deleted or duplicated
+- **Fix:** Completely redesigned the silver bar lifecycle:
+  - Silver bars are created only once when an estimate is first saved
+  - They are preserved when an estimate is edited or saved again
+  - They are deleted only when their parent estimate is deleted
+  - Lists that become empty due to bar deletion are also removed
+- **Technical Details:**
+  - Fixed cascade deletion issue caused by `ON DELETE CASCADE` constraint
+  - Rewrote `save_estimate_with_returns` to use UPDATE instead of INSERT OR REPLACE
+  - Added checks to prevent duplicate bars when saving estimates multiple times
+  - Enhanced estimate deletion to properly clean up related data
+
+### 5. 🔧 SQLite3.Row Access Fixes
+
+- **Issue:** Multiple instances of using `.get()` on `sqlite3.Row` objects causing errors
+- **Fix:** Changed all instances to use dictionary-style access with proper key existence checks
+- **Impact:** Ensures compatibility with both dictionary and sqlite3.Row objects throughout the application
+
+### 6. 💅 UI Improvements to Silver Bar Management
+
+- **Removed Timestamps:** Cleaner presentation with date-only format
+- **Added Totals Display:** Summary labels showing bar count, total weight, and fine weight
+- **Enhanced List Selection:** Added list notes to dropdown items for easier identification
+- **Improved Note Handling:** Consistent display format across the UI
 
 ## 🐞 Key Fixes & Enhancements (v1.14 - April 2025)
 
@@ -225,7 +279,7 @@ On the first run, a database folder and the estimation.db SQLite file will be cr
 
 ## 📝 Development & Debugging Notes for AI
 
-This file reflects the state after v1.14 feature additions/fixes.
+This file reflects the state after v1.51 feature additions/fixes.
 
 ### 🔧 Key Concepts & Logic Flow:
 
@@ -245,6 +299,9 @@ This file reflects the state after v1.14 feature additions/fixes.
 - [x] ~~Estimate History: Update columns.~~ (Completed in v1.14)
 - [x] ~~Tools Menu: Add "Delete All Estimates" option.~~ (Completed in v1.14)
 - [x] ~~Delete Single Estimate: Add option/button.~~ (Completed in v1.14)
+- [x] ~~Silver Bar Management: Implement list-based grouping system.~~ (Completed in v1.51)
+- [x] ~~Silver Bar Lifecycle: Fix issues with deletion and duplication.~~ (Completed in v1.51)
+- [x] ~~Database Schema: Implement versioning to prevent data loss.~~ (Completed in v1.51)
 - [ ] Estimate Screen: Allow table column widths to be resized by the user and persist the sizes between sessions (using `QSettings`).
 - [ ] Estimate Notes: Add feature (UI, DB, Logic, History).
 - [ ] Encryption/Password: Implement password protection & reset.
@@ -366,13 +423,13 @@ UI Events -> `estimate_entry_logic.py` methods -> Update UI/Calculations -> `cal
 **Problem:** Table operations might slow with many rows.
 **Suggestion:** Batch operations, block signals during multi-row updates.
 
-### Implementation Priority Suggestions (Post v1.14)
+### Implementation Priority Suggestions (Post v1.51)
 
 In order of importance, consider addressing:
 
 1.  **Navigation Logic**: Implement conditional column handling based on wage type.
-2.  **Database Migrations**: Add proper versioning before schema changes become more complex.
-3.  **Silver Bar Integration**: Strengthen the inventory linking system.
+2.  ~~**Database Migrations**: Add proper versioning before schema changes become more complex.~~ (Completed in v1.51)
+3.  ~~**Silver Bar Integration**: Strengthen the inventory linking system.~~ (Completed in v1.51)
 4.  **Input Validation**: Improve error handling and visual feedback.
 5.  **UI Spacing**: Re-evaluate and potentially restore dynamic spacing.
 6.  **Estimate Notes**: Implement the notes feature.

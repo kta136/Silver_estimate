@@ -128,7 +128,7 @@ class PrintManager:
         try:
             html_content = self._generate_list_details_html(list_info, bars_in_list)
             preview = QPrintPreviewDialog(self.printer, parent_widget)
-            preview.setWindowTitle(f"Print Preview - List {list_info.get('list_identifier', 'N/A')}")
+            preview.setWindowTitle(f"Print Preview - List {list_info['list_identifier'] if 'list_identifier' in list_info.keys() and list_info['list_identifier'] is not None else 'N/A'}")
             preview.paintRequested.connect(lambda printer: self._print_html(printer, html_content, table_mode=True))
             preview.exec_()
             return True
@@ -303,23 +303,45 @@ class PrintManager:
                    .right{{text-align:right}}</style></head><body>
                    <div class="header-title">SILVER BARS INVENTORY{status_text}</div>
                    <div class="sub-header"><span></span><span>Print Date: {current_date}</span></div>
-                   <table><thead><tr><th>Bar No.</th><th class="right">Weight(g)</th><th class="right">Purity(%)</th>
+                   <table><thead><tr><th>Bar ID</th><th>Estimate Vch</th><th class="right">Weight(g)</th><th class="right">Purity(%)</th>
                    <th class="right">Fine Wt(g)</th><th>Date Added</th><th>Status</th></tr></thead><tbody>"""
         total_weight = 0.0; total_fine = 0.0; bar_count = 0
         if bars:
             for bar in bars: # Assume bar is sqlite3.Row
-                bw=bar['weight'] if bar['weight'] is not None else 0.0; bfw=bar['fine_weight'] if bar['fine_weight'] is not None else 0.0
-                bp=bar['purity'] if bar['purity'] is not None else 0.0; bno=bar['bar_no'] if bar['bar_no'] is not None else ''
-                da=bar['date_added'] if bar['date_added'] is not None else ''; st=bar['status'] if bar['status'] is not None else ''
-                bar_count+=1; total_weight+=bw; total_fine+=bfw
-                html += f"""<tr><td>{bno}</td><td class="right">{bw:.3f}</td><td class="right">{bp:.2f}</td><td class="right">{bfw:.3f}</td><td>{da}</td><td>{st}</td></tr>"""
-        else: html += '<tr><td colspan="6" style="text-align:center;padding:5px 0;">-- No Bars Found --</td></tr>'
+                # Use the new schema column names
+                bw = bar['weight'] if 'weight' in bar.keys() and bar['weight'] is not None else 0.0
+                bfw = bar['fine_weight'] if 'fine_weight' in bar.keys() and bar['fine_weight'] is not None else 0.0
+                bp = bar['purity'] if 'purity' in bar.keys() and bar['purity'] is not None else 0.0
+                bid = bar['bar_id'] if 'bar_id' in bar.keys() and bar['bar_id'] is not None else 'N/A'
+                evch = bar['estimate_voucher_no'] if 'estimate_voucher_no' in bar.keys() and bar['estimate_voucher_no'] is not None else 'N/A'
+                da = bar['date_added'] if 'date_added' in bar.keys() and bar['date_added'] is not None else ''
+                st = bar['status'] if 'status' in bar.keys() and bar['status'] is not None else ''
+                
+                bar_count += 1
+                total_weight += bw
+                total_fine += bfw
+                
+                html += f"""<tr>
+                    <td>{bid}</td>
+                    <td>{evch}</td>
+                    <td class="right">{bw:.3f}</td>
+                    <td class="right">{bp:.2f}</td>
+                    <td class="right">{bfw:.3f}</td>
+                    <td>{da}</td>
+                    <td>{st}</td>
+                </tr>"""
+        else: html += '<tr><td colspan="7" style="text-align:center;padding:5px 0;">-- No Bars Found --</td></tr>'
         html += f"""</tbody></table><div class="totals">TOTAL Bars: {bar_count} | TOTAL Weight: {total_weight:,.3f} g | TOTAL Fine Wt: {total_fine:,.3f} g</div></body></html>"""
         return html
 
     def _generate_list_details_html(self, list_info, bars_in_list):
-        """Generates HTML content for printing a single list's details."""
-        li=list_info.get('list_identifier','N/A'); cd=list_info.get('creation_date','N/A'); ln=list_info.get('list_note',''); pd=QDate.currentDate().toString("yyyy-MM-dd")
+        """Generates HTML content for printing a single list's details (v2.0 schema)."""
+        # Use dictionary-style access with checks for sqlite3.Row compatibility
+        li = list_info['list_identifier'] if 'list_identifier' in list_info.keys() and list_info['list_identifier'] is not None else 'N/A'
+        cd = list_info['creation_date'] if 'creation_date' in list_info.keys() and list_info['creation_date'] is not None else 'N/A'
+        ln = list_info['list_note'] if 'list_note' in list_info.keys() and list_info['list_note'] is not None else ''
+        pd = QDate.currentDate().toString("yyyy-MM-dd")
+
         html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Silver Bar List - {li}</title><style>
                    body{{font-family:Arial,sans-serif;font-size:8pt;margin:10mm}}table{{border-collapse:collapse;width:100%;margin-top:15px;page-break-inside:auto}}
                    th,td{{border:1px solid #ccc;padding:4px 6px;text-align:left;word-wrap:break-word}}tr{{page-break-inside:avoid;page-break-after:auto}}
@@ -327,16 +349,49 @@ class PrintManager:
                    .header-title{{text-align:center;font-size:12pt;font-weight:bold;margin-bottom:10px}}.list-info{{margin-bottom:15px}}
                    .list-info span{{display:inline-block;margin-right:20px}}.list-note{{margin-top:5px;border:1px solid #eee;padding:5px;background-color:#f9f9f9}}
                    .totals{{margin-top:15px;font-weight:bold;border-top:1px double #000;padding-top:5px;text-align:right}}.right{{text-align:right}}</style></head><body>
-                   <div class="header-title">Silver Bar List Details</div><div class="list-info"><span><b>List ID:</b> {li}</span></div>
+                   <div class="header-title">Silver Bar List Details</div>
+                   <div class="list-info">
+                       <span><b>List ID:</b> {li}</span>
+                       <span><b>Created:</b> {cd}</span>
+                       <span><b>Printed:</b> {pd}</span>
+                   </div>
                    <div class="list-note"><b>Note:</b> {ln if ln else 'N/A'}</div>
-                   <table><thead><tr><th>#</th><th class="right">Weight (g)</th><th class="right">Purity (%)</th><th class="right">Fine Wt (g)</th></tr></thead><tbody>"""
-        tw=0.0; tf=0.0; bc=0
+                   <table>
+                       <thead>
+                           <tr>
+                               <th>#</th>
+                               <th>Estimate Vch</th>
+                               <th class="right">Weight (g)</th>
+                               <th class="right">Purity (%)</th>
+                               <th class="right">Fine Wt (g)</th>
+                           </tr>
+                       </thead>
+                       <tbody>"""
+        tw = 0.0; tf = 0.0; bc = 0
         if bars_in_list:
             for idx, bar in enumerate(bars_in_list):
-                bw=bar['weight'] if bar['weight'] is not None else 0.0; bfw=bar['fine_weight'] if bar['fine_weight'] is not None else 0.0
-                bp=bar['purity'] if bar['purity'] is not None else 0.0; bno=bar['bar_no'] if bar['bar_no'] is not None else 'N/A'; st=bar['status'] if bar['status'] is not None else 'N/A'
-                bc+=1; tw+=bw; tf+=bfw
-                html += f"""<tr><td>{idx+1}</td><td class="right">{bw:.3f}</td><td class="right">{bp:.2f}</td><td class="right">{bfw:.3f}</td></tr>"""
-        else: html += '<tr><td colspan="4" style="text-align:center;padding:10px 0;">-- No bars assigned --</td></tr>'
-        html += f"""</tbody></table><div class="totals">TOTAL Bars: {bc} | TOTAL Weight: {tw:,.3f} g | TOTAL Fine Wt: {tf:,.3f} g</div></body></html>"""
+                # Use dictionary-style access with checks for sqlite3.Row compatibility
+                est_vch = bar['estimate_voucher_no'] if 'estimate_voucher_no' in bar.keys() and bar['estimate_voucher_no'] is not None else 'N/A'
+                bw = bar['weight'] if 'weight' in bar.keys() and bar['weight'] is not None else 0.0
+                bfw = bar['fine_weight'] if 'fine_weight' in bar.keys() and bar['fine_weight'] is not None else 0.0
+                bp = bar['purity'] if 'purity' in bar.keys() and bar['purity'] is not None else 0.0
+                # Note: bar_no and status are no longer primary fields in this context
+
+                bc += 1
+                tw += bw
+                tf += bfw
+                html += f"""<tr>
+                               <td>{idx+1}</td>
+                               <td>{est_vch}</td>
+                               <td class="right">{bw:.3f}</td>
+                               <td class="right">{bp:.2f}</td>
+                               <td class="right">{bfw:.3f}</td>
+                           </tr>"""
+        else:
+            # Adjust colspan for the new number of columns
+            html += '<tr><td colspan="5" style="text-align:center;padding:10px 0;">-- No bars assigned --</td></tr>'
+
+        html += f"""</tbody></table>
+                   <div class="totals">TOTAL Bars: {bc} | TOTAL Weight: {tw:,.3f} g | TOTAL Fine Wt: {tf:,.3f} g</div>
+                   </body></html>"""
         return html

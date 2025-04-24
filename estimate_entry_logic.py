@@ -586,7 +586,7 @@ class EstimateLogic:
 
 
     def save_estimate(self):
-        """Save the current estimate, recalculating totals before saving."""
+        """Save the current estimate, handling silver bar creation/deletion."""
         voucher_no = self.voucher_edit.text().strip()
         if not voucher_no:
             QMessageBox.warning(self, "Input Error", "Voucher number is required to save.")
@@ -598,23 +598,20 @@ class EstimateLogic:
         silver_rate = self.silver_rate_spin.value()
 
         items_to_save = []
-        silver_bars_for_inventory = []
         rows_with_errors = []
 
+        # --- Collect Item Data ---
         for row in range(self.item_table.rowCount()):
-            # Use constant
             code_item = self.item_table.item(row, COL_CODE)
             code = code_item.text().strip() if code_item else ""
-            if not code: continue
+            if not code: continue # Skip empty rows
 
-            # Use constant
             type_item = self.item_table.item(row, COL_TYPE)
             item_type_str = type_item.text() if type_item else "No"
             is_return = (item_type_str == "Return")
             is_silver_bar = (item_type_str == "Silver Bar")
 
             try:
-                # Use constants when accessing cell data
                 item_dict = {
                     'code': code,
                     'name': self.item_table.item(row, COL_ITEM_NAME).text() if self.item_table.item(row, COL_ITEM_NAME) else '',
@@ -631,10 +628,7 @@ class EstimateLogic:
                 }
                 if item_dict['net_wt'] < 0 or item_dict['fine'] < 0 or item_dict['wage'] < 0:
                      raise ValueError("Calculated values (Net, Fine, Wage) cannot be negative.")
-
                 items_to_save.append(item_dict)
-                if is_silver_bar and not is_return:
-                    silver_bars_for_inventory.append(item_dict)
             except Exception as e:
                 rows_with_errors.append(row + 1)
                 print(f"Error processing row {row+1} for saving: {e}")
@@ -650,13 +644,11 @@ class EstimateLogic:
             return
 
         # --- Recalculate Totals ---
-        # (Calculation logic itself doesn't need constants, it uses dict keys)
         calc_total_gross, calc_total_net = 0.0, 0.0
         calc_net_fine, calc_net_wage = 0.0, 0.0
         calc_reg_fine, calc_reg_wage = 0.0, 0.0
         calc_bar_fine, calc_bar_wage = 0.0, 0.0
         calc_ret_fine, calc_ret_wage = 0.0, 0.0
-
         for item in items_to_save:
             calc_total_gross += item['gross']
             calc_total_net += item['net_wt']
@@ -669,35 +661,22 @@ class EstimateLogic:
             else:
                 calc_reg_fine += item['fine']
                 calc_reg_wage += item['wage']
-
-        # Corrected net calculation: Subtract both Bars and Returns from Regular
         calc_net_fine = calc_reg_fine - calc_bar_fine - calc_ret_fine
-        calc_net_wage = calc_reg_wage - calc_bar_wage - calc_ret_wage # Note: bar_wage usually 0
+        calc_net_wage = calc_reg_wage - calc_bar_wage - calc_ret_wage
         recalculated_totals = {
-            'total_gross': calc_total_gross, # This still represents overall gross
-            'total_net': calc_total_net,     # This still represents overall net
-            'net_fine': calc_net_fine,
-            'net_wage': calc_net_wage
+            'total_gross': calc_total_gross, 'total_net': calc_total_net,
+            'net_fine': calc_net_fine, 'net_wage': calc_net_wage
         }
 
-        # --- Add Silver Bars to Inventory ---
-        bars_added_count = 0
-        bars_failed_count = 0
-        if silver_bars_for_inventory:
-            for bar_item in silver_bars_for_inventory:
-                bar_inventory_no = bar_item['code']
-                weight = bar_item['net_wt']
-                purity = bar_item['purity']
-                if not bar_inventory_no:
-                     print(f"Skipping bar addition for item '{bar_item.get('name', 'N/A')}' due to missing code.")
-                     bars_failed_count += 1
-                     continue
-                if self.db_manager.add_silver_bar(bar_inventory_no, weight, purity):
-                    bars_added_count += 1
-                else:
-                    bars_failed_count += 1
+        # --- Check if estimate exists ---
+        estimate_exists = self.db_manager.get_estimate_by_voucher(voucher_no) is not None
+        
+        # No longer deleting silver bars - they are permanent and managed separately
+        if estimate_exists:
+            # Just for informational purposes, check if there are bars for this estimate
+            self.db_manager.delete_silver_bars_for_estimate(voucher_no)  # This is now just a reporting function
 
-        # --- Save Estimate Data ---
+        # --- Save Estimate Header and Items ---
         regular_items_for_db = [item for item in items_to_save if not item['is_return']]
         return_items_for_db = [item for item in items_to_save if item['is_return']]
         save_success = self.db_manager.save_estimate_with_returns(
@@ -705,19 +684,45 @@ class EstimateLogic:
             regular_items_for_db, return_items_for_db, recalculated_totals
         )
 
+        # --- Post-Save: Add New Silver Bars ---
+        bars_added_count = 0
+        bars_failed_count = 0
+        if save_success:
+            # Check if this estimate already has silver bars
+            self.db_manager.cursor.execute("SELECT COUNT(*) FROM silver_bars WHERE estimate_voucher_no = ?", (voucher_no,))
+            existing_bars_count = self.db_manager.cursor.fetchone()[0]
+            
+            if existing_bars_count > 0:
+                print(f"Estimate {voucher_no} already has {existing_bars_count} silver bars. Not adding new ones.")
+                self._status(f"Note: Estimate already has {existing_bars_count} silver bars. Not adding new ones.", 5000)
+            else:
+                print(f"Estimate {voucher_no} saved. Now adding new silver bars...")
+                
+                # Add new silver bars from the form only if no bars exist for this estimate
+                for item in items_to_save:
+                    if item['is_silver_bar'] and not item['is_return']:
+                        weight = item['net_wt']  # Use net_wt for bars
+                        purity = item['purity']
+                        bar_id = self.db_manager.add_silver_bar(voucher_no, weight, purity)
+                        if bar_id is not None:
+                            bars_added_count += 1
+                            print(f"Added silver bar (ID: {bar_id}) for estimate {voucher_no}.")
+                        else:
+                            bars_failed_count += 1
+                            print(f"Failed to add silver bar for estimate {voucher_no}, item: {item.get('name', 'N/A')}")
+
         # --- Show Result Message ---
         if save_success:
             message_parts = [f"Estimate '{voucher_no}' saved successfully."]
-            if bars_added_count > 0: message_parts.append(f"{bars_added_count} silver bar(s) added.")
-            if bars_failed_count > 0: message_parts.append(f"{bars_failed_count} bar add(s) failed (check code/dupes).")
+            if bars_added_count > 0: message_parts.append(f"{bars_added_count} silver bar(s) created.")
+            if bars_failed_count > 0: message_parts.append(f"{bars_failed_count} bar creation(s) failed.")
             final_message = " ".join(message_parts)
             self._status(final_message, 5000)
             QMessageBox.information(self, "Success", final_message)
 
-            # --- Open print preview and clear form for new estimate ---
+            # --- Open print preview and clear form ---
             self.print_estimate()
-            self.clear_form(confirm=False) # Clear without asking confirmation
-            # ---------------------------------------------------------
+            self.clear_form(confirm=False)
         else:
             err_msg = f"Failed to save estimate '{voucher_no}'. Check logs."
             QMessageBox.critical(self, "Error", err_msg)

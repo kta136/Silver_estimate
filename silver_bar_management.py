@@ -1,331 +1,511 @@
 #!/usr/bin/env python
-from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
-                            QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
-                            QLineEdit, QDoubleSpinBox, QComboBox, QMessageBox,
-                            QAbstractItemView, QTextEdit, QFrame, QInputDialog) # Added QInputDialog
-from PyQt5.QtCore import Qt, QDate
-# Import the secondary dialog for viewing list contents (Defined below)
-# from simple_list_view_dialog import ViewListBarsDialog # Placeholder
+from PyQt5.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton,
+    QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QComboBox,
+    QMessageBox, QAbstractItemView, QFrame, QInputDialog, QSplitter,
+    QWidget # Added QSplitter, QWidget
+)
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QColor
+import traceback # Added for error handling in actions
 
-# --- Simple Dialog for Viewing List Bars (Defined inline for simplicity) ---
-class ViewListBarsDialog(QDialog):
-    """Simple dialog to display the bars within a selected list."""
-    def __init__(self, list_identifier, list_note, bars_data, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle(f"Contents of List: {list_identifier}")
-        self.setMinimumSize(600, 400) # Adjusted size
-        layout = QVBoxLayout(self)
-
-        # Display List Info
-        info_layout = QGridLayout()
-        info_layout.addWidget(QLabel("<b>List Identifier:</b>"), 0, 0)
-        info_layout.addWidget(QLabel(list_identifier), 0, 1)
-        info_layout.addWidget(QLabel("<b>Note:</b>"), 1, 0, alignment=Qt.AlignTop)
-        note_display = QTextEdit(list_note if list_note else "N/A")
-        note_display.setReadOnly(True)
-        note_display.setMaximumHeight(60) # Limit height
-        info_layout.addWidget(note_display, 1, 1)
-        info_layout.setColumnStretch(1, 1)
-        layout.addLayout(info_layout)
-
-        layout.addWidget(QLabel("<b>Assigned Bars:</b>"))
-
-        # Table for Bars
-        table = QTableWidget()
-        table.setColumnCount(5) # Bar No, Weight, Purity, Fine, Status
-        table.setHorizontalHeaderLabels(["Bar Number", "Weight (g)", "Purity (%)", "Fine Wt (g)", "Status"])
-        table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        table.setAlternatingRowColors(True)
-        table.setSelectionMode(QAbstractItemView.NoSelection) # View only
-        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
-
-        table.setRowCount(len(bars_data))
-        total_w = 0.0
-        total_f = 0.0
-        for row, bar in enumerate(bars_data):
-            # Safely access data from sqlite3.Row
-            bar_no = bar['bar_no'] if bar['bar_no'] is not None else 'N/A'
-            weight = bar['weight'] if bar['weight'] is not None else 0.0
-            purity = bar['purity'] if bar['purity'] is not None else 0.0
-            fine_wt = bar['fine_weight'] if bar['fine_weight'] is not None else 0.0
-            status = bar['status'] if bar['status'] is not None else 'N/A'
-
-            table.setItem(row, 0, QTableWidgetItem(bar_no))
-            table.setItem(row, 1, QTableWidgetItem(f"{weight:.3f}"))
-            table.setItem(row, 2, QTableWidgetItem(f"{purity:.2f}"))
-            table.setItem(row, 3, QTableWidgetItem(f"{fine_wt:.3f}"))
-            table.setItem(row, 4, QTableWidgetItem(status))
-            total_w += weight
-            total_f += fine_wt
-        layout.addWidget(table)
-
-        # Summary Label
-        summary = QLabel(f"<b>Total Bars:</b> {len(bars_data)} | <b>Total Weight:</b> {total_w:,.3f}g | <b>Total Fine:</b> {total_f:,.3f}g")
-        summary.setAlignment(Qt.AlignRight)
-        layout.addWidget(summary)
-
-        # Close Button
-        close_button = QPushButton("Close")
-        close_button.clicked.connect(self.accept)
-        button_layout = QHBoxLayout()
-        button_layout.addStretch()
-        button_layout.addWidget(close_button)
-        layout.addLayout(button_layout)
-
-
-# --- Main Dialog ---
 class SilverBarDialog(QDialog):
-    """Dialog for adding, managing, and listing silver bars (v1.1 Refined)."""
+    """Dialog for managing silver bars and grouping them into lists (v2.0)."""
 
     def __init__(self, db_manager, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
-        self.list_identifiers_cache = [] # Cache for list selection dialogs
+        self.current_list_id = None # Track the currently selected list
         self.init_ui()
-        self.load_bars() # Load initial view ('All' or 'In Stock')
+        self.load_lists()
+        self.load_available_bars()
 
     def init_ui(self):
         """Set up the user interface."""
-        self.setWindowTitle("Silver Bar Management & Lists") # Updated title
-        self.setMinimumWidth(850) # Slightly wider
-        self.setMinimumHeight(700) # Increased height slightly for new buttons
+        self.setWindowTitle("Silver Bar Management (v2.0)")
+        self.setMinimumSize(950, 750) # Adjusted size
 
-        layout = QVBoxLayout(self)
-        header_label = QLabel("Silver Bar Management")
-        header_label.setStyleSheet("font-size: 16pt; font-weight: bold;")
-        layout.addWidget(header_label)
+        main_layout = QVBoxLayout(self)
 
-        # --- Add bar section ---
-        add_bar_layout = QGridLayout()
-        add_bar_layout.addWidget(QLabel("Bar Number:"), 0, 0); self.bar_no_edit = QLineEdit(); self.bar_no_edit.setMaximumWidth(150); add_bar_layout.addWidget(self.bar_no_edit, 0, 1)
-        add_bar_layout.addWidget(QLabel("Weight (g):"), 0, 2); self.weight_spin = QDoubleSpinBox(); self.weight_spin.setRange(0, 100000); self.weight_spin.setDecimals(3); self.weight_spin.setSingleStep(10); add_bar_layout.addWidget(self.weight_spin, 0, 3)
-        add_bar_layout.addWidget(QLabel("Purity (%):"), 0, 4); self.purity_spin = QDoubleSpinBox(); self.purity_spin.setRange(0, 100); self.purity_spin.setDecimals(2); self.purity_spin.setValue(100); self.purity_spin.setSingleStep(0.5); add_bar_layout.addWidget(self.purity_spin, 0, 5)
-        self.add_bar_button = QPushButton("Add Bar"); self.add_bar_button.clicked.connect(self.add_bar); add_bar_layout.addWidget(self.add_bar_button, 0, 6)
-        layout.addLayout(add_bar_layout)
+        # --- Top Section: Search and Available Bars ---
+        top_widget = QWidget()
+        top_layout = QVBoxLayout(top_widget)
+        top_layout.setContentsMargins(0,0,0,0)
 
-        # --- Filter section ---
-        filter_layout = QHBoxLayout()
-        filter_layout.addWidget(QLabel("Filter by Status:"))
-        self.status_filter = QComboBox(); self.status_filter.addItems(["All", "In Stock", "Assigned", "Transferred", "Sold", "Melted"]); self.status_filter.currentTextChanged.connect(self.load_bars); filter_layout.addWidget(self.status_filter)
-        filter_layout.addStretch()
-        self.refresh_button = QPushButton("Refresh List"); self.refresh_button.clicked.connect(self.load_bars); filter_layout.addWidget(self.refresh_button)
-        layout.addLayout(filter_layout)
+        search_layout = QHBoxLayout()
+        search_layout.addWidget(QLabel("Search Available Bars by Weight (approx):"))
+        self.weight_search_edit = QLineEdit()
+        self.weight_search_edit.setPlaceholderText("Enter weight (e.g., 1000.123)")
+        self.weight_search_edit.textChanged.connect(self.load_available_bars) # Use textChanged for live search
+        search_layout.addWidget(self.weight_search_edit)
+        self.refresh_available_button = QPushButton("Refresh Available")
+        self.refresh_available_button.clicked.connect(self.load_available_bars)
+        search_layout.addWidget(self.refresh_available_button)
+        top_layout.addLayout(search_layout)
 
-        # --- Silver bars table ---
-        self.bars_table = QTableWidget()
-        self.bars_table.setColumnCount(7); self.bars_table.setHorizontalHeaderLabels(["ID", "Bar Number", "Weight (g)", "Purity (%)", "Fine Weight (g)", "Date Added", "Status"])
-        self.bars_table.setColumnHidden(0, True); self.bars_table.setColumnWidth(1, 120); self.bars_table.setColumnWidth(2, 100); self.bars_table.setColumnWidth(3, 100); self.bars_table.setColumnWidth(4, 120); self.bars_table.setColumnWidth(5, 120); self.bars_table.setColumnWidth(6, 120)
-        self.bars_table.setEditTriggers(QTableWidget.NoEditTriggers); self.bars_table.setSelectionBehavior(QAbstractItemView.SelectRows); self.bars_table.setSelectionMode(QAbstractItemView.ExtendedSelection); self.bars_table.setAlternatingRowColors(True)
-        layout.addWidget(self.bars_table)
+        self.available_bars_table = QTableWidget()
+        self.available_bars_table.setColumnCount(7) # bar_id, estimate_voucher_no, weight, purity, fine_weight, date_added, status
+        self.available_bars_table.setHorizontalHeaderLabels(["ID", "Estimate Vch", "Weight (g)", "Purity (%)", "Fine Wt (g)", "Date Added", "Status"])
+        self.available_bars_table.setColumnHidden(0, True) # Hide bar_id
+        self.available_bars_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.available_bars_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.available_bars_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.available_bars_table.setAlternatingRowColors(True)
+        self.available_bars_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.available_bars_table.horizontalHeader().setStretchLastSection(True)
+        top_layout.addWidget(self.available_bars_table)
+        
+        # Add totals label for available bars
+        self.available_totals_label = QLabel("Available Bars: 0 | Total Weight: 0.000 g | Total Fine Wt: 0.000 g")
+        self.available_totals_label.setStyleSheet("font-weight: bold;")
+        self.available_totals_label.setAlignment(Qt.AlignRight)
+        top_layout.addWidget(self.available_totals_label)
 
-        # --- Transfer section ---
-        transfer_layout = QGridLayout()
-        transfer_layout.addWidget(QLabel("Transfer Selected Bar(s) to:"), 0, 0); self.transfer_status = QComboBox(); self.transfer_status.addItems(["In Stock", "Assigned", "Transferred", "Sold", "Melted"]); transfer_layout.addWidget(self.transfer_status, 0, 1)
-        transfer_layout.addWidget(QLabel("Transfer Notes:"), 0, 2); self.transfer_notes = QLineEdit(); self.transfer_notes.setPlaceholderText("Optional notes for transfer"); transfer_layout.addWidget(self.transfer_notes, 0, 3)
-        self.transfer_button = QPushButton("Transfer Selected"); self.transfer_button.setToolTip("Transfer selected bar(s) individually (uses above Notes)"); self.transfer_button.clicked.connect(self.transfer_selected_bars); transfer_layout.addWidget(self.transfer_button, 0, 4)
-        layout.addLayout(transfer_layout)
+        # --- Middle Section: List Selection and Actions ---
+        list_action_layout = QHBoxLayout()
+        list_action_layout.addWidget(QLabel("Select List:"))
+        self.list_combo = QComboBox()
+        self.list_combo.setMinimumWidth(200)
+        self.list_combo.currentIndexChanged.connect(self.list_selection_changed)
+        list_action_layout.addWidget(self.list_combo)
 
-        # --- Separator 1 ---
-        line1 = QFrame(); line1.setFrameShape(QFrame.HLine); line1.setFrameShadow(QFrame.Sunken); layout.addWidget(line1)
+        self.create_list_button = QPushButton("Create New List...")
+        self.create_list_button.clicked.connect(self.create_new_list)
+        list_action_layout.addWidget(self.create_list_button)
 
-        # --- List Creation Section ---
-        list_layout = QGridLayout()
-        list_layout.addWidget(QLabel("<b>Create New List & Assign Selected:</b>"), 0, 0, 1, 4)
-        list_layout.addWidget(QLabel("List Note:"), 1, 0); self.list_note_edit = QTextEdit(); self.list_note_edit.setPlaceholderText("Enter note for the new list..."); self.list_note_edit.setMaximumHeight(60); list_layout.addWidget(self.list_note_edit, 1, 1, 1, 2)
-        self.create_list_button = QPushButton("Create List & Assign"); self.create_list_button.setToolTip("Create a new list and assign selected 'In Stock' bars."); self.create_list_button.clicked.connect(self.create_list_and_assign); list_layout.addWidget(self.create_list_button, 1, 3)
-        list_layout.setColumnStretch(1, 1)
-        layout.addLayout(list_layout)
+        self.add_to_list_button = QPushButton("Add Selected Bars to List ↑")
+        self.add_to_list_button.setToolTip("Add selected 'Available' bars to the list selected above.")
+        self.add_to_list_button.clicked.connect(self.add_selected_to_list)
+        list_action_layout.addWidget(self.add_to_list_button)
+        list_action_layout.addStretch()
 
-        # --- Separator 2 ---
-        line2 = QFrame(); line2.setFrameShape(QFrame.HLine); line2.setFrameShadow(QFrame.Sunken); layout.addWidget(line2)
 
-        # --- List Management / Actions Section ---
-        list_manage_layout = QHBoxLayout()
-        list_manage_layout.addWidget(QLabel("<b>List Actions:</b>"))
-        self.view_list_button = QPushButton("View List Contents...")
-        self.view_list_button.setToolTip("Select a list to view its assigned bars.")
-        self.view_list_button.clicked.connect(self.view_list_contents)
-        self.edit_list_note_button = QPushButton("Edit List Note...")
-        self.edit_list_note_button.setToolTip("Select a list to edit its note.")
-        self.edit_list_note_button.clicked.connect(self.edit_selected_list_note)
-        self.unassign_button = QPushButton("Unassign Selected Bar(s)")
-        self.unassign_button.setToolTip("Remove selected 'Assigned' bar(s) from their list (status becomes 'In Stock').")
-        self.unassign_button.clicked.connect(self.unassign_selected_bars)
-        self.delete_list_button = QPushButton("Delete List...")
-        self.delete_list_button.setToolTip("Select a list to delete it (bars become unassigned).")
+        # --- Bottom Section: Bars in Selected List ---
+        bottom_widget = QWidget()
+        bottom_layout = QVBoxLayout(bottom_widget)
+        bottom_layout.setContentsMargins(0,0,0,0)
+
+        list_details_layout = QHBoxLayout()
+        self.list_details_label = QLabel("Selected List: None")
+        self.list_details_label.setStyleSheet("font-weight: bold;")
+        list_details_layout.addWidget(self.list_details_label)
+        list_details_layout.addStretch()
+        self.edit_note_button = QPushButton("Edit List Note...")
+        self.edit_note_button.clicked.connect(self.edit_list_note)
+        self.edit_note_button.setEnabled(False) # Disabled initially
+        list_details_layout.addWidget(self.edit_note_button)
+        self.print_list_button = QPushButton("Print List")
+        self.print_list_button.clicked.connect(self.print_selected_list)
+        self.print_list_button.setEnabled(False) # Disabled initially
+        list_details_layout.addWidget(self.print_list_button)
+        self.delete_list_button = QPushButton("Delete List")
+        self.delete_list_button.setStyleSheet("color: red;")
         self.delete_list_button.clicked.connect(self.delete_selected_list)
+        self.delete_list_button.setEnabled(False) # Disabled initially
+        list_details_layout.addWidget(self.delete_list_button)
+        bottom_layout.addLayout(list_details_layout)
 
-        list_manage_layout.addWidget(self.view_list_button)
-        list_manage_layout.addWidget(self.edit_list_note_button)
-        list_manage_layout.addWidget(self.unassign_button)
-        list_manage_layout.addWidget(self.delete_list_button)
-        list_manage_layout.addStretch()
-        layout.addLayout(list_manage_layout)
 
-        # --- Summary section ---
-        summary_layout = QHBoxLayout(); summary_layout.addWidget(QLabel("Total Displayed Bars:")); self.total_bars_label = QLabel("0"); summary_layout.addWidget(self.total_bars_label); summary_layout.addWidget(QLabel("Total Displayed Weight:")); self.total_weight_label = QLabel("0.000 g"); summary_layout.addWidget(self.total_weight_label); summary_layout.addWidget(QLabel("Total Displayed Fine Wt:")); self.total_fine_label = QLabel("0.000 g"); summary_layout.addWidget(self.total_fine_label); layout.addLayout(summary_layout)
+        self.list_bars_table = QTableWidget()
+        # Same columns as available bars table for consistency
+        self.list_bars_table.setColumnCount(7)
+        self.list_bars_table.setHorizontalHeaderLabels(["ID", "Estimate Vch", "Weight (g)", "Purity (%)", "Fine Wt (g)", "Date Added", "Status"])
+        self.list_bars_table.setColumnHidden(0, True)
+        self.list_bars_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.list_bars_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.list_bars_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.list_bars_table.setAlternatingRowColors(True)
+        self.list_bars_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.list_bars_table.horizontalHeader().setStretchLastSection(True)
+        bottom_layout.addWidget(self.list_bars_table)
+        
+        # Add totals label for list bars
+        self.list_totals_label = QLabel("List Bars: 0 | Total Weight: 0.000 g | Total Fine Wt: 0.000 g")
+        self.list_totals_label.setStyleSheet("font-weight: bold;")
+        self.list_totals_label.setAlignment(Qt.AlignRight)
+        bottom_layout.addWidget(self.list_totals_label)
 
-        # --- Bottom Buttons ---
-        button_layout = QHBoxLayout(); self.print_button = QPushButton("Print Displayed Bars"); self.print_button.clicked.connect(self.print_bar_list); button_layout.addWidget(self.print_button); self.close_button = QPushButton("Close"); self.close_button.clicked.connect(self.accept); button_layout.addWidget(self.close_button); layout.addLayout(button_layout)
+        list_bar_actions_layout = QHBoxLayout()
+        list_bar_actions_layout.addStretch()
+        self.remove_from_list_button = QPushButton("Remove Selected Bars from List ↓")
+        self.remove_from_list_button.setToolTip("Remove selected bars from the list above (status becomes 'In Stock').")
+        self.remove_from_list_button.clicked.connect(self.remove_selected_from_list)
+        self.remove_from_list_button.setEnabled(False) # Disabled initially
+        list_bar_actions_layout.addWidget(self.remove_from_list_button)
+        bottom_layout.addLayout(list_bar_actions_layout)
 
-    # --- Helper to get list choices for dialogs ---
-    def _get_list_choices(self):
-        """Fetches and caches list identifiers for use in QInputDialog."""
-        self.list_identifiers_cache = self.db_manager.get_all_list_identifiers()
-        # Return just the identifiers for display
-        return [identifier for identifier, list_id in self.list_identifiers_cache]
+        # --- Splitter to separate Available and List views ---
+        splitter = QSplitter(Qt.Vertical)
+        splitter.addWidget(top_widget)
+        splitter.addWidget(bottom_widget)
+        splitter.setSizes([350, 400]) # Initial size distribution
 
-    def _get_list_id_from_identifier(self, identifier_string):
-        """Finds the list_id corresponding to an identifier string from the cache."""
-        for identifier, list_id in self.list_identifiers_cache:
-            if identifier == identifier_string:
-                return list_id
-        return None # Not found
+        main_layout.addLayout(list_action_layout) # List selection above splitter
+        main_layout.addWidget(splitter)
 
-    # --- Data Loading and Basic Actions ---
-    def load_bars(self):
-        """Load silver bars based on the status filter."""
-        status_filter = self.status_filter.currentText()
-        status = None if status_filter == "All" else status_filter
-        bars = self.db_manager.get_silver_bars(status)
-        self.bars_table.setRowCount(0); total_weight = 0.0; total_fine = 0.0
-        self.bars_table.blockSignals(True)
-        self.bars_table.setRowCount(len(bars))
-        for row, bar in enumerate(bars):
-            id_item = QTableWidgetItem(str(bar['id'])); id_item.setData(Qt.UserRole, bar['id'])
-            self.bars_table.setItem(row, 0, id_item)
-            self.bars_table.setItem(row, 1, QTableWidgetItem(bar['bar_no']))
-            self.bars_table.setItem(row, 2, QTableWidgetItem(f"{bar['weight']:.3f}"))
-            self.bars_table.setItem(row, 3, QTableWidgetItem(f"{bar['purity']:.2f}"))
-            self.bars_table.setItem(row, 4, QTableWidgetItem(f"{bar['fine_weight']:.3f}"))
-            self.bars_table.setItem(row, 5, QTableWidgetItem(bar['date_added']))
-            self.bars_table.setItem(row, 6, QTableWidgetItem(bar['status']))
-            if isinstance(bar['weight'], (int, float)): total_weight += bar['weight']
-            if isinstance(bar['fine_weight'], (int, float)): total_fine += bar['fine_weight']
-        self.bars_table.blockSignals(False)
-        self.total_bars_label.setText(str(len(bars))); self.total_weight_label.setText(f"{total_weight:.3f} g"); self.total_fine_label.setText(f"{total_fine:.3f} g")
+        # --- Bottom Close Button ---
+        close_button_layout = QHBoxLayout()
+        close_button_layout.addStretch()
+        self.close_button = QPushButton("Close")
+        self.close_button.clicked.connect(self.accept)
+        close_button_layout.addWidget(self.close_button)
+        main_layout.addLayout(close_button_layout)
 
-    def add_bar(self):
-        """Add a new silver bar to inventory."""
-        bar_no = self.bar_no_edit.text().strip(); weight = self.weight_spin.value(); purity = self.purity_spin.value()
-        if not bar_no: QMessageBox.warning(self, "Input Error", "Bar number required."); return
-        if weight <= 0: QMessageBox.warning(self, "Input Error", "Weight must be > 0."); return
-        if self.db_manager.add_silver_bar(bar_no, weight, purity):
-            QMessageBox.information(self, "Success", f"Bar '{bar_no}' added."); self.bar_no_edit.clear(); self.weight_spin.setValue(0); self.purity_spin.setValue(100); self.load_bars()
-        else: QMessageBox.critical(self, "Error", "Failed to add bar (duplicate bar_no?).")
+    # --- Data Loading Methods ---
 
-    def transfer_selected_bars(self):
-        """Transfer one or more selected bars to a new status."""
-        selected_rows = self.bars_table.selectionModel().selectedRows()
-        if not selected_rows: QMessageBox.warning(self, "Selection Error", "Select bar(s) to transfer."); return
-        new_status = self.transfer_status.currentText(); notes = self.transfer_notes.text().strip()
-        transfer_count, skipped_count = 0, 0; bar_nos_skipped = []
-        confirm_text = f"Transfer {len(selected_rows)} selected bar(s) to status '{new_status}'?"; reply = QMessageBox.question(self, "Confirm Transfer", confirm_text, QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if reply == QMessageBox.Yes:
-            for index in selected_rows:
-                row = index.row(); bar_id = self.bars_table.item(row, 0).data(Qt.UserRole); bar_no = self.bars_table.item(row, 1).text(); current_status = self.bars_table.item(row, 6).text()
-                if current_status == new_status: skipped_count += 1; bar_nos_skipped.append(bar_no); continue
-                if self.db_manager.transfer_silver_bar(bar_id, new_status, notes): transfer_count += 1
-                else: skipped_count += 1; bar_nos_skipped.append(bar_no)
-            msg = f"{transfer_count} bar(s) transferred to '{new_status}'.";
-            if skipped_count > 0: msg += f"\n{skipped_count} skipped: {', '.join(bar_nos_skipped)}"
-            QMessageBox.information(self, "Transfer Complete", msg); self.transfer_notes.clear(); self.load_bars()
+    def load_available_bars(self):
+        """Loads bars with status 'In Stock' and no list_id, applying weight filter."""
+        # print("Loading available bars...") # Optional: Keep for debugging
+        weight_query = self.weight_search_edit.text().strip()
+        try:
+            # Use get_silver_bars with specific filters
+            available_bars = self.db_manager.get_silver_bars(
+                status='In Stock',
+                weight_query=weight_query if weight_query else None
+            )
+            # Filter further to ensure list_id is NULL (get_silver_bars doesn't have this filter yet)
+            available_bars = [bar for bar in available_bars if bar['list_id'] is None]
+            self._populate_table(self.available_bars_table, available_bars)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to load available bars: {e}")
+            self.available_bars_table.setRowCount(0)
 
-    # --- List Creation and Assignment ---
-    def create_list_and_assign(self):
-        """Creates a new list and assigns selected 'In Stock' bars."""
-        selected_rows = self.bars_table.selectionModel().selectedRows(); note = self.list_note_edit.toPlainText().strip()
-        if not selected_rows: QMessageBox.warning(self, "Selection Error", "Select 'In Stock' bars to assign."); return
-        if not note: QMessageBox.warning(self, "Input Error", "List note required."); self.list_note_edit.setFocus(); return
-        bar_ids_to_assign = []; can_assign = True
+    def load_lists(self):
+        """Populates the list selection combo box."""
+        print("Loading lists...")
+        self.list_combo.blockSignals(True)
+        self.list_combo.clear()
+        self.list_combo.addItem("--- Select a List ---", None)
+        try:
+            lists = self.db_manager.get_silver_bar_lists()
+            for list_row in lists:
+                # Store list_id as item data, show list note but remove timestamp
+                list_note = list_row['list_note'] or ""
+                list_date = list_row['creation_date'].split()[0] if 'creation_date' in list_row.keys() and list_row['creation_date'] else ""
+                display_text = f"{list_row['list_identifier']} ({list_date})"
+                if list_note:
+                    display_text += f" - {list_note}"
+                self.list_combo.addItem(display_text, list_row['list_id'])
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to load lists: {e}")
+        finally:
+            self.list_combo.blockSignals(False)
+            self.list_selection_changed() # Update UI based on initial selection
+
+    def list_selection_changed(self):
+        """Handles changes in the selected list."""
+        selected_index = self.list_combo.currentIndex()
+        self.current_list_id = self.list_combo.itemData(selected_index)
+
+        is_list_selected = self.current_list_id is not None
+        self.edit_note_button.setEnabled(is_list_selected)
+        self.print_list_button.setEnabled(is_list_selected)
+        self.delete_list_button.setEnabled(is_list_selected)
+        self.remove_from_list_button.setEnabled(is_list_selected)
+
+        if is_list_selected:
+            details = self.db_manager.get_silver_bar_list_details(self.current_list_id)
+            if details:
+                self.list_details_label.setText(f"Selected List: {details['list_identifier']} (Note: {details['list_note'] or 'N/A'})")
+            else:
+                self.list_details_label.setText("Selected List: Error loading details")
+            self.load_bars_in_selected_list()
+        else:
+            self.list_details_label.setText("Selected List: None")
+            self.list_bars_table.setRowCount(0) # Clear list bars table
+
+    def load_bars_in_selected_list(self):
+        """Loads bars assigned to the currently selected list."""
+        if self.current_list_id is None:
+            self.list_bars_table.setRowCount(0)
+            return
+
+        # print(f"Loading bars for list ID: {self.current_list_id}") # Optional: Keep for debugging
+        try:
+            bars_in_list = self.db_manager.get_bars_in_list(self.current_list_id)
+            self._populate_table(self.list_bars_table, bars_in_list)
+        except Exception as e:
+             QMessageBox.critical(self, "Error", f"Failed to load bars for list {self.current_list_id}: {e}")
+             self.list_bars_table.setRowCount(0)
+
+    # --- Action Methods ---
+
+    def create_new_list(self):
+        """Prompts for a note and creates a new list."""
+        print("Creating new list...")
+        note, ok = QInputDialog.getText(self, "Create New List", "Enter a note for the new list:", QLineEdit.Normal)
+        if ok:
+            new_list_id = self.db_manager.create_silver_bar_list(note if note else None)
+            if new_list_id:
+                QMessageBox.information(self, "Success", "New list created.")
+                self.load_lists()
+                # Optionally select the newly created list
+                index = self.list_combo.findData(new_list_id)
+                if index >= 0:
+                    self.list_combo.setCurrentIndex(index)
+            else:
+                QMessageBox.critical(self, "Error", "Failed to create new list.")
+
+    def add_selected_to_list(self):
+        """Adds selected available bars to the currently selected list."""
+        if self.current_list_id is None:
+            QMessageBox.warning(self, "Selection Error", "Please select a list first.")
+            return
+
+        selected_rows = self.available_bars_table.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.warning(self, "Selection Error", "Please select one or more available bars to add.")
+            return
+
+        bar_ids_to_add = []
         for index in selected_rows:
-            row = index.row(); bar_id = self.bars_table.item(row, 0).data(Qt.UserRole); current_status = self.bars_table.item(row, 6).text()
-            if current_status != 'In Stock': bar_no = self.bars_table.item(row, 1).text(); QMessageBox.warning(self, "Selection Error", f"Bar '{bar_no}' not 'In Stock'. Select only 'In Stock' bars."); can_assign = False; break
-            bar_ids_to_assign.append(bar_id)
-        if not can_assign or not bar_ids_to_assign: return
-        reply = QMessageBox.question(self, "Confirm", f"Create list with note:\n'{note}'\nAnd assign {len(bar_ids_to_assign)} bar(s)?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            bar_id_item = self.available_bars_table.item(index.row(), 0) # Hidden ID column
+            if bar_id_item:
+                bar_ids_to_add.append(bar_id_item.data(Qt.UserRole)) # Get ID from item data
+
+        if not bar_ids_to_add:
+            QMessageBox.warning(self, "Error", "Could not get IDs for selected bars.")
+            return
+
+        reply = QMessageBox.question(self, "Confirm Add",
+                                     f"Add {len(bar_ids_to_add)} selected bar(s) to list '{self.list_combo.currentText()}'?",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+
         if reply == QMessageBox.Yes:
-            list_id = self.db_manager.create_list_and_assign_bars(note, bar_ids_to_assign)
-            if list_id is not None: QMessageBox.information(self, "Success", f"List created, {len(bar_ids_to_assign)} bar(s) assigned."); self.list_note_edit.clear(); self.status_filter.setCurrentText("Assigned")
-            else: QMessageBox.critical(self, "Error", "Failed to create list/assign bars.")
+            added_count = 0
+            failed_ids = []
+            for bar_id in bar_ids_to_add:
+                if self.db_manager.assign_bar_to_list(bar_id, self.current_list_id):
+                    added_count += 1
+                else:
+                    failed_ids.append(str(bar_id))
 
-    # --- List Management Actions ---
-    def view_list_contents(self):
-        """Show bars for a selected list in a separate dialog."""
-        list_choices = self._get_list_choices()
-        if not list_choices: QMessageBox.information(self, "No Lists", "No lists have been created yet."); return
-        choice, ok = QInputDialog.getItem(self, "View List Contents", "Select a list to view:", list_choices, 0, False)
-        if ok and choice:
-            selected_list_id = self._get_list_id_from_identifier(choice)
-            if selected_list_id is not None:
-                list_details = self.db_manager.get_list_details(selected_list_id)
-                bars = self.db_manager.get_bars_by_list_id(selected_list_id)
-                if list_details:
-                    view_dialog = ViewListBarsDialog(choice, list_details['list_note'], bars, self)
-                    view_dialog.exec_()
-                else: QMessageBox.warning(self, "Error", "Could not retrieve details for list.")
-            else: QMessageBox.warning(self, "Error", "Could not identify selected list.")
+            if added_count > 0:
+                QMessageBox.information(self, "Success", f"{added_count} bar(s) added to the list.")
+            if failed_ids:
+                QMessageBox.warning(self, "Error", f"Failed to add bars with IDs: {', '.join(failed_ids)}")
 
-    def edit_selected_list_note(self):
-        """Allow editing the note of a selected list."""
-        list_choices = self._get_list_choices()
-        if not list_choices: QMessageBox.information(self, "No Lists", "No lists available to edit."); return
-        choice, ok = QInputDialog.getItem(self, "Edit List Note", "Select list to edit note:", list_choices, 0, False)
-        if ok and choice:
-            selected_list_id = self._get_list_id_from_identifier(choice)
-            if selected_list_id:
-                list_details = self.db_manager.get_list_details(selected_list_id)
-                if list_details:
-                    current_note = list_details['list_note'] if list_details['list_note'] else ""
-                    new_note, ok_edit = QInputDialog.getText(self, "Edit Note", f"Editing note for list {choice}:", QLineEdit.Normal, current_note)
-                    if ok_edit and new_note != current_note:
-                        if self.db_manager.update_list_note(selected_list_id, new_note): QMessageBox.information(self, "Success", "List note updated.")
-                        else: QMessageBox.critical(self, "Error", "Failed to update list note.")
-                else: QMessageBox.warning(self, "Error", "Could not retrieve details for list.")
-            else: QMessageBox.warning(self, "Error", "Could not identify selected list.")
+            self.load_available_bars()
+            self.load_bars_in_selected_list()
+
+    def remove_selected_from_list(self):
+        """Removes selected bars from the currently selected list."""
+        if self.current_list_id is None:
+             QMessageBox.warning(self, "Error", "No list selected.")
+             return
+
+        selected_rows = self.list_bars_table.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.warning(self, "Selection Error", "Please select one or more bars from the list to remove.")
+            return
+
+        bar_ids_to_remove = []
+        for index in selected_rows:
+            bar_id_item = self.list_bars_table.item(index.row(), 0) # Hidden ID column
+            if bar_id_item:
+                bar_ids_to_remove.append(bar_id_item.data(Qt.UserRole))
+
+        if not bar_ids_to_remove:
+            QMessageBox.warning(self, "Error", "Could not get IDs for selected bars.")
+            return
+
+        reply = QMessageBox.question(self, "Confirm Remove",
+                                     f"Remove {len(bar_ids_to_remove)} selected bar(s) from list '{self.list_combo.currentText()}'?",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+
+        if reply == QMessageBox.Yes:
+            removed_count = 0
+            failed_ids = []
+            for bar_id in bar_ids_to_remove:
+                if self.db_manager.remove_bar_from_list(bar_id):
+                    removed_count += 1
+                else:
+                    failed_ids.append(str(bar_id))
+
+            if removed_count > 0:
+                QMessageBox.information(self, "Success", f"{removed_count} bar(s) removed from the list.")
+            if failed_ids:
+                QMessageBox.warning(self, "Error", f"Failed to remove bars with IDs: {', '.join(failed_ids)}")
+
+            self.load_available_bars()
+            self.load_bars_in_selected_list()
+
+    def edit_list_note(self):
+        """Edits the note for the currently selected list."""
+        if self.current_list_id is None:
+             QMessageBox.warning(self, "Error", "No list selected.")
+             return
+        details = self.db_manager.get_silver_bar_list_details(self.current_list_id)
+        if not details:
+            QMessageBox.warning(self, "Error", "Could not retrieve current list details.")
+            return
+
+        current_note = details['list_note'] or ""
+        new_note, ok = QInputDialog.getText(self, "Edit List Note",
+                                            f"Enter new note for list '{details['list_identifier']}':",
+                                            QLineEdit.Normal, current_note)
+
+        if ok and new_note != current_note:
+            if self.db_manager.update_silver_bar_list_note(self.current_list_id, new_note):
+                QMessageBox.information(self, "Success", "List note updated.")
+                # Refresh label and potentially combo box text
+                self.list_details_label.setText(f"Selected List: {details['list_identifier']} (Note: {new_note or 'N/A'})")
+                # Find and update combo box item text with the new note
+                index = self.list_combo.findData(self.current_list_id)
+                if index >= 0:
+                    list_date = details['creation_date'].split()[0] if 'creation_date' in details.keys() and details['creation_date'] else ""
+                    display_text = f"{details['list_identifier']} ({list_date})"
+                    if new_note:
+                        display_text += f" - {new_note}"
+                    self.list_combo.setItemText(index, display_text)
+            else:
+                QMessageBox.critical(self, "Error", "Failed to update list note.")
 
     def delete_selected_list(self):
-        """Allow deleting a selected list."""
-        list_choices = self._get_list_choices()
-        if not list_choices: QMessageBox.information(self, "No Lists", "No lists available to delete."); return
-        choice, ok = QInputDialog.getItem(self, "Delete List", "Select list to DELETE:", list_choices, 0, False)
-        if ok and choice:
-            selected_list_id = self._get_list_id_from_identifier(choice)
-            if selected_list_id:
-                reply = QMessageBox.warning(self, "Confirm Delete List", f"DELETE list '{choice}'?\nBars assigned will become unassigned.\nThis cannot be undone!", QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
-                if reply == QMessageBox.Yes:
-                    success, msg = self.db_manager.delete_silver_bar_list(selected_list_id)
-                    if success: QMessageBox.information(self, "Success", f"List '{choice}' deleted.")
-                    else: QMessageBox.critical(self, "Error", f"Failed to delete list: {msg}")
-                    self.load_bars() # Refresh main view
-            else: QMessageBox.warning(self, "Error", "Could not identify selected list.")
+        """Deletes the currently selected list."""
+        if self.current_list_id is None:
+             QMessageBox.warning(self, "Error", "No list selected.")
+             return
+        details = self.db_manager.get_silver_bar_list_details(self.current_list_id)
+        list_name = details['list_identifier'] if details else f"ID {self.current_list_id}"
 
-    def unassign_selected_bars(self):
-        """Unassign selected 'Assigned' bars from their list."""
-        selected_rows = self.bars_table.selectionModel().selectedRows()
-        if not selected_rows: QMessageBox.warning(self, "Selection Error", "Select 'Assigned' bar(s) to unassign."); return
-        bar_ids_to_unassign = []; can_unassign = True
-        for index in selected_rows:
-            row = index.row(); bar_id = self.bars_table.item(row, 0).data(Qt.UserRole); current_status = self.bars_table.item(row, 6).text()
-            if current_status != 'Assigned': bar_no = self.bars_table.item(row, 1).text(); QMessageBox.warning(self, "Selection Error", f"Bar '{bar_no}' is not 'Assigned'. Select only 'Assigned' bars."); can_unassign = False; break
-            bar_ids_to_unassign.append(bar_id)
-        if not can_unassign or not bar_ids_to_unassign: return
-        reply = QMessageBox.question(self, "Confirm Unassign", f"Unassign {len(bar_ids_to_unassign)} selected bar(s)?\n(Status becomes 'In Stock')", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        reply = QMessageBox.warning(self, "Confirm Delete",
+                                    f"Are you sure you want to delete list '{list_name}'?\n"
+                                    f"All bars currently assigned to this list will be unassigned (status set to 'In Stock').\n"
+                                    f"This action cannot be undone.",
+                                    QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
+
         if reply == QMessageBox.Yes:
-            unassign_count = 0
-            for bar_id in bar_ids_to_unassign:
-                if self.db_manager.unassign_bar_from_list(bar_id): unassign_count += 1
-            QMessageBox.information(self, "Success", f"{unassign_count} bar(s) unassigned."); self.load_bars() # Refresh
+            success, msg = self.db_manager.delete_silver_bar_list(self.current_list_id)
+            if success:
+                QMessageBox.information(self, "Success", f"List '{list_name}' deleted successfully.")
+                self.load_lists() # Reload lists, which triggers selection change and table refresh
+            else:
+                QMessageBox.critical(self, "Error", f"Failed to delete list: {msg}")
 
-    # --- Printing ---
-    def print_bar_list(self):
-        """Print the currently displayed list of silver bars."""
-        from print_manager import PrintManager
-        status_filter = None
-        if self.status_filter.currentText() != "All": status_filter = self.status_filter.currentText()
-        print_manager = PrintManager(self.db_manager)
-        print_manager.print_silver_bars(status_filter, self) # Prints inventory report
+    def print_selected_list(self):
+        """Prints the details and bars of the currently selected list."""
+        if self.current_list_id is None:
+             QMessageBox.warning(self, "Error", "No list selected.")
+             return
+        details = self.db_manager.get_silver_bar_list_details(self.current_list_id)
+        if not details:
+            QMessageBox.warning(self, "Error", "Could not retrieve list details for printing.")
+            return
+
+        bars_in_list = self.db_manager.get_bars_in_list(self.current_list_id)
+
+        print(f"Printing list {details['list_identifier']} (ID: {self.current_list_id}) with {len(bars_in_list)} bars.")
+
+        try:
+            from print_manager import PrintManager # Import locally
+            # Assuming parent() gives access to main window or similar context for font
+            parent_context = self.parent()
+            current_print_font = getattr(parent_context, 'print_font', None) if parent_context else None
+
+            print_manager = PrintManager(self.db_manager, print_font=current_print_font)
+
+            # Call the existing method, assuming it's suitable or will be adapted
+            # This method is defined in print_manager.py and might need adjustment (Step 5)
+            success = print_manager.print_silver_bar_list_details(details, bars_in_list, self)
+
+            if not success:
+                 QMessageBox.warning(self, "Print Error", "Failed to generate print preview for the list.")
+
+        except ImportError:
+             QMessageBox.critical(self, "Error", "Could not import PrintManager.")
+        except AttributeError as ae:
+             QMessageBox.critical(self, "Error", f"Print function not found or incorrect in PrintManager: {ae}")
+        except Exception as e:
+             QMessageBox.critical(self, "Print Error", f"An unexpected error occurred during printing: {e}\n{traceback.format_exc()}")
+
+    # --- Helper Methods ---
+    def _populate_table(self, table, bars_data):
+        """Helper function to populate a table widget with bar data and update totals."""
+        table.blockSignals(True)
+        table.setRowCount(0) # Clear existing rows
+        
+        # Initialize totals
+        total_weight = 0.0
+        total_fine_weight = 0.0
+        bar_count = 0
+        try:
+            if bars_data:
+                table.setRowCount(len(bars_data))
+                for row_idx, bar_row in enumerate(bars_data):
+                    bar_id = bar_row['bar_id']
+                    id_item = QTableWidgetItem(str(bar_id))
+                    id_item.setData(Qt.UserRole, bar_id) # Store ID in item data
+
+                    # Access items using dictionary-style keys for sqlite3.Row
+                    est_vch_item = QTableWidgetItem(bar_row['estimate_voucher_no'] if 'estimate_voucher_no' in bar_row.keys() else 'N/A')
+                    weight_item = QTableWidgetItem(f"{bar_row['weight'] if 'weight' in bar_row.keys() else 0.0:.3f}")
+                    purity_item = QTableWidgetItem(f"{bar_row['purity'] if 'purity' in bar_row.keys() else 0.0:.2f}")
+                    fine_wt_item = QTableWidgetItem(f"{bar_row['fine_weight'] if 'fine_weight' in bar_row.keys() else 0.0:.3f}")
+                    date_item = QTableWidgetItem(bar_row['date_added'] if 'date_added' in bar_row.keys() else '')
+                    status_item = QTableWidgetItem(bar_row['status'] if 'status' in bar_row.keys() else '')
+
+                    # Set alignment for numeric columns
+                    weight_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    purity_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    fine_wt_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+                    # Set items in table
+                    table.setItem(row_idx, 0, id_item) # Hidden ID
+                    table.setItem(row_idx, 1, est_vch_item)
+                    table.setItem(row_idx, 2, weight_item)
+                    table.setItem(row_idx, 3, purity_item)
+                    table.setItem(row_idx, 4, fine_wt_item)
+                    table.setItem(row_idx, 5, date_item)
+                    table.setItem(row_idx, 6, status_item)
+                    # Update totals
+                    weight = bar_row['weight'] if 'weight' in bar_row.keys() and bar_row['weight'] is not None else 0.0
+                    fine_weight = bar_row['fine_weight'] if 'fine_weight' in bar_row.keys() and bar_row['fine_weight'] is not None else 0.0
+                    total_weight += weight
+                    total_fine_weight += fine_weight
+                    bar_count += 1
+                
+                # Update the appropriate totals label
+                totals_text = f"Bars: {bar_count} | Total Weight: {total_weight:.3f} g | Total Fine Wt: {total_fine_weight:.3f} g"
+                if table == self.available_bars_table:
+                    self.available_totals_label.setText(f"Available {totals_text}")
+                elif table == self.list_bars_table:
+                    self.list_totals_label.setText(f"List {totals_text}")
+        except Exception as e:
+             QMessageBox.critical(self, "Table Error", f"Error populating table: {e}\n{traceback.format_exc()}")
+        finally:
+            table.blockSignals(False)
+            # Optional: Resize columns after populating if not using fixed modes
+            # table.resizeColumnsToContents()
+
+# Example usage (if run directly)
+if __name__ == '__main__':
+    import sys
+    from PyQt5.QtWidgets import QApplication
+    # Mock DB Manager for testing
+    class MockDBManager:
+        def get_silver_bar_lists(self): return [{'list_id': 1, 'list_identifier': 'L-20250424-001', 'creation_date': '2025-04-24 10:00:00', 'list_note': 'Test List 1'}, {'list_id': 2, 'list_identifier': 'L-20250424-002', 'creation_date': '2025-04-24 11:00:00', 'list_note': None}]
+        def get_silver_bars(self, status=None, weight_query=None, estimate_voucher_no=None): # Updated mock signature
+             print(f"Mock DB: get_silver_bars(status={status}, weight_query={weight_query})")
+             # Simulate filtering
+             bars = [{'bar_id': 101, 'estimate_voucher_no': '202504231', 'weight': 1000.0, 'purity': 99.9, 'fine_weight': 999.0, 'date_added': '2025-04-23', 'status': 'In Stock', 'list_id': None},
+                     {'bar_id': 103, 'estimate_voucher_no': '202504232', 'weight': 1000.123, 'purity': 99.0, 'fine_weight': 990.12177, 'date_added': '2025-04-23', 'status': 'In Stock', 'list_id': None}]
+             filtered_bars = bars
+             if status:
+                 filtered_bars = [b for b in filtered_bars if b['status'] == status]
+             if weight_query:
+                 try:
+                     target = float(weight_query)
+                     filtered_bars = [b for b in filtered_bars if abs(b['weight'] - target) < 0.001]
+                 except ValueError: pass # Ignore invalid weight query
+             return filtered_bars
+        def get_bars_in_list(self, list_id): return [{'bar_id': 102, 'estimate_voucher_no': '202504241', 'weight': 500.0, 'purity': 99.5, 'fine_weight': 497.5, 'date_added': '2025-04-24', 'status': 'Assigned', 'list_id': list_id}] if list_id == 1 else []
+        def get_silver_bar_list_details(self, list_id): return {'list_id': list_id, 'list_identifier': f'L-20250424-{list_id:03d}', 'creation_date': '...', 'list_note': 'Mock Note'} if list_id else None
+        def create_silver_bar_list(self, note): print(f"Mock: Create list with note: {note}"); return 3 # Simulate new ID
+        # Add mock methods for assign, remove, update_note, delete_list as needed for testing UI flow
+
+    app = QApplication(sys.argv)
+    db_manager = MockDBManager() # Use mock for direct run
+    dialog = SilverBarDialog(db_manager)
+    dialog.show()
+    sys.exit(app.exec_())

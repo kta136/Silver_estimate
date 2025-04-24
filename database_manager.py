@@ -50,150 +50,195 @@ class DatabaseManager:
             print(f"Error checking unique constraint for {table_name}.{column_name}: {e}")
             return False
 
-    def setup_database(self):
-        """Create/update the necessary tables."""
-        print("Starting database setup...")
+    def _check_schema_version(self):
+        """Check if the database has the schema version table and current version."""
         try:
-            # --- Items Table ---
+            # Check if schema_version table exists
+            self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'")
+            if not self.cursor.fetchone():
+                # Create schema_version table if it doesn't exist
+                self.cursor.execute('''
+                    CREATE TABLE schema_version (
+                        id INTEGER PRIMARY KEY,
+                        version INTEGER NOT NULL,
+                        applied_date TEXT NOT NULL
+                    )
+                ''')
+                # Insert initial version 0
+                self.cursor.execute('''
+                    INSERT INTO schema_version (version, applied_date)
+                    VALUES (0, ?)
+                ''', (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
+                self.conn.commit()
+                return 0
+            else:
+                # Get current version
+                self.cursor.execute("SELECT MAX(version) FROM schema_version")
+                result = self.cursor.fetchone()
+                return result[0] if result[0] is not None else 0
+        except sqlite3.Error as e:
+            print(f"Error checking schema version: {e}")
+            return 0  # Assume version 0 on error
+
+    def _update_schema_version(self, new_version):
+        """Update the schema version in the database."""
+        try:
+            self.cursor.execute('''
+                INSERT INTO schema_version (version, applied_date)
+                VALUES (?, ?)
+            ''', (new_version, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+            self.conn.commit()
+            print(f"Schema updated to version {new_version}")
+            return True
+        except sqlite3.Error as e:
+            print(f"Error updating schema version: {e}")
+            self.conn.rollback()
+            return False
+
+    def setup_database(self):
+        """Create/update the necessary tables for the Silver Bar Management Overhaul."""
+        print("Starting database setup check...")
+        try:
+            # Check current schema version
+            current_version = self._check_schema_version()
+            print(f"Current database schema version: {current_version}")
+            
+            self.conn.execute('BEGIN TRANSACTION')  # Use transaction for schema changes
+
+            # --- Core Tables (Items, Estimates, Estimate Items) ---
+            # These are always created if they don't exist
             self.cursor.execute('''
                 CREATE TABLE IF NOT EXISTS items (
-                    code TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    purity REAL DEFAULT 0,
-                    wage_type TEXT DEFAULT 'P',
-                    wage_rate REAL DEFAULT 0
+                    code TEXT PRIMARY KEY, name TEXT NOT NULL, purity REAL DEFAULT 0,
+                    wage_type TEXT DEFAULT 'P', wage_rate REAL DEFAULT 0
                 )''')
-            if not self._table_exists('items'): print("Created 'items' table.")
-
-            # --- Estimates Table ---
             self.cursor.execute('''
                 CREATE TABLE IF NOT EXISTS estimates (
-                    voucher_no TEXT PRIMARY KEY,
-                    date TEXT NOT NULL,
-                    silver_rate REAL DEFAULT 0,
-                    total_gross REAL DEFAULT 0,
-                    total_net REAL DEFAULT 0,
-                    total_fine REAL DEFAULT 0, -- Note: Stores NET fine
-                    total_wage REAL DEFAULT 0  -- Note: Stores NET wage
+                    voucher_no TEXT PRIMARY KEY, date TEXT NOT NULL, silver_rate REAL DEFAULT 0,
+                    total_gross REAL DEFAULT 0, total_net REAL DEFAULT 0,
+                    total_fine REAL DEFAULT 0, total_wage REAL DEFAULT 0
                 )''')
-            if not self._table_exists('estimates'): print("Created 'estimates' table.")
-
-            # --- Estimate Items Table ---
             self.cursor.execute('''
                 CREATE TABLE IF NOT EXISTS estimate_items (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    voucher_no TEXT,
-                    item_code TEXT,
-                    item_name TEXT,
-                    gross REAL DEFAULT 0,
-                    poly REAL DEFAULT 0,
-                    net_wt REAL DEFAULT 0,
-                    purity REAL DEFAULT 0,
-                    wage_rate REAL DEFAULT 0,
-                    pieces INTEGER DEFAULT 1,
-                    wage REAL DEFAULT 0,
-                    fine REAL DEFAULT 0,
-                    is_return INTEGER DEFAULT 0,
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, voucher_no TEXT, item_code TEXT,
+                    item_name TEXT, gross REAL DEFAULT 0, poly REAL DEFAULT 0, net_wt REAL DEFAULT 0,
+                    purity REAL DEFAULT 0, wage_rate REAL DEFAULT 0, pieces INTEGER DEFAULT 1,
+                    wage REAL DEFAULT 0, fine REAL DEFAULT 0, is_return INTEGER DEFAULT 0,
                     is_silver_bar INTEGER DEFAULT 0,
                     FOREIGN KEY (voucher_no) REFERENCES estimates (voucher_no) ON DELETE CASCADE,
                     FOREIGN KEY (item_code) REFERENCES items (code) ON DELETE SET NULL
                 )''')
-            if not self._table_exists('estimate_items'): print("Created 'estimate_items' table.")
 
-            # --- New Silver Bar Lists Table ---
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS silver_bar_lists (
-                    list_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    list_identifier TEXT UNIQUE NOT NULL,
-                    creation_date TEXT NOT NULL,
-                    list_note TEXT
-                )''')
-            if not self._table_exists('silver_bar_lists'): print("Created 'silver_bar_lists' table.")
+            # --- Silver Bar Related Tables ---
+            # Only perform the schema migration if we're at version 0
+            if current_version < 1:
+                print("Performing silver bar schema migration to version 1...")
+                
+                # 1. Drop dependent table first if it exists
+                if self._table_exists('bar_transfers'):
+                    print("Dropping existing 'bar_transfers' table...")
+                    self.cursor.execute('DROP TABLE bar_transfers')
 
+                # 2. Drop old silver_bars table if it exists
+                if self._table_exists('silver_bars'):
+                    print("Dropping existing 'silver_bars' table...")
+                    self.cursor.execute('DROP TABLE silver_bars')
 
-            # --- Silver Bars Table: Ensure bar_no is NOT unique ---
-            if self._table_exists('silver_bars') and self._is_column_unique('silver_bars', 'bar_no'):
-                print("Found UNIQUE constraint on silver_bars.bar_no. Recreating table...")
-                # Add migration logic here if needed for production data
-                # For development, dropping and recreating is often simpler
-                try:
-                    self.conn.execute('BEGIN TRANSACTION')
-                    self.cursor.execute("ALTER TABLE silver_bars RENAME TO silver_bars_old")
-                    self.cursor.execute('''
-                        CREATE TABLE silver_bars (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            bar_no TEXT NOT NULL, -- Removed UNIQUE
-                            weight REAL DEFAULT 0, purity REAL DEFAULT 0, fine_weight REAL DEFAULT 0,
-                            date_added TEXT, status TEXT DEFAULT 'In Stock', list_id INTEGER,
-                            FOREIGN KEY (list_id) REFERENCES silver_bar_lists(list_id) ON DELETE SET NULL
-                        )''')
-                    print("Created new silver_bars table without UNIQUE on bar_no.")
-                    self.cursor.execute('''
-                        INSERT INTO silver_bars (id, bar_no, weight, purity, fine_weight, date_added, status, list_id)
-                        SELECT id, bar_no, weight, purity, fine_weight, date_added, status, list_id
-                        FROM silver_bars_old
-                    ''')
-                    print(f"Copied {self.cursor.rowcount} rows to new silver_bars table.")
-                    self.cursor.execute("DROP TABLE silver_bars_old")
-                    self.conn.commit()
-                    print("Table silver_bars recreated successfully.")
-                except sqlite3.Error as e:
-                    print(f"ERROR recreating silver_bars table: {e}\n{traceback.format_exc()}")
-                    self.conn.rollback()
-                    print("WARNING: Failed to remove UNIQUE constraint. Recreating base table.")
-                    self.cursor.execute('DROP TABLE IF EXISTS silver_bars') # Drop potential partial table
-                    self.cursor.execute('''
-                         CREATE TABLE silver_bars (
-                             id INTEGER PRIMARY KEY AUTOINCREMENT, bar_no TEXT NOT NULL, weight REAL DEFAULT 0,
-                             purity REAL DEFAULT 0, fine_weight REAL DEFAULT 0, date_added TEXT,
-                             status TEXT DEFAULT 'In Stock', list_id INTEGER,
-                             FOREIGN KEY (list_id) REFERENCES silver_bar_lists(list_id) ON DELETE SET NULL
-                         )''') # Create without unique
-                    if not self._table_exists('silver_bars'): print("Created 'silver_bars' table.")
-
-            else:
-                 # Create if not exists (without UNIQUE constraint)
+                # 3. Create/Ensure silver_bar_lists table exists (dependency for silver_bars)
                 self.cursor.execute('''
-                     CREATE TABLE IF NOT EXISTS silver_bars (
-                         id INTEGER PRIMARY KEY AUTOINCREMENT, bar_no TEXT NOT NULL, weight REAL DEFAULT 0,
-                         purity REAL DEFAULT 0, fine_weight REAL DEFAULT 0, date_added TEXT,
-                         status TEXT DEFAULT 'In Stock', list_id INTEGER,
-                         FOREIGN KEY (list_id) REFERENCES silver_bar_lists(list_id) ON DELETE SET NULL
+                    CREATE TABLE IF NOT EXISTS silver_bar_lists (
+                        list_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        list_identifier TEXT UNIQUE NOT NULL,
+                        creation_date TEXT NOT NULL,
+                        list_note TEXT
+                    )''')
+                if not self._table_exists('silver_bar_lists'):
+                    print("Created 'silver_bar_lists' table.")
+
+                # 4. Create the NEW silver_bars table
+                print("Creating new 'silver_bars' table with updated schema...")
+                self.cursor.execute('''
+                    CREATE TABLE silver_bars (
+                        bar_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        estimate_voucher_no TEXT NOT NULL,
+                        weight REAL DEFAULT 0,
+                        purity REAL DEFAULT 0,
+                        fine_weight REAL DEFAULT 0,
+                        date_added TEXT,
+                        status TEXT DEFAULT 'In Stock',
+                        list_id INTEGER,
+                        FOREIGN KEY (estimate_voucher_no) REFERENCES estimates (voucher_no) ON DELETE CASCADE,
+                        FOREIGN KEY (list_id) REFERENCES silver_bar_lists (list_id) ON DELETE SET NULL
+                    )''')
+                print("Created 'silver_bars' table.")
+
+                # 5. Create the NEW bar_transfers table
+                print("Creating new 'bar_transfers' table with updated schema...")
+                self.cursor.execute('''
+                     CREATE TABLE bar_transfers (
+                         id INTEGER PRIMARY KEY AUTOINCREMENT,
+                         transfer_no TEXT,
+                         date TEXT,
+                         silver_bar_id INTEGER NOT NULL,
+                         list_id INTEGER,
+                         from_status TEXT,
+                         to_status TEXT,
+                         notes TEXT,
+                         FOREIGN KEY (silver_bar_id) REFERENCES silver_bars (bar_id) ON DELETE CASCADE,
+                         FOREIGN KEY (list_id) REFERENCES silver_bar_lists (list_id) ON DELETE SET NULL
                      )''')
-                if not self._table_exists('silver_bars'): print("Created 'silver_bars' table.")
-
-
-            # --- Bar Transfers Table Modifications ---
-            if self._table_exists('bar_transfers') and not self._column_exists('bar_transfers', 'list_id'):
-                 print("Attempting to add 'list_id' to 'bar_transfers'.")
-                 try:
-                    self.cursor.execute('ALTER TABLE bar_transfers ADD COLUMN list_id INTEGER REFERENCES silver_bar_lists(list_id) ON DELETE SET NULL')
-                    print("Added 'list_id' column to 'bar_transfers' with constraint.")
-                 except sqlite3.OperationalError as e:
-                    print(f"Could not add column 'list_id' with constraint via ALTER ({e}). Trying without constraint.")
-                    try:
-                        self.cursor.execute('ALTER TABLE bar_transfers ADD COLUMN list_id INTEGER')
-                        print("Added 'list_id' column placeholder to 'bar_transfers'. FK NOT enforced by this ALTER.")
-                    except sqlite3.OperationalError as e2:
-                         print(f"Failed to add 'list_id' column even without constraint: {e2}.")
-            # Ensure base table exists
-            self.cursor.execute('''
-                 CREATE TABLE IF NOT EXISTS bar_transfers (
-                     id INTEGER PRIMARY KEY AUTOINCREMENT, transfer_no TEXT, date TEXT,
-                     bar_id INTEGER, list_id INTEGER, from_status TEXT, to_status TEXT, notes TEXT,
-                     FOREIGN KEY (bar_id) REFERENCES silver_bars (id) ON DELETE CASCADE,
-                     FOREIGN KEY (list_id) REFERENCES silver_bar_lists(list_id) ON DELETE SET NULL
-                 )''')
-            if not self._table_exists('bar_transfers'): print("Created 'bar_transfers' table.")
+                print("Created 'bar_transfers' table.")
+                
+                # Update schema version to 1
+                self._update_schema_version(1)
+            else:
+                print("Silver bar schema is already at version 1 or higher. No migration needed.")
+                
+                # Ensure tables exist (without dropping)
+                self.cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS silver_bar_lists (
+                        list_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        list_identifier TEXT UNIQUE NOT NULL,
+                        creation_date TEXT NOT NULL,
+                        list_note TEXT
+                    )''')
+                    
+                self.cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS silver_bars (
+                        bar_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        estimate_voucher_no TEXT NOT NULL,
+                        weight REAL DEFAULT 0,
+                        purity REAL DEFAULT 0,
+                        fine_weight REAL DEFAULT 0,
+                        date_added TEXT,
+                        status TEXT DEFAULT 'In Stock',
+                        list_id INTEGER,
+                        FOREIGN KEY (estimate_voucher_no) REFERENCES estimates (voucher_no) ON DELETE CASCADE,
+                        FOREIGN KEY (list_id) REFERENCES silver_bar_lists (list_id) ON DELETE SET NULL
+                    )''')
+                    
+                self.cursor.execute('''
+                     CREATE TABLE IF NOT EXISTS bar_transfers (
+                         id INTEGER PRIMARY KEY AUTOINCREMENT,
+                         transfer_no TEXT,
+                         date TEXT,
+                         silver_bar_id INTEGER NOT NULL,
+                         list_id INTEGER,
+                         from_status TEXT,
+                         to_status TEXT,
+                         notes TEXT,
+                         FOREIGN KEY (silver_bar_id) REFERENCES silver_bars (bar_id) ON DELETE CASCADE,
+                         FOREIGN KEY (list_id) REFERENCES silver_bar_lists (list_id) ON DELETE SET NULL
+                     )''')
 
             self.conn.commit()
-            print("Database schema check/update complete.")
+            print("Database schema setup/update complete.")
 
         except sqlite3.Error as e:
             print(f"FATAL Database setup error: {e}")
             print(traceback.format_exc())
-            self.conn.rollback()
-            raise e # Re-raise critical error
+            self.conn.rollback()  # Rollback transaction on error
+            raise e  # Re-raise critical error
 
     # --- Item Methods ---
     def get_item_by_code(self, code):
@@ -269,12 +314,44 @@ class DatabaseManager:
     def save_estimate_with_returns(self, voucher_no, date, silver_rate, regular_items, return_items, totals):
         try:
             self.conn.execute('BEGIN TRANSACTION')
-            self.cursor.execute('INSERT OR REPLACE INTO estimates (voucher_no, date, silver_rate, total_gross, total_net, total_fine, total_wage) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                                (voucher_no, date, silver_rate, totals.get('total_gross', 0.0), totals.get('total_net', 0.0), totals.get('net_fine', 0.0), totals.get('net_wage', 0.0)))
+            
+            # Check if estimate exists
+            self.cursor.execute('SELECT 1 FROM estimates WHERE voucher_no = ?', (voucher_no,))
+            estimate_exists = self.cursor.fetchone() is not None
+            
+            # Use UPDATE instead of INSERT OR REPLACE to avoid triggering ON DELETE CASCADE
+            if estimate_exists:
+                print(f"Updating existing estimate {voucher_no} (preserving silver bars)")
+                self.cursor.execute('''
+                    UPDATE estimates
+                    SET date = ?, silver_rate = ?, total_gross = ?, total_net = ?,
+                        total_fine = ?, total_wage = ?
+                    WHERE voucher_no = ?
+                ''', (date, silver_rate,
+                     totals.get('total_gross', 0.0),
+                     totals.get('total_net', 0.0),
+                     totals.get('net_fine', 0.0),
+                     totals.get('net_wage', 0.0),
+                     voucher_no))
+            else:
+                print(f"Inserting new estimate {voucher_no}")
+                self.cursor.execute('''
+                    INSERT INTO estimates
+                    (voucher_no, date, silver_rate, total_gross, total_net, total_fine, total_wage)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (voucher_no, date, silver_rate,
+                     totals.get('total_gross', 0.0),
+                     totals.get('total_net', 0.0),
+                     totals.get('net_fine', 0.0),
+                     totals.get('net_wage', 0.0)))
+            
+            # Delete and recreate estimate items (these don't have ON DELETE CASCADE issues)
             self.cursor.execute('DELETE FROM estimate_items WHERE voucher_no = ?', (voucher_no,))
             for item in regular_items: self._save_estimate_item(voucher_no, item)
             for item in return_items: self._save_estimate_item(voucher_no, item)
-            self.conn.commit(); return True
+            
+            self.conn.commit()
+            return True
         except sqlite3.Error as e: self.conn.rollback(); print(f"DB error saving estimate {voucher_no}: {e}"); return False
         except Exception as e: # Catch other potential errors like data conversion
              self.conn.rollback(); print(f"Error during save estimate {voucher_no}: {e}"); print(traceback.format_exc()); return False
@@ -287,112 +364,254 @@ class DatabaseManager:
                                 (voucher_no, item.get('code', ''), item.get('name', ''), float(item.get('gross', 0.0)), float(item.get('poly', 0.0)), float(item.get('net_wt', 0.0)), float(item.get('purity', 0.0)), float(item.get('wage_rate', 0.0)), int(item.get('pieces', 1)), float(item.get('wage', 0.0)), float(item.get('fine', 0.0)), is_return, is_silver_bar))
         except (ValueError, TypeError) as e: print(f"Data type error saving item for voucher {voucher_no}, code {item.get('code')}: {e}"); raise e # Re-raise to trigger transaction rollback
 
-    # --- Methods for Silver Bar Lists (v1.1) ---
+    # --- Methods for Silver Bar Lists (Overhauled) ---
     def _generate_list_identifier(self):
+        """Generates a unique identifier for a new list."""
         today_str = datetime.now().strftime('%Y%m%d'); seq = 1
         try:
+            # Use the new table name
             self.cursor.execute("SELECT list_identifier FROM silver_bar_lists WHERE list_identifier LIKE ? ORDER BY list_identifier DESC LIMIT 1", (f"L-{today_str}-%",))
             result = self.cursor.fetchone()
             if result:
                 try: seq = int(result['list_identifier'].split('-')[-1]) + 1
-                except (IndexError, ValueError): pass
+                except (IndexError, ValueError): pass # Handle potential format issues
         except sqlite3.Error as e: print(f"Error generating list ID sequence: {e}")
         return f"L-{today_str}-{seq:03d}"
 
-    def create_list_and_assign_bars(self, note, bar_ids):
-        if not bar_ids: print("No bar IDs provided for list creation."); return None
-        creation_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S'); list_identifier = self._generate_list_identifier()
-        transfer_base_no = f"ASSIGN-{list_identifier}"; assigned_count = 0; list_id = None
-        from_status, to_status = 'In Stock', 'Assigned'
+    def create_silver_bar_list(self, note=None):
+        """Creates a new, empty silver bar list."""
+        creation_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        list_identifier = self._generate_list_identifier()
         try:
-            self.conn.execute('BEGIN TRANSACTION')
-            self.cursor.execute('INSERT INTO silver_bar_lists (list_identifier, creation_date, list_note) VALUES (?, ?, ?)', (list_identifier, creation_date, note))
+            self.cursor.execute('INSERT INTO silver_bar_lists (list_identifier, creation_date, list_note) VALUES (?, ?, ?)',
+                                (list_identifier, creation_date, note))
+            self.conn.commit()
             list_id = self.cursor.lastrowid
-            if not list_id: raise sqlite3.Error("Failed list insertion.")
-            for index, bar_id in enumerate(bar_ids):
-                self.cursor.execute("SELECT status FROM silver_bars WHERE id = ?", (bar_id,))
-                row = self.cursor.fetchone()
-                if not row or row['status'] != 'In Stock': print(f"Skipping bar ID {bar_id}: Not found or not 'In Stock'."); continue
-                self.cursor.execute("UPDATE silver_bars SET status = ?, list_id = ? WHERE id = ?", (to_status, list_id, bar_id))
-                transfer_no = f"{transfer_base_no}-{index+1}"
-                self.cursor.execute('INSERT INTO bar_transfers (transfer_no, date, bar_id, list_id, from_status, to_status, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                                    (transfer_no, creation_date, bar_id, list_id, from_status, to_status, f"Assigned to list: {list_identifier}"))
-                assigned_count += 1
-            self.conn.commit(); print(f"Created list {list_identifier} (ID: {list_id}) and assigned {assigned_count} bars."); return list_id
-        except sqlite3.Error as e: self.conn.rollback(); print(f"DB error creating list/assigning bars: {e}\n{traceback.format_exc()}"); return None
+            print(f"Created silver bar list {list_identifier} (ID: {list_id}).")
+            return list_id
+        except sqlite3.Error as e:
+            print(f"DB error creating silver bar list: {e}")
+            self.conn.rollback()
+            return None
 
-    def get_all_list_identifiers(self):
+    def get_silver_bar_lists(self):
+        """Fetches all silver bar lists (identifier and ID)."""
         try:
-            self.cursor.execute('SELECT list_identifier, list_id FROM silver_bar_lists ORDER BY creation_date DESC')
-            return [(row['list_identifier'], row['list_id']) for row in self.cursor.fetchall()]
-        except sqlite3.Error as e: print(f"DB error fetching list identifiers: {e}"); return []
+            self.cursor.execute('SELECT list_id, list_identifier, creation_date, list_note FROM silver_bar_lists ORDER BY creation_date DESC')
+            return self.cursor.fetchall() # Return list of Row objects
+        except sqlite3.Error as e:
+            print(f"DB error fetching silver bar lists: {e}")
+            return []
 
-    def get_list_details(self, list_id):
-         try: self.cursor.execute('SELECT * FROM silver_bar_lists WHERE list_id = ?', (list_id,)); return self.cursor.fetchone()
-         except sqlite3.Error as e: print(f"DB error fetching list details ID {list_id}: {e}"); return None
+    def get_silver_bar_list_details(self, list_id):
+        """Fetches details for a specific list ID."""
+        try:
+            self.cursor.execute('SELECT * FROM silver_bar_lists WHERE list_id = ?', (list_id,))
+            return self.cursor.fetchone() # Return single Row object or None
+        except sqlite3.Error as e:
+            print(f"DB error fetching list details for ID {list_id}: {e}")
+            return None
 
-    def update_list_note(self, list_id, new_note):
-        try: self.cursor.execute('UPDATE silver_bar_lists SET list_note = ? WHERE list_id = ?', (new_note, list_id)); self.conn.commit(); return self.cursor.rowcount > 0
-        except sqlite3.Error as e: print(f"DB error updating list note: {e}"); self.conn.rollback(); return False
+    def update_silver_bar_list_note(self, list_id, new_note):
+        """Updates the note for a specific list."""
+        try:
+            self.cursor.execute('UPDATE silver_bar_lists SET list_note = ? WHERE list_id = ?', (new_note, list_id))
+            self.conn.commit()
+            return self.cursor.rowcount > 0
+        except sqlite3.Error as e:
+            print(f"DB error updating list note for ID {list_id}: {e}")
+            self.conn.rollback()
+            return False
 
     def delete_silver_bar_list(self, list_id):
+        """Deletes a list and unassigns/updates status of associated bars."""
         try:
             self.conn.execute('BEGIN TRANSACTION')
-            self.cursor.execute("UPDATE silver_bars SET list_id = NULL WHERE list_id = ?", (list_id,))
-            print(f"Unlinked {self.cursor.rowcount} bars from list {list_id}.")
-            # Optionally update transfers: self.cursor.execute("UPDATE bar_transfers SET list_id = NULL WHERE list_id = ?", (list_id,))
+            # Find bars currently assigned to this list
+            self.cursor.execute("SELECT bar_id FROM silver_bars WHERE list_id = ?", (list_id,))
+            bars_to_unassign = [row['bar_id'] for row in self.cursor.fetchall()]
+
+            unassign_note = f"Unassigned due to list {list_id} deletion"
+            unassigned_count = 0
+            for bar_id in bars_to_unassign:
+                # Use the remove_bar_from_list logic (which includes transfer record)
+                if self.remove_bar_from_list(bar_id, note=unassign_note, perform_commit=False): # Don't commit inside loop
+                     unassigned_count += 1
+                else:
+                     print(f"Warning: Failed to properly unassign bar {bar_id} during list deletion.")
+                     # Fallback: Just unlink if remove fails, though transfer record might be missed
+                     self.cursor.execute("UPDATE silver_bars SET list_id = NULL, status = 'In Stock' WHERE bar_id = ?", (bar_id,))
+
+
+            # Delete the list itself
             self.cursor.execute('DELETE FROM silver_bar_lists WHERE list_id = ?', (list_id,))
             deleted = self.cursor.rowcount > 0
-            self.conn.commit(); return deleted, "Deleted" if deleted else "List not found"
-        except sqlite3.Error as e: self.conn.rollback(); print(f"DB error deleting list: {e}"); return False, str(e)
 
-    def unassign_bar_from_list(self, bar_id, note="Unassigned from list"):
-        date_unassigned = datetime.now().strftime('%Y-%m-%d %H:%M:%S'); from_status, to_status = 'Assigned', 'In Stock'
-        transfer_no = f"UNASSIGN-{bar_id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            self.conn.commit() # Commit transaction after all operations
+            print(f"Deleted list {list_id}. Unassigned {unassigned_count} bars.")
+            return deleted, "Deleted" if deleted else "List not found"
+        except sqlite3.Error as e:
+            self.conn.rollback()
+            print(f"DB error deleting list {list_id}: {e}")
+            return False, str(e)
+
+    def assign_bar_to_list(self, bar_id, list_id, note="Assigned to list", perform_commit=True):
+        """Assigns an 'In Stock' bar to a list and updates status."""
+        date_assigned = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        from_status, to_status = 'In Stock', 'Assigned'
+        transfer_no = f"ASSIGN-{bar_id}-{list_id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
         try:
-            self.cursor.execute("SELECT status, list_id FROM silver_bars WHERE id = ?", (bar_id,))
+            # Check bar status
+            self.cursor.execute("SELECT status FROM silver_bars WHERE bar_id = ?", (bar_id,))
             row = self.cursor.fetchone()
-            if not row or row['status'] != 'Assigned': return False
+            if not row or row['status'] != 'In Stock':
+                print(f"Bar {bar_id} not found or not 'In Stock'. Cannot assign.")
+                return False
+
+            # Check if list exists
+            self.cursor.execute("SELECT list_id FROM silver_bar_lists WHERE list_id = ?", (list_id,))
+            if not self.cursor.fetchone():
+                 print(f"List ID {list_id} not found. Cannot assign bar.")
+                 return False
+
+            if perform_commit: self.conn.execute('BEGIN TRANSACTION')
+            # Update bar status and list_id
+            self.cursor.execute("UPDATE silver_bars SET status = ?, list_id = ? WHERE bar_id = ?", (to_status, list_id, bar_id))
+            # Add transfer record using the correct silver_bar_id column name
+            self.cursor.execute('''
+                INSERT INTO bar_transfers
+                (transfer_no, date, silver_bar_id, list_id, from_status, to_status, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (transfer_no, date_assigned, bar_id, list_id, from_status, to_status, note))
+
+            if perform_commit: self.conn.commit()
+            return True
+        except sqlite3.Error as e:
+            if perform_commit: self.conn.rollback()
+            print(f"DB error assigning bar {bar_id} to list {list_id}: {e}")
+            return False
+
+    def remove_bar_from_list(self, bar_id, note="Removed from list", perform_commit=True):
+        """Removes a bar from its list, sets status to 'In Stock'."""
+        date_removed = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        from_status, to_status = 'Assigned', 'In Stock'
+        transfer_no = f"REMOVE-{bar_id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        try:
+            # Get current list_id and status
+            self.cursor.execute("SELECT status, list_id FROM silver_bars WHERE bar_id = ?", (bar_id,))
+            row = self.cursor.fetchone()
+            if not row or row['status'] != 'Assigned' or row['list_id'] is None:
+                print(f"Bar {bar_id} not found or not assigned to a list. Cannot remove.")
+                return False
             current_list_id = row['list_id']
-            self.conn.execute('BEGIN TRANSACTION')
-            self.cursor.execute("UPDATE silver_bars SET status = ?, list_id = NULL WHERE id = ?", (to_status, bar_id))
-            self.cursor.execute('INSERT INTO bar_transfers (transfer_no, date, bar_id, list_id, from_status, to_status, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                                (transfer_no, date_unassigned, bar_id, current_list_id, from_status, to_status, note))
-            self.conn.commit(); return True
-        except sqlite3.Error as e: self.conn.rollback(); print(f"DB error unassigning bar {bar_id}: {e}"); return False
 
-    # --- Silver Bar Methods ---
-    def add_silver_bar(self, bar_no, weight, purity):
-        date_added = datetime.now().strftime('%Y-%m-%d'); fine_weight = weight * (purity / 100)
+            if perform_commit: self.conn.execute('BEGIN TRANSACTION')
+            # Update bar status and clear list_id
+            self.cursor.execute("UPDATE silver_bars SET status = ?, list_id = NULL WHERE bar_id = ?", (to_status, bar_id))
+            # Add transfer record using the correct silver_bar_id column name
+            self.cursor.execute('''
+                INSERT INTO bar_transfers
+                (transfer_no, date, silver_bar_id, list_id, from_status, to_status, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (transfer_no, date_removed, bar_id, current_list_id, from_status, to_status, note))
+
+            if perform_commit: self.conn.commit()
+            return True
+        except sqlite3.Error as e:
+            if perform_commit: self.conn.rollback()
+            print(f"DB error removing bar {bar_id} from list: {e}")
+            return False
+
+    def get_bars_in_list(self, list_id):
+        """Fetches all bars assigned to a specific list."""
         try:
-            self.cursor.execute('INSERT INTO silver_bars (bar_no, weight, purity, fine_weight, date_added, status, list_id) VALUES (?, ?, ?, ?, ?, ?, NULL)',
-                                (bar_no, weight, purity, fine_weight, date_added, 'In Stock'))
-            self.conn.commit(); return True
-        except sqlite3.IntegrityError: print(f"DB Integrity error adding bar '{bar_no}'."); self.conn.rollback(); return False
-        except sqlite3.Error as e: print(f"DB Error adding silver bar: {e}"); self.conn.rollback(); return False
+            self.cursor.execute("SELECT * FROM silver_bars WHERE list_id = ? ORDER BY bar_id", (list_id,))
+            return self.cursor.fetchall()
+        except sqlite3.Error as e:
+            print(f"DB error fetching bars for list {list_id}: {e}")
+            return []
 
-    def get_silver_bars(self, status=None):
-        query = "SELECT * FROM silver_bars"; params = []
-        if status: query += " WHERE status = ?"; params.append(status)
-        query += " ORDER BY date_added DESC, bar_no"
-        try: self.cursor.execute(query, params); return self.cursor.fetchall()
-        except sqlite3.Error as e: print(f"DB error getting silver bars: {e}"); return []
-
-    def transfer_silver_bar(self, bar_id, to_status, notes=None):
-        date_transfer = datetime.now().strftime('%Y-%m-%d %H:%M:%S'); transfer_no = f"TRANSFER-{bar_id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    def get_available_bars(self):
+        """Fetches all bars with status 'In Stock' and not assigned to any list."""
         try:
-            self.cursor.execute("SELECT status, list_id FROM silver_bars WHERE id = ?", (bar_id,))
-            row = self.cursor.fetchone()
-            if not row: return False
-            from_status = row['status']; current_list_id = row['list_id']
-            if from_status == to_status: return False
-            self.conn.execute('BEGIN TRANSACTION')
-            new_list_id = None if from_status == 'Assigned' and to_status != 'Assigned' else current_list_id
-            self.cursor.execute("UPDATE silver_bars SET status = ?, list_id = ? WHERE id = ?", (to_status, new_list_id, bar_id))
-            self.cursor.execute('INSERT INTO bar_transfers (transfer_no, date, bar_id, list_id, from_status, to_status, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                                (transfer_no, date_transfer, bar_id, current_list_id, from_status, to_status, notes))
-            self.conn.commit(); return True
-        except sqlite3.Error as e: self.conn.rollback(); print(f"DB error transferring bar {bar_id}: {e}"); return False
+            self.cursor.execute("SELECT * FROM silver_bars WHERE status = 'In Stock' AND list_id IS NULL ORDER BY date_added DESC, bar_id DESC")
+            return self.cursor.fetchall()
+        except sqlite3.Error as e:
+            print(f"DB error fetching available bars: {e}")
+            return []
+
+    # --- Silver Bar Methods (Overhauled) ---
+    def add_silver_bar(self, estimate_voucher_no, weight, purity):
+        """Adds a new silver bar record linked to an estimate."""
+        date_added = datetime.now().strftime('%Y-%m-%d %H:%M:%S') # Use timestamp for potential sorting
+        fine_weight = weight * (purity / 100)
+        try:
+            self.cursor.execute('''
+                INSERT INTO silver_bars
+                (estimate_voucher_no, weight, purity, fine_weight, date_added, status, list_id)
+                VALUES (?, ?, ?, ?, ?, ?, NULL)
+            ''', (estimate_voucher_no, weight, purity, fine_weight, date_added, 'In Stock'))
+            self.conn.commit()
+            return self.cursor.lastrowid # Return the new bar_id
+        except sqlite3.Error as e:
+            print(f"DB Error adding silver bar for estimate {estimate_voucher_no}: {e}")
+            self.conn.rollback()
+            return None
+
+    def get_silver_bars(self, status=None, weight_query=None, estimate_voucher_no=None):
+        """Fetches silver bars based on optional filters."""
+        query = "SELECT * FROM silver_bars WHERE 1=1"
+        params = []
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        if weight_query is not None:
+            # Allow searching for weights within a small tolerance (e.g., +/- 0.001)
+            try:
+                target_weight = float(weight_query)
+                query += " AND weight BETWEEN ? AND ?"
+                params.extend([target_weight - 0.001, target_weight + 0.001])
+            except ValueError:
+                print(f"Warning: Invalid weight query '{weight_query}'. Ignoring weight filter.")
+        if estimate_voucher_no:
+            query += " AND estimate_voucher_no LIKE ?"
+            params.append(f"%{estimate_voucher_no}%")
+
+        query += " ORDER BY date_added DESC, bar_id DESC" # Changed sort order
+        try:
+            self.cursor.execute(query, params)
+            return self.cursor.fetchall()
+        except sqlite3.Error as e:
+            print(f"DB error getting silver bars: {e}")
+            return []
+
+    def delete_silver_bars_for_estimate(self, voucher_no):
+        """
+        DEPRECATED: This method is kept for compatibility but no longer deletes any silver bars.
+        Silver bars are now permanent and should only be managed through the Silver Bar Management interface.
+        """
+        if not voucher_no:
+            print("Warning: delete_silver_bars_for_estimate called with empty voucher_no")
+            return True
+            
+        print(f"Note: delete_silver_bars_for_estimate called for {voucher_no} but silver bars are now permanent.")
+        print("Silver bars are preserved and should be managed through the Silver Bar Management interface.")
+        
+        # Count how many bars exist for this estimate (for informational purposes only)
+        try:
+            self.cursor.execute("SELECT COUNT(*) FROM silver_bars WHERE estimate_voucher_no = ?", (voucher_no,))
+            total_bars = self.cursor.fetchone()[0]
+            
+            self.cursor.execute("SELECT COUNT(*) FROM silver_bars WHERE estimate_voucher_no = ? AND list_id IS NOT NULL", (voucher_no,))
+            bars_in_lists = self.cursor.fetchone()[0]
+            
+            print(f"FYI: Estimate {voucher_no} has {total_bars} silver bars total, {bars_in_lists} in lists.")
+            return True
+        except sqlite3.Error as e:
+            print(f"DB error checking silver bars for estimate {voucher_no}: {e}")
+            return True  # Still return True to not block the save process
+
+    # def transfer_silver_bar(...): # Removed - Replaced by list assignment logic
 
     def delete_all_estimates(self):
         """Deletes all records from estimates and estimate_items tables."""
@@ -412,24 +631,57 @@ class DatabaseManager:
             return False
 
     def delete_single_estimate(self, voucher_no):
-        """Deletes a specific estimate and its items by voucher number."""
+        """Deletes a specific estimate, its items, and all associated silver bars."""
         if not voucher_no:
             print("Error: No voucher number provided for deletion.")
             return False
         try:
             self.conn.execute('BEGIN TRANSACTION')
-            # Delete items first (optional if ON DELETE CASCADE works reliably, but safer)
+            
+            # First, find all silver bars associated with this estimate
+            self.cursor.execute("SELECT bar_id, list_id FROM silver_bars WHERE estimate_voucher_no = ?", (voucher_no,))
+            bars = self.cursor.fetchall()
+            
+            # Track lists that contain bars from this estimate
+            affected_lists = set()
+            for bar in bars:
+                if bar['list_id'] is not None:
+                    affected_lists.add(bar['list_id'])
+            
+            # Delete all silver bars associated with this estimate
+            # This will also delete related bar_transfers due to ON DELETE CASCADE
+            self.cursor.execute("DELETE FROM silver_bars WHERE estimate_voucher_no = ?", (voucher_no,))
+            deleted_bars_count = self.cursor.rowcount
+            print(f"Deleted {deleted_bars_count} silver bars for estimate {voucher_no}.")
+            
+            # Delete estimate items
             self.cursor.execute('DELETE FROM estimate_items WHERE voucher_no = ?', (voucher_no,))
+            deleted_items_count = self.cursor.rowcount
+            
             # Delete the estimate header
             self.cursor.execute('DELETE FROM estimates WHERE voucher_no = ?', (voucher_no,))
-            deleted_count = self.cursor.rowcount # Check if the estimate header was found and deleted
+            deleted_estimate_count = self.cursor.rowcount
+            
+            # Delete any lists that are now empty due to bar deletions
+            for list_id in affected_lists:
+                # Check if the list is now empty
+                self.cursor.execute("SELECT COUNT(*) FROM silver_bars WHERE list_id = ?", (list_id,))
+                remaining_bars = self.cursor.fetchone()[0]
+                
+                if remaining_bars == 0:
+                    # List is empty, delete it
+                    self.cursor.execute("DELETE FROM silver_bar_lists WHERE list_id = ?", (list_id,))
+                    if self.cursor.rowcount > 0:
+                        print(f"Deleted empty list ID {list_id} after removing its bars.")
+            
             self.conn.commit()
-            if deleted_count > 0:
-                print(f"Deleted estimate {voucher_no} successfully.")
+            
+            if deleted_estimate_count > 0:
+                print(f"Deleted estimate {voucher_no} with {deleted_items_count} items and {deleted_bars_count} silver bars.")
                 return True
             else:
                 print(f"Estimate {voucher_no} not found for deletion.")
-                return False # Indicate estimate wasn't found
+                return False
         except sqlite3.Error as e:
             self.conn.rollback()
             print(f"DB error deleting estimate {voucher_no}: {e}")

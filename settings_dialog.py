@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QDialogButtonBox,
-                             QFormLayout, QLabel, QPushButton, QSpinBox, QFontDialog, QMessageBox)
+from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QDialogButtonBox, QGridLayout, # Added QGridLayout
+                             QFormLayout, QLabel, QPushButton, QSpinBox, QFontDialog, QMessageBox, QDoubleSpinBox) # Added QDoubleSpinBox
 from PyQt5.QtCore import Qt, QSettings, pyqtSignal
 from PyQt5.QtGui import QFont
 
@@ -33,7 +33,7 @@ class SettingsDialog(QDialog):
         # Add tabs
         self.tabs.addTab(self._create_ui_tab(), "User Interface")
         # self.tabs.addTab(self._create_business_tab(), "Business Logic") # Placeholder
-        # self.tabs.addTab(self._create_print_tab(), "Printing") # Placeholder
+        self.tabs.addTab(self._create_print_tab(), "Printing") # Add Printing tab
         self.tabs.addTab(self._create_data_tab(), "Data Management") # Add Data tab
 
         # Buttons
@@ -85,7 +85,51 @@ class SettingsDialog(QDialog):
         return widget
 
     # def _create_business_tab(self): ...
-    # def _create_print_tab(self): ...
+
+    def _create_print_tab(self):
+        """Create the Printing settings tab."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        form_layout = QFormLayout()
+        form_layout.setSpacing(10)
+
+        # --- Margins ---
+        margins_label = QLabel("Page Margins (mm):")
+        margins_layout = QGridLayout()
+        self.margin_left_spin = QSpinBox()
+        self.margin_top_spin = QSpinBox()
+        self.margin_right_spin = QSpinBox()
+        self.margin_bottom_spin = QSpinBox()
+        for spin in [self.margin_left_spin, self.margin_top_spin, self.margin_right_spin, self.margin_bottom_spin]:
+            spin.setRange(0, 50) # Allow 0-50mm margins
+            spin.setSuffix(" mm")
+
+        margins_layout.addWidget(QLabel("Left:"), 0, 0)
+        margins_layout.addWidget(self.margin_left_spin, 0, 1)
+        margins_layout.addWidget(QLabel("Top:"), 0, 2)
+        margins_layout.addWidget(self.margin_top_spin, 0, 3)
+        margins_layout.addWidget(QLabel("Right:"), 1, 0)
+        margins_layout.addWidget(self.margin_right_spin, 1, 1)
+        margins_layout.addWidget(QLabel("Bottom:"), 1, 2)
+        margins_layout.addWidget(self.margin_bottom_spin, 1, 3)
+        form_layout.addRow(margins_label, margins_layout)
+
+        # --- Print Preview Zoom ---
+        self.preview_zoom_spin = QDoubleSpinBox()
+        self.preview_zoom_spin.setRange(0.1, 5.0) # 10% to 500%
+        self.preview_zoom_spin.setSingleStep(0.1)
+        self.preview_zoom_spin.setDecimals(2)
+        self.preview_zoom_spin.setSuffix(" x") # Display as multiplier
+        self.preview_zoom_spin.setToolTip("Default zoom factor for print preview (e.g., 1.0 = 100%, 1.25 = 125%)")
+        form_layout.addRow("Preview Default Zoom:", self.preview_zoom_spin)
+
+        # Load current values into controls
+        self._load_print_settings_to_ui()
+
+        layout.addLayout(form_layout)
+        layout.addStretch()
+        widget.setLayout(layout)
+        return widget
 
     def _create_data_tab(self):
         """Create the Data Management settings tab."""
@@ -155,6 +199,26 @@ class SettingsDialog(QDialog):
         size = self.settings.value("ui/table_font_size", defaultValue=default_size, type=int)
         return max(min_size, min(size, max_size)) # Clamp value
 
+    def _load_print_settings_to_ui(self):
+        """Load current printing settings into the UI controls."""
+        margins = self.settings.value("print/margins", defaultValue="10,2,10,2", type=str).split(',')
+        if len(margins) == 4:
+            try:
+                self.margin_left_spin.setValue(int(margins[0]))
+                self.margin_top_spin.setValue(int(margins[1]))
+                self.margin_right_spin.setValue(int(margins[2]))
+                self.margin_bottom_spin.setValue(int(margins[3]))
+            except ValueError:
+                print("Warning: Invalid margin format in settings.")
+                # Keep default spinbox values
+        else:
+             print("Warning: Margin setting not found or invalid format.")
+
+        default_zoom = 1.25
+        zoom = self.settings.value("print/preview_zoom", defaultValue=default_zoom, type=float)
+        self.preview_zoom_spin.setValue(zoom)
+
+
     def _show_print_font_dialog(self):
         """Show the custom print font dialog."""
         # Use the temporary font object for editing
@@ -188,6 +252,15 @@ class SettingsDialog(QDialog):
                  print(f"Applied table font size: {new_table_size}pt")
             else:
                  print("Warning: Could not apply table font size immediately.")
+
+            # Save Printing Settings
+            margins = f"{self.margin_left_spin.value()},{self.margin_top_spin.value()},{self.margin_right_spin.value()},{self.margin_bottom_spin.value()}"
+            self.settings.setValue("print/margins", margins)
+            print(f"Saved margins: {margins}")
+
+            preview_zoom = self.preview_zoom_spin.value()
+            self.settings.setValue("print/preview_zoom", preview_zoom)
+            print(f"Saved preview zoom: {preview_zoom}")
 
             # Save other settings...
 

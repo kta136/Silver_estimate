@@ -334,3 +334,10 @@ This file documents key learnings, decisions, and important information about th
     - Dialog loads settings from `QSettings` and saves/applies them.
     - Main menu now has "Settings..." action instead of individual tool actions.
 - **Benefits:** Centralizes configuration, improves menu structure, provides foundation for more settings.
+## Settings Dialog - Printing Tab (v1.60 - April 24, 2025)
+
+- **Added:** "Printing" tab to the `SettingsDialog`.
+- **Controls:** Included `QSpinBox` controls for page margins (L, T, R, B in mm) and a `QDoubleSpinBox` for print preview default zoom factor.
+- **Logic:** Implemented loading settings from `QSettings` into the UI controls (`_load_print_settings_to_ui`) and saving them back (`apply_settings`).
+- **Integration:** Modified `PrintManager` to read and attempt to apply these margin and zoom settings from `QSettings`. Added debug print statements to verify values being used.
+- **Note:** User reported settings were not visually applying to the preview, debug prints added for diagnosis. Further testing needed.

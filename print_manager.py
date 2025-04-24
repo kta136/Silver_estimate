@@ -205,10 +205,59 @@ class PrintManager:
             line = f"{sno_space}{fine_str} {labour_str} {qty_str} {poly_str}{space_after_poly}"
             return f"{line:<{TOTAL_WIDTH}}"[:TOTAL_WIDTH]
 
-        output = []; title="* * ESTIMATE SLIP ONLY * *"; pad=(TOTAL_WIDTH-len(title))//2
-        output.append(" "*pad+title); output.append(" ")
-        voucher_str=str(voucher_no).ljust(15); rate_str=f"S.Rate :{silver_rate:10.2f}"
-        pad=max(1,TOTAL_WIDTH-len(voucher_str)-len(rate_str)); output.append(f"{voucher_str}"+" "*pad+rate_str)
+        output = []
+        
+        # Get note from header if it exists
+        note = header.get('note', '')
+        
+        # Original title text
+        title = "* * ESTIMATE SLIP ONLY * *"
+        
+        if note:
+            # Calculate available space
+            title_len = len(title)
+            note_len = len(note)
+            
+            # Keep title centered, add note after it with some spacing
+            # First, calculate how much space the title would take if centered
+            title_pad = (TOTAL_WIDTH - title_len) // 2
+            
+            # Calculate where the title would end if centered
+            title_end_pos = title_pad + title_len
+            
+            # Calculate space available for note after title
+            space_after_title = TOTAL_WIDTH - title_end_pos - 5  # 5 for spacing
+            
+            # Truncate note if needed
+            if note_len > space_after_title:
+                note = note[:space_after_title-3] + "..."
+                note_len = len(note)
+            
+            # Calculate final padding to keep title centered
+            final_pad = (TOTAL_WIDTH - title_len - note_len - 5) // 2
+            if final_pad < 0:
+                final_pad = 0
+            
+            # Create the line with title centered and note after it
+            line = " " * final_pad + title + " " * 5 + note
+            
+            # Ensure line doesn't exceed TOTAL_WIDTH
+            if len(line) > TOTAL_WIDTH:
+                line = line[:TOTAL_WIDTH]
+                
+            output.append(line)
+        else:
+            # Original title centered without note
+            pad = (TOTAL_WIDTH-len(title))//2
+            output.append(" "*pad+title)
+        
+        output.append(" ")  # Empty line after title
+        
+        # Add voucher and rate line (unchanged)
+        voucher_str = str(voucher_no).ljust(15)
+        rate_str = f"S.Rate :{silver_rate:10.2f}"
+        pad = max(1, TOTAL_WIDTH-len(voucher_str)-len(rate_str))
+        output.append(f"{voucher_str}"+" "*pad+rate_str)
         sep_eq="="*TOTAL_WIDTH; sep_dash="-"*TOTAL_WIDTH; output.append(sep_eq)
         h_sno="SNo".center(W_SNO); h_fine="Fine".center(W_FINE); h_labour="Labour".center(W_LABOUR); h_qty="Quantity".center(W_QTY); h_poly="Poly".center(W_POLY)
         h_name="Item Name".center(W_NAME); h_sper="S.Per%".center(W_SPER); h_pcs="Pcs/Doz.".center(W_PCS); h_wrate="W.Rate".center(W_WRATE)

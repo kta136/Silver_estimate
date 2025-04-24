@@ -20,8 +20,8 @@ class EstimateHistoryDialog(QDialog):
     def init_ui(self):
         """Set up the user interface."""
         self.setWindowTitle("Estimate History")
-        self.setMinimumWidth(800)
-        self.setMinimumHeight(500)
+        self.setMinimumWidth(1000)
+        self.setMinimumHeight(600)
 
         # Main layout
         layout = QVBoxLayout(self)
@@ -63,21 +63,22 @@ class EstimateHistoryDialog(QDialog):
 
         # Estimates table
         self.estimates_table = QTableWidget()
-        self.estimates_table.setColumnCount(8) # Increased column count
+        self.estimates_table.setColumnCount(9) # Increased column count to include Note
         self.estimates_table.setHorizontalHeaderLabels([
-            "Voucher No", "Date", "Silver Rate", "Total Gross",
-            "Total Net", "Net Fine", "Net Wage", "Grand Total" # Added Net Fine, Renamed Total Value, Added Net Wage for clarity
+            "Voucher No", "Date", "Note", "Silver Rate", "Total Gross",
+            "Total Net", "Net Fine", "Net Wage", "Grand Total" # Moved Note column after Date
         ])
 
         # Set column widths (adjusting for new columns)
         self.estimates_table.setColumnWidth(0, 110)  # Voucher No
         self.estimates_table.setColumnWidth(1, 90)   # Date
-        self.estimates_table.setColumnWidth(2, 90)   # Silver Rate
-        self.estimates_table.setColumnWidth(3, 90)   # Total Gross
-        self.estimates_table.setColumnWidth(4, 90)   # Total Net
-        self.estimates_table.setColumnWidth(5, 90)   # Net Fine (New)
-        self.estimates_table.setColumnWidth(6, 90)   # Net Wage (New - needed for Grand Total calc)
-        self.estimates_table.setColumnWidth(7, 110)  # Grand Total (Renamed)
+        self.estimates_table.setColumnWidth(2, 200)  # Note (Moved here)
+        self.estimates_table.setColumnWidth(3, 90)   # Silver Rate
+        self.estimates_table.setColumnWidth(4, 90)   # Total Gross
+        self.estimates_table.setColumnWidth(5, 90)   # Total Net
+        self.estimates_table.setColumnWidth(6, 90)   # Net Fine
+        self.estimates_table.setColumnWidth(7, 90)   # Net Wage
+        self.estimates_table.setColumnWidth(8, 110)  # Grand Total
 
         # Table properties
         self.estimates_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -141,25 +142,28 @@ class EstimateHistoryDialog(QDialog):
             # Populate table cells
             self.estimates_table.setItem(row, 0, QTableWidgetItem(header['voucher_no']))
             self.estimates_table.setItem(row, 1, QTableWidgetItem(header['date']))
-            self.estimates_table.setItem(row, 2, QTableWidgetItem(f"{header.get('silver_rate', 0.0):.2f}"))
-            # Column 3: Regular Gross
-            self.estimates_table.setItem(row, 3, QTableWidgetItem(f"{regular_gross_sum:.3f}"))
-            # Column 4: Regular Net
-            self.estimates_table.setItem(row, 4, QTableWidgetItem(f"{regular_net_sum:.3f}"))
-            # Column 5: Net Fine (Directly from header as it's already calculated net)
+            # Column 2: Note (Moved here)
+            note = header.get('note', '')
+            self.estimates_table.setItem(row, 2, QTableWidgetItem(note))
+            self.estimates_table.setItem(row, 3, QTableWidgetItem(f"{header.get('silver_rate', 0.0):.2f}"))
+            # Column 4: Regular Gross
+            self.estimates_table.setItem(row, 4, QTableWidgetItem(f"{regular_gross_sum:.3f}"))
+            # Column 5: Regular Net
+            self.estimates_table.setItem(row, 5, QTableWidgetItem(f"{regular_net_sum:.3f}"))
+            # Column 6: Net Fine (Directly from header as it's already calculated net)
             # Explicitly using header variable
             net_fine = header.get('total_fine', 0.0)
-            self.estimates_table.setItem(row, 5, QTableWidgetItem(f"{net_fine:.3f}"))
-            # Column 6: Net Wage (Directly from header)
+            self.estimates_table.setItem(row, 6, QTableWidgetItem(f"{net_fine:.3f}"))
+            # Column 7: Net Wage (Directly from header)
             # Explicitly using header variable
             net_wage = header.get('total_wage', 0.0)
-            self.estimates_table.setItem(row, 6, QTableWidgetItem(f"{net_wage:.2f}"))
-            # Column 7: Grand Total (Net Value + Net Wage)
+            self.estimates_table.setItem(row, 7, QTableWidgetItem(f"{net_wage:.2f}"))
+            # Column 8: Grand Total (Net Value + Net Wage)
             # Explicitly using header variable
             silver_rate = header.get('silver_rate', 0.0)
             net_value = net_fine * silver_rate
             grand_total = net_value + net_wage
-            self.estimates_table.setItem(row, 7, QTableWidgetItem(f"{grand_total:.2f}"))
+            self.estimates_table.setItem(row, 8, QTableWidgetItem(f"{grand_total:.2f}"))
 
     def get_selected_voucher(self):
         """Get the selected voucher number."""

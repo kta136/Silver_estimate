@@ -1,4 +1,4 @@
-# 🧾 Silver Estimation App — v1.51
+# 🧾 Silver Estimation App — v1.52
 
 A desktop application built using **PyQt5** and **SQLite** for managing silver sales estimates, including item-wise entries, silver bar inventory, returns, and print-ready formatted outputs.
 
@@ -16,7 +16,7 @@ This app is designed for silver shops to:
 
 ---
 
-## ✅ Features (v1.51)
+## ✅ Features (v1.52)
 
 ### 🔢 Estimate Entry
 
@@ -29,6 +29,7 @@ This app is designed for silver shops to:
 - Code not found? Opens filtered `ItemSelectionDialog`.
 - Auto-add new rows upon completing entry in the last column.
 - Summary sections for Regular, Return, Silver Bar, and Net totals (Silver Bars and Returns are **subtracted** from Regular to calculate Net totals, including a Grand Total = Net Value + Net Wage).
+- **Note Field:** Add notes to estimates that are saved with the estimate and displayed in history and silver bar management.
 - **Save workflow:** Saving an estimate now automatically opens Print Preview and then clears the form for a new estimate.
 - Load and print estimates.
 - Status bar for real-time feedback.
@@ -52,7 +53,7 @@ This app is designed for silver shops to:
 ### 🕓 Estimate History
 
 - Browse past estimates by date or voucher number.
-- View summary totals (includes **Regular Gross/Net**, **Net Fine**, **Net Wage**, **Grand Total**).
+- View summary totals (includes **Regular Gross/Net**, **Net Fine**, **Net Wage**, **Grand Total**, **Note**).
 - Reload selected estimate for editing.
 - Print directly from history (uses selected print font settings).
 - **Delete Option:** Button added to delete the selected estimate (with confirmation).
@@ -62,6 +63,7 @@ This app is designed for silver shops to:
 - Completely overhauled system with unique bar IDs and list-based management
 - Bars are linked to source estimates via `estimate_voucher_no`
 - Create and manage lists of silver bars with notes
+- View estimate notes alongside voucher numbers for better identification
 - Add/remove bars to/from lists with automatic status tracking
 - Filter available bars by weight with real-time search
 - View detailed list information including total weight and fine weight
@@ -167,6 +169,21 @@ On the first run, a database folder and the estimation.db SQLite file will be cr
 - **Printing:** `PrintManager` handles formats. Estimate slip uses `<pre>` and fixed-width spacing. Preview via `QPrintPreviewDialog`.
 
 ---
+
+## 🐞 Key Fixes & Enhancements (v1.52 - April 2025)
+
+### 1. 📝 Estimate Notes Feature
+
+- **Added note field** beside silver rate in the estimate entry screen
+- Notes are saved with estimates and displayed in:
+  - Estimate history columns
+  - Silver bar management alongside voucher numbers
+- Helps with better identification and tracking of estimates and silver bars
+- **Database Compatibility:** Automatically adds the note column to existing databases
+- **UI Improvements:**
+  - Note column placed next to Date column in Estimate History for better visibility
+  - Larger Estimate History window (1000x600) for better readability
+  - Notes appear on the same line as "ESTIMATE SLIP ONLY" title while keeping the title centered
 
 ## 🐞 Key Fixes & Enhancements (v1.51 - April 2025)
 
@@ -279,7 +296,7 @@ On the first run, a database folder and the estimation.db SQLite file will be cr
 
 ## 📝 Development & Debugging Notes for AI
 
-This file reflects the state after v1.51 feature additions/fixes.
+This file reflects the state after v1.52 feature additions/fixes.
 
 ### 🔧 Key Concepts & Logic Flow:
 
@@ -292,7 +309,7 @@ This file reflects the state after v1.51 feature additions/fixes.
 
 ---
 
-### 🧪 Known Issues / TODO (Post v1.14)
+### 🧪 Known Issues / TODO (Post v1.52)
 
 - [x] ~~Print: Add Serial number column & Round off printed amounts.~~ (Completed in v1.14)
 - [x] ~~Tools Menu: Rename "Reset Database Tables" action.~~ (Completed in v1.14)
@@ -303,7 +320,7 @@ This file reflects the state after v1.51 feature additions/fixes.
 - [x] ~~Silver Bar Lifecycle: Fix issues with deletion and duplication.~~ (Completed in v1.51)
 - [x] ~~Database Schema: Implement versioning to prevent data loss.~~ (Completed in v1.51)
 - [ ] Estimate Screen: Allow table column widths to be resized by the user and persist the sizes between sessions (using `QSettings`).
-- [ ] Estimate Notes: Add feature (UI, DB, Logic, History).
+- [x] ~~Estimate Notes: Add feature (UI, DB, Logic, History).~~ (Completed in v1.52)
 - [ ] Encryption/Password: Implement password protection & reset.
 - [ ] Re-add UI spacing improvements (original dynamic spacing was reverted).
 - [ ] Re-add conditional column navigation/visibility based on Wage Type.
@@ -423,7 +440,7 @@ UI Events -> `estimate_entry_logic.py` methods -> Update UI/Calculations -> `cal
 **Problem:** Table operations might slow with many rows.
 **Suggestion:** Batch operations, block signals during multi-row updates.
 
-### Implementation Priority Suggestions (Post v1.51)
+### Implementation Priority Suggestions (Post v1.52)
 
 In order of importance, consider addressing:
 
@@ -432,7 +449,7 @@ In order of importance, consider addressing:
 3.  ~~**Silver Bar Integration**: Strengthen the inventory linking system.~~ (Completed in v1.51)
 4.  **Input Validation**: Improve error handling and visual feedback.
 5.  **UI Spacing**: Re-evaluate and potentially restore dynamic spacing.
-6.  **Estimate Notes**: Implement the notes feature.
+6.  ~~**Estimate Notes**: Implement the notes feature.~~ (Completed in v1.52)
 7.  **Encryption/Password**: Implement security features.
 8.  **Performance/Refactoring**: Address signal handling, float parsing, large dataset optimizations.
 

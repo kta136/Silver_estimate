@@ -321,12 +321,19 @@ class EstimateUI:
         self.silver_rate_spin.setValue(0)
         self.silver_rate_spin.setToolTip("Silver rate for calculating fine value.")
         form_layout.addWidget(self.silver_rate_spin, 0, 6)
+        
+        # Note
+        form_layout.addWidget(QLabel("Note:"), 0, 7)
+        self.note_edit = QLineEdit()
+        self.note_edit.setMinimumWidth(200)
+        self.note_edit.setToolTip("Add a note for this estimate (will be saved with the estimate)")
+        form_layout.addWidget(self.note_edit, 0, 8)
 
         # Add Mode Indicator Label here
-        form_layout.addWidget(self.mode_indicator_label, 0, 7, alignment=Qt.AlignLeft | Qt.AlignVCenter) # Add mode label
+        form_layout.addWidget(self.mode_indicator_label, 0, 9, alignment=Qt.AlignLeft | Qt.AlignVCenter) # Add mode label
 
         # Add some spacing
-        form_layout.setColumnStretch(8, 1) # Adjust stretch column index
+        form_layout.setColumnStretch(10, 1) # Adjust stretch column index
 
         # Add the form layout to the main layout
         self.layout.addLayout(form_layout)

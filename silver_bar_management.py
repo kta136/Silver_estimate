@@ -45,7 +45,7 @@ class SilverBarDialog(QDialog):
 
         self.available_bars_table = QTableWidget()
         self.available_bars_table.setColumnCount(7) # bar_id, estimate_voucher_no, weight, purity, fine_weight, date_added, status
-        self.available_bars_table.setHorizontalHeaderLabels(["ID", "Estimate Vch", "Weight (g)", "Purity (%)", "Fine Wt (g)", "Date Added", "Status"])
+        self.available_bars_table.setHorizontalHeaderLabels(["ID", "Estimate Vch/Note", "Weight (g)", "Purity (%)", "Fine Wt (g)", "Date Added", "Status"])
         self.available_bars_table.setColumnHidden(0, True) # Hide bar_id
         self.available_bars_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.available_bars_table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -109,7 +109,7 @@ class SilverBarDialog(QDialog):
         self.list_bars_table = QTableWidget()
         # Same columns as available bars table for consistency
         self.list_bars_table.setColumnCount(7)
-        self.list_bars_table.setHorizontalHeaderLabels(["ID", "Estimate Vch", "Weight (g)", "Purity (%)", "Fine Wt (g)", "Date Added", "Status"])
+        self.list_bars_table.setHorizontalHeaderLabels(["ID", "Estimate Vch/Note", "Weight (g)", "Purity (%)", "Fine Wt (g)", "Date Added", "Status"])
         self.list_bars_table.setColumnHidden(0, True)
         self.list_bars_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.list_bars_table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -438,7 +438,24 @@ class SilverBarDialog(QDialog):
                     id_item.setData(Qt.UserRole, bar_id) # Store ID in item data
 
                     # Access items using dictionary-style keys for sqlite3.Row
-                    est_vch_item = QTableWidgetItem(bar_row['estimate_voucher_no'] if 'estimate_voucher_no' in bar_row.keys() else 'N/A')
+                    voucher_no = bar_row['estimate_voucher_no'] if 'estimate_voucher_no' in bar_row.keys() else 'N/A'
+                    
+                    # Get the note for this estimate
+                    note = ""
+                    try:
+                        self.db_manager.cursor.execute("SELECT note FROM estimates WHERE voucher_no = ?", (voucher_no,))
+                        result = self.db_manager.cursor.fetchone()
+                        if result and result['note']:
+                            note = result['note']
+                    except Exception:
+                        pass
+                    
+                    # Create display text with voucher and note
+                    display_text = voucher_no
+                    if note:
+                        display_text += f" ({note})"
+                    
+                    est_vch_item = QTableWidgetItem(display_text)
                     weight_item = QTableWidgetItem(f"{bar_row['weight'] if 'weight' in bar_row.keys() else 0.0:.3f}")
                     purity_item = QTableWidgetItem(f"{bar_row['purity'] if 'purity' in bar_row.keys() else 0.0:.2f}")
                     fine_wt_item = QTableWidgetItem(f"{bar_row['fine_weight'] if 'fine_weight' in bar_row.keys() else 0.0:.3f}")

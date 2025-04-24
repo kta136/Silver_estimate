@@ -535,6 +535,10 @@ class EstimateLogic:
                 self.date_edit.setDate(QDate.currentDate())
 
             self.silver_rate_spin.setValue(header.get('silver_rate', 0.0))
+            
+            # Load note if it exists
+            if hasattr(self, 'note_edit') and 'note' in header:
+                self.note_edit.setText(header.get('note', ''))
 
             for item in estimate_data['items']:
                 row = self.item_table.rowCount()
@@ -663,9 +667,13 @@ class EstimateLogic:
                 calc_reg_wage += item['wage']
         calc_net_fine = calc_reg_fine - calc_bar_fine - calc_ret_fine
         calc_net_wage = calc_reg_wage - calc_bar_wage - calc_ret_wage
+        # Get note from the note_edit field
+        note = self.note_edit.text().strip() if hasattr(self, 'note_edit') else ''
+        
         recalculated_totals = {
             'total_gross': calc_total_gross, 'total_net': calc_total_net,
-            'net_fine': calc_net_fine, 'net_wage': calc_net_wage
+            'net_fine': calc_net_fine, 'net_wage': calc_net_wage,
+            'note': note
         }
 
         # --- Check if estimate exists ---
@@ -745,6 +753,8 @@ class EstimateLogic:
                 self.generate_voucher()
                 self.date_edit.setDate(QDate.currentDate())
                 self.silver_rate_spin.setValue(0)
+                if hasattr(self, 'note_edit'):
+                    self.note_edit.clear()
                 if self.return_mode: self.toggle_return_mode()
                 if self.silver_bar_mode: self.toggle_silver_bar_mode()
                 self.mode_indicator_label.setText("Mode: Regular")

@@ -321,3 +321,16 @@ This file documents key learnings, decisions, and important information about th
 - **File:** `print_manager.py`
 - **Change:** Modified `_generate_estimate_manual_format` to use `=` characters for the separator line *after* each section's totals line, instead of `-` characters.
 - **Benefits:** Improves readability by visually distinguishing section total blocks.
+## Settings Dialog Refactor (v1.60 - April 24, 2025)
+
+- **Change:** Replaced individual Tools menu actions (except Silver Bar Management) with a centralized Settings dialog.
+- **Files Added:** `settings_dialog.py`
+- **Files Modified:** `main.py` (updated menu, added method to show dialog)
+- **Files Deleted:** `advanced_tools_dialog.py`
+- **Details:**
+    - Created `SettingsDialog` class using `QTabWidget`.
+    - Implemented "User Interface" tab with Print Font and Table Font Size settings.
+    - Implemented "Data Management" tab with "Delete All Estimates" and "DELETE ALL DATA" buttons.
+    - Dialog loads settings from `QSettings` and saves/applies them.
+    - Main menu now has "Settings..." action instead of individual tool actions.
+- **Benefits:** Centralizes configuration, improves menu structure, provides foundation for more settings.

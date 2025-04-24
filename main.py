@@ -14,6 +14,8 @@ from custom_font_dialog import CustomFontDialog
 from estimate_entry import EstimateEntryWidget
 from item_master import ItemMasterWidget
 from database_manager import DatabaseManager
+# from advanced_tools_dialog import AdvancedToolsDialog # Remove old import
+from settings_dialog import SettingsDialog # Import the new settings dialog
 
 
 class MainWindow(QMainWindow):
@@ -27,7 +29,7 @@ class MainWindow(QMainWindow):
         self.db.setup_database()
 
         # Initialize UI
-        self.setWindowTitle("Silver Estimation App v1.59") # Update version
+        self.setWindowTitle("Silver Estimation App v1.60") # Update version
         # self.setGeometry(100, 100, 1000, 700) # Remove fixed geometry
         # self.showFullScreen() # Start in true full screen
         # We need to show the window first before maximizing it
@@ -95,42 +97,19 @@ class MainWindow(QMainWindow):
         # Tools menu
         tools_menu = menu_bar.addMenu("&Tools")
 
-        # Database actions
-        # Delete All Estimates Action
-        db_delete_estimates_action = QAction("Delete All &Estimates...", self)
-        db_delete_estimates_action.setStatusTip("WARNING: Deletes all saved estimates!")
-        db_delete_estimates_action.triggered.connect(self.delete_all_estimates) # Connect to new handler
-        tools_menu.addAction(db_delete_estimates_action)
-
-        tools_menu.addSeparator() # Separator before delete all data
-
-        # Delete All Data Action
-        db_delete_all_action = QAction("&DELETE ALL DATA", self) # Renamed action
-        db_delete_all_action.setStatusTip("WARNING: Deletes all items, estimates, bars, and lists!") # Added status tip
-        # Optionally make text red (might not work reliably across platforms/styles)
-        # db_delete_all_action.setFont(QFont("Arial", weight=QFont.Bold)) # Example: Bold
-        # db_delete_all_action.setData(QColor("red")) # Example: Store color data (doesn't directly style menu)
-        db_delete_all_action.triggered.connect(self.delete_all_data) # Renamed connected method
-        tools_menu.addAction(db_delete_all_action)
-
-        # Silver bar management
-        silver_bars_action = QAction("&Silver Bar Management", self)  # Keep original name maybe?
+        # Silver bar management (Keep this directly in the menu)
+        silver_bars_action = QAction("&Silver Bar Management", self)
         silver_bars_action.setStatusTip("Add, view, transfer, or assign silver bars to lists")
-        silver_bars_action.triggered.connect(self.show_silver_bars)  # Connect to MainWindow's method
+        silver_bars_action.triggered.connect(self.show_silver_bars)
         tools_menu.addAction(silver_bars_action)
 
-        # Font settings action
         tools_menu.addSeparator()
-        font_action = QAction("&Print Font Settings...", self) # Renamed for clarity
-        font_action.setStatusTip("Change font settings for printing estimates")
-        font_action.triggered.connect(self.show_font_dialog)
-        tools_menu.addAction(font_action)
 
-        # Table Font Size action
-        table_font_action = QAction("&Table Font Size...", self)
-        table_font_action.setStatusTip("Change font size for the estimate entry table")
-        table_font_action.triggered.connect(self.show_table_font_size_dialog) # Connect to new handler
-        tools_menu.addAction(table_font_action)
+        # Settings Dialog Action (Replaces Advanced Tools)
+        settings_action = QAction("&Settings...", self)
+        settings_action.setStatusTip("Configure application settings")
+        settings_action.triggered.connect(self.show_settings_dialog) # Connect to new method
+        tools_menu.addAction(settings_action)
 
         # Reports menu
         reports_menu = menu_bar.addMenu("&Reports")
@@ -247,11 +226,12 @@ class MainWindow(QMainWindow):
         """Show about dialog."""
         QMessageBox.about(self, "About Silver Estimation App",
                           "Silver Estimation App\n\n"
-                          "Version 1.14\n\n" # Updated version
+                          "Version 1.60\n\n" # Make sure this matches window title
                           "A comprehensive tool for managing silver estimations, "
                           "item inventory, and silver bars.\n\n"
-                          "© 2023 Silver Estimation App")
+                          "© 2023-2025 Silver Estimation App") # Update copyright year maybe
 
+    # --- Methods called by Advanced Tools Dialog ---
     def show_font_dialog(self):
         """Show the font selection dialog and store the chosen print font."""
         # Use the currently stored print_font to initialize the dialog
@@ -354,6 +334,15 @@ class MainWindow(QMainWindow):
                 self.estimate_widget._apply_table_font_size(new_size)
             else:
                  print("Warning: Estimate widget or apply method not found.")
+
+    # --- Method to show the new Settings dialog ---
+    def show_settings_dialog(self):
+        """Show the centralized settings dialog."""
+        dialog = SettingsDialog(main_window_ref=self, parent=self)
+        # Connect the signal if needed for immediate UI updates beyond fonts
+        # dialog.settings_applied.connect(self.handle_settings_applied)
+        dialog.exec_()
+    # Removed show_advanced_tools_dialog method
 
 
 if __name__ == "__main__":

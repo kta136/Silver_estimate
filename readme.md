@@ -1,4 +1,4 @@
-# 🧾 Silver Estimation App — v1.59
+# 🧾 Silver Estimation App — v1.60
 
 A desktop application built using **PyQt5** and **SQLite** for managing silver sales estimates, including item-wise entries, silver bar inventory, returns, and print-ready formatted outputs.
 
@@ -16,7 +16,7 @@ This app is designed for silver shops to:
 
 ---
 
-## ✅ Features (v1.59)
+## ✅ Features (v1.60)
 
 ### 🔢 Estimate Entry
 
@@ -92,10 +92,13 @@ This app is designed for silver shops to:
 - Configure **Print Font** (family, size min 5pt, bold) via "Tools -> Print Font Settings...". Applies only to estimate slip print output. Persists via `QSettings`.
 - Configure **Table Font Size** (7-16pt) via "Tools -> Table Font Size...". Applies to the estimate entry table UI. Persists via `QSettings`.
 
-### 🛠️ Data Management (Tools Menu)
+### 🛠️ Settings & Data Management (Tools Menu)
 
-- **DELETE ALL DATA:** Replaces "Reset Database Tables". Drops and recreates all tables, deleting all items, estimates, bars, etc. Requires confirmation.
-- **Delete All Estimates:** Deletes all estimate headers and line items from the database. Requires confirmation.
+- **Settings Dialog:** Centralized configuration options under "Tools -> Settings...". Includes:
+    - Print Font configuration.
+    - Estimate Table Font Size configuration.
+    - Data Deletion options (Delete All Estimates, DELETE ALL DATA).
+- **Silver Bar Management:** Remains directly accessible under "Tools -> Silver Bar Management".
 
 ---
 
@@ -174,6 +177,15 @@ On the first run, a database folder and the estimation.db SQLite file will be cr
 - **Printing:** `PrintManager` handles formats. Estimate slip uses `<pre>` and fixed-width spacing. Preview via `QPrintPreviewDialog`.
 
 ---
+
+## 🐞 Key Fixes & Enhancements (v1.60 - April 2025)
+
+### 1. ⚙️ Centralized Settings Dialog
+- Refactored the "Tools" menu.
+- Created a new `SettingsDialog` accessible via "Tools -> Settings...".
+- Moved Print Font, Table Font Size, Delete All Estimates, and DELETE ALL DATA actions into this dialog.
+- Removed the previous "Advanced Tools" dialog implementation.
+- Kept "Silver Bar Management" directly in the "Tools" menu.
 
 ## 🐞 Key Fixes & Enhancements (v1.59 - April 2025)
 

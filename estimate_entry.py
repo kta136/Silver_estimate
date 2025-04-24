@@ -49,8 +49,17 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         # Connect signals AFTER setting delegates
         self.connect_signals()
 
+        # Disconnect load_estimate initially to prevent premature trigger
+        try:
+            self.voucher_edit.editingFinished.disconnect(self.load_estimate)
+        except TypeError: # Signal not connected yet or already disconnected
+            pass
+
         # Generate a voucher number when the widget is first created
         self.generate_voucher()
+
+        # Reconnect load_estimate after a short delay
+        QTimer.singleShot(200, self.reconnect_load_estimate)
 
         # Make sure we start with exactly one empty row
         self.clear_all_rows()
@@ -288,5 +297,15 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
              # Should not happen if called at end of __init__, but as fallback:
              print("Warning: item_table not ready during font size load.")
 
+
+    def reconnect_load_estimate(self):
+        """Reconnect the editingFinished signal for the voucher edit."""
+        try:
+            # Ensure it's not connected multiple times
+            self.voucher_edit.editingFinished.disconnect(self.load_estimate)
+        except TypeError:
+            pass # It wasn't connected, which is fine
+        self.voucher_edit.editingFinished.connect(self.load_estimate)
+        print("Reconnected load_estimate signal.") # Debug print
 
     # Removed _save_table_font_size_setting as saving is handled by MainWindow

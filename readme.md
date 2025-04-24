@@ -1,4 +1,4 @@
-# 🧾 Silver Estimation App — v1.54
+# 🧾 Silver Estimation App — v1.55
 
 A desktop application built using **PyQt5** and **SQLite** for managing silver sales estimates, including item-wise entries, silver bar inventory, returns, and print-ready formatted outputs.
 
@@ -16,7 +16,7 @@ This app is designed for silver shops to:
 
 ---
 
-## ✅ Features (v1.54)
+## ✅ Features (v1.55)
 
 ### 🔢 Estimate Entry
 
@@ -172,6 +172,13 @@ On the first run, a database folder and the estimation.db SQLite file will be cr
 
 ---
 
+## 🐞 Key Fixes & Enhancements (v1.55 - April 2025)
+
+### 1. 🚀 Startup & Window Behavior Fixes
+- Fixed `AttributeError` related to `reconnect_load_estimate` by ensuring method is correctly defined within the class.
+- Prevented premature "Estimate not found" error on startup by delaying signal connection for voucher field.
+- Ensured main window starts maximized correctly using `setWindowState`.
+
 ## 🐞 Key Fixes & Enhancements (v1.54 - April 2025)
 
 ### 1. 💰 Last Balance Feature
@@ -307,7 +314,7 @@ On the first run, a database folder and the estimation.db SQLite file will be cr
 
 ## 📝 Development & Debugging Notes for AI
 
-This file reflects the state after v1.54 feature additions/fixes.
+This file reflects the state after v1.55 feature additions/fixes.
 
 ### 🔧 Key Concepts & Logic Flow:
 
@@ -320,7 +327,7 @@ This file reflects the state after v1.54 feature additions/fixes.
 
 ---
 
-### 🧪 Known Issues / TODO (Post v1.54)
+### 🧪 Known Issues / TODO (Post v1.55)
 
 - [x] ~~Print: Add Serial number column & Round off printed amounts.~~ (Completed in v1.14)
 - [x] ~~Tools Menu: Rename "Reset Database Tables" action.~~ (Completed in v1.14)

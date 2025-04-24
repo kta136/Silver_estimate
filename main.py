@@ -27,8 +27,13 @@ class MainWindow(QMainWindow):
         self.db.setup_database()
 
         # Initialize UI
-        self.setWindowTitle("Silver Estimation App")
-        self.setGeometry(100, 100, 1000, 700)
+        self.setWindowTitle("Silver Estimation App v1.55") # Update version
+        # self.setGeometry(100, 100, 1000, 700) # Remove fixed geometry
+        # self.showFullScreen() # Start in true full screen
+        # We need to show the window first before maximizing it
+        # self.show() # This is implicitly called later by app.exec_() usually
+        # Let's try setting the window state directly
+        self.setWindowState(Qt.WindowMaximized)
 
         # Set up menu bar
         self.setup_menu_bar()

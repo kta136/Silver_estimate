@@ -295,3 +295,15 @@ This file documents key learnings, decisions, and important information about th
   - Allows tracking of previous balances in estimates
   - Provides clear visibility of last balance in printed output
   - Automatically includes last balance in total calculations
+## Startup Error & Window Maximization Fixes (v1.55 - April 24, 2025)
+
+- **Issue 1:** `AttributeError: 'EstimateEntryWidget' object has no attribute 'reconnect_load_estimate'` occurred on startup.
+- **Root Cause 1:** The `reconnect_load_estimate` method was incorrectly placed outside the class definition due to issues with `append_to_file` or `apply_diff`.
+- **Fix 1:** Used `write_to_file` to rewrite `estimate_entry.py` ensuring the method definition is correctly indented within the `EstimateEntryWidget` class.
+
+- **Issue 2:** "Estimate not found" error message appeared immediately on application start.
+- **Root Cause 2:** The `voucher_edit.editingFinished` signal was connected to `load_estimate` and triggered prematurely during initialization when `generate_voucher` was called or focus changed.
+- **Fix 2:** Modified `EstimateEntryWidget.__init__` to disconnect the signal initially and reconnect it using `QTimer.singleShot(200, self.reconnect_load_estimate)` after startup routines complete.
+
+- **Issue 3:** Main window did not reliably start maximized using `showMaximized()`.
+- **Fix 3:** Changed `main.py` to use `self.setWindowState(Qt.WindowMaximized)` in `MainWindow.__init__` for more robust maximization.

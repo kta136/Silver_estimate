@@ -29,7 +29,7 @@ class MainWindow(QMainWindow):
         self.db.setup_database()
 
         # Initialize UI
-        self.setWindowTitle("Silver Estimation App v1.60") # Update version
+        self.setWindowTitle("Silver Estimation App v1.61") # Update version
         # self.setGeometry(100, 100, 1000, 700) # Remove fixed geometry
         # self.showFullScreen() # Start in true full screen
         # We need to show the window first before maximizing it
@@ -226,7 +226,7 @@ class MainWindow(QMainWindow):
         """Show about dialog."""
         QMessageBox.about(self, "About Silver Estimation App",
                           "Silver Estimation App\n\n"
-                          "Version 1.60\n\n" # Make sure this matches window title
+                          "Version 1.61\n\n" # Make sure this matches window title
                           "A comprehensive tool for managing silver estimations, "
                           "item inventory, and silver bars.\n\n"
                           "© 2023-2025 Silver Estimation App") # Update copyright year maybe

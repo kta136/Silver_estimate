@@ -318,15 +318,25 @@ class DatabaseManager:
             return []
 
     def generate_voucher_no(self):
-        today = datetime.now().strftime('%Y%m%d'); seq = 1
+        """Generates the next sequential voucher number (simple integer increment)."""
+        next_voucher_no = 1
         try:
-            self.cursor.execute("SELECT voucher_no FROM estimates WHERE voucher_no LIKE ? ORDER BY voucher_no DESC LIMIT 1", (f"{today}%",))
+            # Find the highest existing numeric voucher number
+            self.cursor.execute("SELECT MAX(CAST(voucher_no AS INTEGER)) FROM estimates WHERE voucher_no GLOB '[0-9]*'")
             result = self.cursor.fetchone()
-            if result:
-                try: seq = int(result['voucher_no'][8:]) + 1
-                except (IndexError, ValueError): print(f"Warn: Non-numeric suffix on {result['voucher_no']}")
-            return f"{today}{seq}"
-        except sqlite3.Error as e: print(f"DB error gen voucher: {e}"); return f"ERR{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            if result and result[0] is not None:
+                try:
+                    next_voucher_no = int(result[0]) + 1
+                except (ValueError, TypeError):
+                    print(f"Warning: Could not parse max voucher number '{result[0]}' as integer. Starting from 1.")
+                    # Fallback to 1 if parsing fails, though the query should prevent this
+                    next_voucher_no = 1
+            # If no numeric voucher exists or table is empty, next_voucher_no remains 1
+            return str(next_voucher_no)
+        except sqlite3.Error as e:
+            print(f"DB error generating voucher number: {e}")
+            # Fallback to a timestamp-based error string if DB query fails
+            return f"ERR{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
     def save_estimate_with_returns(self, voucher_no, date, silver_rate, regular_items, return_items, totals):
         try:

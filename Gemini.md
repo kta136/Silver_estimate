@@ -267,3 +267,31 @@ This file documents key learnings, decisions, and important information about th
   - Improved print layout with notes prominently displayed
   - More user-friendly interface with larger history window
   - Cleaner print layout with note integrated into the header
+## Last Balance Feature Implementation (April 24, 2025)
+
+- **Feature:** Added ability to include previous balance in estimates
+- **Files Modified:**
+  - `database_manager.py`: 
+    - Added last_balance_silver and last_balance_amount columns to estimates table
+    - Implemented automatic schema migration for existing databases
+    - Updated save_estimate_with_returns to handle last balance values
+  - `estimate_entry_ui.py`:
+    - Added "LB" button to the estimate entry screen
+  - `estimate_entry_logic.py`:
+    - Added show_last_balance_dialog method to prompt for last balance values
+    - Connected LB button to the dialog
+    - Updated calculate_totals to include last balance in calculations
+    - Updated save_estimate to store last balance values
+    - Updated load_estimate to load last balance values
+  - `print_manager.py`:
+    - Added last balance section to printed estimate (displayed before final section)
+    - Combined silver weight and amount on a single line for cleaner presentation
+    - Properly included last balance in all final calculations
+    - Fixed calculation: last balance silver is added to fine silver, last balance amount is added to wage
+  - `readme.md`:
+    - Updated documentation to reflect new feature
+    - Incremented version number to 1.54
+- **Benefits:**
+  - Allows tracking of previous balances in estimates
+  - Provides clear visibility of last balance in printed output
+  - Automatically includes last balance in total calculations

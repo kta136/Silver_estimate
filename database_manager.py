@@ -117,7 +117,9 @@ class DatabaseManager:
                     voucher_no TEXT PRIMARY KEY, date TEXT NOT NULL, silver_rate REAL DEFAULT 0,
                     total_gross REAL DEFAULT 0, total_net REAL DEFAULT 0,
                     total_fine REAL DEFAULT 0, total_wage REAL DEFAULT 0,
-                    note TEXT
+                    note TEXT,
+                    last_balance_silver REAL DEFAULT 0,
+                    last_balance_amount REAL DEFAULT 0
                 )''')
             self.cursor.execute('''
                 CREATE TABLE IF NOT EXISTS estimate_items (
@@ -236,6 +238,15 @@ class DatabaseManager:
             if not self._column_exists('estimates', 'note'):
                 print("Adding 'note' column to estimates table...")
                 self.cursor.execute('ALTER TABLE estimates ADD COLUMN note TEXT')
+                
+            # Check if the last_balance columns exist in the estimates table
+            if not self._column_exists('estimates', 'last_balance_silver'):
+                print("Adding 'last_balance_silver' column to estimates table...")
+                self.cursor.execute('ALTER TABLE estimates ADD COLUMN last_balance_silver REAL DEFAULT 0')
+                
+            if not self._column_exists('estimates', 'last_balance_amount'):
+                print("Adding 'last_balance_amount' column to estimates table...")
+                self.cursor.execute('ALTER TABLE estimates ADD COLUMN last_balance_amount REAL DEFAULT 0')
             
             self.conn.commit()
             print("Database schema setup/update complete.")
@@ -325,8 +336,10 @@ class DatabaseManager:
             self.cursor.execute('SELECT 1 FROM estimates WHERE voucher_no = ?', (voucher_no,))
             estimate_exists = self.cursor.fetchone() is not None
             
-            # Get note from totals dictionary
+            # Get note and last balance from totals dictionary
             note = totals.get('note', '')
+            last_balance_silver = totals.get('last_balance_silver', 0.0)
+            last_balance_amount = totals.get('last_balance_amount', 0.0)
             
             # Use UPDATE instead of INSERT OR REPLACE to avoid triggering ON DELETE CASCADE
             if estimate_exists:
@@ -334,7 +347,8 @@ class DatabaseManager:
                 self.cursor.execute('''
                     UPDATE estimates
                     SET date = ?, silver_rate = ?, total_gross = ?, total_net = ?,
-                        total_fine = ?, total_wage = ?, note = ?
+                        total_fine = ?, total_wage = ?, note = ?,
+                        last_balance_silver = ?, last_balance_amount = ?
                     WHERE voucher_no = ?
                 ''', (date, silver_rate,
                      totals.get('total_gross', 0.0),
@@ -342,19 +356,24 @@ class DatabaseManager:
                      totals.get('net_fine', 0.0),
                      totals.get('net_wage', 0.0),
                      note,
+                     last_balance_silver,
+                     last_balance_amount,
                      voucher_no))
             else:
                 print(f"Inserting new estimate {voucher_no}")
                 self.cursor.execute('''
                     INSERT INTO estimates
-                    (voucher_no, date, silver_rate, total_gross, total_net, total_fine, total_wage, note)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (voucher_no, date, silver_rate, total_gross, total_net, total_fine, total_wage, note,
+                     last_balance_silver, last_balance_amount)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (voucher_no, date, silver_rate,
                      totals.get('total_gross', 0.0),
                      totals.get('total_net', 0.0),
                      totals.get('net_fine', 0.0),
                      totals.get('net_wage', 0.0),
-                     note))
+                     note,
+                     last_balance_silver,
+                     last_balance_amount))
             
             # Delete and recreate estimate items (these don't have ON DELETE CASCADE issues)
             self.cursor.execute('DELETE FROM estimate_items WHERE voucher_no = ?', (voucher_no,))

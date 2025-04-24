@@ -1,4 +1,4 @@
-# 🧾 Silver Estimation App — v1.52
+# 🧾 Silver Estimation App — v1.54
 
 A desktop application built using **PyQt5** and **SQLite** for managing silver sales estimates, including item-wise entries, silver bar inventory, returns, and print-ready formatted outputs.
 
@@ -16,7 +16,7 @@ This app is designed for silver shops to:
 
 ---
 
-## ✅ Features (v1.52)
+## ✅ Features (v1.54)
 
 ### 🔢 Estimate Entry
 
@@ -37,6 +37,7 @@ This app is designed for silver shops to:
 - **Backspace Navigation:** Pressing Backspace in an empty editable cell navigates to the previous cell.
 - **UI Readability:** Improved with better spacing, separators, right-aligned totals, and alternating row colors (off-white/light gray).
 - **Delete Option:** Button added to delete the currently loaded estimate (with confirmation).
+- **Last Balance:** Add previous balance in silver weight and amount to estimates with the "LB" button.
 
 ### 📦 Item Master
 
@@ -80,6 +81,7 @@ This app is designed for silver shops to:
   - Return Goods
   - Return Bars
 - Final summary displays Net Fine, Silver Cost, Labour, Total (Net calculated as Regular - Bars - Returns; Labour, Cost, Total **rounded to 0 decimals**).
+- Last Balance section displays previous balance in silver weight and amount when present.
 - Silver Bar Inventory printing via HTML table format.
 
 ### 🔤 Font Settings
@@ -169,6 +171,15 @@ On the first run, a database folder and the estimation.db SQLite file will be cr
 - **Printing:** `PrintManager` handles formats. Estimate slip uses `<pre>` and fixed-width spacing. Preview via `QPrintPreviewDialog`.
 
 ---
+
+## 🐞 Key Fixes & Enhancements (v1.54 - April 2025)
+
+### 1. 💰 Last Balance Feature
+- **Added "LB" button** to the estimate entry screen
+- When clicked, prompts for last balance in silver weight and amount
+- Last balance is added to the totals in calculations
+- Displayed in a separate section in the printed estimate
+- Stored in the database with automatic schema migration
 
 ## 🐞 Key Fixes & Enhancements (v1.52 - April 2025)
 
@@ -296,7 +307,7 @@ On the first run, a database folder and the estimation.db SQLite file will be cr
 
 ## 📝 Development & Debugging Notes for AI
 
-This file reflects the state after v1.52 feature additions/fixes.
+This file reflects the state after v1.54 feature additions/fixes.
 
 ### 🔧 Key Concepts & Logic Flow:
 
@@ -309,7 +320,7 @@ This file reflects the state after v1.52 feature additions/fixes.
 
 ---
 
-### 🧪 Known Issues / TODO (Post v1.52)
+### 🧪 Known Issues / TODO (Post v1.54)
 
 - [x] ~~Print: Add Serial number column & Round off printed amounts.~~ (Completed in v1.14)
 - [x] ~~Tools Menu: Rename "Reset Database Tables" action.~~ (Completed in v1.14)

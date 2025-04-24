@@ -297,13 +297,52 @@ class PrintManager:
                 ret_sf+=item.get('fine',0.0); ret_sw+=item.get('wage',0.0); ret_sg+=item.get('gross',0.0); ret_sp+=item.get('poly',0.0)
                 output.append(format_line(sno,item.get('fine',0.0),item.get('wage',0.0),item.get('gross',0.0),item.get('poly',0.0),item.get('item_name',''),item.get('purity',0.0),0,0)); sno+=1
             output.append(sep_dash); output.append(format_totals_line(ret_sf,ret_sw,ret_sg,ret_sp)); output.append(sep_dash)
+        
+        # Get last balance values if they exist
+        last_balance_silver = header.get('last_balance_silver', 0.0)
+        last_balance_amount = header.get('last_balance_amount', 0.0)
+        
+        # Add last balance section if it exists (before final section)
+        if last_balance_silver > 0 or last_balance_amount > 0:
+            output.append(" ")
+            lb_title = "* * Last Balance * *"
+            lb_pad = (TOTAL_WIDTH - len(lb_title)) // 2
+            output.append(" " * lb_pad + lb_title)
+            output.append(sep_dash)
+            
+            # Format last balance values on a single line
+            lb_str = f"Silver: {last_balance_silver:.3f} g   Amount: ₹ {self.format_indian_rupees(round(last_balance_amount))}"
+            lb_pad = (TOTAL_WIDTH - len(lb_str)) // 2
+            output.append(" " * lb_pad + lb_str)
+            output.append(sep_dash)
 
         output.append(" "); final_title="Final Silver & Amount"; pad=(TOTAL_WIDTH-len(final_title))//2; output.append(" "*pad+final_title); output.append(sep_eq)
-        net_fine=reg_f-sb_f-ret_gf-ret_sf; net_wage=reg_w-sb_w-ret_gw-ret_sw
-        silver_cost=net_fine*silver_rate; total_cost=net_wage+silver_cost
-        net_wage_r=round(net_wage); silver_cost_r=round(silver_cost); total_cost_r=round(total_cost)
+        # Calculate net values
+        net_fine = reg_f - sb_f - ret_gf - ret_sf
+        
+        # Add last balance silver to net fine if it exists
+        if last_balance_silver > 0:
+            net_fine_display = net_fine + last_balance_silver
+        else:
+            net_fine_display = net_fine
+            
+        # Calculate net wage and add last balance amount to it
+        net_wage = reg_w - sb_w - ret_gw - ret_sw
+        if last_balance_amount > 0:
+            net_wage_display = net_wage + last_balance_amount
+        else:
+            net_wage_display = net_wage
+        
+        # Calculate costs with last balance included
+        silver_cost = net_fine_display * silver_rate
+        total_cost = net_wage_display + silver_cost
+            
+        # Round values for display
+        net_wage_r = round(net_wage_display)
+        silver_cost_r = round(silver_cost)
+        total_cost_r = round(total_cost)
 
-        fine_str=f"{net_fine:{W_FINE}.3f}"
+        fine_str=f"{net_fine_display:{W_FINE}.3f}"
         wage_str=f"{net_wage_r:{W_LABOUR}.0f}"
         scost_label="S.Cost : "
         scost_value_formatted = self.format_indian_rupees(silver_cost_r)
@@ -320,7 +359,8 @@ class PrintManager:
         space_before=TOTAL_WIDTH - part1_len - len(scost_pad) - len(total_pad) - 2
         pad_after_labour=max(1, space_before - 1); pad_between=1
         final_line = f"{' '*(W_SNO+S)}{fine_str} {wage_str}" + (" "*pad_after_labour) + scost_pad + (" "*pad_between) + total_pad
-        output.append(final_line[:TOTAL_WIDTH]); output.append(sep_eq); output.append(" ")
+        output.append(final_line[:TOTAL_WIDTH])
+        output.append(sep_eq); output.append(" ")
         note = "Note :-  G O O D S   N O T   R E T U R N"; pad=(TOTAL_WIDTH-len(note))//2; output.append(" "*pad+note); output.append(" \f")
 
         html_content = "\n".join(output)

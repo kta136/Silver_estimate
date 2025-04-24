@@ -38,6 +38,10 @@ class EstimateLogic:
         self.voucher_edit.editingFinished.connect(self.load_estimate)
         self.generate_button.clicked.connect(self.generate_voucher)
         self.silver_rate_spin.valueChanged.connect(self.calculate_totals)
+        
+        # Connect Last Balance button
+        if hasattr(self, 'last_balance_button'):
+            self.last_balance_button.clicked.connect(self.show_last_balance_dialog)
 
         # Connect table signals
         self.item_table.cellClicked.connect(self.cell_clicked)
@@ -439,11 +443,60 @@ class EstimateLogic:
             QMessageBox.critical(self, "Calculation Error", f"{err_msg}\n{traceback.format_exc()}")
 
 
+    def show_last_balance_dialog(self):
+        """Show dialog to enter last balance values."""
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QFormLayout, QDoubleSpinBox, QDialogButtonBox, QLabel
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Enter Last Balance")
+        layout = QVBoxLayout(dialog)
+        
+        form_layout = QFormLayout()
+        
+        # Silver weight input
+        self.lb_silver_spin = QDoubleSpinBox()
+        self.lb_silver_spin.setRange(0, 1000000)
+        self.lb_silver_spin.setDecimals(3)
+        self.lb_silver_spin.setSuffix(" g")
+        if hasattr(self, 'last_balance_silver'):
+            self.lb_silver_spin.setValue(self.last_balance_silver)
+        form_layout.addRow("Silver Weight:", self.lb_silver_spin)
+        
+        # Amount input
+        self.lb_amount_spin = QDoubleSpinBox()
+        self.lb_amount_spin.setRange(0, 10000000)
+        self.lb_amount_spin.setDecimals(2)
+        self.lb_amount_spin.setPrefix("₹ ")
+        if hasattr(self, 'last_balance_amount'):
+            self.lb_amount_spin.setValue(self.last_balance_amount)
+        form_layout.addRow("Amount:", self.lb_amount_spin)
+        
+        layout.addLayout(form_layout)
+        
+        # Add buttons
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(dialog.accept)
+        button_box.rejected.connect(dialog.reject)
+        layout.addWidget(button_box)
+        
+        # Show dialog
+        if dialog.exec_():
+            self.last_balance_silver = self.lb_silver_spin.value()
+            self.last_balance_amount = self.lb_amount_spin.value()
+            self._status(f"Last balance set: {self.last_balance_silver:.3f} g, ₹ {self.last_balance_amount:.2f}", 3000)
+            self.calculate_totals()
+        else:
+            self._status("Last balance not changed", 2000)
+    
     def calculate_totals(self):
         """Calculate and update totals for all columns, separating categories."""
         reg_gross, reg_net, reg_fine, reg_wage = 0.0, 0.0, 0.0, 0.0
         return_gross, return_net, return_fine, return_wage = 0.0, 0.0, 0.0, 0.0
         bar_gross, bar_net, bar_fine, bar_wage = 0.0, 0.0, 0.0, 0.0
+        
+        # Get last balance values if they exist
+        last_balance_silver = getattr(self, 'last_balance_silver', 0.0)
+        last_balance_amount = getattr(self, 'last_balance_amount', 0.0)
 
         for row in range(self.item_table.rowCount()):
             # Use constant
@@ -478,7 +531,16 @@ class EstimateLogic:
         net_fine_calc = reg_fine - bar_fine - return_fine
         net_wage_calc = reg_wage - bar_wage - return_wage # Note: bar_wage is usually 0
         net_value_calc = net_fine_calc * silver_rate
-        grand_total_calc = net_value_calc + net_wage_calc # Calculate Grand Total
+        
+        # Add last balance to calculations
+        net_fine_with_lb = net_fine_calc + last_balance_silver
+        net_wage_with_lb = net_wage_calc + last_balance_amount
+        
+        # Calculate values with last balance included
+        net_value_with_lb = net_fine_with_lb * silver_rate
+        
+        # Calculate Grand Total including last balance
+        grand_total_calc = net_value_with_lb + net_wage_with_lb
 
         # Update UI labels
         self.total_gross_label.setText(f"{reg_gross:.3f}")
@@ -498,6 +560,13 @@ class EstimateLogic:
         self.net_fine_label.setText(f"{net_fine_calc:.3f}")
         self.net_value_label.setText(f"{net_value_calc:.2f}")
         self.net_wage_label.setText(f"{net_wage_calc:.2f}")
+        
+        # Display last balance if it exists
+        if last_balance_silver > 0 or last_balance_amount > 0:
+            self.net_fine_label.setText(f"{net_fine_calc:.3f} + {last_balance_silver:.3f} = {net_fine_with_lb:.3f}")
+            self.net_wage_label.setText(f"{net_wage_calc:.2f} + {last_balance_amount:.2f} = {net_wage_with_lb:.2f}")
+            self.net_value_label.setText(f"{net_value_with_lb:.2f}")
+        
         self.grand_total_label.setText(f"{grand_total_calc:.2f}") # Update Grand Total label
 
 
@@ -539,6 +608,10 @@ class EstimateLogic:
             # Load note if it exists
             if hasattr(self, 'note_edit') and 'note' in header:
                 self.note_edit.setText(header.get('note', ''))
+                
+            # Load last balance if it exists
+            self.last_balance_silver = header.get('last_balance_silver', 0.0)
+            self.last_balance_amount = header.get('last_balance_amount', 0.0)
 
             for item in estimate_data['items']:
                 row = self.item_table.rowCount()
@@ -670,10 +743,16 @@ class EstimateLogic:
         # Get note from the note_edit field
         note = self.note_edit.text().strip() if hasattr(self, 'note_edit') else ''
         
+        # Get last balance values
+        last_balance_silver = getattr(self, 'last_balance_silver', 0.0)
+        last_balance_amount = getattr(self, 'last_balance_amount', 0.0)
+        
         recalculated_totals = {
             'total_gross': calc_total_gross, 'total_net': calc_total_net,
             'net_fine': calc_net_fine, 'net_wage': calc_net_wage,
-            'note': note
+            'note': note,
+            'last_balance_silver': last_balance_silver,
+            'last_balance_amount': last_balance_amount
         }
 
         # --- Check if estimate exists ---
@@ -755,6 +834,9 @@ class EstimateLogic:
                 self.silver_rate_spin.setValue(0)
                 if hasattr(self, 'note_edit'):
                     self.note_edit.clear()
+                # Reset last balance
+                self.last_balance_silver = 0.0
+                self.last_balance_amount = 0.0
                 if self.return_mode: self.toggle_return_mode()
                 if self.silver_bar_mode: self.toggle_silver_bar_mode()
                 self.mode_indicator_label.setText("Mode: Regular")

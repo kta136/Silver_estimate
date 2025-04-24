@@ -222,6 +222,11 @@ class EstimateUI:
         # --- Add other action buttons here ---
         table_actions_layout.addSpacing(20) # Add some space
 
+        # Last Balance button
+        self.last_balance_button = QPushButton("LB")
+        self.last_balance_button.setToolTip("Add Last Balance to this estimate")
+        table_actions_layout.addWidget(self.last_balance_button)
+        
         # Save button
         self.save_button = QPushButton("Save Estimate")
         self.save_button.setToolTip("Save the current estimate details (Ctrl+S - standard shortcut often works)")

@@ -1,4 +1,4 @@
-# 🧾 Silver Estimation App — v1.55
+# 🧾 Silver Estimation App — v1.58
 
 A desktop application built using **PyQt5** and **SQLite** for managing silver sales estimates, including item-wise entries, silver bar inventory, returns, and print-ready formatted outputs.
 
@@ -16,7 +16,7 @@ This app is designed for silver shops to:
 
 ---
 
-## ✅ Features (v1.55)
+## ✅ Features (v1.58)
 
 ### 🔢 Estimate Entry
 
@@ -80,9 +80,11 @@ This app is designed for silver shops to:
   - Silver Bars
   - Return Goods
   - Return Bars
-- Final summary displays Net Fine, Silver Cost, Labour, Total (Net calculated as Regular - Bars - Returns; Labour, Cost, Total **rounded to 0 decimals**).
+- Final summary displays Net Fine, Silver Cost, Labour, Total (Net calculated as Regular - Bars - Returns; Labour, Cost, Total **rounded to 0 decimals**). S.Cost and Total are omitted if Silver Rate is zero.
 - Last Balance section displays previous balance in silver weight and amount when present.
 - Silver Bar Inventory printing via HTML table format.
+- Reduced blank lines and minimized top/bottom margins on printed estimate slip for tighter layout.
+- Section total separators changed from `-` to `=` for clarity.
 
 ### 🔤 Font Settings
 
@@ -171,6 +173,23 @@ On the first run, a database folder and the estimation.db SQLite file will be cr
 - **Printing:** `PrintManager` handles formats. Estimate slip uses `<pre>` and fixed-width spacing. Preview via `QPrintPreviewDialog`.
 
 ---
+
+## 🐞 Key Fixes & Enhancements (v1.58 - April 2025)
+
+### 1. 🖨️ Section Total Separator Change
+- Changed the separator line printed *after* each section's totals (Regular, Bars, Returns) from dashes (`-`) to equals signs (`=`) for better visual distinction.
+
+## 🐞 Key Fixes & Enhancements (v1.57 - April 2025)
+
+### 1. 📄 Print Layout Adjustments
+- Removed most blank lines between sections on the printed estimate slip for a more compact view.
+- Reduced top and bottom page margins to 2mm for less wasted space.
+
+## 🐞 Key Fixes & Enhancements (v1.56 - April 2025)
+
+### 1. 🖨️ Conditional Print Summary
+- Modified the final summary line on the printed estimate slip.
+- If the Silver Rate is zero, the "S.Cost" and "Total" fields are now omitted, showing only Net Fine and Net Wage.
 
 ## 🐞 Key Fixes & Enhancements (v1.55 - April 2025)
 
@@ -314,7 +333,7 @@ On the first run, a database folder and the estimation.db SQLite file will be cr
 
 ## 📝 Development & Debugging Notes for AI
 
-This file reflects the state after v1.55 feature additions/fixes.
+This file reflects the state after v1.58 feature additions/fixes.
 
 ### 🔧 Key Concepts & Logic Flow:
 
@@ -327,7 +346,7 @@ This file reflects the state after v1.55 feature additions/fixes.
 
 ---
 
-### 🧪 Known Issues / TODO (Post v1.55)
+### 🧪 Known Issues / TODO (Post v1.58)
 
 - [x] ~~Print: Add Serial number column & Round off printed amounts.~~ (Completed in v1.14)
 - [x] ~~Tools Menu: Rename "Reset Database Tables" action.~~ (Completed in v1.14)

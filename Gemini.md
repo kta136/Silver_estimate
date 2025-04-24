@@ -307,3 +307,17 @@ This file documents key learnings, decisions, and important information about th
 
 - **Issue 3:** Main window did not reliably start maximized using `showMaximized()`.
 - **Fix 3:** Changed `main.py` to use `self.setWindowState(Qt.WindowMaximized)` in `MainWindow.__init__` for more robust maximization.
+## Print Layout Adjustments (v1.57 - April 24, 2025)
+
+- **Issue:** User requested less whitespace on the printed estimate slip.
+- **File:** `print_manager.py`
+- **Changes:**
+  - Reduced top and bottom page margins from 10mm to 2mm in `PrintManager.__init__`.
+  - Removed most `output.append(" ")` calls within `_generate_estimate_manual_format` to eliminate extra blank lines between sections.
+- **Benefits:** Creates a more compact printout with less wasted paper.
+## Print Section Separator Change (v1.58 - April 24, 2025)
+
+- **Issue:** User requested clearer separation for section totals in the printout.
+- **File:** `print_manager.py`
+- **Change:** Modified `_generate_estimate_manual_format` to use `=` characters for the separator line *after* each section's totals line, instead of `-` characters.
+- **Benefits:** Improves readability by visually distinguishing section total blocks.

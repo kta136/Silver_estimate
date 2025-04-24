@@ -32,8 +32,8 @@ class PrintManager:
         self.printer = QPrinter(QPrinter.HighResolution)
         self.printer.setPageSize(QPageSize(QPageSize.A4))
         self.printer.setOrientation(QPrinter.Portrait)
-        # Use margins appropriate for the fixed-width text format
-        self.printer.setPageMargins(10, 10, 10, 10, QPrinter.Millimeter)
+        # Use margins appropriate for the fixed-width text format (minimize top/bottom)
+        self.printer.setPageMargins(10, 2, 10, 2, QPrinter.Millimeter) # Left, Top, Right, Bottom
 
     def format_indian_rupees(self, number):
         """Formats a number into Indian Rupees notation (Lakhs, Crores)."""
@@ -251,7 +251,7 @@ class PrintManager:
             pad = (TOTAL_WIDTH-len(title))//2
             output.append(" "*pad+title)
         
-        output.append(" ")  # Empty line after title
+        # output.append(" ")  # REMOVED Empty line after title
         
         # Add voucher and rate line (unchanged)
         voucher_str = str(voucher_no).ljust(15)
@@ -272,31 +272,34 @@ class PrintManager:
             for item in regular_items:
                 reg_f+=item.get('fine',0.0); reg_w+=item.get('wage',0.0); reg_g+=item.get('gross',0.0); reg_p+=item.get('poly',0.0)
                 output.append(format_line(sno,item.get('fine',0.0),item.get('wage',0.0),item.get('gross',0.0),item.get('poly',0.0),item.get('item_name',''),item.get('purity',0.0),item.get('pieces',0),item.get('wage_rate',0.0))); sno+=1
-            output.append(sep_dash); output.append(format_totals_line(reg_f,reg_w,reg_g,reg_p)); output.append(sep_dash)
+            output.append(sep_dash); output.append(format_totals_line(reg_f,reg_w,reg_g,reg_p)); output.append(sep_eq) # Use equals after totals
 
         if silver_bar_items:
-            output.append(" "); sb_title="* * Silver Bars * *"; pad=(TOTAL_WIDTH-len(sb_title))//2; output.append(" "*pad+sb_title); output.append(sep_dash); output.append(header_line[:TOTAL_WIDTH]); output.append(sep_dash)
+            # output.append(" "); # REMOVED Blank line
+            sb_title="* * Silver Bars * *"; pad=(TOTAL_WIDTH-len(sb_title))//2; output.append(" "*pad+sb_title); output.append(sep_dash); output.append(header_line[:TOTAL_WIDTH]); output.append(sep_dash)
             sno=1;
             for item in silver_bar_items:
                 sb_f+=item.get('fine',0.0); sb_w+=item.get('wage',0.0); sb_g+=item.get('gross',0.0); sb_p+=item.get('poly',0.0)
                 output.append(format_line(sno,item.get('fine',0.0),item.get('wage',0.0),item.get('gross',0.0),item.get('poly',0.0),item.get('item_name',''),item.get('purity',0.0),0,0)); sno+=1
-            output.append(sep_dash); output.append(format_totals_line(sb_f,sb_w,sb_g,sb_p)); output.append(sep_dash)
+            output.append(sep_dash); output.append(format_totals_line(sb_f,sb_w,sb_g,sb_p)); output.append(sep_eq) # Use equals after totals
 
         if return_goods:
-            output.append(" "); rg_title="* * Return Goods * *"; pad=(TOTAL_WIDTH-len(rg_title))//2; output.append(" "*pad+rg_title); output.append(sep_dash); output.append(header_line[:TOTAL_WIDTH]); output.append(sep_dash)
+            # output.append(" "); # REMOVED Blank line
+            rg_title="* * Return Goods * *"; pad=(TOTAL_WIDTH-len(rg_title))//2; output.append(" "*pad+rg_title); output.append(sep_dash); output.append(header_line[:TOTAL_WIDTH]); output.append(sep_dash)
             sno=1;
             for item in return_goods:
                 ret_gf+=item.get('fine',0.0); ret_gw+=item.get('wage',0.0); ret_gg+=item.get('gross',0.0); ret_gp+=item.get('poly',0.0)
                 output.append(format_line(sno,item.get('fine',0.0),item.get('wage',0.0),item.get('gross',0.0),item.get('poly',0.0),item.get('item_name',''),item.get('purity',0.0),item.get('pieces',0),item.get('wage_rate',0.0))); sno+=1
-            output.append(sep_dash); output.append(format_totals_line(ret_gf,ret_gw,ret_gg,ret_gp)); output.append(sep_dash)
+            output.append(sep_dash); output.append(format_totals_line(ret_gf,ret_gw,ret_gg,ret_gp)); output.append(sep_eq) # Use equals after totals
 
         if return_silver_bars:
-            output.append(" "); rsb_title="* * Return Silver Bar * *"; pad=(TOTAL_WIDTH-len(rsb_title))//2; output.append(" "*pad+rsb_title); output.append(sep_dash); output.append(header_line[:TOTAL_WIDTH]); output.append(sep_dash)
+            # output.append(" "); # REMOVED Blank line
+            rsb_title="* * Return Silver Bar * *"; pad=(TOTAL_WIDTH-len(rsb_title))//2; output.append(" "*pad+rsb_title); output.append(sep_dash); output.append(header_line[:TOTAL_WIDTH]); output.append(sep_dash)
             sno=1;
             for item in return_silver_bars:
                 ret_sf+=item.get('fine',0.0); ret_sw+=item.get('wage',0.0); ret_sg+=item.get('gross',0.0); ret_sp+=item.get('poly',0.0)
                 output.append(format_line(sno,item.get('fine',0.0),item.get('wage',0.0),item.get('gross',0.0),item.get('poly',0.0),item.get('item_name',''),item.get('purity',0.0),0,0)); sno+=1
-            output.append(sep_dash); output.append(format_totals_line(ret_sf,ret_sw,ret_sg,ret_sp)); output.append(sep_dash)
+            output.append(sep_dash); output.append(format_totals_line(ret_sf,ret_sw,ret_sg,ret_sp)); output.append(sep_eq) # Use equals after totals
         
         # Get last balance values if they exist
         last_balance_silver = header.get('last_balance_silver', 0.0)
@@ -304,7 +307,7 @@ class PrintManager:
         
         # Add last balance section if it exists (before final section)
         if last_balance_silver > 0 or last_balance_amount > 0:
-            output.append(" ")
+            # output.append(" ") # REMOVED Blank line
             lb_title = "* * Last Balance * *"
             lb_pad = (TOTAL_WIDTH - len(lb_title)) // 2
             output.append(" " * lb_pad + lb_title)
@@ -316,7 +319,8 @@ class PrintManager:
             output.append(" " * lb_pad + lb_str)
             output.append(sep_dash)
 
-        output.append(" "); final_title="Final Silver & Amount"; pad=(TOTAL_WIDTH-len(final_title))//2; output.append(" "*pad+final_title); output.append(sep_eq)
+        # output.append(" "); # REMOVED Blank line
+        final_title="Final Silver & Amount"; pad=(TOTAL_WIDTH-len(final_title))//2; output.append(" "*pad+final_title); output.append(sep_eq)
         # Calculate net values
         net_fine = reg_f - sb_f - ret_gf - ret_sf
         
@@ -355,12 +359,20 @@ class PrintManager:
         total_pad = total_display.rjust(tfw)
         scost_pad = scost_display.rjust(scfw)
 
-        part1_len=W_SNO+S+W_FINE+S+W_LABOUR
-        space_before=TOTAL_WIDTH - part1_len - len(scost_pad) - len(total_pad) - 2
-        pad_after_labour=max(1, space_before - 1); pad_between=1
-        final_line = f"{' '*(W_SNO+S)}{fine_str} {wage_str}" + (" "*pad_after_labour) + scost_pad + (" "*pad_between) + total_pad
+        # Construct the final line conditionally based on silver_rate
+        if silver_rate > 0:
+            part1_len=W_SNO+S+W_FINE+S+W_LABOUR
+            space_before=TOTAL_WIDTH - part1_len - len(scost_pad) - len(total_pad) - 2
+            pad_after_labour=max(1, space_before - 1); pad_between=1
+            final_line = f"{' '*(W_SNO+S)}{fine_str} {wage_str}" + (" "*pad_after_labour) + scost_pad + (" "*pad_between) + total_pad
+        else:
+            # If silver rate is 0, only show Fine and Labour, omit S.Cost and Total
+            part1_len=W_SNO+S+W_FINE+S+W_LABOUR
+            remaining_space = TOTAL_WIDTH - part1_len
+            final_line = f"{' '*(W_SNO+S)}{fine_str} {wage_str}" + (" " * remaining_space)
+
         output.append(final_line[:TOTAL_WIDTH])
-        output.append(sep_eq); output.append(" ")
+        output.append(sep_eq); # output.append(" ") # REMOVED Blank line
         note = "Note :-  G O O D S   N O T   R E T U R N"; pad=(TOTAL_WIDTH-len(note))//2; output.append(" "*pad+note); output.append(" \f")
 
         html_content = "\n".join(output)

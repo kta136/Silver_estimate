@@ -532,42 +532,54 @@ class EstimateLogic:
         net_wage_calc = reg_wage - bar_wage - return_wage # Note: bar_wage is usually 0
         net_value_calc = net_fine_calc * silver_rate
         
-        # Add last balance to calculations
+        # Add last balance to net fine and net wage
         net_fine_with_lb = net_fine_calc + last_balance_silver
         net_wage_with_lb = net_wage_calc + last_balance_amount
-        
-        # Calculate values with last balance included
-        net_value_with_lb = net_fine_with_lb * silver_rate
-        
-        # Calculate Grand Total including last balance
-        grand_total_calc = net_value_with_lb + net_wage_with_lb
 
-        # Update UI labels
+        # Update UI labels for breakdown sections
         self.total_gross_label.setText(f"{reg_gross:.3f}")
         self.total_net_label.setText(f"{reg_net:.3f}")
         self.total_fine_label.setText(f"{reg_fine:.3f}")
-        self.fine_value_label.setText(f"{reg_fine_value:.2f}")
-        self.total_wage_label.setText(f"{reg_wage:.2f}")
+        # self.fine_value_label.setText(f"{reg_fine_value:.2f}") # Removed
+        # self.total_wage_label.setText(f"{reg_wage:.2f}") # Removed
+
         self.return_gross_label.setText(f"{return_gross:.3f}")
         self.return_net_label.setText(f"{return_net:.3f}")
         self.return_fine_label.setText(f"{return_fine:.3f}")
-        self.return_value_label.setText(f"{return_value:.2f}")
-        self.return_wage_label.setText(f"{return_wage:.2f}")
+        # self.return_value_label.setText(f"{return_value:.2f}") # Removed
+        # self.return_wage_label.setText(f"{return_wage:.2f}") # Removed
+
         self.bar_gross_label.setText(f"{bar_gross:.3f}")
         self.bar_net_label.setText(f"{bar_net:.3f}")
         self.bar_fine_label.setText(f"{bar_fine:.3f}")
-        self.bar_value_label.setText(f"{bar_value:.2f}")
-        self.net_fine_label.setText(f"{net_fine_calc:.3f}")
-        self.net_value_label.setText(f"{net_value_calc:.2f}")
-        self.net_wage_label.setText(f"{net_wage_calc:.2f}")
-        
-        # Display last balance if it exists
-        if last_balance_silver > 0 or last_balance_amount > 0:
-            self.net_fine_label.setText(f"{net_fine_calc:.3f} + {last_balance_silver:.3f} = {net_fine_with_lb:.3f}")
-            self.net_wage_label.setText(f"{net_wage_calc:.2f} + {last_balance_amount:.2f} = {net_wage_with_lb:.2f}")
-            self.net_value_label.setText(f"{net_value_with_lb:.2f}")
-        
-        self.grand_total_label.setText(f"{grand_total_calc:.2f}") # Update Grand Total label
+        # self.bar_value_label.setText(f"{bar_value:.2f}") # Removed
+
+        # Update Net Fine and Net Wage labels (conditionally showing breakdown if LB exists)
+        if last_balance_silver > 0:
+             self.net_fine_label.setText(f"{net_fine_calc:.3f} + {last_balance_silver:.3f} = {net_fine_with_lb:.3f}")
+        else:
+             self.net_fine_label.setText(f"{net_fine_calc:.3f}")
+
+        if last_balance_amount > 0:
+             self.net_wage_label.setText(f"{net_wage_calc:.2f} + {last_balance_amount:.2f} = {net_wage_with_lb:.2f}")
+        else:
+             self.net_wage_label.setText(f"{net_wage_calc:.2f}")
+
+        # Update Grand Total label based on silver rate
+        if silver_rate > 0:
+            net_value_with_lb = net_fine_with_lb * silver_rate
+            grand_total_calc = net_value_with_lb + net_wage_with_lb
+            self.grand_total_label.setText(f"₹ {grand_total_calc:.2f}")
+            # Ensure Net Value label exists before trying to set text (it was removed from UI setup)
+            if hasattr(self, 'net_value_label'):
+                 self.net_value_label.setText(f"{net_value_with_lb:.2f}") # Update Net Value if label exists
+        else:
+            # Format as "Fine g | Wage"
+            grand_total_text = f"{net_fine_with_lb:.3f} g | ₹ {net_wage_with_lb:.2f}"
+            self.grand_total_label.setText(grand_total_text)
+            # Clear Net Value if label exists
+            if hasattr(self, 'net_value_label'):
+                 self.net_value_label.setText("") # Clear Net Value when rate is 0
 
 
     def generate_voucher(self):

@@ -101,6 +101,22 @@ This app is designed for silver shops to:
 - **Silver Bar Management:** Remains directly accessible under "Tools -> Silver Bar Management".
 
 ---
+### 🔒 Security Features (v1.70+)
+
+-   **Password Authentication:** The application requires password authentication upon startup.
+    -   **First Run:** Users are prompted to create a main password (for login) and a secondary password. Both passwords must be different.
+    -   **Subsequent Runs:** Users must enter their main password to access the application.
+-   **Password Hashing:** Passwords are not stored directly. Secure hashes (using the Argon2 algorithm via `passlib`) are generated and stored using the platform's standard settings mechanism (`QSettings`).
+-   **Database Encryption:** The main database file (`database/estimation.db`) is encrypted at rest using AES-GCM encryption (`cryptography` library).
+    -   The encryption key is derived from the user's main password and a unique, randomly generated salt (also stored securely via `QSettings`).
+    -   The database is decrypted into a temporary file only when the application is running and the correct main password has been provided. The temporary file is deleted upon closing the application.
+-   **Password Change:** Users can change both their main and secondary passwords via the "Security" tab in the "Settings" dialog. This requires entering the current main password for verification.
+    -   *Note:* Changing the main password requires an application restart for the new password to be used for database decryption.
+-   **Data Reset:** An explicit "Reset / Wipe All Data" button is available on the login screen.
+    -   This action requires confirmation due to its irreversible nature.
+    -   If confirmed, it permanently deletes the encrypted database file and all stored security settings (password hashes, encryption salt), effectively resetting the application to its first-run state.
+
+---
 
 ## 🛠️ Tech Stack
 

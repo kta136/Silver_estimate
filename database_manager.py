@@ -1,42 +1,263 @@
 #!/usr/bin/env python
 import os
 import sqlite3
+import tempfile # For temporary decrypted DB file
+import traceback
+import base64 # For encoding/decoding salt
+import hashlib # For KDF
 from datetime import datetime
-import traceback # For detailed error logging
+from PyQt5.QtCore import QSettings # To store/retrieve salt
+
+# Cryptography imports
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.backends import default_backend
+from cryptography.exceptions import InvalidTag # To catch decryption errors
+
+# Constants
+SALT_KEY = "security/db_salt" # QSettings key for the salt
+KDF_ITERATIONS = 100000 # Number of iterations for PBKDF2
 
 class DatabaseManager:
-    """Manages SQLite database operations for the Silver Estimation App."""
+    """
+    Manages SQLite database operations for the Silver Estimation App,
+    including file-level encryption/decryption.
+    """
 
-    def __init__(self, db_path):
-        """Initialize the database manager with the path to the database file."""
-        self.db_path = db_path
-        # Ensure directory exists
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
-        # Connect and enable Foreign Keys
-        self.conn = sqlite3.connect(db_path)
-        self.conn.execute("PRAGMA foreign_keys = ON")
-        self.conn.row_factory = sqlite3.Row
-        self.cursor = self.conn.cursor()
-        # Setup or update the database schema
-        self.setup_database()
+    def __init__(self, db_path, password):
+        """
+        Initialize the database manager. Decrypts the database to a temporary
+        file or creates a new encrypted database if it doesn't exist.
+        """
+        self.encrypted_db_path = db_path
+        self.password = password
+        self.salt = self._get_or_create_salt() # Get or create salt using QSettings
+        self.key = self._derive_key(self.password, self.salt)
+        self.temp_db_file = None # Will hold the temporary file object
+        self.temp_db_path = None # Will hold the temporary file path
+        self.conn = None
+        self.cursor = None
+
+        # Ensure directory for encrypted DB exists
+        os.makedirs(os.path.dirname(self.encrypted_db_path), exist_ok=True)
+
+        try:
+            # Create a temporary file for the decrypted database
+            # delete=False is crucial as sqlite3 needs a path, not an open file handle initially
+            self.temp_db_file = tempfile.NamedTemporaryFile(delete=False, suffix=".sqlite")
+            self.temp_db_path = self.temp_db_file.name
+            self.temp_db_file.close() # Close the handle, we just need the path
+
+            print(f"Using temporary database at: {self.temp_db_path}")
+
+            # Attempt to decrypt the existing database
+            decryption_result = self._decrypt_db()
+
+            if decryption_result == 'success':
+                print("Database decrypted successfully.")
+                self._connect_temp_db()
+                # Schema setup/migration should still run even on existing DB
+                self.setup_database()
+            elif decryption_result == 'first_run':
+                print("Encrypted database not found or empty. Initializing new database.")
+                # Salt was created by _get_or_create_salt
+                self._connect_temp_db()
+                self.setup_database() # Setup schema on the new temp DB
+                # No need to encrypt immediately, will happen on close()
+            else: # Decryption failed
+                raise Exception("Database decryption failed. Incorrect password or corrupted file.")
+
+        except Exception as e:
+            print(f"FATAL: Failed to initialize DatabaseManager: {e}")
+            print(traceback.format_exc())
+            # Cleanup temp file if created
+            self._cleanup_temp_db()
+            self.conn = None # Ensure connection is None on failure
+            raise # Re-raise the exception to halt application startup
+
+    def _connect_temp_db(self):
+        """Connects sqlite3 to the temporary database file."""
+        if not self.temp_db_path:
+             raise Exception("Temporary database path not set.")
+        try:
+            self.conn = sqlite3.connect(self.temp_db_path)
+            self.conn.execute("PRAGMA foreign_keys = ON")
+            self.conn.row_factory = sqlite3.Row
+            self.cursor = self.conn.cursor()
+            print("Connected to temporary database.")
+        except sqlite3.Error as e:
+            print(f"Failed to connect to temporary database: {e}")
+            self.conn = None
+            self.cursor = None
+            raise
+
+    def _get_or_create_salt(self):
+        """Retrieves the salt from QSettings or creates and saves a new one."""
+        settings = QSettings("YourCompany", "SilverEstimateApp")
+        salt_b64 = settings.value(SALT_KEY)
+        if salt_b64:
+            try:
+                print("Retrieved existing salt from settings.")
+                return base64.b64decode(salt_b64)
+            except Exception as e:
+                 print(f"Warning: Failed to decode stored salt: {e}. Generating new salt.")
+                 # Fall through to generate new salt if decoding fails
+
+        # Generate, save, and return a new salt
+        print("Generating new salt and saving to settings.")
+        new_salt = os.urandom(16) # 16 bytes salt
+        settings.setValue(SALT_KEY, base64.b64encode(new_salt).decode('utf-8'))
+        settings.sync()
+        return new_salt
+
+    def _derive_key(self, password, salt):
+        """Derives a 32-byte AES key from the password and salt using PBKDF2HMAC."""
+        if not password:
+            raise ValueError("Password cannot be empty for key derivation.")
+        if not salt:
+             raise ValueError("Salt cannot be empty for key derivation.")
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32, # AES-256 key length
+            salt=salt,
+            iterations=KDF_ITERATIONS,
+            backend=default_backend()
+        )
+        key = kdf.derive(password.encode('utf-8'))
+        print("Encryption key derived.")
+        return key
+
+    def _encrypt_db(self):
+        """Encrypts the temporary DB file and saves it to the original path."""
+        if not self.conn or not self.temp_db_path or not os.path.exists(self.temp_db_path):
+            print("Encryption skipped: No active connection or temporary DB file.")
+            return False
+        if not self.key:
+             print("Encryption skipped: No encryption key available.")
+             return False
+
+        print(f"Encrypting temporary DB '{self.temp_db_path}' to '{self.encrypted_db_path}'...")
+        try:
+            aesgcm = AESGCM(self.key)
+            nonce = os.urandom(12) # AES-GCM recommended nonce size
+
+            with open(self.temp_db_path, 'rb') as f_in, open(self.encrypted_db_path, 'wb') as f_out:
+                plaintext = f_in.read()
+                if not plaintext:
+                    print("Warning: Temporary database file is empty. Writing empty encrypted file.")
+                    # Write nonce even for empty file to maintain structure
+                    f_out.write(nonce)
+                    # No ciphertext or tag needed
+                    return True
+
+                ciphertext = aesgcm.encrypt(nonce, plaintext, None) # No associated data
+
+                # Write nonce first, then ciphertext (which includes the tag)
+                f_out.write(nonce)
+                f_out.write(ciphertext)
+            print("Encryption successful.")
+            return True
+        except Exception as e:
+            print(f"Error during database encryption: {e}")
+            print(traceback.format_exc())
+            # Attempt to delete potentially corrupted encrypted file
+            try:
+                if os.path.exists(self.encrypted_db_path):
+                    os.remove(self.encrypted_db_path)
+            except OSError as oe:
+                 print(f"Warning: Could not delete potentially corrupted encrypted file '{self.encrypted_db_path}': {oe}")
+            return False
+
+    def _decrypt_db(self):
+        """Decrypts the database file to the temporary path. Returns status."""
+        if not os.path.exists(self.encrypted_db_path):
+            print("Encrypted database file not found.")
+            return 'first_run'
+        if os.path.getsize(self.encrypted_db_path) <= 12: # Nonce size is 12
+             print("Encrypted database file is empty or too small.")
+             # Treat as first run, existing empty/corrupt file will be overwritten on close.
+             return 'first_run'
+        if not self.key:
+             print("Decryption skipped: No encryption key available.")
+             return 'error'
+
+        print(f"Decrypting '{self.encrypted_db_path}' to temporary DB '{self.temp_db_path}'...")
+        try:
+            aesgcm = AESGCM(self.key)
+            with open(self.encrypted_db_path, 'rb') as f_in, open(self.temp_db_path, 'wb') as f_out:
+                nonce = f_in.read(12) # Read the 12-byte nonce
+                ciphertext = f_in.read() # Read the rest (ciphertext + tag)
+
+                if not nonce or len(nonce) != 12:
+                     raise ValueError("Invalid encrypted file format: Nonce missing or incorrect size.")
+                if not ciphertext:
+                     raise ValueError("Invalid encrypted file format: Ciphertext missing.")
+
+                plaintext = aesgcm.decrypt(nonce, ciphertext, None)
+                f_out.write(plaintext)
+            return 'success'
+        except InvalidTag:
+            print("Decryption failed: Invalid password or corrupted data (InvalidTag).")
+            # Clean up potentially partially written temp file
+            self._cleanup_temp_db(keep_file=True) # Keep the empty file handle, just clear content
+            return 'error'
+        except Exception as e:
+            print(f"Error during database decryption: {e}")
+            print(traceback.format_exc())
+            # Clean up potentially partially written temp file
+            self._cleanup_temp_db(keep_file=True)
+            return 'error'
+
+    def _cleanup_temp_db(self, keep_file=False):
+         """Safely deletes the temporary database file."""
+         path_to_delete = self.temp_db_path
+         if path_to_delete and os.path.exists(path_to_delete):
+              try:
+                   print(f"Cleaning up temporary database: {path_to_delete}")
+                   os.remove(path_to_delete)
+                   if not keep_file:
+                        self.temp_db_path = None
+                        self.temp_db_file = None
+              except OSError as e:
+                   print(f"Warning: Could not delete temporary database file '{path_to_delete}': {e}")
+         elif not keep_file:
+              self.temp_db_path = None
+              self.temp_db_file = None
+
 
     def _table_exists(self, table_name):
         """Check if a table exists in the database."""
+        if not self.cursor: return False # Handle case where connection failed
         self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
         return self.cursor.fetchone() is not None
 
     def _column_exists(self, table_name, column_name):
         """Check if a column exists in a table."""
+        if not self.cursor: return False
         if not self._table_exists(table_name):
             return False
-        self.cursor.execute(f"PRAGMA table_info({table_name})")
-        return any(col['name'] == column_name for col in self.cursor.fetchall())
+        try:
+            self.cursor.execute(f"PRAGMA table_info({table_name})")
+            return any(col['name'] == column_name for col in self.cursor.fetchall())
+        except sqlite3.Error as e:
+             print(f"Error checking column {table_name}.{column_name}: {e}")
+             return False
 
     def _is_column_unique(self, table_name, column_name):
         """Check if a column has a UNIQUE constraint (via implicit index)."""
+        if not self.cursor: return False
         if not self._column_exists(table_name, column_name):
             return False
         try:
+            # Check UNIQUE constraints defined directly on the column
+            self.cursor.execute(f"PRAGMA table_info({table_name})")
+            columns_info = self.cursor.fetchall()
+            for col in columns_info:
+                if col['name'] == column_name and col['unique'] == 1: # Check the 'unique' flag from table_info
+                    return True
+
+            # Check separate UNIQUE indexes
             self.cursor.execute(f"PRAGMA index_list({table_name})")
             indexes = self.cursor.fetchall()
             for index in indexes:
@@ -52,11 +273,12 @@ class DatabaseManager:
 
     def _check_schema_version(self):
         """Check if the database has the schema version table and current version."""
+        if not self.cursor: return 0 # Assume version 0 if no connection
         try:
             # Check if schema_version table exists
-            self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'")
-            if not self.cursor.fetchone():
+            if not self._table_exists('schema_version'):
                 # Create schema_version table if it doesn't exist
+                print("Creating schema_version table...")
                 self.cursor.execute('''
                     CREATE TABLE schema_version (
                         id INTEGER PRIMARY KEY,
@@ -70,9 +292,10 @@ class DatabaseManager:
                     VALUES (0, ?)
                 ''', (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
                 self.conn.commit()
+                print("Initialized schema version to 0.")
                 return 0
             else:
-                # Get current version
+                # Get current version if table exists
                 self.cursor.execute("SELECT MAX(version) FROM schema_version")
                 result = self.cursor.fetchone()
                 return result[0] if result[0] is not None else 0
@@ -82,6 +305,7 @@ class DatabaseManager:
 
     def _update_schema_version(self, new_version):
         """Update the schema version in the database."""
+        if not self.cursor: return False
         try:
             self.cursor.execute('''
                 INSERT INTO schema_version (version, applied_date)
@@ -96,7 +320,11 @@ class DatabaseManager:
             return False
 
     def setup_database(self):
-        """Create/update the necessary tables for the Silver Bar Management Overhaul."""
+        """Create/update the necessary tables in the temporary database."""
+        if not self.conn or not self.cursor:
+            print("Database setup skipped: No active connection.")
+            return
+
         print("Starting database setup check...")
         try:
             # Check current schema version
@@ -258,34 +486,42 @@ class DatabaseManager:
             raise e  # Re-raise critical error
 
     # --- Item Methods ---
+    # Add connection checks to all data access methods
     def get_item_by_code(self, code):
+        if not self.cursor: return None
         try: self.cursor.execute('SELECT * FROM items WHERE LOWER(code) = LOWER(?)', (code,)); return self.cursor.fetchone()
         except sqlite3.Error as e: print(f"DB Error get_item_by_code: {e}"); return None
 
     def search_items(self, search_term):
+        if not self.cursor: return []
         try:
             search_pattern = f"%{search_term}%"
             self.cursor.execute('SELECT * FROM items WHERE LOWER(code) LIKE LOWER(?) OR LOWER(name) LIKE LOWER(?) ORDER BY code', (search_pattern, search_pattern)); return self.cursor.fetchall()
         except sqlite3.Error as e: print(f"DB Error search_items: {e}"); return []
 
     def get_all_items(self):
+        if not self.cursor: return []
         try: self.cursor.execute('SELECT * FROM items ORDER BY code'); return self.cursor.fetchall()
         except sqlite3.Error as e: print(f"DB Error get_all_items: {e}"); return []
 
     def add_item(self, code, name, purity, wage_type, wage_rate):
+        if not self.conn or not self.cursor: return False
         try: self.cursor.execute('INSERT INTO items (code, name, purity, wage_type, wage_rate) VALUES (?, ?, ?, ?, ?)', (code, name, purity, wage_type, wage_rate)); self.conn.commit(); return True
         except sqlite3.Error as e: print(f"DB Error adding item: {e}"); self.conn.rollback(); return False
 
     def update_item(self, code, name, purity, wage_type, wage_rate):
+        if not self.conn or not self.cursor: return False
         try: self.cursor.execute('UPDATE items SET name = ?, purity = ?, wage_type = ?, wage_rate = ? WHERE code = ?', (name, purity, wage_type, wage_rate, code)); self.conn.commit(); return self.cursor.rowcount > 0
         except sqlite3.Error as e: print(f"DB Error updating item: {e}"); self.conn.rollback(); return False
 
     def delete_item(self, code):
+        if not self.conn or not self.cursor: return False
         try: self.cursor.execute('DELETE FROM items WHERE code = ?', (code,)); self.conn.commit(); return self.cursor.rowcount > 0
         except sqlite3.Error as e: print(f"DB Error deleting item: {e}"); self.conn.rollback(); return False
 
     # --- Estimate Methods ---
     def get_estimate_by_voucher(self, voucher_no):
+        if not self.cursor: return None
         try:
             self.cursor.execute('SELECT * FROM estimates WHERE voucher_no = ?', (voucher_no,))
             estimate = self.cursor.fetchone()
@@ -298,6 +534,7 @@ class DatabaseManager:
 
     def get_estimates(self, date_from=None, date_to=None, voucher_search=None):
         """Fetches estimate headers and their associated items based on filters."""
+        if not self.cursor: return []
         query = "SELECT * FROM estimates WHERE 1=1"; params = []
         if date_from: query += " AND date >= ?"; params.append(date_from)
         if date_to: query += " AND date <= ?"; params.append(date_to)
@@ -319,6 +556,7 @@ class DatabaseManager:
 
     def generate_voucher_no(self):
         """Generates the next sequential voucher number (simple integer increment)."""
+        if not self.cursor: return f"ERR{datetime.now().strftime('%Y%m%d%H%M%S')}" # Error if no cursor
         next_voucher_no = 1
         try:
             # Find the highest existing numeric voucher number
@@ -339,9 +577,10 @@ class DatabaseManager:
             return f"ERR{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
     def save_estimate_with_returns(self, voucher_no, date, silver_rate, regular_items, return_items, totals):
+        if not self.conn or not self.cursor: return False
         try:
             self.conn.execute('BEGIN TRANSACTION')
-            
+
             # Check if estimate exists
             self.cursor.execute('SELECT 1 FROM estimates WHERE voucher_no = ?', (voucher_no,))
             estimate_exists = self.cursor.fetchone() is not None
@@ -399,14 +638,17 @@ class DatabaseManager:
     def _save_estimate_item(self, voucher_no, item):
         is_return = 1 if item.get('is_return', False) else 0
         is_silver_bar = 1 if item.get('is_silver_bar', False) else 0
+        if not self.cursor: raise sqlite3.Error("No database cursor available.")
         try:
             self.cursor.execute('INSERT INTO estimate_items (voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage, fine, is_return, is_silver_bar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                                 (voucher_no, item.get('code', ''), item.get('name', ''), float(item.get('gross', 0.0)), float(item.get('poly', 0.0)), float(item.get('net_wt', 0.0)), float(item.get('purity', 0.0)), float(item.get('wage_rate', 0.0)), int(item.get('pieces', 1)), float(item.get('wage', 0.0)), float(item.get('fine', 0.0)), is_return, is_silver_bar))
         except (ValueError, TypeError) as e: print(f"Data type error saving item for voucher {voucher_no}, code {item.get('code')}: {e}"); raise e # Re-raise to trigger transaction rollback
+        except sqlite3.Error as e: print(f"DB error saving item for voucher {voucher_no}, code {item.get('code')}: {e}"); raise e # Re-raise
 
     # --- Methods for Silver Bar Lists (Overhauled) ---
     def _generate_list_identifier(self):
         """Generates a unique identifier for a new list."""
+        if not self.cursor: return f"ERR-L-{datetime.now().strftime('%Y%m%d%H%M%S')}"
         today_str = datetime.now().strftime('%Y%m%d'); seq = 1
         try:
             # Use the new table name
@@ -420,6 +662,7 @@ class DatabaseManager:
 
     def create_silver_bar_list(self, note=None):
         """Creates a new, empty silver bar list."""
+        if not self.conn or not self.cursor: return None
         creation_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         list_identifier = self._generate_list_identifier()
         try:
@@ -436,6 +679,7 @@ class DatabaseManager:
 
     def get_silver_bar_lists(self):
         """Fetches all silver bar lists (identifier and ID)."""
+        if not self.cursor: return []
         try:
             self.cursor.execute('SELECT list_id, list_identifier, creation_date, list_note FROM silver_bar_lists ORDER BY creation_date DESC')
             return self.cursor.fetchall() # Return list of Row objects
@@ -445,6 +689,7 @@ class DatabaseManager:
 
     def get_silver_bar_list_details(self, list_id):
         """Fetches details for a specific list ID."""
+        if not self.cursor: return None
         try:
             self.cursor.execute('SELECT * FROM silver_bar_lists WHERE list_id = ?', (list_id,))
             return self.cursor.fetchone() # Return single Row object or None
@@ -454,6 +699,7 @@ class DatabaseManager:
 
     def update_silver_bar_list_note(self, list_id, new_note):
         """Updates the note for a specific list."""
+        if not self.conn or not self.cursor: return False
         try:
             self.cursor.execute('UPDATE silver_bar_lists SET list_note = ? WHERE list_id = ?', (new_note, list_id))
             self.conn.commit()
@@ -465,6 +711,7 @@ class DatabaseManager:
 
     def delete_silver_bar_list(self, list_id):
         """Deletes a list and unassigns/updates status of associated bars."""
+        if not self.conn or not self.cursor: return False, "No database connection"
         try:
             self.conn.execute('BEGIN TRANSACTION')
             # Find bars currently assigned to this list
@@ -497,6 +744,7 @@ class DatabaseManager:
 
     def assign_bar_to_list(self, bar_id, list_id, note="Assigned to list", perform_commit=True):
         """Assigns an 'In Stock' bar to a list and updates status."""
+        if not self.conn or not self.cursor: return False
         date_assigned = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         from_status, to_status = 'In Stock', 'Assigned'
         transfer_no = f"ASSIGN-{bar_id}-{list_id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -533,6 +781,7 @@ class DatabaseManager:
 
     def remove_bar_from_list(self, bar_id, note="Removed from list", perform_commit=True):
         """Removes a bar from its list, sets status to 'In Stock'."""
+        if not self.conn or not self.cursor: return False
         date_removed = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         from_status, to_status = 'Assigned', 'In Stock'
         transfer_no = f"REMOVE-{bar_id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -564,6 +813,7 @@ class DatabaseManager:
 
     def get_bars_in_list(self, list_id):
         """Fetches all bars assigned to a specific list."""
+        if not self.cursor: return []
         try:
             self.cursor.execute("SELECT * FROM silver_bars WHERE list_id = ? ORDER BY bar_id", (list_id,))
             return self.cursor.fetchall()
@@ -573,6 +823,7 @@ class DatabaseManager:
 
     def get_available_bars(self):
         """Fetches all bars with status 'In Stock' and not assigned to any list."""
+        if not self.cursor: return []
         try:
             self.cursor.execute("SELECT * FROM silver_bars WHERE status = 'In Stock' AND list_id IS NULL ORDER BY date_added DESC, bar_id DESC")
             return self.cursor.fetchall()
@@ -583,6 +834,7 @@ class DatabaseManager:
     # --- Silver Bar Methods (Overhauled) ---
     def add_silver_bar(self, estimate_voucher_no, weight, purity):
         """Adds a new silver bar record linked to an estimate."""
+        if not self.conn or not self.cursor: return None
         date_added = datetime.now().strftime('%Y-%m-%d %H:%M:%S') # Use timestamp for potential sorting
         fine_weight = weight * (purity / 100)
         try:
@@ -600,6 +852,7 @@ class DatabaseManager:
 
     def get_silver_bars(self, status=None, weight_query=None, estimate_voucher_no=None):
         """Fetches silver bars based on optional filters."""
+        if not self.cursor: return []
         query = "SELECT * FROM silver_bars WHERE 1=1"
         params = []
         if status:
@@ -655,6 +908,7 @@ class DatabaseManager:
 
     def delete_all_estimates(self):
         """Deletes all records from estimates and estimate_items tables."""
+        if not self.conn or not self.cursor: return False
         try:
             self.conn.execute('BEGIN TRANSACTION')
             # Delete items first due to foreign key constraint (if ON DELETE CASCADE isn't used/reliable)
@@ -672,12 +926,13 @@ class DatabaseManager:
 
     def delete_single_estimate(self, voucher_no):
         """Deletes a specific estimate, its items, and all associated silver bars."""
+        if not self.conn or not self.cursor: return False
         if not voucher_no:
             print("Error: No voucher number provided for deletion.")
             return False
         try:
             self.conn.execute('BEGIN TRANSACTION')
-            
+
             # First, find all silver bars associated with this estimate
             self.cursor.execute("SELECT bar_id, list_id FROM silver_bars WHERE estimate_voucher_no = ?", (voucher_no,))
             bars = self.cursor.fetchall()
@@ -729,12 +984,49 @@ class DatabaseManager:
 
     # --- Utility Methods ---
     def drop_tables(self):
-        tables = ['estimate_items', 'estimates', 'items', 'bar_transfers', 'silver_bars', 'silver_bar_lists']
+        """Drops all known application tables from the temporary database."""
+        if not self.conn or not self.cursor: return False
+        # Added schema_version to the list
+        tables = ['estimate_items', 'estimates', 'items', 'bar_transfers', 'silver_bars', 'silver_bar_lists', 'schema_version']
         try:
             self.conn.execute('BEGIN TRANSACTION')
-            for table in tables: print(f"Dropping table {table}..."); self.cursor.execute(f'DROP TABLE IF EXISTS {table}')
-            self.conn.commit(); print("All tables dropped successfully."); return True
-        except sqlite3.Error as e: self.conn.rollback(); print(f"DB error dropping tables: {e}"); return False
+            for table in tables:
+                print(f"Dropping table {table}...")
+                self.cursor.execute(f'DROP TABLE IF EXISTS {table}')
+            self.conn.commit()
+            print("All application tables dropped successfully from temporary DB.")
+            return True
+        except sqlite3.Error as e:
+            self.conn.rollback()
+            print(f"DB error dropping tables: {e}")
+            return False
 
     def close(self):
-        if self.conn: self.conn.close(); print("Database connection closed.")
+        """Encrypts the temporary DB, closes the connection, and cleans up."""
+        if self.conn:
+            print("Closing database connection and encrypting data...")
+            # Encrypt the current temporary DB back to the original file
+            encrypt_success = self._encrypt_db()
+            if encrypt_success:
+                 print("Temporary database encrypted successfully.")
+            else:
+                 # This is critical - data might be lost if encryption fails!
+                 # Keep the temp file for potential manual recovery?
+                 print("CRITICAL WARNING: Failed to encrypt database on close!")
+                 print(f"The unencrypted data might still be in: {self.temp_db_path}")
+                 # Decide on recovery strategy - maybe don't delete temp file on failure?
+                 # For now, we proceed to close and cleanup, but log the error prominently.
+
+            # Close the connection to the temporary DB
+            try:
+                self.conn.close()
+                self.conn = None
+                self.cursor = None
+                print("Database connection closed.")
+            except sqlite3.Error as e:
+                 print(f"Error closing SQLite connection: {e}")
+        else:
+             print("No active database connection to close.")
+
+        # Clean up the temporary file regardless of encryption success (unless we change strategy above)
+        self._cleanup_temp_db()

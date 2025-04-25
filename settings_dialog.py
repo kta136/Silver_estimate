@@ -1,12 +1,14 @@
 #!/usr/bin/env python
-from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QDialogButtonBox, QGridLayout, # Added QGridLayout
-                             QFormLayout, QLabel, QPushButton, QSpinBox, QFontDialog, QMessageBox, QDoubleSpinBox) # Added QDoubleSpinBox
+from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QDialogButtonBox, QGridLayout,
+                             QFormLayout, QLabel, QPushButton, QSpinBox, QFontDialog, QMessageBox, QDoubleSpinBox,
+                             QLineEdit, QGroupBox) # Added QLineEdit, QGroupBox
 from PyQt5.QtCore import Qt, QSettings, pyqtSignal
 from PyQt5.QtGui import QFont
 
-# Import dependent dialogs (initially)
+# Import dependent dialogs and modules
 from custom_font_dialog import CustomFontDialog
 from table_font_size_dialog import TableFontSizeDialog
+from login_dialog import LoginDialog # Needed for password verification/hashing
 
 class SettingsDialog(QDialog):
     """Centralized dialog for application settings."""
@@ -35,6 +37,7 @@ class SettingsDialog(QDialog):
         # self.tabs.addTab(self._create_business_tab(), "Business Logic") # Placeholder
         self.tabs.addTab(self._create_print_tab(), "Printing") # Add Printing tab
         self.tabs.addTab(self._create_data_tab(), "Data Management") # Add Data tab
+        self.tabs.addTab(self._create_security_tab(), "Security") # Add Security tab
 
         # Buttons
         # Add Help button later if needed
@@ -164,6 +167,53 @@ class SettingsDialog(QDialog):
         widget.setLayout(layout)
         return widget
 
+    def _create_security_tab(self):
+        """Create the Security settings tab (Password Management)."""
+        widget = QWidget()
+        main_layout = QVBoxLayout(widget)
+        main_layout.setSpacing(15)
+
+        # --- Change Password Group ---
+        password_group = QGroupBox("Change Passwords")
+        group_layout = QFormLayout(password_group)
+        group_layout.setSpacing(10)
+
+        self.current_password_input = QLineEdit()
+        self.current_password_input.setEchoMode(QLineEdit.Password)
+        self.current_password_input.setPlaceholderText("Enter your current main password")
+        group_layout.addRow("Current Password:", self.current_password_input)
+
+        self.new_password_input = QLineEdit()
+        self.new_password_input.setEchoMode(QLineEdit.Password)
+        self.new_password_input.setPlaceholderText("Enter new main password")
+        group_layout.addRow("New Main Password:", self.new_password_input)
+
+        self.confirm_new_password_input = QLineEdit()
+        self.confirm_new_password_input.setEchoMode(QLineEdit.Password)
+        self.confirm_new_password_input.setPlaceholderText("Confirm new main password")
+        group_layout.addRow("Confirm New Main:", self.confirm_new_password_input)
+
+        group_layout.addRow(QLabel("-" * 40)) # Separator
+
+        self.new_secondary_password_input = QLineEdit()
+        self.new_secondary_password_input.setEchoMode(QLineEdit.Password)
+        self.new_secondary_password_input.setPlaceholderText("Enter new secondary password")
+        group_layout.addRow("New Secondary Password:", self.new_secondary_password_input)
+
+        self.confirm_new_secondary_password_input = QLineEdit()
+        self.confirm_new_secondary_password_input.setEchoMode(QLineEdit.Password)
+        self.confirm_new_secondary_password_input.setPlaceholderText("Confirm new secondary password")
+        group_layout.addRow("Confirm New Secondary:", self.confirm_new_secondary_password_input)
+
+        self.change_password_button = QPushButton("Change Passwords")
+        self.change_password_button.clicked.connect(self._handle_password_change)
+        group_layout.addRow("", self.change_password_button) # Add button without label
+
+        main_layout.addWidget(password_group)
+        main_layout.addStretch()
+
+        return widget
+
     # --- Helper Methods ---
 
     def _get_font_display_text(self, font):
@@ -275,9 +325,90 @@ class SettingsDialog(QDialog):
             print(f"Error applying settings: {traceback.format_exc()}")
 
 
+    def _handle_password_change(self):
+        """Handle the logic for changing both passwords."""
+        current_password = self.current_password_input.text()
+        new_main_pw = self.new_password_input.text()
+        confirm_main_pw = self.confirm_new_password_input.text()
+        new_secondary_pw = self.new_secondary_password_input.text()
+        confirm_secondary_pw = self.confirm_new_secondary_password_input.text()
+
+        # 1. Validate Current Password
+        stored_main_hash = self.settings.value("security/password_hash")
+        if not stored_main_hash or not LoginDialog.verify_password(stored_main_hash, current_password):
+            QMessageBox.warning(self, "Password Change Failed", "Incorrect current password.")
+            self.current_password_input.clear() # Clear field on error
+            self.current_password_input.setFocus()
+            return
+
+        # 2. Validate New Main Password
+        if not new_main_pw:
+            QMessageBox.warning(self, "Password Change Failed", "New main password cannot be empty.")
+            self.new_password_input.setFocus()
+            return
+        if new_main_pw != confirm_main_pw:
+            QMessageBox.warning(self, "Password Change Failed", "New main passwords do not match.")
+            self.confirm_new_password_input.clear()
+            self.confirm_new_password_input.setFocus()
+            return
+
+        # 3. Validate New Secondary Password
+        if not new_secondary_pw:
+            QMessageBox.warning(self, "Password Change Failed", "New secondary password cannot be empty.")
+            self.new_secondary_password_input.setFocus()
+            return
+        if new_secondary_pw != confirm_secondary_pw:
+            QMessageBox.warning(self, "Password Change Failed", "New secondary passwords do not match.")
+            self.confirm_new_secondary_password_input.clear()
+            self.confirm_new_secondary_password_input.setFocus()
+            return
+
+        # 4. Validate Main vs Secondary
+        if new_main_pw == new_secondary_pw:
+            QMessageBox.warning(self, "Password Change Failed", "New main and secondary passwords must be different.")
+            self.new_secondary_password_input.setFocus()
+            return
+
+        # 5. Hash New Passwords
+        new_main_hash = LoginDialog.hash_password(new_main_pw)
+        new_secondary_hash = LoginDialog.hash_password(new_secondary_pw)
+
+        if not new_main_hash or not new_secondary_hash:
+             QMessageBox.critical(self, "Password Change Error", "Failed to hash new passwords. Cannot save.")
+             return
+
+        # 6. Save New Hashes to QSettings
+        try:
+            self.settings.setValue("security/password_hash", new_main_hash)
+            self.settings.setValue("security/backup_hash", new_secondary_hash) # Still use backup_hash key internally
+            self.settings.sync()
+
+            QMessageBox.information(self, "Success", "Passwords changed successfully.")
+            # Clear fields after success
+            self.current_password_input.clear()
+            self.new_password_input.clear()
+            self.confirm_new_password_input.clear()
+            self.new_secondary_password_input.clear()
+            self.confirm_new_secondary_password_input.clear()
+
+            # Note: The database encryption key is derived from the *main* password.
+            # If the main password changes, the user will need to use the *new* main password
+            # the next time they start the application to decrypt the database.
+            # The DatabaseManager needs to be re-initialized with the new password if the app continues running.
+            # This is complex. A simpler approach might be to require an app restart after password change.
+            QMessageBox.information(self, "Restart Required", "Please restart the application for the new main password to take effect for database access.")
+
+
+        except Exception as e:
+             QMessageBox.critical(self, "Password Change Error", f"Failed to save new password settings: {e}")
+             print(f"Error saving new password hashes: {traceback.format_exc()}")
+
+
     def accept(self):
         """Apply settings and close the dialog."""
+        # Apply non-password settings first
         self.apply_settings()
+        # Password changes are handled separately by the button click
         super().accept()
 
     def reject(self):

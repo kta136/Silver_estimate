@@ -1,7 +1,8 @@
 #!/usr/bin/env python
+import traceback # Import traceback for error logging
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QDialogButtonBox, QGridLayout,
                              QFormLayout, QLabel, QPushButton, QSpinBox, QFontDialog, QMessageBox, QDoubleSpinBox,
-                             QLineEdit, QGroupBox) # Added QLineEdit, QGroupBox
+                             QLineEdit, QGroupBox, QFileDialog) # Added QFileDialog
 from PyQt5.QtCore import Qt, QSettings, pyqtSignal
 from PyQt5.QtGui import QFont
 
@@ -9,6 +10,7 @@ from PyQt5.QtGui import QFont
 from custom_font_dialog import CustomFontDialog
 from table_font_size_dialog import TableFontSizeDialog
 from login_dialog import LoginDialog # Needed for password verification/hashing
+from item_export_manager import ItemExportManager # Import the new export manager
 
 class SettingsDialog(QDialog):
     """Centralized dialog for application settings."""
@@ -38,6 +40,7 @@ class SettingsDialog(QDialog):
         self.tabs.addTab(self._create_print_tab(), "Printing") # Add Printing tab
         self.tabs.addTab(self._create_data_tab(), "Data Management") # Add Data tab
         self.tabs.addTab(self._create_security_tab(), "Security") # Add Security tab
+        self.tabs.addTab(self._create_import_export_tab(), "Import/Export") # Add Import/Export tab
 
         # Buttons
         # Add Help button later if needed
@@ -166,6 +169,38 @@ class SettingsDialog(QDialog):
         layout.addStretch() # Push buttons up
         widget.setLayout(layout)
         return widget
+
+    def _create_import_export_tab(self):
+        """Create the Import/Export tab."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(15)
+
+        # Import Section
+        import_group = QGroupBox("Import Data")
+        import_layout = QVBoxLayout(import_group)
+
+        import_button = QPushButton("Import Item List...")
+        import_button.setToolTip("Import items from a text or CSV file.")
+        # Connect directly to the method already defined in MainWindow
+        import_button.clicked.connect(self.main_window.show_import_dialog)
+        import_layout.addWidget(import_button)
+        import_layout.addStretch() # Push button to top if more controls are added later
+        layout.addWidget(import_group)
+
+        # Export Section
+        export_group = QGroupBox("Export Data")
+        export_layout = QVBoxLayout(export_group)
+        export_button = QPushButton("Export Item List...")
+        export_button.setToolTip("Export all items to a pipe-delimited text file.")
+        export_button.clicked.connect(self._handle_export_items) # Connect to new handler
+        export_layout.addWidget(export_button)
+        export_layout.addStretch()
+        layout.addWidget(export_group)
+
+        layout.addStretch() # Push groups to the top
+        return widget
+
 
     def _create_security_tab(self):
         """Create the Security settings tab (Password Management)."""
@@ -403,6 +438,38 @@ class SettingsDialog(QDialog):
              QMessageBox.critical(self, "Password Change Error", f"Failed to save new password settings: {e}")
              print(f"Error saving new password hashes: {traceback.format_exc()}")
 
+    def _handle_export_items(self):
+        """Handle the Export Item List button click."""
+        if not self.main_window or not hasattr(self.main_window, 'db') or not self.main_window.db:
+             QMessageBox.warning(self, "Error", "Database connection not available.")
+             return
+
+        # Suggest a filename
+        default_filename = "item_list_export.txt"
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Item List As",
+            default_filename,
+            "Text Files (*.txt);;CSV Files (*.csv);;All Files (*)"
+        )
+
+        if not file_path:
+            return # User cancelled
+
+        # Create and run the exporter
+        exporter = ItemExportManager(self.main_window.db)
+        # Connect the finished signal to show feedback
+        exporter.export_finished.connect(self._on_export_finished)
+        # Disable button during export? Maybe not necessary for quick operation.
+        exporter.export_to_file(file_path)
+
+    def _on_export_finished(self, success, message):
+        """Show feedback message after export attempt."""
+        if success:
+            QMessageBox.information(self, "Export Successful", message)
+        else:
+            QMessageBox.critical(self, "Export Failed", message)
+
 
     def accept(self):
         """Apply settings and close the dialog."""
@@ -427,6 +494,13 @@ if __name__ == '__main__':
             self.print_font = QFont("Arial", 10) # Dummy attribute
             self.estimate_widget = QWidget() # Dummy widget
             self.estimate_widget._apply_table_font_size = lambda size: print(f"Dummy Apply Table Font: {size}")
+            # Add dummy methods needed by the dialog
+            self.show_import_dialog = lambda: print("Dummy Show Import Dialog")
+            self.delete_all_estimates = lambda: print("Dummy Delete All Estimates")
+            self.delete_all_data = lambda: print("Dummy Delete All Data")
+            # Dummy db object for export handler check
+            self.db = True # Or a dummy object with needed methods if exporter uses them directly
+
 
     app = QApplication(sys.argv)
     dummy_main = DummyMainWindow()

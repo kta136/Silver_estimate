@@ -29,13 +29,13 @@ class MainWindow(QMainWindow):
         self._password = password # Store password temporarily
 
         # Initialize UI
-        self.setWindowTitle("Silver Estimation App v1.70 - Secured") # Update version and indicate security
+        self.setWindowTitle("Silver Estimation App v1.62") # Update version
         # self.setGeometry(100, 100, 1000, 700) # Remove fixed geometry
         # self.showFullScreen() # Start in true full screen
         # We need to show the window first before maximizing it
         # self.show() # This is implicitly called later by app.exec_() usually
-        # Let's try setting the window state directly
-        self.setWindowState(Qt.WindowMaximized)
+        # Let's try setting the window state directly (Moved to end of __init__)
+        # self.setWindowState(Qt.WindowMaximized)
 
         # Set up status bar *early* so it's available during DB setup
         self.statusBar = QStatusBar()
@@ -92,6 +92,9 @@ class MainWindow(QMainWindow):
         # Set up shortcuts (if needed)
 #        self.setup_shortcuts()
 
+        # Set window state to maximized at the very end of initialization
+        self.setWindowState(Qt.WindowMaximized)
+
     def setup_database_with_password(self, password):
         """Initialize the DatabaseManager with the provided password."""
         try:
@@ -146,6 +149,11 @@ class MainWindow(QMainWindow):
         settings_action.setStatusTip("Configure application settings")
         settings_action.triggered.connect(self.show_settings_dialog) # Connect to new method
         tools_menu.addAction(settings_action)
+
+        # Removed Import Item List action from here
+        # tools_menu.addSeparator()
+        # import_item_action = QAction(...)
+        # tools_menu.addAction(import_item_action)
 
         # Reports menu
         reports_menu = menu_bar.addMenu("&Reports")
@@ -383,6 +391,46 @@ class MainWindow(QMainWindow):
         dialog.exec_()
     # Removed show_advanced_tools_dialog method
 
+    def show_import_dialog(self):
+        """Show the item import dialog and handle the import process."""
+        from item_import_dialog import ItemImportDialog
+        from item_import_manager import ItemImportManager
+
+        # Only allow if user is authenticated and DB is available
+        if not hasattr(self, 'db') or not self.db:
+            QMessageBox.warning(self, "Authentication Required",
+                               "Database is not connected. Please log in first.")
+            return
+
+        # Create dialog and import manager
+        dialog = ItemImportDialog(self)
+        # Pass the authenticated DatabaseManager instance
+        manager = ItemImportManager(self.db)
+
+        # --- Signal Connections ---
+        # Start import when dialog requests it (pass file path and settings dict)
+        dialog.importStarted.connect(manager.import_from_file) # Manager now expects dict
+
+        # Update dialog UI based on manager progress/status
+        manager.progress_updated.connect(dialog.update_progress)
+        manager.status_updated.connect(dialog.update_status)
+        manager.import_finished.connect(dialog.import_finished)
+
+        # Handle dialog close/cancel: If rejected, request manager to stop
+        dialog.rejected.connect(manager.cancel_import) # Connect reject signal
+
+        # --- Execute Dialog ---
+        dialog.exec_() # Show the dialog modally
+
+        # --- Post-Import Actions ---
+        # Refresh item master table if it's currently visible to show new/updated items
+        if hasattr(self, 'item_master_widget') and self.item_master_widget.isVisible():
+            print("Refreshing Item Master list after import.")
+            self.item_master_widget.load_items()
+
+        # Clean up manager object (optional, depends if it holds resources)
+        # In this case, it's likely fine to let it be garbage collected.
+
 
 # --- Authentication and Data Wipe Logic ---
 
@@ -522,6 +570,7 @@ if __name__ == "__main__":
         # Check if MainWindow initialization and DB setup were successful
         # setup_database_with_password is called within MainWindow.__init__
         if main_window.db: # Check if db object was successfully created
+            # Show the window (maximized state is set in __init__)
             main_window.show()
             # Enter the Qt main event loop
             exit_code = app.exec_()

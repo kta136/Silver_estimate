@@ -1,4 +1,4 @@
-# 🧾 Silver Estimation App — v1.60
+# 🧾 Silver Estimation App — v1.62
 
 A desktop application built using **PyQt5** and **SQLite** for managing silver sales estimates, including item-wise entries, silver bar inventory, returns, and print-ready formatted outputs.
 
@@ -16,7 +16,7 @@ This app is designed for silver shops to:
 
 ---
 
-## ✅ Features (v1.60)
+## ✅ Features (v1.62)
 
 ### 🔢 Estimate Entry
 
@@ -98,10 +98,29 @@ This app is designed for silver shops to:
     - Print Font configuration.
     - Estimate Table Font Size configuration.
     - Data Deletion options (Delete All Estimates, DELETE ALL DATA).
+    - Security options (Password Change).
+    - Import/Export options (Item List Import/Export).
 - **Silver Bar Management:** Remains directly accessible under "Tools -> Silver Bar Management".
 
----
-### 🔒 Security Features (v1.70+)
+### 🔄 Import/Export (v1.62)
+
+-   **Item List Import:**
+-   Accessed via "Tools -> Settings... -> Import/Export" tab.
+-   Supports importing from delimited text files (e.g., `.txt`, `.csv`).
+-   **Configurable Parser:** Allows setting the delimiter, column indices (0-based) for Code, Name, Purity, Wage Type, Wage Rate.
+-   **Options:** Skip header row, apply specific line filtering (for TBOOK.TXT format).
+-   **Wage Rate Adjustment:** Apply multiplication or division (e.g., `*1.1`, `/1000`) to parsed wage rates.
+-   **Q-Type Conversion:** Automatically converts 'Q' type wage rates from per kg to per gram (before applying adjustment factor).
+-   **Duplicate Handling:** Options to "Skip" or "Update" existing items based on item code.
+-   **Preview:** Shows the first 10 rows of data as parsed with current settings.
+-   Provides progress and status feedback during import.
+-   **Item List Export:**
+-   Accessed via "Tools -> Settings... -> Import/Export" tab.
+-   Prompts for a save file location.
+-   Exports all items from the database to a pipe-delimited (`|`) text file with a header row (`Code|Name|Purity|Wage Type|Wage Rate`).
+-   This format is directly compatible with the default settings of the Item Importer.
+
+### 🔒 Security Features (v1.61+)
 
 -   **Password Authentication:** The application requires password authentication upon startup.
     -   **First Run:** Users are prompted to create a main password (for login) and a secondary password. Both passwords must be different.
@@ -370,7 +389,7 @@ On the first run, a database folder and the estimation.db SQLite file will be cr
 
 ## 📝 Development & Debugging Notes for AI
 
-This file reflects the state after v1.58 feature additions/fixes.
+This file reflects the state after v1.62 feature additions/fixes.
 
 ### 🔧 Key Concepts & Logic Flow:
 
@@ -380,10 +399,12 @@ This file reflects the state after v1.58 feature additions/fixes.
 - **Saving Estimates:** `save_estimate` -> `db_manager.save_estimate_with_returns`. Stores net totals (Reg-Bar-Ret) in header.
 - **Database:** `sqlite3.Row` factory, FKs enabled, `is_return`/`is_silver_bar` flags used.
 - **Printing:** `PrintManager` handles formats. Estimate slip uses `<pre>` and fixed-width spacing. Preview via `QPrintPreviewDialog`.
+- **Import/Export:** Moved to Settings dialog. `ItemImportDialog` collects settings, `ItemImportManager` handles parsing/DB interaction, `ItemExportManager` handles DB query/file writing.
+- **Window Maximizing:** Setting `self.setWindowState(Qt.WindowMaximized)` at the end of `MainWindow.__init__` seems more reliable than calling `showMaximized()` after `show()`.
 
 ---
 
-### 🧪 Known Issues / TODO (Post v1.58)
+### 🧪 Known Issues / TODO (Post v1.62)
 
 - [x] ~~Print: Add Serial number column & Round off printed amounts.~~ (Completed in v1.14)
 - [x] ~~Tools Menu: Rename "Reset Database Tables" action.~~ (Completed in v1.14)
@@ -395,7 +416,8 @@ This file reflects the state after v1.58 feature additions/fixes.
 - [x] ~~Database Schema: Implement versioning to prevent data loss.~~ (Completed in v1.51)
 - [ ] Estimate Screen: Allow table column widths to be resized by the user and persist the sizes between sessions (using `QSettings`).
 - [x] ~~Estimate Notes: Add feature (UI, DB, Logic, History).~~ (Completed in v1.52)
-- [ ] Encryption/Password: Implement password protection & reset.
+- [x] ~~Encryption/Password: Implement password protection & reset.~~ (Completed v1.61)
+- [x] ~~Import/Export: Add Item List Import/Export.~~ (Completed v1.62)
 - [ ] Re-add UI spacing improvements (original dynamic spacing was reverted).
 - [ ] Re-add conditional column navigation/visibility based on Wage Type.
 - [ ] Improve signal handling and float parsing for edge cases.
@@ -524,7 +546,7 @@ In order of importance, consider addressing:
 4.  **Input Validation**: Improve error handling and visual feedback.
 5.  **UI Spacing**: Re-evaluate and potentially restore dynamic spacing.
 6.  ~~**Estimate Notes**: Implement the notes feature.~~ (Completed in v1.52)
-7.  **Encryption/Password**: Implement security features.
+7.  ~~**Encryption/Password**: Implement security features.~~ (Completed v1.61)
 8.  **Performance/Refactoring**: Address signal handling, float parsing, large dataset optimizations.
 
 These targeted improvements will enhance the application's robustness while maintaining its core functionality and user experience.

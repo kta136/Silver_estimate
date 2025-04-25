@@ -199,6 +199,32 @@ python main.py
 
 On the first run, a database folder and the estimation.db SQLite file will be created automatically if they don't exist. The necessary tables will also be created.
 
+### 📦 Building Executable (using PyInstaller)
+
+To create a single-file executable (`.exe` on Windows) that includes all dependencies and doesn't open a console window:
+
+1.  **Install PyInstaller:**
+    ```bash
+    pip install pyinstaller
+    ```
+2.  **Install Required Backend:** Ensure the Argon2 backend for `passlib` is installed:
+    ```bash
+    pip install argon2_cffi
+    ```
+3.  **Run PyInstaller:** Navigate to the project root directory in your terminal (where `main.py` is located) and run the following command:
+
+    ```bash
+    pyinstaller --onefile --windowed --name v1.62 --hidden-import=passlib.handlers.argon2 --hidden-import=passlib.handlers.bcrypt main.py
+    ```
+
+    -   `--onefile`: Creates a single executable file.
+    -   `--windowed`: Prevents the console window from appearing when the application runs.
+    -   `--name v1.62`: Sets the name of the output executable (e.g., `v1.62.exe`).
+    -   `--hidden-import=passlib.handlers.argon2`: Explicitly includes the Argon2 handler needed by `passlib`.
+    -   `--hidden-import=passlib.handlers.bcrypt`: Explicitly includes the bcrypt handler needed by `passlib` (as it's listed as a fallback scheme).
+    -   `main.py`: The main script of the application.
+
+4.  The executable will be created in the `dist` subfolder within your project directory.
 ---
 
 ## 🧠 Developer Notes & Architecture Overview

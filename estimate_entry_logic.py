@@ -248,11 +248,16 @@ class EstimateLogic:
         if 0 <= row < self.item_table.rowCount():
             self._ensure_cell_exists(row, COL_CODE) # Use constant
             self.item_table.setCurrentCell(row, COL_CODE) # Use constant
-            item_to_edit = self.item_table.item(row, COL_CODE) # Use constant
-            if item_to_edit:
-                QTimer.singleShot(10, lambda: self.item_table.editItem(item_to_edit))
+            # Capture row and col instead of the item object for the timer
+            target_row, target_col = row, COL_CODE
+            QTimer.singleShot(10, lambda: self._safe_edit_item(target_row, target_col))
 
 
+    def _safe_edit_item(self, row, col):
+        """Safely fetches item at row/col and calls editItem if it exists."""
+        item = self.item_table.item(row, col)
+        if item:
+            self.item_table.editItem(item)
     def process_item_code(self):
         """Look up item code, populate row, or show selection dialog. Moves focus."""
         if self.processing_cell: return

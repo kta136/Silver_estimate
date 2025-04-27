@@ -367,9 +367,9 @@ class PrintManager:
         total_cost = net_wage_display + silver_cost
             
         # Round values for display
-        net_wage_r = round(net_wage_display)
-        silver_cost_r = round(silver_cost)
-        total_cost_r = round(total_cost)
+        net_wage_r = int(round(net_wage_display))
+        silver_cost_r = int(round(silver_cost))
+        total_cost_r = int(round(total_cost))
 
         fine_str=f"{net_fine_display:{W_FINE}.3f}"
         wage_str=f"{net_wage_r:{W_LABOUR}.0f}"

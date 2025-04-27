@@ -539,7 +539,9 @@ class DatabaseManager:
         if date_from: query += " AND date >= ?"; params.append(date_from)
         if date_to: query += " AND date <= ?"; params.append(date_to)
         if voucher_search: query += " AND voucher_no LIKE ?"; params.append(f"%{voucher_search}%")
-        query += " ORDER BY date DESC, voucher_no DESC"
+        # Changed to sort by voucher_no as integer in descending order
+        # For numeric voucher numbers, cast to integer for proper sorting
+        query += " ORDER BY CAST(voucher_no AS INTEGER) DESC"
         results = []
         try:
             self.cursor.execute(query, params)

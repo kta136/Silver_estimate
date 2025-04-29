@@ -519,24 +519,100 @@ graph TD
 
 ### 10.1 Settings Dialog Integration
 
-Add logging configuration to the settings dialog:
+Add comprehensive logging configuration to the settings dialog:
 
 ```python
 # In SettingsDialog class
-def setup_logging_tab(self):
-    logging_tab = QWidget()
-    layout = QVBoxLayout(logging_tab)
+def _create_logging_tab(self):
+    """Create the Logging settings tab."""
+    widget = QWidget()
+    layout = QVBoxLayout(widget)
+    
+    # Description label
+    description = QLabel(
+        "Configure how the application logs events and manages log files. "
+        "Changes to these settings take effect immediately."
+    )
+    description.setWordWrap(True)
+    layout.addWidget(description)
+    
+    # Debug mode section
+    debug_group = QGroupBox("Debug Settings")
+    debug_layout = QVBoxLayout(debug_group)
     
     # Debug mode checkbox
-    self.debug_mode_checkbox = QCheckBox("Enable Debug Logging")
-    self.debug_mode_checkbox.setChecked(QSettings().value("logging/debug_mode", False, type=bool))
+    self.debug_mode_checkbox = QCheckBox("Enable Debug Mode")
+    self.debug_mode_checkbox.setToolTip("Enable detailed debug logging (may affect performance)")
+    debug_mode = self.settings.value("logging/debug_mode", False, type=bool)
+    self.debug_mode_checkbox.setChecked(debug_mode)
+    debug_layout.addWidget(self.debug_mode_checkbox)
     
-    # Log retention settings
-    retention_layout = QFormLayout()
-    self.log_retention_spin = QSpinBox()
-    self.log_retention_spin.setRange(1, 100)
-    self.log_retention_spin.setValue(QSettings().value("logging/retention_days", 30, type=int))
-    retention_layout.addRow("Log Retention (days):", self.log_retention_spin)
+    # Log level toggles group
+    log_levels_group = QGroupBox("Log Levels")
+    log_levels_layout = QVBoxLayout(log_levels_group)
+    
+    # Normal logs (INFO)
+    self.enable_info_checkbox = QCheckBox("Enable Normal Logs (INFO)")
+    self.enable_info_checkbox.setToolTip("Log normal application events (INFO level)")
+    enable_info = self.settings.value("logging/enable_info", True, type=bool)
+    self.enable_info_checkbox.setChecked(enable_info)
+    log_levels_layout.addWidget(self.enable_info_checkbox)
+    
+    # Critical logs (ERROR and CRITICAL)
+    self.enable_critical_checkbox = QCheckBox("Enable Critical Logs (ERROR and CRITICAL)")
+    self.enable_critical_checkbox.setToolTip("Log errors and critical issues")
+    enable_critical = self.settings.value("logging/enable_critical", True, type=bool)
+    self.enable_critical_checkbox.setChecked(enable_critical)
+    log_levels_layout.addWidget(self.enable_critical_checkbox)
+    
+    # Debug logs
+    self.enable_debug_checkbox = QCheckBox("Enable Debug Logs (when Debug Mode is on)")
+    self.enable_debug_checkbox.setToolTip("Log detailed debug information (only when Debug Mode is enabled)")
+    enable_debug = self.settings.value("logging/enable_debug", True, type=bool)
+    self.enable_debug_checkbox.setChecked(enable_debug)
+    log_levels_layout.addWidget(self.enable_debug_checkbox)
+    
+    # Auto cleanup group
+    cleanup_group = QGroupBox("Automatic Log Cleanup")
+    cleanup_layout = QVBoxLayout(cleanup_group)
+    
+    # Auto cleanup checkbox
+    self.auto_cleanup_checkbox = QCheckBox("Automatically Delete Old Logs")
+    self.auto_cleanup_checkbox.setToolTip("Automatically delete log files older than the specified number of days")
+    auto_cleanup = self.settings.value("logging/auto_cleanup", False, type=bool)
+    self.auto_cleanup_checkbox.setChecked(auto_cleanup)
+    cleanup_layout.addWidget(self.auto_cleanup_checkbox)
+    
+    # Cleanup days spinbox
+    cleanup_days_layout = QHBoxLayout()
+    cleanup_days_layout.addWidget(QLabel("Keep logs for:"))
+    self.cleanup_days_spin = QSpinBox()
+    self.cleanup_days_spin.setRange(1, 365)
+    self.cleanup_days_spin.setSuffix(" days")
+    cleanup_days = self.settings.value("logging/cleanup_days", 7, type=int)
+    self.cleanup_days_spin.setValue(cleanup_days)
+    self.cleanup_days_spin.setEnabled(auto_cleanup)
+    cleanup_days_layout.addWidget(self.cleanup_days_spin)
+    cleanup_layout.addLayout(cleanup_days_layout)
+    
+    # Connect auto cleanup checkbox to enable/disable days spinbox
+    self.auto_cleanup_checkbox.toggled.connect(self.cleanup_days_spin.setEnabled)
+    
+    # Manual cleanup button
+    manual_cleanup_layout = QHBoxLayout()
+    self.manual_cleanup_button = QPushButton("Clean Up Logs Now...")
+    self.manual_cleanup_button.setToolTip("Manually delete old log files")
+    self.manual_cleanup_button.clicked.connect(self._handle_manual_log_cleanup)
+    manual_cleanup_layout.addWidget(self.manual_cleanup_button)
+    
+    # Add all widgets to layout
+    layout.addWidget(debug_group)
+    layout.addWidget(log_levels_group)
+    layout.addWidget(cleanup_group)
+    layout.addLayout(manual_cleanup_layout)
+    layout.addStretch()
+    
+    return widget
     
     # Add to layout
     layout.addWidget(self.debug_mode_checkbox)
@@ -554,8 +630,16 @@ def save_settings(self):
     settings.setValue("logging/retention_days", self.log_retention_spin.value())
     
     # Apply logging settings
-    debug_mode = self.debug_mode_checkbox.isChecked()
-    logging.getLogger().setLevel(logging.DEBUG if debug_mode else logging.INFO)
+    self.settings.setValue("logging/debug_mode", self.debug_mode_checkbox.isChecked())
+    self.settings.setValue("logging/enable_info", self.enable_info_checkbox.isChecked())
+    self.settings.setValue("logging/enable_critical", self.enable_critical_checkbox.isChecked())
+    self.settings.setValue("logging/enable_debug", self.enable_debug_checkbox.isChecked())
+    self.settings.setValue("logging/auto_cleanup", self.auto_cleanup_checkbox.isChecked())
+    self.settings.setValue("logging/cleanup_days", self.cleanup_days_spin.value())
+    
+    # Apply logging settings immediately
+    from logger import reconfigure_logging
+    reconfigure_logging()
 ```
 
 ### 10.2 Environment Variable Support
@@ -572,10 +656,141 @@ def get_log_config():
     
     log_dir = os.environ.get('SILVER_APP_LOG_DIR', 'logs')
     
+    # Get log level enable/disable settings
+    enable_info = settings.value("logging/enable_info", True, type=bool)
+    enable_error = settings.value("logging/enable_critical", True, type=bool)
+    enable_debug = settings.value("logging/enable_debug", True, type=bool)
+    
+    # Get auto-cleanup settings
+    auto_cleanup = settings.value("logging/auto_cleanup", False, type=bool)
+    cleanup_days = settings.value("logging/cleanup_days", 7, type=int)
+    
+    # Ensure cleanup_days is within reasonable range
+    if cleanup_days < 1:
+        cleanup_days = 1
+    elif cleanup_days > 365:
+        cleanup_days = 365
+    
     return {
         'debug_mode': debug_mode,
-        'log_dir': log_dir
+        'log_dir': log_dir,
+        'enable_info': enable_info,
+        'enable_error': enable_error,
+        'enable_debug': enable_debug,
+        'auto_cleanup': auto_cleanup,
+        'cleanup_days': cleanup_days
     }
+```
+
+### 10.3 Automatic Log Cleanup
+
+Implement automatic log cleanup to manage disk space:
+
+```python
+class LogCleanupScheduler:
+    """Scheduler for automatic log cleanup."""
+    
+    def __init__(self, log_dir="logs", cleanup_days=7):
+        """
+        Initialize the log cleanup scheduler.
+        
+        Args:
+            log_dir (str): Directory containing log files
+            cleanup_days (int): Maximum age of log files in days
+        """
+        self.log_dir = log_dir
+        self.cleanup_days = max(1, min(cleanup_days, 365))  # Ensure valid range
+        self.timer = None
+        self.midnight_timer = None
+        self.logger = logging.getLogger(__name__)
+        self.is_running = False
+    
+    def start(self):
+        """Start the scheduled cleanup."""
+        if self.is_running:
+            self.stop()
+            
+        # Calculate time until midnight
+        now = datetime.now()
+        midnight = (now + timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        seconds_until_midnight = (midnight - now).total_seconds()
+        
+        # Create a QTimer that fires at midnight
+        self.timer = QtCore.QTimer()
+        self.timer.timeout.connect(self._run_cleanup)
+        self.timer.setSingleShot(False)
+        self.timer.start(24 * 60 * 60 * 1000)  # 24 hours in milliseconds
+        
+        # Also run an initial cleanup after a short delay
+        self.midnight_timer = QtCore.QTimer()
+        self.midnight_timer.timeout.connect(self._run_cleanup)
+        self.midnight_timer.setSingleShot(True)
+        self.midnight_timer.start(int(seconds_until_midnight * 1000))
+        
+        self.is_running = True
+        next_cleanup_time = midnight.strftime("%Y-%m-%d %H:%M:%S")
+        self.logger.info(f"Log cleanup scheduler started. Next cleanup at {next_cleanup_time}")
+    
+    def _run_cleanup(self):
+        """Run the cleanup operation."""
+        try:
+            self.logger.debug(f"Running scheduled cleanup for logs older than {self.cleanup_days} days")
+            removed_count = cleanup_old_logs(self.log_dir, self.cleanup_days)
+            self.logger.info(f"Automatic log cleanup completed. Removed {removed_count} old log files")
+        except Exception as e:
+            self.logger.error(f"Error during automatic log cleanup: {e}", exc_info=True)
+```
+
+### 10.4 Reconfiguring Logging at Runtime
+
+Add support for reconfiguring logging without application restart:
+
+```python
+def reconfigure_logging():
+    """
+    Reconfigure the logging system based on current settings.
+    Call this when settings are changed.
+    """
+    config = get_log_config()
+    
+    # Re-initialize logging with new settings
+    root_logger = setup_logging(
+        debug_mode=config['debug_mode'],
+        log_dir=config['log_dir'],
+        enable_info=config['enable_info'],
+        enable_error=config['enable_error'],
+        enable_debug=config['enable_debug']
+    )
+    
+    # Configure cleanup scheduler if enabled
+    global _cleanup_scheduler
+    
+    if config['auto_cleanup']:
+        if _cleanup_scheduler is None:
+            # Create new scheduler if it doesn't exist
+            _cleanup_scheduler = LogCleanupScheduler(
+                log_dir=config['log_dir'],
+                cleanup_days=config['cleanup_days']
+            )
+            _cleanup_scheduler.start()
+        else:
+            # Update existing scheduler with new settings
+            _cleanup_scheduler.update_settings(
+                log_dir=config['log_dir'],
+                cleanup_days=config['cleanup_days']
+            )
+    else:
+        # Stop and remove scheduler if auto-cleanup is disabled
+        if _cleanup_scheduler is not None:
+            _cleanup_scheduler.stop()
+            _cleanup_scheduler = None
+    
+    # Log the reconfiguration
+    root_logger.info("Logging system reconfigured with new settings")
+    
+    return root_logger
 ```
 
 ## Conclusion
@@ -587,9 +802,13 @@ This logging architecture provides a comprehensive solution for the Silver Estim
 3. **Protects sensitive information** through proper sanitization
 4. **Manages log files** with appropriate rotation and retention policies
 5. **Provides configurable verbosity** for different deployment scenarios
+6. **Enables selective log level control** for performance optimization
+7. **Implements automatic log cleanup** to manage disk space efficiently
 
 By implementing this architecture, the application will gain:
 - Improved troubleshooting capabilities
 - Better security through proper handling of sensitive information
 - More reliable error handling
 - Enhanced maintainability through consistent logging practices
+- Optimized performance through configurable logging levels
+- Reduced disk space usage through automatic cleanup

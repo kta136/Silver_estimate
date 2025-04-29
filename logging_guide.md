@@ -119,10 +119,24 @@ SILVER_APP_DEBUG=true python main.py
 Logging configuration can be managed through the application's Settings dialog:
 
 1. Access via: **Tools → Settings → Logging**
-2. Options include:
-   - Debug mode toggle
-   - Log retention settings
-   - Log directory configuration
+2. The Logging tab provides the following options:
+
+#### Debug Settings
+- **Enable Debug Mode**: Toggles detailed debug logging (may affect performance)
+- When enabled, detailed diagnostic information is captured in the debug log file
+
+#### Log Levels
+- **Enable Normal Logs (INFO)**: Toggle logging of day-to-day application events
+- **Enable Critical Logs (ERROR and CRITICAL)**: Toggle logging of errors and critical issues
+- **Enable Debug Logs**: Toggle logging of detailed debug information (only when Debug Mode is enabled)
+
+#### Automatic Log Cleanup
+- **Automatically Delete Old Logs**: Enable automatic deletion of log files older than the specified period
+- **Keep logs for X days**: Configure the retention period (1-365 days)
+- Automatic cleanup runs at midnight each day
+- **Clean Up Logs Now**: Manually trigger log cleanup based on current settings
+
+![Logging Settings Dialog](images/logging_settings.png)
 
 ### Programmatic Configuration
 
@@ -460,9 +474,9 @@ except ZeroDivisionError:
 
 By default, log files are stored in the `logs/` directory relative to the application root:
 
-- `logs/silver_app.log`: Main application log (INFO and above)
-- `logs/silver_app_error.log`: Error log (ERROR and CRITICAL only)
-- `logs/silver_app_debug.log`: Debug log (all messages when debug enabled)
+- `logs/silver_app.log`: Main application log (INFO and above) - if INFO logs are enabled
+- `logs/silver_app_error.log`: Error log (ERROR and CRITICAL only) - if ERROR logs are enabled
+- `logs/silver_app_debug.log`: Debug log (all messages when debug enabled) - if DEBUG logs are enabled
 - `logs/archived/`: Directory for rotated logs
 
 You can customize the log directory using the `SILVER_APP_LOG_DIR` environment variable or through the settings dialog.
@@ -477,62 +491,74 @@ The logging system uses size-based rotation to prevent logs from growing indefin
 
 When a log file reaches its size limit, it's renamed with a numeric suffix (e.g., `silver_app.log.1`), and a new log file is created.
 
-### Archiving Strategies
+### Automatic Log Cleanup
 
-For long-term storage, consider implementing an archiving strategy:
+The application includes an automatic log cleanup feature that helps manage disk space:
 
-1. **Daily archiving script**:
+1. **Configuration**:
+   - Enable/disable in Settings → Logging → Automatic Log Cleanup
+   - Set retention period (1-365 days)
+   - Logs older than the specified period will be automatically deleted
+
+2. **Cleanup Schedule**:
+   - Automatic cleanup runs at midnight each day
+   - The scheduler calculates the time until midnight and sets up a timer
+   - Subsequent cleanups occur every 24 hours
+
+3. **Manual Cleanup**:
+   - Click "Clean Up Logs Now" in the Settings dialog to manually trigger cleanup
+   - Uses the same retention period as automatic cleanup
+   - Provides immediate feedback on how many files were removed
+
+4. **Implementation**:
    ```python
-   import shutil
-   import datetime
-   import os
-   
-   def archive_logs():
-       today = datetime.datetime.now().strftime('%Y%m%d')
-       archive_dir = f'logs/archived/{today}'
-       os.makedirs(archive_dir, exist_ok=True)
+   # Example of how automatic cleanup works
+   def cleanup_old_logs(log_dir="logs", max_age_days=30):
+       """Remove log files older than max_age_days."""
+       cutoff = datetime.now() - timedelta(days=max_age_days)
+       removed_count = 0
        
-       # Archive main logs
-       for i in range(10):
-           log_file = f'logs/silver_app.log.{i+1}'
-           if os.path.exists(log_file):
-               shutil.move(log_file, f'{archive_dir}/silver_app.log.{i+1}')
+       # Process log files in main and archived directories
+       for file_path in Path(log_dir).glob("**/*.log*"):
+           if file_path.is_file():
+               file_time = datetime.fromtimestamp(file_path.stat().st_mtime)
+               if file_time < cutoff:
+                   file_path.unlink()  # Delete the file
+                   removed_count += 1
+                   
+       return removed_count
    ```
 
-2. **Compression**:
-   ```python
-   import gzip
-   import shutil
-   
-   def compress_log(log_file):
-       with open(log_file, 'rb') as f_in:
-           with gzip.open(f'{log_file}.gz', 'wb') as f_out:
-               shutil.copyfileobj(f_in, f_out)
-       os.remove(log_file)  # Remove original after compression
-   ```
+### Log Level Management
 
-### Cleanup Procedures
+The application now allows you to selectively enable or disable specific log levels:
 
-Implement log cleanup to manage disk space:
+1. **Configurable Log Levels**:
+   - **Normal Logs (INFO)**: Day-to-day application events
+   - **Critical Logs (ERROR/CRITICAL)**: Error conditions and critical issues
+   - **Debug Logs**: Detailed diagnostic information (only when Debug Mode is enabled)
 
-```python
-import os
-import datetime
+2. **Use Cases for Disabling Log Levels**:
+   - Disable INFO logs to reduce disk usage in stable production environments
+   - Disable DEBUG logs to improve performance even when debug mode is enabled
+   - Keep ERROR logs enabled for troubleshooting even in production
 
-def cleanup_old_logs(max_age_days=30):
-    """Remove log files older than max_age_days."""
-    cutoff = datetime.datetime.now() - datetime.timedelta(days=max_age_days)
-    
-    for root, dirs, files in os.walk('logs/archived'):
-        for file in files:
-            if file.endswith('.log') or file.endswith('.gz'):
-                file_path = os.path.join(root, file)
-                file_time = datetime.datetime.fromtimestamp(os.path.getmtime(file_path))
-                
-                if file_time < cutoff:
-                    os.remove(file_path)
-                    print(f"Removed old log: {file_path}")
-```
+3. **Configuration Methods**:
+   - Through Settings dialog: Tools → Settings → Logging → Log Levels
+   - Programmatically:
+     ```python
+     # Example of programmatically configuring log levels
+     from logger import reconfigure_logging
+     
+     # Update settings
+     settings = QSettings("YourCompany", "SilverEstimateApp")
+     settings.setValue("logging/enable_info", False)  # Disable INFO logs
+     settings.setValue("logging/enable_critical", True)  # Keep ERROR logs
+     settings.setValue("logging/enable_debug", False)  # Disable DEBUG logs
+     
+     # Apply changes
+     reconfigure_logging()
+     ```
 
 ## 7. Analyzing Logs for Troubleshooting
 
@@ -623,9 +649,10 @@ To get a complete picture of an issue:
 
 When more detailed information is needed:
 
-1. **Enable debug mode**:
-   - Set `SILVER_APP_DEBUG=true` environment variable
-   - Or enable debug mode in settings dialog
+1. **Enable debug mode and debug logs**:
+   - In Settings dialog: Tools → Settings → Logging → Debug Settings
+   - Or set `SILVER_APP_DEBUG=true` environment variable
+   - Ensure "Enable Debug Logs" is checked
 
 2. **Focus on specific modules**:
    ```python
@@ -642,6 +669,15 @@ When more detailed information is needed:
    - Function entry/exit pairs
    - Database operation start/complete pairs
    - UI event sequences
+
+5. **Performance Considerations**:
+   - Debug logging can impact performance, especially in loops or high-frequency operations
+   - Consider disabling debug logs but keeping debug mode enabled if you need detailed logs for only certain components
+   - Use the lazy evaluation pattern for expensive debug logging:
+     ```python
+     if logger.isEnabledFor(logging.DEBUG):
+         logger.debug(f"Complex calculation result: {expensive_function()}")
+     ```
 
 ## 8. Advanced Topics
 
@@ -706,14 +742,19 @@ for handler in root_logger.handlers:
 
 Optimize logging performance with these techniques:
 
-1. **Lazy Evaluation**:
+1. **Selective Log Level Enabling**:
+   - Disable DEBUG logs in production environments
+   - Consider disabling INFO logs in high-throughput scenarios
+   - Always keep ERROR logs enabled for critical issue detection
+
+2. **Lazy Evaluation**:
    ```python
    # Avoid expensive string formatting if the log won't be emitted
    if logger.isEnabledFor(logging.DEBUG):
        logger.debug(f"Complex calculation result: {expensive_function()}")
    ```
 
-2. **Batch Processing**:
+3. **Batch Processing**:
    ```python
    # For high-volume logging, consider batching
    log_buffer = []
@@ -724,7 +765,7 @@ Optimize logging performance with these techniques:
        log_buffer.clear()
    ```
 
-3. **Sampling**:
+4. **Sampling**:
    ```python
    # Log only a sample of high-volume events
    import random
@@ -733,6 +774,11 @@ Optimize logging performance with these techniques:
        if random.random() < sample_rate:
            logger.log(level, f"SAMPLED (1:{int(1/sample_rate)}): {message}")
    ```
+
+5. **Log Cleanup Impact**:
+   - Automatic cleanup helps maintain application performance by preventing disk space issues
+   - Set appropriate retention periods based on your storage capacity and troubleshooting needs
+   - For most deployments, 7-30 days retention is recommended
 
 ### Security Implications
 

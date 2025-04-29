@@ -2,7 +2,7 @@
 import traceback # Import traceback for error logging
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QDialogButtonBox, QGridLayout,
                              QFormLayout, QLabel, QPushButton, QSpinBox, QFontDialog, QMessageBox, QDoubleSpinBox,
-                             QLineEdit, QGroupBox, QFileDialog) # Added QFileDialog
+                             QLineEdit, QGroupBox, QFileDialog, QCheckBox) # Added QCheckBox for logging settings
 from PyQt5.QtCore import Qt, QSettings, pyqtSignal
 from PyQt5.QtGui import QFont
 
@@ -41,6 +41,7 @@ class SettingsDialog(QDialog):
         self.tabs.addTab(self._create_data_tab(), "Data Management") # Add Data tab
         self.tabs.addTab(self._create_security_tab(), "Security") # Add Security tab
         self.tabs.addTab(self._create_import_export_tab(), "Import/Export") # Add Import/Export tab
+        self.tabs.addTab(self._create_logging_tab(), "Logging") # Add new Logging tab
 
         # Buttons
         # Add Help button later if needed
@@ -201,6 +202,127 @@ class SettingsDialog(QDialog):
         layout.addStretch() # Push groups to the top
         return widget
 
+    def _create_logging_tab(self):
+        """Create the Logging settings tab."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Description label
+        description = QLabel(
+            "Configure how the application logs events and manages log files. "
+            "Changes to these settings take effect immediately."
+        )
+        description.setWordWrap(True)
+        description.setStyleSheet("margin-bottom: 10px;")
+        layout.addWidget(description)
+        
+        # Debug mode section
+        debug_group = QGroupBox("Debug Settings")
+        debug_layout = QVBoxLayout(debug_group)
+        
+        # Debug mode checkbox
+        self.debug_mode_checkbox = QCheckBox("Enable Debug Mode")
+        self.debug_mode_checkbox.setToolTip("Enable detailed debug logging (may affect performance)")
+        debug_mode = self.settings.value("logging/debug_mode", False, type=bool)
+        self.debug_mode_checkbox.setChecked(debug_mode)
+        debug_layout.addWidget(self.debug_mode_checkbox)
+        
+        # Debug mode description
+        debug_desc = QLabel(
+            "Debug mode captures detailed information about application operations. "
+            "This is useful for troubleshooting but may affect performance."
+        )
+        debug_desc.setWordWrap(True)
+        debug_desc.setStyleSheet("color: gray; font-size: 9pt; margin-left: 20px;")
+        debug_layout.addWidget(debug_desc)
+        
+        # Log level toggles group
+        log_levels_group = QGroupBox("Log Levels")
+        log_levels_layout = QVBoxLayout(log_levels_group)
+        
+        # Normal logs (INFO)
+        self.enable_info_checkbox = QCheckBox("Enable Normal Logs (INFO)")
+        self.enable_info_checkbox.setToolTip("Log normal application events (INFO level)")
+        enable_info = self.settings.value("logging/enable_info", True, type=bool)
+        self.enable_info_checkbox.setChecked(enable_info)
+        log_levels_layout.addWidget(self.enable_info_checkbox)
+        
+        # Critical logs (ERROR and CRITICAL)
+        self.enable_critical_checkbox = QCheckBox("Enable Critical Logs (ERROR and CRITICAL)")
+        self.enable_critical_checkbox.setToolTip("Log errors and critical issues")
+        enable_critical = self.settings.value("logging/enable_critical", True, type=bool)
+        self.enable_critical_checkbox.setChecked(enable_critical)
+        log_levels_layout.addWidget(self.enable_critical_checkbox)
+        
+        # Debug logs
+        self.enable_debug_checkbox = QCheckBox("Enable Debug Logs (when Debug Mode is on)")
+        self.enable_debug_checkbox.setToolTip("Log detailed debug information (only when Debug Mode is enabled)")
+        enable_debug = self.settings.value("logging/enable_debug", True, type=bool)
+        self.enable_debug_checkbox.setChecked(enable_debug)
+        log_levels_layout.addWidget(self.enable_debug_checkbox)
+        
+        # Log levels description
+        levels_desc = QLabel(
+            "You can enable or disable specific log levels. Critical logs are recommended "
+            "to keep enabled for troubleshooting purposes."
+        )
+        levels_desc.setWordWrap(True)
+        levels_desc.setStyleSheet("color: gray; font-size: 9pt; margin-top: 5px;")
+        log_levels_layout.addWidget(levels_desc)
+        
+        # Auto cleanup group
+        cleanup_group = QGroupBox("Automatic Log Cleanup")
+        cleanup_layout = QVBoxLayout(cleanup_group)
+        
+        # Auto cleanup checkbox
+        self.auto_cleanup_checkbox = QCheckBox("Automatically Delete Old Logs")
+        self.auto_cleanup_checkbox.setToolTip("Automatically delete log files older than the specified number of days")
+        auto_cleanup = self.settings.value("logging/auto_cleanup", False, type=bool)
+        self.auto_cleanup_checkbox.setChecked(auto_cleanup)
+        cleanup_layout.addWidget(self.auto_cleanup_checkbox)
+        
+        # Cleanup days spinbox
+        cleanup_days_layout = QHBoxLayout()
+        cleanup_days_layout.addWidget(QLabel("Keep logs for:"))
+        self.cleanup_days_spin = QSpinBox()
+        self.cleanup_days_spin.setRange(1, 365)
+        self.cleanup_days_spin.setSuffix(" days")
+        cleanup_days = self.settings.value("logging/cleanup_days", 1, type=int)
+        self.cleanup_days_spin.setValue(cleanup_days)
+        self.cleanup_days_spin.setEnabled(auto_cleanup)
+        cleanup_days_layout.addWidget(self.cleanup_days_spin)
+        cleanup_days_layout.addStretch()
+        cleanup_layout.addLayout(cleanup_days_layout)
+        
+        # Cleanup description
+        cleanup_desc = QLabel(
+            "Automatic cleanup helps manage disk space by removing old log files. "
+            "Cleanup occurs at midnight each day."
+        )
+        cleanup_desc.setWordWrap(True)
+        cleanup_desc.setStyleSheet("color: gray; font-size: 9pt; margin-top: 5px;")
+        cleanup_layout.addWidget(cleanup_desc)
+        
+        # Connect auto cleanup checkbox to enable/disable days spinbox
+        self.auto_cleanup_checkbox.toggled.connect(self.cleanup_days_spin.setEnabled)
+        
+        # Manual cleanup button with layout
+        manual_cleanup_layout = QHBoxLayout()
+        self.manual_cleanup_button = QPushButton("Clean Up Logs Now...")
+        self.manual_cleanup_button.setToolTip("Manually delete old log files")
+        self.manual_cleanup_button.clicked.connect(self._handle_manual_log_cleanup)
+        manual_cleanup_layout.addWidget(self.manual_cleanup_button)
+        manual_cleanup_layout.addStretch()
+        
+        # Add all widgets to layout
+        layout.addWidget(debug_group)
+        layout.addWidget(log_levels_group)
+        layout.addWidget(cleanup_group)
+        layout.addLayout(manual_cleanup_layout)
+        layout.addStretch()
+        
+        return widget
+        
 
     def _create_security_tab(self):
         """Create the Security settings tab (Password Management)."""
@@ -347,6 +469,19 @@ class SettingsDialog(QDialog):
             self.settings.setValue("print/preview_zoom", preview_zoom)
             print(f"Saved preview zoom: {preview_zoom}")
 
+            # Save logging settings
+            self.settings.setValue("logging/debug_mode", self.debug_mode_checkbox.isChecked())
+            self.settings.setValue("logging/enable_info", self.enable_info_checkbox.isChecked())
+            self.settings.setValue("logging/enable_critical", self.enable_critical_checkbox.isChecked())
+            self.settings.setValue("logging/enable_debug", self.enable_debug_checkbox.isChecked())
+            self.settings.setValue("logging/auto_cleanup", self.auto_cleanup_checkbox.isChecked())
+            self.settings.setValue("logging/cleanup_days", self.cleanup_days_spin.value())
+            
+            # Apply logging settings immediately
+            from logger import reconfigure_logging
+            reconfigure_logging()
+            print("Logging settings applied.")
+
             # Save other settings...
 
             self.settings.sync()
@@ -469,6 +604,58 @@ class SettingsDialog(QDialog):
             QMessageBox.information(self, "Export Successful", message)
         else:
             QMessageBox.critical(self, "Export Failed", message)
+            
+    def _handle_manual_log_cleanup(self):
+        """Handle manual log cleanup button click."""
+        from logger import cleanup_old_logs
+        import logging
+        
+        # Get logger for this operation
+        logger = logging.getLogger(__name__)
+        
+        # Ask for confirmation
+        days = self.cleanup_days_spin.value()
+        reply = QMessageBox.question(
+            self,
+            "Confirm Log Cleanup",
+            f"This will permanently delete log files older than {days} day(s).\n\nContinue?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            try:
+                logger.info(f"Manual log cleanup initiated for files older than {days} days")
+                
+                # Show busy cursor during cleanup
+                from PyQt5.QtGui import QCursor
+                from PyQt5.QtCore import Qt
+                self.setCursor(QCursor(Qt.WaitCursor))
+                
+                # Run the cleanup
+                removed_count = cleanup_old_logs(max_age_days=days)
+                
+                # Restore cursor
+                self.unsetCursor()
+                
+                # Show results
+                logger.info(f"Manual log cleanup completed: removed {removed_count} files")
+                QMessageBox.information(
+                    self,
+                    "Log Cleanup Complete",
+                    f"Successfully removed {removed_count} old log file(s)."
+                )
+            except Exception as e:
+                # Restore cursor in case of error
+                self.unsetCursor()
+                
+                # Log and show error
+                logger.error(f"Manual log cleanup failed: {str(e)}", exc_info=True)
+                QMessageBox.critical(
+                    self,
+                    "Log Cleanup Failed",
+                    f"An error occurred during log cleanup: {str(e)}"
+                )
 
 
     def accept(self):

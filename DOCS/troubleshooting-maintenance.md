@@ -204,7 +204,7 @@ def auto_migrate_database(self):
 
 The Silver Estimation App includes a comprehensive logging system that is invaluable for troubleshooting. Here's how to use it effectively:
 
-#### Enabling Debug Logging
+#### Configuring Logging Settings
 
 ```python
 # Via environment variable
@@ -216,16 +216,40 @@ python main.py
 SILVER_APP_DEBUG=true python main.py
 
 # Via settings dialog
-# Tools → Settings → Logging → Enable Debug Logging
+# Tools → Settings → Logging
 ```
+
+#### Log Level Configuration
+
+The application allows you to selectively enable or disable specific log levels:
+
+- **Normal Logs (INFO)**: Day-to-day application events
+- **Critical Logs (ERROR/CRITICAL)**: Error conditions and critical issues
+- **Debug Logs**: Detailed diagnostic information (only when Debug Mode is enabled)
+
+To configure log levels:
+1. Go to Tools → Settings → Logging → Log Levels
+2. Check/uncheck the desired log levels
+3. Click Apply to save changes
+
+#### Automatic Log Cleanup
+
+To manage disk space and prevent log files from growing too large:
+
+1. Go to Tools → Settings → Logging → Automatic Log Cleanup
+2. Enable "Automatically Delete Old Logs"
+3. Set the retention period (1-365 days)
+4. Click Apply to save changes
+
+You can also manually clean up logs by clicking the "Clean Up Logs Now" button.
 
 #### Log File Locations
 
 ```
 logs/
-├── silver_app.log         # Main application log (INFO and above)
-├── silver_app_error.log   # Error log (ERROR and CRITICAL only)
-├── silver_app_debug.log   # Debug log (all messages when debug enabled)
+├── silver_app.log         # Main application log (INFO and above) - if enabled
+├── silver_app_error.log   # Error log (ERROR and CRITICAL only) - if enabled
+├── silver_app_debug.log   # Debug log (all messages when debug enabled) - if enabled
 └── archived/              # Directory for rotated logs
 ```
 
@@ -357,17 +381,20 @@ def reset_application_settings():
 - [ ] Check application logs for errors
 - [ ] Verify database backup completed
 - [ ] Monitor disk space usage
+- [ ] Verify automatic log cleanup is running (check logs/silver_app.log for cleanup messages)
 
 ### Weekly Tasks
 - [ ] Run database integrity check
 - [ ] Review error logs for patterns
 - [ ] Test backup restoration
+- [ ] Verify log levels are appropriately configured for the environment
 
 ### Monthly Tasks
 - [ ] Optimize database (VACUUM)
-- [ ] Archive old logs
+- [ ] Review log retention settings
 - [ ] Update documentation
 - [ ] Review security settings
+- [ ] Check disk space usage by log files
 
 ### Quarterly Tasks
 - [ ] Rotate passwords

@@ -579,15 +579,48 @@ def perform_data_wipe(db_path='database/estimation.db', logger=None):
 if __name__ == "__main__":
     try:
         # Initialize logging before anything else
-        from logger import get_log_config
-        log_config = get_log_config()
-        logger = setup_logging(debug_mode=log_config['debug_mode'], log_dir=log_config['log_dir'])
+        import os
+        from pathlib import Path
+        from logger import get_log_config, setup_logging, LogCleanupScheduler
         
-        # Log application startup
+        # Ensure logs directory exists
+        logs_dir = Path("logs")
+        logs_dir.mkdir(exist_ok=True)
+        
+        # Get logging configuration
+        log_config = get_log_config()
+        
+        # Initialize logging with configuration
+        logger = setup_logging(
+            app_name="silver_app",
+            log_dir=log_config['log_dir'],
+            debug_mode=log_config['debug_mode'],
+            enable_info=log_config['enable_info'],
+            enable_error=log_config['enable_error'],
+            enable_debug=log_config['enable_debug']
+        )
+        
+        # Log startup information
         logger.info(f"Silver Estimation App v1.62 starting")
+        logger.debug(f"Logging configuration: {log_config}")
+        
+        # Initialize cleanup scheduler if enabled
+        cleanup_scheduler = None
+        if log_config['auto_cleanup']:
+            try:
+                cleanup_scheduler = LogCleanupScheduler(
+                    log_dir=log_config['log_dir'],
+                    cleanup_days=log_config['cleanup_days']
+                )
+                cleanup_scheduler.start()
+                logger.info(f"Log cleanup scheduler initialized with {log_config['cleanup_days']} days retention")
+            except Exception as e:
+                logger.error(f"Failed to initialize log cleanup scheduler: {e}", exc_info=True)
+                # Continue without cleanup scheduler
         
         # Set up Qt message redirection
         QtCore.qInstallMessageHandler(qt_message_handler)
+        logger.debug("Qt message handler installed")
         
         # Create the application object early for dialogs
         # Required for QSettings and QMessageBox before MainWindow exists
@@ -625,10 +658,20 @@ if __name__ == "__main__":
                 # Enter the Qt main event loop
                 logger.debug("Entering Qt main event loop")
                 exit_code = app.exec_()
-                # Close DB connection cleanly on exit (called within main_window.db.close())
+                
+                # Clean up resources on exit
+                logger.debug("Cleaning up resources before exit")
+                
+                # Stop log cleanup scheduler if running
+                if cleanup_scheduler is not None:
+                    logger.debug("Stopping log cleanup scheduler")
+                    cleanup_scheduler.stop()
+                
+                # Close DB connection cleanly on exit
                 if hasattr(main_window, 'db') and main_window.db:
                     logger.debug("Closing database connection on exit")
                     main_window.db.close() # Ensure close is called
+                
                 logger.info(f"Application exiting with code {exit_code}")
                 sys.exit(exit_code)
             else:

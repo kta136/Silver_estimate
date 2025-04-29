@@ -117,10 +117,7 @@ The Silver Estimation App is a comprehensive solution designed for silver shops 
 To create a standalone executable:
 
 ```bash
-pyinstaller --onefile --windowed --name "SilverEstimate-v1.62" \
-    --hidden-import=passlib.handlers.argon2 \
-    --hidden-import=passlib.handlers.bcrypt \
-    main.py
+pyinstaller --onefile --windowed --name "SilverEstimate-v1.63" --hidden-import=passlib.handlers.argon2 --hidden-import=passlib.handlers.bcrypt --hidden-import=passlib main.py
 ```
 
 ## 📖 Usage
@@ -170,7 +167,9 @@ pyinstaller --onefile --windowed --name "SilverEstimate-v1.62" \
 ### Logging System
 - **Structured Logging**: Comprehensive logging system replacing print() statements
 - **Configurable Levels**: DEBUG, INFO, WARNING, ERROR, and CRITICAL levels
+- **Selective Log Levels**: Ability to enable/disable specific log levels individually
 - **File Rotation**: Size-based log rotation with archiving
+- **Automatic Cleanup**: Configurable daily deletion of old log files
 - **PyQt5 Integration**: Qt message redirection and status bar logging
 - **Security-Focused**: Automatic sanitization of sensitive data
 
@@ -183,6 +182,11 @@ pyinstaller --onefile --windowed --name "SilverEstimate-v1.62" \
 - **Context Managers**: Specialized handlers for database operations
 - **Enhanced Exceptions**: Proper exception handling with detailed context
 - **User Feedback**: Clear error messages with appropriate detail levels
+
+### Log Management
+- **Settings UI**: Dedicated logging configuration tab in Settings dialog
+- **Performance Optimization**: Options to disable verbose logging in production
+- **Disk Space Management**: Automatic and manual cleanup options
 
 For detailed information, see the [Logging Guide](logging_guide.md).
 

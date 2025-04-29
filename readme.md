@@ -165,6 +165,27 @@ pyinstaller --onefile --windowed --name "SilverEstimate-v1.62" \
 - Unique salt per installation
 - No plaintext password storage
 
+## 📝 Logging & Error Handling
+
+### Logging System
+- **Structured Logging**: Comprehensive logging system replacing print() statements
+- **Configurable Levels**: DEBUG, INFO, WARNING, ERROR, and CRITICAL levels
+- **File Rotation**: Size-based log rotation with archiving
+- **PyQt5 Integration**: Qt message redirection and status bar logging
+- **Security-Focused**: Automatic sanitization of sensitive data
+
+### Log Files
+- **Main Log**: General application events (INFO and above)
+- **Error Log**: Application errors (ERROR and CRITICAL only)
+- **Debug Log**: Detailed troubleshooting information (when debug mode enabled)
+
+### Error Handling
+- **Context Managers**: Specialized handlers for database operations
+- **Enhanced Exceptions**: Proper exception handling with detailed context
+- **User Feedback**: Clear error messages with appropriate detail levels
+
+For detailed information, see the [Logging Guide](logging_guide.md).
+
 ## ⚙️ Configuration
 
 ### Application Settings
@@ -174,12 +195,15 @@ Settings are stored in QSettings and include:
 - Table font sizes
 - Page margins
 - Preview zoom levels
+- Logging configuration
 
 Access via: **Tools → Settings**
 
 ### Environment Variables
 ```bash
 APP_ENV=development  # or production
+SILVER_APP_DEBUG=true  # Enable debug logging
+SILVER_APP_LOG_DIR=logs  # Custom log directory
 ```
 
 ## 👩‍💻 Development

@@ -18,6 +18,8 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
 
     def __init__(self, db_manager, main_window): # Accept main_window
         super().__init__()
+        # Explicitly call EstimateLogic.__init__() to initialize the logger
+        EstimateLogic.__init__(self)
 
         # Set up database manager and main window reference
         self.db_manager = db_manager

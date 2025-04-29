@@ -200,7 +200,63 @@ def auto_migrate_database(self):
 
 ## Diagnostic Tools
 
-### 1. Debug Mode
+### 1. Logging System
+
+The Silver Estimation App includes a comprehensive logging system that is invaluable for troubleshooting. Here's how to use it effectively:
+
+#### Enabling Debug Logging
+
+```python
+# Via environment variable
+# Windows
+set SILVER_APP_DEBUG=true
+python main.py
+
+# Linux/macOS
+SILVER_APP_DEBUG=true python main.py
+
+# Via settings dialog
+# Tools → Settings → Logging → Enable Debug Logging
+```
+
+#### Log File Locations
+
+```
+logs/
+├── silver_app.log         # Main application log (INFO and above)
+├── silver_app_error.log   # Error log (ERROR and CRITICAL only)
+├── silver_app_debug.log   # Debug log (all messages when debug enabled)
+└── archived/              # Directory for rotated logs
+```
+
+#### Common Log Analysis Techniques
+
+```bash
+# Find all errors for a specific user session
+grep "user_id=123" logs/silver_app*.log
+
+# View all database errors
+grep -A 10 "Database error" logs/silver_app_error.log
+
+# Track a specific estimate through the system
+grep "voucher_no=EST1234" logs/silver_app_debug.log
+
+# Find slow database operations
+grep "Slow query" logs/silver_app.log
+```
+
+#### Interpreting Log Patterns
+
+| Log Pattern | Potential Issue | Troubleshooting Steps |
+|-------------|----------------|----------------------|
+| Multiple "Database error" entries | Database corruption or connection issues | Check database integrity, verify encryption key |
+| "Authentication failed" followed by app crash | Password or salt issues | Check QSettings for missing salt, verify password hashing |
+| Repeated "Slow query detected" | Database performance issues | Add indexes, optimize queries, check for large result sets |
+| UI exceptions with "wrapped C/C++ object deleted" | Widget lifecycle issues | Check for premature widget destruction, verify parent-child relationships |
+
+For more detailed information on using the logging system, refer to the [Logging Guide](../logging_guide.md).
+
+### 2. Debug Mode
 ```python
 # Enable debug logging
 import logging

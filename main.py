@@ -2,11 +2,13 @@
 import sys
 import os
 import traceback
+import logging
 
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QShortcut,
                              QMenuBar, QMenu, QAction, QMessageBox, QDialog, QStatusBar)
 from PyQt5.QtGui import QKeySequence, QFont
 from PyQt5.QtCore import Qt, QSettings, QTimer # Import QSettings
+import PyQt5.QtCore as QtCore
 
 # Import the custom dialogs and modules
 from custom_font_dialog import CustomFontDialog
@@ -16,13 +18,18 @@ from item_master import ItemMasterWidget
 from database_manager import DatabaseManager
 # from advanced_tools_dialog import AdvancedToolsDialog # Remove old import
 from settings_dialog import SettingsDialog # Import the new settings dialog
+from logger import setup_logging, qt_message_handler, LoggingStatusBar
 
 
 class MainWindow(QMainWindow):
     """Main application window for the Silver Estimation App."""
 
-    def __init__(self, password=None): # Add password argument
+    def __init__(self, password=None, logger=None): # Add password and logger arguments
         super().__init__()
+        
+        # Set up logging
+        self.logger = logger or logging.getLogger(__name__)
+        self.logger.info("Initializing MainWindow")
 
         # Defer database setup until password is known
         self.db = None
@@ -40,7 +47,9 @@ class MainWindow(QMainWindow):
         # Set up status bar *early* so it's available during DB setup
         self.statusBar = QStatusBar()
         self.setStatusBar(self.statusBar)
-        self.statusBar.showMessage("Initializing...") # Initial message
+        # Create logging status bar wrapper
+        self.logging_status = LoggingStatusBar(self.statusBar, self.logger)
+        self.logging_status.show_message("Initializing...", 3000) # Initial message
 
         # Setup database *after* getting password (if provided)
         if self._password:
@@ -98,14 +107,16 @@ class MainWindow(QMainWindow):
     def setup_database_with_password(self, password):
         """Initialize the DatabaseManager with the provided password."""
         try:
+            self.logger.info("Setting up database connection")
             # DatabaseManager now handles getting/creating salt internally via QSettings
             self.db = DatabaseManager('database/estimation.db', password=password)
             # setup_database is called within DatabaseManager's __init__
-            self.statusBar.showMessage("Database connected securely.")
+            self.logging_status.show_message("Database connected securely.", 3000)
+            self.logger.info("Database connected successfully")
         except Exception as e:
+            self.logger.critical(f"Failed to connect to encrypted database: {str(e)}", exc_info=True)
             QMessageBox.critical(self, "Database Error", f"Failed to connect to encrypted database: {e}\nApplication might not function correctly.")
             self.db = None # Ensure db is None if setup fails
-            print(traceback.format_exc()) # Log detailed error
 
     def setup_menu_bar(self):
         """Set up the main menu bar."""
@@ -248,11 +259,12 @@ class MainWindow(QMainWindow):
         # Import the MODIFIED dialog class
         from silver_bar_management import SilverBarDialog
         try:
+            self.logger.info("Opening Silver Bar Management dialog")
             silver_dialog = SilverBarDialog(self.db, self)
             silver_dialog.exec_()
         except Exception as e:
+            self.logger.error(f"Failed to open Silver Bar Management: {str(e)}", exc_info=True)
             QMessageBox.critical(self, "Error", f"Failed to open Silver Bar Management: {e}")
-            print(traceback.format_exc())
 
     def show_estimate_history(self):
         """Show estimate history dialog."""
@@ -350,8 +362,10 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """Handle window close event."""
+        self.logger.info("Application closing")
         # Close the database connection properly
         if hasattr(self, 'db') and self.db:
+            self.logger.debug("Closing database connection")
             self.db.close()
         # Optional: Add confirmation dialog if needed
         # self.save_settings() # Save settings on close if desired, though saving after change is often better
@@ -434,11 +448,17 @@ class MainWindow(QMainWindow):
 
 # --- Authentication and Data Wipe Logic ---
 
-def run_authentication():
+def run_authentication(logger=None):
     """
     Handles the authentication process using LoginDialog.
     Returns the password on success, 'wipe' if wipe requested, or None on failure/cancel.
+    
+    Args:
+        logger: Logger instance for authentication events
     """
+    logger = logger or logging.getLogger(__name__)
+    logger.info("Starting authentication process")
+    
     settings = QSettings("YourCompany", "SilverEstimateApp")
     password_hash = settings.value("security/password_hash")
     backup_hash = settings.value("security/backup_hash")
@@ -446,36 +466,43 @@ def run_authentication():
 
     if password_hash and backup_hash:
         # --- Existing User: Show Login Dialog ---
+        logger.debug("Found existing password hashes, showing login dialog")
         login_dialog = LoginDialog(is_setup=False)
         result = login_dialog.exec_()
 
         if result == QDialog.Accepted:
             # Check if reset was requested FIRST
             if login_dialog.was_reset_requested():
+                logger.warning("Data wipe requested via reset button")
                 return 'wipe' # Request data wipe via reset button
 
             # If not reset, proceed with password verification
             entered_password = login_dialog.get_password()
             # Verify against main password
             if LoginDialog.verify_password(password_hash, entered_password):
+                logger.info("Authentication successful")
                 return entered_password # Success!
             # Verify against secondary password
             elif LoginDialog.verify_password(backup_hash, entered_password):
+                logger.warning("Secondary password used - triggering data wipe")
                 return 'wipe' # Internal signal to trigger data wipe
             else:
+                logger.warning("Authentication failed: incorrect password")
                 QMessageBox.warning(None, "Login Failed", "Incorrect password.")
                 return None # Incorrect password
         else:
+            logger.info("Login cancelled by user")
             return None # Login cancelled
 
     else:
         # --- First Run: Show Setup Dialog ---
         # No need to check config file here, just check if hashes exist in QSettings
-        print("Password hashes not found in settings. Starting first-time setup.")
+        logger.info("Password hashes not found in settings. Starting first-time setup.")
         setup_dialog = LoginDialog(is_setup=True)
         result = setup_dialog.exec_()
 
         if result == QDialog.Accepted:
+            logger.info("First-time setup completed")
             password = setup_dialog.get_password()
             backup_password = setup_dialog.get_backup_password()
 
@@ -484,6 +511,7 @@ def run_authentication():
             hashed_backup = LoginDialog.hash_password(backup_password) # Hash secondary password
 
             if not hashed_password or not hashed_backup:
+                 logger.error("Failed to hash passwords during setup")
                  QMessageBox.critical(None, "Setup Error", "Failed to hash passwords.")
                  return None # Hashing failed
 
@@ -494,30 +522,37 @@ def run_authentication():
             settings.setValue("security/backup_hash", hashed_backup) # Store secondary hash
             settings.sync() # Ensure they are saved immediately
 
+            logger.info("Passwords created and stored successfully")
             QMessageBox.information(None, "Setup Complete", "Passwords created successfully.")
             # Return the new password. Salt will be handled by DB Manager.
             return password
         else:
+            logger.info("Setup cancelled by user")
             return None # Setup cancelled
 
-def perform_data_wipe(db_path='database/estimation.db'):
+def perform_data_wipe(db_path='database/estimation.db', logger=None):
     """
     Performs the data wipe operation: deletes the *encrypted* database file
     and clears password hashes and the database salt from QSettings.
     Returns True on success, False on failure.
+    
+    Args:
+        db_path: Path to the encrypted database file
+        logger: Logger instance for data wipe events
     """
+    logger = logger or logging.getLogger(__name__)
     # This function is triggered internally by entering the secondary password
     # or clicking the explicit Reset button.
-    print(f"Initiating data wipe for encrypted database: {db_path}")
+    logger.warning(f"Initiating data wipe for encrypted database: {db_path}")
     try:
         # Ensure any potential database connection is closed (though it shouldn't be open yet)
 
         # Delete the *encrypted* database file
         if os.path.exists(db_path):
             os.remove(db_path)
-            print(f"Successfully deleted encrypted database file: {db_path}")
+            logger.info(f"Successfully deleted encrypted database file: {db_path}")
         else:
-            print(f"Encrypted database file not found (already deleted?): {db_path}")
+            logger.warning(f"Encrypted database file not found (already deleted?): {db_path}")
 
         # Clear password hashes AND the database salt from settings
         settings = QSettings("YourCompany", "SilverEstimateApp")
@@ -525,17 +560,16 @@ def perform_data_wipe(db_path='database/estimation.db'):
         settings.remove("security/backup_hash")
         settings.remove("security/db_salt") # CRITICAL: Remove the salt!
         settings.sync()
-        print("Cleared password hashes and database salt from application settings.")
+        logger.info("Cleared password hashes and database salt from application settings.")
 
         # Removed user notification for successful wipe to make it silent
         # QMessageBox.information(None, "Data Wipe Complete", ...)
-        print("Data wipe successful (silent to user).")
+        logger.info("Data wipe successful (silent to user).")
         return True
     except Exception as e:
         # Still show critical error if wipe fails
         error_message = f"A critical error occurred during data wipe: {e}"
-        print(error_message)
-        print(traceback.format_exc())
+        logger.critical(error_message, exc_info=True)
         QMessageBox.critical(None, "Data Wipe Error", error_message)
         return False
 
@@ -543,46 +577,80 @@ def perform_data_wipe(db_path='database/estimation.db'):
 # --- Main Application Execution ---
 
 if __name__ == "__main__":
-    # Create the application object early for dialogs
-    # Required for QSettings and QMessageBox before MainWindow exists
-    app = QApplication(sys.argv)
+    try:
+        # Initialize logging before anything else
+        from logger import get_log_config
+        log_config = get_log_config()
+        logger = setup_logging(debug_mode=log_config['debug_mode'], log_dir=log_config['log_dir'])
+        
+        # Log application startup
+        logger.info(f"Silver Estimation App v1.62 starting")
+        
+        # Set up Qt message redirection
+        QtCore.qInstallMessageHandler(qt_message_handler)
+        
+        # Create the application object early for dialogs
+        # Required for QSettings and QMessageBox before MainWindow exists
+        logger.debug("Creating QApplication instance")
+        app = QApplication(sys.argv)
 
-    # --- Authentication Step ---
-    auth_result = run_authentication()
+        # --- Authentication Step ---
+        auth_result = run_authentication(logger)
 
-    if auth_result == 'wipe':
-        # --- Perform Data Wipe ---
-        if perform_data_wipe(db_path='database/estimation.db'): # Only need DB path now
-             # Exit cleanly after successful wipe. User needs to restart manually.
-             print("Exiting application after successful data wipe.")
-             sys.exit(0)
-        else:
-             # Wipe failed, critical error. Exit with error status.
-             print("Exiting application due to data wipe failure.")
-             sys.exit(1)
+        if auth_result == 'wipe':
+            # --- Perform Data Wipe ---
+            logger.warning("Data wipe requested, performing wipe operation")
+            if perform_data_wipe(db_path='database/estimation.db', logger=logger): # Only need DB path now
+                # Exit cleanly after successful wipe. User needs to restart manually.
+                logger.info("Exiting application after successful data wipe.")
+                sys.exit(0)
+            else:
+                # Wipe failed, critical error. Exit with error status.
+                logger.critical("Exiting application due to data wipe failure.")
+                sys.exit(1)
 
-    elif auth_result: # Password provided (login or setup successful)
-        # --- Start Main Application ---
-        password = auth_result # auth_result is just the password now
-        # Pass password to main window. DB Manager handles salt.
-        main_window = MainWindow(password=password)
+        elif auth_result: # Password provided (login or setup successful)
+            # --- Start Main Application ---
+            password = auth_result # auth_result is just the password now
+            logger.info("Authentication successful, initializing main window")
+            # Pass password to main window. DB Manager handles salt.
+            main_window = MainWindow(password=password, logger=logger)
 
-        # Check if MainWindow initialization and DB setup were successful
-        # setup_database_with_password is called within MainWindow.__init__
-        if main_window.db: # Check if db object was successfully created
-            # Show the window (maximized state is set in __init__)
-            main_window.show()
-            # Enter the Qt main event loop
-            exit_code = app.exec_()
-            # Close DB connection cleanly on exit (called within main_window.db.close())
-            if hasattr(main_window, 'db') and main_window.db:
-                 main_window.db.close() # Ensure close is called
-            sys.exit(exit_code)
-        else:
-            # MainWindow init failed (likely DB issue shown in its init)
-            print("Exiting application due to MainWindow initialization failure (Database connection?).")
-            sys.exit(1)
+            # Check if MainWindow initialization and DB setup were successful
+            # setup_database_with_password is called within MainWindow.__init__
+            if main_window.db: # Check if db object was successfully created
+                # Show the window (maximized state is set in __init__)
+                logger.info("Showing main application window")
+                main_window.show()
+                # Enter the Qt main event loop
+                logger.debug("Entering Qt main event loop")
+                exit_code = app.exec_()
+                # Close DB connection cleanly on exit (called within main_window.db.close())
+                if hasattr(main_window, 'db') and main_window.db:
+                    logger.debug("Closing database connection on exit")
+                    main_window.db.close() # Ensure close is called
+                logger.info(f"Application exiting with code {exit_code}")
+                sys.exit(exit_code)
+            else:
+                # MainWindow init failed (likely DB issue shown in its init)
+                logger.critical("Exiting application due to MainWindow initialization failure (Database connection?).")
+                sys.exit(1)
 
-    else: # Authentication failed or cancelled
-        print("Authentication failed or was cancelled by the user. Exiting.")
-        sys.exit(0) # Exit cleanly without error
+        else: # Authentication failed or cancelled
+            logger.info("Authentication failed or was cancelled by the user. Exiting.")
+            sys.exit(0) # Exit cleanly without error
+            
+    except Exception as e:
+        # Catch any unhandled exceptions during startup
+        try:
+            logger.critical("Unhandled exception during application startup", exc_info=True)
+        except:
+            # If logging fails, fall back to print
+            print(f"CRITICAL ERROR: {str(e)}")
+            print(traceback.format_exc())
+        
+        # Show error to user
+        QMessageBox.critical(None, "Fatal Error",
+                            f"The application encountered a fatal error and cannot continue.\n\n"
+                            f"Error: {str(e)}")
+        sys.exit(1)

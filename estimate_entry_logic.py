@@ -6,6 +6,8 @@ from PyQt5.QtGui import QColor
 from item_selection_dialog import ItemSelectionDialog
 from datetime import datetime
 import traceback # For detailed error reporting
+import logging # Import logging module
+import sqlite3 # Import sqlite3 for exception handling
 
 # --- Column Constants ---
 COL_CODE = 0
@@ -23,13 +25,17 @@ COL_TYPE = 10
 
 class EstimateLogic:
     """Business logic for the estimate entry widget."""
+    
+    def __init__(self):
+        """Initialize the logger for this class."""
+        self.logger = logging.getLogger(__name__)
 
     # --- Helper to show status messages (assumes self has show_status method) ---
     def _status(self, message, timeout=3000):
         if hasattr(self, 'show_status') and callable(self.show_status):
             self.show_status(message, timeout)
         else: # Fallback if show_status isn't available (e.g. testing)
-            print(f"Status: {message}")
+            self.logger.info(f"Status: {message}")
     # --------------------------------------------------------------------------
 
     def connect_signals(self):
@@ -85,6 +91,7 @@ class EstimateLogic:
             self._status("Print Error: Voucher number missing", 4000)
             return
 
+        self.logger.info(f"Generating print preview for {voucher_no}...")
         self._status(f"Generating print preview for {voucher_no}...")
         # Pass the stored main window font setting
         current_print_font = getattr(self.main_window, 'print_font', None)
@@ -194,10 +201,21 @@ class EstimateLogic:
                 # Potentially update totals if other columns could change? Unlikely now.
                  self.calculate_totals()
 
-        except Exception as e:
-            err_msg = f"Calculation Error: {e}"
+        except ValueError as e:
+            err_msg = f"Value Error in calculation: {str(e)}"
+            self.logger.error(err_msg, exc_info=True)
             self._status(err_msg, 5000)
-            QMessageBox.critical(self, "Calculation Error", f"{err_msg}\n{traceback.format_exc()}")
+            QMessageBox.critical(self, "Calculation Error", f"{err_msg}")
+        except TypeError as e:
+            err_msg = f"Type Error in calculation: {str(e)}"
+            self.logger.error(err_msg, exc_info=True)
+            self._status(err_msg, 5000)
+            QMessageBox.critical(self, "Calculation Error", f"{err_msg}")
+        except Exception as e:
+            err_msg = f"Unexpected Error in calculation: {str(e)}"
+            self.logger.error(err_msg, exc_info=True)
+            self._status(err_msg, 5000)
+            QMessageBox.critical(self, "Calculation Error", f"{err_msg}")
         finally:
             self.item_table.blockSignals(False)
 
@@ -329,7 +347,8 @@ class EstimateLogic:
             self.calculate_net_weight()
 
         except Exception as e:
-             QMessageBox.critical(self, "Error", f"Error populating row: {e}\n{traceback.format_exc()}")
+             self.logger.error(f"Error populating row {self.current_row+1}: {str(e)}", exc_info=True)
+             QMessageBox.critical(self, "Error", f"Error populating row: {str(e)}")
              self._status(f"Error populating row {self.current_row+1}", 4000)
         finally:
             self.item_table.blockSignals(False)
@@ -398,9 +417,10 @@ class EstimateLogic:
             self.calculate_fine()
             self.calculate_wage()
         except Exception as e:
-            err_msg = f"Error calculating Net Weight: {e}"
+            err_msg = f"Error calculating Net Weight: {str(e)}"
+            self.logger.error(err_msg, exc_info=True)
             self._status(err_msg, 5000)
-            QMessageBox.critical(self, "Calculation Error", f"{err_msg}\n{traceback.format_exc()}")
+            QMessageBox.critical(self, "Calculation Error", f"{err_msg}")
 
 
     def calculate_fine(self):
@@ -415,9 +435,10 @@ class EstimateLogic:
             fine_item.setText(f"{fine:.3f}")
             self.calculate_totals()
         except Exception as e:
-            err_msg = f"Error calculating Fine Weight: {e}"
+            err_msg = f"Error calculating Fine Weight: {str(e)}"
+            self.logger.error(err_msg, exc_info=True)
             self._status(err_msg, 5000)
-            QMessageBox.critical(self, "Calculation Error", f"{err_msg}\n{traceback.format_exc()}")
+            QMessageBox.critical(self, "Calculation Error", f"{err_msg}")
 
     def calculate_wage(self):
         """Calculate wage based on wage type, net weight/pieces, and rate for current row."""
@@ -443,9 +464,10 @@ class EstimateLogic:
             wage_item.setText(f"{wage:.2f}")
             self.calculate_totals()
         except Exception as e:
-            err_msg = f"Error calculating Wage: {e}"
+            err_msg = f"Error calculating Wage: {str(e)}"
+            self.logger.error(err_msg, exc_info=True)
             self._status(err_msg, 5000)
-            QMessageBox.critical(self, "Calculation Error", f"{err_msg}\n{traceback.format_exc()}")
+            QMessageBox.critical(self, "Calculation Error", f"{err_msg}")
 
 
     def show_last_balance_dialog(self):
@@ -488,6 +510,7 @@ class EstimateLogic:
         if dialog.exec_():
             self.last_balance_silver = self.lb_silver_spin.value()
             self.last_balance_amount = self.lb_amount_spin.value()
+            self.logger.info(f"Last balance set: {self.last_balance_silver:.3f} g, ₹ {self.last_balance_amount:.2f}")
             self._status(f"Last balance set: {self.last_balance_silver:.3f} g, ₹ {self.last_balance_amount:.2f}", 3000)
             self.calculate_totals()
         else:
@@ -524,7 +547,7 @@ class EstimateLogic:
                 else: # Regular ("No")
                     reg_gross += gross; reg_net += net; reg_fine += fine; reg_wage += wage
             except Exception as e:
-                print(f"Warning: Skipping row {row+1} in total calculation due to error: {e}")
+                self.logger.warning(f"Skipping row {row+1} in total calculation due to error: {str(e)}")
                 continue
 
         # ... (rest of total calculations and label updates remain the same) ...
@@ -591,6 +614,7 @@ class EstimateLogic:
         """Generate a new voucher number from the database."""
         voucher_no = self.db_manager.generate_voucher_no()
         self.voucher_edit.setText(voucher_no)
+        self.logger.info(f"Generated new voucher: {voucher_no}")
         self._status(f"Generated new voucher: {voucher_no}", 3000)
 
     def load_estimate(self):
@@ -599,9 +623,11 @@ class EstimateLogic:
         if not voucher_no:
             return # No warning if field just cleared
 
+        self.logger.info(f"Loading estimate {voucher_no}...")
         self._status(f"Loading estimate {voucher_no}...", 2000)
         estimate_data = self.db_manager.get_estimate_by_voucher(voucher_no)
         if not estimate_data:
+            self.logger.warning(f"Estimate voucher '{voucher_no}' not found")
             QMessageBox.warning(self, "Load Error", f"Estimate voucher '{voucher_no}' not found.")
             self._status(f"Estimate {voucher_no} not found.", 4000)
             return
@@ -617,7 +643,7 @@ class EstimateLogic:
                 load_date = QDate.fromString(header.get('date', QDate.currentDate().toString("yyyy-MM-dd")), "yyyy-MM-dd")
                 self.date_edit.setDate(load_date)
             except Exception as e:
-                print(f"Error parsing date during load: {e}")
+                self.logger.error(f"Error parsing date during load: {str(e)}", exc_info=True)
                 self.date_edit.setDate(QDate.currentDate())
 
             self.silver_rate_spin.setValue(header.get('silver_rate', 0.0))
@@ -665,10 +691,12 @@ class EstimateLogic:
 
             self.add_empty_row()
             self.calculate_totals()
+            self.logger.info(f"Estimate {voucher_no} loaded successfully")
             self._status(f"Estimate {voucher_no} loaded successfully.", 3000)
 
         except Exception as e:
-             QMessageBox.critical(self, "Load Error", f"An error occurred loading estimate: {e}\n{traceback.format_exc()}")
+             self.logger.error(f"Error loading estimate {voucher_no}: {str(e)}", exc_info=True)
+             QMessageBox.critical(self, "Load Error", f"An error occurred loading estimate: {str(e)}")
              self._status(f"Error loading estimate {voucher_no}", 5000)
         finally:
             self.processing_cell = False
@@ -683,10 +711,12 @@ class EstimateLogic:
         """Save the current estimate, handling silver bar creation/deletion."""
         voucher_no = self.voucher_edit.text().strip()
         if not voucher_no:
+            self.logger.warning("Save Error: Voucher number missing")
             QMessageBox.warning(self, "Input Error", "Voucher number is required to save.")
             self._status("Save Error: Voucher number missing", 4000)
             return
 
+        self.logger.info(f"Saving estimate {voucher_no}...")
         self._status(f"Saving estimate {voucher_no}...", 2000)
         date = self.date_edit.date().toString("yyyy-MM-dd")
         silver_rate = self.silver_rate_spin.value()
@@ -725,14 +755,17 @@ class EstimateLogic:
                 items_to_save.append(item_dict)
             except Exception as e:
                 rows_with_errors.append(row + 1)
-                print(f"Error processing row {row+1} for saving: {e}")
+                self.logger.error(f"Error processing row {row+1} for saving: {str(e)}", exc_info=True)
                 continue
 
         if rows_with_errors:
-             QMessageBox.warning(self, "Data Error", f"Could not process data in row(s): {', '.join(map(str, rows_with_errors))}. These rows were skipped.")
+             error_msg = f"Could not process data in row(s): {', '.join(map(str, rows_with_errors))}. These rows were skipped."
+             self.logger.warning(error_msg)
+             QMessageBox.warning(self, "Data Error", error_msg)
              self._status(f"Save Error: Invalid data in row(s) {', '.join(map(str, rows_with_errors))}", 5000)
 
         if not items_to_save:
+            self.logger.warning("Save Error: No valid items to save")
             QMessageBox.warning(self, "Input Error", "No valid items found to save.")
             self._status("Save Error: No valid items to save", 4000)
             return
@@ -793,11 +826,14 @@ class EstimateLogic:
         bars_failed_count = 0
         if save_success:
             # Check if this estimate already has silver bars
-            self.db_manager.cursor.execute("SELECT COUNT(*) FROM silver_bars WHERE estimate_voucher_no = ?", (voucher_no,))
-            existing_bars_count = self.db_manager.cursor.fetchone()[0]
-            
-            if existing_bars_count > 0:
-                print(f"Estimate {voucher_no} already has {existing_bars_count} silver bars. Not adding new ones.")
+            try:
+                self.db_manager.cursor.execute("SELECT COUNT(*) FROM silver_bars WHERE estimate_voucher_no = ?", (voucher_no,))
+                existing_bars_count = self.db_manager.cursor.fetchone()[0]
+                
+                if existing_bars_count > 0:
+                    self.logger.info(f"Estimate {voucher_no} already has {existing_bars_count} silver bars. Not adding new ones.")
+            except sqlite3.Error as e:
+                self.logger.error(f"Error checking existing silver bars: {str(e)}", exc_info=True)
                 self._status(f"Note: Estimate already has {existing_bars_count} silver bars. Not adding new ones.", 5000)
             else:
                 print(f"Estimate {voucher_no} saved. Now adding new silver bars...")

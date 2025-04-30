@@ -557,17 +557,52 @@ class DatabaseManager:
 
     # --- Estimate Methods ---
     def get_estimate_by_voucher(self, voucher_no):
-        if not self.cursor: return None
+        """
+        Get an estimate by its voucher number with improved error handling.
+        Returns a dictionary with 'header' and 'items' keys, or None if not found.
+        """
+        if not self.cursor or not self.conn:
+            self.logger.error(f"Cannot get estimate {voucher_no}: No active database connection")
+            return None
+            
+        # Use a transaction to ensure consistency
         try:
+            # Start a transaction
+            self.conn.execute('BEGIN TRANSACTION')
+            
+            # Get the estimate header
             self.cursor.execute('SELECT * FROM estimates WHERE voucher_no = ?', (voucher_no,))
             estimate = self.cursor.fetchone()
-            if estimate:
-                self.cursor.execute('SELECT * FROM estimate_items WHERE voucher_no = ? ORDER BY is_return, is_silver_bar, id', (voucher_no,))
-                items = self.cursor.fetchall()
-                return {'header': dict(estimate), 'items': [dict(item) for item in items]}
-            else: return None
+            
+            if not estimate:
+                self.conn.rollback()
+                return None
+                
+            # Get the estimate items
+            self.cursor.execute('SELECT * FROM estimate_items WHERE voucher_no = ? ORDER BY is_return, is_silver_bar, id', (voucher_no,))
+            items = self.cursor.fetchall()
+            
+            # Convert to dictionaries
+            result = {
+                'header': dict(estimate),
+                'items': [dict(item) for item in items]
+            }
+            
+            # Commit the transaction
+            self.conn.commit()
+            return result
+            
         except sqlite3.Error as e:
+            # Roll back the transaction on error
+            if self.conn:
+                self.conn.rollback()
             self.logger.error(f"DB Error getting estimate {voucher_no}: {str(e)}", exc_info=True)
+            return None
+        except Exception as e:
+            # Roll back the transaction on any other error
+            if self.conn:
+                self.conn.rollback()
+            self.logger.error(f"Unexpected error getting estimate {voucher_no}: {str(e)}", exc_info=True)
             return None
 
     def get_estimates(self, date_from=None, date_to=None, voucher_search=None):

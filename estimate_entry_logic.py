@@ -38,11 +38,17 @@ class EstimateLogic:
             self.logger.info(f"Status: {message}")
     # --------------------------------------------------------------------------
 
-    def connect_signals(self):
+    def connect_signals(self, skip_load_estimate=False):
         """Connect UI signals to their handlers."""
-        # Connect header signals
-        self.voucher_edit.editingFinished.connect(self.load_estimate)
-        self.generate_button.clicked.connect(self.generate_voucher)
+        # Connect header signals - use safe_load_estimate if available
+        if not skip_load_estimate:
+            if hasattr(self, 'safe_load_estimate'):
+                self.voucher_edit.editingFinished.connect(self.safe_load_estimate)
+            else:
+                # Fallback to direct connection if safe method not available
+                self.voucher_edit.editingFinished.connect(self.load_estimate)
+            
+        # Remove connection to generate button as it's been removed
         self.silver_rate_spin.valueChanged.connect(self.calculate_totals)
         
         # Connect Last Balance button
@@ -105,48 +111,64 @@ class EstimateLogic:
 
     def add_empty_row(self):
         """Add an empty row to the item table."""
-        if self.item_table.rowCount() > 0:
-            last_row = self.item_table.rowCount() - 1
-            is_last_row_empty = True
-            last_code_item = self.item_table.item(last_row, COL_CODE) # Use constant
-            if last_code_item and last_code_item.text().strip():
-                is_last_row_empty = False
+        try:
+            if self.item_table.rowCount() > 0:
+                last_row = self.item_table.rowCount() - 1
+                is_last_row_empty = True
+                last_code_item = self.item_table.item(last_row, COL_CODE) # Use constant
+                if last_code_item and last_code_item.text().strip():
+                    is_last_row_empty = False
 
-            if is_last_row_empty:
-                QTimer.singleShot(0, lambda: self.focus_on_code_column(last_row))
-                return
+                if is_last_row_empty:
+                    QTimer.singleShot(0, lambda: self.focus_on_code_column(last_row))
+                    return
 
-        self.processing_cell = True
-        row = self.item_table.rowCount()
-        self.item_table.insertRow(row)
+            self.processing_cell = True
+            row = self.item_table.rowCount()
+            self.item_table.insertRow(row)
 
-        for col in range(self.item_table.columnCount()):
-            item = QTableWidgetItem("")
-            # Use constants for column checks
-            if col in [COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT]:
-                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-            elif col == COL_TYPE:
-                 self._update_row_type_visuals_direct(item)
-                 item.setTextAlignment(Qt.AlignCenter)
-                 item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-            else:
-                item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
-            self.item_table.setItem(row, col, item)
+            for col in range(self.item_table.columnCount()):
+                item = QTableWidgetItem("")
+                # Use constants for column checks
+                if col in [COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT]:
+                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                elif col == COL_TYPE:
+                    self._update_row_type_visuals_direct(item)
+                    item.setTextAlignment(Qt.AlignCenter)
+                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                else:
+                    item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
+                self.item_table.setItem(row, col, item)
 
-        self.processing_cell = False
-        QTimer.singleShot(50, lambda: self.focus_on_code_column(row))
+            self.processing_cell = False
+            QTimer.singleShot(50, lambda: self.focus_on_code_column(row))
+            
+        except Exception as e:
+            # Log the error but don't crash the application
+            self.logger.error(f"Error adding empty row: {str(e)}", exc_info=True)
+            self._status("Warning: Could not add empty row", 3000)
+            # Make sure processing_cell is reset even if an error occurs
+            self.processing_cell = False
 
     # Helper to set item visuals based on mode (used in add_empty_row)
     def _update_row_type_visuals_direct(self, type_item):
-         if self.return_mode:
-             type_item.setText("Return")
-             type_item.setBackground(QColor(255, 200, 200))
-         elif self.silver_bar_mode:
-             type_item.setText("Silver Bar")
-             type_item.setBackground(QColor(200, 255, 200))
-         else:
-             type_item.setText("No")
-             type_item.setBackground(QColor(255, 255, 255))
+         try:
+             if not type_item:
+                 self.logger.warning("Null type_item passed to _update_row_type_visuals_direct")
+                 return
+                 
+             if self.return_mode:
+                 type_item.setText("Return")
+                 type_item.setBackground(QColor(255, 200, 200))
+             elif self.silver_bar_mode:
+                 type_item.setText("Silver Bar")
+                 type_item.setBackground(QColor(200, 255, 200))
+             else:
+                 type_item.setText("No")
+                 type_item.setBackground(QColor(255, 255, 255))
+         except Exception as e:
+             # Log the error but don't crash the application
+             self.logger.error(f"Error updating row type visuals: {str(e)}", exc_info=True)
 
     def cell_clicked(self, row, column):
         """Update current position when a cell is clicked."""
@@ -263,19 +285,34 @@ class EstimateLogic:
 
     def focus_on_code_column(self, row):
         """Focus on the code column (first column) of the specified row and start editing."""
-        if 0 <= row < self.item_table.rowCount():
-            self._ensure_cell_exists(row, COL_CODE) # Use constant
-            self.item_table.setCurrentCell(row, COL_CODE) # Use constant
-            # Capture row and col instead of the item object for the timer
-            target_row, target_col = row, COL_CODE
-            QTimer.singleShot(10, lambda: self._safe_edit_item(target_row, target_col))
+        try:
+            if 0 <= row < self.item_table.rowCount():
+                self._ensure_cell_exists(row, COL_CODE) # Use constant
+                self.item_table.setCurrentCell(row, COL_CODE) # Use constant
+                # Capture row and col instead of the item object for the timer
+                target_row, target_col = row, COL_CODE
+                QTimer.singleShot(10, lambda: self._safe_edit_item(target_row, target_col))
+            else:
+                self.logger.warning(f"Invalid row {row} in focus_on_code_column (rowCount: {self.item_table.rowCount()})")
+        except Exception as e:
+            # Log the error but don't crash the application
+            self.logger.error(f"Error focusing on code column for row {row}: {str(e)}", exc_info=True)
 
 
     def _safe_edit_item(self, row, col):
         """Safely fetches item at row/col and calls editItem if it exists."""
-        item = self.item_table.item(row, col)
-        if item:
-            self.item_table.editItem(item)
+        try:
+            # Check if row and column are valid
+            if row < 0 or row >= self.item_table.rowCount() or col < 0 or col >= self.item_table.columnCount():
+                self.logger.warning(f"Invalid row/col in _safe_edit_item: {row}/{col}")
+                return
+                
+            item = self.item_table.item(row, col)
+            if item:
+                self.item_table.editItem(item)
+        except Exception as e:
+            # Log the error but don't crash the application
+            self.logger.error(f"Error in _safe_edit_item({row}, {col}): {str(e)}", exc_info=True)
     def process_item_code(self):
         """Look up item code, populate row, or show selection dialog. Moves focus."""
         if self.processing_cell: return
@@ -393,15 +430,25 @@ class EstimateLogic:
 
     def _ensure_cell_exists(self, row, col, editable=True):
          """Ensure a QTableWidgetItem exists at row, col."""
-         item = self.item_table.item(row, col)
-         if not item:
-             item = QTableWidgetItem("")
-             self.item_table.setItem(row, col, item)
-             if not editable:
-                 item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-             else:
-                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
-         return item
+         try:
+             # Validate row and column indices
+             if row < 0 or row >= self.item_table.rowCount() or col < 0 or col >= self.item_table.columnCount():
+                 self.logger.warning(f"Invalid row/col in _ensure_cell_exists: {row}/{col}")
+                 return None
+                 
+             item = self.item_table.item(row, col)
+             if not item:
+                 item = QTableWidgetItem("")
+                 self.item_table.setItem(row, col, item)
+                 if not editable:
+                     item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                 else:
+                     item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
+             return item
+         except Exception as e:
+             # Log the error but don't crash the application
+             self.logger.error(f"Error ensuring cell exists at {row}/{col}: {str(e)}", exc_info=True)
+             return None
 
 
     def calculate_net_weight(self):
@@ -564,72 +611,148 @@ class EstimateLogic:
         net_fine_with_lb = net_fine_calc + last_balance_silver
         net_wage_with_lb = net_wage_calc + last_balance_amount
 
-        # Update UI labels for breakdown sections
-        self.total_gross_label.setText(f"{reg_gross:.3f}")
-        self.total_net_label.setText(f"{reg_net:.3f}")
-        self.total_fine_label.setText(f"{reg_fine:.3f}")
-        # self.fine_value_label.setText(f"{reg_fine_value:.2f}") # Removed
-        # self.total_wage_label.setText(f"{reg_wage:.2f}") # Removed
+        # Update UI labels for breakdown sections - with safety checks
+        try:
+            # Regular items section
+            if hasattr(self, 'total_gross_label'):
+                self.total_gross_label.setText(f"{reg_gross:.3f}")
+            if hasattr(self, 'total_net_label'):
+                self.total_net_label.setText(f"{reg_net:.3f}")
+            if hasattr(self, 'total_fine_label'):
+                self.total_fine_label.setText(f"{reg_fine:.3f}")
+            # Removed labels commented out for reference
+            # self.fine_value_label.setText(f"{reg_fine_value:.2f}") # Removed
+            # self.total_wage_label.setText(f"{reg_wage:.2f}") # Removed
 
-        self.return_gross_label.setText(f"{return_gross:.3f}")
-        self.return_net_label.setText(f"{return_net:.3f}")
-        self.return_fine_label.setText(f"{return_fine:.3f}")
-        # self.return_value_label.setText(f"{return_value:.2f}") # Removed
-        # self.return_wage_label.setText(f"{return_wage:.2f}") # Removed
+            # Return items section
+            if hasattr(self, 'return_gross_label'):
+                self.return_gross_label.setText(f"{return_gross:.3f}")
+            if hasattr(self, 'return_net_label'):
+                self.return_net_label.setText(f"{return_net:.3f}")
+            if hasattr(self, 'return_fine_label'):
+                self.return_fine_label.setText(f"{return_fine:.3f}")
+            # self.return_value_label.setText(f"{return_value:.2f}") # Removed
+            # self.return_wage_label.setText(f"{return_wage:.2f}") # Removed
 
-        self.bar_gross_label.setText(f"{bar_gross:.3f}")
-        self.bar_net_label.setText(f"{bar_net:.3f}")
-        self.bar_fine_label.setText(f"{bar_fine:.3f}")
-        # self.bar_value_label.setText(f"{bar_value:.2f}") # Removed
+            # Silver bar section
+            if hasattr(self, 'bar_gross_label'):
+                self.bar_gross_label.setText(f"{bar_gross:.3f}")
+            if hasattr(self, 'bar_net_label'):
+                self.bar_net_label.setText(f"{bar_net:.3f}")
+            if hasattr(self, 'bar_fine_label'):
+                self.bar_fine_label.setText(f"{bar_fine:.3f}")
+            # self.bar_value_label.setText(f"{bar_value:.2f}") # Removed
 
-        # Update Net Fine and Net Wage labels (conditionally showing breakdown if LB exists)
-        if last_balance_silver > 0:
-             self.net_fine_label.setText(f"{net_fine_calc:.3f} + {last_balance_silver:.3f} = {net_fine_with_lb:.3f}")
-        else:
-             self.net_fine_label.setText(f"{net_fine_calc:.3f}")
+            # Update Net Fine and Net Wage labels (conditionally showing breakdown if LB exists)
+            if hasattr(self, 'net_fine_label'):
+                if last_balance_silver > 0:
+                    self.net_fine_label.setText(f"{net_fine_calc:.3f} + {last_balance_silver:.3f} = {net_fine_with_lb:.3f}")
+                else:
+                    self.net_fine_label.setText(f"{net_fine_calc:.3f}")
 
-        if last_balance_amount > 0:
-             self.net_wage_label.setText(f"{net_wage_calc:.2f} + {last_balance_amount:.2f} = {net_wage_with_lb:.2f}")
-        else:
-             self.net_wage_label.setText(f"{net_wage_calc:.2f}")
+            if hasattr(self, 'net_wage_label'):
+                if last_balance_amount > 0:
+                    self.net_wage_label.setText(f"{net_wage_calc:.2f} + {last_balance_amount:.2f} = {net_wage_with_lb:.2f}")
+                else:
+                    self.net_wage_label.setText(f"{net_wage_calc:.2f}")
 
-        # Update Grand Total label based on silver rate
-        if silver_rate > 0:
-            net_value_with_lb = net_fine_with_lb * silver_rate
-            grand_total_calc = net_value_with_lb + net_wage_with_lb
-            self.grand_total_label.setText(f"₹ {grand_total_calc:.2f}")
-            # Ensure Net Value label exists before trying to set text (it was removed from UI setup)
-            if hasattr(self, 'net_value_label'):
-                 self.net_value_label.setText(f"{net_value_with_lb:.2f}") # Update Net Value if label exists
-        else:
-            # Format as "Fine g | Wage"
-            grand_total_text = f"{net_fine_with_lb:.3f} g | ₹ {net_wage_with_lb:.2f}"
-            self.grand_total_label.setText(grand_total_text)
-            # Clear Net Value if label exists
-            if hasattr(self, 'net_value_label'):
-                 self.net_value_label.setText("") # Clear Net Value when rate is 0
+            # Update Grand Total label based on silver rate
+            if hasattr(self, 'grand_total_label'):
+                if silver_rate > 0:
+                    net_value_with_lb = net_fine_with_lb * silver_rate
+                    grand_total_calc = net_value_with_lb + net_wage_with_lb
+                    self.grand_total_label.setText(f"₹ {grand_total_calc:.2f}")
+                    # Ensure Net Value label exists before trying to set text
+                    if hasattr(self, 'net_value_label'):
+                        self.net_value_label.setText(f"{net_value_with_lb:.2f}")
+                else:
+                    # Format as "Fine g | Wage"
+                    grand_total_text = f"{net_fine_with_lb:.3f} g | ₹ {net_wage_with_lb:.2f}"
+                    self.grand_total_label.setText(grand_total_text)
+                    # Clear Net Value if label exists
+                    if hasattr(self, 'net_value_label'):
+                        self.net_value_label.setText("")
+        except Exception as e:
+            # Log the error but don't crash the application
+            self.logger.error(f"Error updating UI labels in calculate_totals: {str(e)}", exc_info=True)
+            self._status(f"Warning: Some UI elements could not be updated", 3000)
 
 
     def generate_voucher(self):
         """Generate a new voucher number from the database."""
-        voucher_no = self.db_manager.generate_voucher_no()
-        self.voucher_edit.setText(voucher_no)
-        self.logger.info(f"Generated new voucher: {voucher_no}")
-        self._status(f"Generated new voucher: {voucher_no}", 3000)
+        try:
+            # Temporarily disconnect the editingFinished signal to prevent triggering load_estimate
+            try:
+                if hasattr(self, 'safe_load_estimate'):
+                    self.voucher_edit.editingFinished.disconnect(self.safe_load_estimate)
+                else:
+                    self.voucher_edit.editingFinished.disconnect(self.load_estimate)
+            except TypeError:
+                pass  # Signal wasn't connected, which is fine
+            
+            voucher_no = self.db_manager.generate_voucher_no()
+            self.voucher_edit.setText(voucher_no)
+            self.logger.info(f"Generated new voucher: {voucher_no}")
+            self._status(f"Generated new voucher: {voucher_no}", 3000)
+            
+        except Exception as e:
+            self.logger.error(f"Error generating voucher number: {str(e)}", exc_info=True)
+            self._status(f"Error generating voucher number", 3000)
+            QMessageBox.critical(self, "Error", f"Failed to generate voucher number: {str(e)}")
+        finally:
+            # Reconnect the signal
+            try:
+                # Ensure it's not connected multiple times
+                if hasattr(self, 'safe_load_estimate'):
+                    self.voucher_edit.editingFinished.connect(self.safe_load_estimate)
+                else:
+                    self.voucher_edit.editingFinished.connect(self.load_estimate)
+            except Exception as e:
+                self.logger.error(f"Error reconnecting signal: {str(e)}", exc_info=True)
 
     def load_estimate(self):
         """Load an existing estimate by voucher number."""
-        voucher_no = self.voucher_edit.text().strip()
+        # Skip loading during initialization to prevent startup crashes
+        if hasattr(self, 'initializing') and self.initializing:
+            self.logger.debug("Skipping load_estimate during initialization")
+            return
+            
+        # Check if database manager is available
+        if not hasattr(self, 'db_manager') or self.db_manager is None:
+            self.logger.error("Cannot load estimate: database manager is not available")
+            QMessageBox.critical(self, "Error", "Database connection is not available. Please restart the application.")
+            return
+            
+        # Get voucher number
+        try:
+            voucher_no = self.voucher_edit.text().strip()
+        except Exception as e:
+            self.logger.error(f"Error getting voucher number: {str(e)}", exc_info=True)
+            QMessageBox.critical(self, "Error", f"Error accessing voucher field: {str(e)}")
+            return
+            
         if not voucher_no:
             return # No warning if field just cleared
 
         self.logger.info(f"Loading estimate {voucher_no}...")
         self._status(f"Loading estimate {voucher_no}...", 2000)
-        estimate_data = self.db_manager.get_estimate_by_voucher(voucher_no)
-        if not estimate_data:
-            self.logger.warning(f"Estimate voucher '{voucher_no}' not found")
-            QMessageBox.warning(self, "Load Error", f"Estimate voucher '{voucher_no}' not found.")
-            self._status(f"Estimate {voucher_no} not found.", 4000)
+        
+        # Get estimate data with error handling
+        try:
+            estimate_data = self.db_manager.get_estimate_by_voucher(voucher_no)
+            if not estimate_data:
+                self.logger.warning(f"Estimate voucher '{voucher_no}' not found")
+                QMessageBox.warning(self, "Load Error", f"Estimate voucher '{voucher_no}' not found.")
+                self._status(f"Estimate {voucher_no} not found.", 4000)
+                return
+                
+            # Log the structure of the estimate data for debugging
+            self.logger.debug(f"Estimate data structure: header keys: {list(estimate_data['header'].keys())}")
+            self.logger.debug(f"Estimate items count: {len(estimate_data['items'])}")
+        except Exception as e:
+            self.logger.error(f"Error retrieving estimate {voucher_no}: {str(e)}", exc_info=True)
+            QMessageBox.critical(self, "Database Error", f"Error retrieving estimate {voucher_no}: {str(e)}")
+            self._status(f"Error retrieving estimate {voucher_no}", 4000)
             return
 
         self.item_table.blockSignals(True)
@@ -701,10 +824,15 @@ class EstimateLogic:
         finally:
             self.processing_cell = False
             self.item_table.blockSignals(False)
-            if self.item_table.rowCount() > 1:
-                self.focus_on_code_column(0)
-            elif self.item_table.rowCount() == 1:
-                self.focus_on_code_column(0)
+            try:
+                if self.item_table.rowCount() > 1:
+                    self.focus_on_code_column(0)
+                elif self.item_table.rowCount() == 1:
+                    self.focus_on_code_column(0)
+            except Exception as e:
+                # Log the error but don't crash the application
+                self.logger.error(f"Error focusing on code column: {str(e)}", exc_info=True)
+                self._status(f"Warning: Could not focus on first item", 3000)
 
 
     def save_estimate(self):

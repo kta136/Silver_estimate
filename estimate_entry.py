@@ -24,6 +24,9 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         # Set up database manager and main window reference
         self.db_manager = db_manager
         self.main_window = main_window # Store reference
+        
+        # Flag to prevent loading estimates during initialization
+        self.initializing = True
 
         # Initialize tracking variables
         # Use COL_CODE for initialization consistency
@@ -48,24 +51,27 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         self.item_table.setItemDelegateForColumn(COL_PIECES, numeric_delegate)
         # -------------------------------------------
 
-        # Connect signals AFTER setting delegates
-        self.connect_signals()
-
-        # Disconnect load_estimate initially to prevent premature trigger
-        try:
-            self.voucher_edit.editingFinished.disconnect(self.load_estimate)
-        except TypeError: # Signal not connected yet or already disconnected
-            pass
-
-        # Generate a voucher number when the widget is first created
-        self.generate_voucher()
-
-        # Reconnect load_estimate after a short delay
-        QTimer.singleShot(200, self.reconnect_load_estimate)
-
         # Make sure we start with exactly one empty row
         self.clear_all_rows()
         self.add_empty_row() # This now focuses correctly
+        
+        # Generate a voucher number when the widget is first created
+        # Do this BEFORE connecting signals to avoid triggering load_estimate
+        self.generate_voucher_silent()
+        
+        # Connect signals AFTER setting delegates and generating voucher
+        # But DO NOT connect the load_estimate signal at startup
+        self.connect_signals(skip_load_estimate=True)
+        
+        # Connect the load button to the safe_load_estimate method
+        self.load_button.clicked.connect(self.safe_load_estimate)
+        
+        # Generate a new voucher number automatically at startup
+        # This is now done silently without the generate button
+        self.generate_voucher_silent()
+        
+        # Set initializing flag to false after setup is complete
+        self.initializing = False
 
         # Set up keyboard shortcuts
         self.delete_row_shortcut = QShortcut(QKeySequence("Ctrl+D"), self)
@@ -307,7 +313,91 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
             self.voucher_edit.editingFinished.disconnect(self.load_estimate)
         except TypeError:
             pass # It wasn't connected, which is fine
-        self.voucher_edit.editingFinished.connect(self.load_estimate)
-        print("Reconnected load_estimate signal.") # Debug print
+            
+        # Use a safer approach - connect to a wrapper method that handles exceptions
+        self.voucher_edit.editingFinished.connect(self.safe_load_estimate)
+        print("Reconnected load_estimate signal with safe wrapper.") # Debug print
+        
+    def safe_load_estimate(self):
+        """Safely load an estimate, catching any exceptions to prevent crashes."""
+        # Skip loading during initialization to prevent startup crashes
+        if hasattr(self, 'initializing') and self.initializing:
+            self.logger.debug("Skipping load_estimate during initialization")
+            return
+            
+        try:
+            # Temporarily disconnect the signal to prevent recursive calls
+            try:
+                self.voucher_edit.editingFinished.disconnect(self.safe_load_estimate)
+            except TypeError:
+                pass  # It wasn't connected, which is fine
+                
+            # Call the actual load_estimate method
+            self.load_estimate()
+            
+        except Exception as e:
+            # Log the error but don't crash the application
+            self.logger.error(f"Error in safe_load_estimate: {str(e)}", exc_info=True)
+            self._status(f"Error loading estimate: {str(e)}", 5000)
+            
+            # Show error message to user
+            QMessageBox.critical(self, "Load Error",
+                                f"An error occurred while loading the estimate: {str(e)}\n\n"
+                                "Your changes have not been saved.")
+        finally:
+            # Reconnect the signal
+            try:
+                # Ensure it's not connected multiple times
+                self.voucher_edit.editingFinished.disconnect(self.safe_load_estimate)
+            except TypeError:
+                pass  # It wasn't connected, which is fine
+                
+            self.voucher_edit.editingFinished.connect(self.safe_load_estimate)
 
     # Removed _save_table_font_size_setting as saving is handled by MainWindow
+    
+    def generate_voucher_silent(self):
+        """Generate a new voucher number without triggering signals."""
+        try:
+            # Get a new voucher number from the database
+            voucher_no = self.db_manager.generate_voucher_no()
+            
+            # Temporarily block signals from the voucher edit field
+            self.voucher_edit.blockSignals(True)
+            
+            # Set the voucher number
+            self.voucher_edit.setText(voucher_no)
+            
+            # Unblock signals
+            self.voucher_edit.blockSignals(False)
+            
+            self.logger.info(f"Generated new voucher silently: {voucher_no}")
+        except Exception as e:
+            self.logger.error(f"Error generating voucher number silently: {str(e)}", exc_info=True)
+            # Don't show error message during initialization
+            
+    def connect_load_estimate_signal(self):
+        """
+        Manually connect the load_estimate signal.
+        This should be called when the user wants to load an estimate.
+        """
+        try:
+            # First disconnect if already connected to avoid multiple connections
+            try:
+                self.voucher_edit.editingFinished.disconnect(self.safe_load_estimate)
+            except TypeError:
+                pass  # It wasn't connected, which is fine
+                
+            # Connect the signal
+            self.voucher_edit.editingFinished.connect(self.safe_load_estimate)
+            self.logger.info("Manually connected load_estimate signal")
+            
+            # Add a button to the UI to load the estimate
+            if not hasattr(self, 'load_button') or self.load_button is None:
+                from PyQt5.QtWidgets import QPushButton
+                self.load_button = QPushButton("Load Estimate", self)
+                self.load_button.clicked.connect(self.safe_load_estimate)
+                self.header_layout.addWidget(self.load_button)
+                self.logger.info("Added Load Estimate button to UI")
+        except Exception as e:
+            self.logger.error(f"Error connecting load_estimate signal: {str(e)}", exc_info=True)

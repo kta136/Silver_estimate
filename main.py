@@ -5,7 +5,8 @@ import traceback
 import logging
 
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QShortcut,
-                             QMenuBar, QMenu, QAction, QMessageBox, QDialog, QStatusBar)
+                             QMenuBar, QMenu, QAction, QMessageBox, QDialog, QStatusBar,
+                             QLabel)
 from PyQt5.QtGui import QKeySequence, QFont
 from PyQt5.QtCore import Qt, QSettings, QTimer # Import QSettings
 import PyQt5.QtCore as QtCore
@@ -36,7 +37,7 @@ class MainWindow(QMainWindow):
         self._password = password # Store password temporarily
 
         # Initialize UI
-        self.setWindowTitle("Silver Estimation App v1.62") # Update version
+        self.setWindowTitle("Silver Estimation App v1.64") # Update version
         # self.setGeometry(100, 100, 1000, 700) # Remove fixed geometry
         # self.showFullScreen() # Start in true full screen
         # We need to show the window first before maximizing it
@@ -80,22 +81,62 @@ class MainWindow(QMainWindow):
         # Initialize widgets, passing main window and db manager
         # Ensure db is initialized before creating widgets that need it
         if self.db:
-            self.estimate_widget = EstimateEntryWidget(self.db, self) # Pass main window instance
-            self.item_master_widget = ItemMasterWidget(self.db)
+            try:
+                # Create widgets with robust error handling
+                self.logger.info("Creating EstimateEntryWidget...")
+                self.estimate_widget = EstimateEntryWidget(self.db, self) # Pass main window instance
+                
+                self.logger.info("Creating ItemMasterWidget...")
+                self.item_master_widget = ItemMasterWidget(self.db)
 
-            # Add widgets to layout
-            self.layout.addWidget(self.estimate_widget)
-            self.layout.addWidget(self.item_master_widget)
+                # Add widgets to layout
+                self.layout.addWidget(self.estimate_widget)
+                self.layout.addWidget(self.item_master_widget)
 
-            # Initially show estimate entry
-            self.item_master_widget.hide()
-            self.estimate_widget.show()
+                # Initially show estimate entry
+                self.item_master_widget.hide()
+                self.estimate_widget.show()
+                
+                self.logger.info("Widgets initialized successfully")
+            except Exception as e:
+                # Catch any exceptions during widget initialization
+                self.logger.critical(f"Failed to initialize widgets: {str(e)}", exc_info=True)
+                QMessageBox.critical(self, "Initialization Error",
+                                    f"Failed to initialize application widgets: {str(e)}\n\n"
+                                    "The application may not function correctly.")
+                
+                # Create placeholder widgets to prevent crashes
+                self.logger.info("Creating placeholder widgets...")
+                placeholder = QWidget()
+                placeholder_layout = QVBoxLayout(placeholder)
+                error_label = QLabel("Application initialization error. Please restart the application.")
+                error_label.setStyleSheet("color: red; font-weight: bold; font-size: 14px;")
+                placeholder_layout.addWidget(error_label)
+                
+                # Add placeholder to layout
+                self.layout.addWidget(placeholder)
+                
+                # Store None for the widgets to prevent attribute errors
+                self.estimate_widget = None
+                self.item_master_widget = None
         else:
              # Handle case where db failed to initialize
+             self.logger.critical("Database initialization failed. Cannot create widgets.")
              QMessageBox.critical(self, "Database Error", "Failed to initialize database. Application cannot continue.")
-             # Again, exiting from here is tricky, maybe disable UI elements?
-             # For now, just don't add the widgets.
-             pass
+             
+             # Create placeholder widget with error message
+             placeholder = QWidget()
+             placeholder_layout = QVBoxLayout(placeholder)
+             error_label = QLabel("Database connection failed. Please restart the application.")
+             error_label.setStyleSheet("color: red; font-weight: bold; font-size: 14px;")
+             placeholder_layout.addWidget(error_label)
+             
+             # Add placeholder to layout
+             self.layout.addWidget(placeholder)
+             
+             # Store None for the widgets to prevent attribute errors
+             self.estimate_widget = None
+             self.item_master_widget = None
 
 
         # Set up shortcuts (if needed)
@@ -108,15 +149,34 @@ class MainWindow(QMainWindow):
         """Initialize the DatabaseManager with the provided password."""
         try:
             self.logger.info("Setting up database connection")
+            
+            # Ensure database directory exists
+            import os
+            os.makedirs(os.path.dirname('database/estimation.db'), exist_ok=True)
+            
             # DatabaseManager now handles getting/creating salt internally via QSettings
             self.db = DatabaseManager('database/estimation.db', password=password)
+            
             # setup_database is called within DatabaseManager's __init__
             self.logging_status.show_message("Database connected securely.", 3000)
             self.logger.info("Database connected successfully")
+            
+            return True
         except Exception as e:
             self.logger.critical(f"Failed to connect to encrypted database: {str(e)}", exc_info=True)
-            QMessageBox.critical(self, "Database Error", f"Failed to connect to encrypted database: {e}\nApplication might not function correctly.")
+            
+            # Show a more detailed error message
+            error_details = f"Failed to connect to encrypted database: {e}\n\n"
+            error_details += "This could be due to:\n"
+            error_details += "- Incorrect password\n"
+            error_details += "- Corrupted database file\n"
+            error_details += "- Missing permissions\n\n"
+            error_details += "The application will continue with limited functionality."
+            
+            QMessageBox.critical(self, "Database Error", error_details)
+            
             self.db = None # Ensure db is None if setup fails
+            return False
 
     def setup_menu_bar(self):
         """Set up the main menu bar."""
@@ -198,16 +258,38 @@ class MainWindow(QMainWindow):
 
     def show_estimate(self):
         """Switch to Estimate Entry screen."""
-        self.item_master_widget.hide()
+        # Check if widgets exist
+        if not hasattr(self, 'estimate_widget') or self.estimate_widget is None:
+            self.logger.error("Cannot show estimate: estimate_widget is not available")
+            QMessageBox.critical(self, "Error", "Estimate entry is not available. Please restart the application.")
+            return
+            
+        if hasattr(self, 'item_master_widget') and self.item_master_widget is not None:
+            self.item_master_widget.hide()
+            
         self.estimate_widget.show()
 
     def show_item_master(self):
         """Switch to Item Master screen."""
-        self.estimate_widget.hide()
+        # Check if widgets exist
+        if not hasattr(self, 'item_master_widget') or self.item_master_widget is None:
+            self.logger.error("Cannot show item master: item_master_widget is not available")
+            QMessageBox.critical(self, "Error", "Item master is not available. Please restart the application.")
+            return
+            
+        if hasattr(self, 'estimate_widget') and self.estimate_widget is not None:
+            self.estimate_widget.hide()
+            
         self.item_master_widget.show()
 
     def delete_all_data(self): # Renamed method
         """Drop and recreate all database tables, effectively deleting all data."""
+        # Check if database is available
+        if not hasattr(self, 'db') or self.db is None:
+            self.logger.error("Cannot delete all data: database connection is not available")
+            QMessageBox.critical(self, "Error", "Database connection is not available. Please restart the application.")
+            return
+            
         # Use QMessageBox.warning for more emphasis
         reply = QMessageBox.warning(self, "CONFIRM DELETE ALL DATA", # Changed title
                                      "Are you absolutely sure you want to delete ALL data?\n"
@@ -224,18 +306,28 @@ class MainWindow(QMainWindow):
                     # Recreate tables
                     self.db.setup_database()
 
-                    # Refresh the widgets to reflect empty state
-                    self.item_master_widget.load_items()
-                    self.estimate_widget.clear_form(confirm=False) # Clear estimate form without confirmation
+                    # Refresh the widgets to reflect empty state if they exist
+                    if hasattr(self, 'item_master_widget') and self.item_master_widget is not None:
+                        self.item_master_widget.load_items()
+                        
+                    if hasattr(self, 'estimate_widget') and self.estimate_widget is not None:
+                        self.estimate_widget.clear_form(confirm=False) # Clear estimate form without confirmation
 
                     QMessageBox.information(self, "Success", "All data has been deleted successfully.") # Updated success message
                 else:
                     QMessageBox.critical(self, "Error", "Failed to delete all data (dropping tables failed).") # Updated error message
             except Exception as e:
+                self.logger.error(f"Error deleting all data: {str(e)}", exc_info=True)
                 QMessageBox.critical(self, "Error", f"Failed to delete all data: {str(e)}") # Updated error message
 
     def delete_all_estimates(self):
         """Handle the 'Delete All Estimates' action."""
+        # Check if database is available
+        if not hasattr(self, 'db') or self.db is None:
+            self.logger.error("Cannot delete all estimates: database connection is not available")
+            QMessageBox.critical(self, "Error", "Database connection is not available. Please restart the application.")
+            return
+            
         reply = QMessageBox.warning(self, "Confirm Delete All Estimates",
                                      "Are you absolutely sure you want to delete ALL estimates?\n"
                                      "This action cannot be undone.",
@@ -246,16 +338,29 @@ class MainWindow(QMainWindow):
                 success = self.db.delete_all_estimates()
                 if success:
                     QMessageBox.information(self, "Success", "All estimates have been deleted successfully.")
-                    # Clear the current estimate form as well
-                    if hasattr(self, 'estimate_widget'):
-                        self.estimate_widget.clear_form(confirm=False)
+                    # Clear the current estimate form as well if it exists
+                    if hasattr(self, 'estimate_widget') and self.estimate_widget is not None:
+                        try:
+                            self.estimate_widget.clear_form(confirm=False)
+                        except Exception as form_e:
+                            self.logger.error(f"Error clearing estimate form: {str(form_e)}", exc_info=True)
+                            # Don't show error to user, just log it
+                    else:
+                        self.logger.warning("Could not clear estimate form: estimate_widget is not available")
                 else:
                     QMessageBox.critical(self, "Error", "Failed to delete all estimates (database error).")
             except Exception as e:
+                self.logger.error(f"Error deleting all estimates: {str(e)}", exc_info=True)
                 QMessageBox.critical(self, "Error", f"An unexpected error occurred: {str(e)}")
 
     def show_silver_bars(self):  # Keep this method name for consistency
         """Show silver bar management dialog."""
+        # Check if database is available
+        if not hasattr(self, 'db') or self.db is None:
+            self.logger.error("Cannot show silver bars: database connection is not available")
+            QMessageBox.critical(self, "Error", "Database connection is not available. Please restart the application.")
+            return
+            
         # Import the MODIFIED dialog class
         from silver_bar_management import SilverBarDialog
         try:
@@ -268,15 +373,34 @@ class MainWindow(QMainWindow):
 
     def show_estimate_history(self):
         """Show estimate history dialog."""
+        # Check if estimate_widget exists
+        if not hasattr(self, 'estimate_widget') or self.estimate_widget is None:
+            self.logger.error("Cannot show estimate history: estimate_widget is not available")
+            QMessageBox.critical(self, "Error", "Estimate entry is not available. Please restart the application.")
+            return
+            
         from estimate_history import EstimateHistoryDialog
         # Pass db_manager, the explicit main_window_ref (self), and parent (self)
         history_dialog = EstimateHistoryDialog(self.db, main_window_ref=self, parent=self)
         if history_dialog.exec_() == QDialog.Accepted:
             voucher_no = history_dialog.selected_voucher
             if voucher_no:
-                self.estimate_widget.voucher_edit.setText(voucher_no)
-                self.estimate_widget.load_estimate()
-                self.show_estimate()
+                try:
+                    # Set the voucher number in the edit field
+                    self.estimate_widget.voucher_edit.setText(voucher_no)
+                    
+                    # Use safe_load_estimate if available, otherwise fall back to load_estimate
+                    if hasattr(self.estimate_widget, 'safe_load_estimate'):
+                        self.estimate_widget.safe_load_estimate()
+                    else:
+                        self.estimate_widget.load_estimate()
+                        
+                    self.show_estimate()
+                except Exception as e:
+                    # Log the error but don't crash the application
+                    self.logger.error(f"Error loading estimate from history: {str(e)}", exc_info=True)
+                    QMessageBox.critical(self, "Load Error",
+                                        f"An error occurred while loading estimate {voucher_no}: {str(e)}")
 
     def show_about(self):
         """Show about dialog."""
@@ -576,7 +700,16 @@ def perform_data_wipe(db_path='database/estimation.db', logger=None):
 
 # --- Main Application Execution ---
 
-if __name__ == "__main__":
+def safe_start_app():
+    """
+    Safe application startup with comprehensive error handling.
+    This function wraps the entire application initialization in a try-except block.
+    """
+    # Initialize minimal variables
+    logger = None
+    app = None
+    cleanup_scheduler = None
+    
     try:
         # Initialize logging before anything else
         import os
@@ -599,6 +732,162 @@ if __name__ == "__main__":
             enable_error=log_config['enable_error'],
             enable_debug=log_config['enable_debug']
         )
+        
+        # Log startup information
+        logger.info(f"Silver Estimation App v1.64 starting")
+        logger.debug(f"Logging configuration: {log_config}")
+        
+        # Initialize cleanup scheduler if enabled
+        cleanup_scheduler = None
+        if log_config['auto_cleanup']:
+            try:
+                cleanup_scheduler = LogCleanupScheduler(
+                    log_dir=log_config['log_dir'],
+                    cleanup_days=log_config['cleanup_days']
+                )
+                cleanup_scheduler.start()
+                logger.info(f"Log cleanup scheduler initialized with {log_config['cleanup_days']} days retention")
+            except Exception as e:
+                logger.error(f"Failed to initialize log cleanup scheduler: {e}", exc_info=True)
+                # Continue without cleanup scheduler
+        
+        # Set up Qt message redirection
+        QtCore.qInstallMessageHandler(qt_message_handler)
+        logger.debug("Qt message handler installed")
+        
+        # Create the application object early for dialogs
+        # Required for QSettings and QMessageBox before MainWindow exists
+        logger.debug("Creating QApplication instance")
+        app = QApplication.instance() or QApplication(sys.argv)
+
+        # --- Authentication Step ---
+        try:
+            auth_result = run_authentication(logger)
+        except Exception as auth_e:
+            logger.critical(f"Authentication failed with error: {str(auth_e)}", exc_info=True)
+            QMessageBox.critical(None, "Authentication Error",
+                                f"Failed to authenticate: {str(auth_e)}\n\nThe application will now exit.")
+            return 1
+
+        if auth_result == 'wipe':
+            # --- Perform Data Wipe ---
+            logger.warning("Data wipe requested, performing wipe operation")
+            try:
+                if perform_data_wipe(db_path='database/estimation.db', logger=logger): # Only need DB path now
+                    # Exit cleanly after successful wipe. User needs to restart manually.
+                    logger.info("Exiting application after successful data wipe.")
+                    return 0
+                else:
+                    # Wipe failed, critical error. Exit with error status.
+                    logger.critical("Exiting application due to data wipe failure.")
+                    return 1
+            except Exception as wipe_e:
+                logger.critical(f"Data wipe failed with error: {str(wipe_e)}", exc_info=True)
+                QMessageBox.critical(None, "Data Wipe Error",
+                                    f"Failed to wipe data: {str(wipe_e)}\n\nThe application will now exit.")
+                return 1
+
+        elif auth_result: # Password provided (login or setup successful)
+            # --- Start Main Application ---
+            password = auth_result # auth_result is just the password now
+            logger.info("Authentication successful, initializing main window")
+            
+            # Create main window with error handling
+            try:
+                # Pass password to main window. DB Manager handles salt.
+                main_window = MainWindow(password=password, logger=logger)
+            except Exception as window_e:
+                logger.critical(f"Failed to create main window: {str(window_e)}", exc_info=True)
+                QMessageBox.critical(None, "Initialization Error",
+                                    f"Failed to initialize application window: {str(window_e)}\n\nThe application will now exit.")
+                return 1
+
+            # Check if MainWindow initialization and DB setup were successful
+            # setup_database_with_password is called within MainWindow.__init__
+            if main_window.db: # Check if db object was successfully created
+                try:
+                    # Show the window (maximized state is set in __init__)
+                    logger.info("Showing main application window")
+                    main_window.show()
+                    
+                    # Enter the Qt main event loop
+                    logger.debug("Entering Qt main event loop")
+                    exit_code = app.exec_()
+                    
+                    # Clean up resources on exit
+                    logger.debug("Cleaning up resources before exit")
+                    
+                    # Stop log cleanup scheduler if running
+                    if cleanup_scheduler is not None:
+                        logger.debug("Stopping log cleanup scheduler")
+                        cleanup_scheduler.stop()
+                    
+                    # Close DB connection cleanly on exit
+                    if hasattr(main_window, 'db') and main_window.db:
+                        logger.debug("Closing database connection on exit")
+                        main_window.db.close() # Ensure close is called
+                    
+                    logger.info(f"Application exiting with code {exit_code}")
+                    return exit_code
+                except Exception as run_e:
+                    logger.critical(f"Error during application execution: {str(run_e)}", exc_info=True)
+                    QMessageBox.critical(None, "Runtime Error",
+                                        f"The application encountered an error during execution: {str(run_e)}\n\nThe application will now exit.")
+                    return 1
+            else:
+                # MainWindow init failed (likely DB issue shown in its init)
+                logger.critical("Exiting application due to MainWindow initialization failure (Database connection?).")
+                QMessageBox.critical(None, "Initialization Error",
+                                    "Failed to initialize database connection.\n\nThe application will now exit.")
+                return 1
+
+        else: # Authentication failed or cancelled
+            logger.info("Authentication failed or was cancelled by the user. Exiting.")
+            return 0 # Exit cleanly without error
+            
+    except Exception as e:
+        # Catch any unhandled exceptions during startup
+        try:
+            if logger:
+                logger.critical("Unhandled exception during application startup", exc_info=True)
+            else:
+                # If logger isn't initialized, fall back to print
+                print(f"CRITICAL ERROR: {str(e)}")
+                print(traceback.format_exc())
+        except:
+            # If logging fails, fall back to print
+            print(f"CRITICAL ERROR: {str(e)}")
+            print(traceback.format_exc())
+        
+        # Show error to user
+        try:
+            QMessageBox.critical(None, "Fatal Error",
+                                f"The application encountered a fatal error and cannot continue.\n\n"
+                                f"Error: {str(e)}")
+        except:
+            # If QMessageBox fails, fall back to print
+            print(f"FATAL ERROR: {str(e)}")
+        
+        return 1
+
+if __name__ == "__main__":
+    # Wrap the entire application in a try-except block
+    try:
+        exit_code = safe_start_app()
+        sys.exit(exit_code)
+    except Exception as e:
+        # Last resort error handling
+        print(f"CRITICAL STARTUP ERROR: {str(e)}")
+        print(traceback.format_exc())
+        
+        try:
+            QMessageBox.critical(None, "Fatal Error",
+                                f"The application encountered a fatal error and cannot continue.\n\n"
+                                f"Error: {str(e)}")
+        except:
+            pass
+            
+        sys.exit(1)
         
         # Log startup information
         logger.info(f"Silver Estimation App v1.62 starting")

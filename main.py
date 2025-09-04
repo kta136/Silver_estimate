@@ -149,14 +149,37 @@ class MainWindow(QMainWindow):
         """Initialize the DatabaseManager with the provided password."""
         try:
             self.logger.info("Setting up database connection")
-            
+
             # Ensure database directory exists
             import os
             os.makedirs(os.path.dirname('database/estimation.db'), exist_ok=True)
-            
+
+            # Startup recovery: if a previous temp DB exists and is newer than encrypted, offer recovery
+            try:
+                from database_manager import DatabaseManager as DM
+                enc_path = 'database/estimation.db'
+                candidate = DM.check_recovery_candidate(enc_path)
+                if candidate:
+                    self.logger.warning(f"Found newer temporary DB candidate for recovery: {candidate}")
+                    reply = QMessageBox.question(
+                        self,
+                        "Recover Unsaved Data",
+                        "A newer unsaved database state was found from a previous session.\n"
+                        "Would you like to recover it now?",
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.Yes
+                    )
+                    if reply == QMessageBox.Yes:
+                        if DM.recover_encrypt_plain_to_encrypted(candidate, enc_path, password, logger=self.logger):
+                            self.logger.info("Recovery successful. Proceeding with startup.")
+                        else:
+                            self.logger.error("Recovery failed. Proceeding with last encrypted state.")
+            except Exception as re:
+                self.logger.error(f"Recovery check failed: {re}", exc_info=True)
+
             # DatabaseManager now handles getting/creating salt internally via QSettings
             self.db = DatabaseManager('database/estimation.db', password=password)
-            
+
             # setup_database is called within DatabaseManager's __init__
             self.logging_status.show_message("Database connected securely.", 3000)
             self.logger.info("Database connected successfully")

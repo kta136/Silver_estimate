@@ -55,6 +55,14 @@ class DatabaseManager:
             self.temp_db_path = self.temp_db_file.name
             self.temp_db_file.close() # Close the handle, we just need the path
 
+            # Store temp path in QSettings for crash recovery on next startup
+            try:
+                settings = QSettings("YourCompany", "SilverEstimateApp")
+                settings.setValue("security/last_temp_db_path", self.temp_db_path)
+                settings.sync()
+            except Exception as se:
+                self.logger.warning(f"Could not store temp DB path for recovery: {se}")
+
             self.logger.debug(f"Using temporary database at: {self.temp_db_path}")
 
             # Attempt to decrypt the existing database
@@ -142,47 +150,63 @@ class DatabaseManager:
         return key
 
     def _encrypt_db(self):
-        """Encrypts the temporary DB file and saves it to the original path."""
+        """Encrypt the temporary DB file and atomically save it to the encrypted path."""
         if not self.conn or not self.temp_db_path or not os.path.exists(self.temp_db_path):
             self.logger.warning("Encryption skipped: No active connection or temporary DB file.")
             return False
         if not self.key:
-             self.logger.warning("Encryption skipped: No encryption key available.")
-             return False
+            self.logger.warning("Encryption skipped: No encryption key available.")
+            return False
+
+        # Ensure any pending writes are flushed to the temp DB before reading
+        try:
+            self.conn.commit()
+        except sqlite3.Error as e:
+            self.logger.error(f"Failed to commit before encryption: {str(e)}", exc_info=True)
+            return False
 
         self.logger.info(f"Encrypting database to {self.encrypted_db_path}")
         start_time = time.time()
+        tmp_out_path = f"{self.encrypted_db_path}.new"
         try:
             aesgcm = AESGCM(self.key)
-            nonce = os.urandom(12) # AES-GCM recommended nonce size
+            nonce = os.urandom(12)  # AES-GCM recommended nonce size
 
-            with open(self.temp_db_path, 'rb') as f_in, open(self.encrypted_db_path, 'wb') as f_out:
+            with open(self.temp_db_path, 'rb') as f_in:
                 plaintext = f_in.read()
-                if not plaintext:
-                    self.logger.warning("Temporary database file is empty. Writing empty encrypted file.")
-                    # Write nonce even for empty file to maintain structure
-                    f_out.write(nonce)
-                    # No ciphertext or tag needed
-                    return True
 
-                ciphertext = aesgcm.encrypt(nonce, plaintext, None) # No associated data
+            # Prepare encrypted payload (nonce + ciphertext)
+            if not plaintext:
+                self.logger.warning("Temporary database file is empty. Writing empty encrypted file.")
+                payload = nonce  # Write only nonce to indicate empty DB
+            else:
+                ciphertext = aesgcm.encrypt(nonce, plaintext, None)  # No associated data
+                payload = nonce + ciphertext
 
-                # Write nonce first, then ciphertext (which includes the tag)
-                f_out.write(nonce)
-                f_out.write(ciphertext)
-                
+            # Write to a temp file first
+            with open(tmp_out_path, 'wb') as f_out:
+                f_out.write(payload)
+                try:
+                    f_out.flush()
+                    os.fsync(f_out.fileno())
+                except Exception:
+                    # fsync best-effort; ignore on platforms where not applicable
+                    pass
+
+            # Atomically replace the target
+            os.replace(tmp_out_path, self.encrypted_db_path)
+
             duration = time.time() - start_time
             self.logger.info(f"Database encrypted successfully in {duration:.2f} seconds")
             return True
         except Exception as e:
             self.logger.error(f"Database encryption failed: {str(e)}", exc_info=True)
-            # Attempt to delete potentially corrupted encrypted file
+            # Clean up partial .new file but never delete the existing encrypted DB
             try:
-                if os.path.exists(self.encrypted_db_path):
-                    os.remove(self.encrypted_db_path)
-                    self.logger.info(f"Deleted potentially corrupted encrypted file: {self.encrypted_db_path}")
+                if os.path.exists(tmp_out_path):
+                    os.remove(tmp_out_path)
             except OSError as oe:
-                 self.logger.warning(f"Could not delete potentially corrupted encrypted file '{self.encrypted_db_path}': {str(oe)}")
+                self.logger.warning(f"Could not remove temporary encrypted file '{tmp_out_path}': {str(oe)}")
             return False
 
     def _decrypt_db(self):
@@ -705,6 +729,12 @@ class DatabaseManager:
             for item in return_items: self._save_estimate_item(voucher_no, item)
             
             self.conn.commit()
+            # Quick-fix: flush to encrypted file to avoid data loss on crash
+            try:
+                if not self.flush_to_encrypted():
+                    self.logger.error("Post-save flush to encrypted file failed. Data remains only in temp DB until exit.")
+            except Exception as fe:
+                self.logger.error(f"Exception during post-save flush: {fe}", exc_info=True)
             return True
         except sqlite3.Error as e:
             self.conn.rollback()
@@ -1116,5 +1146,121 @@ class DatabaseManager:
         else:
              self.logger.debug("No active database connection to close")
 
-        # Clean up the temporary file regardless of encryption success (unless we change strategy above)
-        self._cleanup_temp_db()
+        # Only delete the temporary file when encryption succeeded; otherwise, keep for recovery
+        try:
+            if 'encrypt_success' in locals() and encrypt_success:
+                self._cleanup_temp_db()
+                # Clear stored temp path after successful encryption and cleanup
+                try:
+                    settings = QSettings("YourCompany", "SilverEstimateApp")
+                    settings.remove("security/last_temp_db_path")
+                    settings.sync()
+                except Exception as se:
+                    self.logger.warning(f"Could not clear stored temp DB path: {se}")
+            else:
+                self.logger.critical("Preserving temporary database file due to encryption failure.")
+        except Exception as e:
+            self.logger.warning(f"Cleanup decision failed: {str(e)}")
+
+    def flush_to_encrypted(self):
+        """Flush current temp DB state to encrypted file safely (atomic replace)."""
+        if not self.conn:
+            self.logger.warning("flush_to_encrypted skipped: No active connection.")
+            return False
+        try:
+            # Ensure all changes are committed before encryption
+            self.conn.commit()
+        except sqlite3.Error as e:
+            self.logger.error(f"Commit failed before flush: {str(e)}", exc_info=True)
+            return False
+        return self._encrypt_db()
+
+    # --- Startup Recovery Utilities ---
+    @staticmethod
+    def _get_or_create_salt_static(logger=None):
+        settings = QSettings("YourCompany", "SilverEstimateApp")
+        salt_b64 = settings.value(SALT_KEY)
+        if salt_b64:
+            try:
+                return base64.b64decode(salt_b64)
+            except Exception as e:
+                if logger:
+                    logger.warning(f"Failed to decode stored salt: {str(e)}. Generating new salt.")
+        new_salt = os.urandom(16)
+        settings.setValue(SALT_KEY, base64.b64encode(new_salt).decode('utf-8'))
+        settings.sync()
+        return new_salt
+
+    @staticmethod
+    def check_recovery_candidate(encrypted_db_path):
+        """Return path to prior temp DB if it exists and is newer than encrypted file."""
+        settings = QSettings("YourCompany", "SilverEstimateApp")
+        temp_path = settings.value("security/last_temp_db_path")
+        if not temp_path or not isinstance(temp_path, str):
+            return None
+        if not os.path.exists(temp_path):
+            return None
+        try:
+            enc_exists = os.path.exists(encrypted_db_path)
+            temp_mtime = os.path.getmtime(temp_path)
+            enc_mtime = os.path.getmtime(encrypted_db_path) if enc_exists else 0
+            if not enc_exists or temp_mtime > enc_mtime:
+                return temp_path
+        except Exception:
+            return None
+        return None
+
+    @staticmethod
+    def recover_encrypt_plain_to_encrypted(plain_temp_path, encrypted_db_path, password, logger=None):
+        """Encrypt a plaintext SQLite DB file to the encrypted DB atomically using the app's KDF.
+
+        Returns True on success, False otherwise.
+        """
+        try:
+            if not os.path.exists(plain_temp_path):
+                if logger: logger.error(f"Recovery failed: temp file not found: {plain_temp_path}")
+                return False
+            # Derive key with same KDF and salt
+            salt = DatabaseManager._get_or_create_salt_static(logger=logger)
+            kdf = PBKDF2HMAC(
+                algorithm=hashes.SHA256(),
+                length=32,
+                salt=salt,
+                iterations=KDF_ITERATIONS,
+                backend=default_backend()
+            )
+            key = kdf.derive(password.encode('utf-8'))
+
+            with open(plain_temp_path, 'rb') as f_in:
+                plaintext = f_in.read()
+
+            aesgcm = AESGCM(key)
+            nonce = os.urandom(12)
+            payload = nonce if not plaintext else nonce + aesgcm.encrypt(nonce, plaintext, None)
+
+            tmp_out_path = f"{encrypted_db_path}.new"
+            with open(tmp_out_path, 'wb') as f_out:
+                f_out.write(payload)
+                try:
+                    f_out.flush(); os.fsync(f_out.fileno())
+                except Exception:
+                    pass
+            os.replace(tmp_out_path, encrypted_db_path)
+            if logger: logger.info("Recovered and encrypted temp DB into encrypted store.")
+            # Best-effort: remove the plaintext temp file now that it's recovered
+            try:
+                os.remove(plain_temp_path)
+            except Exception:
+                pass
+            # Clear stored temp path
+            try:
+                settings = QSettings("YourCompany", "SilverEstimateApp")
+                settings.remove("security/last_temp_db_path")
+                settings.sync()
+            except Exception:
+                pass
+            return True
+        except Exception as e:
+            if logger:
+                logger.error(f"Recovery encryption failed: {str(e)}", exc_info=True)
+            return False

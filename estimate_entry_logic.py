@@ -954,18 +954,30 @@ class EstimateLogic:
         bars_failed_count = 0
         if save_success:
             # Check if this estimate already has silver bars
+            existing_bars_count = None
             try:
-                self.db_manager.cursor.execute("SELECT COUNT(*) FROM silver_bars WHERE estimate_voucher_no = ?", (voucher_no,))
+                self.db_manager.cursor.execute(
+                    "SELECT COUNT(*) FROM silver_bars WHERE estimate_voucher_no = ?",
+                    (voucher_no,)
+                )
                 existing_bars_count = self.db_manager.cursor.fetchone()[0]
-                
-                if existing_bars_count > 0:
-                    self.logger.info(f"Estimate {voucher_no} already has {existing_bars_count} silver bars. Not adding new ones.")
             except sqlite3.Error as e:
-                self.logger.error(f"Error checking existing silver bars: {str(e)}", exc_info=True)
-                self._status(f"Note: Estimate already has {existing_bars_count} silver bars. Not adding new ones.", 5000)
-            else:
+                # On error determining existing bars, do NOT add new bars to avoid duplicates
+                self.logger.error(
+                    f"Error checking existing silver bars for {voucher_no}: {str(e)}",
+                    exc_info=True
+                )
+                self._status(
+                    "Warning: Could not verify existing silver bars. Skipping bar creation.",
+                    5000
+                )
+            
+            if existing_bars_count is not None and existing_bars_count > 0:
+                self.logger.info(
+                    f"Estimate {voucher_no} already has {existing_bars_count} silver bar(s). Skipping creation."
+                )
+            elif existing_bars_count == 0:
                 print(f"Estimate {voucher_no} saved. Now adding new silver bars...")
-                
                 # Add new silver bars from the form only if no bars exist for this estimate
                 for item in items_to_save:
                     if item['is_silver_bar'] and not item['is_return']:
@@ -977,7 +989,9 @@ class EstimateLogic:
                             print(f"Added silver bar (ID: {bar_id}) for estimate {voucher_no}.")
                         else:
                             bars_failed_count += 1
-                            print(f"Failed to add silver bar for estimate {voucher_no}, item: {item.get('name', 'N/A')}")
+                            print(
+                                f"Failed to add silver bar for estimate {voucher_no}, item: {item.get('name', 'N/A')}"
+                            )
 
         # --- Show Result Message ---
         if save_success:

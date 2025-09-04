@@ -151,13 +151,29 @@ cython_debug/
 .vs/
 
 # SQLite Databases (if not intended for repo)
-# *.sqlite3
-# *.sqlite
-# *.db
-# *.db-journal # Often created alongside .db files
+# Use directory-specific patterns below instead of global ignores if desired.
 
-# Specific files/folders from this project
-database/estimation.db # Assuming this is generated/user-specific
-database/estimation.db-journal # If it exists
-# Database file
-database/estimation.db
+# Logs
+logs/
+
+# Project database artifacts
+database/*.sqlite3
+database/*.sqlite
+database/*.db
+database/*.db-journal
+
+# OS-specific cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Codex/MCP local config
+.codex/
+
+# Temporary helper files created during tooling exploration
+servers_readme.md
+fs_npm_readme.md
+git_mcp_readme.md
+npm_search*.json
+
+# Ignore local database files

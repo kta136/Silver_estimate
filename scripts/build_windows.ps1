@@ -17,8 +17,9 @@ if ($IsWindows) {
   $py  = Join-Path $envDir "bin/python"
 }
 
-& $pip install --upgrade pip
-& $pip install -r (Join-Path $PSScriptRoot "..\requirements.txt")
+# Use python -m pip to avoid self-upgrade restrictions
+& $py -m pip install --upgrade pip
+& $py -m pip install -r (Join-Path $PSScriptRoot "..\requirements.txt")
 
 Write-Host "[Build] Running PyInstaller..."
 $spec = Join-Path $PSScriptRoot "..\silverestimate.spec"

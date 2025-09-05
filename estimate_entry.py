@@ -3,6 +3,7 @@
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QShortcut, QTableWidgetItem, QCheckBox,
                              QMessageBox, QStyledItemDelegate, QLineEdit)
 from PyQt5.QtCore import Qt, QTimer, QLocale, QSettings # Added QSettings
+from app_constants import SETTINGS_ORG, SETTINGS_APP
 # Added QKeySequence, QColor, QDoubleValidator, QIntValidator
 from PyQt5.QtGui import QKeySequence, QColor, QDoubleValidator, QIntValidator
 # Import the UI class AND the Delegate class AND the Constants
@@ -100,18 +101,14 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         self.delete_row_shortcut = QShortcut(QKeySequence("Ctrl+D"), self)
         self.delete_row_shortcut.activated.connect(self.delete_current_row)
 
-        self.return_toggle_shortcut = QShortcut(QKeySequence(" Ctrl+R"), self)
+        # Fix stray space in shortcut definition
+        self.return_toggle_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
         self.return_toggle_shortcut.activated.connect(self.toggle_return_mode)
 
         self.silver_bar_toggle_shortcut = QShortcut(QKeySequence("Ctrl+B"), self)
         self.silver_bar_toggle_shortcut.activated.connect(self.toggle_silver_bar_mode)
 
-        # Add shortcuts for main actions
-        self.save_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
-        self.save_shortcut.activated.connect(self.save_estimate)
-
-        self.print_shortcut = QShortcut(QKeySequence("Ctrl+P"), self)
-        self.print_shortcut.activated.connect(self.print_estimate)
+        # Do not bind Save/Print here to avoid shortcut conflicts; rely on MainWindow menu actions
 
         self.history_shortcut = QShortcut(QKeySequence("Ctrl+H"), self)
         self.history_shortcut.activated.connect(self.show_history)
@@ -181,9 +178,9 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         # Update button appearance and Mode Label
         if self.return_mode:
             self.return_toggle_button.setText("Return Items Mode Active (Ctrl+R)")
-            self.return_toggle_button.setStyleSheet("background-color: #ffdddd; font-weight: bold;") # Added bold
+            self.return_toggle_button.setStyleSheet("font-weight: bold;")
             self.mode_indicator_label.setText("Mode: Return Items")
-            self.mode_indicator_label.setStyleSheet("font-weight: bold; color: #c00000; margin-top: 5px; margin-bottom: 5px;") # Red color
+            self.mode_indicator_label.setStyleSheet("font-weight: bold;")
             self.show_status("Return Items mode activated", 2000)
         else:
             self.return_toggle_button.setText("Toggle Return Items (Ctrl+R)")
@@ -191,7 +188,7 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
             # Only reset mode label if silver bar mode is also off
             if not self.silver_bar_mode:
                  self.mode_indicator_label.setText("Mode: Regular")
-                 self.mode_indicator_label.setStyleSheet("font-weight: bold; color: #333; margin-top: 5px; margin-bottom: 5px;") # Default color
+                 self.mode_indicator_label.setStyleSheet("font-weight: bold;")
             self.show_status("Return Items mode deactivated", 2000)
 
         # Update the current or next empty row's type column visually
@@ -215,9 +212,9 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         # Update button appearance and Mode Label
         if self.silver_bar_mode:
             self.silver_bar_toggle_button.setText("Silver Bar Mode Active (Ctrl+B)")
-            self.silver_bar_toggle_button.setStyleSheet("background-color: #d0f0d0; font-weight: bold;") # Added bold
+            self.silver_bar_toggle_button.setStyleSheet("font-weight: bold;")
             self.mode_indicator_label.setText("Mode: Silver Bars")
-            self.mode_indicator_label.setStyleSheet("font-weight: bold; color: #006400; margin-top: 5px; margin-bottom: 5px;") # Dark green color
+            self.mode_indicator_label.setStyleSheet("font-weight: bold;")
             self.show_status("Silver Bars mode activated", 2000)
         else:
             self.silver_bar_toggle_button.setText("Toggle Silver Bars (Ctrl+B)")
@@ -225,7 +222,7 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
             # Only reset mode label if return mode is also off
             if not self.return_mode:
                  self.mode_indicator_label.setText("Mode: Regular")
-                 self.mode_indicator_label.setStyleSheet("font-weight: bold; color: #333; margin-top: 5px; margin-bottom: 5px;") # Default color
+                 self.mode_indicator_label.setStyleSheet("font-weight: bold;")
             self.show_status("Silver Bars mode deactivated", 2000)
 
         # Update the current or next empty row's type column visually
@@ -301,7 +298,7 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
 
     # --- Column Width Persistence ---
     def _settings(self):
-        return QSettings("YourCompany", "SilverEstimateApp")
+        return QSettings(SETTINGS_ORG, SETTINGS_APP)
 
     def _save_column_widths_setting(self):
         try:
@@ -407,7 +404,7 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
 
     def _load_table_font_size_setting(self):
         """Loads the table font size from settings and applies it on init."""
-        settings = QSettings("YourCompany", "SilverEstimateApp")
+        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
         # Use a reasonable default font size (e.g., 9)
         # Define default min/max here in case spinbox doesn't exist yet or range changes
         default_size = 9
@@ -448,7 +445,7 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
             logging.getLogger(__name__).warning(f"Failed to apply breakdown font size: {e}")
 
     def _load_breakdown_font_size_setting(self):
-        settings = QSettings("YourCompany", "SilverEstimateApp")
+        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
         default_size = 9
         min_size = 7
         max_size = 16
@@ -477,7 +474,7 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
             logging.getLogger(__name__).warning(f"Failed to apply final calculation font size: {e}")
 
     def _load_final_calc_font_size_setting(self):
-        settings = QSettings("YourCompany", "SilverEstimateApp")
+        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
         default_size = 10
         min_size = 8
         max_size = 20
@@ -553,6 +550,12 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
             self.voucher_edit.blockSignals(False)
             
             self.logger.info(f"Generated new voucher silently: {voucher_no}")
+            # New voucher implies no existing record loaded; disable delete button
+            try:
+                if hasattr(self, 'delete_estimate_button'):
+                    self.delete_estimate_button.setEnabled(False)
+            except Exception:
+                pass
         except Exception as e:
             self.logger.error(f"Error generating voucher number silently: {str(e)}", exc_info=True)
             # Don't show error message during initialization

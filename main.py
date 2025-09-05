@@ -6,7 +6,7 @@ import logging
 
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QShortcut,
                              QMenuBar, QMenu, QAction, QMessageBox, QDialog, QStatusBar,
-                             QLabel)
+                             QLabel, QStackedWidget, QToolBar, QActionGroup, QInputDialog)
 from PyQt5.QtGui import QKeySequence, QFont
 from PyQt5.QtCore import Qt, QSettings, QTimer # Import QSettings
 import PyQt5.QtCore as QtCore
@@ -78,6 +78,9 @@ class MainWindow(QMainWindow):
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         self.layout = QVBoxLayout(self.central_widget)
+        # Navigation stack for primary views
+        self.stack = QStackedWidget(self.central_widget)
+        self.layout.addWidget(self.stack)
 
         # Initialize widgets, passing main window and db manager
         # Ensure db is initialized before creating widgets that need it
@@ -87,16 +90,15 @@ class MainWindow(QMainWindow):
                 self.logger.info("Creating EstimateEntryWidget...")
                 self.estimate_widget = EstimateEntryWidget(self.db, self) # Pass main window instance
                 
-                self.logger.info("Creating ItemMasterWidget...")
-                self.item_master_widget = ItemMasterWidget(self.db)
+                # Lazy-load Item Master on demand (rarely used)
+                self.logger.info("Deferring ItemMasterWidget creation (lazy-load)")
+                self.item_master_widget = None
 
-                # Add widgets to layout
-                self.layout.addWidget(self.estimate_widget)
-                self.layout.addWidget(self.item_master_widget)
+                # Add Estimate view to navigation stack
+                self.stack.addWidget(self.estimate_widget)
 
                 # Initially show estimate entry
-                self.item_master_widget.hide()
-                self.estimate_widget.show()
+                self.stack.setCurrentWidget(self.estimate_widget)
                 
                 self.logger.info("Widgets initialized successfully")
             except Exception as e:
@@ -143,8 +145,53 @@ class MainWindow(QMainWindow):
         # Set up shortcuts (if needed)
 #        self.setup_shortcuts()
 
-        # Set window state to maximized at the very end of initialization
-        self.setWindowState(Qt.WindowMaximized)
+        # Restore window geometry/state if available; otherwise maximize
+        try:
+            settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+            restored = False
+            geo = settings.value("ui/main_geometry")
+            if geo is not None:
+                self.restoreGeometry(geo)
+                restored = True
+            state = settings.value("ui/main_state")
+            if state is not None:
+                self.restoreState(state)
+            if not restored:
+                self.setWindowState(Qt.WindowMaximized)
+        except Exception:
+            # Fall back to maximized if restore fails
+            self.setWindowState(Qt.WindowMaximized)
+
+    def show_status_message(self, message, timeout=3000):
+        """Expose a simple status message helper for child widgets."""
+        try:
+            if hasattr(self, 'statusBar') and self.statusBar:
+                self.statusBar.showMessage(message, timeout)
+        except Exception:
+            pass
+
+    # --- File menu action handlers ---
+    def file_save_estimate(self):
+        """Invoke save on the active estimate view if available."""
+        try:
+            if hasattr(self, 'estimate_widget') and self.estimate_widget:
+                self.estimate_widget.save_estimate()
+            else:
+                QMessageBox.information(self, "Save", "Estimate view is not available.")
+        except Exception as e:
+            self.logger.error(f"Save action failed: {e}", exc_info=True)
+            QMessageBox.critical(self, "Save Error", str(e))
+
+    def file_print_estimate(self):
+        """Invoke print on the active estimate view if available."""
+        try:
+            if hasattr(self, 'estimate_widget') and self.estimate_widget:
+                self.estimate_widget.print_estimate()
+            else:
+                QMessageBox.information(self, "Print", "Estimate view is not available.")
+        except Exception as e:
+            self.logger.error(f"Print action failed: {e}", exc_info=True)
+            QMessageBox.critical(self, "Print Error", str(e))
 
     def setup_database_with_password(self, password):
         """Initialize the DatabaseManager with the provided password."""
@@ -221,10 +268,25 @@ class MainWindow(QMainWindow):
         item_master_action.triggered.connect(self.show_item_master)
         file_menu.addAction(item_master_action)
 
+        # Standard actions for current estimate
+        file_menu.addSeparator()
+        from PyQt5.QtGui import QKeySequence
+        save_action = QAction("&Save", self)
+        save_action.setShortcut(QKeySequence.Save)
+        save_action.setShortcutContext(Qt.ApplicationShortcut)
+        save_action.triggered.connect(self.file_save_estimate)
+        file_menu.addAction(save_action)
+
+        print_action = QAction("&Print", self)
+        print_action.setShortcut(QKeySequence.Print)
+        print_action.setShortcutContext(Qt.ApplicationShortcut)
+        print_action.triggered.connect(self.file_print_estimate)
+        file_menu.addAction(print_action)
+
         # Exit action
         file_menu.addSeparator()
         exit_action = QAction("E&xit", self)
-        exit_action.setShortcut("Alt+X")
+        exit_action.setShortcut(QKeySequence.Quit)
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
@@ -250,6 +312,25 @@ class MainWindow(QMainWindow):
         # import_item_action = QAction(...)
         # tools_menu.addAction(import_item_action)
 
+        # View menu (switch primary views)
+        view_menu = menu_bar.addMenu("&View")
+        view_group = QActionGroup(self)
+        view_group.setExclusive(True)
+
+        self._view_estimate_action = QAction("&Estimate Entry", self, checkable=True)
+        self._view_item_master_action = QAction("&Item Master", self, checkable=True)
+        view_group.addAction(self._view_estimate_action)
+        view_group.addAction(self._view_item_master_action)
+
+        # Initial state reflects initial view
+        self._view_estimate_action.setChecked(True)
+
+        self._view_estimate_action.triggered.connect(self.show_estimate)
+        self._view_item_master_action.triggered.connect(self.show_item_master)
+
+        view_menu.addAction(self._view_estimate_action)
+        view_menu.addAction(self._view_item_master_action)
+
         # Reports menu
         reports_menu = menu_bar.addMenu("&Reports")
 
@@ -265,6 +346,45 @@ class MainWindow(QMainWindow):
         about_action = QAction("&About", self)
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
+
+        # Keep references for sync with toolbar
+        self._menu_estimate_action = estimate_action
+        self._menu_item_master_action = item_master_action
+
+    def setup_navigation_toolbar(self):
+        """Create a persistent toolbar to switch between primary views."""
+        try:
+            toolbar = QToolBar("Navigation", self)
+            toolbar.setMovable(False)
+            toolbar.setAllowedAreas(Qt.TopToolBarArea)
+            self.addToolBar(Qt.TopToolBarArea, toolbar)
+
+            # Exclusive selection between two views
+            group = QActionGroup(self)
+            group.setExclusive(True)
+
+            self.nav_estimate_action = QAction("Estimate Entry", self, checkable=True)
+            self.nav_item_master_action = QAction("Item Master", self, checkable=True)
+
+            group.addAction(self.nav_estimate_action)
+            group.addAction(self.nav_item_master_action)
+
+            # Initial state -> Estimate view
+            self.nav_estimate_action.setChecked(True)
+
+            # Wire actions
+            self.nav_estimate_action.triggered.connect(self.show_estimate)
+            self.nav_item_master_action.triggered.connect(self.show_item_master)
+
+            toolbar.addAction(self.nav_estimate_action)
+            toolbar.addAction(self.nav_item_master_action)
+
+            # Prefer text-only for clarity (icons can be added later)
+            toolbar.setToolButtonStyle(Qt.ToolButtonTextOnly)
+
+            self._nav_toolbar = toolbar
+        except Exception as e:
+            self.logger.warning(f"Failed to create navigation toolbar: {e}")
 
     #def setup_shortcuts(self):
       #  """Set up keyboard shortcuts."""
@@ -287,24 +407,52 @@ class MainWindow(QMainWindow):
             self.logger.error("Cannot show estimate: estimate_widget is not available")
             QMessageBox.critical(self, "Error", "Estimate entry is not available. Please restart the application.")
             return
-            
-        if hasattr(self, 'item_master_widget') and self.item_master_widget is not None:
-            self.item_master_widget.hide()
-            
-        self.estimate_widget.show()
+        # Switch via stacked widget
+        if hasattr(self, 'stack') and self.stack:
+            self.stack.setCurrentWidget(self.estimate_widget)
+        # Sync toolbar/menu states if present
+        if hasattr(self, 'nav_estimate_action'):
+            self.nav_estimate_action.setChecked(True)
+        if hasattr(self, '_menu_estimate_action'):
+            try:
+                self._menu_estimate_action.setChecked(True)
+            except Exception:
+                pass
+        if hasattr(self, '_view_estimate_action'):
+            try:
+                self._view_estimate_action.setChecked(True)
+            except Exception:
+                pass
 
     def show_item_master(self):
         """Switch to Item Master screen."""
-        # Check if widgets exist
+        # Lazy-create Item Master when first requested
         if not hasattr(self, 'item_master_widget') or self.item_master_widget is None:
-            self.logger.error("Cannot show item master: item_master_widget is not available")
-            QMessageBox.critical(self, "Error", "Item master is not available. Please restart the application.")
-            return
-            
-        if hasattr(self, 'estimate_widget') and self.estimate_widget is not None:
-            self.estimate_widget.hide()
-            
-        self.item_master_widget.show()
+            try:
+                self.logger.info("Creating ItemMasterWidget on demand...")
+                self.item_master_widget = ItemMasterWidget(self.db, self)
+                if hasattr(self, 'stack') and self.stack:
+                    self.stack.addWidget(self.item_master_widget)
+            except Exception as e:
+                self.logger.error(f"Failed to create ItemMasterWidget: {e}", exc_info=True)
+                QMessageBox.critical(self, "Error", f"Item master could not be initialized: {e}")
+                return
+        # Switch via stacked widget
+        if hasattr(self, 'stack') and self.stack:
+            self.stack.setCurrentWidget(self.item_master_widget)
+        # Sync toolbar/menu states if present
+        if hasattr(self, 'nav_item_master_action'):
+            self.nav_item_master_action.setChecked(True)
+        if hasattr(self, '_menu_item_master_action'):
+            try:
+                self._menu_item_master_action.setChecked(True)
+            except Exception:
+                pass
+        if hasattr(self, '_view_item_master_action'):
+            try:
+                self._view_item_master_action.setChecked(True)
+            except Exception:
+                pass
 
     def delete_all_data(self): # Renamed method
         """Drop and recreate all database tables, effectively deleting all data."""
@@ -315,13 +463,21 @@ class MainWindow(QMainWindow):
             return
             
         # Use QMessageBox.warning for more emphasis
-        reply = QMessageBox.warning(self, "CONFIRM DELETE ALL DATA", # Changed title
+        reply = QMessageBox.warning(self, "CONFIRM DELETE ALL DATA",
                                      "Are you absolutely sure you want to delete ALL data?\n"
                                      "This includes all items, estimates, silver bars, and lists.\n"
-                                     "THIS ACTION CANNOT BE UNDONE.", # Updated message
-                                     QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel) # Changed buttons
+                                     "THIS ACTION CANNOT BE UNDONE.",
+                                     QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
 
         if reply == QMessageBox.Yes:
+            # Second explicit confirmation: require typing DELETE
+            text, ok = QInputDialog.getText(
+                self,
+                "Type DELETE to Confirm",
+                "This will permanently erase ALL data.\n\nType DELETE to proceed:")
+            if not ok or text.strip().upper() != "DELETE":
+                QMessageBox.information(self, "Cancelled", "Delete all data cancelled.")
+                return
             try:
                 # Use the drop_tables method instead of removing the file
                 success = self.db.drop_tables() # This method drops all tables
@@ -513,6 +669,14 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         """Handle window close event."""
         self.logger.info("Application closing")
+        # Persist window geometry/state
+        try:
+            settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+            settings.setValue("ui/main_geometry", self.saveGeometry())
+            settings.setValue("ui/main_state", self.saveState())
+            settings.sync()
+        except Exception:
+            pass
         # Close the database connection properly
         if hasattr(self, 'db') and self.db:
             self.logger.debug("Closing database connection")
@@ -571,9 +735,15 @@ class MainWindow(QMainWindow):
         # Pass the authenticated DatabaseManager instance
         manager = ItemImportManager(self.db)
 
+        # Move manager to a dedicated thread for responsiveness
+        from PyQt5.QtCore import QThread
+        worker_thread = QThread(self)
+        manager.moveToThread(worker_thread)
+        worker_thread.start()
+
         # --- Signal Connections ---
         # Start import when dialog requests it (pass file path and settings dict)
-        dialog.importStarted.connect(manager.import_from_file) # Manager now expects dict
+        dialog.importStarted.connect(manager.import_from_file) # Queued to worker thread
 
         # Update dialog UI based on manager progress/status
         manager.progress_updated.connect(dialog.update_progress)
@@ -582,9 +752,17 @@ class MainWindow(QMainWindow):
 
         # Handle dialog close/cancel: If rejected, request manager to stop
         dialog.rejected.connect(manager.cancel_import) # Connect reject signal
+        dialog.rejected.connect(worker_thread.quit)
 
         # --- Execute Dialog ---
         dialog.exec_() # Show the dialog modally
+
+        # Ensure worker thread stops after dialog closes
+        try:
+            worker_thread.quit()
+            worker_thread.wait(2000)
+        except Exception:
+            pass
 
         # --- Post-Import Actions ---
         # Refresh item master table if it's currently visible to show new/updated items
@@ -792,6 +970,14 @@ def safe_start_app():
         
         # Create the application object early for dialogs
         # Required for QSettings and QMessageBox before MainWindow exists
+        # Enable HiDPI scaling for crisp UI on high‑resolution displays
+        try:
+            QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
+            QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
+            logger.debug("HiDPI attributes enabled")
+        except Exception as e:
+            logger.warning(f"Failed to set HiDPI attributes: {e}")
+
         logger.debug("Creating QApplication instance")
         app = QApplication.instance() or QApplication(sys.argv)
 

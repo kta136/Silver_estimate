@@ -29,6 +29,8 @@ class EstimateLogic:
     def __init__(self):
         """Initialize the logger for this class."""
         self.logger = logging.getLogger(__name__)
+        # Track whether an existing estimate is loaded
+        self._estimate_loaded = False
 
     # --- Helper to show status messages (assumes self has show_status method) ---
     def _status(self, message, timeout=3000):
@@ -86,6 +88,24 @@ class EstimateLogic:
         # Connect Delete This Estimate button
         if hasattr(self, 'delete_estimate_button'):
             self.delete_estimate_button.clicked.connect(self.delete_current_estimate)
+            # Ensure disabled initially; enable only when an estimate is loaded
+            try:
+                self.delete_estimate_button.setEnabled(False)
+            except Exception:
+                pass
+
+    # --- Currency formatting helper ---
+    def _format_currency(self, value):
+        """Format currency using system locale; fallback to INR symbol with grouping."""
+        try:
+            locale = QLocale.system()
+            # Round to whole currency units for display
+            return locale.toCurrencyString(float(round(value)))
+        except Exception:
+            try:
+                return f"₹ {int(round(value)):,}"
+            except Exception:
+                return str(value)
 
     def print_estimate(self):
         """Print the current estimate."""
@@ -99,6 +119,12 @@ class EstimateLogic:
 
         self.logger.info(f"Generating print preview for {voucher_no}...")
         self._status(f"Generating print preview for {voucher_no}...")
+        # Disable initiating button while preparing preview
+        try:
+            if hasattr(self, 'print_button'):
+                self.print_button.setEnabled(False)
+        except Exception:
+            pass
         # Pass the stored main window font setting
         current_print_font = getattr(self.main_window, 'print_font', None)
         print_manager = PrintManager(self.db_manager, print_font=current_print_font)
@@ -107,6 +133,12 @@ class EstimateLogic:
              self._status(f"Print preview for {voucher_no} generated.", 3000)
         else:
              self._status(f"Failed to generate print preview for {voucher_no}.", 4000)
+        # Re-enable button
+        try:
+            if hasattr(self, 'print_button'):
+                self.print_button.setEnabled(True)
+        except Exception:
+            pass
 
 
     def add_empty_row(self):
@@ -664,24 +696,26 @@ class EstimateLogic:
 
             if hasattr(self, 'net_wage_label'):
                 if last_balance_amount > 0:
-                    self.net_wage_label.setText(f"{net_wage_calc:.0f} + {last_balance_amount:.0f} = {net_wage_with_lb:.0f}")
+                    lhs = self._format_currency(net_wage_calc)
+                    lb = self._format_currency(last_balance_amount)
+                    total = self._format_currency(net_wage_with_lb)
+                    self.net_wage_label.setText(f"{lhs} + {lb} = {total}")
                 else:
-                    self.net_wage_label.setText(f"{net_wage_calc:.0f}")
+                    self.net_wage_label.setText(self._format_currency(net_wage_calc))
 
             # Update Grand Total label based on silver rate
             if hasattr(self, 'grand_total_label'):
                 if silver_rate > 0:
                     net_value_with_lb = net_fine_with_lb * silver_rate
                     grand_total_calc = net_value_with_lb + net_wage_with_lb
-                    self.grand_total_label.setText(f"₹ {grand_total_calc:.0f}")
-                    # Ensure Net Value label exists before trying to set text
+                    self.grand_total_label.setText(self._format_currency(grand_total_calc))
                     if hasattr(self, 'net_value_label'):
-                        self.net_value_label.setText(f"{net_value_with_lb:.0f}")
+                        self.net_value_label.setText(self._format_currency(net_value_with_lb))
                 else:
                     # Format as "Fine g | Wage"
-                    grand_total_text = f"{net_fine_with_lb:.1f} g | ₹ {net_wage_with_lb:.0f}"
+                    wage_str = self._format_currency(net_wage_with_lb)
+                    grand_total_text = f"{net_fine_with_lb:.1f} g | {wage_str}"
                     self.grand_total_label.setText(grand_total_text)
-                    # Clear Net Value if label exists
                     if hasattr(self, 'net_value_label'):
                         self.net_value_label.setText("")
         except Exception as e:
@@ -828,6 +862,13 @@ class EstimateLogic:
             self.calculate_totals()
             self.logger.info(f"Estimate {voucher_no} loaded successfully")
             self._status(f"Estimate {voucher_no} loaded successfully.", 3000)
+            # Enable delete button now that an existing estimate is loaded
+            self._estimate_loaded = True
+            try:
+                if hasattr(self, 'delete_estimate_button'):
+                    self.delete_estimate_button.setEnabled(True)
+            except Exception:
+                pass
 
         except Exception as e:
              self.logger.error(f"Error loading estimate {voucher_no}: {str(e)}", exc_info=True)
@@ -1050,7 +1091,7 @@ class EstimateLogic:
                 if self.return_mode: self.toggle_return_mode()
                 if self.silver_bar_mode: self.toggle_silver_bar_mode()
                 self.mode_indicator_label.setText("Mode: Regular")
-                self.mode_indicator_label.setStyleSheet("font-weight: bold; color: #333; margin-top: 5px; margin-bottom: 5px;")
+                self.mode_indicator_label.setStyleSheet("font-weight: bold;")
 
                 while self.item_table.rowCount() > 0:
                     self.item_table.removeRow(0)
@@ -1064,6 +1105,13 @@ class EstimateLogic:
                  self.processing_cell = False
                  self.item_table.blockSignals(False)
                  QTimer.singleShot(50, lambda: self.focus_on_code_column(0))
+                 # Disable delete button when starting a new/unsaved estimate
+                 self._estimate_loaded = False
+                 try:
+                     if hasattr(self, 'delete_estimate_button'):
+                         self.delete_estimate_button.setEnabled(False)
+                 except Exception:
+                     pass
 
 
     def show_history(self):

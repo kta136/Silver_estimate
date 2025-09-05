@@ -212,6 +212,7 @@ class EstimateUI:
         table_actions_layout.addSpacing(10)
         self.delete_estimate_button = QPushButton("Delete This Estimate")
         self.delete_estimate_button.setToolTip("Delete the currently loaded/displayed estimate")
+        self.delete_estimate_button.setEnabled(False)
         table_actions_layout.addWidget(self.delete_estimate_button)
         table_actions_layout.addStretch()
         self.layout.addLayout(table_actions_layout)
@@ -228,11 +229,12 @@ class EstimateUI:
     def _setup_header_form(self, widget):
         """Set up the header form for voucher details."""
         self.mode_indicator_label = QLabel("Mode: Regular Items")
-        self.mode_indicator_label.setStyleSheet("font-weight: bold; color: green;")
+        self.mode_indicator_label.setStyleSheet("font-weight: bold;")
         self.mode_indicator_label.setToolTip("Indicates whether Return Items or Silver Bar entry mode is active.")
 
         form_layout = QGridLayout()
-        form_layout.addWidget(QLabel("Voucher No:"), 0, 0)
+        voucher_label = QLabel("Voucher No:")
+        form_layout.addWidget(voucher_label, 0, 0)
         self.voucher_edit = QLineEdit()
         self.voucher_edit.setMaximumWidth(150)
         self.voucher_edit.setToolTip("Enter an existing voucher number to load or leave blank for a new estimate.")
@@ -240,14 +242,16 @@ class EstimateUI:
         self.load_button = QPushButton("Load")
         self.load_button.setToolTip("Load the estimate with the entered voucher number.")
         form_layout.addWidget(self.load_button, 0, 2)
-        form_layout.addWidget(QLabel("Date:"), 0, 3)
+        date_label = QLabel("Date:")
+        form_layout.addWidget(date_label, 0, 3)
         self.date_edit = QDateEdit()
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDate(QDate.currentDate())
         self.date_edit.setMaximumWidth(120)
         self.date_edit.setToolTip("Date of the estimate.")
         form_layout.addWidget(self.date_edit, 0, 4)
-        form_layout.addWidget(QLabel("Silver Rate:"), 0, 5)
+        silver_rate_label = QLabel("Silver Rate:")
+        form_layout.addWidget(silver_rate_label, 0, 5)
         self.silver_rate_spin = QDoubleSpinBox()
         self.silver_rate_spin.setRange(0, 1000000)
         self.silver_rate_spin.setDecimals(2)
@@ -255,7 +259,8 @@ class EstimateUI:
         self.silver_rate_spin.setValue(0)
         self.silver_rate_spin.setToolTip("Silver rate for calculating fine value.")
         form_layout.addWidget(self.silver_rate_spin, 0, 6)
-        form_layout.addWidget(QLabel("Note:"), 0, 7)
+        note_label = QLabel("Note:")
+        form_layout.addWidget(note_label, 0, 7)
         self.note_edit = QLineEdit()
         self.note_edit.setMinimumWidth(200)
         self.note_edit.setToolTip("Add a note for this estimate (will be saved with the estimate)")
@@ -263,6 +268,11 @@ class EstimateUI:
         form_layout.addWidget(self.mode_indicator_label, 0, 9, alignment=Qt.AlignLeft | Qt.AlignVCenter)
         form_layout.setColumnStretch(10, 1)
         self.layout.addLayout(form_layout)
+        # Buddies for labels to improve keyboard flow
+        voucher_label.setBuddy(self.voucher_edit)
+        date_label.setBuddy(self.date_edit)
+        silver_rate_label.setBuddy(self.silver_rate_spin)
+        note_label.setBuddy(self.note_edit)
 
 
     def _setup_item_table(self, widget):
@@ -313,9 +323,9 @@ class EstimateUI:
         self.item_table.setAlternatingRowColors(True)
         self.item_table.setStyleSheet("""
             QTableWidget {
-                background-color: #f8f8f8; /* Base color: Off-white */
-                alternate-background-color: #eeeeee; /* Alternate color: Light Gray */
-                gridline-color: #d0d0d0; /* Optional: Adjust gridline color */
+                background-color: palette(base);
+                alternate-background-color: palette(alternate-base);
+                gridline-color: palette(mid);
             }
         """)
 
@@ -399,10 +409,12 @@ class EstimateUI:
         # Final Calculation Section (using QFormLayout directly)
         final_calc_form = QFormLayout()
         final_calc_form.setSpacing(8)
-        final_title_label = QLabel("<b><u>Final Calculation</u></b>")
+        final_title_label = QLabel("Final Calculation")
         # Increase title font size
         final_title_font = final_title_label.font()
-        final_title_font.setPointSize(final_title_font.pointSize() + 1) # Increase by 1pt
+        final_title_font.setPointSize(final_title_font.pointSize() + 1)
+        final_title_font.setBold(True)
+        final_title_font.setUnderline(True)
         final_title_label.setFont(final_title_font)
         final_calc_form.addRow(final_title_label) # Title for the section
 
@@ -410,20 +422,20 @@ class EstimateUI:
         self.net_fine_label = QLabel("0.0")
         self.net_fine_label.setStyleSheet("font-weight: bold;")
         self.net_fine_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        net_fine_header = QLabel("<b>Net Fine Wt:</b>")
+        net_fine_header = QLabel("Net Fine Wt:")
         # Increase font size
         net_fine_font = self.net_fine_label.font(); net_fine_font.setPointSize(net_fine_font.pointSize() + 1); self.net_fine_label.setFont(net_fine_font)
-        net_fine_header_font = net_fine_header.font(); net_fine_header_font.setPointSize(net_fine_header_font.pointSize() + 1); net_fine_header.setFont(net_fine_header_font)
+        net_fine_header_font = net_fine_header.font(); net_fine_header_font.setPointSize(net_fine_header_font.pointSize() + 1); net_fine_header_font.setBold(True); net_fine_header.setFont(net_fine_header_font)
         final_calc_form.addRow(net_fine_header, self.net_fine_label)
 
         # Net Wage
         self.net_wage_label = QLabel("0")
         self.net_wage_label.setStyleSheet("font-weight: bold;")
         self.net_wage_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        net_wage_header = QLabel("<b>Net Wage:</b>")
+        net_wage_header = QLabel("Net Wage:")
         # Increase font size
         net_wage_font = self.net_wage_label.font(); net_wage_font.setPointSize(net_wage_font.pointSize() + 1); self.net_wage_label.setFont(net_wage_font)
-        net_wage_header_font = net_wage_header.font(); net_wage_header_font.setPointSize(net_wage_header_font.pointSize() + 1); net_wage_header.setFont(net_wage_header_font)
+        net_wage_header_font = net_wage_header.font(); net_wage_header_font.setPointSize(net_wage_header_font.pointSize() + 1); net_wage_header_font.setBold(True); net_wage_header.setFont(net_wage_header_font)
         final_calc_form.addRow(net_wage_header, self.net_wage_label)
 
         # Separator before Grand Total
@@ -434,9 +446,11 @@ class EstimateUI:
 
         # Grand Total
         self.grand_total_label = QLabel("0")
-        self.grand_total_label.setStyleSheet("font-weight: bold; color: blue;")
+        self.grand_total_label.setStyleSheet("font-weight: bold;")
         self.grand_total_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        final_calc_form.addRow("<b>Grand Total:</b>", self.grand_total_label)
+        grand_total_header = QLabel("Grand Total:")
+        gth_font = grand_total_header.font(); gth_font.setBold(True); grand_total_header.setFont(gth_font)
+        final_calc_form.addRow(grand_total_header, self.grand_total_label)
 
         # REMOVED QVBoxLayout wrapper for Final Calc
         # Add Final Calc form layout directly to the main horizontal layout
@@ -444,5 +458,15 @@ class EstimateUI:
 
         # Add the main horizontal layout to the widget's main vertical layout
         self.layout.addLayout(main_totals_layout)
+
+        # Tab order: header fields -> table
+        try:
+            QWidget.setTabOrder(self.voucher_edit, self.load_button)
+            QWidget.setTabOrder(self.load_button, self.date_edit)
+            QWidget.setTabOrder(self.date_edit, self.silver_rate_spin)
+            QWidget.setTabOrder(self.silver_rate_spin, self.note_edit)
+            QWidget.setTabOrder(self.note_edit, self.item_table)
+        except Exception:
+            pass
 
     # Removed _setup_buttons method as buttons are now created directly in setup_ui

@@ -2,7 +2,7 @@
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QPushButton, QTextEdit,
                              QLabel, QMessageBox, QApplication)
 from PyQt5.QtGui import QFont, QTextCursor, QPageSize, QTextDocument, QFontDatabase
-from PyQt5.QtCore import Qt, QDate
+from PyQt5.QtCore import Qt, QDate, QLocale
 # Import QPrintPreviewWidget
 from PyQt5.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog, QPrintPreviewWidget
 import traceback # Keep for debugging
@@ -82,6 +82,14 @@ class PrintManager:
         # Reverse the formatted string back
         formatted_other = formatted_other_rev[::-1]
         return formatted_other + "," + last_three
+
+    def _format_currency_locale(self, number):
+        """Format currency using system locale; fallback to Indian format with ₹."""
+        try:
+            locale = QLocale.system()
+            return locale.toCurrencyString(float(round(number)))
+        except Exception:
+            return f"₹ {self.format_indian_rupees(int(round(number)))}"
 
 
     def print_estimate(self, voucher_no, parent_widget=None):
@@ -349,7 +357,7 @@ class PrintManager:
             output.append(sep_dash)
             
             # Format last balance values on a single line
-            lb_str = f"Silver: {last_balance_silver:.3f} g   Amount: ₹ {self.format_indian_rupees(round(last_balance_amount))}"
+            lb_str = f"Silver: {last_balance_silver:.3f} g   Amount: {self._format_currency_locale(last_balance_amount)}"
             lb_pad = (TOTAL_WIDTH - len(lb_str)) // 2
             output.append(" " * lb_pad + lb_str)
             output.append(sep_dash)
@@ -384,10 +392,10 @@ class PrintManager:
         fine_str=f"{net_fine_display:{W_FINE}.3f}"
         wage_str=f"{net_wage_r:{W_LABOUR}.0f}"
         scost_label="S.Cost : "
-        scost_value_formatted = self.format_indian_rupees(silver_cost_r)
+        scost_value_formatted = self._format_currency_locale(silver_cost_r)
         scost_display = scost_label + scost_value_formatted
         total_label="Total: "
-        total_value_formatted = self.format_indian_rupees(total_cost_r)
+        total_value_formatted = self._format_currency_locale(total_cost_r)
         total_display = total_label + total_value_formatted
 
         tfw = 18; scfw = 22

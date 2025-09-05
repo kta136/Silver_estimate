@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 import traceback # Import traceback for error logging
+import logging    # Ensure logging is available for getLogger calls
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QDialogButtonBox, QGridLayout,
                              QFormLayout, QLabel, QPushButton, QSpinBox, QFontDialog, QMessageBox, QDoubleSpinBox,
                              QLineEdit, QGroupBox, QFileDialog, QCheckBox) # Added QCheckBox for logging settings
 from PyQt5.QtCore import Qt, QSettings, pyqtSignal
+from app_constants import SETTINGS_ORG, SETTINGS_APP
 from PyQt5.QtGui import QFont
 
 # Import dependent dialogs and modules
@@ -24,7 +26,7 @@ class SettingsDialog(QDialog):
         self.setMinimumWidth(500)
 
         # Load current settings
-        self.settings = QSettings("YourCompany", "SilverEstimateApp")
+        self.settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
 
         # Store temporary font objects for editing
         self._current_print_font = self._load_print_font_setting()

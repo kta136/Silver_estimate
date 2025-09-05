@@ -328,11 +328,24 @@ class EstimateUI:
             # REMOVED Spacer row and QVBoxLayout wrapper
             return form # Return the QFormLayout directly
 
+        # Overall Totals (leftmost): Total Gross and Total Poly
+        overall_labels = [
+            ("Total Gross Wt:", 'overall_gross_label', "0.0"),
+            ("Total Poly Wt:", 'overall_poly_label', "0.0"),
+        ]
+        main_totals_layout.addLayout(create_breakdown_form("Totals", overall_labels))
+
+        # Vertical Separator before Regular
+        sep0 = QFrame()
+        sep0.setFrameShape(QFrame.VLine)
+        sep0.setFrameShadow(QFrame.Sunken)
+        main_totals_layout.addWidget(sep0)
+
         # Regular Items
         regular_labels = [
-            ("Gross Wt:", 'total_gross_label', "0.000"),
-            ("Net Wt:", 'total_net_label', "0.000"),
-            ("Fine Wt:", 'total_fine_label', "0.000"),
+            ("Gross Wt:", 'total_gross_label', "0.0"),
+            ("Net Wt:", 'total_net_label', "0.0"),
+            ("Fine Wt:", 'total_fine_label', "0.0"),
         ]
         main_totals_layout.addLayout(create_breakdown_form("Regular", regular_labels))
 
@@ -344,9 +357,9 @@ class EstimateUI:
 
         # Return Items
         return_labels = [
-            ("Gross Wt:", 'return_gross_label', "0.000"),
-            ("Net Wt:", 'return_net_label', "0.000"),
-            ("Fine Wt:", 'return_fine_label', "0.000"),
+            ("Gross Wt:", 'return_gross_label', "0.0"),
+            ("Net Wt:", 'return_net_label', "0.0"),
+            ("Fine Wt:", 'return_fine_label', "0.0"),
         ]
         main_totals_layout.addLayout(create_breakdown_form("Return", return_labels))
 
@@ -358,9 +371,9 @@ class EstimateUI:
 
         # Silver Bars
         bar_labels = [
-            ("Gross Wt:", 'bar_gross_label', "0.000"),
-            ("Net Wt:", 'bar_net_label', "0.000"),
-            ("Fine Wt:", 'bar_fine_label', "0.000"),
+            ("Gross Wt:", 'bar_gross_label', "0.0"),
+            ("Net Wt:", 'bar_net_label', "0.0"),
+            ("Fine Wt:", 'bar_fine_label', "0.0"),
         ]
         main_totals_layout.addLayout(create_breakdown_form("Silver Bar", bar_labels))
 
@@ -384,7 +397,7 @@ class EstimateUI:
         final_calc_form.addRow(final_title_label) # Title for the section
 
         # Net Fine
-        self.net_fine_label = QLabel("0.000")
+        self.net_fine_label = QLabel("0.0")
         self.net_fine_label.setStyleSheet("font-weight: bold;")
         self.net_fine_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         net_fine_header = QLabel("<b>Net Fine Wt:</b>")
@@ -394,7 +407,7 @@ class EstimateUI:
         final_calc_form.addRow(net_fine_header, self.net_fine_label)
 
         # Net Wage
-        self.net_wage_label = QLabel("0.00")
+        self.net_wage_label = QLabel("0")
         self.net_wage_label.setStyleSheet("font-weight: bold;")
         self.net_wage_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         net_wage_header = QLabel("<b>Net Wage:</b>")
@@ -410,8 +423,8 @@ class EstimateUI:
         final_calc_form.addRow(line_before_grand)
 
         # Grand Total
-        self.grand_total_label = QLabel("0.00")
-        self.grand_total_label.setStyleSheet("font-weight: bold; color: blue; font-size: 10pt;")
+        self.grand_total_label = QLabel("0")
+        self.grand_total_label.setStyleSheet("font-weight: bold; color: blue;")
         self.grand_total_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         final_calc_form.addRow("<b>Grand Total:</b>", self.grand_total_label)
 

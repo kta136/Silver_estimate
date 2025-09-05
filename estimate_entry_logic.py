@@ -508,7 +508,7 @@ class EstimateLogic:
             else:
                 wage = net * wage_rate
             wage_item = self._ensure_cell_exists(self.current_row, COL_WAGE_AMT, editable=False)
-            wage_item.setText(f"{wage:.2f}")
+            wage_item.setText(f"{wage:.0f}")
             self.calculate_totals()
         except Exception as e:
             err_msg = f"Error calculating Wage: {str(e)}"
@@ -539,7 +539,7 @@ class EstimateLogic:
         # Amount input
         self.lb_amount_spin = QDoubleSpinBox()
         self.lb_amount_spin.setRange(0, 10000000)
-        self.lb_amount_spin.setDecimals(2)
+        self.lb_amount_spin.setDecimals(0)
         self.lb_amount_spin.setPrefix("₹ ")
         if hasattr(self, 'last_balance_amount'):
             self.lb_amount_spin.setValue(self.last_balance_amount)
@@ -557,8 +557,8 @@ class EstimateLogic:
         if dialog.exec_():
             self.last_balance_silver = self.lb_silver_spin.value()
             self.last_balance_amount = self.lb_amount_spin.value()
-            self.logger.info(f"Last balance set: {self.last_balance_silver:.3f} g, ₹ {self.last_balance_amount:.2f}")
-            self._status(f"Last balance set: {self.last_balance_silver:.3f} g, ₹ {self.last_balance_amount:.2f}", 3000)
+            self.logger.info(f"Last balance set: {self.last_balance_silver:.3f} g, ₹ {self.last_balance_amount:.0f}")
+            self._status(f"Last balance set: {self.last_balance_silver:.3f} g, ₹ {self.last_balance_amount:.0f}", 3000)
             self.calculate_totals()
         else:
             self._status("Last balance not changed", 2000)
@@ -568,6 +568,7 @@ class EstimateLogic:
         reg_gross, reg_net, reg_fine, reg_wage = 0.0, 0.0, 0.0, 0.0
         return_gross, return_net, return_fine, return_wage = 0.0, 0.0, 0.0, 0.0
         bar_gross, bar_net, bar_fine, bar_wage = 0.0, 0.0, 0.0, 0.0
+        overall_gross, overall_poly = 0.0, 0.0
         
         # Get last balance values if they exist
         last_balance_silver = getattr(self, 'last_balance_silver', 0.0)
@@ -583,9 +584,14 @@ class EstimateLogic:
                 item_type = type_item.text() if type_item else "No"
                 # Use constants for reading values
                 gross = self._get_cell_float(row, COL_GROSS)
+                poly = self._get_cell_float(row, COL_POLY)
                 net = self._get_cell_float(row, COL_NET_WT)
                 fine = self._get_cell_float(row, COL_FINE_WT)
                 wage = self._get_cell_float(row, COL_WAGE_AMT)
+
+                # Overall totals (independent of type)
+                overall_gross += gross
+                overall_poly += poly
 
                 if item_type == "Return":
                     return_gross += gross; return_net += net; return_fine += fine; return_wage += wage
@@ -613,61 +619,67 @@ class EstimateLogic:
 
         # Update UI labels for breakdown sections - with safety checks
         try:
+            # Overall totals (one decimal place)
+            if hasattr(self, 'overall_gross_label'):
+                self.overall_gross_label.setText(f"{overall_gross:.1f}")
+            if hasattr(self, 'overall_poly_label'):
+                self.overall_poly_label.setText(f"{overall_poly:.1f}")
+
             # Regular items section
             if hasattr(self, 'total_gross_label'):
-                self.total_gross_label.setText(f"{reg_gross:.3f}")
+                self.total_gross_label.setText(f"{reg_gross:.1f}")
             if hasattr(self, 'total_net_label'):
-                self.total_net_label.setText(f"{reg_net:.3f}")
+                self.total_net_label.setText(f"{reg_net:.1f}")
             if hasattr(self, 'total_fine_label'):
-                self.total_fine_label.setText(f"{reg_fine:.3f}")
+                self.total_fine_label.setText(f"{reg_fine:.1f}")
             # Removed labels commented out for reference
             # self.fine_value_label.setText(f"{reg_fine_value:.2f}") # Removed
             # self.total_wage_label.setText(f"{reg_wage:.2f}") # Removed
 
             # Return items section
             if hasattr(self, 'return_gross_label'):
-                self.return_gross_label.setText(f"{return_gross:.3f}")
+                self.return_gross_label.setText(f"{return_gross:.1f}")
             if hasattr(self, 'return_net_label'):
-                self.return_net_label.setText(f"{return_net:.3f}")
+                self.return_net_label.setText(f"{return_net:.1f}")
             if hasattr(self, 'return_fine_label'):
-                self.return_fine_label.setText(f"{return_fine:.3f}")
+                self.return_fine_label.setText(f"{return_fine:.1f}")
             # self.return_value_label.setText(f"{return_value:.2f}") # Removed
             # self.return_wage_label.setText(f"{return_wage:.2f}") # Removed
 
             # Silver bar section
             if hasattr(self, 'bar_gross_label'):
-                self.bar_gross_label.setText(f"{bar_gross:.3f}")
+                self.bar_gross_label.setText(f"{bar_gross:.1f}")
             if hasattr(self, 'bar_net_label'):
-                self.bar_net_label.setText(f"{bar_net:.3f}")
+                self.bar_net_label.setText(f"{bar_net:.1f}")
             if hasattr(self, 'bar_fine_label'):
-                self.bar_fine_label.setText(f"{bar_fine:.3f}")
+                self.bar_fine_label.setText(f"{bar_fine:.1f}")
             # self.bar_value_label.setText(f"{bar_value:.2f}") # Removed
 
             # Update Net Fine and Net Wage labels (conditionally showing breakdown if LB exists)
             if hasattr(self, 'net_fine_label'):
                 if last_balance_silver > 0:
-                    self.net_fine_label.setText(f"{net_fine_calc:.3f} + {last_balance_silver:.3f} = {net_fine_with_lb:.3f}")
+                    self.net_fine_label.setText(f"{net_fine_calc:.1f} + {last_balance_silver:.1f} = {net_fine_with_lb:.1f}")
                 else:
-                    self.net_fine_label.setText(f"{net_fine_calc:.3f}")
+                    self.net_fine_label.setText(f"{net_fine_calc:.1f}")
 
             if hasattr(self, 'net_wage_label'):
                 if last_balance_amount > 0:
-                    self.net_wage_label.setText(f"{net_wage_calc:.2f} + {last_balance_amount:.2f} = {net_wage_with_lb:.2f}")
+                    self.net_wage_label.setText(f"{net_wage_calc:.0f} + {last_balance_amount:.0f} = {net_wage_with_lb:.0f}")
                 else:
-                    self.net_wage_label.setText(f"{net_wage_calc:.2f}")
+                    self.net_wage_label.setText(f"{net_wage_calc:.0f}")
 
             # Update Grand Total label based on silver rate
             if hasattr(self, 'grand_total_label'):
                 if silver_rate > 0:
                     net_value_with_lb = net_fine_with_lb * silver_rate
                     grand_total_calc = net_value_with_lb + net_wage_with_lb
-                    self.grand_total_label.setText(f"₹ {grand_total_calc:.2f}")
+                    self.grand_total_label.setText(f"₹ {grand_total_calc:.0f}")
                     # Ensure Net Value label exists before trying to set text
                     if hasattr(self, 'net_value_label'):
-                        self.net_value_label.setText(f"{net_value_with_lb:.2f}")
+                        self.net_value_label.setText(f"{net_value_with_lb:.0f}")
                 else:
                     # Format as "Fine g | Wage"
-                    grand_total_text = f"{net_fine_with_lb:.3f} g | ₹ {net_wage_with_lb:.2f}"
+                    grand_total_text = f"{net_fine_with_lb:.1f} g | ₹ {net_wage_with_lb:.0f}"
                     self.grand_total_label.setText(grand_total_text)
                     # Clear Net Value if label exists
                     if hasattr(self, 'net_value_label'):

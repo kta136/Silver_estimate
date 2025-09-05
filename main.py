@@ -37,7 +37,7 @@ class MainWindow(QMainWindow):
         self._password = password # Store password temporarily
 
         # Initialize UI
-        self.setWindowTitle("Silver Estimation App v1.64") # Update version
+        self.setWindowTitle("Silver Estimation App v1.66") # Update version
         # self.setGeometry(100, 100, 1000, 700) # Remove fixed geometry
         # self.showFullScreen() # Start in true full screen
         # We need to show the window first before maximizing it
@@ -757,7 +757,7 @@ def safe_start_app():
         )
         
         # Log startup information
-        logger.info(f"Silver Estimation App v1.64 starting")
+        logger.info(f"Silver Estimation App v1.66 starting")
         logger.debug(f"Logging configuration: {log_config}")
         
         # Initialize cleanup scheduler if enabled

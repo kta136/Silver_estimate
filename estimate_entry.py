@@ -102,6 +102,10 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         # Load initial table font size
         self._load_table_font_size_setting()
 
+        # Load initial breakdown and final calculation font sizes
+        self._load_breakdown_font_size_setting()
+        self._load_final_calc_font_size_setting()
+
 
     # --- Add helper to show status messages via main window ---
     def show_status(self, message, timeout=3000):
@@ -304,6 +308,63 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         else:
              # Should not happen if called at end of __init__, but as fallback:
              print("Warning: item_table not ready during font size load.")
+
+    # --- Totals (Regular/Return/Silver Bar) font size handling ---
+    def _apply_breakdown_font_size(self, size):
+        """Apply font size to totals breakdown numeric labels (bottom-left)."""
+        try:
+            labels = [
+                getattr(self, name, None) for name in [
+                    'overall_gross_label', 'overall_poly_label',
+                    'total_gross_label', 'total_net_label', 'total_fine_label',
+                    'return_gross_label', 'return_net_label', 'return_fine_label',
+                    'bar_gross_label', 'bar_net_label', 'bar_fine_label'
+                ]
+            ]
+            for lbl in labels:
+                if lbl is not None:
+                    f = lbl.font()
+                    f.setPointSize(int(size))
+                    lbl.setFont(f)
+        except Exception as e:
+            print(f"Warning: Failed to apply breakdown font size: {e}")
+
+    def _load_breakdown_font_size_setting(self):
+        settings = QSettings("YourCompany", "SilverEstimateApp")
+        default_size = 9
+        min_size = 7
+        max_size = 16
+        size = settings.value("ui/breakdown_font_size", defaultValue=default_size, type=int)
+        size = max(min_size, min(size, max_size))
+        self._apply_breakdown_font_size(size)
+
+    # --- Final Calculation font size handling ---
+    def _apply_final_calc_font_size(self, size):
+        """Apply font size to Final Calculation numeric labels (right side)."""
+        try:
+            labels = [getattr(self, name, None) for name in [
+                'net_fine_label', 'net_wage_label', 'grand_total_label'
+            ]]
+            for lbl in labels:
+                if lbl is not None:
+                    f = lbl.font()
+                    f.setPointSize(int(size))
+                    lbl.setFont(f)
+            # Ensure stylesheet for grand total does not pin font-size
+            if hasattr(self, 'grand_total_label') and self.grand_total_label is not None:
+                # Preserve bold + color but drop any fixed font-size
+                self.grand_total_label.setStyleSheet("font-weight: bold; color: blue;")
+        except Exception as e:
+            print(f"Warning: Failed to apply final calculation font size: {e}")
+
+    def _load_final_calc_font_size_setting(self):
+        settings = QSettings("YourCompany", "SilverEstimateApp")
+        default_size = 10
+        min_size = 8
+        max_size = 20
+        size = settings.value("ui/final_calc_font_size", defaultValue=default_size, type=int)
+        size = max(min_size, min(size, max_size))
+        self._apply_final_calc_font_size(size)
 
 
     def reconnect_load_estimate(self):

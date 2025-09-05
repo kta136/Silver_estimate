@@ -29,6 +29,8 @@ class SettingsDialog(QDialog):
         # Store temporary font objects for editing
         self._current_print_font = self._load_print_font_setting()
         self._current_table_font_size = self._load_table_font_size_setting()
+        self._current_breakdown_font_size = self._load_breakdown_font_size_setting()
+        self._current_final_calc_font_size = self._load_final_calc_font_size_setting()
         # Add more settings variables as needed
 
         # Create tab widget
@@ -83,6 +85,20 @@ class SettingsDialog(QDialog):
         self.table_font_size_spin.setValue(self._current_table_font_size)
         self.table_font_size_spin.setToolTip("Set font size for the main estimate entry table (7-16pt)")
         form_layout.addRow("Estimate Table Font Size:", self.table_font_size_spin)
+
+        # Breakdown Totals Font Size (Regular/Return/Silver Bar)
+        self.breakdown_font_size_spin = QSpinBox()
+        self.breakdown_font_size_spin.setRange(7, 16)
+        self.breakdown_font_size_spin.setValue(self._current_breakdown_font_size)
+        self.breakdown_font_size_spin.setToolTip("Text size for Regular/Return/Silver Bar totals at bottom-left")
+        form_layout.addRow("Totals (Left) Font Size:", self.breakdown_font_size_spin)
+
+        # Final Calculation Font Size
+        self.final_calc_font_size_spin = QSpinBox()
+        self.final_calc_font_size_spin.setRange(8, 20)
+        self.final_calc_font_size_spin.setValue(self._current_final_calc_font_size)
+        self.final_calc_font_size_spin.setToolTip("Text size for Final Calculation numbers (right panel)")
+        form_layout.addRow("Final Calculation Font Size:", self.final_calc_font_size_spin)
 
         # Add more UI settings here...
 
@@ -406,6 +422,20 @@ class SettingsDialog(QDialog):
         size = self.settings.value("ui/table_font_size", defaultValue=default_size, type=int)
         return max(min_size, min(size, max_size)) # Clamp value
 
+    def _load_breakdown_font_size_setting(self):
+        default_size = 9
+        min_size = 7
+        max_size = 16
+        size = self.settings.value("ui/breakdown_font_size", defaultValue=default_size, type=int)
+        return max(min_size, min(size, max_size))
+
+    def _load_final_calc_font_size_setting(self):
+        default_size = 10
+        min_size = 8
+        max_size = 20
+        size = self.settings.value("ui/final_calc_font_size", defaultValue=default_size, type=int)
+        return max(min_size, min(size, max_size))
+
     def _load_print_settings_to_ui(self):
         """Load current printing settings into the UI controls."""
         margins = self.settings.value("print/margins", defaultValue="10,2,10,2", type=str).split(',')
@@ -459,6 +489,24 @@ class SettingsDialog(QDialog):
                  print(f"Applied table font size: {new_table_size}pt")
             else:
                  print("Warning: Could not apply table font size immediately.")
+
+            # Save Breakdown Totals Font Size
+            new_breakdown_size = self.breakdown_font_size_spin.value()
+            self.settings.setValue("ui/breakdown_font_size", new_breakdown_size)
+            if hasattr(self.main_window, 'estimate_widget') and hasattr(self.main_window.estimate_widget, '_apply_breakdown_font_size'):
+                 self.main_window.estimate_widget._apply_breakdown_font_size(new_breakdown_size)
+                 print(f"Applied breakdown totals font size: {new_breakdown_size}pt")
+            else:
+                 print("Warning: Could not apply breakdown totals font size immediately.")
+
+            # Save Final Calculation Font Size
+            new_final_calc_size = self.final_calc_font_size_spin.value()
+            self.settings.setValue("ui/final_calc_font_size", new_final_calc_size)
+            if hasattr(self.main_window, 'estimate_widget') and hasattr(self.main_window.estimate_widget, '_apply_final_calc_font_size'):
+                 self.main_window.estimate_widget._apply_final_calc_font_size(new_final_calc_size)
+                 print(f"Applied final calculation font size: {new_final_calc_size}pt")
+            else:
+                 print("Warning: Could not apply final calculation font size immediately.")
 
             # Save Printing Settings
             margins = f"{self.margin_left_spin.value()},{self.margin_top_spin.value()},{self.margin_right_spin.value()},{self.margin_bottom_spin.value()}"

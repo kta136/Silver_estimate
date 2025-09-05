@@ -283,8 +283,12 @@ class EstimateUI:
         for i, tooltip in enumerate(header_tooltips):
             self.item_table.horizontalHeaderItem(i).setToolTip(tooltip)
 
+        # Allow user to interactively resize columns and persist via QSettings
+        header = self.item_table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Interactive)
+
+        # Initial sensible widths (user may change at runtime)
         self.item_table.setColumnWidth(COL_CODE, 80)
-        self.item_table.horizontalHeader().setSectionResizeMode(COL_ITEM_NAME, QHeaderView.Stretch)
         self.item_table.setColumnWidth(COL_GROSS, 85)
         self.item_table.setColumnWidth(COL_POLY, 85)
         self.item_table.setColumnWidth(COL_NET_WT, 85)
@@ -294,6 +298,12 @@ class EstimateUI:
         self.item_table.setColumnWidth(COL_WAGE_AMT, 85)
         self.item_table.setColumnWidth(COL_FINE_WT, 85)
         self.item_table.setColumnWidth(COL_TYPE, 80)
+
+        # Notify widget on resize to save widths
+        try:
+            header.sectionResized.connect(widget._on_item_table_section_resized)
+        except Exception:
+            pass
 
         self.item_table.setEditTriggers(
             QTableWidget.DoubleClicked | QTableWidget.EditKeyPressed | QTableWidget.CurrentChanged

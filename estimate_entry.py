@@ -6,7 +6,17 @@ from PyQt5.QtCore import Qt, QTimer, QLocale, QSettings # Added QSettings
 # Added QKeySequence, QColor, QDoubleValidator, QIntValidator
 from PyQt5.QtGui import QKeySequence, QColor, QDoubleValidator, QIntValidator
 # Import the UI class AND the Delegate class AND the Constants
-from estimate_entry_ui import EstimateUI, NumericDelegate, COL_CODE, COL_GROSS, COL_POLY, COL_PURITY, COL_WAGE_RATE, COL_PIECES
+from estimate_entry_ui import (
+    EstimateUI,
+    NumericDelegate,
+    COL_CODE,
+    COL_ITEM_NAME,
+    COL_GROSS,
+    COL_POLY,
+    COL_PURITY,
+    COL_WAGE_RATE,
+    COL_PIECES,
+)
 from estimate_entry_logic import EstimateLogic
 
 
@@ -40,6 +50,17 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         # Set up UI (this creates self.item_table)
         self.setup_ui(self)
 
+        # Hybrid column sizing state
+        self._use_stretch_for_item_name = False
+        self._programmatic_resizing = False
+
+        # Restore any saved column widths for the item table (enables stretch if none saved)
+        self._load_column_widths_setting()
+
+        # If stretching is active (no saved widths), do an initial auto-stretch after layout
+        if self._use_stretch_for_item_name:
+            QTimer.singleShot(0, self._auto_stretch_item_name)
+
         # --- Set Delegates for Table Validation ---
         numeric_delegate = NumericDelegate(parent=self.item_table)
 
@@ -72,6 +93,8 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         
         # Set initializing flag to false after setup is complete
         self.initializing = False
+
+        # Column width persistence is hooked in UI setup via header.sectionResized
 
         # Set up keyboard shortcuts
         self.delete_row_shortcut = QShortcut(QKeySequence("Ctrl+D"), self)
@@ -275,6 +298,98 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
 
         # Let the parent handle other key events (like character input)
         super().keyPressEvent(event)
+
+    # --- Column Width Persistence ---
+    def _settings(self):
+        return QSettings("YourCompany", "SilverEstimateApp")
+
+    def _save_column_widths_setting(self):
+        try:
+            if not hasattr(self, 'item_table'):
+                return
+            count = self.item_table.columnCount()
+            widths = [str(max(30, self.item_table.columnWidth(i))) for i in range(count)]
+            value = ",".join(widths)
+            self._settings().setValue("ui/estimate_table_column_widths", value)
+        except Exception:
+            pass
+
+    def _load_column_widths_setting(self):
+        try:
+            if not hasattr(self, 'item_table'):
+                return
+            value = self._settings().value("ui/estimate_table_column_widths", type=str)
+            if not value:
+                # No saved widths → enable stretch mode for Item Name
+                self._use_stretch_for_item_name = True
+                return
+            parts = [p.strip() for p in str(value).split(',') if p.strip().isdigit()]
+            if not parts:
+                # Treat as no saved widths
+                self._use_stretch_for_item_name = True
+                return
+            count = min(self.item_table.columnCount(), len(parts))
+            # Applying saved widths disables stretch mode
+            self._use_stretch_for_item_name = False
+            self._programmatic_resizing = True
+            for i in range(count):
+                w = int(parts[i])
+                w = max(30, min(2000, w))
+                self.item_table.setColumnWidth(i, w)
+            self._programmatic_resizing = False
+        except Exception:
+            pass
+
+    def _on_item_table_section_resized(self, logicalIndex, oldSize, newSize):
+        # Ignore programmatic resizes
+        if getattr(self, '_programmatic_resizing', False):
+            return
+        # User resized any column → disable stretch mode going forward
+        if getattr(self, '_use_stretch_for_item_name', False):
+            self._use_stretch_for_item_name = False
+        # Save widths
+        self._save_column_widths_setting()
+
+    def resizeEvent(self, event):
+        try:
+            if getattr(self, '_use_stretch_for_item_name', False):
+                self._auto_stretch_item_name()
+        except Exception:
+            pass
+        super().resizeEvent(event)
+
+    def _auto_stretch_item_name(self):
+        """Auto-size the Item Name column to fill remaining space while in stretch mode."""
+        if not hasattr(self, 'item_table'):
+            return
+        table = self.item_table
+        viewport_width = table.viewport().width()
+        if viewport_width <= 0:
+            return
+        # Sum widths of all columns except Item Name
+        count = table.columnCount()
+        other_sum = 0
+        for i in range(count):
+            if i == COL_ITEM_NAME:
+                continue
+            other_sum += table.columnWidth(i)
+        # Account for vertical scrollbar if visible
+        try:
+            if table.verticalScrollBar().isVisible():
+                other_sum += table.verticalScrollBar().width()
+        except Exception:
+            pass
+        # Minimal width for item name
+        min_width = 150
+        leftover = max(min_width, viewport_width - other_sum - 4)
+        self._programmatic_resizing = True
+        table.setColumnWidth(COL_ITEM_NAME, leftover)
+        self._programmatic_resizing = False
+
+    def closeEvent(self, event):
+        # Save column widths on close
+        self._save_column_widths_setting()
+        super().closeEvent(event)
 
     # --- Font Size Handling ---
     def _apply_table_font_size(self, size):

@@ -2,6 +2,14 @@
 
 This file tracks notable changes, fixes, and decisions for the Silver Estimate project.
 
+## Release v1.69 (2025-09-05)
+
+- UI: Status messages now display inline next to the Mode label in the header to prevent window reflows and flicker.
+- Startup: Initial "Ready" and "Database connected securely" messages route to the inline label.
+- Cleanup: Top `MessageBar` instance retained for fallback but removed from the layout to avoid resizing.
+- Build: Rebuilt Windows executable as `SilverEstimate-v1.69.exe`; created Git tag `v1.69` and GitHub release.
+- Touched files: `main.py`, `estimate_entry.py`, `estimate_entry_ui.py`, `message_bar.py`, `app_constants.py`, `requirements.txt`, `readme.md`.
+
 ## Table of Contents
 - [Comprehensive Logging System Design & Integration (2025-05)](#comprehensive-logging-system-design--integration-may-2025)
 - [Estimate Loading Architecture Stabilization (2025-05)](#estimate-loading-architecture-stabilization-may-2025)

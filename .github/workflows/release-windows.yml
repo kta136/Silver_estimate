@@ -35,6 +35,11 @@ jobs:
           } else {
             pyinstaller --noconfirm --windowed --name "SilverEstimate" --hidden-import passlib.handlers.argon2 --hidden-import passlib.handlers.bcrypt main.py
           }
+      - name: List dist contents
+        shell: pwsh
+        run: |
+          Write-Host "=== dist tree ==="
+          Get-ChildItem -Recurse dist | ForEach-Object { $_.FullName }
 
       - name: Archive build
         shell: pwsh
@@ -43,7 +48,11 @@ jobs:
           if (-not $version) { $version = "dev" }
           $zipName = "SilverEstimate-v$version-win64.zip"
           if (Test-Path "dist/$zipName") { Remove-Item "dist/$zipName" -Force }
-          Compress-Archive -Path "dist/SilverEstimate/*" -DestinationPath "dist/$zipName"
+          # Find first onedir output folder under dist (fallback to name 'SilverEstimate')
+          $outDir = Get-ChildItem dist -Directory | Select-Object -First 1
+          if (-not $outDir) { throw "No build output folder found in dist" }
+          Write-Host "Zipping from: $($outDir.FullName)"
+          Compress-Archive -Path (Join-Path $outDir.FullName '*') -DestinationPath "dist/$zipName"
           "ZIP_NAME=$zipName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Upload artifact

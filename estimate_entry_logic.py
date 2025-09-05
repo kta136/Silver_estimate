@@ -31,6 +31,8 @@ class EstimateLogic:
         self.logger = logging.getLogger(__name__)
         # Track whether an existing estimate is loaded
         self._estimate_loaded = False
+        # Guard flag to prevent recursive selection handling
+        self._enforcing_code_nav = False
 
     # --- Helper to show status messages (assumes self has show_status method) ---
     def _status(self, message, timeout=3000):
@@ -60,6 +62,8 @@ class EstimateLogic:
         # Connect table signals
         self.item_table.cellClicked.connect(self.cell_clicked)
         self.item_table.itemSelectionChanged.connect(self.selection_changed)
+        # Always edit on navigation/selection changes
+        self.item_table.currentCellChanged.connect(self.current_cell_changed)
         self.item_table.cellChanged.connect(self.handle_cell_changed)
 
         # Connect button signals
@@ -202,8 +206,42 @@ class EstimateLogic:
              # Log the error but don't crash the application
              self.logger.error(f"Error updating row type visuals: {str(e)}", exc_info=True)
 
+    def _is_code_empty(self, row):
+        try:
+            itm = self.item_table.item(row, COL_CODE)
+            return (not itm) or (not itm.text().strip())
+        except Exception:
+            return True
+
+    def _enforce_code_required(self, target_row, target_col, show_hint=True):
+        """Ensure code is filled before allowing navigation away from code column.
+
+        Returns True if navigation is allowed, False if blocked (and focus reset).
+        """
+        if self._enforcing_code_nav:
+            return True
+        try:
+            # If current row has empty code, only allow focus on its code cell
+            if 0 <= getattr(self, 'current_row', -1) < self.item_table.rowCount():
+                if self._is_code_empty(self.current_row):
+                    if target_row != self.current_row or target_col != COL_CODE:
+                        if show_hint:
+                            self._status("Enter item code first", 1500)
+                        self._enforcing_code_nav = True
+                        try:
+                            self.focus_on_code_column(self.current_row)
+                        finally:
+                            self._enforcing_code_nav = False
+                        return False
+        except Exception:
+            # On any error, do not block
+            return True
+        return True
+
     def cell_clicked(self, row, column):
-        """Update current position when a cell is clicked."""
+        """Update current position when a cell is clicked, enforcing code requirement."""
+        if not self._enforce_code_required(row, column):
+            return
         self.current_row = row
         self.current_column = column
         # Use constants for editable columns check
@@ -214,12 +252,37 @@ class EstimateLogic:
                 self.item_table.editItem(item)
 
     def selection_changed(self):
-        """Update current position when selection changes."""
+        """Update current position when selection changes; keep focus on Code if empty."""
         selected_items = self.item_table.selectedItems()
-        if selected_items:
-            item = selected_items[0]
-            self.current_row = self.item_table.row(item)
-            self.current_column = self.item_table.column(item)
+        if not selected_items:
+            return
+        item = selected_items[0]
+        row = self.item_table.row(item)
+        col = self.item_table.column(item)
+        if not self._enforce_code_required(row, col):
+            return
+        self.current_row = row
+        self.current_column = col
+        # Open editor when a new selection is made on an editable cell
+        editable_cols = [COL_CODE, COL_GROSS, COL_POLY, COL_PURITY, COL_WAGE_RATE, COL_PIECES]
+        if col in editable_cols:
+            cell = self._ensure_cell_exists(row, col)
+            if cell and (cell.flags() & Qt.ItemIsEditable):
+                from PyQt5.QtCore import QTimer
+                QTimer.singleShot(0, lambda c=cell: self.item_table.editItem(c))
+
+    def current_cell_changed(self, currentRow, currentCol, previousRow, previousCol):
+        """Ensure the newly focused cell enters edit mode immediately if editable."""
+        if not self._enforce_code_required(currentRow, currentCol):
+            return
+        self.current_row = currentRow
+        self.current_column = currentCol
+        editable_cols = [COL_CODE, COL_GROSS, COL_POLY, COL_PURITY, COL_WAGE_RATE, COL_PIECES]
+        if currentCol in editable_cols and 0 <= currentRow < self.item_table.rowCount():
+            cell = self._ensure_cell_exists(currentRow, currentCol)
+            if cell and (cell.flags() & Qt.ItemIsEditable):
+                from PyQt5.QtCore import QTimer
+                QTimer.singleShot(0, lambda c=cell: self.item_table.editItem(c))
 
     def handle_cell_changed(self, row, column):
         """Handle cell value changes with direct calculation for weight fields and purity."""
@@ -281,6 +344,12 @@ class EstimateLogic:
         current_row = self.current_row
         next_col = -1
         next_row = current_row
+
+        # Block leaving Code if empty
+        if current_col == COL_CODE and self._is_code_empty(current_row):
+            self._status("Enter item code first", 1500)
+            self.focus_on_code_column(current_row)
+            return
 
         # Use constants for navigation logic
         if current_col == COL_CODE: next_col = COL_GROSS
@@ -356,7 +425,9 @@ class EstimateLogic:
         code_item.setText(code) # Update cell visually
 
         if not code:
-            QTimer.singleShot(0, self.move_to_next_cell)
+            # Keep focus on code; do not move forward
+            self._status("Enter item code first", 1500)
+            QTimer.singleShot(0, lambda: self.focus_on_code_column(self.current_row))
             return
 
         item_data = self.db_manager.get_item_by_code(code)

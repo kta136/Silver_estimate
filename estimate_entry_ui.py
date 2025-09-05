@@ -328,8 +328,10 @@ class EstimateUI:
         except Exception:
             pass
 
+        # Start editing only on explicit user intent; avoid CurrentChanged which
+        # can spam Qt warnings when the current item isn't editable.
         self.item_table.setEditTriggers(
-            QTableWidget.DoubleClicked | QTableWidget.EditKeyPressed | QTableWidget.CurrentChanged
+            QTableWidget.DoubleClicked | QTableWidget.EditKeyPressed
         )
         self.item_table.setSelectionBehavior(QAbstractItemView.SelectItems)
         self.item_table.setSelectionMode(QTableWidget.SingleSelection)

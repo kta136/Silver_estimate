@@ -289,6 +289,27 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         key = event.key()
         modifiers = event.modifiers()
 
+        # Enforce code entry before any navigation from the row
+        try:
+            nav_keys = {
+                Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right,
+                Qt.Key_PageUp, Qt.Key_PageDown, Qt.Key_Home, Qt.Key_End,
+                Qt.Key_Tab, Qt.Key_Backtab, Qt.Key_Return, Qt.Key_Enter
+            }
+            if key in nav_keys and hasattr(self, 'current_row') and self.current_row >= 0:
+                from estimate_entry_ui import COL_CODE as _COL_CODE
+                def _is_code_empty(r):
+                    itm = self.item_table.item(r, _COL_CODE)
+                    return (not itm) or (not itm.text().strip())
+                if _is_code_empty(self.current_row):
+                    # Always force focus back to Code on empty
+                    self.show_status("Enter item code first", 1500)
+                    self.focus_on_code_column(self.current_row)
+                    event.accept()
+                    return
+        except Exception:
+            pass
+
         # --- Shortcut Handlers (already connected via QShortcut, but can intercept here too) ---
         if modifiers == Qt.ControlModifier:
             if key == Qt.Key_R:

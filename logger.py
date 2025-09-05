@@ -105,6 +105,13 @@ def qt_message_handler(mode, context, message):
     """
     logger = logging.getLogger('qt')
     
+    # Reduce noise for benign, frequent Qt messages
+    msg_lower = (message or "").lower()
+    if "edit: editing failed" in msg_lower:
+        # Happens when an edit is requested on a non-editable item
+        logging.getLogger('qt').debug(message)
+        return
+
     if mode == QtMsgType.QtDebugMsg:
         logger.debug(message)
     elif mode == QtMsgType.QtInfoMsg:

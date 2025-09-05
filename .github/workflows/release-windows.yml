@@ -30,7 +30,14 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller --noconfirm silverestimate.spec
+          if (Test-Path "silverestimate.spec") {
+            pyinstaller --noconfirm silverestimate.spec
+          } else {
+            pyinstaller --noconfirm --windowed --name "SilverEstimate" \
+              --hidden-import passlib.handlers.argon2 \
+              --hidden-import passlib.handlers.bcrypt \
+              main.py
+          }
 
       - name: Archive build
         shell: pwsh

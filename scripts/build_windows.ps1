@@ -23,9 +23,17 @@ if ($IsWindows) {
 Write-Host "[Build] Running PyInstaller..."
 $spec = Join-Path $PSScriptRoot "..\silverestimate.spec"
 if ($OneFile) {
-  & $py -m PyInstaller --noconfirm --onefile --name SilverEstimate main.py
-} else {
+  & $py -m PyInstaller --noconfirm --onefile --windowed --name SilverEstimate \
+    --hidden-import passlib.handlers.argon2 \
+    --hidden-import passlib.handlers.bcrypt \
+    main.py
+} elseif (Test-Path $spec) {
   & $py -m PyInstaller --noconfirm $spec
+} else {
+  & $py -m PyInstaller --noconfirm --windowed --name SilverEstimate \
+    --hidden-import passlib.handlers.argon2 \
+    --hidden-import passlib.handlers.bcrypt \
+    main.py
 }
 
 Write-Host "[Build] Packaging zip..."
@@ -42,4 +50,3 @@ if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 Compress-Archive -Path (Join-Path $PSScriptRoot "..\dist\SilverEstimate\*") -DestinationPath $zipPath
 
 Write-Host "[Build] Done: $zipPath"
-

@@ -265,7 +265,20 @@ class EstimateUI:
         self.note_edit.setMinimumWidth(200)
         self.note_edit.setToolTip("Add a note for this estimate (will be saved with the estimate)")
         form_layout.addWidget(self.note_edit, 0, 8)
+
+        # Mode indicator
         form_layout.addWidget(self.mode_indicator_label, 0, 9, alignment=Qt.AlignLeft | Qt.AlignVCenter)
+
+        # Inline status message label (to the right of Mode)
+        self.status_message_label = QLabel("")
+        self.status_message_label.setObjectName("InlineStatusLabel")
+        self.status_message_label.setWordWrap(False)
+        self.status_message_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        # Subtle default style; color varies with level in logic
+        self.status_message_label.setStyleSheet("color: #445; padding-left: 8px;")
+        form_layout.addWidget(self.status_message_label, 0, 10, alignment=Qt.AlignLeft | Qt.AlignVCenter)
+
+        # Let the status column stretch to take remaining space
         form_layout.setColumnStretch(10, 1)
         self.layout.addLayout(form_layout)
         # Buddies for labels to improve keyboard flow

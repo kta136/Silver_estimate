@@ -114,10 +114,26 @@ The Silver Estimation App is a comprehensive solution designed for silver shops 
 
 ### Building Executable
 
-To create a standalone executable:
+To create a standalone executable, prefer building with the provided spec (includes required hidden imports for Passlib/Argon2). The output file name includes the app version from `app_constants.py` (e.g., `dist/SilverEstimate-v1.68.exe`):
 
 ```bash
-pyinstaller --onefile --windowed --name "SilverEstimate-v1.63" --hidden-import=passlib.handlers.argon2 --hidden-import=passlib.handlers.bcrypt --hidden-import=passlib main.py
+pyinstaller --clean silverestimate.spec
+```
+
+If you build directly from `main.py`, ensure hidden imports are included (useful for quick tests):
+
+```bash
+pyinstaller --onefile --windowed --name "SilverEstimate" \
+  --hidden-import=passlib.handlers.argon2 \
+  --hidden-import=passlib.handlers.bcrypt \
+  --hidden-import=passlib \
+  main.py
+```
+
+Note: Argon2 backend is required for password hashing. Make sure your environment has:
+
+```bash
+pip install "passlib[argon2]" argon2_cffi
 ```
 
 ## 📖 Usage

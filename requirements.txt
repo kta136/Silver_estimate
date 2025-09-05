@@ -1,4 +1,5 @@
 PyQt5>=5.15.10
 cryptography>=42.0.0
-passlib>=1.7.4
+passlib[argon2]>=1.7.4
+argon2_cffi>=21.3.0
 pyinstaller>=6.6.0

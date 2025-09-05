@@ -3,11 +3,12 @@ from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QComboBox,
     QMessageBox, QAbstractItemView, QFrame, QInputDialog, QSplitter,
-    QWidget # Added QSplitter, QWidget
+    QWidget, QMenu, QShortcut
 )
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QColor
+from PyQt5.QtCore import Qt, QTimer, QSettings
+from PyQt5.QtGui import QColor, QKeySequence
 import traceback # Added for error handling in actions
+from app_constants import SETTINGS_ORG, SETTINGS_APP
 
 class SilverBarDialog(QDialog):
     """Dialog for managing silver bars and grouping them into lists (v2.0)."""
@@ -23,9 +24,11 @@ class SilverBarDialog(QDialog):
     def init_ui(self):
         """Set up the user interface."""
         self.setWindowTitle("Silver Bar Management (v2.0)")
-        self.setMinimumSize(950, 750) # Adjusted size
+        self.setMinimumSize(980, 780) # Adjusted size
 
         main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(12, 12, 12, 12)
+        main_layout.setSpacing(8)
 
         # --- Top Section: Search and Available Bars ---
         top_widget = QWidget()
@@ -36,6 +39,10 @@ class SilverBarDialog(QDialog):
         search_layout.addWidget(QLabel("Search Available Bars by Weight (approx):"))
         self.weight_search_edit = QLineEdit()
         self.weight_search_edit.setPlaceholderText("Enter weight (e.g., 1000.123)")
+        try:
+            self.weight_search_edit.setClearButtonEnabled(True)
+        except Exception:
+            pass
         self.weight_search_edit.textChanged.connect(self.load_available_bars) # Use textChanged for live search
         search_layout.addWidget(self.weight_search_edit)
         self.refresh_available_button = QPushButton("Refresh Available")
@@ -51,8 +58,13 @@ class SilverBarDialog(QDialog):
         self.available_bars_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.available_bars_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.available_bars_table.setAlternatingRowColors(True)
+        self.available_bars_table.setSortingEnabled(True)
+        self.available_bars_table.verticalHeader().setVisible(False)
         self.available_bars_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.available_bars_table.horizontalHeader().setStretchLastSection(True)
+        # Context menu for quick actions
+        self.available_bars_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.available_bars_table.customContextMenuRequested.connect(self._show_available_context_menu)
         top_layout.addWidget(self.available_bars_table)
         
         # Add totals label for available bars
@@ -115,8 +127,13 @@ class SilverBarDialog(QDialog):
         self.list_bars_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.list_bars_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.list_bars_table.setAlternatingRowColors(True)
+        self.list_bars_table.setSortingEnabled(True)
+        self.list_bars_table.verticalHeader().setVisible(False)
         self.list_bars_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.list_bars_table.horizontalHeader().setStretchLastSection(True)
+        # Context menu for quick actions
+        self.list_bars_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.list_bars_table.customContextMenuRequested.connect(self._show_list_context_menu)
         bottom_layout.addWidget(self.list_bars_table)
         
         # Add totals label for list bars
@@ -138,7 +155,10 @@ class SilverBarDialog(QDialog):
         splitter = QSplitter(Qt.Vertical)
         splitter.addWidget(top_widget)
         splitter.addWidget(bottom_widget)
-        splitter.setSizes([350, 400]) # Initial size distribution
+        splitter.setChildrenCollapsible(False)
+        splitter.setOpaqueResize(True)
+        splitter.setSizes([360, 420]) # Initial size distribution
+        self._splitter = splitter
 
         main_layout.addLayout(list_action_layout) # List selection above splitter
         main_layout.addWidget(splitter)
@@ -150,6 +170,19 @@ class SilverBarDialog(QDialog):
         self.close_button.clicked.connect(self.accept)
         close_button_layout.addWidget(self.close_button)
         main_layout.addLayout(close_button_layout)
+
+        # Shortcuts for power users
+        try:
+            QShortcut(QKeySequence.Refresh, self, activated=self.load_available_bars)  # F5 / Ctrl+R
+            QShortcut(QKeySequence("Ctrl+N"), self, activated=self.create_new_list)
+            QShortcut(QKeySequence.Print, self, activated=self.print_selected_list)
+            QShortcut(QKeySequence.Cancel, self, activated=self.reject)  # Esc to close
+            QShortcut(QKeySequence.Delete, self.list_bars_table, activated=self.remove_selected_from_list)
+        except Exception:
+            pass
+
+        # Restore persisted UI state
+        self._restore_ui_state()
 
     # --- Data Loading Methods ---
 
@@ -169,6 +202,9 @@ class SilverBarDialog(QDialog):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load available bars: {e}")
             self.available_bars_table.setRowCount(0)
+        finally:
+            # After loading, try to restore column widths
+            self._restore_table_column_widths()
 
     def load_lists(self):
         """Populates the list selection combo box."""
@@ -497,6 +533,106 @@ class SilverBarDialog(QDialog):
             table.blockSignals(False)
             # Optional: Resize columns after populating if not using fixed modes
             # table.resizeColumnsToContents()
+
+    # --- UI Helpers: Context Menus and State Persistence ---
+    def _show_available_context_menu(self, pos):
+        try:
+            menu = QMenu(self)
+            add_action = menu.addAction("Add Selected Bars to List")
+            refresh_action = menu.addAction("Refresh Available")
+            action = menu.exec_(self.available_bars_table.viewport().mapToGlobal(pos))
+            if action == add_action:
+                self.add_selected_to_list()
+            elif action == refresh_action:
+                self.load_available_bars()
+        except Exception:
+            pass
+
+    def _show_list_context_menu(self, pos):
+        try:
+            menu = QMenu(self)
+            remove_action = menu.addAction("Remove Selected Bars from List")
+            print_action = menu.addAction("Print List")
+            action = menu.exec_(self.list_bars_table.viewport().mapToGlobal(pos))
+            if action == remove_action:
+                self.remove_selected_from_list()
+            elif action == print_action:
+                self.print_selected_list()
+        except Exception:
+            pass
+
+    def _settings(self):
+        return QSettings(SETTINGS_ORG, SETTINGS_APP)
+
+    def _save_ui_state(self):
+        try:
+            s = self._settings()
+            # Dialog geometry
+            s.setValue("ui/silver_bars/geometry", self.saveGeometry())
+            # Splitter
+            if hasattr(self, "_splitter"):
+                s.setValue("ui/silver_bars/splitter", self._splitter.saveState())
+            # Column widths
+            s.setValue("ui/silver_bars/available_cols", self._get_table_column_widths(self.available_bars_table))
+            s.setValue("ui/silver_bars/list_cols", self._get_table_column_widths(self.list_bars_table))
+            s.sync()
+        except Exception:
+            pass
+
+    def _restore_ui_state(self):
+        try:
+            s = self._settings()
+            # Geometry
+            geo = s.value("ui/silver_bars/geometry")
+            if geo:
+                self.restoreGeometry(geo)
+            # Splitter
+            state = s.value("ui/silver_bars/splitter")
+            if state and hasattr(self, "_splitter"):
+                self._splitter.restoreState(state)
+        except Exception:
+            pass
+
+    def _get_table_column_widths(self, table):
+        try:
+            header = table.horizontalHeader()
+            return [header.sectionSize(i) for i in range(table.columnCount())]
+        except Exception:
+            return None
+
+    def _apply_table_column_widths(self, table, widths):
+        try:
+            if not widths:
+                return
+            header = table.horizontalHeader()
+            for i, w in enumerate(widths):
+                if i < table.columnCount() and isinstance(w, int) and w > 0:
+                    header.resizeSection(i, w)
+        except Exception:
+            pass
+
+    def _restore_table_column_widths(self):
+        try:
+            s = self._settings()
+            avail = s.value("ui/silver_bars/available_cols", type=list)
+            lcols = s.value("ui/silver_bars/list_cols", type=list)
+            self._apply_table_column_widths(self.available_bars_table, avail)
+            self._apply_table_column_widths(self.list_bars_table, lcols)
+        except Exception:
+            pass
+
+    # Persist UI state on close/accept
+    def closeEvent(self, event):
+        try:
+            self._save_ui_state()
+        finally:
+            super().closeEvent(event)
+
+    def accept(self):
+        try:
+            self._save_ui_state()
+        finally:
+            super().accept()
 
 # Example usage (if run directly)
 if __name__ == '__main__':

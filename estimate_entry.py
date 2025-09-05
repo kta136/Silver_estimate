@@ -126,15 +126,50 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         self._load_breakdown_font_size_setting()
         self._load_final_calc_font_size_setting()
 
+        # Inline status timer for auto-clear
+        self._inline_status_timer = QTimer(self)
+        self._inline_status_timer.setSingleShot(True)
+        self._inline_status_timer.timeout.connect(lambda: self._set_inline_status_text(""))
+
 
     # --- Add helper to show status messages via main window ---
     def show_status(self, message, timeout=3000):
-        if self.main_window:
-            self.main_window.statusBar.showMessage(message, timeout)
-        else:
+        # Route to inline label next to Mode
+        try:
+            self.show_inline_status(message, timeout)
+        except Exception:
             import logging
             logging.getLogger(__name__).info(f"Status: {message}")
     # --------------------------------------------------------
+
+    def _set_inline_status_text(self, text):
+        try:
+            if hasattr(self, 'status_message_label') and self.status_message_label is not None:
+                self.status_message_label.setText(text or "")
+        except Exception:
+            pass
+
+    def show_inline_status(self, message, timeout=3000, level='info'):
+        """Show a transient status message inline next to the Mode label."""
+        # Choose a subtle color per level
+        try:
+            color = {
+                'info': '#2b6cb0',     # blue-ish
+                'warning': '#8a6d3b',  # amber/brown
+                'error': '#a61b1b',    # red
+            }.get((level or 'info').lower(), '#2b6cb0')
+
+            if hasattr(self, 'status_message_label') and self.status_message_label is not None:
+                self.status_message_label.setStyleSheet(f"color: {color}; padding-left: 8px;")
+                self.status_message_label.setText(message or "")
+
+            # Reset timer
+            self._inline_status_timer.stop()
+            if isinstance(timeout, int) and timeout > 0:
+                self._inline_status_timer.start(timeout)
+        except Exception:
+            # Silent fallback; nothing critical here
+            pass
 
 
     def force_focus_to_first_cell(self):

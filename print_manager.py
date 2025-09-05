@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QPushButton, QTextEdit,
-                             QLabel, QMessageBox, QApplication)
+                             QLabel, QMessageBox, QApplication, QToolBar, QAction, QFileDialog)
 from PyQt5.QtGui import QFont, QTextCursor, QPageSize, QTextDocument, QFontDatabase
 from PyQt5.QtCore import Qt, QDate, QLocale
 # Import QPrintPreviewWidget
-from PyQt5.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog, QPrintPreviewWidget
+from PyQt5.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog, QPrintPreviewWidget, QPageSetupDialog
 import traceback # Keep for debugging
 import math # For rounding
 
@@ -102,36 +102,12 @@ class PrintManager:
         try:
             html_text = self._generate_estimate_manual_format(estimate_data)
 
-            preview = QPrintPreviewDialog(self.printer, parent_widget)
-            preview.setWindowTitle(f"Print Preview - Estimate {voucher_no}")
-            preview.paintRequested.connect(lambda printer: self._print_html(printer, html_text))
-
-            # --- Set initial zoom and maximize ---
-            try:
-                preview_widget = preview.findChild(QPrintPreviewWidget)
-                if preview_widget:
-                    # Load zoom setting
-                    settings = QSettings("YourCompany", "SilverEstimateApp")
-                    default_zoom = 1.25
-                    zoom_factor = settings.value("print/preview_zoom", defaultValue=default_zoom, type=float)
-                    # Clamp zoom factor to reasonable range (e.g., 0.1 to 5.0)
-                    zoom_factor = max(0.1, min(zoom_factor, 5.0))
-                    import logging
-                    logging.getLogger(__name__).debug(f"Applying zoom factor: {zoom_factor}")
-                    preview_widget.setZoomFactor(zoom_factor)
-                    import logging
-                    logging.getLogger(__name__).debug(f"Set preview zoom factor to: {zoom_factor}")
-                else:
-                    import logging
-                    logging.getLogger(__name__).warning("Could not find QPrintPreviewWidget to set zoom.")
-            except Exception as zoom_err:
-                import logging
-                logging.getLogger(__name__).warning(f"Error setting initial zoom: {zoom_err}")
-
-            preview.showMaximized() # Show maximized
-            # ------------------------------------
-
-            preview.exec_()
+            self._open_preview_with_enhancements(
+                html_text,
+                parent_widget=parent_widget,
+                title=f"Print Preview - Estimate {voucher_no}",
+                table_mode=False
+            )
             return True
         except Exception as e:
             QMessageBox.critical(parent_widget, "Print Error", f"Error preparing print preview: {e}\n{traceback.format_exc()}")
@@ -149,10 +125,12 @@ class PrintManager:
         try:
             html_text = self._generate_silver_bars_html_table(bars, status_filter)
 
-            preview = QPrintPreviewDialog(self.printer, parent_widget)
-            preview.setWindowTitle("Print Preview - Silver Bar Inventory")
-            preview.paintRequested.connect(lambda printer: self._print_html(printer, html_text, table_mode=True))
-            preview.exec_()
+            self._open_preview_with_enhancements(
+                html_text,
+                parent_widget=parent_widget,
+                title="Print Preview - Silver Bar Inventory",
+                table_mode=True
+            )
             return True
 
         except Exception as e:
@@ -167,10 +145,12 @@ class PrintManager:
 
         try:
             html_content = self._generate_list_details_html(list_info, bars_in_list)
-            preview = QPrintPreviewDialog(self.printer, parent_widget)
-            preview.setWindowTitle(f"Print Preview - List {list_info['list_identifier'] if 'list_identifier' in list_info.keys() and list_info['list_identifier'] is not None else 'N/A'}")
-            preview.paintRequested.connect(lambda printer: self._print_html(printer, html_content, table_mode=True))
-            preview.exec_()
+            self._open_preview_with_enhancements(
+                html_content,
+                parent_widget=parent_widget,
+                title=f"Print Preview - List {list_info['list_identifier'] if 'list_identifier' in list_info.keys() and list_info['list_identifier'] is not None else 'N/A'}",
+                table_mode=True
+            )
             return True
         except Exception as e:
             QMessageBox.critical(parent_widget, "Print Error", f"Error preparing list print preview: {e}\n{traceback.format_exc()}")
@@ -539,3 +519,176 @@ class PrintManager:
                    <div class="totals">TOTAL Bars: {bc} | TOTAL Weight: {tw:,.3f} g | TOTAL Fine Wt: {tf:,.3f} g</div>
                    </body></html>"""
         return html
+
+    # ---------------------- Preview Enhancements ----------------------
+    def _open_preview_with_enhancements(self, html_content, parent_widget, title, table_mode=False):
+        """Open QPrintPreviewDialog with custom toolbar actions and persistent zoom."""
+        import logging
+        # Create preview dialog
+        preview = QPrintPreviewDialog(self.printer, parent_widget)
+        preview.setWindowTitle(title)
+        preview.paintRequested.connect(lambda printer: self._print_html(printer, html_content, table_mode=table_mode))
+
+        # Set initial zoom from settings
+        preview_widget = None
+        try:
+            preview_widget = preview.findChild(QPrintPreviewWidget)
+            if preview_widget:
+                settings = QSettings("YourCompany", "SilverEstimateApp")
+                default_zoom = 1.25
+                zoom_factor = settings.value("print/preview_zoom", defaultValue=default_zoom, type=float)
+                zoom_factor = max(0.1, min(zoom_factor, 5.0))
+                logging.getLogger(__name__).debug(f"Applying zoom factor: {zoom_factor}")
+                preview_widget.setZoomFactor(zoom_factor)
+            else:
+                logging.getLogger(__name__).warning("Could not find QPrintPreviewWidget to set zoom.")
+        except Exception as zoom_err:
+            logging.getLogger(__name__).warning(f"Error setting initial zoom: {zoom_err}")
+
+        # Enhance toolbar
+        try:
+            self._augment_preview_toolbar(preview, preview_widget, html_content, table_mode, parent_widget)
+        except Exception as tb_err:
+            logging.getLogger(__name__).warning(f"Could not augment preview toolbar: {tb_err}")
+
+        preview.showMaximized()
+
+        # Execute dialog; after close, persist zoom
+        preview.exec_()
+        try:
+            if preview_widget:
+                z = float(preview_widget.zoomFactor())
+                settings = QSettings("YourCompany", "SilverEstimateApp")
+                settings.setValue("print/preview_zoom", z)
+                logging.getLogger(__name__).debug(f"Saved preview zoom: {z}")
+        except Exception as save_err:
+            logging.getLogger(__name__).warning(f"Could not save preview zoom: {save_err}")
+
+    def _augment_preview_toolbar(self, preview, preview_widget, html_content, table_mode, parent_widget):
+        """Add useful actions to the existing QPrintPreviewDialog toolbar."""
+        toolbars = preview.findChildren(QToolBar)
+        toolbar = toolbars[0] if toolbars else None
+        if not toolbar:
+            return
+
+        # Separator helper
+        def sep():
+            toolbar.addSeparator()
+
+        # Save as PDF
+        act_pdf = QAction("Save PDF", preview)
+        act_pdf.setToolTip("Export to PDF file (Ctrl+S)")
+        act_pdf.setShortcut("Ctrl+S")
+        act_pdf.triggered.connect(lambda: self._export_pdf_via_dialog(html_content, table_mode, parent_widget))
+        toolbar.addAction(act_pdf)
+
+        # Page Setup
+        act_page = QAction("Page Setup", preview)
+        act_page.setToolTip("Choose page size, margins, orientation")
+        act_page.triggered.connect(lambda: self._page_setup_and_refresh(preview, html_content, table_mode))
+        toolbar.addAction(act_page)
+
+        sep()
+
+        # Zoom controls (in addition to built-ins)
+        if preview_widget:
+            act_zi = QAction("Zoom +", preview)
+            act_zi.setShortcut("+")
+            act_zi.triggered.connect(lambda: preview_widget.zoomIn(1))
+            toolbar.addAction(act_zi)
+
+            act_zo = QAction("Zoom -", preview)
+            act_zo.setShortcut("-")
+            act_zo.triggered.connect(lambda: preview_widget.zoomOut(1))
+            toolbar.addAction(act_zo)
+
+            act_fitw = QAction("Fit Width", preview)
+            act_fitw.setShortcut("Ctrl+W")
+            act_fitw.triggered.connect(preview_widget.fitToWidth)
+            toolbar.addAction(act_fitw)
+
+            act_fitp = QAction("Fit Page", preview)
+            act_fitp.setShortcut("Ctrl+F")
+            act_fitp.triggered.connect(preview_widget.fitInView)
+            toolbar.addAction(act_fitp)
+
+        sep()
+
+        # Orientation toggle
+        act_orient = QAction("Toggle Portrait/Landscape", preview)
+        act_orient.setToolTip("Switch orientation and refresh preview")
+        act_orient.triggered.connect(lambda: self._toggle_orientation_and_refresh(preview, html_content, table_mode))
+        toolbar.addAction(act_orient)
+
+        sep()
+
+        # Quick Print (bypass dialog) with distinct shortcut
+        act_qprint = QAction("Quick Print", preview)
+        act_qprint.setToolTip("Send directly to current/default printer (Ctrl+Shift+P)")
+        act_qprint.setShortcut("Ctrl+Shift+P")
+        act_qprint.triggered.connect(lambda: self._quick_print_current(preview, html_content, table_mode, parent_widget))
+        toolbar.addAction(act_qprint)
+
+    def _export_pdf_via_dialog(self, html_content, table_mode, parent_widget):
+        """Prompt for a PDF path and export current content as PDF."""
+        options = QFileDialog.Options()
+        file_path, _ = QFileDialog.getSaveFileName(parent_widget, "Save as PDF", "estimate.pdf", "PDF Files (*.pdf)", options=options)
+        if not file_path:
+            return
+        try:
+            # Use a temporary printer configured for PDF output
+            pdf_printer = QPrinter(QPrinter.HighResolution)
+            pdf_printer.setOutputFormat(QPrinter.PdfFormat)
+            if not file_path.lower().endswith('.pdf'):
+                file_path = f"{file_path}.pdf"
+            pdf_printer.setOutputFileName(file_path)
+            # Preserve page size and orientation from current printer
+            pdf_printer.setPageSize(self.printer.pageSize())
+            pdf_printer.setOrientation(self.printer.orientation())
+            # Apply current margins from settings (kept consistent across previews)
+            settings = QSettings("YourCompany", "SilverEstimateApp")
+            margins_str = settings.value("print/margins", defaultValue="10,5,10,5", type=str)
+            try:
+                margins = [int(m.strip()) for m in margins_str.split(',')]
+                if len(margins) != 4:
+                    margins = [10, 5, 10, 5]
+            except Exception:
+                margins = [10, 5, 10, 5]
+            pdf_printer.setPageMargins(margins[0], margins[1], margins[2], margins[3], QPrinter.Millimeter)
+            # Render
+            self._print_html(pdf_printer, html_content, table_mode=table_mode)
+            QMessageBox.information(parent_widget, "Saved", f"PDF saved to:\n{file_path}")
+        except Exception as e:
+            QMessageBox.critical(parent_widget, "Export Failed", f"Could not export PDF:\n{str(e)}")
+
+    def _page_setup_and_refresh(self, preview, html_content, table_mode):
+        """Open page setup dialog and refresh preview if accepted."""
+        dlg = QPageSetupDialog(self.printer, preview)
+        if dlg.exec_() == QDialog.Accepted:
+            # Refresh preview via inner QPrintPreviewWidget
+            widget = preview.findChild(QPrintPreviewWidget)
+            if widget:
+                widget.updatePreview()
+            else:
+                preview.repaint()
+
+    # Note: Rely on QPrintPreviewDialog's built-in Print action (Ctrl+P)
+
+    def _toggle_orientation_and_refresh(self, preview, html_content, table_mode):
+        """Toggle between portrait and landscape and refresh preview."""
+        current = self.printer.orientation()
+        self.printer.setOrientation(QPrinter.Landscape if current == QPrinter.Portrait else QPrinter.Portrait)
+        widget = preview.findChild(QPrintPreviewWidget)
+        if widget:
+            widget.updatePreview()
+        else:
+            preview.repaint()
+
+    def _quick_print_current(self, preview, html_content, table_mode, parent_widget):
+        """Send the document directly to the currently configured/default printer."""
+        try:
+            self._print_html(self.printer, html_content, table_mode=table_mode)
+            # Optional toast: keep it non-intrusive
+            QMessageBox.information(parent_widget or preview, "Printing", "Document sent to printer.")
+        except Exception as e:
+            QMessageBox.critical(parent_widget or preview, "Print Failed", f"Could not print document:\n{str(e)}")

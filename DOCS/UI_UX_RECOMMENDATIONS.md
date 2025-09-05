@@ -73,6 +73,17 @@ Status Key
 - Notes:
   - `Quit` uses `QKeySequence.Quit`.
   - `Save`/`Print` wired under File menu using `QKeySequence.Save`/`QKeySequence.Print` and call Estimate view actions.
+  - Shortcut reliability: menu actions use `Qt.ApplicationShortcut`; duplicate per‑widget `QShortcut`/`QAction` bindings were removed to avoid “Ambiguous shortcut overload”.
+
+---
+
+## 4.2) Shortcut Reliability (Ctrl+S/Ctrl+P)
+- Status: ✅ Implemented
+- Why: Ensure hotkeys work while editing fields/table cells without conflicts.
+- Files: `main.py`, `estimate_entry.py`
+- Notes:
+  - Centralize Save/Print to main menu actions with `Qt.ApplicationShortcut`.
+  - Avoid attaching additional Ctrl+S/Ctrl+P shortcuts at widget level to prevent ambiguity.
 
 ---
 

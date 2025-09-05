@@ -3,10 +3,11 @@ import traceback # Import traceback for error logging
 import logging    # Ensure logging is available for getLogger calls
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QDialogButtonBox, QGridLayout,
                              QFormLayout, QLabel, QPushButton, QSpinBox, QFontDialog, QMessageBox, QDoubleSpinBox,
-                             QLineEdit, QGroupBox, QFileDialog, QCheckBox) # Added QCheckBox for logging settings
-from PyQt5.QtCore import Qt, QSettings, pyqtSignal
+                             QLineEdit, QGroupBox, QFileDialog, QCheckBox, QStyle, QListWidget, QListWidgetItem,
+                             QListView, QStackedWidget, QFrame)
+from PyQt5.QtCore import Qt, QSettings, pyqtSignal, QUrl, QSize
+from PyQt5.QtGui import QFont, QDesktopServices
 from app_constants import SETTINGS_ORG, SETTINGS_APP
-from PyQt5.QtGui import QFont
 
 # Import dependent dialogs and modules
 from custom_font_dialog import CustomFontDialog
@@ -23,7 +24,7 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.main_window = main_window_ref # Store reference to main window
         self.setWindowTitle("Application Settings")
-        self.setMinimumWidth(500)
+        self.setMinimumWidth(640)
 
         # Load current settings
         self.settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
@@ -35,17 +36,40 @@ class SettingsDialog(QDialog):
         self._current_final_calc_font_size = self._load_final_calc_font_size_setting()
         # Add more settings variables as needed
 
-        # Create tab widget
-        self.tabs = QTabWidget()
+        # Sidebar + pages (cleaner than rotated west tabs)
+        style = self.style()
+        self.sidebar = QListWidget()
+        self.sidebar.setViewMode(QListView.ListMode)
+        self.sidebar.setIconSize(QSize(20, 20))
+        self.sidebar.setSpacing(4)
+        self.sidebar.setFrameShape(QFrame.NoFrame)
+        self.sidebar.setFixedWidth(180)
 
-        # Add tabs
-        self.tabs.addTab(self._create_ui_tab(), "User Interface")
-        # self.tabs.addTab(self._create_business_tab(), "Business Logic") # Placeholder
-        self.tabs.addTab(self._create_print_tab(), "Printing") # Add Printing tab
-        self.tabs.addTab(self._create_data_tab(), "Data Management") # Add Data tab
-        self.tabs.addTab(self._create_security_tab(), "Security") # Add Security tab
-        self.tabs.addTab(self._create_import_export_tab(), "Import/Export") # Add Import/Export tab
-        self.tabs.addTab(self._create_logging_tab(), "Logging") # Add new Logging tab
+        self.pages = QStackedWidget()
+
+        # Build pages list
+        page_defs = [
+            ("User Interface", style.standardIcon(QStyle.SP_DesktopIcon), self._create_ui_tab()),
+            ("Printing", style.standardIcon(QStyle.SP_FileDialogDetailedView), self._create_print_tab()),
+            ("Data Management", style.standardIcon(QStyle.SP_DirHomeIcon), self._create_data_tab()),
+            ("Security", style.standardIcon(QStyle.SP_MessageBoxWarning), self._create_security_tab()),
+            ("Import/Export", style.standardIcon(QStyle.SP_DialogOpenButton), self._create_import_export_tab()),
+            ("Logging", style.standardIcon(QStyle.SP_FileDialogInfoView), self._create_logging_tab()),
+        ]
+        for title, icon, widget in page_defs:
+            self.sidebar.addItem(QListWidgetItem(icon, title))
+            self.pages.addWidget(widget)
+
+        # Remember last page
+        try:
+            last_idx = int(self.settings.value("ui/settings_last_tab", 0, type=int))
+        except Exception:
+            last_idx = 0
+        last_idx = max(0, min(last_idx, len(page_defs) - 1))
+        self.sidebar.setCurrentRow(last_idx)
+        self.pages.setCurrentIndex(last_idx)
+        self.sidebar.currentRowChanged.connect(self.pages.setCurrentIndex)
+        self.sidebar.currentRowChanged.connect(lambda i: self.settings.setValue("ui/settings_last_tab", i))
 
         # Buttons
         # Add Help button later if needed
@@ -53,14 +77,29 @@ class SettingsDialog(QDialog):
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
         self.buttonBox.button(QDialogButtonBox.Apply).clicked.connect(self.apply_settings)
-        # Disable Apply button initially (optional, enable when settings change)
-        # self.buttonBox.button(QDialogButtonBox.Apply).setEnabled(False)
+        # Disable Apply until change
+        self.buttonBox.button(QDialogButtonBox.Apply).setEnabled(False)
+
+        # Add Restore Defaults button
+        restore_btn = QPushButton("Restore Defaults…")
+        self.buttonBox.addButton(restore_btn, QDialogButtonBox.ResetRole)
+        restore_btn.clicked.connect(self._restore_defaults)
 
         # Layout
         layout = QVBoxLayout()
-        layout.addWidget(self.tabs)
+        # content row: sidebar + pages
+        content = QHBoxLayout()
+        content.addWidget(self.sidebar)
+        content.addWidget(self.pages, 1)
+        layout.addLayout(content)
         layout.addWidget(self.buttonBox) # Use self.buttonBox here
         self.setLayout(layout)
+
+        # Wire change signals to enable Apply
+        self._connect_change_signals()
+        # If changes fired during construction, reflect pending dirty state
+        if getattr(self, "_dirty", False):
+            self.buttonBox.button(QDialogButtonBox.Apply).setEnabled(True)
 
     # --- Tab Creation Methods ---
 
@@ -70,36 +109,53 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(widget)
         form_layout = QFormLayout()
         form_layout.setSpacing(10)
+        form_layout.setLabelAlignment(Qt.AlignRight)
 
         # Print Font
         self.print_font_button = QPushButton("Configure Print Font...")
         self.print_font_button.setToolTip("Set font family, size, and style for printed estimates")
         self.print_font_label = QLabel(self._get_font_display_text(self._current_print_font)) # Show current setting
         self.print_font_button.clicked.connect(self._show_print_font_dialog)
+        self.print_font_button.clicked.connect(self._mark_dirty)
         font_layout = QHBoxLayout()
         font_layout.addWidget(self.print_font_label)
         font_layout.addWidget(self.print_font_button)
         form_layout.addRow("Print Font:", font_layout)
 
+        # Live font sample
+        self.print_font_sample = QLabel("AaBb123")
+        self.print_font_sample.setToolTip("Live sample using the chosen print font")
+        self._update_font_sample_label()
+        form_layout.addRow("Sample:", self.print_font_sample)
+
         # Table Font Size
         self.table_font_size_spin = QSpinBox()
         self.table_font_size_spin.setRange(7, 16) # Keep range consistent
         self.table_font_size_spin.setValue(self._current_table_font_size)
-        self.table_font_size_spin.setToolTip("Set font size for the main estimate entry table (7-16pt)")
+        self.table_font_size_spin.setToolTip("Set font size for the main estimate entry table (7–16 pt)")
+        self.table_font_size_spin.setSuffix(" pt")
+        self.table_font_size_spin.setMinimumWidth(80)
+        self.table_font_size_spin.valueChanged.connect(self._mark_dirty)
         form_layout.addRow("Estimate Table Font Size:", self.table_font_size_spin)
 
         # Breakdown Totals Font Size (Regular/Return/Silver Bar)
         self.breakdown_font_size_spin = QSpinBox()
         self.breakdown_font_size_spin.setRange(7, 16)
         self.breakdown_font_size_spin.setValue(self._current_breakdown_font_size)
-        self.breakdown_font_size_spin.setToolTip("Text size for Regular/Return/Silver Bar totals at bottom-left")
+        self.breakdown_font_size_spin.setToolTip("Text size for Regular/Return/Silver Bar totals")
+        self.breakdown_font_size_spin.setSuffix(" pt")
+        self.breakdown_font_size_spin.setMinimumWidth(80)
+        self.breakdown_font_size_spin.valueChanged.connect(self._mark_dirty)
         form_layout.addRow("Totals (Left) Font Size:", self.breakdown_font_size_spin)
 
         # Final Calculation Font Size
         self.final_calc_font_size_spin = QSpinBox()
         self.final_calc_font_size_spin.setRange(8, 20)
         self.final_calc_font_size_spin.setValue(self._current_final_calc_font_size)
-        self.final_calc_font_size_spin.setToolTip("Text size for Final Calculation numbers (right panel)")
+        self.final_calc_font_size_spin.setToolTip("Text size for Final Calculation panel")
+        self.final_calc_font_size_spin.setSuffix(" pt")
+        self.final_calc_font_size_spin.setMinimumWidth(80)
+        self.final_calc_font_size_spin.valueChanged.connect(self._mark_dirty)
         form_layout.addRow("Final Calculation Font Size:", self.final_calc_font_size_spin)
 
         # Add more UI settings here...
@@ -117,6 +173,7 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(widget)
         form_layout = QFormLayout()
         form_layout.setSpacing(10)
+        form_layout.setLabelAlignment(Qt.AlignRight)
 
         # --- Margins ---
         margins_label = QLabel("Page Margins (mm):")
@@ -128,6 +185,7 @@ class SettingsDialog(QDialog):
         for spin in [self.margin_left_spin, self.margin_top_spin, self.margin_right_spin, self.margin_bottom_spin]:
             spin.setRange(0, 50) # Allow 0-50mm margins
             spin.setSuffix(" mm")
+            spin.valueChanged.connect(self._mark_dirty)
 
         margins_layout.addWidget(QLabel("Left:"), 0, 0)
         margins_layout.addWidget(self.margin_left_spin, 0, 1)
@@ -146,6 +204,7 @@ class SettingsDialog(QDialog):
         self.preview_zoom_spin.setDecimals(2)
         self.preview_zoom_spin.setSuffix(" x") # Display as multiplier
         self.preview_zoom_spin.setToolTip("Default zoom factor for print preview (e.g., 1.0 = 100%, 1.25 = 125%)")
+        self.preview_zoom_spin.valueChanged.connect(self._mark_dirty)
         form_layout.addRow("Preview Default Zoom:", self.preview_zoom_spin)
 
         # Load current values into controls
@@ -243,6 +302,7 @@ class SettingsDialog(QDialog):
         self.debug_mode_checkbox.setToolTip("Enable detailed debug logging (may affect performance)")
         debug_mode = self.settings.value("logging/debug_mode", False, type=bool)
         self.debug_mode_checkbox.setChecked(debug_mode)
+        self.debug_mode_checkbox.toggled.connect(self._mark_dirty)
         debug_layout.addWidget(self.debug_mode_checkbox)
         
         # Debug mode description
@@ -263,6 +323,7 @@ class SettingsDialog(QDialog):
         self.enable_info_checkbox.setToolTip("Log normal application events (INFO level)")
         enable_info = self.settings.value("logging/enable_info", True, type=bool)
         self.enable_info_checkbox.setChecked(enable_info)
+        self.enable_info_checkbox.toggled.connect(self._mark_dirty)
         log_levels_layout.addWidget(self.enable_info_checkbox)
         
         # Critical logs (ERROR and CRITICAL)
@@ -270,6 +331,7 @@ class SettingsDialog(QDialog):
         self.enable_critical_checkbox.setToolTip("Log errors and critical issues")
         enable_critical = self.settings.value("logging/enable_critical", True, type=bool)
         self.enable_critical_checkbox.setChecked(enable_critical)
+        self.enable_critical_checkbox.toggled.connect(self._mark_dirty)
         log_levels_layout.addWidget(self.enable_critical_checkbox)
         
         # Debug logs
@@ -277,6 +339,7 @@ class SettingsDialog(QDialog):
         self.enable_debug_checkbox.setToolTip("Log detailed debug information (only when Debug Mode is enabled)")
         enable_debug = self.settings.value("logging/enable_debug", True, type=bool)
         self.enable_debug_checkbox.setChecked(enable_debug)
+        self.enable_debug_checkbox.toggled.connect(self._mark_dirty)
         log_levels_layout.addWidget(self.enable_debug_checkbox)
         
         # Log levels description
@@ -309,6 +372,7 @@ class SettingsDialog(QDialog):
         self.cleanup_days_spin.setValue(cleanup_days)
         self.cleanup_days_spin.setEnabled(auto_cleanup)
         cleanup_days_layout.addWidget(self.cleanup_days_spin)
+        self.cleanup_days_spin.valueChanged.connect(self._mark_dirty)
         cleanup_days_layout.addStretch()
         cleanup_layout.addLayout(cleanup_days_layout)
         
@@ -323,20 +387,26 @@ class SettingsDialog(QDialog):
         
         # Connect auto cleanup checkbox to enable/disable days spinbox
         self.auto_cleanup_checkbox.toggled.connect(self.cleanup_days_spin.setEnabled)
-        
-        # Manual cleanup button with layout
-        manual_cleanup_layout = QHBoxLayout()
-        self.manual_cleanup_button = QPushButton("Clean Up Logs Now...")
+
+        # Utilities
+        utils_group = QGroupBox("Utilities")
+        utils_layout = QHBoxLayout(utils_group)
+        self.manual_cleanup_button = QPushButton("Clean Up Logs Now…")
         self.manual_cleanup_button.setToolTip("Manually delete old log files")
         self.manual_cleanup_button.clicked.connect(self._handle_manual_log_cleanup)
-        manual_cleanup_layout.addWidget(self.manual_cleanup_button)
-        manual_cleanup_layout.addStretch()
-        
+        utils_layout.addWidget(self.manual_cleanup_button)
+
+        open_logs_btn = QPushButton("Open Logs Folder…")
+        open_logs_btn.setToolTip("Open the folder containing application log files")
+        open_logs_btn.clicked.connect(self._open_logs_folder)
+        utils_layout.addWidget(open_logs_btn)
+        utils_layout.addStretch()
+
         # Add all widgets to layout
         layout.addWidget(debug_group)
         layout.addWidget(log_levels_group)
         layout.addWidget(cleanup_group)
-        layout.addLayout(manual_cleanup_layout)
+        layout.addWidget(utils_group)
         layout.addStretch()
         
         return widget
@@ -383,6 +453,11 @@ class SettingsDialog(QDialog):
         self.change_password_button = QPushButton("Change Passwords")
         self.change_password_button.clicked.connect(self._handle_password_change)
         group_layout.addRow("", self.change_password_button) # Add button without label
+
+        # Show/hide passwords toggle
+        self.show_passwords_checkbox = QCheckBox("Show passwords")
+        self.show_passwords_checkbox.toggled.connect(self._toggle_password_visibility)
+        group_layout.addRow("", self.show_passwords_checkbox)
 
         main_layout.addWidget(password_group)
         main_layout.addStretch()
@@ -465,6 +540,9 @@ class SettingsDialog(QDialog):
         if dialog.exec_() == QDialog.Accepted:
             self._current_print_font = dialog.get_selected_font()
             self.print_font_label.setText(self._get_font_display_text(self._current_print_font))
+            self._mark_dirty()
+            # Update live sample
+            self._update_font_sample_label()
 
     # --- Apply/Save/Accept/Reject ---
 
@@ -541,6 +619,8 @@ class SettingsDialog(QDialog):
             logging.getLogger(__name__).info("Settings applied and saved.")
             # Optionally disable Apply button until changes are made again
             self.buttonBox.button(QDialogButtonBox.Apply).setEnabled(False)
+            # Also reflect button disabled state on OK (still closes)
+            self._dirty = False
 
         except Exception as e:
             QMessageBox.critical(self, "Error Applying Settings", f"Could not apply settings: {e}")
@@ -721,6 +801,93 @@ class SettingsDialog(QDialog):
         """Close the dialog without applying changes since last Apply/Load."""
         logging.getLogger(__name__).debug("Settings dialog rejected.")
         super().reject()
+
+    # --- UI helpers ---
+    def _mark_dirty(self):
+        """Enable Apply button when any setting changes."""
+        # Record dirty state even if buttonBox not yet constructed
+        self._dirty = True
+        try:
+            btn = self.buttonBox.button(QDialogButtonBox.Apply)
+            if btn:
+                btn.setEnabled(True)
+        except AttributeError:
+            # buttonBox not available yet during early construction; will enable later
+            pass
+
+    def _connect_change_signals(self):
+        """Connect common change signals to mark the dialog dirty."""
+        # Called after widgets are created; many controls already connected individually.
+        # This is a placeholder for future additions.
+        pass
+
+    def _restore_defaults(self):
+        """Restore sensible default settings for this dialog and update the UI."""
+        # Fonts
+        default_font = QFont("Courier New", 7)
+        default_font.float_size = 7.0
+        self._current_print_font = default_font
+        self.print_font_label.setText(self._get_font_display_text(default_font))
+
+        # Table/UI sizes
+        self.table_font_size_spin.setValue(9)
+        self.breakdown_font_size_spin.setValue(9)
+        self.final_calc_font_size_spin.setValue(10)
+
+        # Printing
+        self.margin_left_spin.setValue(10)
+        self.margin_top_spin.setValue(2)
+        self.margin_right_spin.setValue(10)
+        self.margin_bottom_spin.setValue(2)
+        self.preview_zoom_spin.setValue(1.25)
+
+        # Logging
+        self.debug_mode_checkbox.setChecked(False)
+        self.enable_info_checkbox.setChecked(True)
+        self.enable_critical_checkbox.setChecked(True)
+        self.enable_debug_checkbox.setChecked(True)
+        self.auto_cleanup_checkbox.setChecked(False)
+        self.cleanup_days_spin.setValue(1)
+
+        # Mark dirty so user can Apply
+        self._mark_dirty()
+
+    def _open_logs_folder(self):
+        """Open the logs directory in the system file manager."""
+        try:
+            from app_constants import LOG_DIR
+            QDesktopServices.openUrl(QUrl.fromLocalFile(LOG_DIR))
+        except Exception:
+            # Fallback: try current working directory 'logs'
+            QDesktopServices.openUrl(QUrl.fromLocalFile("logs"))
+
+    def _toggle_password_visibility(self, checked):
+        """Toggle password echo mode for all password fields."""
+        mode = QLineEdit.Normal if checked else QLineEdit.Password
+        for fld in [
+            getattr(self, 'current_password_input', None),
+            getattr(self, 'new_password_input', None),
+            getattr(self, 'confirm_new_password_input', None),
+            getattr(self, 'new_secondary_password_input', None),
+            getattr(self, 'confirm_new_secondary_password_input', None),
+        ]:
+            if fld is not None:
+                fld.setEchoMode(mode)
+        # no Apply state change needed here
+
+    def _update_font_sample_label(self):
+        """Update the live sample label to reflect current print font."""
+        try:
+            if hasattr(self, 'print_font_sample') and self.print_font_sample is not None:
+                if self._current_print_font:
+                    sample_font = QFont(self._current_print_font)
+                    # Respect fractional size stored in float_size if present
+                    size_f = getattr(self._current_print_font, 'float_size', float(self._current_print_font.pointSize()))
+                    if size_f:
+                        sample_font.setPointSizeF(max(5.0, float(size_f)))
+                    self.print_font_sample.setFont(sample_font)
+        except Exception:
+            pass
 
 # Example usage for testing
 if __name__ == '__main__':

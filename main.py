@@ -19,7 +19,8 @@ from item_master import ItemMasterWidget
 from database_manager import DatabaseManager
 # from advanced_tools_dialog import AdvancedToolsDialog # Remove old import
 from settings_dialog import SettingsDialog # Import the new settings dialog
-from logger import setup_logging, qt_message_handler, LoggingStatusBar
+from logger import setup_logging, qt_message_handler
+from message_bar import MessageBar
 from app_constants import APP_TITLE, APP_VERSION, SETTINGS_ORG, SETTINGS_APP, DB_PATH
 
 
@@ -46,12 +47,8 @@ class MainWindow(QMainWindow):
         # Let's try setting the window state directly (Moved to end of __init__)
         # self.setWindowState(Qt.WindowMaximized)
 
-        # Set up status bar *early* so it's available during DB setup
-        self.statusBar = QStatusBar()
-        self.setStatusBar(self.statusBar)
-        # Create logging status bar wrapper
-        self.logging_status = LoggingStatusBar(self.statusBar, self.logger)
-        self.logging_status.show_message("Initializing...", 3000) # Initial message
+        # Top message bar (created but not added to layout; inline status is preferred)
+        self.message_bar = MessageBar(self)
 
         # Setup database *after* getting password (if provided)
         if self._password:
@@ -71,8 +68,15 @@ class MainWindow(QMainWindow):
         # Load settings (including font) before setting up UI elements that use them
         self.load_settings() # Password hashes will be loaded/checked elsewhere (login dialog)
 
-        # Status bar is already set up
-        self.statusBar.showMessage("Ready") # Update message after setup
+        # Ensure any QMainWindow footer status bar is hidden to free space
+        try:
+            sb = QMainWindow.statusBar(self)  # creates if not exists
+            if sb:
+                sb.hide()
+        except Exception:
+            pass
+
+        # Initial user-facing message will be shown inline after widgets are ready
 
         # Central widget
         self.central_widget = QWidget()
@@ -80,6 +84,7 @@ class MainWindow(QMainWindow):
         self.layout = QVBoxLayout(self.central_widget)
         # Navigation stack for primary views
         self.stack = QStackedWidget(self.central_widget)
+        # Insert just the main stack (inline status lives in header area)
         self.layout.addWidget(self.stack)
 
         # Initialize widgets, passing main window and db manager
@@ -101,6 +106,11 @@ class MainWindow(QMainWindow):
                 self.stack.setCurrentWidget(self.estimate_widget)
                 
                 self.logger.info("Widgets initialized successfully")
+                # Now that widgets exist, show initial Ready status inline
+                try:
+                    self.show_status_message("Ready", 2000, level='info')
+                except Exception:
+                    pass
             except Exception as e:
                 # Catch any exceptions during widget initialization
                 self.logger.critical(f"Failed to initialize widgets: {str(e)}", exc_info=True)
@@ -162,13 +172,17 @@ class MainWindow(QMainWindow):
             # Fall back to maximized if restore fails
             self.setWindowState(Qt.WindowMaximized)
 
-    def show_status_message(self, message, timeout=3000):
-        """Expose a simple status message helper for child widgets."""
+    def show_status_message(self, message, timeout=3000, level='info'):
+        """Show a transient message inline next to Mode when possible."""
+        # Prefer inline status on the active Estimate view
         try:
-            if hasattr(self, 'statusBar') and self.statusBar:
-                self.statusBar.showMessage(message, timeout)
+            if hasattr(self, 'estimate_widget') and self.estimate_widget is not None:
+                if hasattr(self.estimate_widget, 'show_inline_status'):
+                    self.estimate_widget.show_inline_status(message, timeout, level)
+                    return
         except Exception:
             pass
+        # No inline target yet; skip showing to avoid UI flicker
 
     # --- File menu action handlers ---
     def file_save_estimate(self):
@@ -229,7 +243,7 @@ class MainWindow(QMainWindow):
             self.db = DatabaseManager(DB_PATH, password=password)
 
             # setup_database is called within DatabaseManager's __init__
-            self.logging_status.show_message("Database connected securely.", 3000)
+            self.show_status_message("Database connected securely.", 3000, level='info')
             self.logger.info("Database connected successfully")
             
             return True

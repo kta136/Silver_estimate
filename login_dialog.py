@@ -180,7 +180,8 @@ class LoginDialog(QDialog):
             hashed = pwd_context.hash(password)
             return hashed
         except Exception as e:
-            print(f"Error hashing password: {e}")
+            import logging
+            logging.getLogger(__name__).error("Error hashing password:", exc_info=True)
             return None
 
     @staticmethod
@@ -193,13 +194,16 @@ class LoginDialog(QDialog):
             # and performs the comparison.
             return pwd_context.verify(provided_password, stored_hash)
         except UnknownHashError:
-            print(f"Warning: Unknown hash format encountered: {stored_hash[:10]}...")
+            import logging
+            logging.getLogger(__name__).warning(f"Unknown hash format encountered: {stored_hash[:10]}...")
             return False
         except ValueError as ve: # Catches potential issues like malformed hash string
-             print(f"Warning: Error comparing password hash (invalid format?): {ve}")
+             import logging
+             logging.getLogger(__name__).warning("Error comparing password hash (invalid format?)", exc_info=True)
              return False
         except Exception as e:
-            print(f"Error verifying password: {e}")
+            import logging
+            logging.getLogger(__name__).error("Error verifying password:", exc_info=True)
             return False
 
 

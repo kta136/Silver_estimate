@@ -15,7 +15,8 @@ class ItemImportManager(QObject):
 
     def cancel_import(self):
         """Flags the import process to stop."""
-        print("Import cancellation requested.")
+        import logging
+        logging.getLogger(__name__).info("Import cancellation requested.")
         self.cancel_requested = True
 
     def import_from_file(self, file_path, import_settings):
@@ -47,7 +48,8 @@ class ItemImportManager(QObject):
                     adjustment_val = float(wage_adjustment_factor_str[1:])
                     if adjustment_op == '/' and adjustment_val == 0:
                          raise ValueError("Cannot divide by zero.")
-                    print(f"Applying wage adjustment: {adjustment_op} {adjustment_val}")
+                    import logging
+                    logging.getLogger(__name__).debug(f"Applying wage adjustment: {adjustment_op} {adjustment_val}")
                 except (ValueError, IndexError):
                     raise ValueError(f"Invalid wage adjustment factor format: '{wage_adjustment_factor_str}'. Use *value or /value.")
 
@@ -59,10 +61,12 @@ class ItemImportManager(QObject):
                 try:
                     with open(file_path, 'r', encoding=enc) as f:
                         lines = f.readlines()
-                    print(f"Successfully read file with encoding: {enc}")
+                    import logging
+                    logging.getLogger(__name__).debug(f"Successfully read file with encoding: {enc}")
                     break # Stop trying encodings if one works
                 except UnicodeDecodeError:
-                    print(f"Failed to decode file with {enc}, trying next...")
+                    import logging
+                    logging.getLogger(__name__).debug(f"Failed to decode file with {enc}, trying next...")
                     continue
                 except Exception as e_read: # Catch other file reading errors
                      raise IOError(f"Could not read file '{file_path}': {e_read}") from e_read
@@ -214,7 +218,8 @@ class ItemImportManager(QObject):
                  self.import_finished.emit(imported_count, total_items, None)  # None indicates success
 
         except Exception as e:
-            print(f"Import failed: {traceback.format_exc()}")
+            import logging
+            logging.getLogger(__name__).error("Import failed:", exc_info=True)
             self.status_updated.emit(f"Error: {str(e)}")
             # Emit finished signal with error message
             self.import_finished.emit(imported_count, processed_count or 1, str(e))

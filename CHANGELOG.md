@@ -1,6 +1,20 @@
-# Project Learnings (Silver Estimate)
+# Changelog (Silver Estimate)
 
-This file documents key learnings, decisions, and important information about the Silver Estimate project.
+This file tracks notable changes, fixes, and decisions for the Silver Estimate project.
+
+## Table of Contents
+- [Comprehensive Logging System Design & Integration (2025-05)](#comprehensive-logging-system-design--integration-may-2025)
+- [Estimate Loading Architecture Stabilization (2025-05)](#estimate-loading-architecture-stabilization-may-2025)
+- [Security Architecture Summary (2025-05)](#security-architecture-summary-may-2025)
+- [Data Model, Integrity, and Migrations (2025-05)](#data-model-integrity-and-migrations-may-2025)
+- [Silver Bar Lifecycle: Permanent Bars With Controlled Deletion (Apr-May 2025)](#silver-bar-lifecycle-permanent-bars-with-controlled-deletion-apr-may-2025)
+- [Silver Bar Management Overhaul Implementation (April 24, 2025)](#silver-bar-management-overhaul-implementation-april-24-2025)
+- [Bug Fixes and UI Improvements (April 24, 2025)](#bug-fixes-and-ui-improvements-april-24-2025)
+- [Startup Error & Window Maximization Fixes (v1.55 - April 24, 2025)](#startup-error--window-maximization-fixes-v155---april-24-2025)
+- [Print Layout Adjustments (v1.57 - April 24, 2025)](#print-layout-adjustments-v157---april-24-2025)
+- [Print Section Separator Change (v1.58 - April 24, 2025)](#print-section-separator-change-v158---april-24-2025)
+- [Settings Dialog Refactor (v1.60 - April 24, 2025)](#settings-dialog-refactor-v160---april-24-2025)
+- [Settings Dialog - Printing Tab (v1.60 - April 24, 2025)](#settings-dialog---printing-tab-v160---april-24-2025)
 
 ## Comprehensive Logging System Design & Integration (May 2025)
 

@@ -112,7 +112,8 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         if self.main_window:
             self.main_window.statusBar.showMessage(message, timeout)
         else:
-            print(f"Status: {message}") # Fallback if no main window
+            import logging
+            logging.getLogger(__name__).info(f"Status: {message}")
     # --------------------------------------------------------
 
 
@@ -307,7 +308,8 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
              self._apply_table_font_size(size)
         else:
              # Should not happen if called at end of __init__, but as fallback:
-             print("Warning: item_table not ready during font size load.")
+             import logging
+             logging.getLogger(__name__).warning("item_table not ready during font size load.")
 
     # --- Totals (Regular/Return/Silver Bar) font size handling ---
     def _apply_breakdown_font_size(self, size):
@@ -327,7 +329,8 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
                     f.setPointSize(int(size))
                     lbl.setFont(f)
         except Exception as e:
-            print(f"Warning: Failed to apply breakdown font size: {e}")
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to apply breakdown font size: {e}")
 
     def _load_breakdown_font_size_setting(self):
         settings = QSettings("YourCompany", "SilverEstimateApp")
@@ -355,7 +358,8 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
                 # Preserve bold + color but drop any fixed font-size
                 self.grand_total_label.setStyleSheet("font-weight: bold; color: blue;")
         except Exception as e:
-            print(f"Warning: Failed to apply final calculation font size: {e}")
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to apply final calculation font size: {e}")
 
     def _load_final_calc_font_size_setting(self):
         settings = QSettings("YourCompany", "SilverEstimateApp")
@@ -377,7 +381,8 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
             
         # Use a safer approach - connect to a wrapper method that handles exceptions
         self.voucher_edit.editingFinished.connect(self.safe_load_estimate)
-        print("Reconnected load_estimate signal with safe wrapper.") # Debug print
+        import logging
+        logging.getLogger(__name__).debug("Reconnected load_estimate signal with safe wrapper.")
         
     def safe_load_estimate(self):
         """Safely load an estimate, catching any exceptions to prevent crashes."""

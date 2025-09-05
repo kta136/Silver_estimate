@@ -989,7 +989,8 @@ class EstimateLogic:
                     f"Estimate {voucher_no} already has {existing_bars_count} silver bar(s). Skipping creation."
                 )
             elif existing_bars_count == 0:
-                print(f"Estimate {voucher_no} saved. Now adding new silver bars...")
+                import logging
+                logging.getLogger(__name__).info(f"Estimate {voucher_no} saved. Now adding new silver bars...")
                 # Add new silver bars from the form only if no bars exist for this estimate
                 for item in items_to_save:
                     if item['is_silver_bar'] and not item['is_return']:
@@ -998,10 +999,12 @@ class EstimateLogic:
                         bar_id = self.db_manager.add_silver_bar(voucher_no, weight, purity)
                         if bar_id is not None:
                             bars_added_count += 1
-                            print(f"Added silver bar (ID: {bar_id}) for estimate {voucher_no}.")
+                            import logging
+                            logging.getLogger(__name__).debug(f"Added silver bar (ID: {bar_id}) for estimate {voucher_no}.")
                         else:
                             bars_failed_count += 1
-                            print(
+                            import logging
+                            logging.getLogger(__name__).warning(
                                 f"Failed to add silver bar for estimate {voucher_no}, item: {item.get('name', 'N/A')}"
                             )
 
@@ -1138,7 +1141,8 @@ class EstimateLogic:
         # Usually called from MainWindow's closeEvent
         # Check for unsaved changes here if needed.
         # For now, assume MainWindow handles it or there's no unsaved check.
-        print("Confirm exit requested (logic likely in MainWindow)")
+        import logging
+        logging.getLogger(__name__).info("Confirm exit requested (logic likely in MainWindow)")
         # Example check (needs has_unsaved_changes method):
         # if self.has_unsaved_changes():
         #    # ... ask user ...

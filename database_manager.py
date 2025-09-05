@@ -291,23 +291,23 @@ class DatabaseManager:
              return False
 
     def _is_column_unique(self, table_name, column_name):
-        """Check if a column has a UNIQUE constraint (via implicit index)."""
-        if not self.cursor: return False
+        """Check if a column has a UNIQUE constraint via PK or unique index."""
+        if not self.cursor:
+            return False
         if not self._column_exists(table_name, column_name):
             return False
         try:
-            # Check UNIQUE constraints defined directly on the column
+            # Primary key implies uniqueness
             self.cursor.execute(f"PRAGMA table_info({table_name})")
-            columns_info = self.cursor.fetchall()
-            for col in columns_info:
-                if col['name'] == column_name and col['unique'] == 1: # Check the 'unique' flag from table_info
+            for col in self.cursor.fetchall():
+                if col['name'] == column_name and int(col['pk']) == 1:
                     return True
 
             # Check separate UNIQUE indexes
             self.cursor.execute(f"PRAGMA index_list({table_name})")
             indexes = self.cursor.fetchall()
             for index in indexes:
-                if index['unique'] == 1:
+                if int(index['unique']) == 1:
                     self.cursor.execute(f"PRAGMA index_info({index['name']})")
                     idx_cols = self.cursor.fetchall()
                     if len(idx_cols) == 1 and idx_cols[0]['name'] == column_name:
@@ -524,6 +524,25 @@ class DatabaseManager:
             
             self.conn.commit()
             self.logger.info("Database schema setup/update complete.")
+
+            # --- Common Indexes for Performance ---
+            try:
+                # Items
+                self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_items_code ON items(code)")
+                # Estimates and items
+                self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_estimates_voucher ON estimates(voucher_no)")
+                self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_estimate_items_voucher ON estimate_items(voucher_no)")
+                # Silver bars
+                self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_sbars_voucher ON silver_bars(estimate_voucher_no)")
+                self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_sbars_list ON silver_bars(list_id)")
+                self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_sbars_status ON silver_bars(status)")
+                self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_sbars_date_added ON silver_bars(date_added)")
+                # Lists
+                self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_sbar_lists_identifier ON silver_bar_lists(list_identifier)")
+                self.conn.commit()
+                self.logger.info("Database indexes ensured.")
+            except sqlite3.Error as e:
+                self.logger.warning(f"Failed creating one or more indexes: {e}")
 
         except sqlite3.Error as e:
             self.logger.critical(f"FATAL Database setup error: {str(e)}", exc_info=True)

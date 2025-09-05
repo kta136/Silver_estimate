@@ -1,0 +1,4 @@
+PyQt5>=5.15.10
+cryptography>=42.0.0
+passlib>=1.7.4
+pyinstaller>=6.6.0

@@ -51,10 +51,12 @@ class ItemExportManager(QObject):
                     exported_count += 1
 
             success_message = f"Successfully exported {exported_count} items to:\n{file_path}"
-            print(success_message)
+            import logging
+            logging.getLogger(__name__).info(success_message)
             self.export_finished.emit(True, success_message)
 
         except Exception as e:
             error_message = f"Error exporting items: {str(e)}"
-            print(f"{error_message}\n{traceback.format_exc()}")
+            import logging
+            logging.getLogger(__name__).error(error_message, exc_info=True)
             self.export_finished.emit(False, error_message)

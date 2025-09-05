@@ -124,8 +124,8 @@ class LoggingStatusBar:
         self.logger = logger or logging.getLogger()
     
     def show_message(self, message, timeout=0):
-        """Show message in status bar and log at INFO level."""
-        self.logger.info(f"Status: {message}")
+        """Show message in status bar and log at DEBUG level to reduce noise."""
+        self.logger.debug(f"Status: {message}")
         self.status_bar.showMessage(message, timeout)
 
 class DatabaseOperation:
@@ -358,7 +358,10 @@ def get_log_config():
     
     # Get log level enable/disable settings
     enable_info = settings.value("logging/enable_info", True, type=bool)
-    enable_error = settings.value("logging/enable_critical", True, type=bool)
+    # Backward-compat: accept either enable_error or enable_critical; default True
+    enable_error = settings.value("logging/enable_error", None, type=bool)
+    if enable_error is None:
+        enable_error = settings.value("logging/enable_critical", True, type=bool)
     enable_debug = settings.value("logging/enable_debug", True, type=bool)
     
     # Get auto-cleanup settings

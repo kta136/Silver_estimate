@@ -44,13 +44,16 @@ class PrintManager:
                 raise ValueError("Invalid margin format")
             # Ensure margins are non-negative
             margins = [max(0, m) for m in margins]
-            print(f"Using margins (L,T,R,B): {margins} mm")
+            import logging
+            logging.getLogger(__name__).debug(f"Using margins (L,T,R,B): {margins} mm")
         except (ValueError, TypeError):
-            print(f"Warning: Using default margins ({default_margins} mm) due to invalid setting '{margins_str}'")
+            import logging
+            logging.getLogger(__name__).warning(f"Using default margins ({default_margins} mm) due to invalid setting '{margins_str}'")
             margins = [10, 5, 10, 5]
 
         self.printer.setPageMargins(margins[0], margins[1], margins[2], margins[3], QPrinter.Millimeter) # Left, Top, Right, Bottom
-        print(f"[PrintManager] Printer margins set to: L={margins[0]}, T={margins[1]}, R={margins[2]}, B={margins[3]}") # DEBUG
+        import logging
+        logging.getLogger(__name__).debug(f"Printer margins set to: L={margins[0]}, T={margins[1]}, R={margins[2]}, B={margins[3]}")
 
     def format_indian_rupees(self, number):
         """Formats a number into Indian Rupees notation (Lakhs, Crores)."""
@@ -105,13 +108,17 @@ class PrintManager:
                     zoom_factor = settings.value("print/preview_zoom", defaultValue=default_zoom, type=float)
                     # Clamp zoom factor to reasonable range (e.g., 0.1 to 5.0)
                     zoom_factor = max(0.1, min(zoom_factor, 5.0))
-                    print(f"[PrintManager] Applying zoom factor: {zoom_factor}") # DEBUG
+                    import logging
+                    logging.getLogger(__name__).debug(f"Applying zoom factor: {zoom_factor}")
                     preview_widget.setZoomFactor(zoom_factor)
-                    print(f"[PrintManager] Set preview zoom factor to: {zoom_factor}") # DEBUG
+                    import logging
+                    logging.getLogger(__name__).debug(f"Set preview zoom factor to: {zoom_factor}")
                 else:
-                    print("Warning: Could not find QPrintPreviewWidget to set zoom.")
+                    import logging
+                    logging.getLogger(__name__).warning("Could not find QPrintPreviewWidget to set zoom.")
             except Exception as zoom_err:
-                print(f"Warning: Error setting initial zoom: {zoom_err}")
+                import logging
+                logging.getLogger(__name__).warning(f"Error setting initial zoom: {zoom_err}")
 
             preview.showMaximized() # Show maximized
             # ------------------------------------
@@ -219,7 +226,10 @@ class PrintManager:
                 # Construct line with padding
                 line = (f"{sno} {fine} {labour} {qty} {poly} {name} {sper} {pcs} {wrate}")
                 return f"{line:<{TOTAL_WIDTH}}"[:TOTAL_WIDTH]
-            except Exception as e: print(f"Error formatting line: {e}, Data: {args}"); return " " * TOTAL_WIDTH
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Error formatting line: {e}, Data: {args}")
+                return " " * TOTAL_WIDTH
 
         def format_totals_line(fine, labour, qty, poly):
             # Format values, including Poly and Labour as integer

@@ -20,6 +20,7 @@ from database_manager import DatabaseManager
 # from advanced_tools_dialog import AdvancedToolsDialog # Remove old import
 from settings_dialog import SettingsDialog # Import the new settings dialog
 from logger import setup_logging, qt_message_handler, LoggingStatusBar
+from app_constants import APP_TITLE, APP_VERSION, SETTINGS_ORG, SETTINGS_APP, DB_PATH
 
 
 class MainWindow(QMainWindow):
@@ -37,7 +38,7 @@ class MainWindow(QMainWindow):
         self._password = password # Store password temporarily
 
         # Initialize UI
-        self.setWindowTitle("Silver Estimation App v1.66") # Update version
+        self.setWindowTitle(APP_TITLE)
         # self.setGeometry(100, 100, 1000, 700) # Remove fixed geometry
         # self.showFullScreen() # Start in true full screen
         # We need to show the window first before maximizing it
@@ -152,12 +153,12 @@ class MainWindow(QMainWindow):
 
             # Ensure database directory exists
             import os
-            os.makedirs(os.path.dirname('database/estimation.db'), exist_ok=True)
+            os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
             # Startup recovery: if a previous temp DB exists and is newer than encrypted, offer recovery
             try:
                 from database_manager import DatabaseManager as DM
-                enc_path = 'database/estimation.db'
+                enc_path = DB_PATH
                 candidate = DM.check_recovery_candidate(enc_path)
                 if candidate:
                     self.logger.warning(f"Found newer temporary DB candidate for recovery: {candidate}")
@@ -178,7 +179,7 @@ class MainWindow(QMainWindow):
                 self.logger.error(f"Recovery check failed: {re}", exc_info=True)
 
             # DatabaseManager now handles getting/creating salt internally via QSettings
-            self.db = DatabaseManager('database/estimation.db', password=password)
+            self.db = DatabaseManager(DB_PATH, password=password)
 
             # setup_database is called within DatabaseManager's __init__
             self.logging_status.show_message("Database connected securely.", 3000)
@@ -429,7 +430,7 @@ class MainWindow(QMainWindow):
         """Show about dialog."""
         QMessageBox.about(self, "About Silver Estimation App",
                           "Silver Estimation App\n\n"
-                          "Version 1.61\n\n" # Make sure this matches window title
+                          f"Version {APP_VERSION}\n\n" # Make sure this matches window title
                           "A comprehensive tool for managing silver estimations, "
                           "item inventory, and silver bars.\n\n"
                           "© 2023-2025 Silver Estimation App") # Update copyright year maybe
@@ -453,13 +454,15 @@ class MainWindow(QMainWindow):
             # Store the selected font for printing, don't apply to UI
             self.print_font = selected_font
             self.save_settings(selected_font) # Pass the selected font to save
-            print(f"Stored print font: {self.print_font.family()}, Size: {getattr(self.print_font, 'float_size', self.print_font.pointSize())}pt, Bold={self.print_font.bold()}") # For debugging
+            self.logger.debug(
+                f"Stored print font: {self.print_font.family()}, Size: {getattr(self.print_font, 'float_size', self.print_font.pointSize())}pt, Bold={self.print_font.bold()}"
+            )
 
     # Removed apply_font_settings as we no longer apply to UI directly from here
 
     def load_settings(self):
         """Load application settings, including font."""
-        settings = QSettings("YourCompany", "SilverEstimateApp") # Use consistent names
+        settings = QSettings(SETTINGS_ORG, SETTINGS_APP) # Use consistent names
         default_family = QApplication.font().family()
         default_size = float(QApplication.font().pointSize())
         default_bold = QApplication.font().bold()
@@ -498,7 +501,7 @@ class MainWindow(QMainWindow):
 
     def save_settings(self, font_to_save):
         """Save application settings, specifically the print font."""
-        settings = QSettings("YourCompany", "SilverEstimateApp") # Use consistent names
+        settings = QSettings(SETTINGS_ORG, SETTINGS_APP) # Use consistent names
         # Use the font passed (which is intended for printing)
         float_size = getattr(font_to_save, 'float_size', float(font_to_save.pointSize()))
         # Ensure we save as float
@@ -525,7 +528,7 @@ class MainWindow(QMainWindow):
         from PyQt5.QtCore import QSettings
 
         # 1. Load current setting
-        settings = QSettings("YourCompany", "SilverEstimateApp")
+        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
         current_size = settings.value("ui/table_font_size", defaultValue=9, type=int)
 
         # 2. Show dialog
@@ -541,7 +544,7 @@ class MainWindow(QMainWindow):
             if hasattr(self, 'estimate_widget') and hasattr(self.estimate_widget, '_apply_table_font_size'):
                 self.estimate_widget._apply_table_font_size(new_size)
             else:
-                 print("Warning: Estimate widget or apply method not found.")
+                 self.logger.warning("Estimate widget or apply method not found.")
 
     # --- Method to show the new Settings dialog ---
     def show_settings_dialog(self):
@@ -586,7 +589,7 @@ class MainWindow(QMainWindow):
         # --- Post-Import Actions ---
         # Refresh item master table if it's currently visible to show new/updated items
         if hasattr(self, 'item_master_widget') and self.item_master_widget.isVisible():
-            print("Refreshing Item Master list after import.")
+            self.logger.info("Refreshing Item Master list after import.")
             self.item_master_widget.load_items()
 
         # Clean up manager object (optional, depends if it holds resources)
@@ -606,7 +609,7 @@ def run_authentication(logger=None):
     logger = logger or logging.getLogger(__name__)
     logger.info("Starting authentication process")
     
-    settings = QSettings("YourCompany", "SilverEstimateApp")
+    settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
     password_hash = settings.value("security/password_hash")
     backup_hash = settings.value("security/backup_hash")
     # Salt is handled internally by DatabaseManager now
@@ -664,7 +667,7 @@ def run_authentication(logger=None):
 
             # Salt is generated and saved internally by DatabaseManager on first init
             # Save hashes to QSettings
-            settings = QSettings("YourCompany", "SilverEstimateApp") # Need settings object here
+            settings = QSettings(SETTINGS_ORG, SETTINGS_APP) # Need settings object here
             settings.setValue("security/password_hash", hashed_password)
             settings.setValue("security/backup_hash", hashed_backup) # Store secondary hash
             settings.sync() # Ensure they are saved immediately
@@ -677,7 +680,7 @@ def run_authentication(logger=None):
             logger.info("Setup cancelled by user")
             return None # Setup cancelled
 
-def perform_data_wipe(db_path='database/estimation.db', logger=None):
+def perform_data_wipe(db_path=DB_PATH, logger=None):
     """
     Performs the data wipe operation: deletes the *encrypted* database file
     and clears password hashes and the database salt from QSettings.
@@ -702,10 +705,19 @@ def perform_data_wipe(db_path='database/estimation.db', logger=None):
             logger.warning(f"Encrypted database file not found (already deleted?): {db_path}")
 
         # Clear password hashes AND the database salt from settings
-        settings = QSettings("YourCompany", "SilverEstimateApp")
+        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+        # Best-effort: remove any leftover plaintext temp DB
+        try:
+            temp_path = settings.value("security/last_temp_db_path")
+            if isinstance(temp_path, str) and temp_path and os.path.exists(temp_path):
+                os.remove(temp_path)
+                logger.info(f"Removed temporary plaintext DB: {temp_path}")
+        except Exception as te:
+            logger.warning(f"Could not remove temporary plaintext DB: {te}")
         settings.remove("security/password_hash")
         settings.remove("security/backup_hash")
         settings.remove("security/db_salt") # CRITICAL: Remove the salt!
+        settings.remove("security/last_temp_db_path")
         settings.sync()
         logger.info("Cleared password hashes and database salt from application settings.")
 
@@ -757,7 +769,7 @@ def safe_start_app():
         )
         
         # Log startup information
-        logger.info(f"Silver Estimation App v1.66 starting")
+        logger.info(f"{APP_TITLE} starting")
         logger.debug(f"Logging configuration: {log_config}")
         
         # Initialize cleanup scheduler if enabled
@@ -796,7 +808,7 @@ def safe_start_app():
             # --- Perform Data Wipe ---
             logger.warning("Data wipe requested, performing wipe operation")
             try:
-                if perform_data_wipe(db_path='database/estimation.db', logger=logger): # Only need DB path now
+                if perform_data_wipe(db_path=DB_PATH, logger=logger): # Only need DB path now
                     # Exit cleanly after successful wipe. User needs to restart manually.
                     logger.info("Exiting application after successful data wipe.")
                     return 0
@@ -910,102 +922,4 @@ if __name__ == "__main__":
         except:
             pass
             
-        sys.exit(1)
-        
-        # Log startup information
-        logger.info(f"Silver Estimation App v1.62 starting")
-        logger.debug(f"Logging configuration: {log_config}")
-        
-        # Initialize cleanup scheduler if enabled
-        cleanup_scheduler = None
-        if log_config['auto_cleanup']:
-            try:
-                cleanup_scheduler = LogCleanupScheduler(
-                    log_dir=log_config['log_dir'],
-                    cleanup_days=log_config['cleanup_days']
-                )
-                cleanup_scheduler.start()
-                logger.info(f"Log cleanup scheduler initialized with {log_config['cleanup_days']} days retention")
-            except Exception as e:
-                logger.error(f"Failed to initialize log cleanup scheduler: {e}", exc_info=True)
-                # Continue without cleanup scheduler
-        
-        # Set up Qt message redirection
-        QtCore.qInstallMessageHandler(qt_message_handler)
-        logger.debug("Qt message handler installed")
-        
-        # Create the application object early for dialogs
-        # Required for QSettings and QMessageBox before MainWindow exists
-        logger.debug("Creating QApplication instance")
-        app = QApplication(sys.argv)
-
-        # --- Authentication Step ---
-        auth_result = run_authentication(logger)
-
-        if auth_result == 'wipe':
-            # --- Perform Data Wipe ---
-            logger.warning("Data wipe requested, performing wipe operation")
-            if perform_data_wipe(db_path='database/estimation.db', logger=logger): # Only need DB path now
-                # Exit cleanly after successful wipe. User needs to restart manually.
-                logger.info("Exiting application after successful data wipe.")
-                sys.exit(0)
-            else:
-                # Wipe failed, critical error. Exit with error status.
-                logger.critical("Exiting application due to data wipe failure.")
-                sys.exit(1)
-
-        elif auth_result: # Password provided (login or setup successful)
-            # --- Start Main Application ---
-            password = auth_result # auth_result is just the password now
-            logger.info("Authentication successful, initializing main window")
-            # Pass password to main window. DB Manager handles salt.
-            main_window = MainWindow(password=password, logger=logger)
-
-            # Check if MainWindow initialization and DB setup were successful
-            # setup_database_with_password is called within MainWindow.__init__
-            if main_window.db: # Check if db object was successfully created
-                # Show the window (maximized state is set in __init__)
-                logger.info("Showing main application window")
-                main_window.show()
-                # Enter the Qt main event loop
-                logger.debug("Entering Qt main event loop")
-                exit_code = app.exec_()
-                
-                # Clean up resources on exit
-                logger.debug("Cleaning up resources before exit")
-                
-                # Stop log cleanup scheduler if running
-                if cleanup_scheduler is not None:
-                    logger.debug("Stopping log cleanup scheduler")
-                    cleanup_scheduler.stop()
-                
-                # Close DB connection cleanly on exit
-                if hasattr(main_window, 'db') and main_window.db:
-                    logger.debug("Closing database connection on exit")
-                    main_window.db.close() # Ensure close is called
-                
-                logger.info(f"Application exiting with code {exit_code}")
-                sys.exit(exit_code)
-            else:
-                # MainWindow init failed (likely DB issue shown in its init)
-                logger.critical("Exiting application due to MainWindow initialization failure (Database connection?).")
-                sys.exit(1)
-
-        else: # Authentication failed or cancelled
-            logger.info("Authentication failed or was cancelled by the user. Exiting.")
-            sys.exit(0) # Exit cleanly without error
-            
-    except Exception as e:
-        # Catch any unhandled exceptions during startup
-        try:
-            logger.critical("Unhandled exception during application startup", exc_info=True)
-        except:
-            # If logging fails, fall back to print
-            print(f"CRITICAL ERROR: {str(e)}")
-            print(traceback.format_exc())
-        
-        # Show error to user
-        QMessageBox.critical(None, "Fatal Error",
-                            f"The application encountered a fatal error and cannot continue.\n\n"
-                            f"Error: {str(e)}")
         sys.exit(1)

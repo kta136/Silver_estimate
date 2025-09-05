@@ -309,6 +309,19 @@ This project is proprietary software. All rights reserved.
 
 [See full changelog](CHANGELOG.md)
 
+### Build Locally (Windows)
+- Prereqs: Python 3.11+, PowerShell, internet access.
+- Run: `pwsh scripts/build_windows.ps1`
+- Output: `dist/SilverEstimate-vX.YY-win64.zip` and `dist/SilverEstimate/` folder.
+
+### GitHub Release (CI)
+- Tag the version and push:
+  - Update `app_constants.py:APP_VERSION`.
+  - `git commit -am "chore: bump version to vX.YY"`
+  - `git tag vX.YY`
+  - `git push origin main --tags`
+- The workflow `.github/workflows/release-windows.yml` builds the Windows zip and attaches it to the GitHub Release automatically.
+
 ---
 
 ## 🙏 Acknowledgments

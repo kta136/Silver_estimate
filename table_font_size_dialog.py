@@ -45,5 +45,6 @@ if __name__ == '__main__':
     dialog = TableFontSizeDialog(current_size=10)
     if dialog.exec_() == QDialog.Accepted:
         size = dialog.get_selected_size()
-        print(f"Selected Size: {size}pt")
+        import logging
+        logging.getLogger(__name__).debug(f"Selected table font size: {size}pt")
     sys.exit()

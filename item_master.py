@@ -21,7 +21,8 @@ class ItemMasterWidget(QWidget):
         if self.main_window:
             self.main_window.show_status_message(message, timeout)
         else:
-            print(f"Status: {message}")
+            import logging
+            logging.getLogger(__name__).info(f"Status: {message}")
     # ------------------------------------
 
     def init_ui(self):

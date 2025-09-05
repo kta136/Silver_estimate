@@ -446,10 +446,10 @@ class SettingsDialog(QDialog):
                 self.margin_right_spin.setValue(int(margins[2]))
                 self.margin_bottom_spin.setValue(int(margins[3]))
             except ValueError:
-                print("Warning: Invalid margin format in settings.")
+                logging.getLogger(__name__).warning("Invalid margin format in settings.")
                 # Keep default spinbox values
         else:
-             print("Warning: Margin setting not found or invalid format.")
+             logging.getLogger(__name__).warning("Margin setting not found or invalid format.")
 
         default_zoom = 1.25
         zoom = self.settings.value("print/preview_zoom", defaultValue=default_zoom, type=float)
@@ -468,7 +468,7 @@ class SettingsDialog(QDialog):
 
     def apply_settings(self):
         """Save currently selected settings and apply immediate changes."""
-        print("Applying settings...") # Debug
+        logging.getLogger(__name__).debug("Applying settings...")
         try:
             # Save Print Font
             font_to_save = self._current_print_font
@@ -478,7 +478,7 @@ class SettingsDialog(QDialog):
             self.settings.setValue("font/bold", bool(font_to_save.bold()))
             # Apply immediately to main window's print_font attribute
             self.main_window.print_font = font_to_save
-            print(f"Applied print font: {self._get_font_display_text(font_to_save)}")
+            logging.getLogger(__name__).debug(f"Applied print font: {self._get_font_display_text(font_to_save)}")
 
             # Save Table Font Size
             new_table_size = self.table_font_size_spin.value()
@@ -486,36 +486,36 @@ class SettingsDialog(QDialog):
             # Apply immediately by calling main window's method (which applies to estimate widget)
             if hasattr(self.main_window, 'estimate_widget') and hasattr(self.main_window.estimate_widget, '_apply_table_font_size'):
                  self.main_window.estimate_widget._apply_table_font_size(new_table_size)
-                 print(f"Applied table font size: {new_table_size}pt")
+                 logging.getLogger(__name__).debug(f"Applied table font size: {new_table_size}pt")
             else:
-                 print("Warning: Could not apply table font size immediately.")
+                 logging.getLogger(__name__).warning("Could not apply table font size immediately.")
 
             # Save Breakdown Totals Font Size
             new_breakdown_size = self.breakdown_font_size_spin.value()
             self.settings.setValue("ui/breakdown_font_size", new_breakdown_size)
             if hasattr(self.main_window, 'estimate_widget') and hasattr(self.main_window.estimate_widget, '_apply_breakdown_font_size'):
                  self.main_window.estimate_widget._apply_breakdown_font_size(new_breakdown_size)
-                 print(f"Applied breakdown totals font size: {new_breakdown_size}pt")
+                 logging.getLogger(__name__).debug(f"Applied breakdown totals font size: {new_breakdown_size}pt")
             else:
-                 print("Warning: Could not apply breakdown totals font size immediately.")
+                 logging.getLogger(__name__).warning("Could not apply breakdown totals font size immediately.")
 
             # Save Final Calculation Font Size
             new_final_calc_size = self.final_calc_font_size_spin.value()
             self.settings.setValue("ui/final_calc_font_size", new_final_calc_size)
             if hasattr(self.main_window, 'estimate_widget') and hasattr(self.main_window.estimate_widget, '_apply_final_calc_font_size'):
                  self.main_window.estimate_widget._apply_final_calc_font_size(new_final_calc_size)
-                 print(f"Applied final calculation font size: {new_final_calc_size}pt")
+                 logging.getLogger(__name__).debug(f"Applied final calculation font size: {new_final_calc_size}pt")
             else:
-                 print("Warning: Could not apply final calculation font size immediately.")
+                 logging.getLogger(__name__).warning("Could not apply final calculation font size immediately.")
 
             # Save Printing Settings
             margins = f"{self.margin_left_spin.value()},{self.margin_top_spin.value()},{self.margin_right_spin.value()},{self.margin_bottom_spin.value()}"
             self.settings.setValue("print/margins", margins)
-            print(f"Saved margins: {margins}")
+            logging.getLogger(__name__).debug(f"Saved margins: {margins}")
 
             preview_zoom = self.preview_zoom_spin.value()
             self.settings.setValue("print/preview_zoom", preview_zoom)
-            print(f"Saved preview zoom: {preview_zoom}")
+            logging.getLogger(__name__).debug(f"Saved preview zoom: {preview_zoom}")
 
             # Save logging settings
             self.settings.setValue("logging/debug_mode", self.debug_mode_checkbox.isChecked())
@@ -528,19 +528,21 @@ class SettingsDialog(QDialog):
             # Apply logging settings immediately
             from logger import reconfigure_logging
             reconfigure_logging()
-            print("Logging settings applied.")
+            logging.getLogger(__name__).info("Logging settings applied.")
 
             # Save other settings...
 
+            # Also persist both modern and legacy keys for error log toggle
+            self.settings.setValue("logging/enable_error", self.enable_critical_checkbox.isChecked())
             self.settings.sync()
             self.settings_applied.emit() # Emit signal
-            print("Settings applied and saved.")
+            logging.getLogger(__name__).info("Settings applied and saved.")
             # Optionally disable Apply button until changes are made again
             self.buttonBox.button(QDialogButtonBox.Apply).setEnabled(False)
 
         except Exception as e:
             QMessageBox.critical(self, "Error Applying Settings", f"Could not apply settings: {e}")
-            print(f"Error applying settings: {traceback.format_exc()}")
+            logging.getLogger(__name__).error("Error applying settings:", exc_info=True)
 
 
     def _handle_password_change(self):
@@ -619,7 +621,7 @@ class SettingsDialog(QDialog):
 
         except Exception as e:
              QMessageBox.critical(self, "Password Change Error", f"Failed to save new password settings: {e}")
-             print(f"Error saving new password hashes: {traceback.format_exc()}")
+             logging.getLogger(__name__).error("Error saving new password hashes:", exc_info=True)
 
     def _handle_export_items(self):
         """Handle the Export Item List button click."""
@@ -715,7 +717,7 @@ class SettingsDialog(QDialog):
 
     def reject(self):
         """Close the dialog without applying changes since last Apply/Load."""
-        print("Settings dialog rejected.") # Debug
+        logging.getLogger(__name__).debug("Settings dialog rejected.")
         super().reject()
 
 # Example usage for testing

@@ -172,7 +172,8 @@ class SilverBarDialog(QDialog):
 
     def load_lists(self):
         """Populates the list selection combo box."""
-        print("Loading lists...")
+        import logging
+        logging.getLogger(__name__).debug("Loading lists...")
         self.list_combo.blockSignals(True)
         self.list_combo.clear()
         self.list_combo.addItem("--- Select a List ---", None)
@@ -232,7 +233,8 @@ class SilverBarDialog(QDialog):
 
     def create_new_list(self):
         """Prompts for a note and creates a new list."""
-        print("Creating new list...")
+        import logging
+        logging.getLogger(__name__).info("Creating new list...")
         note, ok = QInputDialog.getText(self, "Create New List", "Enter a note for the new list:", QLineEdit.Normal)
         if ok:
             new_list_id = self.db_manager.create_silver_bar_list(note if note else None)
@@ -395,7 +397,8 @@ class SilverBarDialog(QDialog):
 
         bars_in_list = self.db_manager.get_bars_in_list(self.current_list_id)
 
-        print(f"Printing list {details['list_identifier']} (ID: {self.current_list_id}) with {len(bars_in_list)} bars.")
+        import logging
+        logging.getLogger(__name__).info(f"Printing list {details['list_identifier']} (ID: {self.current_list_id}) with {len(bars_in_list)} bars.")
 
         try:
             from print_manager import PrintManager # Import locally

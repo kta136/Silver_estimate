@@ -106,5 +106,8 @@ if __name__ == '__main__':
     dialog = CustomFontDialog()
     if dialog.exec_() == QDialog.Accepted:
         font = dialog.get_selected_font()
-        print(f"Selected Font: {font.family()}, Size: {getattr(font, 'float_size', font.pointSize())} (applied as {font.pointSize()}pt), Bold: {font.bold()}")
+        import logging
+        logging.getLogger(__name__).debug(
+            f"Selected Font: {font.family()}, Size: {getattr(font, 'float_size', font.pointSize())} (applied as {font.pointSize()}pt), Bold: {font.bold()}"
+        )
     sys.exit()

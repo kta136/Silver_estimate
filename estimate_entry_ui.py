@@ -179,39 +179,67 @@ class EstimateUI:
         # Table Actions
         table_actions_layout = QHBoxLayout()
         self.delete_row_button = QPushButton("Delete Row")
-        self.delete_row_button.setToolTip("Delete the currently selected row (Ctrl+D)")
+        self.delete_row_button.setToolTip("Delete the currently selected row\nKeyboard: Ctrl+D\nRemoves the active row from the estimate\nCannot be undone")
         self.delete_row_button.clicked.connect(widget.delete_current_row)
         table_actions_layout.addWidget(self.delete_row_button)
-        self.return_toggle_button = QPushButton("Return Items")
-        self.return_toggle_button.setToolTip("Toggle Return Item entry mode for new rows (Ctrl+R)")
+        self.return_toggle_button = QPushButton("↩ Return Items")
+        self.return_toggle_button.setToolTip("Toggle Return Item entry mode for new rows\nKeyboard: Ctrl+R\nNew rows will be marked as Return items\nAffects calculations and item type")
         self.return_toggle_button.setCheckable(True)
+        # Set initial styling for inactive state
+        self.return_toggle_button.setStyleSheet("""
+            QPushButton {
+                background-color: palette(button);
+                border: 1px solid palette(mid);
+                border-radius: 4px;
+                font-weight: normal;
+                color: palette(buttonText);
+                padding: 4px 8px;
+            }
+            QPushButton:hover {
+                background-color: palette(light);
+            }
+        """)
         table_actions_layout.addWidget(self.return_toggle_button)
-        self.silver_bar_toggle_button = QPushButton("Silver Bars")
-        self.silver_bar_toggle_button.setToolTip("Toggle Silver Bar entry mode for new rows (Ctrl+B)")
+        self.silver_bar_toggle_button = QPushButton("🥈 Silver Bars")
+        self.silver_bar_toggle_button.setToolTip("Toggle Silver Bar entry mode for new rows\nKeyboard: Ctrl+B\nNew rows will be marked as Silver Bar items\nCannot use both Return and Silver Bar modes")
         self.silver_bar_toggle_button.setCheckable(True)
+        # Set initial styling for inactive state  
+        self.silver_bar_toggle_button.setStyleSheet("""
+            QPushButton {
+                background-color: palette(button);
+                border: 1px solid palette(mid);
+                border-radius: 4px;
+                font-weight: normal;
+                color: palette(buttonText);
+                padding: 4px 8px;
+            }
+            QPushButton:hover {
+                background-color: palette(light);
+            }
+        """)
         table_actions_layout.addWidget(self.silver_bar_toggle_button)
         table_actions_layout.addSpacing(20)
         self.last_balance_button = QPushButton("LB")
-        self.last_balance_button.setToolTip("Add Last Balance to this estimate")
+        self.last_balance_button.setToolTip("Add Last Balance to this estimate\nAdds previous unpaid balance\nUseful for ongoing customer accounts\nWill show dialog if multiple balances available")
         table_actions_layout.addWidget(self.last_balance_button)
         self.save_button = QPushButton("Save Estimate")
-        self.save_button.setToolTip("Save the current estimate details (Ctrl+S - standard shortcut often works)")
+        self.save_button.setToolTip("Save the current estimate details\nKeyboard: Ctrl+S\nSaves all items and totals to database\nRequired before printing")
         table_actions_layout.addWidget(self.save_button)
         self.print_button = QPushButton("Print Preview")
-        self.print_button.setToolTip("Preview and print the current estimate (requires saving first)")
+        self.print_button.setToolTip("Preview and print the current estimate\nKeyboard: Ctrl+P\nRequires saving the estimate first\nOpens print preview dialog")
         table_actions_layout.addWidget(self.print_button)
         self.history_button = QPushButton("Estimate History")
-        self.history_button.setToolTip("View, load, or print past estimates")
+        self.history_button.setToolTip("View, load, or print past estimates\nKeyboard: Ctrl+H\nBrowse all saved estimates\nDouble-click to load an estimate")
         table_actions_layout.addWidget(self.history_button)
         self.silver_bars_button = QPushButton("Manage Silver Bars")
-        self.silver_bars_button.setToolTip("View and manage silver bar inventory")
+        self.silver_bars_button.setToolTip("View and manage silver bar inventory\nAdd, edit, or assign silver bars\nTrack bar usage across estimates\nManage bar transfers")
         table_actions_layout.addWidget(self.silver_bars_button)
         self.clear_button = QPushButton("New Estimate")
-        self.clear_button.setToolTip("Clear the form to start a new estimate")
+        self.clear_button.setToolTip("Clear the form to start a new estimate\nKeyboard: Ctrl+N\nResets all fields and generates new voucher\nWill ask for confirmation if unsaved changes")
         table_actions_layout.addWidget(self.clear_button)
         table_actions_layout.addSpacing(10)
         self.delete_estimate_button = QPushButton("Delete This Estimate")
-        self.delete_estimate_button.setToolTip("Delete the currently loaded/displayed estimate")
+        self.delete_estimate_button.setToolTip("Delete the currently loaded estimate\nPermanently removes estimate from database\nOnly enabled when estimate is loaded\nCannot be undone - use with caution")
         self.delete_estimate_button.setEnabled(False)
         table_actions_layout.addWidget(self.delete_estimate_button)
         table_actions_layout.addStretch()
@@ -229,58 +257,89 @@ class EstimateUI:
     def _setup_header_form(self, widget):
         """Set up the header form for voucher details."""
         self.mode_indicator_label = QLabel("Mode: Regular Items")
-        self.mode_indicator_label.setStyleSheet("font-weight: bold;")
-        self.mode_indicator_label.setToolTip("Indicates whether Return Items or Silver Bar entry mode is active.")
+        self.mode_indicator_label.setStyleSheet("""
+            font-weight: bold; 
+            color: palette(windowText);
+            background-color: palette(window);
+            border: 1px solid palette(mid);
+            border-radius: 3px;
+            padding: 2px 6px;
+        """)
+        self.mode_indicator_label.setToolTip("Indicates current entry mode:\\n• Regular: Standard silver items\\n• Return Items: Items being returned by customer\\n• Silver Bars: Silver bar inventory items\\n\\nUse toggle buttons (Ctrl+R, Ctrl+B) to change mode")
 
-        form_layout = QGridLayout()
+        # Single-line layout with improved spacing and subtle visual separation
+        form_layout = QHBoxLayout()
+        form_layout.setSpacing(10)  # Base spacing between elements
+        
+        # Document group - Voucher + Load + Date
         voucher_label = QLabel("Voucher No:")
-        form_layout.addWidget(voucher_label, 0, 0)
         self.voucher_edit = QLineEdit()
-        self.voucher_edit.setMaximumWidth(150)
-        self.voucher_edit.setToolTip("Enter an existing voucher number to load or leave blank for a new estimate.")
-        form_layout.addWidget(self.voucher_edit, 0, 1)
+        self.voucher_edit.setMaximumWidth(140)
+        self.voucher_edit.setToolTip("Enter an existing voucher number to load or leave blank for a new estimate.\nFormat: Any alphanumeric code (e.g., EST001, V-2024-001)\nPress Tab or Enter to load estimate")
         self.load_button = QPushButton("Load")
-        self.load_button.setToolTip("Load the estimate with the entered voucher number.")
-        form_layout.addWidget(self.load_button, 0, 2)
+        self.load_button.setToolTip("Load the estimate with the entered voucher number.\nShortcut: Enter in Voucher field\nWill show error if voucher not found")
+        
         date_label = QLabel("Date:")
-        form_layout.addWidget(date_label, 0, 3)
         self.date_edit = QDateEdit()
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDate(QDate.currentDate())
         self.date_edit.setMaximumWidth(120)
-        self.date_edit.setToolTip("Date of the estimate.")
-        form_layout.addWidget(self.date_edit, 0, 4)
+        self.date_edit.setToolTip("Date of the estimate.\nClick calendar icon to choose date\nFormat: DD/MM/YYYY\nDefaults to today's date")
+        
+        # Business data - Silver Rate
         silver_rate_label = QLabel("Silver Rate:")
-        form_layout.addWidget(silver_rate_label, 0, 5)
         self.silver_rate_spin = QDoubleSpinBox()
         self.silver_rate_spin.setRange(0, 1000000)
         self.silver_rate_spin.setDecimals(2)
         self.silver_rate_spin.setPrefix("₹ ")
         self.silver_rate_spin.setValue(0)
-        self.silver_rate_spin.setToolTip("Silver rate for calculating fine value.")
-        form_layout.addWidget(self.silver_rate_spin, 0, 6)
+        self.silver_rate_spin.setToolTip("Silver rate for calculating fine value.\nFormat: ₹ 0.00 (up to 2 decimal places)\nRange: 0 to 1,000,000\nUsed to calculate total value of fine silver")
+        
+        # Additional info - Note
         note_label = QLabel("Note:")
-        form_layout.addWidget(note_label, 0, 7)
         self.note_edit = QLineEdit()
-        self.note_edit.setMinimumWidth(200)
-        self.note_edit.setToolTip("Add a note for this estimate (will be saved with the estimate)")
-        form_layout.addWidget(self.note_edit, 0, 8)
-
-        # Mode indicator
-        form_layout.addWidget(self.mode_indicator_label, 0, 9, alignment=Qt.AlignLeft | Qt.AlignVCenter)
-
-        # Inline status message label (to the right of Mode)
+        self.note_edit.setMinimumWidth(180)
+        self.note_edit.setToolTip("Add a note for this estimate (will be saved with the estimate)\nOptional field for comments, customer details, or special instructions\nWill appear on printed estimates")
+        
+        # Create subtle visual separators
+        def create_separator():
+            sep = QLabel("|")
+            sep.setStyleSheet("color: palette(mid); font-weight: normal;")
+            return sep
+        
+        # Status area
         self.status_message_label = QLabel("")
         self.status_message_label.setObjectName("InlineStatusLabel")
         self.status_message_label.setWordWrap(False)
         self.status_message_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        # Subtle default style; color varies with level in logic
         self.status_message_label.setStyleSheet("color: #445; padding-left: 8px;")
-        form_layout.addWidget(self.status_message_label, 0, 10, alignment=Qt.AlignLeft | Qt.AlignVCenter)
-
-        # Let the status column stretch to take remaining space
-        form_layout.setColumnStretch(10, 1)
+        
+        # Add all widgets to single row with logical grouping and separators
+        form_layout.addWidget(voucher_label)
+        form_layout.addWidget(self.voucher_edit)
+        form_layout.addWidget(self.load_button)
+        form_layout.addSpacing(8)
+        form_layout.addWidget(date_label)
+        form_layout.addWidget(self.date_edit)
+        form_layout.addSpacing(15)  # Group separator
+        form_layout.addWidget(create_separator())
+        form_layout.addSpacing(15)
+        form_layout.addWidget(silver_rate_label)
+        form_layout.addWidget(self.silver_rate_spin)
+        form_layout.addSpacing(15)  # Group separator
+        form_layout.addWidget(create_separator())
+        form_layout.addSpacing(15)
+        form_layout.addWidget(note_label)
+        form_layout.addWidget(self.note_edit)
+        form_layout.addSpacing(15)  # Group separator
+        form_layout.addWidget(create_separator())
+        form_layout.addSpacing(15)
+        form_layout.addWidget(self.mode_indicator_label)
+        form_layout.addWidget(self.status_message_label)
+        form_layout.addStretch()  # Push everything to left
+        
         self.layout.addLayout(form_layout)
+        
         # Buddies for labels to improve keyboard flow
         voucher_label.setBuddy(self.voucher_edit)
         date_label.setBuddy(self.date_edit)
@@ -297,10 +356,17 @@ class EstimateUI:
             "Purity %", "Wage Rate", "Pieces", "Wage Amt", "Fine Wt", "Type"
         ]
         header_tooltips = [
-            "Item code (press Enter/Tab to lookup)", "Item description (filled from code)",
-            "Gross Weight (grams)", "Poly/Stone Weight (grams)", "Net Weight (Gross - Poly, calculated)",
-            "Silver Purity (%)", "Wage rate per gram or per piece", "Number of pieces (for PC wage type)",
-            "Total Wage Amount (calculated)", "Fine Silver Weight (calculated)", "Item Type (Regular/Return/Silver Bar)"
+            "Item code (press Enter/Tab to lookup)\nEnter partial code to search\nLeave empty and press Tab to browse all items",
+            "Item description (filled automatically from code)\nRead-only field\nUpdated when valid code is entered",
+            "Gross Weight (grams)\nFormat: 0.000 (up to 3 decimal places)\nTotal weight including stones/poly\nLeave empty for 0.000",
+            "Poly/Stone Weight (grams)\nFormat: 0.000 (up to 3 decimal places)\nWeight of non-silver parts\nLeave empty for 0.000",
+            "Net Weight (Gross - Poly, calculated)\nRead-only field\nCalculated automatically\nActual silver content weight",
+            "Silver Purity (%)\nFormat: 0.00 (percentage)\nRange: 0.00 to 100.00\nE.g., 92.50 for 92.5% pure silver",
+            "Wage rate per gram or per piece\nFormat: 0.00 (currency)\nRate depends on item's wage type\nPer gram for GM items, per piece for PC items",
+            "Number of pieces (for PC wage type only)\nFormat: Whole numbers only\nRequired for PC (per piece) items\nLeave as 0 for GM (per gram) items",
+            "Total Wage Amount (calculated)\nRead-only field\nCalculated automatically\nWage Rate × (Net Weight or Pieces)",
+            "Fine Silver Weight (calculated)\nRead-only field\nCalculated automatically\nNet Weight × (Purity / 100)",
+            "Item Type (Regular/Return/Silver Bar)\nRead-only field\nSet automatically based on entry mode\nUse mode toggle buttons to change"
         ]
         self.item_table.setHorizontalHeaderLabels(headers)
         for i, tooltip in enumerate(header_tooltips):

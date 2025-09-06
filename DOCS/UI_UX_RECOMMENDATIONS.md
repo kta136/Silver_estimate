@@ -1,6 +1,6 @@
 # UI/UX Recommendations – Silver Estimation App
 
-This document captures prioritized, actionable UI/UX improvements based on the current codebase.
+This document captures prioritized, actionable UI/UX improvements based on comprehensive codebase analysis.
 
 Audience: developers working on this repo. Each item lists rationale, files to touch, and implementation hints.
 
@@ -11,225 +11,273 @@ Status Key
 
 ---
 
-## 1) Primary Navigation
-- Status: ✅ Implemented (QStackedWidget) + Lazy-load Item Master
-- Files: `main.py`
-- Notes:
-  - Replaced show/hide with a central `QStackedWidget`. Item Master is created on demand inside `show_item_master()` to reduce startup cost and UI clutter.
-  - Because Item Master is used infrequently, a persistent global toolbar was not enabled by default. See section 13 for an optional power-user toolbar toggle.
+## Critical Usability Issues
 
----
-
-## 1.1) Primary Actions Toolbar (Contextual)
-- Status: 💡 (optional, contextual in Estimate view)
-- Why: Surface frequent actions (Save, Print, History, New, Silver Bars, Delete) for faster workflows in Estimate Entry without exposing Item Master constantly.
-- Files: `estimate_entry.py` (add a small `QToolBar` or button row at top), `main.py` (optional View toggle)
+### 1) Input Validation Feedback
+- Status: 💡 **High Priority**
+- Why: Numeric validation happens silently with fallback to 0.0; users may not realize their input was invalid
+- Files: `estimate_entry_ui.py` (NumericDelegate), `estimate_entry.py`
 - How:
-  - Add a toolbar within Estimate view only, or keep the existing button row but add icons + mnemonics.
-  - If desired globally, expose a Settings toggle (see section 13) so users can show/hide it.
+  - Add inline validation messages for invalid inputs
+  - Use color coding (red border) for invalid field states
+  - Add tooltips explaining expected number formats
+  - Show validation status in the inline status area
+
+### ✅ 2) Mode Switching Clarity  
+- Status: ✅ **COMPLETED** in v1.70
+- Why: Return Items/Silver Bar modes needed better visual indication
+- Files: `estimate_entry.py`, `estimate_entry_ui.py`
+- Implementation:
+  - ✅ Added distinct color schemes for active modes (blue for Return, orange for Silver Bar)
+  - ✅ Enhanced mode buttons with icons (↩ Return, 🥈 Silver Bar) and "ACTIVE" text
+  - ✅ Color-coordinated mode indicator label with button styling
+  - ✅ Bold borders, backgrounds, and hover effects for clear visual feedback
 
 ---
 
-## 2) Persist Window Geometry + State
-- Status: ✅ Implemented
-- Why: Restores the user’s last window size/position and (optionally) toolbar/menu states.
-- Files: `main.py`
-- How:
-  - On start (end of `__init__`):
-    ```python
-    settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
-    if (geo := settings.value("ui/main_geometry")):
-        self.restoreGeometry(geo)
-    if (state := settings.value("ui/main_state")):
-        self.restoreState(state)
-    ```
-  - On close (`closeEvent`):
-    ```python
-    settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
-    settings.setValue("ui/main_geometry", self.saveGeometry())
-    settings.setValue("ui/main_state", self.saveState())
-    settings.sync()
-    ```
+## Interface Layout Issues
 
----
+### ✅ 3) Information Density Management
+- Status: ✅ **COMPLETED** in v1.70
+- Why: Header form was cramped with poor field spacing
+- Files: `estimate_entry_ui.py`
+- Implementation:
+  - ✅ Added logical visual grouping with subtle "|" separators
+  - ✅ Increased spacing between functional groups (15px vs original cramped layout)
+  - ✅ Maintained single-row layout for space efficiency
+  - ✅ Improved field alignment and breathing room without extra height
 
-## 3) HiDPI Support
-- Status: ✅ Implemented 
-- Why: Sharper UI on high‑resolution displays.
-- Files: `main.py`
-- How: before creating `QApplication` in `safe_start_app()`:
-  ```python
-  from PyQt5.QtCore import Qt
-  QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
-  QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
-  ```
-
----
-
-## 4) Standard Shortcuts + Menus
-- Status: ✅ Implemented
-- Why: Consistency with platform conventions.
-- Files: `main.py`
-- Notes:
-  - `Quit` uses `QKeySequence.Quit`.
-  - `Save`/`Print` wired under File menu using `QKeySequence.Save`/`QKeySequence.Print` and call Estimate view actions.
-  - Shortcut reliability: menu actions use `Qt.ApplicationShortcut`; duplicate per‑widget `QShortcut`/`QAction` bindings were removed to avoid “Ambiguous shortcut overload”.
-
----
-
-## 4.2) Shortcut Reliability (Ctrl+S/Ctrl+P)
-- Status: ✅ Implemented
-- Why: Ensure hotkeys work while editing fields/table cells without conflicts.
-- Files: `main.py`, `estimate_entry.py`
-- Notes:
-  - Centralize Save/Print to main menu actions with `Qt.ApplicationShortcut`.
-  - Avoid attaching additional Ctrl+S/Ctrl+P shortcuts at widget level to prevent ambiguity.
-
----
-
-## 4.1) View Menu (Stack Switching)
-- Status: ✅ Implemented
-- Why: Alternative to a global toolbar; lets users switch between views predictably.
-- Files: `main.py`
-- Notes: Added `&View` menu with two checkable actions; actions are kept in sync with the current stacked view.
-
----
-
-## 5) Palette‑Aware Styling + Theme Support
-- Status: ✅ Groundwork Implemented
-- Why: Current inline styles use hardcoded colors; break in dark mode.
-- Files: `estimate_entry_ui.py`, `estimate_entry.py`, `item_master.py`
-- How:
-  - Replaced explicit hex colors for the item table with palette roles (`palette(base)`, `palette(alternate-base)`, `palette(mid)`).
-  - Removed hardcoded colors on mode indicators and key labels; use bold font styling instead of color for emphasis.
-  - Next: extract to a theme manager and add a Settings toggle for “Dark Mode”.
-
----
-
-## 6) Safer Destructive Actions
-- Status: ✅ Implemented
-- Why: Guardrails to prevent accidental data loss.
-- Files: `estimate_entry_ui.py`, `estimate_entry_logic.py`, `estimate_entry.py`, `main.py`, `settings_dialog.py`
-- How:
-  - “Delete This Estimate” is disabled by default and becomes enabled only after loading an existing estimate.
-  - “Delete All Data” now has a second explicit confirmation requiring typing `DELETE` after the initial warning.
-  - Kept destructive actions grouped under Settings.
-
----
-
-## 7) Labels and Tab Order (No Renames/Mnemonics)
-- Status: ✅ Implemented (header + table focus)
-- Why: Improve keyboard flow without renaming labels or adding mnemonics.
-- Files: `estimate_entry_ui.py`, `item_master.py`
-- How:
-  - Kept existing button texts as-is (e.g., “LB”), no new mnemonics.
-  - Added `QLabel.setBuddy(...)` for Voucher/Date/Silver Rate/Note.
-  - Defined tab order: Voucher → Load → Date → Silver Rate → Note → Item Table.
-
----
-
-## 8) Autocomplete and Pickers
-- Status: 💡
-- Why: Reduce typing; prevent invalid codes.
-- Files: `estimate_entry.py`, `item_selection_dialog.py`
-- How:
-  - Add `QCompleter` to voucher number and code fields with database‑backed models.
-  - Keep `ItemSelectionDialog` for discovery; invoke when code not found or ambiguous.
-
----
-
-## 9) Locale & Currency Formatting
-- Status: ✅ Implemented
-- Why: Consistent display of currency and numbers.
-- Files: `estimate_entry_logic.py`, `print_manager.py`
-- How:
-  - Centralized currency formatting via `QLocale.system().toCurrencyString(...)` with safe fallbacks.
-  - Totals (Net Wage, Net Value, Grand Total) and printing (Last Balance, S.Cost, Total) now use localized currency strings.
-
----
-
-## 10) Progress & Responsiveness
-- Status: 🔜 In Progress (async import done)
-- Why: Keep UI responsive during long ops (import/export/printing).
-- Files: `settings_dialog.py`, `item_import_dialog.py`, `item_import_manager.py`, `print_manager.py`
-- How:
-  - Import now runs on a dedicated `QThread` (non‑blocking UI) with progress signals.
-  - Print action disables the initiating button while preparing preview.
-  - Next: add `QProgressDialog` or overlay for long print/exports and disable initiating buttons consistently.
-
----
-
-## 11) Unify QSettings Usage
-- Status: ✅ Implemented
-- Why: Avoid fragmented preference keys.
-- Files: `estimate_entry.py`, `settings_dialog.py`, `app_constants.py`
-- Notes: All app QSettings now use `SETTINGS_ORG/SETTINGS_APP` constants (e.g., in `estimate_entry.py`, `settings_dialog.py`, `main.py`).
-
----
-
-## 12) Totals Section Cleanup
-- Status: ✅ Implemented
-- Why: Improve theme compatibility and accessibility.
+### 4) Table Column Organization
+- Status: 💡 **Medium Priority**  
+- Why: 11-column table mixes user input and calculated data without clear distinction
 - Files: `estimate_entry_ui.py`
 - How:
-  - Replaced inline HTML with styled `QLabel` (bold/underline via font), keeping numeric labels right‑aligned.
-  - Palette‑friendly styling for the totals area, avoiding hard‑coded colors.
+  - Use different background colors for calculated vs. input columns
+  - Group related columns visually with subtle borders
+  - Add column grouping headers
+  - Enhance existing column resize persistence
 
----
-
-## 13) Optional Power‑User Toolbar (Toggle)
-- Status: 💡 (unchanged)
-- Why: Some users prefer 1‑click access.
-- Files: `main.py`, `settings_dialog.py`
+### 5) Totals Section Enhancement
+- Status: ✅ **Partially Implemented**
+- Why: Complex breakdown display with many numeric values needs better hierarchy
+- Files: `estimate_entry_ui.py`
 - How:
-  - Add a Settings toggle (View → Toolbar) to show/hide a minimal toolbar bound to the stack switching.
-  - Default: off, given Item Master’s rare use.
-  - If enabled, include actions: Save, Print, History, New, Silver Bars, Delete (icons + standard shortcuts).
+  - ✅ Already improved with palette-friendly styling
+  - 💡 Add progressive disclosure (show/hide details toggle)
+  - 💡 Use different font weights for importance hierarchy
+  - 💡 Add visual separators between calculation groups
 
 ---
 
-## 14) Accessibility & Feedback
-- Status: 💡 (partial improvements)
-- Why: Improve clarity and trust.
-- Files: app‑wide
+## Accessibility Problems
+
+### 6) Keyboard Navigation Standards
+- Status: 💡 **Medium Priority**
+- Why: Complex keyboard shortcuts without clear documentation or standard conventions
+- Files: `estimate_entry.py`, documentation
 - How:
-  - Pending: caps‑lock indicator and show/hide toggles on login fields.
-  - Current: status bar messaging and defensive disabling of destructive actions when not applicable.
+  - Add context-sensitive help (F1 key support)
+  - Show available shortcuts in tooltips and status messages
+  - Implement standard Windows keyboard conventions
+  - Create keyboard shortcut reference guide
 
----
-
-## 14.1) Login & Security UX
-- Status: 💡
-- Why: Keep login focused; clarify destructive paths.
-- Files: `login_dialog.py`, `settings_dialog.py`
+### 7) Visual Accessibility
+- Status: 💡 **Medium Priority**
+- Why: No consideration for color blindness or visual impairments in current design
+- Files: app-wide styling
 - How:
-  - Add show/hide password toggles, caps‑lock detection, and a basic strength meter in setup mode.
-  - Prefer relocating wipe/reset to Settings > Data with clear copy and multi‑step confirmation; if keeping on the login screen, visually separate the destructive action.
+  - Use patterns/textures in addition to colors for mode indication
+  - Ensure sufficient color contrast ratios (WCAG 2.1 AA)
+  - Add text alternatives to color-coded information
+  - Test with colorblind simulation tools
+
+### 8) Typography Hierarchy
+- Status: ✅ **Partially Implemented**
+- Why: Multiple font size settings without clear hierarchy and relationships
+- Files: `settings_dialog.py`, `estimate_entry.py`
+- How:
+  - ✅ Already have separate controls for different UI areas
+  - 💡 Establish clear typography scale relationships
+  - 💡 Use relative sizing relationships
+  - 💡 Document font size recommendations
 
 ---
 
-## 15) Future: Model‑View for Scalability
-- Status: 💡
-- Why: Smooth performance with large tables.
+## Workflow Improvements
+
+### 9) Error Recovery & Undo
+- Status: 💡 **Medium Priority**
+- Why: Limited undo functionality and error recovery capabilities
+- Files: `estimate_entry_logic.py`
+- How:
+  - Add Ctrl+Z undo for recent cell changes
+  - Implement auto-save for work-in-progress
+  - Provide "are you sure?" dialogs for destructive table operations
+  - Add recovery from accidental data loss
+
+### 10) Bulk Operations Support
+- Status: 💡 **Low Priority**
+- Why: No support for bulk editing or multi-row operations
 - Files: `estimate_entry_ui.py`, `estimate_entry_logic.py`
 - How:
-  - Consider migrating `QTableWidget` → `QTableView` + custom model when row counts grow. Keep current approach for now if performance is fine.
+  - Add multi-row selection capability
+  - Implement copy/paste functionality for table data
+  - Allow bulk property changes (e.g., purity for selected items)
+  - Add bulk delete operations
+
+### 11) Enhanced Search & Filtering
+- Status: 💡 **Low Priority** (ItemSelectionDialog already exists)
+- Why: Limited search capabilities in item selection dialog
+- Files: `item_selection_dialog.py`
+- How:
+  - Add advanced filtering options (by type, purity range, etc.)
+  - Implement fuzzy search algorithms
+  - Show search results count and navigation
+  - Add recent/favorites for frequently used items
 
 ---
 
-## Suggested Implementation Order (Quick Wins First)
-1) Safer destructive actions (6) – ✅
-2) Tab order + buddies only (7) – ✅
-3) Currency/locale formatting for totals (9) – ✅
-4) Palette‑aware styling groundwork (5) – ✅ groundwork
-5) Progress + async wrappers (10) – 🔜 (import async done)
-6) Autocomplete/pickers (8)
+## Performance & Responsiveness
+
+### 12) Calculation Optimization
+- Status: 💡 **Low Priority**
+- Why: Real-time calculations trigger on every cell change
+- Files: `estimate_entry_logic.py`
+- How:
+  - Debounce calculations with 300ms delay
+  - Use progress indicators for complex calculations
+  - Optimize calculation algorithms for large tables
+  - Cache intermediate results where possible
+
+### 13) Dialog State Management
+- Status: 💡 **Low Priority**
+- Why: Modal dialogs without proper state persistence
+- Files: dialog files (`*_dialog.py`)
+- How:
+  - Remember dialog positions and sizes in QSettings
+  - Add non-modal options where appropriate
+  - Implement dialog queuing for multiple messages
+  - Preserve dialog content when possible
 
 ---
 
-## Implementation Summary (Current Sprint)
-- Delete safeguards: Disabled Delete until an estimate is loaded; typed DELETE required for “Delete All Data”. Files: `estimate_entry_ui.py`, `estimate_entry_logic.py`, `estimate_entry.py`, `main.py`.
-- Keyboard flow: Added label buddies and tab order in header; table focus kept. File: `estimate_entry_ui.py`.
-- Currency formatting: Localized currency strings in UI totals and printing. Files: `estimate_entry_logic.py`, `print_manager.py`.
-- Palette-friendly UI: Replaced hardcoded colors with palette roles and font emphasis. Files: `estimate_entry_ui.py`, `estimate_entry.py`.
-- Responsiveness: Item import runs on a worker `QThread`; print button is disabled during preview generation. Files: `main.py`, `estimate_entry_logic.py`.
+## Modern UI Standards
+
+### 14) Visual Design Modernization
+- Status: 💡 **Low Priority**
+- Why: Basic PyQt styling without modern design language
+- Files: app-wide styling
+- How:
+  - Implement consistent spacing grid (8px base unit)
+  - Add subtle shadows and modern borders
+  - Use cohesive color palette with proper contrast
+  - Apply modern button and input field styling
+
+### 15) Enhanced Status Communication
+- Status: ✅ **Partially Implemented** (inline status exists)
+- Why: Current inline status messages need better visibility
+- Files: `estimate_entry.py`, `message_bar.py`
+- How:
+  - ✅ Already have inline status next to Mode indicator
+  - 💡 Add toast notifications for important messages
+  - 💡 Use progress bars for long operations
+  - 💡 Implement status icons (success/warning/error)
+
+---
+
+## Recently Completed in v1.70
+
+### ✅ Enhanced Tooltips System
+- Status: ✅ **COMPLETED** in v1.70
+- Why: Users needed better guidance on input formats and keyboard shortcuts
+- Files: `estimate_entry_ui.py`, `settings_dialog.py`, `login_dialog.py`, `item_selection_dialog.py`
+- Implementation:
+  - ✅ Comprehensive tooltips for all input fields with detailed format explanations
+  - ✅ Keyboard shortcuts documented in all button tooltips (Ctrl+S, Ctrl+P, etc.)
+  - ✅ Multi-line structured tooltips with ranges, examples, and usage tips
+  - ✅ Context-aware help for setup vs login modes
+  - ✅ Enhanced table column header tooltips with calculation explanations
+
+### ✅ Mode Button Visual Enhancement
+- Status: ✅ **COMPLETED** in v1.70
+- Implementation: See "Mode Switching Clarity" above
+
+### ✅ Header Field Spacing Improvement
+- Status: ✅ **COMPLETED** in v1.70  
+- Implementation: See "Information Density Management" above
+
+---
+
+## Previously Implemented Features
+
+### ✅ Primary Navigation
+- Status: ✅ Implemented (QStackedWidget) + Lazy-load Item Master
+- Files: `main.py`
+
+### ✅ Primary Actions Toolbar (Contextual)
+- Status: ✅ Implemented as button row in Estimate view
+- Files: `estimate_entry_ui.py`
+
+### ✅ Window State Persistence  
+- Status: ✅ Implemented
+- Files: `main.py`
+
+### ✅ HiDPI Support
+- Status: ✅ Implemented 
+- Files: `main.py`
+
+### ✅ Standard Shortcuts + Menus
+- Status: ✅ Implemented
+- Files: `main.py`
+
+### ✅ Palette‑Aware Styling + Theme Support
+- Status: ✅ Groundwork Implemented
+- Files: `estimate_entry_ui.py`, `estimate_entry.py`, `item_master.py`
+
+### ✅ Safer Destructive Actions
+- Status: ✅ Implemented
+- Files: `estimate_entry_ui.py`, `estimate_entry_logic.py`, `estimate_entry.py`, `main.py`, `settings_dialog.py`
+
+### ✅ Keyboard Tab Order
+- Status: ✅ Implemented (header + table focus)
+- Files: `estimate_entry_ui.py`, `item_master.py`
+
+### ✅ Locale & Currency Formatting
+- Status: ✅ Implemented
+- Files: `estimate_entry_logic.py`, `print_manager.py`
+
+### ✅ Progress & Responsiveness
+- Status: 🔜 In Progress (async import done)
+- Files: `settings_dialog.py`, `item_import_dialog.py`, `item_import_manager.py`, `print_manager.py`
+
+### ✅ Unified QSettings Usage
+- Status: ✅ Implemented
+- Files: `estimate_entry.py`, `settings_dialog.py`, `app_constants.py`
+
+---
+
+## Implementation Priority
+
+**High Priority**: Input validation feedback (#1)  
+**Medium Priority**: Table organization (#4), Keyboard navigation (#6), Visual accessibility (#7), Error recovery (#9)  
+**Low Priority**: Bulk operations (#10), Search enhancement (#11), Performance optimization (#12), Dialog management (#13), Visual modernization (#14), Status communication (#15)
+
+---
+
+## Quick Implementation Wins (Next Phase)
+
+1. **Input Validation Visual Feedback** - Add red borders and tooltips to invalid numeric inputs  
+2. **Table Column Visual Grouping** - Use background colors to distinguish input vs calculated columns
+3. **Keyboard Shortcut Documentation** - Add F1 help context system
+4. **Enhanced Error Messages** - Provide clear, actionable error messages with recovery suggestions
+5. **Undo/Redo Support** - Add Ctrl+Z for recent table changes
+
+---
+
+## Recent Achievements (v1.70)
+
+✅ **Enhanced Tooltips System** - Comprehensive help and format guidance throughout the application  
+✅ **Mode Button Visual Enhancement** - Clear visual indication of Return Items and Silver Bar modes  
+✅ **Header Field Spacing** - Professional layout with logical grouping and proper spacing  
+
+These improvements provide immediate usability benefits and establish a foundation for future UX enhancements.

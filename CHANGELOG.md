@@ -2,6 +2,20 @@
 
 This file tracks notable changes, fixes, and decisions for the Silver Estimate project.
 
+## Release v1.70 (2025-09-06)
+
+- UI/UX: Enhanced tooltips system with comprehensive help and format guidance throughout the application
+- UI/UX: Mode button visual enhancement with distinct color schemes (blue for Return Items, orange for Silver Bar modes)
+- UI/UX: Mode buttons now include icons (↩ Return, 🥈 Silver Bar) and "ACTIVE" text for clear visual feedback
+- UI/UX: Mode indicator label styling coordinated with button colors for consistent visual language
+- UI/UX: Header field spacing improvement with logical grouping using subtle "|" separators
+- UI/UX: Enhanced professional layout with proper spacing (15px between groups) while maintaining single-row efficiency
+- Tooltips: All input fields now have detailed format explanations, ranges, and examples
+- Tooltips: Button tooltips include keyboard shortcuts (Ctrl+S, Ctrl+P, etc.) for better discoverability
+- Tooltips: Context-aware help for setup vs login modes in authentication dialog
+- Build: Version bumped to v1.70; prepared for Windows executable rebuild
+- Touched files: `estimate_entry_ui.py`, `estimate_entry.py`, `settings_dialog.py`, `login_dialog.py`, `item_selection_dialog.py`, `app_constants.py`, `DOCS/UI_UX_RECOMMENDATIONS.md`
+
 ## Release v1.69 (2025-09-05)
 
 - UI: Status messages now display inline next to the Mode label in the header to prevent window reflows and flicker.

@@ -82,6 +82,7 @@ class SettingsDialog(QDialog):
 
         # Add Restore Defaults button
         restore_btn = QPushButton("Restore Defaults…")
+        restore_btn.setToolTip("Reset all settings to default values\nWill not affect saved estimates or data\nChanges take effect immediately")
         self.buttonBox.addButton(restore_btn, QDialogButtonBox.ResetRole)
         restore_btn.clicked.connect(self._restore_defaults)
 
@@ -113,7 +114,7 @@ class SettingsDialog(QDialog):
 
         # Print Font
         self.print_font_button = QPushButton("Configure Print Font...")
-        self.print_font_button.setToolTip("Set font family, size, and style for printed estimates")
+        self.print_font_button.setToolTip("Set font family, size, and style for printed estimates\nAffects only printed output, not screen display\nRecommended: Monospace fonts like Courier New\nClick to open font selection dialog")
         self.print_font_label = QLabel(self._get_font_display_text(self._current_print_font)) # Show current setting
         self.print_font_button.clicked.connect(self._show_print_font_dialog)
         self.print_font_button.clicked.connect(self._mark_dirty)
@@ -124,7 +125,7 @@ class SettingsDialog(QDialog):
 
         # Live font sample
         self.print_font_sample = QLabel("AaBb123")
-        self.print_font_sample.setToolTip("Live sample using the chosen print font")
+        self.print_font_sample.setToolTip("Live preview of selected print font\nShows how text will appear on printed estimates\nUpdates automatically when font changes")
         self._update_font_sample_label()
         form_layout.addRow("Sample:", self.print_font_sample)
 
@@ -132,7 +133,7 @@ class SettingsDialog(QDialog):
         self.table_font_size_spin = QSpinBox()
         self.table_font_size_spin.setRange(7, 16) # Keep range consistent
         self.table_font_size_spin.setValue(self._current_table_font_size)
-        self.table_font_size_spin.setToolTip("Set font size for the main estimate entry table (7–16 pt)")
+        self.table_font_size_spin.setToolTip("Set font size for the main estimate entry table\nRange: 7–16 points\nAffects table readability and screen space usage\nRecommended: 9-11 for most users")
         self.table_font_size_spin.setSuffix(" pt")
         self.table_font_size_spin.setMinimumWidth(80)
         self.table_font_size_spin.valueChanged.connect(self._mark_dirty)
@@ -142,7 +143,7 @@ class SettingsDialog(QDialog):
         self.breakdown_font_size_spin = QSpinBox()
         self.breakdown_font_size_spin.setRange(7, 16)
         self.breakdown_font_size_spin.setValue(self._current_breakdown_font_size)
-        self.breakdown_font_size_spin.setToolTip("Text size for Regular/Return/Silver Bar totals")
+        self.breakdown_font_size_spin.setToolTip("Text size for Regular/Return/Silver Bar totals\nRange: 7–16 points\nControls left-side totals display\nShould match or be smaller than table font")
         self.breakdown_font_size_spin.setSuffix(" pt")
         self.breakdown_font_size_spin.setMinimumWidth(80)
         self.breakdown_font_size_spin.valueChanged.connect(self._mark_dirty)
@@ -152,7 +153,7 @@ class SettingsDialog(QDialog):
         self.final_calc_font_size_spin = QSpinBox()
         self.final_calc_font_size_spin.setRange(8, 20)
         self.final_calc_font_size_spin.setValue(self._current_final_calc_font_size)
-        self.final_calc_font_size_spin.setToolTip("Text size for Final Calculation panel")
+        self.final_calc_font_size_spin.setToolTip("Text size for Final Calculation panel\nRange: 8–20 points\nControls right-side grand totals display\nCan be larger for emphasis")
         self.final_calc_font_size_spin.setSuffix(" pt")
         self.final_calc_font_size_spin.setMinimumWidth(80)
         self.final_calc_font_size_spin.valueChanged.connect(self._mark_dirty)
@@ -232,13 +233,13 @@ class SettingsDialog(QDialog):
         button_layout = QHBoxLayout()
 
         self.delete_estimates_button = QPushButton("Delete All Estimates...")
-        self.delete_estimates_button.setToolTip("Deletes all estimate headers and line items.")
+        self.delete_estimates_button.setToolTip("Remove all estimate records\nKeeps item master and silver bar data intact\nRequires confirmation")
         self.delete_estimates_button.setStyleSheet("color: orange;")
         self.delete_estimates_button.clicked.connect(self.main_window.delete_all_estimates)
         button_layout.addWidget(self.delete_estimates_button)
 
         self.delete_all_data_button = QPushButton("DELETE ALL DATA")
-        self.delete_all_data_button.setToolTip("Deletes ALL items, estimates, bars, lists, etc.")
+        self.delete_all_data_button.setToolTip("Reset all application data\nIncludes: estimates, items, silver bars, lists\nRequires typing DELETE to confirm")
         self.delete_all_data_button.setStyleSheet("color: red; font-weight: bold;")
         self.delete_all_data_button.clicked.connect(self.main_window.delete_all_data)
         button_layout.addWidget(self.delete_all_data_button)
@@ -259,7 +260,7 @@ class SettingsDialog(QDialog):
         import_layout = QVBoxLayout(import_group)
 
         import_button = QPushButton("Import Item List...")
-        import_button.setToolTip("Import items from a text or CSV file.")
+        import_button.setToolTip("Import items from a text or CSV file\nSupported formats: TXT, CSV\nRequires specific column format\nWill merge with existing items")
         # Connect directly to the method already defined in MainWindow
         import_button.clicked.connect(self.main_window.show_import_dialog)
         import_layout.addWidget(import_button)
@@ -270,7 +271,7 @@ class SettingsDialog(QDialog):
         export_group = QGroupBox("Export Data")
         export_layout = QVBoxLayout(export_group)
         export_button = QPushButton("Export Item List...")
-        export_button.setToolTip("Export all items to a pipe-delimited text file.")
+        export_button.setToolTip("Export all items to a pipe-delimited text file\nCreates backup of item master data\nFormat: Code|Name|Purity|Type|Rate\nCan be imported later if needed")
         export_button.clicked.connect(self._handle_export_items) # Connect to new handler
         export_layout.addWidget(export_button)
         export_layout.addStretch()

@@ -202,8 +202,20 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
             self.silver_bar_mode = False
             self.silver_bar_toggle_button.setChecked(False)
             # Use the tooltip text directly if needed, or just reset
-            self.silver_bar_toggle_button.setText("Toggle Silver Bars (Ctrl+B)")
-            self.silver_bar_toggle_button.setStyleSheet("")
+            self.silver_bar_toggle_button.setText("🥈 Silver Bars (Ctrl+B)")
+            self.silver_bar_toggle_button.setStyleSheet("""
+                QPushButton {
+                    background-color: palette(button);
+                    border: 1px solid palette(mid);
+                    border-radius: 4px;
+                    font-weight: normal;
+                    color: palette(buttonText);
+                    padding: 4px 8px;
+                }
+                QPushButton:hover {
+                    background-color: palette(light);
+                }
+            """)
             # Mode label updated below
 
         # Toggle the mode
@@ -212,18 +224,49 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
 
         # Update button appearance and Mode Label
         if self.return_mode:
-            self.return_toggle_button.setText("Return Items Mode Active (Ctrl+R)")
-            self.return_toggle_button.setStyleSheet("font-weight: bold;")
+            self.return_toggle_button.setText("↩ Return Items Mode ACTIVE (Ctrl+R)")
+            self.return_toggle_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #e8f4fd;
+                    border: 2px solid #0066cc;
+                    border-radius: 4px;
+                    font-weight: bold;
+                    color: #003d7a;
+                    padding: 4px 8px;
+                }
+                QPushButton:hover {
+                    background-color: #d6eafc;
+                }
+            """)
             self.mode_indicator_label.setText("Mode: Return Items")
-            self.mode_indicator_label.setStyleSheet("font-weight: bold;")
+            self.mode_indicator_label.setStyleSheet("font-weight: bold; color: #0066cc;")
             self.show_status("Return Items mode activated", 2000)
         else:
-            self.return_toggle_button.setText("Toggle Return Items (Ctrl+R)")
-            self.return_toggle_button.setStyleSheet("")
+            self.return_toggle_button.setText("↩ Return Items (Ctrl+R)")
+            self.return_toggle_button.setStyleSheet("""
+                QPushButton {
+                    background-color: palette(button);
+                    border: 1px solid palette(mid);
+                    border-radius: 4px;
+                    font-weight: normal;
+                    color: palette(buttonText);
+                    padding: 4px 8px;
+                }
+                QPushButton:hover {
+                    background-color: palette(light);
+                }
+            """)
             # Only reset mode label if silver bar mode is also off
             if not self.silver_bar_mode:
                  self.mode_indicator_label.setText("Mode: Regular")
-                 self.mode_indicator_label.setStyleSheet("font-weight: bold;")
+                 self.mode_indicator_label.setStyleSheet("""
+                     font-weight: bold; 
+                     color: palette(windowText);
+                     background-color: palette(window);
+                     border: 1px solid palette(mid);
+                     border-radius: 3px;
+                     padding: 2px 6px;
+                 """)
             self.show_status("Return Items mode deactivated", 2000)
 
         # Update the current or next empty row's type column visually
@@ -236,8 +279,20 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         if not self.silver_bar_mode and self.return_mode:
             self.return_mode = False
             self.return_toggle_button.setChecked(False)
-            self.return_toggle_button.setText("Toggle Return Items (Ctrl+R)")
-            self.return_toggle_button.setStyleSheet("")
+            self.return_toggle_button.setText("↩ Return Items (Ctrl+R)")
+            self.return_toggle_button.setStyleSheet("""
+                QPushButton {
+                    background-color: palette(button);
+                    border: 1px solid palette(mid);
+                    border-radius: 4px;
+                    font-weight: normal;
+                    color: palette(buttonText);
+                    padding: 4px 8px;
+                }
+                QPushButton:hover {
+                    background-color: palette(light);
+                }
+            """)
              # Mode label updated below
 
         # Toggle the mode
@@ -246,18 +301,49 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
 
         # Update button appearance and Mode Label
         if self.silver_bar_mode:
-            self.silver_bar_toggle_button.setText("Silver Bar Mode Active (Ctrl+B)")
-            self.silver_bar_toggle_button.setStyleSheet("font-weight: bold;")
+            self.silver_bar_toggle_button.setText("🥈 Silver Bar Mode ACTIVE (Ctrl+B)")
+            self.silver_bar_toggle_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #fff4e6;
+                    border: 2px solid #cc6600;
+                    border-radius: 4px;
+                    font-weight: bold;
+                    color: #994d00;
+                    padding: 4px 8px;
+                }
+                QPushButton:hover {
+                    background-color: #ffe6cc;
+                }
+            """)
             self.mode_indicator_label.setText("Mode: Silver Bars")
-            self.mode_indicator_label.setStyleSheet("font-weight: bold;")
+            self.mode_indicator_label.setStyleSheet("font-weight: bold; color: #cc6600;")
             self.show_status("Silver Bars mode activated", 2000)
         else:
-            self.silver_bar_toggle_button.setText("Toggle Silver Bars (Ctrl+B)")
-            self.silver_bar_toggle_button.setStyleSheet("")
+            self.silver_bar_toggle_button.setText("🥈 Silver Bars (Ctrl+B)")
+            self.silver_bar_toggle_button.setStyleSheet("""
+                QPushButton {
+                    background-color: palette(button);
+                    border: 1px solid palette(mid);
+                    border-radius: 4px;
+                    font-weight: normal;
+                    color: palette(buttonText);
+                    padding: 4px 8px;
+                }
+                QPushButton:hover {
+                    background-color: palette(light);
+                }
+            """)
             # Only reset mode label if return mode is also off
             if not self.return_mode:
                  self.mode_indicator_label.setText("Mode: Regular")
-                 self.mode_indicator_label.setStyleSheet("font-weight: bold;")
+                 self.mode_indicator_label.setStyleSheet("""
+                     font-weight: bold; 
+                     color: palette(windowText);
+                     background-color: palette(window);
+                     border: 1px solid palette(mid);
+                     border-radius: 3px;
+                     padding: 2px 6px;
+                 """)
             self.show_status("Silver Bars mode deactivated", 2000)
 
         # Update the current or next empty row's type column visually

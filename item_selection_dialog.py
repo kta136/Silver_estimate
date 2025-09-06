@@ -31,6 +31,7 @@ class ItemSelectionDialog(QDialog):
         search_layout.addWidget(QLabel("Search (Code or Name):")) # Clarify search scope
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText("Type to filter...") # Add placeholder
+        self.search_edit.setToolTip("Search by item code or name\nFilters the list as you type\nPartial matches supported\nClear to show all items")
         self.search_edit.textChanged.connect(self.filter_items) # Connect to filter method
         search_layout.addWidget(self.search_edit)
         layout.addLayout(search_layout)
@@ -44,6 +45,7 @@ class ItemSelectionDialog(QDialog):
         self.items_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.items_table.setSelectionMode(QTableWidget.SingleSelection)
         self.items_table.itemDoubleClicked.connect(self.accept)
+        self.items_table.setToolTip("Double-click to select an item\nOr single-click and press Select button\nShows code, name, purity, type, and rate")
         layout.addWidget(self.items_table)
 
         # Load all items instead of filtering
@@ -54,10 +56,12 @@ class ItemSelectionDialog(QDialog):
 
         select_button = QPushButton("Select")
         select_button.clicked.connect(self.accept)
+        select_button.setToolTip("Select the highlighted item\nKeyboard: Enter\nDouble-click table row also selects")
         button_layout.addWidget(select_button)
 
         cancel_button = QPushButton("Cancel")
         cancel_button.clicked.connect(self.reject)
+        cancel_button.setToolTip("Cancel item selection\nKeyboard: Escape\nReturns to estimate without selecting")
         button_layout.addWidget(cancel_button)
 
         layout.addLayout(button_layout)

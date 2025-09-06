@@ -44,6 +44,10 @@ class LoginDialog(QDialog):
         self.password_label = QLabel("Password:")
         self.password_input = QLineEdit()
         self.password_input.setEchoMode(QLineEdit.Password)
+        if self.is_setup:
+            self.password_input.setToolTip("Enter your main password for database access\nThis password encrypts your data\nChoose a strong, memorable password")
+        else:
+            self.password_input.setToolTip("Enter your password to access the application\nPress Enter to login\nUse Reset button if password is forgotten")
         form_layout.addRow(self.password_label, self.password_input)
 
         if self.is_setup:
@@ -51,12 +55,14 @@ class LoginDialog(QDialog):
             self.backup_password_label = QLabel("Secondary Password:")
             self.backup_password_input = QLineEdit()
             self.backup_password_input.setEchoMode(QLineEdit.Password)
+            self.backup_password_input.setToolTip("Enter a different secondary password\nMust be different from main password\nUsed for emergency access and data management")
             form_layout.addRow(self.backup_password_label, self.backup_password_input)
 
             # Renamed label
             self.confirm_password_label = QLabel("Confirm Secondary Password:")
             self.confirm_password_input = QLineEdit()
             self.confirm_password_input.setEchoMode(QLineEdit.Password)
+            self.confirm_password_input.setToolTip("Re-enter the secondary password to confirm\nMust match exactly\nEnsures password was typed correctly")
             form_layout.addRow(self.confirm_password_label, self.confirm_password_input)
 
             # Removed the informational label explaining the wipe function
@@ -68,13 +74,20 @@ class LoginDialog(QDialog):
         # Buttons
         button_layout = QHBoxLayout()
         self.ok_button = QPushButton("Login" if not self.is_setup else "Create Passwords")
+        if self.is_setup:
+            self.ok_button.setToolTip("Create passwords and initialize the application\nBoth passwords will be saved securely\nApplication will start after setup")
+        else:
+            self.ok_button.setToolTip("Login to the application\nKeyboard: Enter\nVerifies password and opens main window")
+        
         self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.setToolTip("Exit without logging in\nApplication will close\nNo data will be accessed or modified")
 
         button_layout.addStretch()
         # Add Reset button only in login mode
         if not self.is_setup:
             self.reset_button = QPushButton("Reset / Wipe All Data")
             self.reset_button.setStyleSheet("color: red;") # Make it stand out
+            self.reset_button.setToolTip("Reset application settings\nUse if you need to start fresh\nWill require password setup again")
             button_layout.addWidget(self.reset_button)
             button_layout.addSpacing(20) # Add some space
 

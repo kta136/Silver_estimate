@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__filesystem__directory_tree",
+      "mcp__filesystem__list_directory",
+      "mcp__filesystem__read_text_file",
+      "Bash(git add:*)",
+      "Bash(git tag:*)",
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run:*)",
+      "Bash(gh release:*)",
+      "Bash(python:*)",
+      "Bash(git pull:*)",
+      "Bash(git reset:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

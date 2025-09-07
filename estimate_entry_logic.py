@@ -1080,14 +1080,14 @@ class EstimateLogic:
         bars_added_count = 0
         bars_failed_count = 0
         if save_success:
-            # Check if this estimate already has silver bars
+            # Determine how many silver bars already exist for this estimate
             existing_bars_count = None
             try:
                 self.db_manager.cursor.execute(
                     "SELECT COUNT(*) FROM silver_bars WHERE estimate_voucher_no = ?",
                     (voucher_no,)
                 )
-                existing_bars_count = self.db_manager.cursor.fetchone()[0]
+                existing_bars_count = int(self.db_manager.cursor.fetchone()[0])
             except sqlite3.Error as e:
                 # On error determining existing bars, do NOT add new bars to avoid duplicates
                 self.logger.error(
@@ -1098,27 +1098,42 @@ class EstimateLogic:
                     "Warning: Could not verify existing silver bars. Skipping bar creation.",
                     5000
                 )
-            
-            if existing_bars_count is not None and existing_bars_count > 0:
-                self.logger.info(
-                    f"Estimate {voucher_no} already has {existing_bars_count} silver bar(s). Skipping creation."
-                )
-            elif existing_bars_count == 0:
-                import logging
-                logging.getLogger(__name__).info(f"Estimate {voucher_no} saved. Now adding new silver bars...")
-                # Add new silver bars from the form only if no bars exist for this estimate
-                for item in items_to_save:
-                    if item['is_silver_bar'] and not item['is_return']:
-                        weight = item['net_wt']  # Use net_wt for bars
-                        purity = item['purity']
+
+            if existing_bars_count is not None:
+                # Collect current silver bar items from the form
+                current_bar_items = [
+                    item for item in items_to_save
+                    if item.get('is_silver_bar') and not item.get('is_return')
+                ]
+
+                desired_count = len(current_bar_items)
+                if existing_bars_count >= desired_count:
+                    # Nothing new to add; keep existing bars as-is (they're permanent)
+                    self.logger.info(
+                        f"Estimate {voucher_no} already has {existing_bars_count} silver bar(s). "
+                        f"Current form has {desired_count}. No new bars will be created."
+                    )
+                else:
+                    # Add only the difference as new bars to avoid duplicates on re-save
+                    to_add = desired_count - existing_bars_count
+                    # Heuristic: assume previously saved bars correspond to the first N items; add the remaining
+                    items_to_add = current_bar_items[-to_add:]
+                    self.logger.info(
+                        f"Adding {to_add} new silver bar(s) for estimate {voucher_no} "
+                        f"(existing: {existing_bars_count}, desired: {desired_count})."
+                    )
+                    import logging
+                    for item in items_to_add:
+                        weight = item.get('net_wt', 0.0)
+                        purity = item.get('purity', 0.0)
                         bar_id = self.db_manager.add_silver_bar(voucher_no, weight, purity)
                         if bar_id is not None:
                             bars_added_count += 1
-                            import logging
-                            logging.getLogger(__name__).debug(f"Added silver bar (ID: {bar_id}) for estimate {voucher_no}.")
+                            logging.getLogger(__name__).debug(
+                                f"Added silver bar (ID: {bar_id}) for estimate {voucher_no}."
+                            )
                         else:
                             bars_failed_count += 1
-                            import logging
                             logging.getLogger(__name__).warning(
                                 f"Failed to add silver bar for estimate {voucher_no}, item: {item.get('name', 'N/A')}"
                             )
@@ -1204,7 +1219,16 @@ class EstimateLogic:
 
 
     def show_silver_bars(self):
-        """Show the silver bar management dialog."""
+        """Open Silver Bar Management embedded in the main window when available."""
+        try:
+            # Prefer embedded view on the main window
+            if hasattr(self, 'main_window') and hasattr(self.main_window, 'show_silver_bars'):
+                self.main_window.show_silver_bars()
+                self._status("Opened Silver Bar Management.", 1500)
+                return
+        except Exception:
+            pass
+        # Fallback to modal dialog if main window hook not available
         from silver_bar_management import SilverBarDialog
         silver_dialog = SilverBarDialog(self.db_manager, self)
         silver_dialog.exec_()

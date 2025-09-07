@@ -575,24 +575,64 @@ class DatabaseManager:
             return []
 
     def add_item(self, code, name, purity, wage_type, wage_rate):
-        if not self.conn or not self.cursor: return False
-        try: self.cursor.execute('INSERT INTO items (code, name, purity, wage_type, wage_rate) VALUES (?, ?, ?, ?, ?)', (code, name, purity, wage_type, wage_rate)); self.conn.commit(); return True
+        if not self.conn or not self.cursor:
+            return False
+        try:
+            self.cursor.execute(
+                'INSERT INTO items (code, name, purity, wage_type, wage_rate) VALUES (?, ?, ?, ?, ?)',
+                (code, name, purity, wage_type, wage_rate)
+            )
+            self.conn.commit()
+            # Persist immediately to encrypted file to ensure durability across sessions
+            try:
+                if not self.flush_to_encrypted():
+                    self.logger.error("Post-add flush to encrypted file failed. Data remains only in temp DB until exit.")
+            except Exception as fe:
+                self.logger.error(f"Exception during post-add flush: {fe}", exc_info=True)
+            return True
         except sqlite3.Error as e:
             self.logger.error(f"DB Error adding item: {str(e)}", exc_info=True)
             self.conn.rollback()
             return False
 
     def update_item(self, code, name, purity, wage_type, wage_rate):
-        if not self.conn or not self.cursor: return False
-        try: self.cursor.execute('UPDATE items SET name = ?, purity = ?, wage_type = ?, wage_rate = ? WHERE code = ?', (name, purity, wage_type, wage_rate, code)); self.conn.commit(); return self.cursor.rowcount > 0
+        if not self.conn or not self.cursor:
+            return False
+        try:
+            self.cursor.execute(
+                'UPDATE items SET name = ?, purity = ?, wage_type = ?, wage_rate = ? WHERE code = ?',
+                (name, purity, wage_type, wage_rate, code)
+            )
+            self.conn.commit()
+            updated = self.cursor.rowcount > 0
+            if updated:
+                # Persist immediately
+                try:
+                    if not self.flush_to_encrypted():
+                        self.logger.error("Post-update flush to encrypted file failed. Data remains only in temp DB until exit.")
+                except Exception as fe:
+                    self.logger.error(f"Exception during post-update flush: {fe}", exc_info=True)
+            return updated
         except sqlite3.Error as e:
             self.logger.error(f"DB Error updating item: {str(e)}", exc_info=True)
             self.conn.rollback()
             return False
 
     def delete_item(self, code):
-        if not self.conn or not self.cursor: return False
-        try: self.cursor.execute('DELETE FROM items WHERE code = ?', (code,)); self.conn.commit(); return self.cursor.rowcount > 0
+        if not self.conn or not self.cursor:
+            return False
+        try:
+            self.cursor.execute('DELETE FROM items WHERE code = ?', (code,))
+            self.conn.commit()
+            deleted = self.cursor.rowcount > 0
+            if deleted:
+                # Persist immediately
+                try:
+                    if not self.flush_to_encrypted():
+                        self.logger.error("Post-delete flush to encrypted file failed. Data remains only in temp DB until exit.")
+                except Exception as fe:
+                    self.logger.error(f"Exception during post-delete flush: {fe}", exc_info=True)
+            return deleted
         except sqlite3.Error as e:
             self.logger.error(f"DB Error deleting item: {str(e)}", exc_info=True)
             self.conn.rollback()
@@ -986,8 +1026,18 @@ class DatabaseManager:
             self.conn.rollback()
             return None
 
-    def get_silver_bars(self, status=None, weight_query=None, estimate_voucher_no=None):
-        """Fetches silver bars based on optional filters."""
+    def get_silver_bars(self, status=None, weight_query=None, estimate_voucher_no=None,
+                        weight_tolerance=0.001, min_purity=None, max_purity=None,
+                        date_range=None):
+        """Fetches silver bars with optional filters.
+        Args:
+            status: filter by status string (e.g., 'In Stock').
+            weight_query: target weight; matches within ±weight_tolerance.
+            estimate_voucher_no: substring match for voucher.
+            weight_tolerance: tolerance in grams for weight matching.
+            min_purity/max_purity: numeric percentage bounds inclusive.
+            date_range: tuple (start_iso, end_iso) for date_added; either can be None.
+        """
         if not self.cursor: return []
         query = "SELECT * FROM silver_bars WHERE 1=1"
         params = []
@@ -998,13 +1048,36 @@ class DatabaseManager:
             # Allow searching for weights within a small tolerance (e.g., +/- 0.001)
             try:
                 target_weight = float(weight_query)
+                tol = float(weight_tolerance) if weight_tolerance is not None else 0.001
                 query += " AND weight BETWEEN ? AND ?"
-                params.extend([target_weight - 0.001, target_weight + 0.001])
+                params.extend([target_weight - tol, target_weight + tol])
             except ValueError:
                 self.logger.warning(f"Invalid weight query '{weight_query}'. Ignoring weight filter.")
         if estimate_voucher_no:
             query += " AND estimate_voucher_no LIKE ?"
             params.append(f"%{estimate_voucher_no}%")
+        # Purity bounds
+        if min_purity is not None:
+            try:
+                query += " AND purity >= ?"
+                params.append(float(min_purity))
+            except (TypeError, ValueError):
+                pass
+        if max_purity is not None:
+            try:
+                query += " AND purity <= ?"
+                params.append(float(max_purity))
+            except (TypeError, ValueError):
+                pass
+        # Date range (expects ISO timestamps like 'YYYY-MM-DD HH:MM:SS')
+        if date_range and isinstance(date_range, (tuple, list)) and len(date_range) == 2:
+            start_iso, end_iso = date_range
+            if start_iso:
+                query += " AND date_added >= ?"
+                params.append(start_iso)
+            if end_iso:
+                query += " AND date_added <= ?"
+                params.append(end_iso)
 
         query += " ORDER BY date_added DESC, bar_id DESC" # Changed sort order
         try:
@@ -1054,6 +1127,12 @@ class DatabaseManager:
             deleted_estimates_count = self.cursor.rowcount
             self.conn.commit()
             self.logger.info(f"Deleted {deleted_estimates_count} estimates and {deleted_items_count} estimate items.")
+            # Persist immediately
+            try:
+                if not self.flush_to_encrypted():
+                    self.logger.error("Post-delete-all flush to encrypted file failed. Data remains only in temp DB until exit.")
+            except Exception as fe:
+                self.logger.error(f"Exception during post-delete-all flush: {fe}", exc_info=True)
             return True
         except sqlite3.Error as e:
             self.conn.rollback()
@@ -1106,6 +1185,12 @@ class DatabaseManager:
                         self.logger.info(f"Deleted empty list ID {list_id} after removing its bars.")
             
             self.conn.commit()
+            # Persist immediately
+            try:
+                if not self.flush_to_encrypted():
+                    self.logger.error("Post-delete flush to encrypted file failed. Data remains only in temp DB until exit.")
+            except Exception as fe:
+                self.logger.error(f"Exception during post-delete flush: {fe}", exc_info=True)
             
             if deleted_estimate_count > 0:
                 self.logger.info(f"Deleted estimate {voucher_no} with {deleted_items_count} items and {deleted_bars_count} silver bars.")
@@ -1140,19 +1225,21 @@ class DatabaseManager:
 
     def close(self):
         """Encrypts the temporary DB, closes the connection, and cleans up."""
+        encrypt_success = False
         if self.conn:
             self.logger.info("Closing database connection and encrypting data")
             # Encrypt the current temporary DB back to the original file
-            encrypt_success = self._encrypt_db()
+            try:
+                encrypt_success = self._encrypt_db()
+            except Exception:
+                encrypt_success = False
             if encrypt_success:
-                 self.logger.info("Temporary database encrypted successfully")
+                self.logger.info("Temporary database encrypted successfully")
             else:
-                 # This is critical - data might be lost if encryption fails!
-                 # Keep the temp file for potential manual recovery?
-                 self.logger.critical("Failed to encrypt database on close!")
-                 self.logger.critical(f"The unencrypted data might still be in: {self.temp_db_path}")
-                 # Decide on recovery strategy - maybe don't delete temp file on failure?
-                 # For now, we proceed to close and cleanup, but log the error prominently.
+                # This is critical - data might be lost if encryption fails!
+                # Keep the temp file for potential manual recovery
+                self.logger.critical("Failed to encrypt database on close!")
+                self.logger.critical(f"The unencrypted data might still be in: {self.temp_db_path}")
 
             # Close the connection to the temporary DB
             try:
@@ -1161,13 +1248,13 @@ class DatabaseManager:
                 self.cursor = None
                 self.logger.debug("Database connection closed")
             except sqlite3.Error as e:
-                 self.logger.error(f"Error closing SQLite connection: {str(e)}", exc_info=True)
+                self.logger.error(f"Error closing SQLite connection: {str(e)}", exc_info=True)
         else:
-             self.logger.debug("No active database connection to close")
+            self.logger.debug("No active database connection to close")
 
         # Only delete the temporary file when encryption succeeded; otherwise, keep for recovery
         try:
-            if 'encrypt_success' in locals() and encrypt_success:
+            if encrypt_success:
                 self._cleanup_temp_db()
                 # Clear stored temp path after successful encryption and cleanup
                 try:

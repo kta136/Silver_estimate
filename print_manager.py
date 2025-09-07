@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QPushButton, QTextEdit,
-                             QLabel, QMessageBox, QApplication, QToolBar, QAction, QFileDialog)
+                             QLabel, QMessageBox, QApplication, QToolBar, QAction, QFileDialog, QWidgetAction)
 from PyQt5.QtGui import QFont, QTextCursor, QPageSize, QTextDocument, QFontDatabase
 from PyQt5.QtCore import Qt, QDate, QLocale
 # Import QPrintPreviewWidget
-from PyQt5.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog, QPrintPreviewWidget, QPageSetupDialog
+from PyQt5.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog, QPrintPreviewWidget, QPageSetupDialog, QPrinterInfo
 import traceback # Keep for debugging
 import math # For rounding
 
@@ -32,10 +32,34 @@ class PrintManager:
 
 
         self.printer = QPrinter(QPrinter.HighResolution)
-        self.printer.setPageSize(QPageSize(QPageSize.A4))
-        self.printer.setOrientation(QPrinter.Portrait)
-        # Load margin settings
+        # Load printer defaults
         settings = QSettings("YourCompany", "SilverEstimateApp")
+        # Default printer
+        try:
+            default_printer_name = settings.value("print/default_printer", "", type=str)
+            if default_printer_name:
+                self.printer.setPrinterName(default_printer_name)
+        except Exception:
+            pass
+        # Page size
+        try:
+            page_size_name = settings.value("print/page_size", "A4", type=str)
+            size_map = {
+                'A4': QPageSize.A4,
+                'A5': QPageSize.A5,
+                'Letter': QPageSize.Letter,
+                'Legal': QPageSize.Legal,
+            }
+            self.printer.setPageSize(QPageSize(size_map.get(page_size_name, QPageSize.A4)))
+        except Exception:
+            self.printer.setPageSize(QPageSize(QPageSize.A4))
+        # Orientation
+        try:
+            orientation_name = settings.value("print/orientation", "Portrait", type=str)
+            self.printer.setOrientation(QPrinter.Landscape if orientation_name == 'Landscape' else QPrinter.Portrait)
+        except Exception:
+            self.printer.setOrientation(QPrinter.Portrait)
+        # Load margin settings
         default_margins = "10,5,10,5" # Default: 10mm L/R, 5mm T/B
         margins_str = settings.value("print/margins", defaultValue=default_margins, type=str)
         try:
@@ -408,7 +432,7 @@ class PrintManager:
                         padding: 0;
                         page-break-inside: avoid;
                     }}
-                    body {{ margin: 10mm; }}
+                    body {{ margin: 0; }}
                     </style></head><body><pre>{html_content}</pre></body></html>"""
         return html
 
@@ -416,7 +440,7 @@ class PrintManager:
         """Generates HTML table for the general INVENTORY report."""
         status_text = f" - {status_filter}" if status_filter else " - All"; current_date = QDate.currentDate().toString("yyyy-MM-dd")
         html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Silver Bar Inventory</title><style>
-                   body{{font-family:Arial,sans-serif;font-size:8pt;margin:10mm;}} /* Increased font size */
+                   body{{font-family:Arial,sans-serif;font-size:8pt;margin:0;}} /* Increased font size */
                    table{{border-collapse:collapse;width:100%;margin-bottom:10px;page-break-inside:auto}}
                    th,td{{border:1px solid #ccc;padding:4px 6px;text-align:left;word-wrap:break-word}}
                    tr{{page-break-inside:avoid;page-break-after:auto}} thead{{display:table-header-group}}
@@ -467,7 +491,7 @@ class PrintManager:
         pd = QDate.currentDate().toString("yyyy-MM-dd")
 
         html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Silver Bar List - {li}</title><style>
-                   body{{font-family:Arial,sans-serif;font-size:8pt;margin:10mm}}table{{border-collapse:collapse;width:100%;margin-top:15px;page-break-inside:auto}}
+                   body{{font-family:Arial,sans-serif;font-size:8pt;margin:0}}table{{border-collapse:collapse;width:100%;margin-top:15px;page-break-inside:auto}}
                    th,td{{border:1px solid #ccc;padding:4px 6px;text-align:left;word-wrap:break-word}}tr{{page-break-inside:avoid;page-break-after:auto}}
                    thead{{display:table-header-group}}th{{border-bottom:1px solid #000;background-color:#f0f0f0;font-weight:bold}}
                    .header-title{{text-align:center;font-size:12pt;font-weight:bold;margin-bottom:10px}}.list-info{{margin-bottom:15px}}
@@ -480,22 +504,20 @@ class PrintManager:
                        <span><b>Printed:</b> {pd}</span>
                    </div>
                    <div class="list-note"><b>Note:</b> {ln if ln else 'N/A'}</div>
-                   <table>
-                       <thead>
-                           <tr>
-                               <th>#</th>
-                               <th>Estimate Vch</th>
-                               <th class="right">Weight (g)</th>
-                               <th class="right">Purity (%)</th>
-                               <th class="right">Fine Wt (g)</th>
-                           </tr>
-                       </thead>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th class="right">Weight (g)</th>
+                                <th class="right">Purity (%)</th>
+                                <th class="right">Fine Wt (g)</th>
+                            </tr>
+                        </thead>
                        <tbody>"""
         tw = 0.0; tf = 0.0; bc = 0
         if bars_in_list:
             for idx, bar in enumerate(bars_in_list):
                 # Use dictionary-style access with checks for sqlite3.Row compatibility
-                est_vch = bar['estimate_voucher_no'] if 'estimate_voucher_no' in bar.keys() and bar['estimate_voucher_no'] is not None else 'N/A'
                 bw = bar['weight'] if 'weight' in bar.keys() and bar['weight'] is not None else 0.0
                 bfw = bar['fine_weight'] if 'fine_weight' in bar.keys() and bar['fine_weight'] is not None else 0.0
                 bp = bar['purity'] if 'purity' in bar.keys() and bar['purity'] is not None else 0.0
@@ -506,14 +528,13 @@ class PrintManager:
                 tf += bfw
                 html += f"""<tr>
                                <td>{idx+1}</td>
-                               <td>{est_vch}</td>
                                <td class="right">{bw:.3f}</td>
                                <td class="right">{bp:.2f}</td>
                                <td class="right">{bfw:.3f}</td>
                            </tr>"""
         else:
             # Adjust colspan for the new number of columns
-            html += '<tr><td colspan="5" style="text-align:center;padding:10px 0;">-- No bars assigned --</td></tr>'
+            html += '<tr><td colspan="4" style="text-align:center;padding:10px 0;">-- No bars assigned --</td></tr>'
 
         html += f"""</tbody></table>
                    <div class="totals">TOTAL Bars: {bc} | TOTAL Weight: {tw:,.3f} g | TOTAL Fine Wt: {tf:,.3f} g</div>
@@ -539,6 +560,11 @@ class PrintManager:
                 zoom_factor = settings.value("print/preview_zoom", defaultValue=default_zoom, type=float)
                 zoom_factor = max(0.1, min(zoom_factor, 5.0))
                 logging.getLogger(__name__).debug(f"Applying zoom factor: {zoom_factor}")
+                # Ensure custom zoom mode before applying factor
+                try:
+                    preview_widget.setZoomMode(QPrintPreviewWidget.CustomZoom)
+                except Exception:
+                    pass
                 preview_widget.setZoomFactor(zoom_factor)
             else:
                 logging.getLogger(__name__).warning("Could not find QPrintPreviewWidget to set zoom.")
@@ -594,22 +620,54 @@ class PrintManager:
         if preview_widget:
             act_zi = QAction("Zoom +", preview)
             act_zi.setShortcut("+")
-            act_zi.triggered.connect(lambda: preview_widget.zoomIn(1))
+            def _zoom_in():
+                try:
+                    preview_widget.setZoomMode(QPrintPreviewWidget.CustomZoom)
+                except Exception:
+                    pass
+                try:
+                    z = float(preview_widget.zoomFactor())
+                except Exception:
+                    z = 1.0
+                z = min(5.0, z * 1.10)
+                preview_widget.setZoomFactor(z)
+            act_zi.triggered.connect(_zoom_in)
             toolbar.addAction(act_zi)
 
             act_zo = QAction("Zoom -", preview)
             act_zo.setShortcut("-")
-            act_zo.triggered.connect(lambda: preview_widget.zoomOut(1))
+            def _zoom_out():
+                try:
+                    preview_widget.setZoomMode(QPrintPreviewWidget.CustomZoom)
+                except Exception:
+                    pass
+                try:
+                    z = float(preview_widget.zoomFactor())
+                except Exception:
+                    z = 1.0
+                z = max(0.1, z / 1.10)
+                preview_widget.setZoomFactor(z)
+            act_zo.triggered.connect(_zoom_out)
             toolbar.addAction(act_zo)
 
             act_fitw = QAction("Fit Width", preview)
             act_fitw.setShortcut("Ctrl+W")
-            act_fitw.triggered.connect(preview_widget.fitToWidth)
+            def _fit_width():
+                try:
+                    preview_widget.fitToWidth()
+                except Exception:
+                    pass
+            act_fitw.triggered.connect(_fit_width)
             toolbar.addAction(act_fitw)
 
             act_fitp = QAction("Fit Page", preview)
             act_fitp.setShortcut("Ctrl+F")
-            act_fitp.triggered.connect(preview_widget.fitInView)
+            def _fit_page():
+                try:
+                    preview_widget.fitInView()
+                except Exception:
+                    pass
+            act_fitp.triggered.connect(_fit_page)
             toolbar.addAction(act_fitp)
 
         sep()
@@ -622,12 +680,89 @@ class PrintManager:
 
         sep()
 
+        # Page navigation and page info
+        if preview_widget:
+            act_first = QAction("First", preview)
+            act_first.setToolTip("Go to first page (Home)")
+            act_first.setShortcut("Home")
+            act_first.triggered.connect(lambda: preview_widget.setCurrentPage(1))
+            toolbar.addAction(act_first)
+
+            act_prev = QAction("Prev", preview)
+            act_prev.setShortcut("PgUp")
+            act_prev.triggered.connect(lambda: preview_widget.setCurrentPage(max(1, preview_widget.currentPage() - 1)))
+            toolbar.addAction(act_prev)
+
+            act_next = QAction("Next", preview)
+            act_next.setShortcut("PgDown")
+            def _safe_next():
+                try:
+                    pc = preview_widget.pageCount()
+                except Exception:
+                    pc = preview_widget.currentPage() + 1
+                preview_widget.setCurrentPage(min(pc, preview_widget.currentPage() + 1))
+            act_next.triggered.connect(_safe_next)
+            toolbar.addAction(act_next)
+
+            act_last = QAction("Last", preview)
+            act_last.setToolTip("Go to last page (End)")
+            act_last.setShortcut("End")
+            def _safe_last():
+                try:
+                    preview_widget.setCurrentPage(preview_widget.pageCount())
+                except Exception:
+                    pass
+            act_last.triggered.connect(_safe_last)
+            toolbar.addAction(act_last)
+
+            # Page info label
+            page_info = QLabel("")
+            page_info_action = QWidgetAction(preview)
+            page_info_action.setDefaultWidget(page_info)
+            toolbar.addAction(page_info_action)
+
+            def _update_page_info():
+                try:
+                    page_info.setText(f"  Page {preview_widget.currentPage()} / {preview_widget.pageCount()}  ")
+                except Exception:
+                    pass
+
+            try:
+                # previewChanged is emitted when the preview is repainted
+                preview_widget.previewChanged.connect(_update_page_info)
+            except Exception:
+                pass
+            # Initialize
+            _update_page_info()
+
+        sep()
+
         # Quick Print (bypass dialog) with distinct shortcut
         act_qprint = QAction("Quick Print", preview)
         act_qprint.setToolTip("Send directly to current/default printer (Ctrl+Shift+P)")
         act_qprint.setShortcut("Ctrl+Shift+P")
         act_qprint.triggered.connect(lambda: self._quick_print_current(preview, html_content, table_mode, parent_widget))
         toolbar.addAction(act_qprint)
+
+        # Select Printer (updates current printer without printing)
+        act_sel_prn = QAction("Select Printer", preview)
+        act_sel_prn.setToolTip("Choose a printer and keep it for this session")
+        def _choose_printer():
+            dlg = QPrintDialog(self.printer, preview)
+            if dlg.exec_() == QDialog.Accepted:
+                try:
+                    # Persist selected printer name
+                    prn_name = self.printer.printerName()
+                    s = QSettings("YourCompany", "SilverEstimateApp")
+                    s.setValue("print/default_printer", prn_name)
+                except Exception:
+                    pass
+                # Refresh preview in case device metrics differ
+                w = preview.findChild(QPrintPreviewWidget)
+                if w:
+                    w.updatePreview()
+        act_sel_prn.triggered.connect(_choose_printer)
+        toolbar.addAction(act_sel_prn)
 
     def _export_pdf_via_dialog(self, html_content, table_mode, parent_widget):
         """Prompt for a PDF path and export current content as PDF."""

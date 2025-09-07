@@ -98,6 +98,9 @@ class MainWindow(QMainWindow):
                 # Lazy-load Item Master on demand (rarely used)
                 self.logger.info("Deferring ItemMasterWidget creation (lazy-load)")
                 self.item_master_widget = None
+                # Lazy-load Silver Bar Management view on demand
+                self.logger.info("Deferring SilverBar view creation (lazy-load)")
+                self.silver_bar_widget = None
 
                 # Add Estimate view to navigation stack
                 self.stack.addWidget(self.estimate_widget)
@@ -307,7 +310,7 @@ class MainWindow(QMainWindow):
         # Tools menu
         tools_menu = menu_bar.addMenu("&Tools")
 
-        # Silver bar management (Keep this directly in the menu)
+        # Silver bar management (also accessible in View/Toolbar)
         silver_bars_action = QAction("&Silver Bar Management", self)
         silver_bars_action.setStatusTip("Add, view, transfer, or assign silver bars to lists")
         silver_bars_action.triggered.connect(self.show_silver_bars)
@@ -333,17 +336,21 @@ class MainWindow(QMainWindow):
 
         self._view_estimate_action = QAction("&Estimate Entry", self, checkable=True)
         self._view_item_master_action = QAction("&Item Master", self, checkable=True)
+        self._view_silver_bars_action = QAction("&Silver Bars", self, checkable=True)
         view_group.addAction(self._view_estimate_action)
         view_group.addAction(self._view_item_master_action)
+        view_group.addAction(self._view_silver_bars_action)
 
         # Initial state reflects initial view
         self._view_estimate_action.setChecked(True)
 
         self._view_estimate_action.triggered.connect(self.show_estimate)
         self._view_item_master_action.triggered.connect(self.show_item_master)
+        self._view_silver_bars_action.triggered.connect(self.show_silver_bars)
 
         view_menu.addAction(self._view_estimate_action)
         view_menu.addAction(self._view_item_master_action)
+        view_menu.addAction(self._view_silver_bars_action)
 
         # Reports menu
         reports_menu = menu_bar.addMenu("&Reports")
@@ -364,6 +371,7 @@ class MainWindow(QMainWindow):
         # Keep references for sync with toolbar
         self._menu_estimate_action = estimate_action
         self._menu_item_master_action = item_master_action
+        self._menu_silver_action = silver_bars_action
 
     def setup_navigation_toolbar(self):
         """Create a persistent toolbar to switch between primary views."""
@@ -379,9 +387,11 @@ class MainWindow(QMainWindow):
 
             self.nav_estimate_action = QAction("Estimate Entry", self, checkable=True)
             self.nav_item_master_action = QAction("Item Master", self, checkable=True)
+            self.nav_silver_action = QAction("Silver Bars", self, checkable=True)
 
             group.addAction(self.nav_estimate_action)
             group.addAction(self.nav_item_master_action)
+            group.addAction(self.nav_silver_action)
 
             # Initial state -> Estimate view
             self.nav_estimate_action.setChecked(True)
@@ -389,9 +399,11 @@ class MainWindow(QMainWindow):
             # Wire actions
             self.nav_estimate_action.triggered.connect(self.show_estimate)
             self.nav_item_master_action.triggered.connect(self.show_item_master)
+            self.nav_silver_action.triggered.connect(self.show_silver_bars)
 
             toolbar.addAction(self.nav_estimate_action)
             toolbar.addAction(self.nav_item_master_action)
+            toolbar.addAction(self.nav_silver_action)
 
             # Prefer text-only for clarity (icons can be added later)
             toolbar.setToolButtonStyle(Qt.ToolButtonTextOnly)
@@ -465,6 +477,49 @@ class MainWindow(QMainWindow):
         if hasattr(self, '_view_item_master_action'):
             try:
                 self._view_item_master_action.setChecked(True)
+            except Exception:
+                pass
+
+    def show_silver_bars(self):
+        """Switch to Silver Bar Management screen (embedded)."""
+        # Check DB
+        if not hasattr(self, 'db') or self.db is None:
+            self.logger.error("Cannot show silver bars: database connection is not available")
+            QMessageBox.critical(self, "Error", "Database connection is not available. Please restart the application.")
+            return
+        # Lazy-create view
+        if not hasattr(self, 'silver_bar_widget') or self.silver_bar_widget is None:
+            try:
+                from silver_bar_management import SilverBarDialog
+                self.logger.info("Creating SilverBar view on demand...")
+                # Use the dialog class as a widget inside the stack
+                self.silver_bar_widget = SilverBarDialog(self.db, self)
+                if hasattr(self, 'stack') and self.stack:
+                    self.stack.addWidget(self.silver_bar_widget)
+            except Exception as e:
+                self.logger.error(f"Failed to create SilverBar view: {e}", exc_info=True)
+                QMessageBox.critical(self, "Error", f"Silver Bar Management could not be initialized: {e}")
+                return
+        # Switch to the silver bar view
+        if hasattr(self, 'stack') and self.stack:
+            self.stack.setCurrentWidget(self.silver_bar_widget)
+            # Proactively refresh data when navigating to the view
+            try:
+                self.silver_bar_widget.load_available_bars()
+                self.silver_bar_widget.load_bars_in_selected_list()
+            except Exception:
+                pass
+        # Sync toolbar/menu states
+        if hasattr(self, 'nav_silver_action'):
+            self.nav_silver_action.setChecked(True)
+        if hasattr(self, '_view_silver_bars_action'):
+            try:
+                self._view_silver_bars_action.setChecked(True)
+            except Exception:
+                pass
+        if hasattr(self, '_menu_silver_action'):
+            try:
+                self._menu_silver_action.setChecked(True)
             except Exception:
                 pass
 
@@ -547,23 +602,7 @@ class MainWindow(QMainWindow):
                 self.logger.error(f"Error deleting all estimates: {str(e)}", exc_info=True)
                 QMessageBox.critical(self, "Error", f"An unexpected error occurred: {str(e)}")
 
-    def show_silver_bars(self):  # Keep this method name for consistency
-        """Show silver bar management dialog."""
-        # Check if database is available
-        if not hasattr(self, 'db') or self.db is None:
-            self.logger.error("Cannot show silver bars: database connection is not available")
-            QMessageBox.critical(self, "Error", "Database connection is not available. Please restart the application.")
-            return
-            
-        # Import the MODIFIED dialog class
-        from silver_bar_management import SilverBarDialog
-        try:
-            self.logger.info("Opening Silver Bar Management dialog")
-            silver_dialog = SilverBarDialog(self.db, self)
-            silver_dialog.exec_()
-        except Exception as e:
-            self.logger.error(f"Failed to open Silver Bar Management: {str(e)}", exc_info=True)
-            QMessageBox.critical(self, "Error", f"Failed to open Silver Bar Management: {e}")
+    # old modal method replaced by embedded view above
 
     def show_estimate_history(self):
         """Show estimate history dialog."""

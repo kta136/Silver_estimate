@@ -4,10 +4,11 @@ import logging    # Ensure logging is available for getLogger calls
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QDialogButtonBox, QGridLayout,
                              QFormLayout, QLabel, QPushButton, QSpinBox, QFontDialog, QMessageBox, QDoubleSpinBox,
                              QLineEdit, QGroupBox, QFileDialog, QCheckBox, QStyle, QListWidget, QListWidgetItem,
-                             QListView, QStackedWidget, QFrame)
+                             QListView, QStackedWidget, QFrame, QComboBox)
 from PyQt5.QtCore import Qt, QSettings, pyqtSignal, QUrl, QSize
 from PyQt5.QtGui import QFont, QDesktopServices
 from app_constants import SETTINGS_ORG, SETTINGS_APP
+from PyQt5.QtPrintSupport import QPrinterInfo
 
 # Import dependent dialogs and modules
 from custom_font_dialog import CustomFontDialog
@@ -207,6 +208,27 @@ class SettingsDialog(QDialog):
         self.preview_zoom_spin.setToolTip("Default zoom factor for print preview (e.g., 1.0 = 100%, 1.25 = 125%)")
         self.preview_zoom_spin.valueChanged.connect(self._mark_dirty)
         form_layout.addRow("Preview Default Zoom:", self.preview_zoom_spin)
+
+        # --- Default Printer ---
+        self.printer_combo = QComboBox()
+        self.printer_combo.setToolTip("Default printer for printing and quick print")
+        self._refresh_printer_list()
+        self.printer_combo.currentIndexChanged.connect(self._mark_dirty)
+        form_layout.addRow("Default Printer:", self.printer_combo)
+
+        # --- Page Size ---
+        self.page_size_combo = QComboBox()
+        self.page_size_combo.addItems(["A4", "A5", "Letter", "Legal"])
+        self.page_size_combo.setToolTip("Default page size for printing")
+        self.page_size_combo.currentIndexChanged.connect(self._mark_dirty)
+        form_layout.addRow("Page Size:", self.page_size_combo)
+
+        # --- Orientation ---
+        self.orientation_combo = QComboBox()
+        self.orientation_combo.addItems(["Portrait", "Landscape"])
+        self.orientation_combo.setToolTip("Default page orientation for printing")
+        self.orientation_combo.currentIndexChanged.connect(self._mark_dirty)
+        form_layout.addRow("Orientation:", self.orientation_combo)
 
         # Load current values into controls
         self._load_print_settings_to_ui()
@@ -533,6 +555,24 @@ class SettingsDialog(QDialog):
         zoom = self.settings.value("print/preview_zoom", defaultValue=default_zoom, type=float)
         self.preview_zoom_spin.setValue(zoom)
 
+        # Default printer
+        saved_printer = self.settings.value("print/default_printer", "", type=str)
+        if saved_printer:
+            idx = self.printer_combo.findText(saved_printer)
+            if idx >= 0:
+                self.printer_combo.setCurrentIndex(idx)
+
+        # Page size and orientation
+        page_size = self.settings.value("print/page_size", "A4", type=str)
+        idx_ps = self.page_size_combo.findText(page_size)
+        if idx_ps >= 0:
+            self.page_size_combo.setCurrentIndex(idx_ps)
+
+        orientation = self.settings.value("print/orientation", "Portrait", type=str)
+        idx_or = self.orientation_combo.findText(orientation)
+        if idx_or >= 0:
+            self.orientation_combo.setCurrentIndex(idx_or)
+
 
     def _show_print_font_dialog(self):
         """Show the custom print font dialog."""
@@ -597,6 +637,19 @@ class SettingsDialog(QDialog):
             preview_zoom = self.preview_zoom_spin.value()
             self.settings.setValue("print/preview_zoom", preview_zoom)
             logging.getLogger(__name__).debug(f"Saved preview zoom: {preview_zoom}")
+
+            # Save printer settings
+            default_printer = self.printer_combo.currentText().strip()
+            if default_printer:
+                self.settings.setValue("print/default_printer", default_printer)
+                logging.getLogger(__name__).debug(f"Saved default printer: {default_printer}")
+
+            # Save page setup defaults
+            self.settings.setValue("print/page_size", self.page_size_combo.currentText())
+            self.settings.setValue("print/orientation", self.orientation_combo.currentText())
+            logging.getLogger(__name__).debug(
+                f"Saved page setup: size={self.page_size_combo.currentText()}, orient={self.orientation_combo.currentText()}"
+            )
 
             # Save logging settings
             self.settings.setValue("logging/debug_mode", self.debug_mode_checkbox.isChecked())
@@ -822,6 +875,18 @@ class SettingsDialog(QDialog):
         # This is a placeholder for future additions.
         pass
 
+    def _refresh_printer_list(self):
+        """Populate the default printer combo with available printers."""
+        try:
+            self.printer_combo.clear()
+            printers = QPrinterInfo.availablePrinters()
+            names = [p.printerName() for p in printers] if printers else []
+            # Keep a deterministic order
+            names.sort(key=lambda s: s.lower())
+            self.printer_combo.addItems(names)
+        except Exception as e:
+            logging.getLogger(__name__).warning(f"Failed to read printers: {e}")
+
     def _restore_defaults(self):
         """Restore sensible default settings for this dialog and update the UI."""
         # Fonts
@@ -841,6 +906,19 @@ class SettingsDialog(QDialog):
         self.margin_right_spin.setValue(10)
         self.margin_bottom_spin.setValue(2)
         self.preview_zoom_spin.setValue(1.25)
+        # Page setup defaults
+        try:
+            idx = self.page_size_combo.findText("A4")
+            if idx >= 0:
+                self.page_size_combo.setCurrentIndex(idx)
+        except Exception:
+            pass
+        try:
+            idx = self.orientation_combo.findText("Portrait")
+            if idx >= 0:
+                self.orientation_combo.setCurrentIndex(idx)
+        except Exception:
+            pass
 
         # Logging
         self.debug_mode_checkbox.setChecked(False)

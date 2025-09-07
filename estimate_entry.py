@@ -54,6 +54,12 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         # Hybrid column sizing state
         self._use_stretch_for_item_name = False
         self._programmatic_resizing = False
+        # Debounce timer for saving column layout
+        from PyQt5.QtCore import QTimer as _QTimer
+        self._column_save_timer = _QTimer(self)
+        self._column_save_timer.setSingleShot(True)
+        self._column_save_timer.setInterval(350)
+        self._column_save_timer.timeout.connect(self._save_column_widths_setting)
 
         # Restore any saved column widths for the item table (enables stretch if none saved)
         self._load_column_widths_setting()
@@ -446,10 +452,21 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         try:
             if not hasattr(self, 'item_table'):
                 return
-            count = self.item_table.columnCount()
-            widths = [str(max(30, self.item_table.columnWidth(i))) for i in range(count)]
-            value = ",".join(widths)
-            self._settings().setValue("ui/estimate_table_column_widths", value)
+            header = self.item_table.horizontalHeader()
+            # Save binary header state (preferred)
+            try:
+                state = header.saveState()
+                self._settings().setValue("ui/estimate_table_header_state", state)
+            except Exception:
+                pass
+            # Also persist legacy CSV widths for backward compatibility
+            try:
+                count = self.item_table.columnCount()
+                widths = [str(max(30, self.item_table.columnWidth(i))) for i in range(count)]
+                value = ",".join(widths)
+                self._settings().setValue("ui/estimate_table_column_widths", value)
+            except Exception:
+                pass
         except Exception:
             pass
 
@@ -457,25 +474,38 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         try:
             if not hasattr(self, 'item_table'):
                 return
+            header = self.item_table.horizontalHeader()
+            # Try to restore binary header state first
+            restored = False
+            try:
+                state = self._settings().value("ui/estimate_table_header_state")
+                if state:
+                    self._programmatic_resizing = True
+                    restored = bool(header.restoreState(state))
+                    self._programmatic_resizing = False
+            except Exception:
+                restored = False
+            if restored:
+                self._use_stretch_for_item_name = False
+                return
+
+            # Legacy CSV fallback
             value = self._settings().value("ui/estimate_table_column_widths", type=str)
-            if not value:
-                # No saved widths → enable stretch mode for Item Name
-                self._use_stretch_for_item_name = True
-                return
-            parts = [p.strip() for p in str(value).split(',') if p.strip().isdigit()]
-            if not parts:
-                # Treat as no saved widths
-                self._use_stretch_for_item_name = True
-                return
-            count = min(self.item_table.columnCount(), len(parts))
-            # Applying saved widths disables stretch mode
-            self._use_stretch_for_item_name = False
-            self._programmatic_resizing = True
-            for i in range(count):
-                w = int(parts[i])
-                w = max(30, min(2000, w))
-                self.item_table.setColumnWidth(i, w)
-            self._programmatic_resizing = False
+            if value:
+                parts = [p.strip() for p in str(value).split(',') if p.strip().isdigit()]
+                if parts:
+                    count = min(self.item_table.columnCount(), len(parts))
+                    self._use_stretch_for_item_name = False
+                    self._programmatic_resizing = True
+                    for i in range(count):
+                        w = int(parts[i])
+                        w = max(30, min(2000, w))
+                        self.item_table.setColumnWidth(i, w)
+                    self._programmatic_resizing = False
+                    return
+
+            # Nothing restored → enable stretch mode for Item Name
+            self._use_stretch_for_item_name = True
         except Exception:
             pass
 
@@ -486,8 +516,13 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         # User resized any column → disable stretch mode going forward
         if getattr(self, '_use_stretch_for_item_name', False):
             self._use_stretch_for_item_name = False
-        # Save widths
-        self._save_column_widths_setting()
+        # Debounce save of column layout
+        try:
+            self._column_save_timer.stop()
+            self._column_save_timer.start()
+        except Exception:
+            # Fallback to immediate save if timer fails
+            self._save_column_widths_setting()
 
     def resizeEvent(self, event):
         try:
@@ -529,6 +564,31 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         # Save column widths on close
         self._save_column_widths_setting()
         super().closeEvent(event)
+
+    def _show_header_context_menu(self, pos):
+        try:
+            header = self.item_table.horizontalHeader()
+            from PyQt5.QtWidgets import QMenu
+            menu = QMenu(self)
+            reset_action = menu.addAction("Reset Column Layout")
+            action = menu.exec_(header.mapToGlobal(pos))
+            if action == reset_action:
+                self._reset_columns_layout()
+        except Exception:
+            pass
+
+    def _reset_columns_layout(self):
+        try:
+            # Clear saved states
+            self._settings().remove("ui/estimate_table_header_state")
+            self._settings().remove("ui/estimate_table_column_widths")
+            # Re-enable stretch mode and auto-apply
+            self._use_stretch_for_item_name = True
+            self._auto_stretch_item_name()
+            # Inform user subtly
+            self.show_status("Column layout reset", 2000)
+        except Exception:
+            pass
 
     # --- Font Size Handling ---
     def _apply_table_font_size(self, size):

@@ -13,17 +13,8 @@ Status Key
 
 ## Critical Usability Issues
 
-### 1) Input Validation Feedback
-- Status: 💡 **High Priority**
-- Why: Numeric validation happens silently with fallback to 0.0; users may not realize their input was invalid
-- Files: `estimate_entry_ui.py` (NumericDelegate), `estimate_entry.py`
-- How:
-  - Add inline validation messages for invalid inputs
-  - Use color coding (red border) for invalid field states
-  - Add tooltips explaining expected number formats
-  - Show validation status in the inline status area
 
-### ✅ 2) Mode Switching Clarity  
+### ✅ 1) Mode Switching Clarity  
 - Status: ✅ **COMPLETED** in v1.70
 - Why: Return Items/Silver Bar modes needed better visual indication
 - Files: `estimate_entry.py`, `estimate_entry_ui.py`
@@ -48,14 +39,17 @@ Status Key
   - ✅ Improved field alignment and breathing room without extra height
 
 ### 4) Table Column Organization
-- Status: 💡 **Medium Priority**  
+- Status: ✅ **Partially Implemented**  
 - Why: 11-column table mixes user input and calculated data without clear distinction
-- Files: `estimate_entry_ui.py`
-- How:
-  - Use different background colors for calculated vs. input columns
-  - Group related columns visually with subtle borders
-  - Add column grouping headers
-  - Enhance existing column resize persistence
+- Files: `estimate_entry_ui.py`, `estimate_entry.py`
+- Implementation:
+  - ✅ Persist column layout using `QHeaderView.saveState()/restoreState()`
+  - ✅ Debounced saves to `QSettings` while resizing
+  - ✅ Header context menu: “Reset Column Layout” (clears saved state)
+  - ✅ Backward-compatible CSV width persistence maintained
+  - ✅ Item Name column auto-stretches when no saved layout exists
+  - 🚫 Sorting disabled by design (no column sorting)
+  - 💡 Visual grouping via colors deferred (removed per feedback)
 
 ### 5) Totals Section Enhancement
 - Status: ✅ **Partially Implemented**
@@ -258,7 +252,6 @@ Status Key
 
 ## Implementation Priority
 
-**High Priority**: Input validation feedback (#1)  
 **Medium Priority**: Table organization (#4), Keyboard navigation (#6), Visual accessibility (#7), Error recovery (#9)  
 **Low Priority**: Bulk operations (#10), Search enhancement (#11), Performance optimization (#12), Dialog management (#13), Visual modernization (#14), Status communication (#15)
 
@@ -266,11 +259,9 @@ Status Key
 
 ## Quick Implementation Wins (Next Phase)
 
-1. **Input Validation Visual Feedback** - Add red borders and tooltips to invalid numeric inputs  
-2. **Table Column Visual Grouping** - Use background colors to distinguish input vs calculated columns
-3. **Keyboard Shortcut Documentation** - Add F1 help context system
-4. **Enhanced Error Messages** - Provide clear, actionable error messages with recovery suggestions
-5. **Undo/Redo Support** - Add Ctrl+Z for recent table changes
+1. **Keyboard Shortcut Documentation** - Add F1 help context system
+2. **Enhanced Error Messages** - Provide clear, actionable error messages with recovery suggestions
+3. **Undo/Redo Support** - Add Ctrl+Z for recent table changes
 
 ---
 

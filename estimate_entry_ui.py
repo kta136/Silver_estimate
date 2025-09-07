@@ -375,6 +375,12 @@ class EstimateUI:
         # Allow user to interactively resize columns and persist via QSettings
         header = self.item_table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Interactive)
+        # Add header context menu for layout reset (no sorting enabled)
+        try:
+            header.setContextMenuPolicy(Qt.CustomContextMenu)
+            header.customContextMenuRequested.connect(widget._show_header_context_menu)
+        except Exception:
+            pass
 
         # Initial sensible widths (user may change at runtime)
         self.item_table.setColumnWidth(COL_CODE, 80)

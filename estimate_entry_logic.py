@@ -206,6 +206,7 @@ class EstimateLogic:
              # Log the error but don't crash the application
              self.logger.error(f"Error updating row type visuals: {str(e)}", exc_info=True)
 
+
     def _is_code_empty(self, row):
         try:
             itm = self.item_table.item(row, COL_CODE)
@@ -928,6 +929,8 @@ class EstimateLogic:
                 for col in [COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT]:
                     cell = self.item_table.item(row, col)
                     if cell: cell.setFlags(cell.flags() & ~Qt.ItemIsEditable)
+
+                # Backgrounds: rely on default palette for all non-Type columns
 
             self.add_empty_row()
             self.calculate_totals()

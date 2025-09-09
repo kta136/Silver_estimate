@@ -427,7 +427,8 @@ class DatabaseManager:
                         list_id INTEGER PRIMARY KEY AUTOINCREMENT,
                         list_identifier TEXT UNIQUE NOT NULL,
                         creation_date TEXT NOT NULL,
-                        list_note TEXT
+                        list_note TEXT,
+                        issued_date TEXT
                     )''')
                 if not self._table_exists('silver_bar_lists'):
                     self.logger.info("Created 'silver_bar_lists' table.")
@@ -468,8 +469,20 @@ class DatabaseManager:
                 
                 # Update schema version to 1
                 self._update_schema_version(1)
+                
+            # Migration for version 2: Add issued_date column to silver_bar_lists
+            if current_version < 2:
+                self.logger.info("Performing schema migration to version 2: Adding issued_date column...")
+                
+                # Add issued_date column to silver_bar_lists table
+                if not self._column_exists('silver_bar_lists', 'issued_date'):
+                    self.logger.info("Adding 'issued_date' column to silver_bar_lists table...")
+                    self.cursor.execute('ALTER TABLE silver_bar_lists ADD COLUMN issued_date TEXT')
+                
+                # Update schema version to 2
+                self._update_schema_version(2)
             else:
-                self.logger.info("Silver bar schema is already at version 1 or higher. No migration needed.")
+                self.logger.info("Silver bar schema is already at version 2 or higher. No migration needed.")
                 
                 # Ensure tables exist (without dropping)
                 self.cursor.execute('''
@@ -477,7 +490,8 @@ class DatabaseManager:
                         list_id INTEGER PRIMARY KEY AUTOINCREMENT,
                         list_identifier TEXT UNIQUE NOT NULL,
                         creation_date TEXT NOT NULL,
-                        list_note TEXT
+                        list_note TEXT,
+                        issued_date TEXT
                     )''')
                     
                 self.cursor.execute('''
@@ -853,11 +867,20 @@ class DatabaseManager:
             self.conn.rollback()
             return None
 
-    def get_silver_bar_lists(self):
-        """Fetches all silver bar lists (identifier and ID)."""
+    def get_silver_bar_lists(self, include_issued=True):
+        """Fetches silver bar lists (identifier and ID).
+        
+        Args:
+            include_issued: If False, excludes lists that have been marked as issued.
+        """
         if not self.cursor: return []
         try:
-            self.cursor.execute('SELECT list_id, list_identifier, creation_date, list_note FROM silver_bar_lists ORDER BY creation_date DESC')
+            if include_issued:
+                query = 'SELECT list_id, list_identifier, creation_date, list_note, issued_date FROM silver_bar_lists ORDER BY creation_date DESC'
+            else:
+                query = 'SELECT list_id, list_identifier, creation_date, list_note, issued_date FROM silver_bar_lists WHERE issued_date IS NULL ORDER BY creation_date DESC'
+            
+            self.cursor.execute(query)
             return self.cursor.fetchall() # Return list of Row objects
         except sqlite3.Error as e:
             self.logger.error(f"DB error fetching silver bar lists: {str(e)}", exc_info=True)

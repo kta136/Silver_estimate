@@ -19,6 +19,7 @@ from item_master import ItemMasterWidget
 from database_manager import DatabaseManager
 # from advanced_tools_dialog import AdvancedToolsDialog # Remove old import
 from settings_dialog import SettingsDialog # Import the new settings dialog
+from silver_bar_history import SilverBarHistoryDialog # Import the new silver bar history dialog
 from logger import setup_logging, qt_message_handler
 from message_bar import MessageBar
 from app_constants import APP_TITLE, APP_VERSION, SETTINGS_ORG, SETTINGS_APP, DB_PATH
@@ -218,6 +219,7 @@ class MainWindow(QMainWindow):
             # Ensure database directory exists
             import os
             os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+            os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
             # Startup recovery: if a previous temp DB exists and is newer than encrypted, offer recovery
             try:
@@ -315,6 +317,12 @@ class MainWindow(QMainWindow):
         silver_bars_action.setStatusTip("Add, view, transfer, or assign silver bars to lists")
         silver_bars_action.triggered.connect(self.show_silver_bars)
         tools_menu.addAction(silver_bars_action)
+
+        # Silver bar history
+        silver_history_action = QAction("Silver Bar &History", self)
+        silver_history_action.setStatusTip("View history of all silver bars and issued lists")
+        silver_history_action.triggered.connect(self.show_silver_bar_history)
+        tools_menu.addAction(silver_history_action)
 
         tools_menu.addSeparator()
 
@@ -603,6 +611,22 @@ class MainWindow(QMainWindow):
                 QMessageBox.critical(self, "Error", f"An unexpected error occurred: {str(e)}")
 
     # old modal method replaced by embedded view above
+
+    def show_silver_bar_history(self):
+        """Show Silver Bar History dialog."""
+        # Check if database is available
+        if not hasattr(self, 'db') or self.db is None:
+            self.logger.error("Cannot show silver bar history: database connection is not available")
+            QMessageBox.critical(self, "Error", "Database connection is not available. Please restart the application.")
+            return
+        
+        try:
+            self.logger.info("Opening Silver Bar History dialog")
+            dialog = SilverBarHistoryDialog(self.db, self)
+            dialog.exec_()
+        except Exception as e:
+            self.logger.error(f"Error opening Silver Bar History: {str(e)}", exc_info=True)
+            QMessageBox.critical(self, "Error", f"Failed to open Silver Bar History: {str(e)}")
 
     def show_estimate_history(self):
         """Show estimate history dialog."""

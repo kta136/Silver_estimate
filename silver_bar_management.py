@@ -4,7 +4,8 @@ from PyQt5.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QComboBox,
     QMessageBox, QAbstractItemView, QFrame, QInputDialog, QSplitter,
     QWidget, QMenu, QShortcut, QToolButton, QStyle, QSizePolicy,
-    QApplication, QCheckBox, QDoubleSpinBox, QFileDialog, QStackedWidget
+    QApplication, QCheckBox, QDoubleSpinBox, QSpinBox, QFileDialog, QStackedWidget,
+    QRadioButton, QButtonGroup
 )
 from PyQt5.QtCore import Qt, QTimer, QSettings
 from PyQt5.QtGui import QColor, QKeySequence
@@ -29,99 +30,233 @@ class SilverBarDialog(QDialog):
         self.setMinimumSize(1180, 760) # Wider to accommodate side-by-side panes
 
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(12, 12, 12, 12)
-        main_layout.setSpacing(6)
+        main_layout.setContentsMargins(16, 16, 16, 16)
+        main_layout.setSpacing(12)
 
         # --- Left Pane: Search and Available Bars ---
         left_widget = QWidget()
         left_layout = QVBoxLayout(left_widget)
-        left_layout.setContentsMargins(0,0,0,0)
-        left_layout.setSpacing(6)
+        left_layout.setContentsMargins(8, 8, 8, 8)
+        left_layout.setSpacing(10)
 
-        search_layout = QHBoxLayout()
-        left_title = QLabel("Available Bars")
-        left_title.setStyleSheet("font-weight: 600;")
-        left_layout.addWidget(left_title)
-        search_layout.addWidget(QLabel("Weight ≈"))
+        # Title row with refresh controls
+        title_row = QHBoxLayout()
+        title_row.setSpacing(8)
+        
+        left_title = QLabel("Available Silver Bars")
+        left_title.setStyleSheet("""
+            font-weight: 700;
+            font-size: 16px;
+            color: #2c3e50;
+            margin-bottom: 8px;
+            padding: 8px 0px;
+        """)
+        title_row.addWidget(left_title)
+        
+        title_row.addStretch()
+        
+        # Refresh controls on title line
+        self.refresh_available_button = QPushButton("Refresh")
+        self.refresh_available_button.setStyleSheet("""
+            QPushButton {
+                padding: 4px 8px;
+                font-size: 12px;
+                font-weight: 600;
+                border: 1px solid #007acc;
+                background-color: #007acc;
+                color: white;
+                border-radius: 3px;
+            }
+            QPushButton:hover {
+                background-color: #005a9e;
+            }
+        """)
+        self.refresh_available_button.clicked.connect(self.load_available_bars)
+        title_row.addWidget(self.refresh_available_button)
+        
+        # Auto-refresh toggle
+        self.auto_refresh_checkbox = QCheckBox("Auto-refresh")
+        self.auto_refresh_checkbox.setStyleSheet("font-size: 12px; margin-left: 6px;")
+        self.auto_refresh_checkbox.setToolTip("Auto-refresh available bars every 5s")
+        self.auto_refresh_checkbox.toggled.connect(lambda checked: self._toggle_auto_refresh(checked))
+        title_row.addWidget(self.auto_refresh_checkbox)
+        
+        # Clear filters button
+        self.clear_filters_button = QPushButton("Clear Filters")
+        self.clear_filters_button.setStyleSheet("""
+            QPushButton {
+                padding: 4px 8px;
+                font-size: 12px;
+                border: 1px solid #666;
+                background-color: #f5f5f5;
+                color: #333;
+                border-radius: 3px;
+            }
+            QPushButton:hover {
+                background-color: #e5e5e5;
+            }
+        """)
+        self.clear_filters_button.setToolTip("Clear all search filters")
+        self.clear_filters_button.clicked.connect(lambda: self._clear_filters())
+        title_row.addWidget(self.clear_filters_button)
+        
+        left_layout.addLayout(title_row)
+        
+        # Search filters with compact organization
+        filters_group = QWidget()
+        filters_layout = QVBoxLayout(filters_group)
+        filters_layout.setSpacing(4)  # Reduced from 8 to 4
+        filters_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Weight search row - only weight field
+        weight_row = QHBoxLayout()
+        weight_row.setSpacing(6)
+        weight_label = QLabel("Weight Search:")
+        weight_label.setStyleSheet("font-weight: 600; font-size: 13px; min-width: 90px;")
+        weight_row.addWidget(weight_label)
+        
         self.weight_search_edit = QLineEdit()
-        self.weight_search_edit.setPlaceholderText("Enter weight (e.g., 1000.123)")
+        self.weight_search_edit.setPlaceholderText("Enter weight (e.g., 190)")
+        self.weight_search_edit.setStyleSheet("""
+            QLineEdit {
+                padding: 6px;
+                font-size: 13px;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+            }
+            QLineEdit:focus {
+                border-color: #007acc;
+            }
+        """)
         try:
             self.weight_search_edit.setClearButtonEnabled(True)
         except Exception:
             pass
-        self.weight_search_edit.textChanged.connect(self.load_available_bars) # Use textChanged for live search
-        search_layout.addWidget(self.weight_search_edit)
-        # Weight tolerance
-        tol_lbl = QLabel("±")
-        tol_lbl.setToolTip("Weight tolerance for matching")
-        search_layout.addWidget(tol_lbl)
-        self.weight_tol_spin = QDoubleSpinBox()
-        self.weight_tol_spin.setDecimals(6)
-        self.weight_tol_spin.setRange(0.0, 10.0)
-        self.weight_tol_spin.setSingleStep(0.001)
-        self.weight_tol_spin.setValue(0.001)
-        self.weight_tol_spin.setToolTip("Match bars within ±tolerance (grams)")
-        self.weight_tol_spin.valueChanged.connect(self.load_available_bars)
-        search_layout.addWidget(self.weight_tol_spin)
-        # Voucher search
-        search_layout.addWidget(QLabel("Voucher"))
-        self.voucher_search_edit = QLineEdit()
-        self.voucher_search_edit.setPlaceholderText("Voucher contains…")
-        try:
-            self.voucher_search_edit.setClearButtonEnabled(True)
-        except Exception:
-            pass
-        self.voucher_search_edit.textChanged.connect(self.load_available_bars)
-        search_layout.addWidget(self.voucher_search_edit)
-        # Purity filter min/max
-        pur_lbl = QLabel("Purity % ≥")
-        pur_lbl.setToolTip("Minimum purity")
-        search_layout.addWidget(pur_lbl)
+        self.weight_search_edit.textChanged.connect(self.load_available_bars)
+        weight_row.addWidget(self.weight_search_edit)
+        weight_row.addStretch()
+        filters_layout.addLayout(weight_row)
+        
+        # Combined purity range and tolerance row
+        purity_tol_row = QHBoxLayout()
+        purity_tol_row.setSpacing(6)
+        
+        # Purity range
+        purity_label = QLabel("Purity Range:")
+        purity_label.setStyleSheet("font-weight: 600; font-size: 13px; min-width: 90px;")
+        purity_tol_row.addWidget(purity_label)
+        
         self.purity_min_spin = QDoubleSpinBox()
         self.purity_min_spin.setDecimals(2)
         self.purity_min_spin.setRange(0.0, 100.0)
         self.purity_min_spin.setSingleStep(0.5)
         self.purity_min_spin.setValue(0.0)
+        self.purity_min_spin.setStyleSheet("""
+            QDoubleSpinBox {
+                padding: 4px;
+                font-size: 13px;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                max-width: 80px;
+            }
+        """)
         self.purity_min_spin.valueChanged.connect(self.load_available_bars)
-        search_layout.addWidget(self.purity_min_spin)
-        purmax_lbl = QLabel("≤")
-        purmax_lbl.setToolTip("Maximum purity")
-        search_layout.addWidget(purmax_lbl)
+        purity_tol_row.addWidget(self.purity_min_spin)
+        
+        range_lbl = QLabel("% to")
+        range_lbl.setStyleSheet("font-size: 12px; margin: 0 6px;")
+        purity_tol_row.addWidget(range_lbl)
+        
         self.purity_max_spin = QDoubleSpinBox()
         self.purity_max_spin.setDecimals(2)
         self.purity_max_spin.setRange(0.0, 100.0)
         self.purity_max_spin.setSingleStep(0.5)
         self.purity_max_spin.setValue(100.0)
+        self.purity_max_spin.setStyleSheet("""
+            QDoubleSpinBox {
+                padding: 4px;
+                font-size: 13px;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                max-width: 80px;
+            }
+        """)
         self.purity_max_spin.valueChanged.connect(self.load_available_bars)
-        search_layout.addWidget(self.purity_max_spin)
-        self.refresh_available_button = QPushButton("Refresh")
-        self.refresh_available_button.clicked.connect(self.load_available_bars)
-        search_layout.addWidget(self.refresh_available_button)
-        # Auto-refresh toggle
-        self.auto_refresh_checkbox = QCheckBox("Auto")
-        self.auto_refresh_checkbox.setToolTip("Auto-refresh available bars every 5s")
-        self.auto_refresh_checkbox.toggled.connect(lambda checked: self._toggle_auto_refresh(checked))
-        search_layout.addWidget(self.auto_refresh_checkbox)
-        # Clear filters button
-        self.clear_filters_button = QToolButton()
+        purity_tol_row.addWidget(self.purity_max_spin)
+        
+        percent_lbl = QLabel("%")
+        percent_lbl.setStyleSheet("font-size: 12px; margin-left: 2px; margin-right: 12px;")
+        purity_tol_row.addWidget(percent_lbl)
+        
+        # Weight tolerance on same line
+        tol_lbl = QLabel("± Tolerance:")
+        tol_lbl.setStyleSheet("font-size: 12px; margin-left: 8px; margin-right: 2px;")
+        tol_lbl.setToolTip("Weight tolerance for matching")
+        purity_tol_row.addWidget(tol_lbl)
+        
+        self.weight_tol_spin = QDoubleSpinBox()
+        self.weight_tol_spin.setDecimals(3)
+        self.weight_tol_spin.setRange(0.0, 999999.0)
+        self.weight_tol_spin.setSingleStep(0.1)
+        self.weight_tol_spin.setValue(1.0)
+        self.weight_tol_spin.setToolTip("Match bars within ±tolerance (grams)")
+        self.weight_tol_spin.setStyleSheet("""
+            QDoubleSpinBox {
+                padding: 4px;
+                font-size: 13px;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                max-width: 100px;
+            }
+        """)
+        self.weight_tol_spin.valueChanged.connect(self.load_available_bars)
+        purity_tol_row.addWidget(self.weight_tol_spin)
+        
+        purity_tol_row.addStretch()
+        filters_layout.addLayout(purity_tol_row)
+        
+        # Date filter row - compact
+        date_row = QHBoxLayout()
+        date_row.setSpacing(6)
+        date_label = QLabel("Date Filter:")
+        date_label.setStyleSheet("font-weight: 600; font-size: 13px; min-width: 90px;")
+        date_row.addWidget(date_label)
+        
         try:
-            self.clear_filters_button.setIcon(self.style().standardIcon(QStyle.SP_DialogResetButton))
+            self.date_range_combo = QComboBox()
+            self.date_range_combo.addItems(["Any", "Today", "Last 7 days", "Last 30 days", "This Month"])
+            self.date_range_combo.currentIndexChanged.connect(self.load_available_bars)
+            self.date_range_combo.setStyleSheet("""
+                QComboBox {
+                    padding: 4px 8px;
+                    font-size: 13px;
+                    border: 1px solid #ccc;
+                    border-radius: 3px;
+                    min-width: 120px;
+                }
+            """)
+            date_row.addWidget(self.date_range_combo)
         except Exception:
             pass
-        self.clear_filters_button.setAutoRaise(True)
-        self.clear_filters_button.setToolTip("Clear weight and voucher filters")
-        self.clear_filters_button.clicked.connect(lambda: self._clear_filters())
-        search_layout.addWidget(self.clear_filters_button)
-        search_layout.addStretch()
-        # Small header badges
+        date_row.addStretch()
+        filters_layout.addLayout(date_row)
+        
+        # Add filters group to left layout
+        left_layout.addWidget(filters_group)
+        
+        # Small header badges with better readability
         self.available_header_badge = QLabel("")
-        self.available_header_badge.setStyleSheet("color:#666; font-size: 11px;")
-        search_layout.addWidget(self.available_header_badge)
-        left_layout.addLayout(search_layout)
+        self.available_header_badge.setStyleSheet("""
+            color: #666; 
+            font-size: 13px; 
+            font-weight: 500;
+            margin: 4px 0px;
+        """)
+        left_layout.addWidget(self.available_header_badge)
 
         self.available_bars_table = QTableWidget()
         self.available_bars_table.setColumnCount(7) # bar_id, estimate_voucher_no, weight, purity, fine_weight, date_added, status
-        self.available_bars_table.setHorizontalHeaderLabels(["ID", "Estimate Vch/Note", "Weight (g)", "Purity (%)", "Fine Wt (g)", "Date Added", "Status"])
+        self.available_bars_table.setHorizontalHeaderLabels(["ID", "Voucher/Note", "Weight (g)", "Purity (%)", "Fine Wt (g)", "Date Added", "Status"])
         self.available_bars_table.setColumnHidden(0, True) # Hide bar_id
         self.available_bars_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.available_bars_table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -129,8 +264,34 @@ class SilverBarDialog(QDialog):
         self.available_bars_table.setAlternatingRowColors(True)
         self.available_bars_table.setSortingEnabled(True)
         self.available_bars_table.verticalHeader().setVisible(False)
+        
+        # Improved table styling for better readability
+        self.available_bars_table.setStyleSheet("""
+            QTableWidget {
+                font-size: 13px;
+                gridline-color: #ddd;
+                background-color: white;
+                alternate-background-color: #f9f9f9;
+                selection-background-color: #e6f2ff;
+            }
+            QTableWidget::item {
+                padding: 8px 4px;
+                border-bottom: 1px solid #eee;
+            }
+            QTableWidget::item:selected {
+                background-color: #d4e7ff;
+                color: black;
+            }
+            QHeaderView::section {
+                background-color: #f0f0f0;
+                padding: 8px 4px;
+                border: 1px solid #ddd;
+                font-weight: 600;
+                font-size: 13px;
+            }
+        """)
         try:
-            self.available_bars_table.verticalHeader().setDefaultSectionSize(22)
+            self.available_bars_table.verticalHeader().setDefaultSectionSize(28)  # Increased row height for better readability
         except Exception:
             pass
         self.available_bars_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
@@ -140,185 +301,394 @@ class SilverBarDialog(QDialog):
         self.available_bars_table.customContextMenuRequested.connect(self._show_available_context_menu)
         left_layout.addWidget(self.available_bars_table)
         
-        # Add totals label for available bars
+        # Improved totals section for available bars
         self.available_totals_label = QLabel("Available Bars: 0 | Total Weight: 0.000 g | Total Fine Wt: 0.000 g")
-        self.available_totals_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-        self.available_totals_label.setAlignment(Qt.AlignRight)
+        self.available_totals_label.setStyleSheet("""
+            font-weight: 600; 
+            font-size: 14px; 
+            color: #2c3e50;
+            background-color: #f8f9fa;
+            padding: 8px 12px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            margin-top: 4px;
+        """)
+        self.available_totals_label.setAlignment(Qt.AlignCenter)
         left_layout.addWidget(self.available_totals_label)
-        # Selection summary for available table
+        
+        # Improved selection summary for available table
         self.available_selection_label = QLabel("Selected: 0 | Weight: 0.000 g | Fine: 0.000 g")
-        self.available_selection_label.setAlignment(Qt.AlignRight)
-        self.available_selection_label.setStyleSheet("color: #555;")
+        self.available_selection_label.setStyleSheet("""
+            color: #6c757d;
+            font-size: 13px;
+            font-weight: 500;
+            background-color: #ffffff;
+            padding: 6px 12px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            margin-top: 2px;
+        """)
+        self.available_selection_label.setAlignment(Qt.AlignCenter)
         left_layout.addWidget(self.available_selection_label)
-
-        # Add date range after we’ve set up base filters
-        try:
-            date_lbl = QLabel("Date")
-            search_layout.addWidget(date_lbl)
-            self.date_range_combo = QComboBox()
-            self.date_range_combo.addItems(["Any", "Today", "Last 7 days", "Last 30 days", "This Month"])
-            self.date_range_combo.currentIndexChanged.connect(self.load_available_bars)
-            self.date_range_combo.setMinimumWidth(110)
-            search_layout.addWidget(self.date_range_combo)
-        except Exception:
-            pass
 
         # --- Center Pane: Transfer Buttons ---
         center_widget = QWidget()
         center_layout = QVBoxLayout(center_widget)
-        center_layout.setContentsMargins(0, 12, 0, 12)
-        center_layout.setSpacing(10)
-        center_layout.setAlignment(Qt.AlignHCenter)
+        center_layout.setContentsMargins(8, 16, 8, 16)
+        center_layout.setSpacing(12)
+        center_layout.setAlignment(Qt.AlignCenter)
+        
+        # Transfer section title
+        transfer_title = QLabel("Transfer")
+        transfer_title.setAlignment(Qt.AlignCenter)
+        transfer_title.setStyleSheet("""
+            font-weight: 600;
+            font-size: 14px;
+            color: #495057;
+            margin-bottom: 8px;
+        """)
+        center_layout.addWidget(transfer_title)
         center_layout.addStretch()
-        self.add_to_list_button = QToolButton()
-        try:
-            self.add_to_list_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowForward))
-        except Exception:
-            pass
-        self.add_to_list_button.setToolButtonStyle(Qt.ToolButtonIconOnly)
-        self.add_to_list_button.setAutoRaise(True)
-        self.add_to_list_button.setText("")
+        # Improved transfer buttons with better readability
+        self.add_to_list_button = QPushButton("→")
+        self.add_to_list_button.setStyleSheet("""
+            QPushButton {
+                font-size: 16px;
+                font-weight: bold;
+                padding: 8px;
+                border: 2px solid #007acc;
+                background-color: #007acc;
+                color: white;
+                border-radius: 20px;
+                min-width: 40px;
+                min-height: 40px;
+            }
+            QPushButton:hover {
+                background-color: #005a9e;
+                border-color: #005a9e;
+            }
+            QPushButton:disabled {
+                background-color: #ccc;
+                border-color: #ccc;
+                color: #999;
+            }
+        """)
         self.add_to_list_button.setToolTip("Add selected 'Available' bars to the selected list.")
         self.add_to_list_button.clicked.connect(self.add_selected_to_list)
         self.add_to_list_button.setEnabled(False)
-        self.add_to_list_button.setFixedSize(28, 28)
         center_layout.addWidget(self.add_to_list_button)
 
-        # Add All (filtered) button
-        self.add_all_button = QToolButton()
-        try:
-            # Use a different icon for "All" to avoid two identical arrows
-            self.add_all_button.setIcon(self.style().standardIcon(QStyle.SP_MediaSkipForward))
-        except Exception:
-            # Fallback to the same arrow if style lacks media icons
-            try:
-                self.add_all_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowForward))
-            except Exception:
-                pass
-        self.add_all_button.setToolButtonStyle(Qt.ToolButtonIconOnly)
-        self.add_all_button.setAutoRaise(True)
-        self.add_all_button.setText("")
+        # Add All button
+        self.add_all_button = QPushButton("⇒")
+        self.add_all_button.setStyleSheet("""
+            QPushButton {
+                font-size: 14px;
+                font-weight: bold;
+                padding: 6px;
+                border: 2px solid #28a745;
+                background-color: #28a745;
+                color: white;
+                border-radius: 16px;
+                min-width: 32px;
+                min-height: 32px;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+                border-color: #218838;
+            }
+            QPushButton:disabled {
+                background-color: #ccc;
+                border-color: #ccc;
+                color: #999;
+            }
+        """)
         self.add_all_button.setToolTip("Add all available (filtered) bars to the selected list.")
         self.add_all_button.clicked.connect(self.add_all_filtered_to_list)
         self.add_all_button.setEnabled(False)
-        self.add_all_button.setFixedSize(28, 28)
         center_layout.addWidget(self.add_all_button)
-        self.remove_from_list_button = QToolButton()
-        try:
-            self.remove_from_list_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowBack))
-        except Exception:
-            pass
-        self.remove_from_list_button.setToolButtonStyle(Qt.ToolButtonIconOnly)
-        self.remove_from_list_button.setAutoRaise(True)
-        self.remove_from_list_button.setText("")
+        
+        # Spacer
+        spacer = QLabel("• • •")
+        spacer.setAlignment(Qt.AlignCenter)
+        spacer.setStyleSheet("color: #ccc; font-size: 12px; margin: 6px 0;")
+        center_layout.addWidget(spacer)
+        
+        # Remove button
+        self.remove_from_list_button = QPushButton("←")
+        self.remove_from_list_button.setStyleSheet("""
+            QPushButton {
+                font-size: 16px;
+                font-weight: bold;
+                padding: 8px;
+                border: 2px solid #dc3545;
+                background-color: #dc3545;
+                color: white;
+                border-radius: 20px;
+                min-width: 40px;
+                min-height: 40px;
+            }
+            QPushButton:hover {
+                background-color: #c82333;
+                border-color: #c82333;
+            }
+            QPushButton:disabled {
+                background-color: #ccc;
+                border-color: #ccc;
+                color: #999;
+            }
+        """)
         self.remove_from_list_button.setToolTip("Remove selected bars from the list (status becomes 'In Stock').")
         self.remove_from_list_button.clicked.connect(self.remove_selected_from_list)
         self.remove_from_list_button.setEnabled(False)
-        self.remove_from_list_button.setFixedSize(28, 28)
         center_layout.addWidget(self.remove_from_list_button)
 
         # Remove All button
-        self.remove_all_button = QToolButton()
-        try:
-            # Use a different icon for "All" to avoid duplicate-looking arrows
-            self.remove_all_button.setIcon(self.style().standardIcon(QStyle.SP_MediaSkipBackward))
-        except Exception:
-            try:
-                self.remove_all_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowBack))
-            except Exception:
-                pass
-        self.remove_all_button.setToolButtonStyle(Qt.ToolButtonIconOnly)
-        self.remove_all_button.setAutoRaise(True)
-        self.remove_all_button.setText("")
+        self.remove_all_button = QPushButton("⇐")
+        self.remove_all_button.setStyleSheet("""
+            QPushButton {
+                font-size: 14px;
+                font-weight: bold;
+                padding: 6px;
+                border: 2px solid #fd7e14;
+                background-color: #fd7e14;
+                color: white;
+                border-radius: 16px;
+                min-width: 32px;
+                min-height: 32px;
+            }
+            QPushButton:hover {
+                background-color: #e8630c;
+                border-color: #e8630c;
+            }
+            QPushButton:disabled {
+                background-color: #ccc;
+                border-color: #ccc;
+                color: #999;
+            }
+        """)
         self.remove_all_button.setToolTip("Remove all bars from the selected list (status becomes 'In Stock').")
         self.remove_all_button.clicked.connect(self.remove_all_from_list)
         self.remove_all_button.setEnabled(False)
-        self.remove_all_button.setFixedSize(28, 28)
         center_layout.addWidget(self.remove_all_button)
         center_layout.addStretch()
         try:
-            center_widget.setFixedWidth(56)
+            center_widget.setFixedWidth(80)  # Wider for better button visibility
         except Exception:
             pass
 
         # --- Right Pane: List Selection, Actions, and Bars ---
         right_widget = QWidget()
         right_layout = QVBoxLayout(right_widget)
-        right_layout.setContentsMargins(0,0,0,0)
-        right_layout.setSpacing(6)
+        right_layout.setContentsMargins(8, 8, 8, 8)
+        right_layout.setSpacing(10)
+
+        # Improved section title
+        right_title = QLabel("Silver Bar Lists")
+        right_title.setStyleSheet("""
+            font-weight: 700;
+            font-size: 16px;
+            color: #2c3e50;
+            margin-bottom: 8px;
+            padding: 8px 0px;
+        """)
+        right_layout.addWidget(right_title)
 
         header_row = QHBoxLayout()
-        header_row.setSpacing(6)
+        header_row.setSpacing(8)
         header_title = QLabel("Select List:")
-        header_title.setStyleSheet("font-weight: 600;")
+        header_title.setStyleSheet("font-weight: 600; font-size: 13px; min-width: 80px;")
         header_row.addWidget(header_title)
+        
         self.list_combo = QComboBox()
-        self.list_combo.setMinimumWidth(220)
+        self.list_combo.setMinimumWidth(240)
+        self.list_combo.setStyleSheet("""
+            QComboBox {
+                padding: 6px 8px;
+                font-size: 13px;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+            }
+            QComboBox:focus {
+                border-color: #007acc;
+            }
+        """)
         self.list_combo.currentIndexChanged.connect(self.list_selection_changed)
         header_row.addWidget(self.list_combo)
+        
         self.create_list_button = QPushButton("Create New List...")
+        self.create_list_button.setStyleSheet("""
+            QPushButton {
+                padding: 6px 12px;
+                font-size: 13px;
+                font-weight: 600;
+                border: 1px solid #28a745;
+                background-color: #28a745;
+                color: white;
+                border-radius: 3px;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+            }
+        """)
         self.create_list_button.clicked.connect(self.create_new_list)
         header_row.addWidget(self.create_list_button)
-        # Compact list info next to combo to avoid duplicate section
-        self.list_info_label = QLabel("")
-        self.list_info_label.setStyleSheet("color:#333; font-weight: 500;")
-        header_row.addWidget(self.list_info_label)
+        
+        self.generate_optimal_button = QPushButton("Generate Optimal List...")
+        self.generate_optimal_button.setStyleSheet("""
+            QPushButton {
+                padding: 6px 12px;
+                font-size: 13px;
+                font-weight: 600;
+                border: 1px solid #6f42c1;
+                background-color: #6f42c1;
+                color: white;
+                border-radius: 3px;
+            }
+            QPushButton:hover {
+                background-color: #5a32a3;
+            }
+        """)
+        self.generate_optimal_button.setToolTip("Generate an optimal list for a target fine weight")
+        self.generate_optimal_button.clicked.connect(self.generate_optimal_list)
+        header_row.addWidget(self.generate_optimal_button)
+        
         header_row.addStretch()
-        # Compact tool buttons for actions
-        self.print_list_button = QToolButton()
-        try:
-            self.print_list_button.setIcon(self.style().standardIcon(QStyle.SP_DialogPrintButton))
-        except Exception:
-            pass
-        self.print_list_button.setAutoRaise(True)
+        right_layout.addLayout(header_row)
+        
+        # List info and actions row
+        info_actions_row = QHBoxLayout()
+        info_actions_row.setSpacing(8)
+        
+        self.list_info_label = QLabel("Select a list to view details")
+        self.list_info_label.setStyleSheet("""
+            color: #6c757d;
+            font-size: 13px;
+            font-weight: 500;
+            font-style: italic;
+            padding: 4px 8px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 3px;
+        """)
+        info_actions_row.addWidget(self.list_info_label)
+        info_actions_row.addStretch()
+        
+        # Action buttons with improved styling
+        self.print_list_button = QPushButton("Print")
+        self.print_list_button.setStyleSheet("""
+            QPushButton {
+                padding: 4px 8px;
+                font-size: 12px;
+                border: 1px solid #6f42c1;
+                background-color: #6f42c1;
+                color: white;
+                border-radius: 3px;
+            }
+            QPushButton:hover { background-color: #5a32a3; }
+            QPushButton:disabled { 
+                background-color: #ccc; 
+                border-color: #ccc;
+                color: #999; 
+            }
+        """)
         self.print_list_button.setToolTip("Print selected list")
         self.print_list_button.clicked.connect(self.print_selected_list)
         self.print_list_button.setEnabled(False)
-        header_row.addWidget(self.print_list_button)
-        self.edit_note_button = QToolButton()
-        try:
-            self.edit_note_button.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
-        except Exception:
-            pass
-        self.edit_note_button.setAutoRaise(True)
+        info_actions_row.addWidget(self.print_list_button)
+        
+        self.edit_note_button = QPushButton("Edit Note")
+        self.edit_note_button.setStyleSheet("""
+            QPushButton {
+                padding: 4px 8px;
+                font-size: 12px;
+                border: 1px solid #17a2b8;
+                background-color: #17a2b8;
+                color: white;
+                border-radius: 3px;
+            }
+            QPushButton:hover { background-color: #138496; }
+            QPushButton:disabled { 
+                background-color: #ccc; 
+                border-color: #ccc;
+                color: #999; 
+            }
+        """)
         self.edit_note_button.setToolTip("Edit list note")
         self.edit_note_button.clicked.connect(self.edit_list_note)
         self.edit_note_button.setEnabled(False)
-        header_row.addWidget(self.edit_note_button)
-        # Export CSV button
-        self.export_list_button = QToolButton()
-        try:
-            self.export_list_button.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
-        except Exception:
-            pass
-        self.export_list_button.setAutoRaise(True)
+        info_actions_row.addWidget(self.edit_note_button)
+        
+        self.export_list_button = QPushButton("Export CSV")
+        self.export_list_button.setStyleSheet("""
+            QPushButton {
+                padding: 4px 8px;
+                font-size: 12px;
+                border: 1px solid #28a745;
+                background-color: #28a745;
+                color: white;
+                border-radius: 3px;
+            }
+            QPushButton:hover { background-color: #218838; }
+            QPushButton:disabled { 
+                background-color: #ccc; 
+                border-color: #ccc;
+                color: #999; 
+            }
+        """)
         self.export_list_button.setToolTip("Export current list to CSV")
         self.export_list_button.clicked.connect(self.export_current_list_to_csv)
         self.export_list_button.setEnabled(False)
-        header_row.addWidget(self.export_list_button)
-        self.delete_list_button = QToolButton()
-        try:
-            self.delete_list_button.setIcon(self.style().standardIcon(QStyle.SP_TrashIcon))
-        except Exception:
-            pass
-        self.delete_list_button.setAutoRaise(True)
+        info_actions_row.addWidget(self.export_list_button)
+        
+        self.delete_list_button = QPushButton("Delete")
+        self.delete_list_button.setStyleSheet("""
+            QPushButton {
+                padding: 4px 8px;
+                font-size: 12px;
+                border: 1px solid #dc3545;
+                background-color: #dc3545;
+                color: white;
+                border-radius: 3px;
+            }
+            QPushButton:hover { background-color: #c82333; }
+            QPushButton:disabled { 
+                background-color: #ccc; 
+                border-color: #ccc;
+                color: #999; 
+            }
+        """)
         self.delete_list_button.setToolTip("Delete list")
         self.delete_list_button.clicked.connect(self.delete_selected_list)
         self.delete_list_button.setEnabled(False)
-        header_row.addWidget(self.delete_list_button)
-        right_layout.addLayout(header_row)
+        info_actions_row.addWidget(self.delete_list_button)
+        
+        self.mark_issued_button = QPushButton("Mark as Issued")
+        self.mark_issued_button.setStyleSheet("""
+            QPushButton {
+                padding: 4px 8px;
+                font-size: 12px;
+                border: 1px solid #fd7e14;
+                background-color: #fd7e14;
+                color: white;
+                border-radius: 3px;
+            }
+            QPushButton:hover { background-color: #e8630c; }
+            QPushButton:disabled { 
+                background-color: #ccc; 
+                border-color: #ccc;
+                color: #999; 
+            }
+        """)
+        self.mark_issued_button.setToolTip("Mark list as issued (moves to history)")
+        self.mark_issued_button.clicked.connect(self.mark_list_as_issued)
+        self.mark_issued_button.setEnabled(False)
+        info_actions_row.addWidget(self.mark_issued_button)
+        right_layout.addLayout(info_actions_row)
 
-        # Deprecated duplicate selected list row is hidden to reduce redundancy
-        details_row = QHBoxLayout()
-        self.list_details_label = QLabel("")
-        self.list_details_label.hide()
-        details_row.addWidget(self.list_details_label)
-        details_row.addStretch()
-        right_layout.addLayout(details_row)
-
+        # List table with improved styling
         self.list_bars_table = QTableWidget()
         self.list_bars_table.setColumnCount(7)
-        self.list_bars_table.setHorizontalHeaderLabels(["ID", "Estimate Vch/Note", "Weight (g)", "Purity (%)", "Fine Wt (g)", "Date Added", "Status"])
+        self.list_bars_table.setHorizontalHeaderLabels(["ID", "Voucher/Note", "Weight (g)", "Purity (%)", "Fine Wt (g)", "Date Added", "Status"])
         self.list_bars_table.setColumnHidden(0, True)
         self.list_bars_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.list_bars_table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -326,8 +696,34 @@ class SilverBarDialog(QDialog):
         self.list_bars_table.setAlternatingRowColors(True)
         self.list_bars_table.setSortingEnabled(True)
         self.list_bars_table.verticalHeader().setVisible(False)
+        
+        # Apply same improved styling as available bars table
+        self.list_bars_table.setStyleSheet("""
+            QTableWidget {
+                font-size: 13px;
+                gridline-color: #ddd;
+                background-color: white;
+                alternate-background-color: #f9f9f9;
+                selection-background-color: #e6f2ff;
+            }
+            QTableWidget::item {
+                padding: 8px 4px;
+                border-bottom: 1px solid #eee;
+            }
+            QTableWidget::item:selected {
+                background-color: #d4e7ff;
+                color: black;
+            }
+            QHeaderView::section {
+                background-color: #f0f0f0;
+                padding: 8px 4px;
+                border: 1px solid #ddd;
+                font-weight: 600;
+                font-size: 13px;
+            }
+        """)
         try:
-            self.list_bars_table.verticalHeader().setDefaultSectionSize(22)
+            self.list_bars_table.verticalHeader().setDefaultSectionSize(28)  # Increased row height for better readability
         except Exception:
             pass
         self.list_bars_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
@@ -336,20 +732,46 @@ class SilverBarDialog(QDialog):
         self.list_bars_table.customContextMenuRequested.connect(self._show_list_context_menu)
         right_layout.addWidget(self.list_bars_table)
 
+        # Improved totals section for list bars
         self.list_totals_label = QLabel("List Bars: 0 | Total Weight: 0.000 g | Total Fine Wt: 0.000 g")
-        self.list_totals_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-        self.list_totals_label.setAlignment(Qt.AlignRight)
+        self.list_totals_label.setStyleSheet("""
+            font-weight: 600; 
+            font-size: 14px; 
+            color: #2c3e50;
+            background-color: #f8f9fa;
+            padding: 8px 12px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            margin-top: 4px;
+        """)
+        self.list_totals_label.setAlignment(Qt.AlignCenter)
         right_layout.addWidget(self.list_totals_label)
-        # Small header badge for list counts
+        
+        # Improved selection summary for list table
+        self.list_selection_label = QLabel("Selected: 0 | Weight: 0.000 g | Fine: 0.000 g")
+        self.list_selection_label.setStyleSheet("""
+            color: #6c757d;
+            font-size: 13px;
+            font-weight: 500;
+            background-color: #ffffff;
+            padding: 6px 12px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            margin-top: 2px;
+        """)
+        self.list_selection_label.setAlignment(Qt.AlignCenter)
+        right_layout.addWidget(self.list_selection_label)
+        
+        # Small header badge for list counts with better readability
         self.list_header_badge = QLabel("")
         self.list_header_badge.setAlignment(Qt.AlignRight)
-        self.list_header_badge.setStyleSheet("color:#666; font-size: 11px;")
+        self.list_header_badge.setStyleSheet("""
+            color: #666; 
+            font-size: 13px; 
+            font-weight: 500;
+            margin: 4px 0px;
+        """)
         right_layout.addWidget(self.list_header_badge)
-        # Selection summary for list table
-        self.list_selection_label = QLabel("Selected: 0 | Weight: 0.000 g | Fine: 0.000 g")
-        self.list_selection_label.setAlignment(Qt.AlignRight)
-        self.list_selection_label.setStyleSheet("color: #555;")
-        right_layout.addWidget(self.list_selection_label)
 
         # --- Splitter: left | center | right ---
         splitter = QSplitter(Qt.Horizontal)
@@ -358,7 +780,7 @@ class SilverBarDialog(QDialog):
         splitter.addWidget(right_widget)
         splitter.setChildrenCollapsible(False)
         splitter.setOpaqueResize(True)
-        splitter.setSizes([620, 56, 620])
+        splitter.setSizes([600, 80, 600])  # Adjusted for wider center panel
         self._splitter = splitter
 
         # Size policies to prevent center pane from expanding
@@ -371,17 +793,57 @@ class SilverBarDialog(QDialog):
 
         main_layout.addWidget(splitter)
 
-        # --- Bottom Actions (Print + Close) ---
+        # --- Bottom Actions (Print + Close) with improved styling ---
         close_button_layout = QHBoxLayout()
+        close_button_layout.setSpacing(12)
         close_button_layout.addStretch()
-        self.print_bottom_button = QPushButton("Print")
+        
+        self.print_bottom_button = QPushButton("Print List")
+        self.print_bottom_button.setStyleSheet("""
+            QPushButton {
+                padding: 8px 16px;
+                font-size: 13px;
+                font-weight: 600;
+                border: 1px solid #6f42c1;
+                background-color: #6f42c1;
+                color: white;
+                border-radius: 4px;
+                min-width: 100px;
+            }
+            QPushButton:hover {
+                background-color: #5a32a3;
+            }
+            QPushButton:disabled {
+                background-color: #ccc;
+                border-color: #ccc;
+                color: #999;
+            }
+        """)
         self.print_bottom_button.setToolTip("Print selected list")
         self.print_bottom_button.clicked.connect(self.print_selected_list)
         self.print_bottom_button.setEnabled(False)
         close_button_layout.addWidget(self.print_bottom_button)
+        
         self.close_button = QPushButton("Close")
+        self.close_button.setStyleSheet("""
+            QPushButton {
+                padding: 8px 16px;
+                font-size: 13px;
+                font-weight: 600;
+                border: 1px solid #6c757d;
+                background-color: #f8f9fa;
+                color: #495057;
+                border-radius: 4px;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background-color: #e9ecef;
+                border-color: #adb5bd;
+            }
+        """)
         self.close_button.clicked.connect(self.accept)
         close_button_layout.addWidget(self.close_button)
+        
         main_layout.addLayout(close_button_layout)
 
         # Shortcuts for power users
@@ -449,11 +911,7 @@ class SilverBarDialog(QDialog):
         """Loads bars with status 'In Stock' and no list_id, applying weight filter."""
         # print("Loading available bars...") # Optional: Keep for debugging
         weight_query = self.weight_search_edit.text().strip()
-        voucher_query = ""
-        try:
-            voucher_query = self.voucher_search_edit.text().strip()
-        except Exception:
-            pass
+        voucher_query = ""  # Voucher search removed
         # Read other filters
         try:
             tol = float(self.weight_tol_spin.value())
@@ -508,7 +966,8 @@ class SilverBarDialog(QDialog):
         self.list_combo.clear()
         self.list_combo.addItem("--- Select a List ---", None)
         try:
-            lists = self.db_manager.get_silver_bar_lists()
+            # Get only active lists (not issued)
+            lists = self.db_manager.get_silver_bar_lists(include_issued=False)
             for list_row in lists:
                 # Store list_id as item data, show list note but remove timestamp
                 list_note = list_row['list_note'] or ""
@@ -545,6 +1004,7 @@ class SilverBarDialog(QDialog):
         except Exception:
             pass
         self.delete_list_button.setEnabled(is_list_selected)
+        self.mark_issued_button.setEnabled(is_list_selected)
         # Update transfer buttons based on list selection and current table selections
         self._update_transfer_buttons_state()
 
@@ -809,6 +1269,50 @@ class SilverBarDialog(QDialog):
             else:
                 QMessageBox.critical(self, "Error", f"Failed to delete list: {msg}")
 
+    def mark_list_as_issued(self):
+        """Mark the currently selected list as issued."""
+        if self.current_list_id is None:
+            QMessageBox.warning(self, "Error", "No list selected.")
+            return
+        
+        details = self.db_manager.get_silver_bar_list_details(self.current_list_id)
+        list_name = details['list_identifier'] if details else f"ID {self.current_list_id}"
+        
+        reply = QMessageBox.question(self, "Mark as Issued",
+                                   f"Are you sure you want to mark list '{list_name}' as issued?\n\n"
+                                   f"This will:\n"
+                                   f"• Remove the list from the active lists menu\n"
+                                   f"• Move it to Silver Bar History\n"
+                                   f"• Set all bars in the list to 'Issued' status\n\n"
+                                   f"This action can be reversed from the History window.",
+                                   QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
+        
+        if reply == QMessageBox.Yes:
+            try:
+                # Mark the list as issued
+                issued_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                self.db_manager.cursor.execute("""
+                    UPDATE silver_bar_lists SET issued_date = ? WHERE list_id = ?
+                """, (issued_date, self.current_list_id))
+                
+                # Update all bars in this list to 'Issued' status
+                self.db_manager.cursor.execute("""
+                    UPDATE silver_bars SET status = 'Issued' WHERE list_id = ?
+                """, (self.current_list_id,))
+                
+                self.db_manager.conn.commit()
+                
+                QMessageBox.information(self, "Success", 
+                                      f"List '{list_name}' has been marked as issued.\n"
+                                      f"It has been moved to Silver Bar History.")
+                
+                # Refresh the interface
+                self.load_lists()
+                self.load_available_bars()
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to mark list as issued: {e}")
+
     def print_selected_list(self):
         """Prints the details and bars of the currently selected list."""
         if self.current_list_id is None:
@@ -845,6 +1349,168 @@ class SilverBarDialog(QDialog):
              QMessageBox.critical(self, "Error", f"Print function not found or incorrect in PrintManager: {ae}")
         except Exception as e:
              QMessageBox.critical(self, "Print Error", f"An unexpected error occurred during printing: {e}\n{traceback.format_exc()}")
+
+    def generate_optimal_list(self):
+        """Generate an optimal list based on target fine weight and optimization preference."""
+        dialog = OptimalListDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            min_target = dialog.min_target
+            max_target = dialog.max_target
+            target_fine_weight = dialog.target_fine_weight
+            list_name = dialog.list_name
+            optimization_type = dialog.optimization_type
+            
+            try:
+                # Get all available bars
+                available_bars = self.db_manager.get_silver_bars(status='In Stock')
+                # Filter to only bars not in any list
+                available_bars = [bar for bar in available_bars if bar['list_id'] is None]
+                
+                if not available_bars:
+                    QMessageBox.information(self, "No Bars Available", "No silver bars are available for list generation.")
+                    return
+                
+                # Find optimal combination
+                selected_bars = self._find_optimal_combination(available_bars, min_target, max_target, optimization_type)
+                
+                if not selected_bars:
+                    QMessageBox.information(self, "No Solution", 
+                                          f"Could not find a combination of bars within the range {min_target:.1f}g - {max_target:.1f}g.")
+                    return
+                
+                # Create new list
+                new_list_id = self.db_manager.create_silver_bar_list(list_name)
+                if not new_list_id:
+                    QMessageBox.critical(self, "Error", "Failed to create new list.")
+                    return
+                
+                # Add selected bars to the list
+                added_count = 0
+                failed_bars = []
+                for bar in selected_bars:
+                    if self.db_manager.assign_bar_to_list(bar['bar_id'], new_list_id):
+                        added_count += 1
+                    else:
+                        failed_bars.append(str(bar['bar_id']))
+                
+                # Calculate actual fine weight
+                actual_fine_weight = sum(bar['fine_weight'] for bar in selected_bars)
+                
+                # Show results
+                message = f"Optimal list created successfully!\n\n"
+                message += f"List Name: {list_name}\n"
+                message += f"Target Range: {min_target:.1f}g - {max_target:.1f}g\n"
+                message += f"Actual Fine Weight: {actual_fine_weight:.1f}g\n"
+                message += f"Bars Added: {added_count}\n"
+                message += f"Optimization: {'Minimum bars' if optimization_type == 'min_bars' else 'Maximum bars'}"
+                
+                if failed_bars:
+                    message += f"\n\nWarning: Failed to add {len(failed_bars)} bars: {', '.join(failed_bars)}"
+                
+                QMessageBox.information(self, "List Generated", message)
+                
+                # Refresh the interface
+                self.load_lists()
+                self.load_available_bars()
+                
+                # Select the new list
+                index = self.list_combo.findData(new_list_id)
+                if index >= 0:
+                    self.list_combo.setCurrentIndex(index)
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to generate optimal list: {e}\n{traceback.format_exc()}")
+
+    def _find_optimal_combination(self, available_bars, min_target, max_target, optimization_type):
+        """Find the optimal combination of silver bars within the target range."""
+        # Sort bars by fine weight for better algorithm performance
+        bars = sorted(available_bars, key=lambda x: x['fine_weight'], reverse=True)
+        
+        if optimization_type == 'min_bars':
+            # Use greedy approach for minimum number of bars
+            return self._find_min_bars_combination(bars, min_target, max_target)
+        else:  # max_bars
+            # Use approach that maximizes number of bars while staying in range
+            return self._find_max_bars_combination(bars, min_target, max_target)
+    
+    def _find_min_bars_combination(self, bars, min_target, max_target):
+        """Find combination with minimum number of bars within the target range."""
+        # Try to get as close to min_target as possible using fewest bars
+        selected = []
+        current_total = 0.0
+        
+        # Greedy approach: add largest bars that don't exceed max_target
+        for bar in bars:
+            if current_total + bar['fine_weight'] <= max_target:
+                selected.append(bar)
+                current_total += bar['fine_weight']
+                if current_total >= min_target:
+                    break
+        
+        # Check if we're in range
+        if min_target <= current_total <= max_target:
+            return selected
+        
+        # If greedy didn't work and set is small, try DP
+        if len(bars) <= 50:
+            return self._dp_combination_range(bars, min_target, max_target)
+        
+        return []
+    
+    def _find_max_bars_combination(self, bars, min_target, max_target):
+        """Find combination that uses maximum bars while staying within the range."""
+        # Sort by fine weight ascending for max bars approach
+        bars_asc = sorted(bars, key=lambda x: x['fine_weight'])
+        selected = []
+        current_total = 0.0
+        
+        for bar in bars_asc:
+            if current_total + bar['fine_weight'] <= max_target:
+                selected.append(bar)
+                current_total += bar['fine_weight']
+        
+        # Return only if we're within the range
+        return selected if min_target <= current_total <= max_target else []
+    
+    def _dp_combination_range(self, bars, min_target, max_target):
+        """Dynamic programming approach for finding optimal combinations within a range."""
+        # Convert to integer math for DP (multiply by 10 for 1 decimal precision)
+        min_target_int = int(min_target * 10)
+        max_target_int = int(max_target * 10)
+        
+        # DP table: dp[weight] = (bars_used, bar_indices)
+        n = len(bars)
+        
+        # Initialize DP table
+        dp = {}
+        dp[0] = (0, [])
+        
+        for i in range(n):
+            bar_weight = int(bars[i]['fine_weight'] * 10)
+            new_dp = dp.copy()
+            
+            for weight, (count, indices) in dp.items():
+                new_weight = weight + bar_weight
+                if new_weight <= max_target_int:
+                    if new_weight not in new_dp or new_dp[new_weight][0] > count + 1:
+                        new_dp[new_weight] = (count + 1, indices + [i])
+            
+            dp = new_dp
+        
+        # Find best solution within range (minimum bars first)
+        best_solution = None
+        best_bars_count = float('inf')
+        
+        for weight, (count, indices) in dp.items():
+            if min_target_int <= weight <= max_target_int:
+                if count < best_bars_count:
+                    best_bars_count = count
+                    best_solution = indices
+        
+        if best_solution:
+            return [bars[i] for i in best_solution]
+        
+        return []
 
     # --- Helper Methods ---
     def _populate_table(self, table, bars_data):
@@ -1063,10 +1729,7 @@ class SilverBarDialog(QDialog):
                 s.setValue("ui/silver_bars/weight_query", self.weight_search_edit.text())
             except Exception:
                 pass
-            try:
-                s.setValue("ui/silver_bars/voucher_query", self.voucher_search_edit.text())
-            except Exception:
-                pass
+            # Voucher search removed - no need for try/except
             try:
                 s.setValue("ui/silver_bars/current_list_id", self.current_list_id)
             except Exception:
@@ -1107,16 +1770,16 @@ class SilverBarDialog(QDialog):
             if hasattr(self, "_splitter"):
                 self._splitter.setOrientation(Qt.Horizontal)
             # Restore filters (won't trigger load until after init)
-            try:
-                wq = s.value("ui/silver_bars/weight_query", "")
-                if isinstance(wq, str):
-                    self.weight_search_edit.setText(wq)
-            except Exception:
-                pass
+            # Weight search should always start empty - don't restore previous value
+            # try:
+            #     wq = s.value("ui/silver_bars/weight_query", "")
+            #     if isinstance(wq, str):
+            #         self.weight_search_edit.setText(wq)
+            # except Exception:
+            #     pass
             try:
                 vq = s.value("ui/silver_bars/voucher_query", "")
-                if isinstance(vq, str) and hasattr(self, 'voucher_search_edit'):
-                    self.voucher_search_edit.setText(vq)
+                # Voucher search removed
             except Exception:
                 pass
             try:
@@ -1271,8 +1934,7 @@ class SilverBarDialog(QDialog):
     def _clear_filters(self):
         try:
             self.weight_search_edit.clear()
-            if hasattr(self, 'voucher_search_edit'):
-                self.voucher_search_edit.clear()
+            # Voucher search removed
             try:
                 self.weight_tol_spin.setValue(0.001)
                 self.purity_min_spin.setValue(0.0)
@@ -1510,6 +2172,269 @@ class SilverBarDialog(QDialog):
                 mw.show_estimate()
         except Exception:
             pass
+
+class OptimalListDialog(QDialog):
+    """Dialog for getting input for optimal list generation."""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Generate Optimal List")
+        self.setMinimumSize(450, 400)
+        self.target_fine_weight = 0.0
+        self.list_name = ""
+        self.optimization_type = "min_bars"
+        self.min_target = 0.0
+        self.max_target = 0.0
+        
+        self.init_ui()
+    
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(16)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        # Title
+        title = QLabel("Generate Optimal Silver Bar List")
+        title.setStyleSheet("""
+            font-size: 16px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        """)
+        layout.addWidget(title)
+        
+        # Fine weight input group
+        weight_group = QWidget()
+        weight_layout = QVBoxLayout(weight_group)
+        weight_layout.setSpacing(12)
+        
+        weight_title = QLabel("Target Fine Weight Range (grams):")
+        weight_title.setStyleSheet("font-weight: 600; font-size: 13px; margin-bottom: 8px;")
+        weight_layout.addWidget(weight_title)
+        
+        # Min and Max weight inputs in a row
+        minmax_layout = QHBoxLayout()
+        minmax_layout.setSpacing(12)
+        
+        # Min weight
+        min_group = QVBoxLayout()
+        min_label = QLabel("Minimum:")
+        min_label.setStyleSheet("font-weight: 500; font-size: 12px;")
+        min_group.addWidget(min_label)
+        
+        self.min_weight_spin = QDoubleSpinBox()
+        self.min_weight_spin.setDecimals(1)
+        self.min_weight_spin.setRange(0.1, 999999.9)
+        self.min_weight_spin.setSingleStep(1.0)
+        self.min_weight_spin.setValue(95.0)
+        self.min_weight_spin.setStyleSheet("""
+            QDoubleSpinBox {
+                padding: 8px;
+                font-size: 14px;
+                border: 2px solid #ddd;
+                border-radius: 4px;
+            }
+            QDoubleSpinBox:focus {
+                border-color: #007acc;
+            }
+        """)
+        min_group.addWidget(self.min_weight_spin)
+        minmax_layout.addLayout(min_group)
+        
+        # Max weight  
+        max_group = QVBoxLayout()
+        max_label = QLabel("Maximum:")
+        max_label.setStyleSheet("font-weight: 500; font-size: 12px;")
+        max_group.addWidget(max_label)
+        
+        self.max_weight_spin = QDoubleSpinBox()
+        self.max_weight_spin.setDecimals(1)
+        self.max_weight_spin.setRange(0.1, 999999.9)
+        self.max_weight_spin.setSingleStep(1.0)
+        self.max_weight_spin.setValue(105.0)
+        self.max_weight_spin.setStyleSheet("""
+            QDoubleSpinBox {
+                padding: 8px;
+                font-size: 14px;
+                border: 2px solid #ddd;
+                border-radius: 4px;
+            }
+            QDoubleSpinBox:focus {
+                border-color: #007acc;
+            }
+        """)
+        max_group.addWidget(self.max_weight_spin)
+        minmax_layout.addLayout(max_group)
+        
+        weight_layout.addLayout(minmax_layout)
+        
+        # Add explanation for range
+        range_explanation = QLabel("The algorithm will find bars with total fine weight between these values.")
+        range_explanation.setStyleSheet("""
+            color: #666;
+            font-size: 11px;
+            font-style: italic;
+            margin-top: 4px;
+        """)
+        weight_layout.addWidget(range_explanation)
+        
+        layout.addWidget(weight_group)
+        
+        # List name input
+        list_name_group = QWidget()
+        list_name_layout = QVBoxLayout(list_name_group)
+        list_name_layout.setSpacing(8)
+        
+        list_name_label = QLabel("List Name:")
+        list_name_label.setStyleSheet("font-weight: 600; font-size: 13px;")
+        list_name_layout.addWidget(list_name_label)
+        
+        self.list_name_edit = QLineEdit()
+        self.list_name_edit.setPlaceholderText("Enter a name for the new list")
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M")
+        self.list_name_edit.setText(f"Optimal-{timestamp}")
+        self.list_name_edit.setStyleSheet("""
+            QLineEdit {
+                padding: 8px;
+                font-size: 14px;
+                border: 2px solid #ddd;
+                border-radius: 4px;
+            }
+            QLineEdit:focus {
+                border-color: #007acc;
+            }
+        """)
+        list_name_layout.addWidget(self.list_name_edit)
+        layout.addWidget(list_name_group)
+        
+        # Optimization preference
+        opt_group = QWidget()
+        opt_layout = QVBoxLayout(opt_group)
+        opt_layout.setSpacing(12)
+        
+        opt_label = QLabel("Optimization Preference:")
+        opt_label.setStyleSheet("font-weight: 600; font-size: 13px;")
+        opt_layout.addWidget(opt_label)
+        
+        self.opt_button_group = QButtonGroup(self)
+        
+        self.min_bars_radio = QRadioButton("Minimum number of silver bars")
+        self.min_bars_radio.setChecked(True)
+        self.min_bars_radio.setStyleSheet("""
+            QRadioButton {
+                font-size: 13px;
+                padding: 4px;
+            }
+            QRadioButton::indicator {
+                width: 18px;
+                height: 18px;
+            }
+        """)
+        self.opt_button_group.addButton(self.min_bars_radio, 0)
+        opt_layout.addWidget(self.min_bars_radio)
+        
+        self.max_bars_radio = QRadioButton("Maximum number of silver bars")
+        self.max_bars_radio.setStyleSheet("""
+            QRadioButton {
+                font-size: 13px;
+                padding: 4px;
+            }
+            QRadioButton::indicator {
+                width: 18px;
+                height: 18px;
+            }
+        """)
+        self.opt_button_group.addButton(self.max_bars_radio, 1)
+        opt_layout.addWidget(self.max_bars_radio)
+        
+        # Add explanation
+        explanation = QLabel("• Minimum bars: Find the smallest number of bars within the weight range\n• Maximum bars: Use as many bars as possible within the weight range")
+        explanation.setStyleSheet("""
+            color: #666;
+            font-size: 12px;
+            font-style: italic;
+            margin-top: 8px;
+            padding: 8px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        """)
+        explanation.setWordWrap(True)
+        opt_layout.addWidget(explanation)
+        
+        layout.addWidget(opt_group)
+        
+        layout.addStretch()
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        
+        cancel_button = QPushButton("Cancel")
+        cancel_button.setStyleSheet("""
+            QPushButton {
+                padding: 10px 20px;
+                font-size: 13px;
+                border: 1px solid #6c757d;
+                background-color: #f8f9fa;
+                color: #495057;
+                border-radius: 4px;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background-color: #e9ecef;
+            }
+        """)
+        cancel_button.clicked.connect(self.reject)
+        button_layout.addWidget(cancel_button)
+        
+        generate_button = QPushButton("Generate List")
+        generate_button.setStyleSheet("""
+            QPushButton {
+                padding: 10px 20px;
+                font-size: 13px;
+                font-weight: 600;
+                border: 1px solid #28a745;
+                background-color: #28a745;
+                color: white;
+                border-radius: 4px;
+                min-width: 100px;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+            }
+        """)
+        generate_button.clicked.connect(self.accept)
+        generate_button.setDefault(True)
+        button_layout.addWidget(generate_button)
+        
+        layout.addLayout(button_layout)
+    
+    def accept(self):
+        # Validate inputs
+        min_val = self.min_weight_spin.value()
+        max_val = self.max_weight_spin.value()
+        
+        if min_val <= 0 or max_val <= 0:
+            QMessageBox.warning(self, "Invalid Input", "Please enter valid weight values greater than 0.")
+            return
+        
+        if min_val >= max_val:
+            QMessageBox.warning(self, "Invalid Input", "Minimum weight must be less than maximum weight.")
+            return
+        
+        if not self.list_name_edit.text().strip():
+            QMessageBox.warning(self, "Invalid Input", "Please enter a name for the list.")
+            return
+        
+        # Store values
+        self.min_target = min_val
+        self.max_target = max_val
+        self.target_fine_weight = (min_val + max_val) / 2  # Use midpoint for algorithms
+        self.list_name = self.list_name_edit.text().strip()
+        self.optimization_type = "min_bars" if self.min_bars_radio.isChecked() else "max_bars"
+        
+        super().accept()
+
 
 # Example usage (if run directly)
 if __name__ == '__main__':

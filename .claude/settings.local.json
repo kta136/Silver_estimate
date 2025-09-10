@@ -19,7 +19,8 @@
       "WebFetch(domain:ddasilver.com)",
       "WebSearch",
       "Bash(pip install:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "mcp__filesystem__read_multiple_files"
     ],
     "deny": [],
     "ask": []

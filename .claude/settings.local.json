@@ -13,7 +13,13 @@
       "Bash(gh release:*)",
       "Bash(python:*)",
       "Bash(git pull:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(git restore:*)",
+      "Read(//c/Users/kk/Desktop/**)",
+      "WebFetch(domain:ddasilver.com)",
+      "WebSearch",
+      "Bash(pip install:*)",
+      "Bash(git stash:*)"
     ],
     "deny": [],
     "ask": []

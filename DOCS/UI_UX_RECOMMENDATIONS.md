@@ -61,6 +61,80 @@ Status Key
   - 💡 Use different font weights for importance hierarchy
   - 💡 Add visual separators between calculation groups
 
+## Window Reviews (Targeted Recommendations)
+
+### Item Master (Item Catalog)
+- Why: Frequent data entry and lookup benefit from faster interaction and clarity.
+- Improvements:
+  - Persist table layout: save/restore column widths, sort order, and visibility via `QHeaderView.saveState()`/`restoreState()` and `QSettings`.
+  - Debounced search: add 250–300ms debounce on `textChanged` to avoid DB chatter while typing.
+  - Filter chips: quick filters for Wage Type (PC/WT) and non-zero wage, plus purity ranges.
+  - Empty states: when no items match the search, show a helpful message and a “Clear Filter” affordance.
+  - Inline validation: show inline error styles on invalid fields (code empty/duplicate, name empty). Keep add/update disabled until valid.
+  - Context menu: right-click row → Open in estimate, Duplicate, Delete, Export selected.
+  - Keyboard: Enter to Add/Update (context aware), Esc to clear selection, Ctrl+F to focus search.
+  - Bulk actions: allow multi-select rows for Delete and Export CSV.
+  - Integration: buttons to Import/Export (reusing existing managers) for discoverability.
+- Files: `item_master.py`, `database_manager.py` (optional: search API range filters), add state keys in `QSettings`.
+
+### Estimate History
+- Why: Retrieval and actions on past estimates should be fast, searchable, and safe.
+- Improvements:
+  - Two-pane layout: optional details pane shows line items of selected estimate (read-only table) for quick preview before opening.
+  - Persist filters: remember date range, voucher search, and dialog size/position between runs.
+  - Debounced filters: 250ms debounce for voucher search.
+  - Column improvements: ellipsis for long Note with full text in tooltip; enable sort per column and persist sort state.
+  - Batch actions: multi-select rows → Print, Export CSV, or Delete (with count confirmation and progress feedback).
+  - Export: add “Export to CSV/PDF” for selected estimate(s) via `PrintManager` or a lightweight exporter.
+  - Shortcuts: Enter to Open, Ctrl+P to Print, Del to Delete, Esc to close.
+  - Safety: clearer delete confirmation with exact count and undo option where feasible (soft delete flag then purge).
+- Files: `estimate_history.py`, `database_manager.py` (export APIs, optional soft-delete), `print_manager.py` (batch print/export).
+
+### Silver Bar Management
+- Why: Complex, high-density screen benefits from clarity, persistence, and bulk ergonomics.
+- Improvements:
+  - Save UI state: persist splitter sizes, table layouts, and sort orders per table (available vs. list) in `QSettings` with unique keys.
+  - Selection summaries: already present; add color cues for overweight/underweight relative to a target fine weight when generating lists.
+  - Batch affordances: enable/disable transfer buttons dynamically based on selections; add counts on buttons (e.g., “→ Add (3)”).
+  - Inline feedback: use non-blocking toasts for success/info; reserve modal dialogs for confirmations and errors.
+  - Issued lists: separate tab or filter to view issued lists read-only; prevent edits and clarify state with badges.
+  - Performance: consider table model/view with `QAbstractTableModel` for large datasets to avoid widget overhead.
+  - Keyboard: Enter to add selected, Backspace/Delete to remove from list, Ctrl+A select all, F5 refresh.
+  - CSV import/export: export exists; add import to seed bars (admin-only), with validation and preview.
+- Files: `silver_bar_management.py`, `database_manager.py` (issued views, optional model APIs), optional `ui_utils.py` for toasts.
+
+### Settings Dialog
+- Why: Central hub should be discoverable, safe, and reversible.
+- Improvements:
+  - Search within settings: small search box that filters sidebar/page labels and highlights matching controls.
+  - Section reset: “Restore defaults” per section in addition to global restore.
+  - Live previews: print font sample already exists; add live table font sample and page margin preview graphic.
+  - Dangerous operations: move data wipe/reset to a “Danger Zone” section with explicit multi-step confirmation and time delay.
+  - Logging: expose toggles you already support (debug/info/error files, auto-cleanup days) with validation and a “Clean Now” action.
+  - Export/Import settings: allow exporting QSettings to a JSON file and restoring, with conflict prompts.
+  - Printer validation: show current default and availability; warn if selected default printer is not found.
+  - Apply semantics: Apply should be enabled only when dirty (already handled) and show a subtle “Settings applied” toast.
+- Files: `settings_dialog.py`, `logger.py` (reconfigure hooks already exist), `app_constants.py` (defaults), optional `settings_exporter.py`.
+
+### Login Dialog
+- Why: First impression and critical flow for access and safety.
+- Improvements:
+  - Show password toggle (eye icon), caps-lock warning, and strength indicator on setup.
+  - Secondary password explanation: concise, clear description with “Learn more” link; emphasize difference from primary.
+  - Error messaging: avoid generic “incorrect password”; provide UI hints and offer “Reset / Wipe” as a clearly separated path.
+  - Keyboard: Enter submits, Esc cancels, Tab order audited.
+- Files: `login_dialog.py`.
+
+### Item Selection Dialog (Supporting)
+- Why: Speed is key during estimate composition.
+- Improvements:
+  - Fuzzy search with ranked results, highlight matched substrings.
+  - Recent items and favorites pinned at top; maintain per-user recency lists.
+  - Keyboard-centric flow: up/down moves results, Enter selects, Esc closes, Ctrl+F jumps to search.
+  - Persist window size and last filter.
+- Files: `item_selection_dialog.py`.
+
+
 ---
 
 ## Accessibility Problems

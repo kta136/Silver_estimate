@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from PyQt5.QtWidgets import (QTableWidgetItem, QMessageBox, QDialog)
+from PyQt5.QtWidgets import (QTableWidgetItem, QMessageBox, QDialog, QApplication)
 from PyQt5.QtCore import Qt, QDate, QTimer, QLocale # Import QLocale
 from PyQt5.QtGui import QColor
 
@@ -240,9 +240,14 @@ class EstimateLogic:
         return True
 
     def cell_clicked(self, row, column):
-        """Update current position when a cell is clicked, enforcing code requirement."""
-        if not self._enforce_code_required(row, column):
-            return
+        """Update current position when a cell is clicked.
+
+        Allow changing selection with the mouse even if the current row's
+        code is empty. Code enforcement will be handled for keyboard
+        navigation in current_cell_changed.
+        """
+        prev_row = getattr(self, 'current_row', -1)
+        prev_empty_code = self._is_code_empty(prev_row) if 0 <= prev_row < self.item_table.rowCount() else False
         self.current_row = row
         self.current_column = column
         # Use constants for editable columns check
@@ -250,18 +255,25 @@ class EstimateLogic:
         if column in editable_cols:
             item = self.item_table.item(row, column)
             if item and (item.flags() & Qt.ItemIsEditable):
-                self.item_table.editItem(item)
+                # If we are switching away from a row with empty code, allow selection
+                # but avoid immediately entering edit mode in the new row.
+                if not (prev_empty_code and row != prev_row):
+                    self.item_table.editItem(item)
 
     def selection_changed(self):
-        """Update current position when selection changes; keep focus on Code if empty."""
+        """Update current position when selection changes.
+
+        Do not block mouse-driven selection changes here; keyboard
+        enforcement is handled in current_cell_changed.
+        """
         selected_items = self.item_table.selectedItems()
         if not selected_items:
             return
         item = selected_items[0]
         row = self.item_table.row(item)
         col = self.item_table.column(item)
-        if not self._enforce_code_required(row, col):
-            return
+        prev_row = getattr(self, 'current_row', -1)
+        prev_empty_code = self._is_code_empty(prev_row) if 0 <= prev_row < self.item_table.rowCount() else False
         self.current_row = row
         self.current_column = col
         # Open editor when a new selection is made on an editable cell
@@ -269,13 +281,25 @@ class EstimateLogic:
         if col in editable_cols:
             cell = self._ensure_cell_exists(row, col)
             if cell and (cell.flags() & Qt.ItemIsEditable):
-                from PyQt5.QtCore import QTimer
-                QTimer.singleShot(0, lambda c=cell: self.item_table.editItem(c))
+                # Same behavior: if switching from an empty-code row, don't auto-edit
+                if not (prev_empty_code and row != prev_row):
+                    from PyQt5.QtCore import QTimer
+                    QTimer.singleShot(0, lambda c=cell: self.item_table.editItem(c))
 
     def current_cell_changed(self, currentRow, currentCol, previousRow, previousCol):
-        """Ensure the newly focused cell enters edit mode immediately if editable."""
-        if not self._enforce_code_required(currentRow, currentCol):
-            return
+        """Ensure the newly focused cell enters edit mode immediately if editable.
+
+        Enforce the "code required" rule only for keyboard/navigation-driven
+        focus changes. Mouse-driven selection changes should be allowed so that
+        users can click to select another row.
+        """
+        try:
+            mouse_pressed = QApplication.mouseButtons() != Qt.NoButton
+        except Exception:
+            mouse_pressed = False
+        if not mouse_pressed:
+            if not self._enforce_code_required(currentRow, currentCol):
+                return
         self.current_row = currentRow
         self.current_column = currentCol
         editable_cols = [COL_CODE, COL_GROSS, COL_POLY, COL_PURITY, COL_WAGE_RATE, COL_PIECES]
@@ -1025,6 +1049,9 @@ class EstimateLogic:
             self._status("Save Error: No valid items to save", 4000)
             return
 
+        # --- Silver Bar change guard and sync ---
+        # Removed: we no longer revert or block edits for listed bars.
+
         # --- Recalculate Totals ---
         calc_total_gross, calc_total_net = 0.0, 0.0
         calc_net_fine, calc_net_wage = 0.0, 0.0
@@ -1076,10 +1103,45 @@ class EstimateLogic:
             regular_items_for_db, return_items_for_db, recalculated_totals
         )
 
-        # --- Post-Save: Add New Silver Bars ---
+        # --- Post-Save: Sync edits to existing bars, then add any new bars ---
         bars_added_count = 0
         bars_failed_count = 0
         if save_success:
+            # Update existing bars (positionally) to match current estimate values
+            try:
+                # Fetch existing bars and current silver bar rows
+                self.db_manager.cursor.execute(
+                    "SELECT bar_id, weight, purity FROM silver_bars WHERE estimate_voucher_no = ? ORDER BY bar_id ASC",
+                    (voucher_no,)
+                )
+                existing_bars = self.db_manager.cursor.fetchall() or []
+
+                current_bar_items = []
+                for row in range(self.item_table.rowCount()):
+                    type_item = self.item_table.item(row, COL_TYPE)
+                    if type_item and type_item.text() == "Silver Bar":
+                        current_bar_items.append({
+                            'row': row,
+                            'net_wt': self._get_cell_float(row, COL_NET_WT),
+                            'purity': self._get_cell_float(row, COL_PURITY)
+                        })
+
+                compare_count = min(len(existing_bars), len(current_bar_items))
+                for i in range(compare_count):
+                    eb = existing_bars[i]
+                    cb = current_bar_items[i]
+                    new_w = cb['net_wt'] or 0.0
+                    new_p = cb['purity'] or 0.0
+                    if abs(new_w - (eb['weight'] or 0.0)) > 1e-6 or abs(new_p - (eb['purity'] or 0.0)) > 1e-6:
+                        if hasattr(self.db_manager, 'update_silver_bar_values') and callable(self.db_manager.update_silver_bar_values):
+                            ok = self.db_manager.update_silver_bar_values(eb['bar_id'], new_w, new_p)
+                            if not ok:
+                                self.logger.warning(f"Failed to sync silver bar {eb['bar_id']} to weight={new_w}, purity={new_p}")
+                        else:
+                            self.logger.error("DB manager missing update_silver_bar_values; cannot sync bar edits.")
+            except Exception as e:
+                self.logger.error(f"Error syncing existing silver bars for {voucher_no}: {str(e)}", exc_info=True)
+
             # Determine how many silver bars already exist for this estimate
             existing_bars_count = None
             try:

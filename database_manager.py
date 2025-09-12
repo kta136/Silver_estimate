@@ -1049,6 +1049,28 @@ class DatabaseManager:
             self.conn.rollback()
             return None
 
+    def update_silver_bar_values(self, bar_id, weight, purity):
+        """Updates weight, purity, and fine_weight for an existing silver bar."""
+        if not self.conn or not self.cursor: return False
+        try:
+            fine_weight = float(weight) * (float(purity) / 100.0)
+        except Exception:
+            fine_weight = 0.0
+        try:
+            self.cursor.execute(
+                "UPDATE silver_bars SET weight = ?, purity = ?, fine_weight = ? WHERE bar_id = ?",
+                (weight, purity, fine_weight, bar_id)
+            )
+            self.conn.commit()
+            return self.cursor.rowcount > 0
+        except sqlite3.Error as e:
+            self.logger.error(f"DB Error updating silver bar {bar_id}: {str(e)}", exc_info=True)
+            try:
+                self.conn.rollback()
+            except Exception:
+                pass
+            return False
+
     def get_silver_bars(self, status=None, weight_query=None, estimate_voucher_no=None,
                         weight_tolerance=0.001, min_purity=None, max_purity=None,
                         date_range=None):

@@ -29,16 +29,18 @@ jobs:
         run: |
           python -m PyInstaller --noconfirm --onefile --windowed --name SilverEstimate --hidden-import passlib.handlers.argon2 --hidden-import passlib.handlers.bcrypt main.py
 
-      - name: Package artifact
+      - name: Rename executable with version and package artifact
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $zipName = "SilverEstimate-${{ github.ref_name }}-win64.zip"
-          if (Test-Path dist\SilverEstimate.exe) {
-            Compress-Archive -Path dist\SilverEstimate.exe -DestinationPath $zipName
-          } else {
-            throw 'Build did not produce dist\\SilverEstimate.exe'
-          }
+          $tag = "${{ github.ref_name }}"
+          $exeSrc = "dist\SilverEstimate.exe"
+          if (!(Test-Path $exeSrc)) { throw 'Build did not produce dist\\SilverEstimate.exe' }
+          $exeDst = "dist\SilverEstimate-$tag.exe"
+          Move-Item -Force -Path $exeSrc -Destination $exeDst
+          $zipName = "SilverEstimate-$tag-win64.zip"
+          if (Test-Path $zipName) { Remove-Item -Force $zipName }
+          Compress-Archive -Path $exeDst -DestinationPath $zipName
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -47,4 +49,3 @@ jobs:
             SilverEstimate-${{ github.ref_name }}-win64.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

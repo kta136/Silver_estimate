@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import os
+import threading  # For async debounced flush
 import sqlite3
 import tempfile # For temporary decrypted DB file
 import traceback
@@ -44,6 +45,10 @@ class DatabaseManager:
         self.temp_db_path = None # Will hold the temporary file path
         self.conn = None
         self.cursor = None
+        # Async flush state
+        self._flush_lock = threading.Lock()
+        self._flush_timer = None
+        self._flush_in_progress = False
 
         # Ensure directory for encrypted DB exists
         os.makedirs(os.path.dirname(self.encrypted_db_path), exist_ok=True)
@@ -99,6 +104,29 @@ class DatabaseManager:
             self.conn = sqlite3.connect(self.temp_db_path)
             self.conn.execute("PRAGMA foreign_keys = ON")
             self.conn.row_factory = sqlite3.Row
+            # Performance-oriented PRAGMAs (connection-scoped)
+            try:
+                self.conn.execute("PRAGMA journal_mode=WAL")
+                self.conn.execute("PRAGMA synchronous=NORMAL")
+                self.conn.execute("PRAGMA temp_store=MEMORY")
+                self.conn.execute("PRAGMA cache_size=-20000")  # ~20MB page cache
+                try:
+                    # Best-effort: enable memory mapping for faster I/O if supported
+                    self.conn.execute("PRAGMA mmap_size=268435456")  # 256 MB
+                except Exception:
+                    pass
+                # Log critical PRAGMA values to confirm they are applied
+                try:
+                    for p in ("journal_mode", "synchronous", "temp_store", "cache_size"):
+                        cur = self.conn.execute(f"PRAGMA {p}")
+                        row = cur.fetchone()
+                        val = row[0] if row and len(row) > 0 else None
+                        self.logger.debug(f"PRAGMA {p} = {val}")
+                except Exception:
+                    pass
+            except Exception as e:
+                # Non-fatal; continue with defaults if any PRAGMA fails
+                self.logger.warning(f"One or more PRAGMA settings failed: {e}")
             self.cursor = self.conn.cursor()
             self.logger.debug("Connected to temporary database")
         except sqlite3.Error as e:
@@ -546,6 +574,8 @@ class DatabaseManager:
                 # Estimates and items
                 self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_estimates_voucher ON estimates(voucher_no)")
                 self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_estimate_items_voucher ON estimate_items(voucher_no)")
+                # Speed up item lookups by code in estimate_items
+                self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_estimate_items_code ON estimate_items(item_code)")
                 # Silver bars
                 self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_sbars_voucher ON silver_bars(estimate_voucher_no)")
                 self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_sbars_list ON silver_bars(list_id)")
@@ -597,10 +627,9 @@ class DatabaseManager:
                 (code, name, purity, wage_type, wage_rate)
             )
             self.conn.commit()
-            # Persist immediately to encrypted file to ensure durability across sessions
+            # Schedule non-blocking encrypt flush
             try:
-                if not self.flush_to_encrypted():
-                    self.logger.error("Post-add flush to encrypted file failed. Data remains only in temp DB until exit.")
+                self.request_flush()
             except Exception as fe:
                 self.logger.error(f"Exception during post-add flush: {fe}", exc_info=True)
             return True
@@ -620,10 +649,9 @@ class DatabaseManager:
             self.conn.commit()
             updated = self.cursor.rowcount > 0
             if updated:
-                # Persist immediately
+                # Schedule non-blocking encrypt flush
                 try:
-                    if not self.flush_to_encrypted():
-                        self.logger.error("Post-update flush to encrypted file failed. Data remains only in temp DB until exit.")
+                    self.request_flush()
                 except Exception as fe:
                     self.logger.error(f"Exception during post-update flush: {fe}", exc_info=True)
             return updated
@@ -640,10 +668,9 @@ class DatabaseManager:
             self.conn.commit()
             deleted = self.cursor.rowcount > 0
             if deleted:
-                # Persist immediately
+                # Schedule non-blocking encrypt flush
                 try:
-                    if not self.flush_to_encrypted():
-                        self.logger.error("Post-delete flush to encrypted file failed. Data remains only in temp DB until exit.")
+                    self.request_flush()
                 except Exception as fe:
                     self.logger.error(f"Exception during post-delete flush: {fe}", exc_info=True)
             return deleted
@@ -802,10 +829,9 @@ class DatabaseManager:
             for item in return_items: self._save_estimate_item(voucher_no, item)
             
             self.conn.commit()
-            # Quick-fix: flush to encrypted file to avoid data loss on crash
+            # Debounced background flush
             try:
-                if not self.flush_to_encrypted():
-                    self.logger.error("Post-save flush to encrypted file failed. Data remains only in temp DB until exit.")
+                self.request_flush()
             except Exception as fe:
                 self.logger.error(f"Exception during post-save flush: {fe}", exc_info=True)
             return True
@@ -1172,10 +1198,9 @@ class DatabaseManager:
             deleted_estimates_count = self.cursor.rowcount
             self.conn.commit()
             self.logger.info(f"Deleted {deleted_estimates_count} estimates and {deleted_items_count} estimate items.")
-            # Persist immediately
+            # Debounced background flush
             try:
-                if not self.flush_to_encrypted():
-                    self.logger.error("Post-delete-all flush to encrypted file failed. Data remains only in temp DB until exit.")
+                self.request_flush()
             except Exception as fe:
                 self.logger.error(f"Exception during post-delete-all flush: {fe}", exc_info=True)
             return True
@@ -1230,13 +1255,12 @@ class DatabaseManager:
                         self.logger.info(f"Deleted empty list ID {list_id} after removing its bars.")
             
             self.conn.commit()
-            # Persist immediately
+            # Debounced background flush
             try:
-                if not self.flush_to_encrypted():
-                    self.logger.error("Post-delete flush to encrypted file failed. Data remains only in temp DB until exit.")
+                self.request_flush()
             except Exception as fe:
                 self.logger.error(f"Exception during post-delete flush: {fe}", exc_info=True)
-            
+
             if deleted_estimate_count > 0:
                 self.logger.info(f"Deleted estimate {voucher_no} with {deleted_items_count} items and {deleted_bars_count} silver bars.")
                 return True
@@ -1325,6 +1349,65 @@ class DatabaseManager:
             self.logger.error(f"Commit failed before flush: {str(e)}", exc_info=True)
             return False
         return self._encrypt_db()
+
+    def request_flush(self, delay_seconds: float = 2.0):
+        """Debounce and asynchronously flush the temp DB to the encrypted file.
+
+        Schedules a background encryption after `delay_seconds`. Rapid successive
+        calls coalesce into a single flush. The encryption itself runs in a
+        worker thread and does not block the UI thread.
+        """
+        # Guard if no connection exists
+        if not self.conn:
+            try:
+                self.logger.debug("request_flush skipped: no active connection")
+            except Exception:
+                pass
+            return
+
+        def _start_worker():
+            # Clear timer reference under lock
+            with self._flush_lock:
+                self._flush_timer = None
+                if self._flush_in_progress:
+                    # A worker is already running; skip
+                    return
+                self._flush_in_progress = True
+
+            def _worker():
+                try:
+                    # Best-effort commit before encrypting
+                    try:
+                        self.conn.commit()
+                    except Exception:
+                        pass
+                    self._encrypt_db()
+                except Exception as e:
+                    try:
+                        self.logger.error(f"Async flush failed: {e}", exc_info=True)
+                    except Exception:
+                        pass
+                finally:
+                    with self._flush_lock:
+                        self._flush_in_progress = False
+
+            t = threading.Thread(target=_worker, name="DBEncryptFlush", daemon=True)
+            t.start()
+
+        with self._flush_lock:
+            # Cancel existing timer if pending
+            if self._flush_timer and hasattr(self._flush_timer, 'cancel'):
+                try:
+                    self._flush_timer.cancel()
+                except Exception:
+                    pass
+            # Schedule new timer
+            self._flush_timer = threading.Timer(delay_seconds, _start_worker)
+            try:
+                self._flush_timer.daemon = True
+            except Exception:
+                pass
+            self._flush_timer.start()
 
     # --- Startup Recovery Utilities ---
     @staticmethod

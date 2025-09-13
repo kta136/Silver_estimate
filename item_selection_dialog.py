@@ -68,23 +68,31 @@ class ItemSelectionDialog(QDialog):
 
     def load_all_items(self):
         """Load all items from the database."""
-        items = self.db_manager.get_all_items()
-
-        self.items_table.setRowCount(len(items))
-        for row, item in enumerate(items):
-            self.items_table.setItem(row, 0, QTableWidgetItem(item['code']))
-            self.items_table.setItem(row, 1, QTableWidgetItem(item['name']))
-            self.items_table.setItem(row, 2, QTableWidgetItem(str(item['purity'])))
-            self.items_table.setItem(row, 3, QTableWidgetItem(item['wage_type']))
-            self.items_table.setItem(row, 4, QTableWidgetItem(str(item['wage_rate'])))
-
-        # Select the first row if available
-        if self.items_table.rowCount() > 0:
-            self.items_table.selectRow(0)
-        # Set initial search text if provided
-        if self.search_term:
-            self.search_edit.setText(self.search_term)
-            self.filter_items(self.search_term) # Apply initial filter
+        table = self.items_table
+        table.setUpdatesEnabled(False)
+        table.blockSignals(True)
+        try:
+            table.setSortingEnabled(False)
+            items = self.db_manager.get_all_items()
+            table.setRowCount(len(items))
+            for row, item in enumerate(items):
+                table.setItem(row, 0, QTableWidgetItem(item['code']))
+                table.setItem(row, 1, QTableWidgetItem(item['name']))
+                table.setItem(row, 2, QTableWidgetItem(str(item['purity'])))
+                table.setItem(row, 3, QTableWidgetItem(item['wage_type']))
+                table.setItem(row, 4, QTableWidgetItem(str(item['wage_rate'])))
+            # Select the first row if available
+            if table.rowCount() > 0:
+                table.selectRow(0)
+            # Set initial search text if provided
+            if self.search_term:
+                self.search_edit.setText(self.search_term)
+                self.filter_items(self.search_term)  # Apply initial filter
+        finally:
+            table.setSortingEnabled(True)
+            table.blockSignals(False)
+            table.setUpdatesEnabled(True)
+            table.viewport().update()
 
     def filter_items(self, text):
         """Filter table rows based on search text in Code or Name columns."""

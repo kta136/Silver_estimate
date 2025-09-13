@@ -340,8 +340,11 @@ class EstimateLogic:
                 else:
                     QTimer.singleShot(10, lambda: self.focus_on_code_column(row + 1))
             else:
-                # Potentially update totals if other columns could change? Unlikely now.
-                 self.calculate_totals()
+                # Potentially update totals; use debounced recalculation to reduce churn
+                if hasattr(self, 'request_totals_recalc'):
+                    self.request_totals_recalc()
+                else:
+                    self.calculate_totals()
 
         except ValueError as e:
             err_msg = f"Value Error in calculation: {str(e)}"
@@ -608,7 +611,10 @@ class EstimateLogic:
             fine = net * (purity / 100.0) if purity > 0 else 0.0
             fine_item = self._ensure_cell_exists(self.current_row, COL_FINE_WT, editable=False)
             fine_item.setText(f"{fine:.3f}")
-            self.calculate_totals()
+            if hasattr(self, 'request_totals_recalc'):
+                self.request_totals_recalc()
+            else:
+                self.calculate_totals()
         except Exception as e:
             err_msg = f"Error calculating Fine Weight: {str(e)}"
             self.logger.error(err_msg, exc_info=True)
@@ -637,7 +643,10 @@ class EstimateLogic:
                 wage = net * wage_rate
             wage_item = self._ensure_cell_exists(self.current_row, COL_WAGE_AMT, editable=False)
             wage_item.setText(f"{wage:.0f}")
-            self.calculate_totals()
+            if hasattr(self, 'request_totals_recalc'):
+                self.request_totals_recalc()
+            else:
+                self.calculate_totals()
         except Exception as e:
             err_msg = f"Error calculating Wage: {str(e)}"
             self.logger.error(err_msg, exc_info=True)

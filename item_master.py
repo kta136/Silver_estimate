@@ -139,31 +139,41 @@ class ItemMasterWidget(QWidget):
 
     def load_items(self, search_term=None):
         """Load items from the database into the table."""
-        self.items_table.setRowCount(0)  # Clear table first
+        table = self.items_table
+        table.setUpdatesEnabled(False)
+        table.blockSignals(True)
+        try:
+            table.setSortingEnabled(False)
+            table.setRowCount(0)  # Clear table first
 
-        if search_term:
-            items = self.db_manager.search_items(search_term)  # Returns list of sqlite3.Row
-        else:
-            items = self.db_manager.get_all_items()  # Returns list of sqlite3.Row
+            if search_term:
+                items = self.db_manager.search_items(search_term)  # Returns list of sqlite3.Row
+            else:
+                items = self.db_manager.get_all_items()  # Returns list of sqlite3.Row
 
-        self.items_table.setRowCount(len(items))  # Set row count before populating
+            table.setRowCount(len(items))  # Set row count before populating
 
-        # --- Corrected Loop ---
-        for row, item_row in enumerate(items):  # item_row is sqlite3.Row
-            # Access columns directly using ['key'], providing defaults for None
-            code = item_row['code'] if item_row['code'] is not None else ''
-            name = item_row['name'] if item_row['name'] is not None else ''
-            purity = item_row['purity'] if item_row['purity'] is not None else 0.0
-            wage_type = item_row['wage_type'] if item_row['wage_type'] is not None else 'WT'  # Default wage type
-            wage_rate = item_row['wage_rate'] if item_row['wage_rate'] is not None else 0.0
+            # --- Corrected Loop ---
+            for row, item_row in enumerate(items):  # item_row is sqlite3.Row
+                # Access columns directly using ['key'], providing defaults for None
+                code = item_row['code'] if item_row['code'] is not None else ''
+                name = item_row['name'] if item_row['name'] is not None else ''
+                purity = item_row['purity'] if item_row['purity'] is not None else 0.0
+                wage_type = item_row['wage_type'] if item_row['wage_type'] is not None else 'WT'  # Default wage type
+                wage_rate = item_row['wage_rate'] if item_row['wage_rate'] is not None else 0.0
 
-            # Set table cell values using the retrieved or default values
-            self.items_table.setItem(row, 0, QTableWidgetItem(code))
-            self.items_table.setItem(row, 1, QTableWidgetItem(name))
-            self.items_table.setItem(row, 2, QTableWidgetItem(str(purity)))
-            self.items_table.setItem(row, 3, QTableWidgetItem(wage_type))
-            self.items_table.setItem(row, 4, QTableWidgetItem(str(wage_rate)))
-        # --- End Corrected Loop ---
+                # Set table cell values using the retrieved or default values
+                table.setItem(row, 0, QTableWidgetItem(code))
+                table.setItem(row, 1, QTableWidgetItem(name))
+                table.setItem(row, 2, QTableWidgetItem(str(purity)))
+                table.setItem(row, 3, QTableWidgetItem(wage_type))
+                table.setItem(row, 4, QTableWidgetItem(str(wage_rate)))
+            # --- End Corrected Loop ---
+        finally:
+            table.setSortingEnabled(True)
+            table.blockSignals(False)
+            table.setUpdatesEnabled(True)
+            table.viewport().update()
 
         self.show_status(f"Loaded {len(items)} items.", 2000)
 

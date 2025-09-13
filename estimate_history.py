@@ -114,58 +114,80 @@ class EstimateHistoryDialog(QDialog):
 
     def load_estimates(self):
         """Load estimates based on search criteria."""
-        # Get search criteria
-        date_from = self.date_from.date().toString("yyyy-MM-dd")
-        date_to = self.date_to.date().toString("yyyy-MM-dd")
-        voucher_search = self.voucher_search.text().strip()
+        table = self.estimates_table
+        table.setUpdatesEnabled(False)
+        table.blockSignals(True)
+        try:
+            table.setSortingEnabled(False)
+            # Get search criteria
+            date_from = self.date_from.date().toString("yyyy-MM-dd")
+            date_to = self.date_to.date().toString("yyyy-MM-dd")
+            voucher_search = self.voucher_search.text().strip()
 
-        # Get estimates from database
-        # get_estimates now returns a list of dicts with 'header' and 'items' keys
-        estimates_data = self.db_manager.get_estimates(date_from, date_to, voucher_search)
+            # Get estimates from database
+            # get_estimates now returns a list of dicts with 'header' and 'items' keys
+            estimates_data = self.db_manager.get_estimates(date_from, date_to, voucher_search)
 
-        # Clear and populate table
-        self.estimates_table.setRowCount(0)
-        self.estimates_table.setRowCount(len(estimates_data)) # Set row count based on results
+            # Clear and populate table
+            table.setRowCount(0)
+            table.setRowCount(len(estimates_data))  # Set row count based on results
 
-        for row, estimate_data in enumerate(estimates_data):
-            header = estimate_data['header']
-            items = estimate_data['items']
+            # Pre-compute Regular-only aggregates for all vouchers in one query
+            voucher_nos = [e['header']['voucher_no'] for e in estimates_data]
+            agg_map = {}
+            try:
+                if voucher_nos and hasattr(self.db_manager, 'cursor') and self.db_manager.cursor:
+                    placeholders = ",".join(["?"] * len(voucher_nos))
+                    sql = (
+                        f"SELECT voucher_no, "
+                        f"SUM(CASE WHEN is_return=0 AND is_silver_bar=0 THEN gross ELSE 0 END) AS rg, "
+                        f"SUM(CASE WHEN is_return=0 AND is_silver_bar=0 THEN net_wt ELSE 0 END) AS rn "
+                        f"FROM estimate_items WHERE voucher_no IN ({placeholders}) GROUP BY voucher_no"
+                    )
+                    self.db_manager.cursor.execute(sql, voucher_nos)
+                    for row in self.db_manager.cursor.fetchall():
+                        # sqlite3.Row supports index or key; use keys for clarity
+                        vno = row["voucher_no"] if "voucher_no" in row.keys() else row[0]
+                        rg = row["rg"] if "rg" in row.keys() else row[1]
+                        rn = row["rn"] if "rn" in row.keys() else row[2]
+                        agg_map[str(vno)] = (float(rg or 0.0), float(rn or 0.0))
+            except Exception:
+                agg_map = {}
 
-            # Calculate Regular Gross and Net sums
-            regular_gross_sum = 0.0
-            regular_net_sum = 0.0
-            for item in items:
-                if not item.get('is_return') and not item.get('is_silver_bar'):
-                    regular_gross_sum += item.get('gross', 0.0)
-                    regular_net_sum += item.get('net_wt', 0.0)
+            for row_idx, estimate_data in enumerate(estimates_data):
+                header = estimate_data['header']
+                vno = str(header['voucher_no'])
+                regular_gross_sum, regular_net_sum = agg_map.get(vno, (0.0, 0.0))
 
-            # Populate table cells
-            self.estimates_table.setItem(row, 0, QTableWidgetItem(header['voucher_no']))
-            self.estimates_table.setItem(row, 1, QTableWidgetItem(header['date']))
-            # Column 2: Note (Moved here)
-            note = header.get('note', '')
-            self.estimates_table.setItem(row, 2, QTableWidgetItem(note))
-            self.estimates_table.setItem(row, 3, QTableWidgetItem(f"{header.get('silver_rate', 0.0):.2f}"))
-            # Column 4: Regular Gross
-            self.estimates_table.setItem(row, 4, QTableWidgetItem(f"{regular_gross_sum:.3f}"))
-            # Column 5: Regular Net
-            self.estimates_table.setItem(row, 5, QTableWidgetItem(f"{regular_net_sum:.3f}"))
-            # Column 6: Net Fine (Directly from header as it's already calculated net)
-            # Explicitly using header variable
-            net_fine = header.get('total_fine', 0.0)
-            self.estimates_table.setItem(row, 6, QTableWidgetItem(f"{net_fine:.3f}"))
-            # Column 7: Net Wage (Directly from header)
-            # Explicitly using header variable
-            net_wage = header.get('total_wage', 0.0)
-            self.estimates_table.setItem(row, 7, QTableWidgetItem(f"{net_wage:.2f}"))
-            
-            # Column 8: Grand Total (Net Value + Net Wage + Last Balance Amount)
-            # Explicitly using header variable
-            silver_rate = header.get('silver_rate', 0.0)
-            net_value = net_fine * silver_rate
-            last_balance_amount = header.get('last_balance_amount', 0.0)
-            grand_total = net_value + net_wage + last_balance_amount
-            self.estimates_table.setItem(row, 8, QTableWidgetItem(f"{grand_total:.2f}"))
+                # Populate table cells
+                table.setItem(row_idx, 0, QTableWidgetItem(header['voucher_no']))
+                table.setItem(row_idx, 1, QTableWidgetItem(header['date']))
+                # Column 2: Note (Moved here)
+                note = header.get('note', '')
+                table.setItem(row_idx, 2, QTableWidgetItem(note))
+                table.setItem(row_idx, 3, QTableWidgetItem(f"{header.get('silver_rate', 0.0):.2f}"))
+                # Column 4: Regular Gross
+                table.setItem(row_idx, 4, QTableWidgetItem(f"{regular_gross_sum:.3f}"))
+                # Column 5: Regular Net
+                table.setItem(row_idx, 5, QTableWidgetItem(f"{regular_net_sum:.3f}"))
+                # Column 6: Net Fine (Directly from header as it's already calculated net)
+                net_fine = header.get('total_fine', 0.0)
+                table.setItem(row_idx, 6, QTableWidgetItem(f"{net_fine:.3f}"))
+                # Column 7: Net Wage (Directly from header)
+                net_wage = header.get('total_wage', 0.0)
+                table.setItem(row_idx, 7, QTableWidgetItem(f"{net_wage:.2f}"))
+
+                # Column 8: Grand Total (Net Value + Net Wage + Last Balance Amount)
+                silver_rate = header.get('silver_rate', 0.0)
+                net_value = net_fine * silver_rate
+                last_balance_amount = header.get('last_balance_amount', 0.0)
+                grand_total = net_value + net_wage + last_balance_amount
+                table.setItem(row_idx, 8, QTableWidgetItem(f"{grand_total:.2f}"))
+        finally:
+            table.setSortingEnabled(True)
+            table.blockSignals(False)
+            table.setUpdatesEnabled(True)
+            table.viewport().update()
 
     def get_selected_voucher(self):
         """Get the selected voucher number."""

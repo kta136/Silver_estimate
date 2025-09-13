@@ -102,6 +102,11 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         self.initializing = False
 
         # Column width persistence is hooked in UI setup via header.sectionResized
+        # Debounced totals recalculation timer (improves UI responsiveness)
+        self._totals_timer = QTimer(self)
+        self._totals_timer.setSingleShot(True)
+        self._totals_timer.setInterval(100)  # 80–120ms works well
+        self._totals_timer.timeout.connect(self.calculate_totals)
 
         # Set up keyboard shortcuts
         self.delete_row_shortcut = QShortcut(QKeySequence("Ctrl+D"), self)
@@ -176,6 +181,17 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         except Exception:
             # Silent fallback; nothing critical here
             pass
+
+
+    def request_totals_recalc(self):
+        """Request a debounced totals recomputation."""
+        try:
+            self._totals_timer.start()
+        except Exception:
+            try:
+                self.calculate_totals()
+            except Exception:
+                pass
 
 
     def force_focus_to_first_cell(self):

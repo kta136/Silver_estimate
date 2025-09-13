@@ -219,7 +219,6 @@ class MainWindow(QMainWindow):
             # Ensure database directory exists
             import os
             os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-            os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
             # Startup recovery: if a previous temp DB exists and is newer than encrypted, offer recovery
             try:

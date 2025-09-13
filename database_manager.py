@@ -112,6 +112,9 @@ class DatabaseManager:
             self.conn = sqlite3.connect(self.temp_db_path)
             self.conn.execute("PRAGMA foreign_keys = ON")
             self.conn.row_factory = sqlite3.Row
+            # Prepared cursors for hot statements
+            self._c_get_item_by_code = None
+            self._c_insert_estimate_item = None
             # Performance-oriented PRAGMAs (connection-scoped)
             try:
                 self.conn.execute("PRAGMA journal_mode=WAL")
@@ -136,6 +139,23 @@ class DatabaseManager:
                 # Non-fatal; continue with defaults if any PRAGMA fails
                 self.logger.warning(f"One or more PRAGMA settings failed: {e}")
             self.cursor = self.conn.cursor()
+            # Initialize prepared cursors
+            try:
+                self._c_get_item_by_code = self.conn.cursor()
+                self._sql_get_item_by_code = 'SELECT * FROM items WHERE code = ? COLLATE NOCASE'
+            except Exception:
+                self._c_get_item_by_code = None
+                self._sql_get_item_by_code = None
+            try:
+                self._c_insert_estimate_item = self.conn.cursor()
+                self._sql_insert_estimate_item = (
+                    'INSERT INTO estimate_items '
+                    '(voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage, fine, is_return, is_silver_bar) '
+                    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                )
+            except Exception:
+                self._c_insert_estimate_item = None
+                self._sql_insert_estimate_item = None
             self.logger.debug("Connected to temporary database")
         except sqlite3.Error as e:
             self.logger.error(f"Failed to connect to temporary database: {str(e)}", exc_info=True)
@@ -616,9 +636,18 @@ class DatabaseManager:
                 cached = self._item_cache
             if key in cached:
                 return cached[key]
-            # Use case-insensitive compare with index support via NOCASE index
-            self.cursor.execute('SELECT * FROM items WHERE code = ? COLLATE NOCASE', (code,))
-            row = self.cursor.fetchone()
+            # Use prepared cursor for case-insensitive lookup if available
+            row = None
+            try:
+                if self._c_get_item_by_code and self._sql_get_item_by_code:
+                    self._c_get_item_by_code.execute(self._sql_get_item_by_code, (code,))
+                    row = self._c_get_item_by_code.fetchone()
+            except Exception:
+                row = None
+            if row is None:
+                # Fallback to the shared cursor
+                self.cursor.execute('SELECT * FROM items WHERE code = ? COLLATE NOCASE', (code,))
+                row = self.cursor.fetchone()
             if row is not None:
                 cached[key] = row
             return row
@@ -935,10 +964,40 @@ class DatabaseManager:
                      last_balance_silver,
                      last_balance_amount))
             
-            # Delete and recreate estimate items (these don't have ON DELETE CASCADE issues)
+            # Delete and recreate estimate items (batch insert with prepared cursor)
             self.cursor.execute('DELETE FROM estimate_items WHERE voucher_no = ?', (voucher_no,))
-            for item in regular_items: self._save_estimate_item(voucher_no, item)
-            for item in return_items: self._save_estimate_item(voucher_no, item)
+            params = []
+            for item in regular_items:
+                params.append((
+                    voucher_no, item.get('code', ''), item.get('name', ''), float(item.get('gross', 0.0)),
+                    float(item.get('poly', 0.0)), float(item.get('net_wt', 0.0)), float(item.get('purity', 0.0)),
+                    float(item.get('wage_rate', 0.0)), int(item.get('pieces', 1)), float(item.get('wage', 0.0)),
+                    float(item.get('fine', 0.0)), 0, 0
+                ))
+            for item in return_items:
+                params.append((
+                    voucher_no, item.get('code', ''), item.get('name', ''), float(item.get('gross', 0.0)),
+                    float(item.get('poly', 0.0)), float(item.get('net_wt', 0.0)), float(item.get('purity', 0.0)),
+                    float(item.get('wage_rate', 0.0)), int(item.get('pieces', 1)), float(item.get('wage', 0.0)),
+                    float(item.get('fine', 0.0)), 1 if item.get('is_return', False) else 0,
+                    1 if item.get('is_silver_bar', False) else 0
+                ))
+            if params:
+                try:
+                    if self._c_insert_estimate_item and self._sql_insert_estimate_item:
+                        self._c_insert_estimate_item.executemany(self._sql_insert_estimate_item, params)
+                    else:
+                        self.cursor.executemany(
+                            'INSERT INTO estimate_items (voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage, fine, is_return, is_silver_bar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                            params
+                        )
+                except sqlite3.Error as _e:
+                    # Fallback to row-by-row if executemany fails
+                    for p in params:
+                        self.cursor.execute(
+                            'INSERT INTO estimate_items (voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage, fine, is_return, is_silver_bar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                            p
+                        )
             
             self.conn.commit()
             # Debounced background flush

@@ -15,7 +15,6 @@ All quick wins listed here have been implemented:
 - Removed duplicate `makedirs` in `main.py:setup_database_with_password`.
 
 ## Database Hotpaths
-- Prepared statements: Cache hot statements (get item by code, insert estimate_items) for small but steady savings.
 
 ## Encryption/Flush Strategy
 - Implemented: Debounced background flush; immediate flush on exit remains.
@@ -23,7 +22,6 @@ All quick wins listed here have been implemented:
 ## UI Tables (Responsiveness)
 - Keep large-table scalability in mind: If row counts grow significantly, consider migrating to `QTableView + QAbstractTableModel` with virtualized access.
 
-## Threading & Async
 
 ## Startup Time
 - Logging: Default to INFO in production; avoid heavy string formatting on hot paths unless DEBUG is enabled.

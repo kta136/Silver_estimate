@@ -2,6 +2,16 @@
 
 This file tracks notable changes, fixes, and decisions for the Silver Estimate project.
 
+## Release v1.72.2 (2025-09-13)
+
+- Performance: Debounced, async database encryption flush to avoid UI stalls.
+- Performance: Optimized history view by aggregating regular gross/net via a single SQL query.
+- Performance: Batching applied to selection dialog table updates to cut repaints/signals.
+- DB: Added index `idx_estimate_items_code` and PRAGMA verification logs on connect.
+- UI: Debounced totals recalculation for smoother editing.
+- Fix: Resolved indentation error in `estimate_entry.py` for `show_inline_status`.
+- Docs: Updated `PERFORMANCE_OBSERVATIONS.md` to reflect completed optimizations.
+
 ## Release v1.70 (2025-09-06)
 
 - UI/UX: Enhanced tooltips system with comprehensive help and format guidance throughout the application

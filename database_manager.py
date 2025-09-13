@@ -49,6 +49,9 @@ class DatabaseManager:
         self._flush_lock = threading.Lock()
         self._flush_timer = None
         self._flush_in_progress = False
+        # Optional UI callbacks (set by UI layer)
+        self.on_flush_queued = None
+        self.on_flush_done = None
 
         # Ensure directory for encrypted DB exists
         os.makedirs(os.path.dirname(self.encrypted_db_path), exist_ok=True)
@@ -597,7 +600,20 @@ class DatabaseManager:
     # Add connection checks to all data access methods
     def get_item_by_code(self, code):
         if not self.cursor: return None
-        try: self.cursor.execute('SELECT * FROM items WHERE LOWER(code) = LOWER(?)', (code,)); return self.cursor.fetchone()
+        try:
+            key = (code or "").upper()
+            # lightweight in-memory cache
+            cached = getattr(self, '_item_cache', None)
+            if cached is None:
+                self._item_cache = {}
+                cached = self._item_cache
+            if key in cached:
+                return cached[key]
+            self.cursor.execute('SELECT * FROM items WHERE LOWER(code) = LOWER(?)', (code,))
+            row = self.cursor.fetchone()
+            if row is not None:
+                cached[key] = row
+            return row
         except sqlite3.Error as e:
             self.logger.error(f"DB Error get_item_by_code: {str(e)}", exc_info=True)
             return None
@@ -613,7 +629,8 @@ class DatabaseManager:
 
     def get_all_items(self):
         if not self.cursor: return []
-        try: self.cursor.execute('SELECT * FROM items ORDER BY code'); return self.cursor.fetchall()
+        try:
+            self.cursor.execute('SELECT * FROM items ORDER BY code'); return self.cursor.fetchall()
         except sqlite3.Error as e:
             self.logger.error(f"DB Error get_all_items: {str(e)}", exc_info=True)
             return []
@@ -632,6 +649,12 @@ class DatabaseManager:
                 self.request_flush()
             except Exception as fe:
                 self.logger.error(f"Exception during post-add flush: {fe}", exc_info=True)
+            # Invalidate cache entry
+            try:
+                if hasattr(self, '_item_cache') and self._item_cache is not None:
+                    self._item_cache.pop((code or "").upper(), None)
+            except Exception:
+                pass
             return True
         except sqlite3.Error as e:
             self.logger.error(f"DB Error adding item: {str(e)}", exc_info=True)
@@ -654,6 +677,12 @@ class DatabaseManager:
                     self.request_flush()
                 except Exception as fe:
                     self.logger.error(f"Exception during post-update flush: {fe}", exc_info=True)
+                # Invalidate cache entry
+                try:
+                    if hasattr(self, '_item_cache') and self._item_cache is not None:
+                        self._item_cache.pop((code or "").upper(), None)
+                except Exception:
+                    pass
             return updated
         except sqlite3.Error as e:
             self.logger.error(f"DB Error updating item: {str(e)}", exc_info=True)
@@ -673,6 +702,12 @@ class DatabaseManager:
                     self.request_flush()
                 except Exception as fe:
                     self.logger.error(f"Exception during post-delete flush: {fe}", exc_info=True)
+                # Invalidate cache entry
+                try:
+                    if hasattr(self, '_item_cache') and self._item_cache is not None:
+                        self._item_cache.pop((code or "").upper(), None)
+                except Exception:
+                    pass
             return deleted
         except sqlite3.Error as e:
             self.logger.error(f"DB Error deleting item: {str(e)}", exc_info=True)
@@ -1390,6 +1425,12 @@ class DatabaseManager:
                 finally:
                     with self._flush_lock:
                         self._flush_in_progress = False
+                    # Notify UI callback on completion (best-effort)
+                    try:
+                        if callable(self.on_flush_done):
+                            self.on_flush_done()
+                    except Exception:
+                        pass
 
             t = threading.Thread(target=_worker, name="DBEncryptFlush", daemon=True)
             t.start()
@@ -1408,6 +1449,12 @@ class DatabaseManager:
             except Exception:
                 pass
             self._flush_timer.start()
+        # Notify UI that a flush is queued (best-effort)
+        try:
+            if callable(self.on_flush_queued):
+                self.on_flush_queued()
+        except Exception:
+            pass
 
     # --- Startup Recovery Utilities ---
     @staticmethod

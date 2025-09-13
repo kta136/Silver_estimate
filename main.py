@@ -108,6 +108,18 @@ class MainWindow(QMainWindow):
 
                 # Initially show estimate entry
                 self.stack.setCurrentWidget(self.estimate_widget)
+
+                # Hook DB flush callbacks to inline status in the estimate view
+                try:
+                    if hasattr(self.db, 'on_flush_queued'):
+                        def _on_flush_q():
+                            QTimer.singleShot(0, lambda: self.estimate_widget.show_inline_status("Saving…", 1000, 'info'))
+                        def _on_flush_done():
+                            QTimer.singleShot(0, lambda: self.estimate_widget.show_inline_status("", 0))
+                        self.db.on_flush_queued = _on_flush_q
+                        self.db.on_flush_done = _on_flush_done
+                except Exception as _cb_e:
+                    self.logger.debug(f"Could not hook flush callbacks: {_cb_e}")
                 
                 self.logger.info("Widgets initialized successfully")
                 # Now that widgets exist, show initial Ready status inline

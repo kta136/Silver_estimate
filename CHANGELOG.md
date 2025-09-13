@@ -2,6 +2,16 @@
 
 This file tracks notable changes, fixes, and decisions for the Silver Estimate project.
 
+## Release v1.72.3 (2025-09-13)
+
+- Startup: Lazy-import rarely used windows (Item Master, Settings, Silver Bar History) to reduce initial load time.
+- History: Background-threaded history load with headers-only query + single aggregate for regular-only totals.
+- Database: Case-insensitive indexed item lookup (NOCASE) and added `idx_estimates_date` for faster date filters.
+- Database: Prepared cursors for hot statements and batch `executemany` insert of `estimate_items` on save.
+- Items: Warm up in-memory item cache at startup for faster code validations.
+- Close hygiene: Cancel pending flush and briefly wait on in-progress encryption worker during shutdown.
+- UI: Inline "Saving…" hint during debounced async flush (cleared on completion).
+
 ## Release v1.72.2 (2025-09-13)
 
 - Performance: Debounced, async database encryption flush to avoid UI stalls.

@@ -49,6 +49,7 @@ class DatabaseManager:
         self._flush_lock = threading.Lock()
         self._flush_timer = None
         self._flush_in_progress = False
+        self._flush_thread = None
         # Optional UI callbacks (set by UI layer)
         self.on_flush_queued = None
         self.on_flush_done = None
@@ -574,6 +575,7 @@ class DatabaseManager:
             try:
                 # Items
                 self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_items_code ON items(code)")
+                self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_items_code_nocase ON items(code COLLATE NOCASE)")
                 # Estimates and items
                 self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_estimates_voucher ON estimates(voucher_no)")
                 self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_estimate_items_voucher ON estimate_items(voucher_no)")
@@ -609,7 +611,8 @@ class DatabaseManager:
                 cached = self._item_cache
             if key in cached:
                 return cached[key]
-            self.cursor.execute('SELECT * FROM items WHERE LOWER(code) = LOWER(?)', (code,))
+            # Use case-insensitive compare with index support via NOCASE index
+            self.cursor.execute('SELECT * FROM items WHERE code = ? COLLATE NOCASE', (code,))
             row = self.cursor.fetchone()
             if row is not None:
                 cached[key] = row
@@ -786,6 +789,22 @@ class DatabaseManager:
             return results
         except sqlite3.Error as e:
             self.logger.error(f"DB Error getting estimates: {str(e)}", exc_info=True)
+            return []
+
+    def get_estimate_headers(self, date_from=None, date_to=None, voucher_search=None):
+        """Fetch only estimate headers based on filters (no items)."""
+        if not self.cursor: return []
+        query = "SELECT * FROM estimates WHERE 1=1"; params = []
+        if date_from: query += " AND date >= ?"; params.append(date_from)
+        if date_to: query += " AND date <= ?"; params.append(date_to)
+        if voucher_search: query += " AND voucher_no LIKE ?"; params.append(f"%{voucher_search}%")
+        query += " ORDER BY CAST(voucher_no AS INTEGER) DESC"
+        try:
+            self.cursor.execute(query, params)
+            rows = self.cursor.fetchall()
+            return [dict(r) for r in rows]
+        except sqlite3.Error as e:
+            self.logger.error(f"DB Error getting estimate headers: {str(e)}", exc_info=True)
             return []
 
     def generate_voucher_no(self):
@@ -1329,6 +1348,20 @@ class DatabaseManager:
 
     def close(self):
         """Encrypts the temporary DB, closes the connection, and cleans up."""
+        # Cancel any pending flush timer and wait briefly on in-progress worker
+        try:
+            with self._flush_lock:
+                if self._flush_timer and hasattr(self._flush_timer, 'cancel'):
+                    try: self._flush_timer.cancel()
+                    except Exception: pass
+                    self._flush_timer = None
+                thread_ref = self._flush_thread
+            if thread_ref and thread_ref.is_alive():
+                # Wait a short time for background flush to complete
+                thread_ref.join(timeout=2.0)
+        except Exception:
+            pass
+
         encrypt_success = False
         if self.conn:
             self.logger.info("Closing database connection and encrypting data")
@@ -1434,6 +1467,8 @@ class DatabaseManager:
 
             t = threading.Thread(target=_worker, name="DBEncryptFlush", daemon=True)
             t.start()
+            with self._flush_lock:
+                self._flush_thread = t
 
         with self._flush_lock:
             # Cancel existing timer if pending

@@ -124,16 +124,15 @@ class EstimateHistoryDialog(QDialog):
             date_to = self.date_to.date().toString("yyyy-MM-dd")
             voucher_search = self.voucher_search.text().strip()
 
-            # Get estimates from database
-            # get_estimates now returns a list of dicts with 'header' and 'items' keys
-            estimates_data = self.db_manager.get_estimates(date_from, date_to, voucher_search)
+            # Fetch only estimate headers for performance (no item lists)
+            headers = self.db_manager.get_estimate_headers(date_from, date_to, voucher_search)
 
             # Clear and populate table
             table.setRowCount(0)
-            table.setRowCount(len(estimates_data))  # Set row count based on results
+            table.setRowCount(len(headers))  # Set row count based on results
 
             # Pre-compute Regular-only aggregates for all vouchers in one query
-            voucher_nos = [e['header']['voucher_no'] for e in estimates_data]
+            voucher_nos = [str(h['voucher_no']) for h in headers]
             agg_map = {}
             try:
                 if voucher_nos and hasattr(self.db_manager, 'cursor') and self.db_manager.cursor:
@@ -154,8 +153,7 @@ class EstimateHistoryDialog(QDialog):
             except Exception:
                 agg_map = {}
 
-            for row_idx, estimate_data in enumerate(estimates_data):
-                header = estimate_data['header']
+            for row_idx, header in enumerate(headers):
                 vno = str(header['voucher_no'])
                 regular_gross_sum, regular_net_sum = agg_map.get(vno, (0.0, 0.0))
 

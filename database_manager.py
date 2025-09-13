@@ -578,6 +578,7 @@ class DatabaseManager:
                 self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_items_code_nocase ON items(code COLLATE NOCASE)")
                 # Estimates and items
                 self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_estimates_voucher ON estimates(voucher_no)")
+                self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_estimates_date ON estimates(date)")
                 self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_estimate_items_voucher ON estimate_items(voucher_no)")
                 # Speed up item lookups by code in estimate_items
                 self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_estimate_items_code ON estimate_items(item_code)")

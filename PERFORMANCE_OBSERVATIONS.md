@@ -24,9 +24,6 @@ All quick wins listed here have been implemented:
 - Keep large-table scalability in mind: If row counts grow significantly, consider migrating to `QTableView + QAbstractTableModel` with virtualized access.
 
 ## Threading & Async
-- Move heavy DB ops off the UI thread:
-  - History queries under wide ranges; long saves if encryption stays synchronous.
-  - You already use `QThread` for imports - apply the same pattern for long queries and (if needed) save/flush.
 - Preload item cache off the UI thread:
   - Build a small `code -> defaults` map on startup to speed `process_item_code()` lookups.
 

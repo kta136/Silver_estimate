@@ -53,6 +53,10 @@ class DatabaseManager:
         # Optional UI callbacks (set by UI layer)
         self.on_flush_queued = None
         self.on_flush_done = None
+        # Item cache preload state
+        self._item_cache = {}
+        self._item_cache_thread = None
+        self._item_cache_preloaded = False
 
         # Ensure directory for encrypted DB exists
         os.makedirs(os.path.dirname(self.encrypted_db_path), exist_ok=True)
@@ -621,6 +625,59 @@ class DatabaseManager:
         except sqlite3.Error as e:
             self.logger.error(f"DB Error get_item_by_code: {str(e)}", exc_info=True)
             return None
+
+    def start_preload_item_cache(self):
+        """Warm up the item cache off the UI thread using a separate connection."""
+        if self._item_cache_preloaded:
+            return
+        if self._item_cache_thread and self._item_cache_thread.is_alive():
+            return
+
+        def _worker():
+            import sqlite3 as _sqlite3
+            try:
+                # Separate connection to avoid thread constraints
+                conn = _sqlite3.connect(self.temp_db_path)
+                conn.row_factory = _sqlite3.Row
+                cur = conn.cursor()
+                cur.execute('SELECT code, name, purity, wage_type, wage_rate FROM items')
+                rows = cur.fetchall()
+                local_cache = {}
+                for r in rows:
+                    try:
+                        key = (r['code'] or '').upper()
+                        local_cache[key] = {
+                            'code': r['code'],
+                            'name': r['name'],
+                            'purity': r['purity'],
+                            'wage_type': r['wage_type'],
+                            'wage_rate': r['wage_rate'],
+                        }
+                    except Exception:
+                        continue
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+                # Atomically swap cache reference
+                self._item_cache = local_cache
+                self._item_cache_preloaded = True
+                try:
+                    self.logger.debug(f"Preloaded item cache with {len(local_cache)} items")
+                except Exception:
+                    pass
+            except Exception as e:
+                try:
+                    self.logger.debug(f"Item cache preload failed: {e}")
+                except Exception:
+                    pass
+
+        t = threading.Thread(target=_worker, name="ItemCacheWarmup", daemon=True)
+        self._item_cache_thread = t
+        try:
+            t.start()
+        except Exception:
+            pass
 
     def search_items(self, search_term):
         if not self.cursor: return []

@@ -120,6 +120,13 @@ class MainWindow(QMainWindow):
                         self.db.on_flush_done = _on_flush_done
                 except Exception as _cb_e:
                     self.logger.debug(f"Could not hook flush callbacks: {_cb_e}")
+
+                # Preload item cache off the UI thread for faster code lookups
+                try:
+                    if hasattr(self.db, 'start_preload_item_cache'):
+                        self.db.start_preload_item_cache()
+                except Exception as _pre_e:
+                    self.logger.debug(f"Item cache preload failed: {_pre_e}")
                 
                 self.logger.info("Widgets initialized successfully")
                 # Now that widgets exist, show initial Ready status inline

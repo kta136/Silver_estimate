@@ -24,8 +24,6 @@ All quick wins listed here have been implemented:
 - Keep large-table scalability in mind: If row counts grow significantly, consider migrating to `QTableView + QAbstractTableModel` with virtualized access.
 
 ## Threading & Async
-- Preload item cache off the UI thread:
-  - Build a small `code -> defaults` map on startup to speed `process_item_code()` lookups.
 
 ## Startup Time
 - Lazy imports for rarely used dialogs/managers (keep `from X import ...` inside the method that uses it where practical).

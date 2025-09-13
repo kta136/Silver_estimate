@@ -15,11 +15,9 @@ import PyQt5.QtCore as QtCore
 from custom_font_dialog import CustomFontDialog
 from login_dialog import LoginDialog # Import the new login dialog
 from estimate_entry import EstimateEntryWidget
-from item_master import ItemMasterWidget
 from database_manager import DatabaseManager
 # from advanced_tools_dialog import AdvancedToolsDialog # Remove old import
-from settings_dialog import SettingsDialog # Import the new settings dialog
-from silver_bar_history import SilverBarHistoryDialog # Import the new silver bar history dialog
+# Lazy imports: ItemMasterWidget, SettingsDialog, SilverBarHistoryDialog
 from logger import setup_logging, qt_message_handler
 from message_bar import MessageBar
 from app_constants import APP_TITLE, APP_VERSION, SETTINGS_ORG, SETTINGS_APP, DB_PATH
@@ -482,6 +480,7 @@ class MainWindow(QMainWindow):
         if not hasattr(self, 'item_master_widget') or self.item_master_widget is None:
             try:
                 self.logger.info("Creating ItemMasterWidget on demand...")
+                from item_master import ItemMasterWidget
                 self.item_master_widget = ItemMasterWidget(self.db, self)
                 if hasattr(self, 'stack') and self.stack:
                     self.stack.addWidget(self.item_master_widget)
@@ -640,6 +639,7 @@ class MainWindow(QMainWindow):
         
         try:
             self.logger.info("Opening Silver Bar History dialog")
+            from silver_bar_history import SilverBarHistoryDialog
             dialog = SilverBarHistoryDialog(self.db, self)
             dialog.exec_()
         except Exception as e:
@@ -808,6 +808,7 @@ class MainWindow(QMainWindow):
     # --- Method to show the new Settings dialog ---
     def show_settings_dialog(self):
         """Show the centralized settings dialog."""
+        from settings_dialog import SettingsDialog
         dialog = SettingsDialog(main_window_ref=self, parent=self)
         # Connect the signal if needed for immediate UI updates beyond fonts
         # dialog.settings_applied.connect(self.handle_settings_applied)

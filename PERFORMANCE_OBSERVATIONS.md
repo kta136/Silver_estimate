@@ -26,7 +26,6 @@ All quick wins listed here have been implemented:
 ## Threading & Async
 
 ## Startup Time
-- Lazy imports for rarely used dialogs/managers (keep `from X import ...` inside the method that uses it where practical).
 - Logging: Default to INFO in production; avoid heavy string formatting on hot paths unless DEBUG is enabled.
 
 ## Schema & Indexes

@@ -45,11 +45,15 @@ class DatabaseManager:
         self.temp_db_path = None # Will hold the temporary file path
         self.conn = None
         self.cursor = None
+        # Track the thread that owns the SQLite connection
+        self._conn_thread_id = None
         # Async flush state
         self._flush_lock = threading.Lock()
         self._flush_timer = None
         self._flush_in_progress = False
         self._flush_thread = None
+        # Serialize encryption to avoid concurrent writers
+        self._encrypt_lock = threading.Lock()
         # Optional UI callbacks (set by UI layer)
         self.on_flush_queued = None
         self.on_flush_done = None
@@ -110,6 +114,11 @@ class DatabaseManager:
         try:
             self.logger.debug("Connecting to temporary database")
             self.conn = sqlite3.connect(self.temp_db_path)
+            # Record the owning thread for this connection
+            try:
+                self._conn_thread_id = threading.get_ident()
+            except Exception:
+                self._conn_thread_id = None
             self.conn.execute("PRAGMA foreign_keys = ON")
             self.conn.row_factory = sqlite3.Row
             # Prepared cursors for hot statements
@@ -163,6 +172,30 @@ class DatabaseManager:
             self.cursor = None
             raise
 
+    def _is_conn_owner_thread(self):
+        """Return True if current thread owns the SQLite connection."""
+        try:
+            return self._conn_thread_id is not None and threading.get_ident() == self._conn_thread_id
+        except Exception:
+            return False
+
+    def _commit_if_owner_thread(self):
+        """Commit only if called from the thread that created the connection."""
+        if not self.conn:
+            return True
+        if not self._is_conn_owner_thread():
+            try:
+                self.logger.debug("Skipping commit on non-owner thread")
+            except Exception:
+                pass
+            return True
+        try:
+            self.conn.commit()
+            return True
+        except sqlite3.Error as e:
+            self.logger.error(f"Commit failed: {str(e)}", exc_info=True)
+            return False
+
     def _get_or_create_salt(self):
         """Retrieves the salt from QSettings or creates and saves a new one."""
         settings = QSettings("YourCompany", "SilverEstimateApp")
@@ -207,63 +240,91 @@ class DatabaseManager:
 
     def _encrypt_db(self):
         """Encrypt the temporary DB file and atomically save it to the encrypted path."""
-        if not self.conn or not self.temp_db_path or not os.path.exists(self.temp_db_path):
-            self.logger.warning("Encryption skipped: No active connection or temporary DB file.")
-            return False
-        if not self.key:
-            self.logger.warning("Encryption skipped: No encryption key available.")
-            return False
-
-        # Ensure any pending writes are flushed to the temp DB before reading
+        lock = getattr(self, '_encrypt_lock', None)
+        if lock is None:
+            self._encrypt_lock = threading.Lock()
+            lock = self._encrypt_lock
+        lock.acquire()
         try:
-            self.conn.commit()
-        except sqlite3.Error as e:
-            self.logger.error(f"Failed to commit before encryption: {str(e)}", exc_info=True)
-            return False
+            if not self.conn or not self.temp_db_path or not os.path.exists(self.temp_db_path):
+                self.logger.warning("Encryption skipped: No active connection or temporary DB file.")
+                return False
+            if not self.key:
+                self.logger.warning("Encryption skipped: No encryption key available.")
+                return False
 
-        self.logger.info(f"Encrypting database to {self.encrypted_db_path}")
-        start_time = time.time()
-        tmp_out_path = f"{self.encrypted_db_path}.new"
-        try:
-            aesgcm = AESGCM(self.key)
-            nonce = os.urandom(12)  # AES-GCM recommended nonce size
+            # Ensure any pending writes are flushed to the temp DB before reading
+            if not self._commit_if_owner_thread():
+                # If commit failed on owner thread, abort. If called from a non-owner thread,
+                # _commit_if_owner_thread() returns True after skipping, so encryption can proceed.
+                return False
 
-            with open(self.temp_db_path, 'rb') as f_in:
-                plaintext = f_in.read()
-
-            # Prepare encrypted payload (nonce + ciphertext)
-            if not plaintext:
-                self.logger.warning("Temporary database file is empty. Writing empty encrypted file.")
-                payload = nonce  # Write only nonce to indicate empty DB
-            else:
-                ciphertext = aesgcm.encrypt(nonce, plaintext, None)  # No associated data
-                payload = nonce + ciphertext
-
-            # Write to a temp file first
-            with open(tmp_out_path, 'wb') as f_out:
-                f_out.write(payload)
-                try:
-                    f_out.flush()
-                    os.fsync(f_out.fileno())
-                except Exception:
-                    # fsync best-effort; ignore on platforms where not applicable
-                    pass
-
-            # Atomically replace the target
-            os.replace(tmp_out_path, self.encrypted_db_path)
-
-            duration = time.time() - start_time
-            self.logger.info(f"Database encrypted successfully in {duration:.2f} seconds")
-            return True
-        except Exception as e:
-            self.logger.error(f"Database encryption failed: {str(e)}", exc_info=True)
-            # Clean up partial .new file but never delete the existing encrypted DB
+            # If connection uses WAL, checkpoint it so the main DB file reflects latest state
             try:
-                if os.path.exists(tmp_out_path):
-                    os.remove(tmp_out_path)
-            except OSError as oe:
-                self.logger.warning(f"Could not remove temporary encrypted file '{tmp_out_path}': {str(oe)}")
-            return False
+                self._checkpoint_wal()
+            except Exception:
+                pass
+
+            self.logger.info(f"Encrypting database to {self.encrypted_db_path}")
+            start_time = time.time()
+            tmp_out_path = f"{self.encrypted_db_path}.new"
+            snapshot_path = None
+            try:
+                # Create a consistent snapshot copy using SQLite backup API
+                snapshot_path = self._snapshot_temp_db_copy()
+                source_path = snapshot_path if snapshot_path else self.temp_db_path
+
+                aesgcm = AESGCM(self.key)
+                nonce = os.urandom(12)  # AES-GCM recommended nonce size
+
+                with open(source_path, 'rb') as f_in:
+                    plaintext = f_in.read()
+
+                # Prepare encrypted payload (nonce + ciphertext)
+                if not plaintext:
+                    self.logger.warning("Temporary database file is empty. Writing empty encrypted file.")
+                    payload = nonce  # Write only nonce to indicate empty DB
+                else:
+                    ciphertext = aesgcm.encrypt(nonce, plaintext, None)  # No associated data
+                    payload = nonce + ciphertext
+
+                # Write to a temp file first
+                with open(tmp_out_path, 'wb') as f_out:
+                    f_out.write(payload)
+                    try:
+                        f_out.flush()
+                        os.fsync(f_out.fileno())
+                    except Exception:
+                        # fsync best-effort; ignore on platforms where not applicable
+                        pass
+
+                # Atomically replace the target
+                os.replace(tmp_out_path, self.encrypted_db_path)
+
+                duration = time.time() - start_time
+                self.logger.info(f"Database encrypted successfully in {duration:.2f} seconds")
+                return True
+            except Exception as e:
+                self.logger.error(f"Database encryption failed: {str(e)}", exc_info=True)
+                # Clean up partial .new file but never delete the existing encrypted DB
+                try:
+                    if os.path.exists(tmp_out_path):
+                        os.remove(tmp_out_path)
+                except OSError as oe:
+                    self.logger.warning(f"Could not remove temporary encrypted file '{tmp_out_path}': {str(oe)}")
+                return False
+            finally:
+                # Remove snapshot file if created
+                try:
+                    if snapshot_path and os.path.exists(snapshot_path):
+                        os.remove(snapshot_path)
+                except Exception:
+                    pass
+        finally:
+            try:
+                lock.release()
+            except Exception:
+                pass
 
     def _decrypt_db(self):
         """Decrypts the database file to the temporary path. Returns status."""
@@ -1474,8 +1535,15 @@ class DatabaseManager:
                     self._flush_timer = None
                 thread_ref = self._flush_thread
             if thread_ref and thread_ref.is_alive():
-                # Wait a short time for background flush to complete
-                thread_ref.join(timeout=2.0)
+                # Wait longer for background flush to complete
+                thread_ref.join(timeout=8.0)
+                # If still in progress, poll the flag briefly
+                try:
+                    deadline = time.time() + 2.0
+                    while getattr(self, '_flush_in_progress', False) and time.time() < deadline:
+                        time.sleep(0.1)
+                except Exception:
+                    pass
         except Exception:
             pass
 
@@ -1527,12 +1595,14 @@ class DatabaseManager:
         if not self.conn:
             self.logger.warning("flush_to_encrypted skipped: No active connection.")
             return False
-        try:
-            # Ensure all changes are committed before encryption
-            self.conn.commit()
-        except sqlite3.Error as e:
-            self.logger.error(f"Commit failed before flush: {str(e)}", exc_info=True)
+        # Ensure all changes are committed before encryption (only on owner thread)
+        if not self._commit_if_owner_thread():
             return False
+        # Best-effort WAL checkpoint
+        try:
+            self._checkpoint_wal()
+        except Exception:
+            pass
         return self._encrypt_db()
 
     def request_flush(self, delay_seconds: float = 2.0):
@@ -1562,8 +1632,10 @@ class DatabaseManager:
             def _worker():
                 try:
                     # Best-effort commit before encrypting
+                    self._commit_if_owner_thread()
+                    # Best-effort WAL checkpoint
                     try:
-                        self.conn.commit()
+                        self._checkpoint_wal()
                     except Exception:
                         pass
                     self._encrypt_db()
@@ -1609,6 +1681,66 @@ class DatabaseManager:
             pass
 
     # --- Startup Recovery Utilities ---
+    def _snapshot_temp_db_copy(self):
+        """Create a consistent snapshot of the temp DB using SQLite backup API.
+
+        Returns path to the snapshot file, or None if backup failed.
+        """
+        if not self.temp_db_path:
+            return None
+        try:
+            import sqlite3 as _sqlite3, tempfile as _tempfile
+            # Prepare destination temporary file path
+            tmp = _tempfile.NamedTemporaryFile(delete=False, suffix=".sqlite")
+            snapshot_path = tmp.name
+            tmp.close()
+            # Open a read-only connection to source DB (separate from main connection)
+            try:
+                src = _sqlite3.connect(f"file:{self.temp_db_path}?mode=ro", uri=True, timeout=5)
+            except Exception:
+                # Fallback to a normal connection if URI not supported
+                src = _sqlite3.connect(self.temp_db_path, timeout=5)
+            dest = _sqlite3.connect(snapshot_path, timeout=5)
+            try:
+                src.backup(dest)
+            finally:
+                try:
+                    dest.close()
+                except Exception:
+                    pass
+                try:
+                    src.close()
+                except Exception:
+                    pass
+            return snapshot_path
+        except Exception as e:
+            try:
+                self.logger.debug(f"Snapshot backup failed or skipped: {e}")
+            except Exception:
+                pass
+            # Best-effort: return None to fall back to direct file read
+            return None
+    def _checkpoint_wal(self):
+        """Force a WAL checkpoint so the main DB file contains latest data.
+
+        Uses a short-lived separate connection so it is safe from any thread.
+        """
+        if not self.temp_db_path:
+            return False
+        try:
+            import sqlite3 as _sqlite3
+            conn = _sqlite3.connect(self.temp_db_path, timeout=5)
+            try:
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            finally:
+                conn.close()
+            return True
+        except Exception as e:
+            try:
+                self.logger.debug(f"WAL checkpoint skipped/failed: {e}")
+            except Exception:
+                pass
+            return False
     @staticmethod
     def _get_or_create_salt_static(logger=None):
         settings = QSettings("YourCompany", "SilverEstimateApp")

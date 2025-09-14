@@ -2,6 +2,15 @@
 
 This file tracks notable changes, fixes, and decisions for the Silver Estimate project.
 
+## Release v1.72.5 (2025-09-14)
+
+- Persistence: Fixed session-only data issue by ensuring encryption reads a complete DB image.
+  - Added WAL checkpoint before encrypting and a snapshot via SQLite backup API.
+  - Commit now runs only on the connection's owner thread to avoid cross-thread errors.
+  - Serialized encryption with a lock and extended shutdown wait for background flush.
+- Item Master: Items reliably persist across restarts; continued UI polish for status messages.
+- Logs: More precise messages around flush/encrypt lifecycle to aid troubleshooting.
+
 ## Release v1.72.4 (2025-09-14)
 
 - UI: Added a refresh icon button for Silver Rate and placed it next to the Live Silver Rate field for quick manual updates.

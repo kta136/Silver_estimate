@@ -820,12 +820,23 @@ class SettingsDialog(QDialog):
             self.new_secondary_password_input.clear()
             self.confirm_new_secondary_password_input.clear()
 
-            # Note: The database encryption key is derived from the *main* password.
-            # If the main password changes, the user will need to use the *new* main password
-            # the next time they start the application to decrypt the database.
-            # The DatabaseManager needs to be re-initialized with the new password if the app continues running.
-            # This is complex. A simpler approach might be to require an app restart after password change.
-            QMessageBox.information(self, "Restart Required", "Please restart the application for the new main password to take effect for database access.")
+            # Attempt to re-encrypt the database immediately with the new password if DB is available
+            try:
+                dbm = getattr(self.main_window, 'db', None)
+                if dbm is not None:
+                    self.statusBarMsg = getattr(self.main_window, 'show_status_message', None)
+                    if callable(self.statusBarMsg):
+                        self.statusBarMsg("Re-encrypting database with new password...", 3000, level='info')
+                    reenc_ok = dbm.reencrypt_with_new_password(new_main_pw)
+                    if reenc_ok:
+                        QMessageBox.information(self, "Password Updated", "Passwords changed and database re-encrypted successfully.")
+                    else:
+                        QMessageBox.information(self, "Restart Recommended", "Passwords changed. Please restart the application to ensure the new password is used for database access.")
+                else:
+                    QMessageBox.information(self, "Restart Required", "Passwords changed. Please restart the application for the new password to take effect for database access.")
+            except Exception as _re:
+                logging.getLogger(__name__).warning(f"Live re-encryption failed or skipped: {_re}")
+                QMessageBox.information(self, "Restart Required", "Passwords changed. Please restart the application for the new password to take effect for database access.")
 
 
         except Exception as e:

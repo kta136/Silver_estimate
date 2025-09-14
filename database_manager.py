@@ -326,6 +326,50 @@ class DatabaseManager:
             except Exception:
                 pass
 
+    def reencrypt_with_new_password(self, new_password: str) -> bool:
+        """Re-encrypt the encrypted DB using a new password-derived key.
+
+        Writes atomically to the encrypted store. On success, updates in-memory
+        password/key so subsequent flushes use the new key. On failure, keeps
+        the old key/password and returns False.
+        """
+        try:
+            if not new_password:
+                raise ValueError("New password cannot be empty.")
+            # Derive new key using existing salt
+            new_key = self._derive_key(new_password, self.salt)
+            # Ensure latest state is committed and visible in main DB file
+            try:
+                self._commit_if_owner_thread()
+            except Exception:
+                pass
+            try:
+                self._checkpoint_wal()
+            except Exception:
+                pass
+            # Swap key temporarily for encryption
+            old_key, old_password = self.key, self.password
+            self.key, self.password = new_key, new_password
+            success = False
+            try:
+                success = self._encrypt_db()
+            finally:
+                if not success:
+                    # Restore old credentials on failure
+                    self.key, self.password = old_key, old_password
+            if success:
+                try:
+                    self.logger.info("Database re-encrypted with new password.")
+                except Exception:
+                    pass
+            return success
+        except Exception as e:
+            try:
+                self.logger.error(f"Re-encryption failed: {e}", exc_info=True)
+            except Exception:
+                pass
+            return False
+
     def _decrypt_db(self):
         """Decrypts the database file to the temporary path. Returns status."""
         if not os.path.exists(self.encrypted_db_path):
@@ -524,21 +568,11 @@ class DatabaseManager:
                 )''')
 
             # --- Silver Bar Related Tables ---
-            # Only perform the schema migration if we're at version 0
+            # Version 1: Introduce silver bars and transfers (non-destructive)
             if current_version < 1:
-                self.logger.info("Performing silver bar schema migration to version 1...")
-                
-                # 1. Drop dependent table first if it exists
-                if self._table_exists('bar_transfers'):
-                    self.logger.info("Dropping existing 'bar_transfers' table...")
-                    self.cursor.execute('DROP TABLE bar_transfers')
+                self.logger.info("Applying silver bar schema migration to version 1 (non-destructive)...")
 
-                # 2. Drop old silver_bars table if it exists
-                if self._table_exists('silver_bars'):
-                    self.logger.info("Dropping existing 'silver_bars' table...")
-                    self.cursor.execute('DROP TABLE silver_bars')
-
-                # 3. Create/Ensure silver_bar_lists table exists (dependency for silver_bars)
+                # Ensure silver_bar_lists exists
                 self.cursor.execute('''
                     CREATE TABLE IF NOT EXISTS silver_bar_lists (
                         list_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -547,43 +581,63 @@ class DatabaseManager:
                         list_note TEXT,
                         issued_date TEXT
                     )''')
-                if not self._table_exists('silver_bar_lists'):
-                    self.logger.info("Created 'silver_bar_lists' table.")
 
-                # 4. Create the NEW silver_bars table
-                self.logger.info("Creating new 'silver_bars' table with updated schema...")
-                self.cursor.execute('''
-                    CREATE TABLE silver_bars (
-                        bar_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        estimate_voucher_no TEXT NOT NULL,
-                        weight REAL DEFAULT 0,
-                        purity REAL DEFAULT 0,
-                        fine_weight REAL DEFAULT 0,
-                        date_added TEXT,
-                        status TEXT DEFAULT 'In Stock',
-                        list_id INTEGER,
-                        FOREIGN KEY (estimate_voucher_no) REFERENCES estimates (voucher_no) ON DELETE CASCADE,
-                        FOREIGN KEY (list_id) REFERENCES silver_bar_lists (list_id) ON DELETE SET NULL
-                    )''')
-                self.logger.info("Created 'silver_bars' table.")
+                # Ensure silver_bars exists; if it exists, add any missing columns
+                if not self._table_exists('silver_bars'):
+                    self.cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS silver_bars (
+                            bar_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            estimate_voucher_no TEXT NOT NULL,
+                            weight REAL DEFAULT 0,
+                            purity REAL DEFAULT 0,
+                            fine_weight REAL DEFAULT 0,
+                            date_added TEXT,
+                            status TEXT DEFAULT 'In Stock',
+                            list_id INTEGER,
+                            FOREIGN KEY (estimate_voucher_no) REFERENCES estimates (voucher_no) ON DELETE CASCADE,
+                            FOREIGN KEY (list_id) REFERENCES silver_bar_lists (list_id) ON DELETE SET NULL
+                        )''')
+                else:
+                    # Add missing columns if not present
+                    for col_def in (
+                        ('weight', "REAL DEFAULT 0"),
+                        ('purity', "REAL DEFAULT 0"),
+                        ('fine_weight', "REAL DEFAULT 0"),
+                        ('date_added', "TEXT"),
+                        ('status', "TEXT DEFAULT 'In Stock'"),
+                        ('list_id', "INTEGER"),
+                    ):
+                        if not self._column_exists('silver_bars', col_def[0]):
+                            self.cursor.execute(f"ALTER TABLE silver_bars ADD COLUMN {col_def[0]} {col_def[1]}")
 
-                # 5. Create the NEW bar_transfers table
-                self.logger.info("Creating new 'bar_transfers' table with updated schema...")
-                self.cursor.execute('''
-                     CREATE TABLE bar_transfers (
-                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                         transfer_no TEXT,
-                         date TEXT,
-                         silver_bar_id INTEGER NOT NULL,
-                         list_id INTEGER,
-                         from_status TEXT,
-                         to_status TEXT,
-                         notes TEXT,
-                         FOREIGN KEY (silver_bar_id) REFERENCES silver_bars (bar_id) ON DELETE CASCADE,
-                         FOREIGN KEY (list_id) REFERENCES silver_bar_lists (list_id) ON DELETE SET NULL
-                     )''')
-                self.logger.info("Created 'bar_transfers' table.")
-                
+                # Ensure bar_transfers exists; if it exists, add missing columns
+                if not self._table_exists('bar_transfers'):
+                    self.cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS bar_transfers (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            transfer_no TEXT,
+                            date TEXT,
+                            silver_bar_id INTEGER NOT NULL,
+                            list_id INTEGER,
+                            from_status TEXT,
+                            to_status TEXT,
+                            notes TEXT,
+                            FOREIGN KEY (silver_bar_id) REFERENCES silver_bars (bar_id) ON DELETE CASCADE,
+                            FOREIGN KEY (list_id) REFERENCES silver_bar_lists (list_id) ON DELETE SET NULL
+                        )''')
+                else:
+                    for col_def in (
+                        ('transfer_no', 'TEXT'),
+                        ('date', 'TEXT'),
+                        ('silver_bar_id', 'INTEGER'),
+                        ('list_id', 'INTEGER'),
+                        ('from_status', 'TEXT'),
+                        ('to_status', 'TEXT'),
+                        ('notes', 'TEXT'),
+                    ):
+                        if not self._column_exists('bar_transfers', col_def[0]):
+                            self.cursor.execute(f"ALTER TABLE bar_transfers ADD COLUMN {col_def[0]} {col_def[1]}")
+
                 # Update schema version to 1
                 self._update_schema_version(1)
                 
@@ -661,6 +715,12 @@ class DatabaseManager:
                 # Items
                 self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_items_code ON items(code)")
                 self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_items_code_nocase ON items(code COLLATE NOCASE)")
+                # Enforce case-insensitive uniqueness for item codes
+                try:
+                    self.cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_items_code_upper ON items(UPPER(code))")
+                except sqlite3.Error:
+                    # Expression indexes may not be available on very old SQLite versions; continue without hard constraint
+                    pass
                 # Estimates and items
                 self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_estimates_voucher ON estimates(voucher_no)")
                 self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_estimates_date ON estimates(date)")

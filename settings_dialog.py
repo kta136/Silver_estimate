@@ -51,6 +51,7 @@ class SettingsDialog(QDialog):
         # Build pages list
         page_defs = [
             ("User Interface", style.standardIcon(QStyle.SP_DesktopIcon), self._create_ui_tab()),
+            ("Live Rates", style.standardIcon(QStyle.SP_BrowserReload), self._create_live_rates_tab()),
             ("Printing", style.standardIcon(QStyle.SP_FileDialogDetailedView), self._create_print_tab()),
             ("Data Management", style.standardIcon(QStyle.SP_DirHomeIcon), self._create_data_tab()),
             ("Security", style.standardIcon(QStyle.SP_MessageBoxWarning), self._create_security_tab()),
@@ -168,6 +169,62 @@ class SettingsDialog(QDialog):
         return widget
 
     # def _create_business_tab(self): ...
+
+    def _create_live_rates_tab(self):
+        """Create the Live Rates settings tab (DDASilver auto-refresh)."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(10)
+
+        group = QGroupBox("DDASilver Live Rate")
+        form = QFormLayout(group)
+        form.setSpacing(8)
+
+        # Enable live rate display and fetching
+        live_enabled_default = True
+        live_enabled = self.settings.value("rates/live_enabled", live_enabled_default, type=bool)
+        self.live_enabled_checkbox = QCheckBox("Enable live rate (show in UI)")
+        self.live_enabled_checkbox.setChecked(live_enabled)
+        self.live_enabled_checkbox.toggled.connect(self._mark_dirty)
+        form.addRow("Live Rate:", self.live_enabled_checkbox)
+
+        # Enable auto-refresh
+        self.live_enable_checkbox = QCheckBox("Enable automatic live rate updates")
+        enabled = self.settings.value("rates/auto_refresh_enabled", True, type=bool)
+        self.live_enable_checkbox.setChecked(enabled)
+        self.live_enable_checkbox.toggled.connect(self._mark_dirty)
+        form.addRow("Auto Refresh:", self.live_enable_checkbox)
+
+        # Refresh interval (seconds)
+        self.live_interval_spin = QSpinBox()
+        self.live_interval_spin.setRange(5, 3600)
+        self.live_interval_spin.setSuffix(" s")
+        interval_sec = self.settings.value("rates/refresh_interval_sec", 60, type=int)
+        try:
+            interval_sec = int(interval_sec)
+        except Exception:
+            interval_sec = 60
+        self.live_interval_spin.setValue(max(5, interval_sec))
+        self.live_interval_spin.valueChanged.connect(self._mark_dirty)
+        form.addRow("Refresh Interval:", self.live_interval_spin)
+
+        # Hint
+        hint = QLabel("Updates the Silver Rate field from DDASilver.com (item: 'Silver Agra Local Mohar').")
+        hint.setWordWrap(True)
+
+        layout.addWidget(group)
+        layout.addWidget(hint)
+        layout.addStretch()
+
+        # Initial enable/disable of dependent controls
+        def _sync_enabled(state: bool):
+            self.live_enable_checkbox.setEnabled(state)
+            self.live_interval_spin.setEnabled(state and self.live_enable_checkbox.isChecked())
+        _sync_enabled(self.live_enabled_checkbox.isChecked())
+        self.live_enabled_checkbox.toggled.connect(_sync_enabled)
+        self.live_enable_checkbox.toggled.connect(lambda _: _sync_enabled(self.live_enabled_checkbox.isChecked()))
+
+        return widget
 
     def _create_print_tab(self):
         """Create the Printing settings tab."""
@@ -647,18 +704,34 @@ class SettingsDialog(QDialog):
             # Save page setup defaults
             self.settings.setValue("print/page_size", self.page_size_combo.currentText())
             self.settings.setValue("print/orientation", self.orientation_combo.currentText())
-            logging.getLogger(__name__).debug(
-                f"Saved page setup: size={self.page_size_combo.currentText()}, orient={self.orientation_combo.currentText()}"
-            )
 
-            # Save logging settings
+            # Live Rates settings
+            try:
+                ui_enabled = bool(self.live_enabled_checkbox.isChecked())
+                auto_enabled = bool(self.live_enable_checkbox.isChecked())
+                live_interval = int(self.live_interval_spin.value())
+                self.settings.setValue("rates/live_enabled", ui_enabled)
+                self.settings.setValue("rates/auto_refresh_enabled", auto_enabled)
+                self.settings.setValue("rates/refresh_interval_sec", max(5, live_interval))
+                # Notify main window to reconfigure timer and visibility immediately
+                if hasattr(self.main_window, 'reconfigure_rate_visibility_from_settings'):
+                    self.main_window.reconfigure_rate_visibility_from_settings()
+                if hasattr(self.main_window, 'reconfigure_rate_timer_from_settings'):
+                    self.main_window.reconfigure_rate_timer_from_settings()
+            except Exception:
+                logging.getLogger(__name__).warning("Could not apply live rates settings immediately.")
+                logging.getLogger(__name__).debug(
+                    f"Saved page setup: size={self.page_size_combo.currentText()}, orient={self.orientation_combo.currentText()}"
+                )
+
+            # Save logging settings (outside inner try/except)
             self.settings.setValue("logging/debug_mode", self.debug_mode_checkbox.isChecked())
             self.settings.setValue("logging/enable_info", self.enable_info_checkbox.isChecked())
             self.settings.setValue("logging/enable_critical", self.enable_critical_checkbox.isChecked())
             self.settings.setValue("logging/enable_debug", self.enable_debug_checkbox.isChecked())
             self.settings.setValue("logging/auto_cleanup", self.auto_cleanup_checkbox.isChecked())
             self.settings.setValue("logging/cleanup_days", self.cleanup_days_spin.value())
-            
+
             # Apply logging settings immediately
             from logger import reconfigure_logging
             reconfigure_logging()

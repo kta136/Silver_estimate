@@ -2,7 +2,8 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QFormLayout, # Added QWidget, QFormLayout
                              QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
                              QHeaderView, QDoubleSpinBox, QDateEdit, QAbstractItemView,
-                              QCheckBox, QStyledItemDelegate, QFrame, QSpinBox) # Added QSpinBox
+                              QCheckBox, QStyledItemDelegate, QFrame, QSpinBox, QToolButton)
+from PyQt5.QtWidgets import QStyle
 # Removed QFocusEvent, QValidator. Added QEvent
 from PyQt5.QtGui import QDoubleValidator, QIntValidator, QFont # Added QFont
 from PyQt5.QtCore import Qt, QDate, QLocale, QModelIndex, QEvent # Keep QModelIndex, Add QEvent
@@ -242,6 +243,49 @@ class EstimateUI:
         self.delete_estimate_button.setToolTip("Delete the currently loaded estimate\nPermanently removes estimate from database\nOnly enabled when estimate is loaded\nCannot be undone - use with caution")
         self.delete_estimate_button.setEnabled(False)
         table_actions_layout.addWidget(self.delete_estimate_button)
+
+        # Live rate display (non-editable) placed immediately after Delete button
+        self.live_rate_label = QLabel("Live Silver Rate:")
+        self.live_rate_label.setToolTip("Latest rate fetched from DDASilver.com (read-only)")
+        try:
+            self.live_rate_label.setStyleSheet("font-weight: 600; color: #222;")
+        except Exception:
+            pass
+        self.live_rate_value_label = QLabel("…")
+        self.live_rate_value_label.setObjectName("LiveRateValue")
+        try:
+            # Subtle, readable styling (less distracting)
+            self.live_rate_value_label.setStyleSheet("""
+                QLabel#LiveRateValue {
+                  color: #0f172a;
+                  background-color: #e6f0ff;
+                  border: 1px solid #93c5fd;
+                  border-radius: 10px;
+                  padding: 2px 8px;
+                  font-weight: 700;
+                  font-size: 11pt;
+                }
+            """)
+            self.live_rate_value_label.setMinimumWidth(110)
+            self.live_rate_value_label.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
+        except Exception:
+            pass
+        table_actions_layout.addSpacing(10)
+        table_actions_layout.addWidget(self.live_rate_label)
+        table_actions_layout.addWidget(self.live_rate_value_label)
+        # Refresh button placed next to the live silver rate value
+        self.refresh_rate_button = QToolButton()
+        try:
+            self.refresh_rate_button.setToolTip("Refresh live silver rate and set it here")
+            self.refresh_rate_button.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
+            self.refresh_rate_button.setAutoRaise(True)
+            self.refresh_rate_button.setCursor(Qt.PointingHandCursor)
+            self.refresh_rate_button.setAccessibleName("Refresh Silver Rate")
+        except Exception:
+            pass
+        table_actions_layout.addWidget(self.refresh_rate_button)
+
+        # Push remaining space to the right
         table_actions_layout.addStretch()
         self.layout.addLayout(table_actions_layout)
         self.layout.addSpacing(8)

@@ -85,6 +85,10 @@ class EstimateLogic:
         if hasattr(self, 'silver_bars_button'):
             self.silver_bars_button.clicked.connect(self.show_silver_bars)
 
+        # Manual refresh for silver rate
+        if hasattr(self, 'refresh_rate_button'):
+            self.refresh_rate_button.clicked.connect(self.refresh_silver_rate)
+
         # Removed connection for table_font_size_spinbox as it's moved to menu
         # if hasattr(self, 'table_font_size_spinbox'):
         #     self.table_font_size_spinbox.valueChanged.connect(self._apply_table_font_size)
@@ -1225,6 +1229,72 @@ class EstimateLogic:
             err_msg = f"Failed to save estimate '{voucher_no}'. Check logs."
             QMessageBox.critical(self, "Error", err_msg)
             self._status(err_msg, 5000)
+
+    def refresh_silver_rate(self):
+        """Fetch the live silver rate and apply it to the field and live label."""
+        btn = getattr(self, 'refresh_rate_button', None)
+        try:
+            if btn:
+                btn.setEnabled(False)
+        except Exception:
+            pass
+        self._status("Refreshing live silver rate…", 2000)
+
+        def worker():
+            rate = None
+            try:
+                from dda_rate_fetcher import fetch_broadcast_rate_exact, fetch_silver_agra_local_mohar_rate
+                # Prefer broadcast for exact screen number
+                try:
+                    rate, market_open, _ = fetch_broadcast_rate_exact(timeout=7)
+                except Exception:
+                    rate = None
+                if rate is None:
+                    try:
+                        rate, _meta = fetch_silver_agra_local_mohar_rate(timeout=7)
+                    except Exception:
+                        rate = None
+            except Exception:
+                rate = None
+
+            from PyQt5.QtCore import QTimer
+            def apply():
+                try:
+                    if btn:
+                        btn.setEnabled(True)
+                except Exception:
+                    pass
+                if rate is None:
+                    try:
+                        QMessageBox.warning(self, "Rate Refresh", "Could not fetch live silver rate. Please try again.")
+                    except Exception:
+                        pass
+                    self._status("Live rate refresh failed", 3000)
+                    return
+                try:
+                    self.silver_rate_spin.setValue(float(rate))
+                except Exception:
+                    pass
+                # Update live badge if present
+                if hasattr(self, 'live_rate_value_label'):
+                    try:
+                        locale = QLocale.system()
+                        display = locale.toCurrencyString(float(rate))
+                    except Exception:
+                        try:
+                            display = f"₹ {int(round(float(rate))):,}"
+                        except Exception:
+                            display = str(rate)
+                    try:
+                        self.live_rate_value_label.setText(display)
+                    except Exception:
+                        pass
+                self._status("Silver rate updated", 2000)
+
+            QTimer.singleShot(0, apply)
+
+        import threading
+        threading.Thread(target=worker, daemon=True).start()
 
 
     def clear_form(self, confirm=True):

@@ -3,6 +3,7 @@ import sys
 import os
 import traceback
 import logging
+import threading
 
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QShortcut,
                              QMenuBar, QMenu, QAction, QMessageBox, QDialog, QStatusBar,
@@ -21,9 +22,15 @@ from database_manager import DatabaseManager
 from logger import setup_logging, qt_message_handler
 from message_bar import MessageBar
 from app_constants import APP_TITLE, APP_VERSION, SETTINGS_ORG, SETTINGS_APP, DB_PATH
+from dda_rate_fetcher import (
+    fetch_silver_agra_local_mohar_rate,
+    fetch_broadcast_rate_exact,
+)
 
 
 class MainWindow(QMainWindow):
+    # Thread-safe signal to apply fetched rates on the UI thread
+    rate_updated = QtCore.pyqtSignal(object, object, object)  # (brate, api_rate, is_open)
     """Main application window for the Silver Estimation App."""
 
     def __init__(self, password=None, logger=None): # Add password and logger arguments
@@ -48,6 +55,12 @@ class MainWindow(QMainWindow):
 
         # Top message bar (created but not added to layout; inline status is preferred)
         self.message_bar = MessageBar(self)
+
+        # Connect live-rate signal
+        try:
+            self.rate_updated.connect(self._apply_live_rate)
+        except Exception:
+            pass
 
         # Setup database *after* getting password (if provided)
         if self._password:
@@ -132,6 +145,20 @@ class MainWindow(QMainWindow):
                     self.show_status_message("Ready", 2000, level='info')
                 except Exception:
                     pass
+
+                # Configure and start live rate updates
+                try:
+                    # Apply visibility first, then timer setup per settings
+                    self.reconfigure_rate_visibility_from_settings()
+                    self._setup_live_rate_timer()
+                    # Trigger an initial fetch shortly after UI is ready
+                    QTimer.singleShot(500, self.refresh_live_rate_now)
+                    try:
+                        self.logger.info("Scheduled initial live-rate fetch (500ms)")
+                    except Exception:
+                        pass
+                except Exception as _rate_e:
+                    self.logger.debug(f"Live rate timer init failed: {_rate_e}")
             except Exception as e:
                 # Catch any exceptions during widget initialization
                 self.logger.critical(f"Failed to initialize widgets: {str(e)}", exc_info=True)
@@ -203,7 +230,170 @@ class MainWindow(QMainWindow):
                     return
         except Exception:
             pass
-        # No inline target yet; skip showing to avoid UI flicker
+        # No inline target yet; skip showing tAo avoid UI flicker
+
+    # --- Live Rate Integration ---
+    def _setup_live_rate_timer(self):
+        """Initialize or reconfigure the live rate refresh timer from settings."""
+        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+        # Robust bool parsing (QSettings may store as string)
+        raw_enabled = settings.value("rates/auto_refresh_enabled", True)
+        if isinstance(raw_enabled, bool):
+            auto_enabled = raw_enabled
+        elif isinstance(raw_enabled, str):
+            auto_enabled = raw_enabled.strip().lower() in ("1", "true", "yes", "on")
+        else:
+            auto_enabled = True
+
+        try:
+            interval_sec = int(settings.value("rates/refresh_interval_sec", 60))
+        except Exception:
+            interval_sec = 60
+        try:
+            interval_ms = max(5, int(interval_sec)) * 1000
+        except Exception:
+            interval_ms = 60000
+
+        if not hasattr(self, '_live_rate_timer') or self._live_rate_timer is None:
+            self._live_rate_timer = QTimer(self)
+            self._live_rate_timer.setSingleShot(False)
+            self._live_rate_timer.timeout.connect(self.refresh_live_rate_now)
+
+        self._live_rate_timer.setInterval(interval_ms)
+        if auto_enabled:
+            if not self._live_rate_timer.isActive():
+                self._live_rate_timer.start()
+                try:
+                    self.logger.info(f"Live-rate timer started: every {interval_ms} ms")
+                except Exception:
+                    pass
+        else:
+            if self._live_rate_timer.isActive():
+                self._live_rate_timer.stop()
+            try:
+                self.logger.info("Live-rate timer disabled via settings")
+            except Exception:
+                pass
+
+        # State flag to prevent overlapping fetches
+        self._rate_fetch_in_progress = False
+
+    def reconfigure_rate_timer_from_settings(self):
+        """Public hook to update the timer when settings change."""
+        try:
+            self._setup_live_rate_timer()
+            # Optional immediate refresh when settings are applied
+            self.refresh_live_rate_now()
+        except Exception as e:
+            self.logger.debug(f"Failed to reconfigure rate timer: {e}")
+
+    def refresh_live_rate_now(self):
+        """Kick off a background fetch of the latest DDASilver rate."""
+        # Skip entirely if live is disabled
+        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+        live_enabled = settings.value("rates/live_enabled", True, type=bool)
+        if not live_enabled:
+            return
+        if getattr(self, '_rate_fetch_in_progress', False):
+            return
+        self._rate_fetch_in_progress = True
+        try:
+            self.logger.info("Live-rate fetch started")
+        except Exception:
+            pass
+
+        def _worker():
+            try:
+                # Prefer exact on-screen broadcast
+                brate, is_open, info = fetch_broadcast_rate_exact(timeout=5)
+                # Fallback to commodity API if broadcast missing
+                api_rate = None
+                if brate is None:
+                    api_rate, _ = fetch_silver_agra_local_mohar_rate(timeout=5)
+                try:
+                    self.logger.info(f"LiveRate fetch: broadcast={brate}, open={is_open}, api={api_rate}")
+                except Exception:
+                    pass
+            except Exception as e:
+                # Broadcast fetch failed (network/firewall/etc). Try API fallback.
+                self.logger.warning(f"Rate fetch error (broadcast): {e}")
+                brate, is_open = None, True
+                try:
+                    api_rate, _ = fetch_silver_agra_local_mohar_rate(timeout=5)
+                except Exception as e2:
+                    self.logger.warning(f"Rate fetch error (API fallback): {e2}")
+                    api_rate = None
+
+            # Deliver to UI thread via signal
+            try:
+                self.rate_updated.emit(brate, api_rate, is_open)
+            finally:
+                # In case signal delivery is delayed, we still clear the in-progress flag in UI method
+                pass
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _apply_live_rate(self, brate, api_rate, is_open):
+        """Apply the fetched rate on the UI thread (signal handler)."""
+        # If live disabled mid-flight, do nothing
+        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+        if not settings.value("rates/live_enabled", True, type=bool):
+            self._rate_fetch_in_progress = False
+            return
+        try:
+            self.logger.info("Live-rate UI apply: entered")
+        except Exception:
+            pass
+        try:
+            if not hasattr(self, 'estimate_widget') or self.estimate_widget is None:
+                self.logger.warning("Live-rate UI apply: estimate_widget not ready")
+                return
+
+            # Read current value to decide if we should seed when closed
+            try:
+                current_val = float(self.estimate_widget.silver_rate_spin.value())
+            except Exception:
+                current_val = 0.0
+
+            # Update read-only label
+            def _set_label(val):
+                if hasattr(self.estimate_widget, 'live_rate_value_label') and self.estimate_widget.live_rate_value_label is not None:
+                    self.estimate_widget.live_rate_value_label.setText(str(int(float(val))))
+
+            if brate is not None:
+                self.logger.info(f"Live-rate UI apply: setting broadcast value {brate}")
+                _set_label(brate)
+                self.show_status_message("Live rate updated", 1200, level='info')
+                self.logger.info(f"Live-rate applied from broadcast: {brate} (open={is_open})")
+            elif api_rate is not None:
+                self.logger.info(f"Live-rate UI apply: setting API value {api_rate}")
+                _set_label(api_rate)
+                self.show_status_message("Rate loaded (API fallback)", 1500, level='warning')
+                self.logger.info(f"Live-rate applied from API: {api_rate}")
+            else:
+                # Show placeholder if nothing could be fetched
+                if hasattr(self.estimate_widget, 'live_rate_value_label') and self.estimate_widget.live_rate_value_label is not None:
+                    self.estimate_widget.live_rate_value_label.setText("—")
+                self.show_status_message("Live rate fetch failed", 2000, level='error')
+                self.logger.warning("Live rate fetch failed: both broadcast and API returned None")
+        finally:
+            self._rate_fetch_in_progress = False
+
+    def reconfigure_rate_visibility_from_settings(self):
+        """Show/Hide live rate UI and enable/disable manual refresh based on settings."""
+        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+        live_enabled = settings.value("rates/live_enabled", True, type=bool)
+        try:
+            if hasattr(self, 'estimate_widget') and self.estimate_widget is not None:
+                if hasattr(self.estimate_widget, 'live_rate_label') and self.estimate_widget.live_rate_label is not None:
+                    self.estimate_widget.live_rate_label.setVisible(live_enabled)
+                if hasattr(self.estimate_widget, 'live_rate_value_label') and self.estimate_widget.live_rate_value_label is not None:
+                    self.estimate_widget.live_rate_value_label.setVisible(live_enabled)
+            # Toggle manual refresh action if present
+            if hasattr(self, 'refresh_rate_action') and self.refresh_rate_action is not None:
+                self.refresh_rate_action.setEnabled(live_enabled)
+        except Exception:
+            pass
 
     # --- File menu action handlers ---
     def file_save_estimate(self):
@@ -347,6 +537,12 @@ class MainWindow(QMainWindow):
         settings_action.setStatusTip("Configure application settings")
         settings_action.triggered.connect(self.show_settings_dialog) # Connect to new method
         tools_menu.addAction(settings_action)
+
+        # Manual live-rate refresh for troubleshooting
+        self.refresh_rate_action = QAction("Refresh Live Rate Now", self)
+        self.refresh_rate_action.setStatusTip("Fetch the latest live silver rate immediately")
+        self.refresh_rate_action.triggered.connect(self.refresh_live_rate_now)
+        tools_menu.addAction(self.refresh_rate_action)
 
         # Removed Import Item List action from here
         # tools_menu.addSeparator()

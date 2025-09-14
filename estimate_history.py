@@ -260,6 +260,72 @@ class EstimateHistoryDialog(QDialog):
             pass
 
 
+    def get_selected_voucher(self):
+        """Get the selected voucher number."""
+        selected_items = self.estimates_table.selectedItems()
+        if not selected_items:
+            return None
+
+        row = selected_items[0].row()
+        return self.estimates_table.item(row, 0).text()
+
+    def accept(self):
+        """Handle dialog acceptance and return the selected voucher."""
+        self.selected_voucher = self.get_selected_voucher()
+        if not self.selected_voucher:
+            QMessageBox.warning(self, "Selection Error", "Please select an estimate first.")
+            return
+
+        super().accept()
+
+    def print_estimate(self):
+        """Print the selected estimate."""
+        voucher_no = self.get_selected_voucher()
+        if not voucher_no:
+            QMessageBox.warning(self, "Selection Error", "Please select an estimate first.")
+            return
+
+        # --- Get the print font from the explicitly stored main window reference ---
+        print_font_setting = None
+        if self.main_window and hasattr(self.main_window, 'print_font'):
+            print_font_setting = self.main_window.print_font
+        # ---------------------------------------------------------
+
+        # Create print manager instance, passing the font, and print the selected estimate
+        print_manager = PrintManager(self.db_manager, print_font=print_font_setting)
+        success = print_manager.print_estimate(voucher_no, self)  # 'self' used as parent for dialogs
+
+        if not success:
+            QMessageBox.warning(self, "Print Error", f"Failed to print estimate {voucher_no}.")
+
+    def delete_selected_estimate(self):
+        """Handle deletion of the selected estimate."""
+        voucher_no = self.get_selected_voucher()
+        if not voucher_no:
+            QMessageBox.warning(self, "Selection Error", "Please select an estimate to delete.")
+            return
+
+        reply = QMessageBox.warning(
+            self,
+            "Confirm Delete Estimate",
+            f"Are you sure you want to permanently delete estimate '{voucher_no}'?\n"
+            "This action cannot be undone.",
+            QMessageBox.Yes | QMessageBox.Cancel,
+            QMessageBox.Cancel,
+        )
+
+        if reply == QMessageBox.Yes:
+            try:
+                success = self.db_manager.delete_single_estimate(voucher_no)
+                if success:
+                    QMessageBox.information(self, "Success", f"Estimate '{voucher_no}' deleted successfully.")
+                    self.load_estimates()  # Refresh the list
+                else:
+                    QMessageBox.warning(self, "Delete Error", f"Estimate '{voucher_no}' could not be deleted (might already be deleted).")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"An unexpected error occurred during deletion: {str(e)}")
+
+
 class _HistoryLoadWorker(QObject):
     data_ready = pyqtSignal(list, dict)
     error = pyqtSignal(str)
@@ -310,66 +376,3 @@ class _HistoryLoadWorker(QObject):
             self.error.emit(str(e))
         finally:
             self.finished.emit()
-
-    def get_selected_voucher(self):
-        """Get the selected voucher number."""
-        selected_items = self.estimates_table.selectedItems()
-        if not selected_items:
-            return None
-
-        row = selected_items[0].row()
-        return self.estimates_table.item(row, 0).text()
-
-    def accept(self):
-        """Handle dialog acceptance and return the selected voucher."""
-        self.selected_voucher = self.get_selected_voucher()
-        if not self.selected_voucher:
-            QMessageBox.warning(self, "Selection Error", "Please select an estimate first.")
-            return
-
-        super().accept()
-
-    def print_estimate(self):
-        """Print the selected estimate."""
-        # from print_manager import PrintManager # Moved import to top
-
-        voucher_no = self.get_selected_voucher()
-        if not voucher_no:
-            QMessageBox.warning(self, "Selection Error", "Please select an estimate first.")
-            return
-
-        # --- Get the print font from the explicitly stored main window reference ---
-        print_font_setting = None
-        if self.main_window and hasattr(self.main_window, 'print_font'):
-            print_font_setting = self.main_window.print_font
-        # ---------------------------------------------------------
-
-        # Create print manager instance, passing the font, and print the selected estimate
-        print_manager = PrintManager(self.db_manager, print_font=print_font_setting)
-        success = print_manager.print_estimate(voucher_no, self) # 'self' is the dialog, used for parent QMessageBox
-
-        if not success:
-            QMessageBox.warning(self, "Print Error", f"Failed to print estimate {voucher_no}.")
-
-    def delete_selected_estimate(self):
-        """Handle deletion of the selected estimate."""
-        voucher_no = self.get_selected_voucher()
-        if not voucher_no:
-            QMessageBox.warning(self, "Selection Error", "Please select an estimate to delete.")
-            return
-
-        reply = QMessageBox.warning(self, "Confirm Delete Estimate",
-                                     f"Are you sure you want to permanently delete estimate '{voucher_no}'?\n"
-                                     "This action cannot be undone.",
-                                     QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
-
-        if reply == QMessageBox.Yes:
-            try:
-                success = self.db_manager.delete_single_estimate(voucher_no)
-                if success:
-                    QMessageBox.information(self, "Success", f"Estimate '{voucher_no}' deleted successfully.")
-                    self.load_estimates() # Refresh the list
-                else:
-                    QMessageBox.warning(self, "Delete Error", f"Estimate '{voucher_no}' could not be deleted (might already be deleted).")
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"An unexpected error occurred during deletion: {str(e)}")

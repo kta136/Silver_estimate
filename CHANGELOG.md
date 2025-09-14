@@ -2,6 +2,13 @@
 
 This file tracks notable changes, fixes, and decisions for the Silver Estimate project.
 
+## Release v1.72.4 (2025-09-14)
+
+- UI: Added a refresh icon button for Silver Rate and placed it next to the Live Silver Rate field for quick manual updates.
+- Logic: Implemented `refresh_silver_rate()` to fetch live rates (broadcast-first with API fallback) without blocking the UI.
+- History: Fixed AttributeError in Estimate History by ensuring print/delete helpers live on the dialog class, not the worker.
+- UX: Minor layout polish and tooltips for the new refresh control.
+
 ## Release v1.72.3 (2025-09-13)
 
 - Startup: Lazy-import rarely used windows (Item Master, Settings, Silver Bar History) to reduce initial load time.

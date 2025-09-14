@@ -157,10 +157,9 @@ cython_debug/
 logs/
 
 # Project database artifacts
-database/*.sqlite3
-database/*.sqlite
-database/*.db
-database/*.db-journal
+# Ignore all database files while keeping the folder via .gitkeep
+database/*
+!database/.gitkeep
 
 # OS-specific cruft
 .DS_Store

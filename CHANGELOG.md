@@ -2,6 +2,10 @@
 
 This file tracks notable changes, fixes, and decisions for the Silver Estimate project.
 
+## Release v1.72.7 (2025-09-16)
+
+- Database: Prevent false critical temp-file warnings when shutdown triggers multiple DatabaseManager closes; only flag when encryption genuinely fails.
+
 ## Release v1.72.5 (2025-09-14)
 
 - Persistence: Fixed session-only data issue by ensuring encryption reads a complete DB image.

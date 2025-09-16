@@ -1608,8 +1608,10 @@ class DatabaseManager:
             pass
 
         encrypt_success = False
+        encryption_attempted = False
         if self.conn:
             self.logger.info("Closing database connection and encrypting data")
+            encryption_attempted = True
             # Encrypt the current temporary DB back to the original file
             try:
                 encrypt_success = self._encrypt_db()
@@ -1645,8 +1647,11 @@ class DatabaseManager:
                     settings.sync()
                 except Exception as se:
                     self.logger.warning(f"Could not clear stored temp DB path: {se}")
-            else:
+            elif encryption_attempted:
                 self.logger.critical("Preserving temporary database file due to encryption failure.")
+            else:
+                # No encryption attempt (already closed earlier); nothing to report.
+                pass
         except Exception as e:
             self.logger.warning(f"Cleanup decision failed: {str(e)}")
 

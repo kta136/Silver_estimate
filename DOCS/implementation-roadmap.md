@@ -15,6 +15,7 @@ This document captures the living implementation plan for the SilverEstimate ref
 - Persistence repositories for estimates and silver bars are live; DatabaseManager lazily loads them.
 - database_manager.py now leans on silverestimate.security.encryption for all crypto work.
 - Added pytest-based repository coverage using in-memory SQLite fixtures (tests/test_repositories.py).
+- Authentication flow now lives in silverestimate/services/auth_service; UI code delegates to the shared service.
 
 ## Target Package Layout
 `
@@ -44,6 +45,7 @@ Existing top-level scripts (main.py, dialogs, etc.) will gradually import from t
    - [x] Estimate and silver-bar repositories carved under silverestimate/persistence/.
    - [ ] Keep refining DatabaseManager into a thin lifecycle/encryption facade.
 2. **Security hardening**
+   - [x] Consolidate authentication flow into silverestimate/services/auth_service and remove duplicate logic from main.py.
    - [ ] Introduce salt rotation on password change; evaluate upgrading to Argon2id KDF (passlib already bundled).
    - [ ] Revisit handling of security/last_temp_db_path to minimise plaintext leakage.
 3. **Testing groundwork**
@@ -64,5 +66,3 @@ When completing a unit of work:
 - [ ] Record testing performed and outstanding gaps.
 
 Keeping this checklist current ensures continuity between sessions.
-
-

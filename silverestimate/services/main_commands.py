@@ -91,6 +91,45 @@ class MainCommands:
                 f"Failed to delete all data: {exc}",
             )
 
+    def import_items(self) -> None:
+        """Show the item import dialog and orchestrate the import workflow."""
+        if not self._ensure_db():
+            return
+
+        from item_import_dialog import ItemImportDialog
+        from item_import_manager import ItemImportManager
+        from PyQt5.QtCore import QThread
+
+        dialog = ItemImportDialog(self.main_window)
+        manager = ItemImportManager(self.db)
+
+        worker_thread = QThread(self.main_window)
+        manager.moveToThread(worker_thread)
+        worker_thread.start()
+
+        dialog.importStarted.connect(manager.import_from_file)
+        manager.progress_updated.connect(dialog.update_progress)
+        manager.status_updated.connect(dialog.update_status)
+        manager.import_finished.connect(dialog.import_finished)
+        dialog.rejected.connect(manager.cancel_import)
+        dialog.rejected.connect(worker_thread.quit)
+
+        try:
+            dialog.exec_()
+        finally:
+            try:
+                worker_thread.quit()
+                worker_thread.wait(2000)
+            except Exception:
+                pass
+
+        item_master = getattr(self.main_window, 'item_master_widget', None)
+        if item_master is not None and item_master.isVisible():
+            try:
+                item_master.load_items()
+            except Exception as exc:
+                self.logger.warning("Could not refresh item master after import: %s", exc)
+
     def delete_all_estimates(self) -> None:
         if not self._ensure_db():
             return

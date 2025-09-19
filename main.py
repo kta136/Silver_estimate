@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QS
                              QMenuBar, QMenu, QAction, QMessageBox, QDialog, QStatusBar,
                              QLabel, QStackedWidget, QToolBar, QActionGroup, QInputDialog)
 from PyQt5.QtGui import QKeySequence, QFont
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, QSettings
 import PyQt5.QtCore as QtCore
 
 # Import the custom dialogs and modules

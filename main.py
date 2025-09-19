@@ -16,6 +16,7 @@ import PyQt5.QtCore as QtCore
 from custom_font_dialog import CustomFontDialog
 from estimate_entry import EstimateEntryWidget
 from database_manager import DatabaseManager
+from login_dialog import LoginDialog
 # from advanced_tools_dialog import AdvancedToolsDialog # Remove old import
 # Lazy imports: ItemMasterWidget, SettingsDialog, SilverBarHistoryDialog
 from silverestimate.services.auth_service import run_authentication, perform_data_wipe

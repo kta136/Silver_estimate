@@ -9,16 +9,20 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QS
                              QMenuBar, QMenu, QAction, QMessageBox, QDialog, QStatusBar,
                              QLabel, QStackedWidget, QToolBar, QActionGroup, QInputDialog)
 from PyQt5.QtGui import QKeySequence, QFont
-from PyQt5.QtCore import Qt, QSettings, QTimer # Import QSettings
+from PyQt5.QtCore import Qt, QTimer
 import PyQt5.QtCore as QtCore
 
 # Import the custom dialogs and modules
 from custom_font_dialog import CustomFontDialog
-from login_dialog import LoginDialog # Import the new login dialog
 from estimate_entry import EstimateEntryWidget
 from database_manager import DatabaseManager
 # from advanced_tools_dialog import AdvancedToolsDialog # Remove old import
 # Lazy imports: ItemMasterWidget, SettingsDialog, SilverBarHistoryDialog
+from silverestimate.services.auth_service import run_authentication, perform_data_wipe
+from silverestimate.services.live_rate_service import LiveRateService
+from silverestimate.services.main_commands import MainCommands
+from silverestimate.services.navigation_service import NavigationService
+from silverestimate.services.settings_service import SettingsService
 from logger import setup_logging, qt_message_handler
 from message_bar import MessageBar
 from app_constants import APP_TITLE, APP_VERSION, SETTINGS_ORG, SETTINGS_APP, DB_PATH

@@ -9,11 +9,18 @@ from PyQt5.QtCore import QSettings
 from PyQt5.QtWidgets import QMessageBox, QDialog
 
 from app_constants import SETTINGS_APP, SETTINGS_ORG, DB_PATH
-from login_dialog import LoginDialog
+try:
+    from login_dialog import LoginDialog  # type: ignore
+except Exception:  # pragma: no cover - lazy import fallback
+    LoginDialog = None
 
 
 def run_authentication(logger: Optional[logging.Logger] = None) -> Optional[str]:
     """Handle authentication flow using the LoginDialog."""
+    global LoginDialog
+    if LoginDialog is None:
+        from login_dialog import LoginDialog as _LoginDialog  # lazy import
+        LoginDialog = _LoginDialog
     logger = logger or logging.getLogger(__name__)
     logger.info("Starting authentication process")
 

@@ -11,7 +11,7 @@ from PyQt5.QtCore import Qt, QTimer, QSettings
 from PyQt5.QtGui import QColor, QKeySequence
 import traceback
 from datetime import datetime, timedelta
-from app_constants import SETTINGS_ORG, SETTINGS_APP
+from silverestimate.infrastructure.app_constants import SETTINGS_ORG, SETTINGS_APP
 
 class SilverBarHistoryDialog(QDialog):
     """Dialog for viewing silver bar history and searching all bars in the database."""

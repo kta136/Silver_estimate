@@ -11,7 +11,7 @@ from PyQt5.QtCore import Qt, QTimer, QSettings
 from PyQt5.QtGui import QColor, QKeySequence
 import traceback # Added for error handling in actions
 from datetime import datetime, timedelta
-from app_constants import SETTINGS_ORG, SETTINGS_APP
+from silverestimate.infrastructure.app_constants import SETTINGS_ORG, SETTINGS_APP
 
 class SilverBarDialog(QDialog):
     """Dialog for managing silver bars and grouping them into lists (v2.0)."""
@@ -1329,7 +1329,7 @@ class SilverBarDialog(QDialog):
         logging.getLogger(__name__).info(f"Printing list {details['list_identifier']} (ID: {self.current_list_id}) with {len(bars_in_list)} bars.")
 
         try:
-            from print_manager import PrintManager # Import locally
+            from .print_manager import PrintManager # Import locally
             # Assuming parent() gives access to main window or similar context for font
             parent_context = self.parent()
             current_print_font = getattr(parent_context, 'print_font', None) if parent_context else None

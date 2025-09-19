@@ -35,7 +35,7 @@ Write-Host "[Build] Packaging zip..."
 $outDir = Join-Path $PSScriptRoot "..\dist\SilverEstimate"
 if (!(Test-Path $outDir)) { throw "Output directory not found: $outDir" }
 
-$versionFile = Join-Path $PSScriptRoot "..\app_constants.py"
+$versionFile = Join-Path $PSScriptRoot '..\silverestimate\infrastructure\app_constants.py'
 $version = (Get-Content $versionFile | Select-String -Pattern 'APP_VERSION\s*=\s*"([^"]+)' -AllMatches).Matches.Groups[1].Value
 if (-not $version) { $version = "dev" }
 
@@ -45,3 +45,7 @@ if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 Compress-Archive -Path (Join-Path $PSScriptRoot "..\dist\SilverEstimate\*") -DestinationPath $zipPath
 
 Write-Host "[Build] Done: $zipPath"
+
+
+
+

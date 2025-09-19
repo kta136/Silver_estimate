@@ -8,8 +8,8 @@ from typing import Callable, Optional
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import QDialog, QWidget
 
-from custom_font_dialog import CustomFontDialog
-from table_font_size_dialog import TableFontSizeDialog
+from .custom_font_dialog import CustomFontDialog
+from .table_font_size_dialog import TableFontSizeDialog
 from silverestimate.services.settings_service import SettingsService
 
 ApplyFontSize = Callable[[int], None]

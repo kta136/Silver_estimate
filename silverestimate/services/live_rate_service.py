@@ -7,8 +7,8 @@ from typing import Callable, Optional, Tuple
 
 from PyQt5.QtCore import QObject, QSettings, QTimer, pyqtSignal
 
-from app_constants import SETTINGS_APP, SETTINGS_ORG
-from dda_rate_fetcher import (
+from silverestimate.infrastructure.app_constants import SETTINGS_APP, SETTINGS_ORG
+from silverestimate.services.dda_rate_fetcher import (
     fetch_broadcast_rate_exact,
     fetch_silver_agra_local_mohar_rate,
 )

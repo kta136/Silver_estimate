@@ -6,7 +6,7 @@ import sqlite3
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
-    from database_manager import DatabaseManager
+    from silverestimate.persistence.database_manager import DatabaseManager
 
 
 def run_schema_setup(db: "DatabaseManager") -> None:

@@ -41,7 +41,7 @@ class NavigationService:
         widget = getattr(self.main_window, 'item_master_widget', None)
         if widget is None:
             try:
-                from item_master import ItemMasterWidget
+                from silverestimate.ui.item_master import ItemMasterWidget
 
                 self._logger.info("Creating ItemMasterWidget on demand...")
                 widget = ItemMasterWidget(self.db, self.main_window)
@@ -69,7 +69,7 @@ class NavigationService:
         widget = getattr(self.main_window, 'silver_bar_widget', None)
         if widget is None:
             try:
-                from silver_bar_management import SilverBarDialog
+                from silverestimate.ui.silver_bar_management import SilverBarDialog
 
                 self._logger.info("Creating SilverBar view on demand...")
                 widget = SilverBarDialog(self.db, self.main_window)
@@ -100,7 +100,7 @@ class NavigationService:
         if not self._ensure_db():
             return
         try:
-            from silver_bar_history import SilverBarHistoryDialog
+            from silverestimate.ui.silver_bar_history import SilverBarHistoryDialog
 
             self._logger.info("Opening Silver Bar History dialog")
             dialog = SilverBarHistoryDialog(self.db, self.main_window)
@@ -124,7 +124,7 @@ class NavigationService:
             )
             return
         try:
-            from estimate_history import EstimateHistoryDialog
+            from silverestimate.ui.estimate_history import EstimateHistoryDialog
 
             history_dialog = EstimateHistoryDialog(
                 self.db, main_window_ref=self.main_window, parent=self.main_window

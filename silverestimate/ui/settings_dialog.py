@@ -7,14 +7,14 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWid
                              QListView, QStackedWidget, QFrame, QComboBox)
 from PyQt5.QtCore import Qt, QSettings, pyqtSignal, QUrl, QSize
 from PyQt5.QtGui import QFont, QDesktopServices
-from app_constants import SETTINGS_ORG, SETTINGS_APP
+from silverestimate.infrastructure.app_constants import SETTINGS_ORG, SETTINGS_APP
 from PyQt5.QtPrintSupport import QPrinterInfo
 
 # Import dependent dialogs and modules
-from custom_font_dialog import CustomFontDialog
-from table_font_size_dialog import TableFontSizeDialog
-from login_dialog import LoginDialog # Needed for password verification/hashing
-from item_export_manager import ItemExportManager # Import the new export manager
+from .custom_font_dialog import CustomFontDialog
+from .table_font_size_dialog import TableFontSizeDialog
+from .login_dialog import LoginDialog # Needed for password verification/hashing
+from .item_export_manager import ItemExportManager # Import the new export manager
 
 class SettingsDialog(QDialog):
     """Centralized dialog for application settings."""
@@ -733,7 +733,7 @@ class SettingsDialog(QDialog):
             self.settings.setValue("logging/cleanup_days", self.cleanup_days_spin.value())
 
             # Apply logging settings immediately
-            from logger import reconfigure_logging
+            from silverestimate.infrastructure.logger import reconfigure_logging
             reconfigure_logging()
             logging.getLogger(__name__).info("Logging settings applied.")
 
@@ -877,7 +877,7 @@ class SettingsDialog(QDialog):
             
     def _handle_manual_log_cleanup(self):
         """Handle manual log cleanup button click."""
-        from logger import cleanup_old_logs
+        from silverestimate.infrastructure.logger import cleanup_old_logs
         import logging
         
         # Get logger for this operation
@@ -1018,7 +1018,7 @@ class SettingsDialog(QDialog):
     def _open_logs_folder(self):
         """Open the logs directory in the system file manager."""
         try:
-            from app_constants import LOG_DIR
+            from silverestimate.infrastructure.app_constants import LOG_DIR
             QDesktopServices.openUrl(QUrl.fromLocalFile(LOG_DIR))
         except Exception:
             # Fallback: try current working directory 'logs'

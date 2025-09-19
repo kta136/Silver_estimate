@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushBut
                              QTableWidget, QTableWidgetItem, QHeaderView,
                              QAbstractItemView, QLineEdit, QDateEdit, QMessageBox)
 from PyQt5.QtCore import Qt, QDate, QThread, QObject, pyqtSignal
-from print_manager import PrintManager # Added import
+from .print_manager import PrintManager # Added import
 
 class EstimateHistoryDialog(QDialog):
     """Dialog for browsing and selecting past estimates."""

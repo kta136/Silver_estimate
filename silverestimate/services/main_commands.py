@@ -96,8 +96,8 @@ class MainCommands:
         if not self._ensure_db():
             return
 
-        from item_import_dialog import ItemImportDialog
-        from item_import_manager import ItemImportManager
+        from silverestimate.ui.item_import_dialog import ItemImportDialog
+        from silverestimate.ui.item_import_manager import ItemImportManager
         from PyQt5.QtCore import QThread
 
         dialog = ItemImportDialog(self.main_window)

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from PyQt5.QtCore import QSettings
 from PyQt5.QtGui import QFont
 
-from app_constants import SETTINGS_APP, SETTINGS_ORG
+from silverestimate.infrastructure.app_constants import SETTINGS_APP, SETTINGS_ORG
 
 
 @dataclass

@@ -12,8 +12,8 @@ from PyQt5.QtCore import Qt, QTimer
 import PyQt5.QtCore as QtCore
 
 # Import the custom dialogs and modules
-from estimate_entry import EstimateEntryWidget
-from database_manager import DatabaseManager
+from silverestimate.ui.estimate_entry import EstimateEntryWidget
+from silverestimate.persistence.database_manager import DatabaseManager
 # from advanced_tools_dialog import AdvancedToolsDialog # Remove old import
 # Lazy imports: ItemMasterWidget, SettingsDialog, SilverBarHistoryDialog
 from silverestimate.services.auth_service import run_authentication, perform_data_wipe
@@ -22,9 +22,9 @@ from silverestimate.services.main_commands import MainCommands
 from silverestimate.services.navigation_service import NavigationService
 from silverestimate.services.settings_service import SettingsService
 from silverestimate.ui.font_dialogs import adjust_table_font_size, choose_print_font
-from logger import setup_logging, qt_message_handler
-from message_bar import MessageBar
-from app_constants import APP_TITLE, APP_VERSION, SETTINGS_ORG, SETTINGS_APP, DB_PATH
+from silverestimate.infrastructure.logger import setup_logging, qt_message_handler
+from silverestimate.ui.message_bar import MessageBar
+from silverestimate.infrastructure.app_constants import APP_TITLE, APP_VERSION, SETTINGS_ORG, SETTINGS_APP, DB_PATH
 
 class MainWindow(QMainWindow):
     # Thread-safe signal to apply fetched rates on the UI thread
@@ -326,7 +326,7 @@ class MainWindow(QMainWindow):
 
             # Startup recovery: if a previous temp DB exists and is newer than encrypted, offer recovery
             try:
-                from database_manager import DatabaseManager as DM
+                from silverestimate.persistence.database_manager import DatabaseManager as DM
                 enc_path = DB_PATH
                 candidate = DM.check_recovery_candidate(enc_path)
                 if candidate:
@@ -629,7 +629,7 @@ class MainWindow(QMainWindow):
     # --- Method to show the new Settings dialog ---
     def show_settings_dialog(self):
         """Show the centralized settings dialog."""
-        from settings_dialog import SettingsDialog
+        from silverestimate.ui.settings_dialog import SettingsDialog
         dialog = SettingsDialog(main_window_ref=self, parent=self)
         # Connect the signal if needed for immediate UI updates beyond fonts
         # dialog.settings_applied.connect(self.handle_settings_applied)
@@ -650,7 +650,7 @@ def main() -> int:
     main_window = None
     try:
         from pathlib import Path
-        from logger import get_log_config, setup_logging, LogCleanupScheduler
+        from silverestimate.infrastructure.logger import get_log_config, setup_logging, LogCleanupScheduler
 
         logs_dir = Path("logs")
         logs_dir.mkdir(exist_ok=True)

@@ -145,8 +145,8 @@ First run notes:
 
 ## ⚙️ Configuration
 
-- Settings: Qt QSettings (`SETTINGS_ORG`, `SETTINGS_APP`) in `app_constants.py`
-- Paths: DB path via `DB_PATH` in `app_constants.py`
+- Settings: Qt QSettings (`SETTINGS_ORG`, `SETTINGS_APP`) in `silverestimate/infrastructure/app_constants.py`
+- Paths: DB path via `DB_PATH` in `silverestimate/infrastructure/app_constants.py`
 - Printing: Fonts and sizes configurable via Settings dialog
 
 ## 🧑‍💻 Development
@@ -154,23 +154,23 @@ First run notes:
 Project structure (key files):
 
 ```
-app_constants.py            # App name/version, constants, paths
-main.py                     # Application entry point and main window
-estimate_entry.py           # Main estimate UI + interactions
-estimate_entry_ui.py        # UI helpers and widgets
-estimate_entry_logic.py     # Calculation helpers and validations
-database_manager.py         # Encrypted SQLite management
-item_master.py              # Item catalog management
-silver_bar_management.py    # Silver bar inventory flows
-silver_bar_history.py       # Silver bar movements/history
-item_selection_dialog.py    # Item selection and filtering
-settings_dialog.py          # App settings dialog
-print_manager.py            # Print/preview formatting and INR currency
-message_bar.py              # Inline status/messages
-logger.py                   # Logging setup (Qt and Python)
-scripts/build_windows.ps1   # Local Windows build script
-.github/workflows/release-windows.yml  # CI release build (Windows)
-DOCS/                       # Deep-dive docs
+silverestimate/infrastructure/app_constants.py    # App name/version, constants, paths
+silverestimate/infrastructure/logger.py          # Logging setup (Qt and Python)
+silverestimate/persistence/database_manager.py   # Encrypted SQLite management
+silverestimate/ui/estimate_entry.py              # Main estimate UI + interactions
+silverestimate/ui/estimate_entry_ui.py           # UI helpers and widgets
+silverestimate/ui/estimate_entry_logic.py        # Calculation helpers and validations
+silverestimate/ui/item_master.py                 # Item catalog management
+silverestimate/ui/silver_bar_management.py       # Silver bar inventory flows
+silverestimate/ui/silver_bar_history.py          # Silver bar movements/history
+silverestimate/ui/item_selection_dialog.py       # Item selection and filtering
+silverestimate/ui/settings_dialog.py             # App settings dialog
+silverestimate/ui/print_manager.py               # Print/preview formatting and INR currency
+silverestimate/ui/message_bar.py                 # Inline status/messages
+main.py                                          # Application entry point and main window
+scripts/build_windows.ps1                        # Local Windows build script
+.github/workflows/release-windows.yml            # CI release build (Windows)
+DOCS/                                            # Deep-dive docs
 ```
 
 ## ✅ Testing
@@ -186,7 +186,7 @@ Add tests as the project evolves. Focus areas: calculations, encryption cycles, 
 - Output: `dist/SilverEstimate.exe` or versioned zip from script
 
 ### GitHub Release (Windows CI)
-- Update version in `app_constants.py` (`APP_VERSION`)
+- Update version in `silverestimate/infrastructure/app_constants.py` (`APP_VERSION`)
 - Create and push a tag (workflow triggers on tags):
   - `git commit -am "chore: bump version to vX.YY"`
   - `git tag vX.YY`

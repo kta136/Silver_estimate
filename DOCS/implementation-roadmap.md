@@ -22,6 +22,7 @@ This document captures the living implementation plan for the SilverEstimate ref
 - Main window delegates live-rate, navigation, destructive actions, and item import to shared services; startup now uses a simple main() entry point.
 
 - Migrated print and table font dialogs into silverestimate/ui/font_dialogs with SettingsService coordination.
+- Consolidated legacy root-level UI/service modules under silverestimate/ui, infrastructure, and persistence to match the target layout.
 
 
 ## Target Package Layout

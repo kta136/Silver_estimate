@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 from PyQt5.QtCore import QSettings
 from PyQt5.QtGui import QFont
@@ -45,6 +44,17 @@ class SettingsService:
         self._settings.setValue("font/family", settings.family)
         self._settings.setValue("font/size_float", settings.size)
         self._settings.setValue("font/bold", settings.bold)
+        self._settings.sync()
+
+    def load_table_font_size(self, default_size: int = 9) -> int:
+        size = self._settings.value("ui/table_font_size", defaultValue=int(default_size), type=int)
+        try:
+            return int(size)
+        except (TypeError, ValueError):
+            return int(default_size)
+
+    def save_table_font_size(self, size: int) -> None:
+        self._settings.setValue("ui/table_font_size", int(size))
         self._settings.sync()
 
     # --- Geometry/state -----------------------------------------------

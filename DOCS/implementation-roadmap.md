@@ -13,10 +13,16 @@ This document captures the living implementation plan for the SilverEstimate ref
 
 ## Recent Updates (2025-09-19)
 - Persistence repositories for estimates and silver bars are live; DatabaseManager lazily loads them.
-- database_manager.py now leans on silverestimate.security.encryption for all crypto work.
-- Added pytest-based repository coverage using in-memory SQLite fixtures (tests/test_repositories.py).
-- Authentication flow now lives in silverestimate/services/auth_service; UI code delegates to the shared service.
-- Main window delegates live-rate, navigation, destructive actions, and item import to shared services; startup now uses a simple main() entry point.
+- database_manager.py now leans on silverestimate.security.encryption for all crypto work.
+
+- Added pytest-based repository coverage using in-memory SQLite fixtures (tests/test_repositories.py).
+
+- Authentication flow now lives in silverestimate/services/auth_service; UI code delegates to the shared service.
+
+- Main window delegates live-rate, navigation, destructive actions, and item import to shared services; startup now uses a simple main() entry point.
+
+- Migrated print and table font dialogs into silverestimate/ui/font_dialogs with SettingsService coordination.
+
 
 ## Target Package Layout
 `
@@ -52,9 +58,12 @@ Existing top-level scripts (main.py, dialogs, etc.) will gradually import from t
 3. **Testing groundwork**
    - [x] Add a pytest harness covering migrations and repositories using in-memory SQLite fixtures.
    - [ ] Expand coverage to encryption helpers and failure scenarios.
-4. **Main window cleanup**
-   - [x] Delegate live-rate orchestration, navigation wiring, destructive operations, and item import to service modules; main.py now acts as a thin UI shell.
-   - [ ] Continue moving remaining widget wiring (fonts/dialog helpers) into silverestimate/services/ + silverestimate/ui/ packages.
+4. **Main window cleanup**
+
+   - [x] Delegate live-rate orchestration, navigation wiring, destructive operations, and item import to service modules; main.py now acts as a thin UI shell.
+
+   - [x] Continue moving remaining widget wiring (fonts/dialog helpers) into silverestimate/services/ + silverestimate/ui/ packages.
+
 
 ## Longer-Term Goals
 - Replace ad-hoc background threads with managed executors/Qt workers.

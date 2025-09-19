@@ -7,12 +7,11 @@ import logging
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QMenuBar, QMenu, QAction, QMessageBox, QDialog, QStatusBar,
                              QLabel, QStackedWidget, QToolBar, QActionGroup, QInputDialog)
-from PyQt5.QtGui import QKeySequence, QFont
-from PyQt5.QtCore import Qt, QTimer, QSettings
+from PyQt5.QtGui import QKeySequence
+from PyQt5.QtCore import Qt, QTimer
 import PyQt5.QtCore as QtCore
 
 # Import the custom dialogs and modules
-from custom_font_dialog import CustomFontDialog
 from estimate_entry import EstimateEntryWidget
 from database_manager import DatabaseManager
 # from advanced_tools_dialog import AdvancedToolsDialog # Remove old import
@@ -22,12 +21,14 @@ from silverestimate.services.live_rate_service import LiveRateService
 from silverestimate.services.main_commands import MainCommands
 from silverestimate.services.navigation_service import NavigationService
 from silverestimate.services.settings_service import SettingsService
+from silverestimate.ui.font_dialogs import adjust_table_font_size, choose_print_font
 from logger import setup_logging, qt_message_handler
 from message_bar import MessageBar
 from app_constants import APP_TITLE, APP_VERSION, SETTINGS_ORG, SETTINGS_APP, DB_PATH
 
 class MainWindow(QMainWindow):
-    # Thread-safe signal to apply fetched rates on the UI thread
+    # Thread-safe signal to apply fetched rates on the UI thread
+
     """Main application window for the Silver Estimation App."""
 
     def __init__(self, password=None, logger=None): # Add password and logger arguments
@@ -36,6 +37,8 @@ class MainWindow(QMainWindow):
         # Set up logging
         self.logger = logger or logging.getLogger(__name__)
         self.logger.info("Initializing MainWindow")
+
+        self.settings_service = SettingsService()
 
         # Defer database setup until password is known
         self.db = None
@@ -69,7 +72,12 @@ class MainWindow(QMainWindow):
         self.setup_menu_bar()
 
         # Load settings (including font) before setting up UI elements that use them
-        self.load_settings() # Password hashes will be loaded/checked elsewhere (login dialog)
+        default_font = QApplication.font()
+        try:
+            self.print_font = self.settings_service.load_print_font(default_font)
+        except Exception as exc:
+            self.logger.warning("Failed to load print font settings: %s", exc)
+            self.print_font = default_font
 
         # Ensure any QMainWindow footer status bar is hidden to free space
         try:
@@ -204,15 +212,7 @@ class MainWindow(QMainWindow):
 
         # Restore window geometry/state if available; otherwise maximize
         try:
-            settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
-            restored = False
-            geo = settings.value("ui/main_geometry")
-            if geo is not None:
-                self.restoreGeometry(geo)
-                restored = True
-            state = settings.value("ui/main_state")
-            if state is not None:
-                self.restoreState(state)
+            restored = self.settings_service.restore_geometry(self)
             if not restored:
                 self.setWindowState(Qt.WindowMaximized)
         except Exception:
@@ -293,8 +293,9 @@ class MainWindow(QMainWindow):
 
     def reconfigure_rate_visibility_from_settings(self):
         """Show/Hide live rate UI and enable/disable manual refresh based on settings."""
-        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
-        live_enabled = settings.value("rates/live_enabled", True, type=bool)
+        live_enabled = self.settings_service.get("rates/live_enabled", True, type=bool)
+        if live_enabled is None:
+            live_enabled = True
         try:
             if hasattr(self, 'estimate_widget') and self.estimate_widget is not None:
                 if hasattr(self.estimate_widget, 'live_rate_label') and self.estimate_widget.live_rate_label is not None:
@@ -585,87 +586,21 @@ class MainWindow(QMainWindow):
     # --- Methods called by Advanced Tools Dialog ---
     def show_font_dialog(self):
         """Show the font selection dialog and store the chosen print font."""
-        # Use the currently stored print_font to initialize the dialog
-        # Ensure the float_size attribute exists on it from loading/previous setting
-        if not hasattr(self.print_font, 'float_size'):
-             # If missing (e.g., first run before saving), initialize from pointSize
-             self.print_font.float_size = float(self.print_font.pointSize())
-
-        dialog = CustomFontDialog(self.print_font, self)
-        # Connect the custom signal
-        # dialog.fontSelected.connect(self.handle_font_selected) # Alternative way
-
-        if dialog.exec_() == QDialog.Accepted:
-            selected_font = dialog.get_selected_font()
-            # The dialog ensures min size 5.0 internally via spinbox range
-            # Store the selected font for printing, don't apply to UI
-            self.print_font = selected_font
-            self.save_settings(selected_font) # Pass the selected font to save
-            self.logger.debug(
-                f"Stored print font: {self.print_font.family()}, Size: {getattr(self.print_font, 'float_size', self.print_font.pointSize())}pt, Bold={self.print_font.bold()}"
-            )
+        self.print_font = choose_print_font(
+            parent=self,
+            settings=self.settings_service,
+            current_font=self.print_font,
+            logger=self.logger,
+        )
 
     # Removed apply_font_settings as we no longer apply to UI directly from here
-
-    def load_settings(self):
-        """Load application settings, including font."""
-        settings = QSettings(SETTINGS_ORG, SETTINGS_APP) # Use consistent names
-        default_family = QApplication.font().family()
-        default_size = float(QApplication.font().pointSize())
-        default_bold = QApplication.font().bold()
-
-        # Read values explicitly checking types
-        font_family_raw = settings.value("font/family")
-        font_size_raw = settings.value("font/size_float")
-        font_bold_raw = settings.value("font/bold")
-
-        font_family = font_family_raw if isinstance(font_family_raw, str) else default_family
-        # Use the type hint in settings.value for loading float
-        font_size_float = settings.value("font/size_float", default_size, type=float)
-        # Explicit boolean conversion check
-        if isinstance(font_bold_raw, str): # Handle 'true'/'false' strings if saved that way
-             font_bold = font_bold_raw.lower() == 'true'
-        elif isinstance(font_bold_raw, bool):
-             font_bold = font_bold_raw
-        else: # Fallback for other types or None
-             font_bold = default_bold
-
-        # Ensure minimum size on load
-        if font_size_float < 5.0:
-            font_size_float = 5.0
-
-        # Create the font using the integer size for QFont, but store the float size
-        loaded_font = QFont(font_family, int(round(font_size_float)))
-        loaded_font.setBold(font_bold)
-        loaded_font.float_size = font_size_float # Store the float size
-
-        # Apply the loaded font settings during initialization
-        # We need to ensure widgets exist before applying.
-        # Applying here might be too early. Let's apply after widgets are created.
-        # Store the loaded font settings for printing
-        self.print_font = loaded_font
-
-
-    def save_settings(self, font_to_save):
-        """Save application settings, specifically the print font."""
-        settings = QSettings(SETTINGS_ORG, SETTINGS_APP) # Use consistent names
-        # Use the font passed (which is intended for printing)
-        float_size = getattr(font_to_save, 'float_size', float(font_to_save.pointSize()))
-        # Ensure we save as float
-        settings.setValue("font/family", font_to_save.family())
-        settings.setValue("font/size_float", float(float_size)) # Explicitly save as float
-        settings.setValue("font/bold", bool(font_to_save.bold())) # Explicitly save as bool
-        settings.sync() # Ensure settings are written immediately
 
     def closeEvent(self, event):
         """Handle window close event."""
         self.logger.info("Application closing")
         # Persist window geometry/state
         try:
-            settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
-            settings.setValue("ui/main_geometry", self.saveGeometry())
-            settings.setValue("ui/main_state", self.saveState())
-            settings.sync()
+            self.settings_service.save_geometry(self)
         except Exception:
             pass
         # Close the database connection properly
@@ -673,33 +608,23 @@ class MainWindow(QMainWindow):
             self.logger.debug("Closing database connection")
             self.db.close()
         # Optional: Add confirmation dialog if needed
-        # self.save_settings() # Save settings on close if desired, though saving after change is often better
         super().closeEvent(event)
 
     def show_table_font_size_dialog(self):
         """Show dialog to change estimate table font size."""
-        from table_font_size_dialog import TableFontSizeDialog
-        from PyQt5.QtGui import QFont
-        from PyQt5.QtCore import QSettings
+        apply_callback = None
+        if hasattr(self, 'estimate_widget') and hasattr(self.estimate_widget, '_apply_table_font_size'):
+            apply_callback = self.estimate_widget._apply_table_font_size
 
-        # 1. Load current setting
-        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
-        current_size = settings.value("ui/table_font_size", defaultValue=9, type=int)
+        new_size = adjust_table_font_size(
+            parent=self,
+            settings=self.settings_service,
+            apply_callback=apply_callback,
+            logger=self.logger,
+        )
 
-        # 2. Show dialog
-        dialog = TableFontSizeDialog(current_size=current_size, parent=self)
-        if dialog.exec_() == QDialog.Accepted:
-            new_size = dialog.get_selected_size()
-
-            # 3. Save new setting
-            settings.setValue("ui/table_font_size", new_size)
-            settings.sync()
-
-            # 4. Apply to estimate widget's table (if widget exists)
-            if hasattr(self, 'estimate_widget') and hasattr(self.estimate_widget, '_apply_table_font_size'):
-                self.estimate_widget._apply_table_font_size(new_size)
-            else:
-                 self.logger.warning("Estimate widget or apply method not found.")
+        if new_size is not None and apply_callback is None:
+            self.logger.warning("Estimate widget or apply method not found.")
 
     # --- Method to show the new Settings dialog ---
     def show_settings_dialog(self):

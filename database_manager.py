@@ -587,57 +587,6 @@ class DatabaseManager:
     def delete_silver_bars_for_estimate(self, voucher_no):
         return self.silver_bars_repo.delete_silver_bars_for_estimate(voucher_no)
 
-    # --- Utility Methods ---    # --- Silver Bar Methods (Overhauled) ---
-    def _generate_list_identifier(self):
-        return self.silver_bars_repo.generate_list_identifier()
-
-    def create_silver_bar_list(self, note=None):
-        return self.silver_bars_repo.create_list(note)
-
-    def get_silver_bar_lists(self, include_issued=True):
-        return self.silver_bars_repo.get_lists(include_issued)
-
-    def get_silver_bar_list_details(self, list_id):
-        return self.silver_bars_repo.get_list_details(list_id)
-
-    def update_silver_bar_list_note(self, list_id, new_note):
-        return self.silver_bars_repo.update_list_note(list_id, new_note)
-
-    def delete_silver_bar_list(self, list_id):
-        return self.silver_bars_repo.delete_list(list_id)
-
-    def assign_bar_to_list(self, bar_id, list_id, note="Assigned to list", perform_commit=True):
-        return self.silver_bars_repo.assign_bar_to_list(bar_id, list_id, note=note, perform_commit=perform_commit)
-
-    def remove_bar_from_list(self, bar_id, note="Removed from list", perform_commit=True):
-        return self.silver_bars_repo.remove_bar_from_list(bar_id, note=note, perform_commit=perform_commit)
-
-    def get_bars_in_list(self, list_id):
-        return self.silver_bars_repo.get_bars_in_list(list_id)
-
-    def get_available_bars(self):
-        return self.silver_bars_repo.get_available_bars()
-
-    def add_silver_bar(self, estimate_voucher_no, weight, purity):
-        return self.silver_bars_repo.add_silver_bar(estimate_voucher_no, weight, purity)
-
-    def update_silver_bar_values(self, bar_id, weight, purity):
-        return self.silver_bars_repo.update_silver_bar_values(bar_id, weight, purity)
-
-    def get_silver_bars(self, status=None, weight_query=None, estimate_voucher_no=None, weight_tolerance=0.001, min_purity=None, max_purity=None, date_range=None):
-        return self.silver_bars_repo.get_silver_bars(
-            status=status,
-            weight_query=weight_query,
-            estimate_voucher_no=estimate_voucher_no,
-            weight_tolerance=weight_tolerance,
-            min_purity=min_purity,
-            max_purity=max_purity,
-            date_range=date_range,
-        )
-
-    def delete_silver_bars_for_estimate(self, voucher_no):
-        return self.silver_bars_repo.delete_silver_bars_for_estimate(voucher_no)
-
     # --- Utility Methods ---
     def drop_tables(self):
         """Drops all known application tables from the temporary database."""

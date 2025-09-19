@@ -4,7 +4,7 @@ import os
 import traceback
 import logging
 
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QShortcut,
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QMenuBar, QMenu, QAction, QMessageBox, QDialog, QStatusBar,
                              QLabel, QStackedWidget, QToolBar, QActionGroup, QInputDialog)
 from PyQt5.QtGui import QKeySequence, QFont
@@ -25,15 +25,9 @@ from silverestimate.services.settings_service import SettingsService
 from logger import setup_logging, qt_message_handler
 from message_bar import MessageBar
 from app_constants import APP_TITLE, APP_VERSION, SETTINGS_ORG, SETTINGS_APP, DB_PATH
-from dda_rate_fetcher import (
-    fetch_silver_agra_local_mohar_rate,
-    fetch_broadcast_rate_exact,
-)
-
 
 class MainWindow(QMainWindow):
-    # Thread-safe signal to apply fetched rates on the UI thread
-    rate_updated = QtCore.pyqtSignal(object, object, object)  # (brate, api_rate, is_open)
+    # Thread-safe signal to apply fetched rates on the UI thread
     """Main application window for the Silver Estimation App."""
 
     def __init__(self, password=None, logger=None): # Add password and logger arguments
@@ -58,12 +52,6 @@ class MainWindow(QMainWindow):
 
         # Top message bar (created but not added to layout; inline status is preferred)
         self.message_bar = MessageBar(self)
-
-        # Connect live-rate signal
-        try:
-            self.rate_updated.connect(self._apply_live_rate)
-        except Exception:
-            pass
 
         # Setup database *after* getting password (if provided)
         if self._password:
@@ -727,30 +715,22 @@ class MainWindow(QMainWindow):
         return self.commands.import_items()
 
 
-def safe_start_app():
-    """
-    Safe application startup with comprehensive error handling.
-    This function wraps the entire application initialization in a try-except block.
-    """
-    # Initialize minimal variables
+# --- Application entry point ---
+
+def main() -> int:
+    """Start the SilverEstimate application and return the exit code."""
     logger = None
     app = None
     cleanup_scheduler = None
-    
+    main_window = None
     try:
-        # Initialize logging before anything else
-        import os
         from pathlib import Path
         from logger import get_log_config, setup_logging, LogCleanupScheduler
-        
-        # Ensure logs directory exists
+
         logs_dir = Path("logs")
         logs_dir.mkdir(exist_ok=True)
-        
-        # Get logging configuration
+
         log_config = get_log_config()
-        
-        # Initialize logging with configuration
         logger = setup_logging(
             app_name="silver_app",
             log_dir=log_config['log_dir'],
@@ -759,167 +739,133 @@ def safe_start_app():
             enable_error=log_config['enable_error'],
             enable_debug=log_config['enable_debug']
         )
-        
-        # Log startup information
         logger.info(f"{APP_TITLE} starting")
         logger.debug(f"Logging configuration: {log_config}")
-        
-        # Initialize cleanup scheduler if enabled
-        cleanup_scheduler = None
-        if log_config['auto_cleanup']:
+
+        if log_config.get('auto_cleanup'):
             try:
                 cleanup_scheduler = LogCleanupScheduler(
                     log_dir=log_config['log_dir'],
                     cleanup_days=log_config['cleanup_days']
                 )
                 cleanup_scheduler.start()
-                logger.info(f"Log cleanup scheduler initialized with {log_config['cleanup_days']} days retention")
-            except Exception as e:
-                logger.error(f"Failed to initialize log cleanup scheduler: {e}", exc_info=True)
-                # Continue without cleanup scheduler
-        
-        # Set up Qt message redirection
+                logger.info(
+                    "Log cleanup scheduler initialized with %s days retention",
+                    log_config['cleanup_days']
+                )
+            except Exception as exc:
+                logger.error("Failed to initialize log cleanup scheduler: %s", exc, exc_info=True)
+
         QtCore.qInstallMessageHandler(qt_message_handler)
         logger.debug("Qt message handler installed")
-        
-        # Create the application object early for dialogs
-        # Required for QSettings and QMessageBox before MainWindow exists
-        # Enable HiDPI scaling for crisp UI on high‑resolution displays
-        try:
-            QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
-            QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
-            logger.debug("HiDPI attributes enabled")
-        except Exception as e:
-            logger.warning(f"Failed to set HiDPI attributes: {e}")
+
+        for attr in (Qt.AA_EnableHighDpiScaling, Qt.AA_UseHighDpiPixmaps):
+            try:
+                QApplication.setAttribute(attr)
+            except Exception as exc:
+                if logger:
+                    logger.warning("Failed to set Qt attribute %s: %s", attr, exc)
 
         logger.debug("Creating QApplication instance")
         app = QApplication.instance() or QApplication(sys.argv)
 
-        # --- Authentication Step ---
         try:
             auth_result = run_authentication(logger)
-        except Exception as auth_e:
-            logger.critical(f"Authentication failed with error: {str(auth_e)}", exc_info=True)
-            QMessageBox.critical(None, "Authentication Error",
-                                f"Failed to authenticate: {str(auth_e)}\n\nThe application will now exit.")
+        except Exception as auth_exc:
+            logger.critical("Authentication failed with error: %s", auth_exc, exc_info=True)
+            QMessageBox.critical(
+                None,
+                "Authentication Error",
+                f"Failed to authenticate: {auth_exc}\n\nThe application will now exit."
+            )
             return 1
 
         if auth_result == 'wipe':
-            # --- Perform Data Wipe ---
             logger.warning("Data wipe requested, performing wipe operation")
             try:
-                if perform_data_wipe(db_path=DB_PATH, logger=logger): # Only need DB path now
-                    # Exit cleanly after successful wipe. User needs to restart manually.
-                    logger.info("Exiting application after successful data wipe.")
+                if perform_data_wipe(db_path=DB_PATH, logger=logger):
+                    logger.info("Exiting application after successful data wipe")
                     return 0
-                else:
-                    # Wipe failed, critical error. Exit with error status.
-                    logger.critical("Exiting application due to data wipe failure.")
-                    return 1
-            except Exception as wipe_e:
-                logger.critical(f"Data wipe failed with error: {str(wipe_e)}", exc_info=True)
-                QMessageBox.critical(None, "Data Wipe Error",
-                                    f"Failed to wipe data: {str(wipe_e)}\n\nThe application will now exit.")
+                logger.critical("Exiting application due to data wipe failure")
+                return 1
+            except Exception as wipe_exc:
+                logger.critical("Data wipe failed with error: %s", wipe_exc, exc_info=True)
+                QMessageBox.critical(
+                    None,
+                    "Data Wipe Error",
+                    f"Failed to wipe data: {wipe_exc}\n\nThe application will now exit."
+                )
                 return 1
 
-        elif auth_result: # Password provided (login or setup successful)
-            # --- Start Main Application ---
-            password = auth_result # auth_result is just the password now
-            logger.info("Authentication successful, initializing main window")
-            
-            # Create main window with error handling
-            try:
-                # Pass password to main window. DB Manager handles salt.
-                main_window = MainWindow(password=password, logger=logger)
-            except Exception as window_e:
-                logger.critical(f"Failed to create main window: {str(window_e)}", exc_info=True)
-                QMessageBox.critical(None, "Initialization Error",
-                                    f"Failed to initialize application window: {str(window_e)}\n\nThe application will now exit.")
-                return 1
-
-            # Check if MainWindow initialization and DB setup were successful
-            # setup_database_with_password is called within MainWindow.__init__
-            if main_window.db: # Check if db object was successfully created
-                try:
-                    # Show the window (maximized state is set in __init__)
-                    logger.info("Showing main application window")
-                    main_window.show()
-                    
-                    # Enter the Qt main event loop
-                    logger.debug("Entering Qt main event loop")
-                    exit_code = app.exec_()
-                    
-                    # Clean up resources on exit
-                    logger.debug("Cleaning up resources before exit")
-                    
-                    # Stop log cleanup scheduler if running
-                    if cleanup_scheduler is not None:
-                        logger.debug("Stopping log cleanup scheduler")
-                        cleanup_scheduler.stop()
-                    
-                    # Close DB connection cleanly on exit
-                    if hasattr(main_window, 'db') and main_window.db:
-                        logger.debug("Closing database connection on exit")
-                        main_window.db.close() # Ensure close is called
-                    
-                    logger.info(f"Application exiting with code {exit_code}")
-                    return exit_code
-                except Exception as run_e:
-                    logger.critical(f"Error during application execution: {str(run_e)}", exc_info=True)
-                    QMessageBox.critical(None, "Runtime Error",
-                                        f"The application encountered an error during execution: {str(run_e)}\n\nThe application will now exit.")
-                    return 1
-            else:
-                # MainWindow init failed (likely DB issue shown in its init)
-                logger.critical("Exiting application due to MainWindow initialization failure (Database connection?).")
-                QMessageBox.critical(None, "Initialization Error",
-                                    "Failed to initialize database connection.\n\nThe application will now exit.")
-                return 1
-
-        else: # Authentication failed or cancelled
+        if not auth_result:
             logger.info("Authentication failed or was cancelled by the user. Exiting.")
-            return 0 # Exit cleanly without error
-            
-    except Exception as e:
-        # Catch any unhandled exceptions during startup
-        try:
-            if logger:
-                logger.critical("Unhandled exception during application startup", exc_info=True)
-            else:
-                # If logger isn't initialized, fall back to print
-                print(f"CRITICAL ERROR: {str(e)}")
-                print(traceback.format_exc())
-        except:
-            # If logging fails, fall back to print
-            print(f"CRITICAL ERROR: {str(e)}")
+            return 0
+
+        password = auth_result
+        logger.info("Authentication successful, initializing main window")
+
+        main_window = MainWindow(password=password, logger=logger)
+        if not getattr(main_window, 'db', None):
+            logger.critical("Failed to initialize database connection during startup")
+            QMessageBox.critical(
+                None,
+                "Initialization Error",
+                "Failed to initialize database connection.\n\nThe application will now exit."
+            )
+            return 1
+
+        logger.info("Showing main application window")
+        main_window.show()
+        logger.debug("Entering Qt main event loop")
+        exit_code = app.exec_()
+        logger.info("Application exiting with code %s", exit_code)
+        return exit_code
+
+    except Exception as exc:
+        if logger:
+            logger.critical("Unhandled exception during application startup", exc_info=True)
+        else:
+            print(f"CRITICAL ERROR: {exc}")
             print(traceback.format_exc())
-        
-        # Show error to user
         try:
-            QMessageBox.critical(None, "Fatal Error",
-                                f"The application encountered a fatal error and cannot continue.\n\n"
-                                f"Error: {str(e)}")
-        except:
-            # If QMessageBox fails, fall back to print
-            print(f"FATAL ERROR: {str(e)}")
-        
+            QMessageBox.critical(
+                None,
+                "Fatal Error",
+                f"The application encountered a fatal error and cannot continue.\n\nError: {exc}"
+            )
+        except Exception:
+            pass
         return 1
 
+    finally:
+        if cleanup_scheduler is not None:
+            try:
+                cleanup_scheduler.stop()
+            except Exception as exc:
+                if logger:
+                    logger.debug("Failed to stop cleanup scheduler: %s", exc)
+        if main_window and getattr(main_window, 'db', None):
+            try:
+                main_window.db.close()
+            except Exception as exc:
+                if logger:
+                    logger.debug("Failed to close database on exit: %s", exc)
+
+
 if __name__ == "__main__":
-    # Wrap the entire application in a try-except block
     try:
-        exit_code = safe_start_app()
-        sys.exit(exit_code)
-    except Exception as e:
-        # Last resort error handling
-        print(f"CRITICAL STARTUP ERROR: {str(e)}")
+        sys.exit(main())
+    except Exception as exc:
+        print(f"CRITICAL STARTUP ERROR: {exc}")
         print(traceback.format_exc())
-        
         try:
-            QMessageBox.critical(None, "Fatal Error",
-                                f"The application encountered a fatal error and cannot continue.\n\n"
-                                f"Error: {str(e)}")
-        except:
+            QMessageBox.critical(
+                None,
+                "Fatal Error",
+                f"The application encountered a fatal error and cannot continue.\n\nError: {exc}"
+            )
+        except Exception:
             pass
-            
         sys.exit(1)
+
+

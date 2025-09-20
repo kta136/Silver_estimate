@@ -291,6 +291,78 @@ class MainWindow(QMainWindow):
 
             self.logger.debug(f"Live rate refresh failed: {exc}")
 
+
+    def _apply_live_rate(self, broadcast_rate, api_rate, market_open):
+
+        """Slot executed on the UI thread when the live-rate service emits new data."""
+
+        self.logger.info("Live-rate UI apply: entered")
+
+        estimate_widget = getattr(self, 'estimate_widget', None)
+        if estimate_widget is None:
+            self.logger.debug("Live-rate apply skipped: estimate widget not ready")
+            return
+
+        rate_value = broadcast_rate
+        source = 'broadcast'
+        if rate_value is None:
+            rate_value = api_rate
+            source = 'api'
+
+        if rate_value is None:
+            self.logger.warning(
+                "Live-rate apply: no rate available (broadcast=%s, api=%s)",
+                broadcast_rate,
+                api_rate,
+            )
+            label = getattr(estimate_widget, 'live_rate_value_label', None)
+            if label is not None:
+                try:
+                    label.setText("N/A /g")
+                except Exception:
+                    pass
+            self.show_status_message("Live rate unavailable", 3000, level='warning')
+            return
+
+        try:
+            rate_float = float(rate_value)
+        except (TypeError, ValueError):
+            self.logger.warning(
+                "Live-rate apply: invalid rate value %r from %s",
+                rate_value,
+                source,
+            )
+            self.show_status_message("Live rate invalid", 3000, level='warning')
+            return
+
+        label = getattr(estimate_widget, 'live_rate_value_label', None)
+        if label is not None:
+            try:
+                from PyQt5.QtCore import QLocale
+
+                locale = QLocale.system()
+                gram_rate = rate_float / 1000.0
+                display_value = locale.toCurrencyString(gram_rate)
+                display_value = f"{display_value} /g"
+            except Exception:
+                display_value = f"Rs {round(rate_float / 1000.0, 2)} /g"
+            try:
+                label.setText(display_value)
+            except Exception as exc:
+                self.logger.debug("Live-rate apply: failed to update label: %s", exc)
+
+        self.logger.info(
+            "Live-rate applied from %s: %s per kg (open=%s)",
+            source,
+            rate_float,
+            market_open,
+        )
+        status_text = "Live rate updated (per-g preview)" if market_open else "Live rate (market closed, per-g preview)"
+        status_level = 'info' if market_open else 'warning'
+        self.show_status_message(status_text, 3000, level=status_level)
+        self.logger.debug("Live-rate preview applied without altering silver_rate_spin")
+
+
     def reconfigure_rate_visibility_from_settings(self):
         """Show/Hide live rate UI and enable/disable manual refresh based on settings."""
         live_enabled = self.settings_service.get("rates/live_enabled", True, type=bool)
@@ -792,5 +864,3 @@ if __name__ == "__main__":
         except Exception:
             pass
         sys.exit(1)
-
-

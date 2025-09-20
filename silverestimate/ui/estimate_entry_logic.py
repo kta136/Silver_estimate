@@ -1269,27 +1269,45 @@ class EstimateLogic:
                         QMessageBox.warning(self, "Rate Refresh", "Could not fetch live silver rate. Please try again.")
                     except Exception:
                         pass
+                    if hasattr(self, 'live_rate_value_label'):
+                        try:
+                            self.live_rate_value_label.setText("N/A /g")
+                        except Exception:
+                            pass
                     self._status("Live rate refresh failed", 3000)
                     return
+                gram_rate = None
                 try:
-                    self.silver_rate_spin.setValue(float(rate))
+                    gram_rate = float(rate) / 1000.0
                 except Exception:
-                    pass
-                # Update live badge if present
+                    gram_rate = None
+
+                if gram_rate is None:
+                    if hasattr(self, 'live_rate_value_label'):
+                        try:
+                            self.live_rate_value_label.setText("N/A /g")
+                        except Exception:
+                            pass
+                    self._status("Live rate unavailable", 3000)
+                    return
+
+                # Update live badge if present (per gram display)
                 if hasattr(self, 'live_rate_value_label'):
                     try:
                         locale = QLocale.system()
-                        display = locale.toCurrencyString(float(rate))
+                        display = locale.toCurrencyString(gram_rate)
+                        display = f"{display} /g"
                     except Exception:
                         try:
-                            display = f"₹ {int(round(float(rate))):,}"
+                            display = f"₹ {round(gram_rate, 2)} /g"
                         except Exception:
-                            display = str(rate)
+                            display = str(gram_rate)
                     try:
                         self.live_rate_value_label.setText(display)
                     except Exception:
                         pass
-                self._status("Silver rate updated", 2000)
+
+                self._status("Live rate refreshed (per-gram display)", 2000)
 
             QTimer.singleShot(0, apply)
 

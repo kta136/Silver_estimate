@@ -155,3 +155,82 @@ def test_silver_bar_assignment_cycle(fake_db):
     assert repo.remove_bar_from_list(bar_id)
     bars_in_list = repo.get_bars_in_list(list_id)
     assert bars_in_list == []
+
+def test_estimate_repository_load_preserves_item_types(fake_db):
+    repo = EstimatesRepository(fake_db)
+    voucher = '500'
+    regular = {
+        'code': 'REG001',
+        'name': 'Regular Item',
+        'gross': 12.0,
+        'poly': 1.0,
+        'net_wt': 11.0,
+        'purity': 91.6,
+        'wage_rate': 15.0,
+        'pieces': 2,
+        'wage': 165.0,
+        'fine': 10.076,
+    }
+    return_item = {
+        'code': 'RET001',
+        'name': 'Return Item',
+        'gross': 2.0,
+        'poly': 0.2,
+        'net_wt': 1.8,
+        'purity': 80.0,
+        'wage_rate': 0.0,
+        'pieces': 1,
+        'wage': 0.0,
+        'fine': 1.44,
+        'is_return': True,
+    }
+    bar_item = {
+        'code': 'BAR001',
+        'name': 'Silver Bar',
+        'gross': 5.0,
+        'poly': 0.0,
+        'net_wt': 5.0,
+        'purity': 99.9,
+        'wage_rate': 0.0,
+        'pieces': 1,
+        'wage': 0.0,
+        'fine': 4.995,
+        'is_return': False,
+        'is_silver_bar': True,
+    }
+    totals = {
+        'total_gross': 12.0,
+        'total_net': 11.0,
+        'net_fine': 10.076,
+        'net_wage': 165.0,
+        'note': 'Test persistence',
+    }
+
+    saved = repo.save_estimate_with_returns(
+        voucher_no=voucher,
+        date='2025-03-01',
+        silver_rate=68000.0,
+        regular_items=[regular],
+        return_items=[return_item, bar_item],
+        totals=totals,
+    )
+    assert saved
+
+    loaded = repo.get_estimate_by_voucher(voucher)
+    assert loaded is not None
+    items = {item['item_code']: item for item in loaded['items']}
+
+    assert items['REG001']['is_return'] == 0
+    assert items['REG001']['is_silver_bar'] == 0
+    assert items['REG001']['gross'] == pytest.approx(12.0)
+    assert items['REG001']['fine'] == pytest.approx(10.076)
+
+    assert items['RET001']['is_return'] == 1
+    assert items['RET001']['is_silver_bar'] == 0
+    assert items['RET001']['net_wt'] == pytest.approx(1.8)
+    assert items['RET001']['fine'] == pytest.approx(1.44)
+
+    assert items['BAR001']['is_return'] == 0
+    assert items['BAR001']['is_silver_bar'] == 1
+    assert items['BAR001']['net_wt'] == pytest.approx(5.0)
+    assert items['BAR001']['fine'] == pytest.approx(4.995)

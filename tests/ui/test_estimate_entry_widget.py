@@ -212,3 +212,19 @@ def test_widget_save_and_reload(qt_app, tmp_path, settings_stub, monkeypatch):
     widget_loaded.deleteLater()
     manager.close()
 
+
+
+def test_toggle_modes_updates_empty_row(qt_app, fake_db):
+    widget = _make_widget(fake_db)
+    last_row = widget.item_table.rowCount() - 1
+    assert widget.item_table.item(last_row, COL_TYPE).text() == "No"
+    widget.toggle_return_mode()
+    last_row = widget.item_table.rowCount() - 1
+    assert widget.item_table.item(last_row, COL_TYPE).text() == "Return"
+    widget.toggle_silver_bar_mode()
+    last_row = widget.item_table.rowCount() - 1
+    assert widget.item_table.item(last_row, COL_TYPE).text() == "Silver Bar"
+    widget.toggle_silver_bar_mode()
+    last_row = widget.item_table.rowCount() - 1
+    assert widget.item_table.item(last_row, COL_TYPE).text() == "No"
+    assert widget.item_table.item(last_row, COL_TYPE).text() == "Silver Bar"

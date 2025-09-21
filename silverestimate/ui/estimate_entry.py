@@ -19,6 +19,8 @@ from .estimate_entry_ui import (
     COL_PIECES,
 )
 from .estimate_entry_logic import EstimateLogic
+from .inline_status import InlineStatusController
+
 
 
 class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
@@ -131,51 +133,18 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         self._load_breakdown_font_size_setting()
         self._load_final_calc_font_size_setting()
 
-        # Inline status timer for auto-clear
-        self._inline_status_timer = QTimer(self)
-        self._inline_status_timer.setSingleShot(True)
-        self._inline_status_timer.timeout.connect(lambda: self._set_inline_status_text(""))
-
+        self._status_helper = InlineStatusController(
+            parent=self,
+            label_getter=lambda: getattr(self, "status_message_label", None),
+            logger=self.logger,
+        )
 
     # --- Add helper to show status messages via main window ---
-    def show_status(self, message, timeout=3000):
-        # Route to inline label next to Mode
-        try:
-            self.show_inline_status(message, timeout)
-        except Exception:
-            import logging
-            logging.getLogger(__name__).info(f"Status: {message}")
-    # --------------------------------------------------------
-
-    def _set_inline_status_text(self, text):
-        try:
-            if hasattr(self, 'status_message_label') and self.status_message_label is not None:
-                self.status_message_label.setText(text or "")
-        except Exception:
-            pass
+    def show_status(self, message, timeout=3000, level='info'):
+        self._status_helper.show(message, timeout=timeout, level=level)
 
     def show_inline_status(self, message, timeout=3000, level='info'):
-        """Show a transient status message inline next to the Mode label."""
-        # Choose a subtle color per level
-        try:
-            color = {
-                'info': '#2b6cb0',     # blue-ish
-                'warning': '#8a6d3b',  # amber/brown
-                'error': '#a61b1b',    # red
-            }.get((level or 'info').lower(), '#2b6cb0')
-
-            if hasattr(self, 'status_message_label') and self.status_message_label is not None:
-                self.status_message_label.setStyleSheet(f"color: {color}; padding-left: 8px;")
-                self.status_message_label.setText(message or "")
-
-            # Reset timer
-            self._inline_status_timer.stop()
-            if isinstance(timeout, int) and timeout > 0:
-                self._inline_status_timer.start(timeout)
-        except Exception:
-            # Silent fallback; nothing critical here
-            pass
-
+        self._status_helper.show(message, timeout=timeout, level=level)
 
     def request_totals_recalc(self):
         """Request a debounced totals recomputation."""
@@ -286,6 +255,7 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
             self.show_status("Return Items mode deactivated", 2000)
 
         # Update the current or next empty row's type column visually
+        self._refresh_empty_row_type()
         self.focus_on_empty_row(update_visuals=True)
 
 
@@ -363,8 +333,31 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
             self.show_status("Silver Bars mode deactivated", 2000)
 
         # Update the current or next empty row's type column visually
+        self._refresh_empty_row_type()
         self.focus_on_empty_row(update_visuals=True)
 
+
+    def _refresh_empty_row_type(self):
+        """Ensure the empty row reflects the active mode."""
+        try:
+            table = self.item_table
+            for row in range(table.rowCount()):
+                code_item = table.item(row, COL_CODE)
+                if code_item and code_item.text().strip():
+                    continue
+                type_item = table.item(row, COL_TYPE)
+                if type_item is None:
+                    type_item = QTableWidgetItem("")
+                    type_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+                    table.setItem(row, COL_TYPE, type_item)
+                table.blockSignals(True)
+                try:
+                    self._update_row_type_visuals_direct(type_item)
+                    type_item.setTextAlignment(Qt.AlignCenter)
+                finally:
+                    table.blockSignals(False)
+        except Exception:
+            self.logger.debug('Failed to refresh empty row type', exc_info=True)
 
     def focus_on_empty_row(self, update_visuals=False):
         """Find and focus the first empty row's code column. Optionally update its type visuals."""

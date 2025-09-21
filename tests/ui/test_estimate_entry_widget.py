@@ -227,4 +227,3 @@ def test_toggle_modes_updates_empty_row(qt_app, fake_db):
     widget.toggle_silver_bar_mode()
     last_row = widget.item_table.rowCount() - 1
     assert widget.item_table.item(last_row, COL_TYPE).text() == "No"
-    assert widget.item_table.item(last_row, COL_TYPE).text() == "Silver Bar"

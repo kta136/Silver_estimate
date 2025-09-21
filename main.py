@@ -65,6 +65,8 @@ class MainWindow(QMainWindow):
 
         # Setup database now that a valid password is available
         self.setup_database_with_password(self._password)
+        if not self.db:
+            raise StartupError("Failed to initialize database connection.")
 
         # Set up menu bar
         self.setup_menu_bar()
@@ -105,278 +107,58 @@ class MainWindow(QMainWindow):
 
 
         # Initialize widgets, passing main window and db manager
-        # Ensure db is initialized before creating widgets that need it
-        if self.db:
+        try:
+            self.logger.info("Creating EstimateEntryWidget...")
+            self.estimate_widget = EstimateEntryWidget(self.db, self)
+
+            # Lazy-load Item Master on demand (rarely used)
+            self.logger.info("Deferring ItemMasterWidget creation (lazy-load)")
+            self.item_master_widget = None
+            # Lazy-load Silver Bar Management view on demand
+            self.logger.info("Deferring SilverBar view creation (lazy-load)")
+            self.silver_bar_widget = None
+
+            # Add Estimate view to navigation stack
+            self.stack.addWidget(self.estimate_widget)
+            self.stack.setCurrentWidget(self.estimate_widget)
+
+            # Hook DB flush callbacks to inline status in the estimate view
             try:
-                # Create widgets with robust error handling
-                self.logger.info("Creating EstimateEntryWidget...")
-                self.estimate_widget = EstimateEntryWidget(self.db, self) # Pass main window instance
-                
-                # Lazy-load Item Master on demand (rarely used)
-                self.logger.info("Deferring ItemMasterWidget creation (lazy-load)")
-                self.item_master_widget = None
-                # Lazy-load Silver Bar Management view on demand
-                self.logger.info("Deferring SilverBar view creation (lazy-load)")
-                self.silver_bar_widget = None
+                if hasattr(self.db, 'on_flush_queued'):
+                    def _on_flush_q():
+                        QTimer.singleShot(0, lambda: self.estimate_widget.show_inline_status("Saving.", 1000, 'info'))
 
-                # Add Estimate view to navigation stack
-                self.stack.addWidget(self.estimate_widget)
+                    def _on_flush_done():
+                        QTimer.singleShot(0, lambda: self.estimate_widget.show_inline_status("", 0))
 
-                # Initially show estimate entry
-                self.stack.setCurrentWidget(self.estimate_widget)
+                    self.db.on_flush_queued = _on_flush_q
+                    self.db.on_flush_done = _on_flush_done
+            except Exception as callback_error:
+                self.logger.debug("Could not hook flush callbacks: %s", callback_error)
 
-                # Hook DB flush callbacks to inline status in the estimate view
-                try:
-                    if hasattr(self.db, 'on_flush_queued'):
-                        def _on_flush_q():
-                            QTimer.singleShot(0, lambda: self.estimate_widget.show_inline_status("Saving…", 1000, 'info'))
-                        def _on_flush_done():
-                            QTimer.singleShot(0, lambda: self.estimate_widget.show_inline_status("", 0))
-                        self.db.on_flush_queued = _on_flush_q
-                        self.db.on_flush_done = _on_flush_done
-                except Exception as _cb_e:
-                    self.logger.debug(f"Could not hook flush callbacks: {_cb_e}")
-
-                # Preload item cache off the UI thread for faster code lookups
-                try:
-                    if hasattr(self.db, 'start_preload_item_cache'):
-                        self.db.start_preload_item_cache()
-                except Exception as _pre_e:
-                    self.logger.debug(f"Item cache preload failed: {_pre_e}")
-                
-                self.logger.info("Widgets initialized successfully")
-                # Now that widgets exist, show initial Ready status inline
-                try:
-                    self.show_status_message("Ready", 2000, level='info')
-                except Exception:
-                    pass
-
-                # Configure and start live rate updates
-                try:
-                    # Apply visibility first, then timer setup per settings
-                    self.reconfigure_rate_visibility_from_settings()
-                    self._setup_live_rate_timer()
-                    # Trigger an initial fetch shortly after UI is ready
-                    QTimer.singleShot(500, self.refresh_live_rate_now)
-                    try:
-                        self.logger.info("Scheduled initial live-rate fetch (500ms)")
-                    except Exception:
-                        pass
-                except Exception as _rate_e:
-                    self.logger.debug(f"Live rate timer init failed: {_rate_e}")
-            except Exception as e:
-                # Catch any exceptions during widget initialization
-                self.logger.critical(f"Failed to initialize widgets: {str(e)}", exc_info=True)
-                QMessageBox.critical(self, "Initialization Error",
-                                    f"Failed to initialize application widgets: {str(e)}\n\n"
-                                    "The application may not function correctly.")
-                
-                # Create placeholder widgets to prevent crashes
-                self.logger.info("Creating placeholder widgets...")
-                placeholder = QWidget()
-                placeholder_layout = QVBoxLayout(placeholder)
-                error_label = QLabel("Application initialization error. Please restart the application.")
-                error_label.setStyleSheet("color: red; font-weight: bold; font-size: 14px;")
-                placeholder_layout.addWidget(error_label)
-                
-                # Add placeholder to layout
-                self.layout.addWidget(placeholder)
-                
-                # Store None for the widgets to prevent attribute errors
-                self.estimate_widget = None
-                self.item_master_widget = None
-        else:
-             # Handle case where db failed to initialize
-             self.logger.critical("Database initialization failed. Cannot create widgets.")
-             QMessageBox.critical(self, "Database Error", "Failed to initialize database. Application cannot continue.")
-             
-             # Create placeholder widget with error message
-             placeholder = QWidget()
-             placeholder_layout = QVBoxLayout(placeholder)
-             error_label = QLabel("Database connection failed. Please restart the application.")
-             error_label.setStyleSheet("color: red; font-weight: bold; font-size: 14px;")
-             placeholder_layout.addWidget(error_label)
-             
-             # Add placeholder to layout
-             self.layout.addWidget(placeholder)
-             
-             # Store None for the widgets to prevent attribute errors
-             self.estimate_widget = None
-             self.item_master_widget = None
-
-
-        # Set up shortcuts (if needed)
-#        self.setup_shortcuts()
-
-        # Restore window geometry/state if available; otherwise maximize
-        try:
-            restored = self.settings_service.restore_geometry(self)
-            if not restored:
-                self.setWindowState(Qt.WindowMaximized)
-        except Exception:
-            # Fall back to maximized if restore fails
-            self.setWindowState(Qt.WindowMaximized)
-
-    def show_status_message(self, message, timeout=3000, level='info'):
-        """Show a transient message inline next to Mode when possible."""
-        # Prefer inline status on the active Estimate view
-        try:
-            if hasattr(self, 'estimate_widget') and self.estimate_widget is not None:
-                if hasattr(self.estimate_widget, 'show_inline_status'):
-                    self.estimate_widget.show_inline_status(message, timeout, level)
-                    return
-        except Exception:
-            pass
-        # No inline target yet; skip showing tAo avoid UI flicker
-
-    # --- Live Rate Integration ---
-
-    def _ensure_live_rate_service(self):
-
-        if not hasattr(self, 'live_rate_service') or self.live_rate_service is None:
-
-            self.live_rate_service = LiveRateService(parent=self, logger=self.logger)
-
-            self.live_rate_service.rate_updated.connect(self._apply_live_rate)
-
-
-
-    def _setup_live_rate_timer(self):
-
-        """Initialize or reconfigure the live rate service based on settings."""
-
-        self._ensure_live_rate_service()
-
-        try:
-
-            self.live_rate_service.stop()
-
-        except Exception:
-
-            pass
-
-        self.live_rate_service.start()
-
-
-
-    def reconfigure_rate_timer_from_settings(self):
-
-        """Public hook to update the live-rate cadence when settings change."""
-
-        try:
-
-            self._setup_live_rate_timer()
-
-            self.refresh_live_rate_now()
-
-        except Exception as exc:
-
-            self.logger.debug(f"Failed to reconfigure rate timer: {exc}")
-
-
-
-    def refresh_live_rate_now(self):
-
-        """Trigger an immediate live-rate refresh via the service."""
-
-        try:
-
-            self._ensure_live_rate_service()
-
-            self.live_rate_service.refresh_now()
-
-        except Exception as exc:
-
-            self.logger.debug(f"Live rate refresh failed: {exc}")
-
-
-    def _apply_live_rate(self, broadcast_rate, api_rate, market_open):
-
-        """Slot executed on the UI thread when the live-rate service emits new data."""
-
-        self.logger.info("Live-rate UI apply: entered")
-
-        estimate_widget = getattr(self, 'estimate_widget', None)
-        if estimate_widget is None:
-            self.logger.debug("Live-rate apply skipped: estimate widget not ready")
-            return
-
-        rate_value = broadcast_rate
-        source = 'broadcast'
-        if rate_value is None:
-            rate_value = api_rate
-            source = 'api'
-
-        if rate_value is None:
-            self.logger.warning(
-                "Live-rate apply: no rate available (broadcast=%s, api=%s)",
-                broadcast_rate,
-                api_rate,
-            )
-            label = getattr(estimate_widget, 'live_rate_value_label', None)
-            if label is not None:
-                try:
-                    label.setText("N/A /g")
-                except Exception:
-                    pass
-            self.show_status_message("Live rate unavailable", 3000, level='warning')
-            return
-
-        try:
-            rate_float = float(rate_value)
-        except (TypeError, ValueError):
-            self.logger.warning(
-                "Live-rate apply: invalid rate value %r from %s",
-                rate_value,
-                source,
-            )
-            self.show_status_message("Live rate invalid", 3000, level='warning')
-            return
-
-        label = getattr(estimate_widget, 'live_rate_value_label', None)
-        if label is not None:
+            # Preload item cache off the UI thread for faster code lookups
             try:
-                from PyQt5.QtCore import QLocale
+                if hasattr(self.db, 'start_preload_item_cache'):
+                    self.db.start_preload_item_cache()
+            except Exception as preload_error:
+                self.logger.debug("Item cache preload failed: %s", preload_error)
 
-                locale = QLocale.system()
-                gram_rate = rate_float / 1000.0
-                display_value = locale.toCurrencyString(gram_rate)
-                display_value = f"{display_value} /g"
+            self.logger.info("Widgets initialized successfully")
+            try:
+                self.show_status_message("Ready", 2000, level='info')
             except Exception:
-                display_value = f"Rs {round(rate_float / 1000.0, 2)} /g"
+                pass
+
             try:
-                label.setText(display_value)
-            except Exception as exc:
-                self.logger.debug("Live-rate apply: failed to update label: %s", exc)
-
-        self.logger.info(
-            "Live-rate applied from %s: %s per kg (open=%s)",
-            source,
-            rate_float,
-            market_open,
-        )
-        status_text = "Live rate updated (per-g preview)" if market_open else "Live rate (market closed, per-g preview)"
-        status_level = 'info' if market_open else 'warning'
-        self.show_status_message(status_text, 3000, level=status_level)
-        self.logger.debug("Live-rate preview applied without altering silver_rate_spin")
-
-
-    def reconfigure_rate_visibility_from_settings(self):
-        """Show/Hide live rate UI and enable/disable manual refresh based on settings."""
-        live_enabled = self.settings_service.get("rates/live_enabled", True, type=bool)
-        if live_enabled is None:
-            live_enabled = True
-        try:
-            if hasattr(self, 'estimate_widget') and self.estimate_widget is not None:
-                if hasattr(self.estimate_widget, 'live_rate_label') and self.estimate_widget.live_rate_label is not None:
-                    self.estimate_widget.live_rate_label.setVisible(live_enabled)
-                if hasattr(self.estimate_widget, 'live_rate_value_label') and self.estimate_widget.live_rate_value_label is not None:
-                    self.estimate_widget.live_rate_value_label.setVisible(live_enabled)
-            # Toggle manual refresh action if present
-            if hasattr(self, 'refresh_rate_action') and self.refresh_rate_action is not None:
-                self.refresh_rate_action.setEnabled(live_enabled)
-        except Exception:
-            pass
+                self.reconfigure_rate_visibility_from_settings()
+                self._setup_live_rate_timer()
+                QTimer.singleShot(500, self.refresh_live_rate_now)
+                self.logger.info("Scheduled initial live-rate fetch (500ms)")
+            except Exception as rate_error:
+                self.logger.debug("Live rate timer init failed: %s", rate_error)
+        except Exception as exc:
+            self.logger.critical("Failed to initialize widgets: %s", exc, exc_info=True)
+            raise StartupError(f"Failed to initialize application widgets: {exc}") from exc
 
     # --- File menu action handlers ---
     def file_save_estimate(self, *args, **kwargs):

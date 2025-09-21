@@ -25,8 +25,10 @@ def fake_db(tmp_path):
     class _DB:
         def __init__(self):
             self.item_cache_controller = None
+            self.generate_calls = 0
 
         def generate_voucher_no(self):
+            self.generate_calls += 1
             return "TEST123"
 
         def drop_tables(self):
@@ -73,6 +75,14 @@ def _set_row(widget, row, item):
 
 def _make_widget(db_manager):
     return EstimateEntryWidget(db_manager, types.SimpleNamespace(show_inline_status=lambda *a, **k: None))
+
+def test_widget_generates_voucher_on_init(qt_app, fake_db):
+    widget = _make_widget(fake_db)
+    try:
+        assert fake_db.generate_calls == 1
+        assert widget.voucher_edit.text() == "TEST123"
+    finally:
+        widget.deleteLater()
 
 
 def test_widget_calculates_totals(qt_app, fake_db):

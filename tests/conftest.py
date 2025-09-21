@@ -73,5 +73,6 @@ def settings_stub(monkeypatch):
     monkeypatch.setattr("silverestimate.services.live_rate_service.QSettings", _SettingsStub, raising=False)
     monkeypatch.setattr("silverestimate.ui.estimate_entry.QSettings", _SettingsStub, raising=False)
     monkeypatch.setattr("silverestimate.infrastructure.logger.QSettings", _SettingsStub, raising=False)
+    monkeypatch.setattr("silverestimate.infrastructure.settings.QSettings", _SettingsStub, raising=False)
     yield _SettingsStub
     _SettingsStub.clear()

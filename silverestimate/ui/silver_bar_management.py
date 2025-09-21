@@ -7,11 +7,11 @@ from PyQt5.QtWidgets import (
     QApplication, QCheckBox, QDoubleSpinBox, QSpinBox, QFileDialog, QStackedWidget,
     QRadioButton, QButtonGroup
 )
-from PyQt5.QtCore import Qt, QTimer, QSettings
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor, QKeySequence
 import traceback # Added for error handling in actions
 from datetime import datetime, timedelta
-from silverestimate.infrastructure.app_constants import SETTINGS_ORG, SETTINGS_APP
+from silverestimate.infrastructure.settings import get_app_settings
 
 class SilverBarDialog(QDialog):
     """Dialog for managing silver bars and grouping them into lists (v2.0)."""
@@ -1699,7 +1699,7 @@ class SilverBarDialog(QDialog):
             pass
 
     def _settings(self):
-        return QSettings(SETTINGS_ORG, SETTINGS_APP)
+        return get_app_settings()
 
     def _save_table_sort_state(self, which, table):
         try:

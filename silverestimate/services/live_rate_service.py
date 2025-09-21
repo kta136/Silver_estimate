@@ -1,18 +1,14 @@
 """Live rate polling and scheduling services."""
 from __future__ import annotations
-
 import logging
 import threading
 from typing import Callable, Optional, Tuple
-
-from PyQt5.QtCore import QObject, QSettings, QTimer, pyqtSignal
-
-from silverestimate.infrastructure.app_constants import SETTINGS_APP, SETTINGS_ORG
+from PyQt5.QtCore import QObject, QTimer, pyqtSignal
+from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.services.dda_rate_fetcher import (
     fetch_broadcast_rate_exact,
     fetch_silver_agra_local_mohar_rate,
 )
-
 
 class LiveRateService(QObject):
     rate_updated = pyqtSignal(object, object, object)
@@ -24,7 +20,7 @@ class LiveRateService(QObject):
         self._timer: Optional[QTimer] = None
 
     def start(self) -> None:
-        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+        settings = get_app_settings()
         if not self._timer:
             self._timer = QTimer(self)
             self._timer.setSingleShot(False)
@@ -52,14 +48,13 @@ class LiveRateService(QObject):
             self._logger.info("Live-rate timer disabled via settings")
 
     def refresh_now(self) -> None:
-        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+        settings = get_app_settings()
         if not settings.value("rates/live_enabled", True, type=bool):
             return
         if self._rate_fetch_in_progress:
             return
         self._rate_fetch_in_progress = True
         self._logger.info("Live-rate fetch started")
-
         def _worker():
             try:
                 brate, is_open, _ = fetch_broadcast_rate_exact(timeout=5)
@@ -82,5 +77,4 @@ class LiveRateService(QObject):
                     api_rate = None
             self.rate_updated.emit(brate, api_rate, is_open)
             self._rate_fetch_in_progress = False
-
         threading.Thread(target=_worker, daemon=True).start()

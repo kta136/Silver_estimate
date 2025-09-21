@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
     QApplication, QCheckBox, QDoubleSpinBox, QSpinBox, QFileDialog,
     QTabWidget, QTextEdit
 )
-from PyQt5.QtCore import Qt, QTimer, QSettings
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor, QKeySequence
 import traceback
 from datetime import datetime, timedelta

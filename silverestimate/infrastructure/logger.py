@@ -4,8 +4,10 @@ import logging.handlers
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
-from PyQt5.QtCore import QtMsgType, QSettings
+from PyQt5.QtCore import QtMsgType
 import PyQt5.QtCore as QtCore
+
+from silverestimate.infrastructure.settings import get_app_settings
 
 # Global variable to store the cleanup scheduler instance
 _cleanup_scheduler = None
@@ -354,7 +356,7 @@ def get_log_config():
     Returns:
         dict: Dictionary containing all logging configuration settings
     """
-    settings = QSettings("YourCompany", "SilverEstimateApp")
+    settings = get_app_settings()
     
     # Environment variables take precedence
     debug_mode = os.environ.get('SILVER_APP_DEBUG', '').lower() in ('true', '1', 'yes')

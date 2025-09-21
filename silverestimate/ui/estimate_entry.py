@@ -2,8 +2,8 @@
 # Added QStyledItemDelegate, QLineEdit, QMessageBox
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QShortcut, QTableWidgetItem, QCheckBox,
                              QMessageBox, QStyledItemDelegate, QLineEdit)
-from PyQt5.QtCore import Qt, QTimer, QLocale, QSettings # Added QSettings
-from silverestimate.infrastructure.app_constants import SETTINGS_ORG, SETTINGS_APP
+from PyQt5.QtCore import Qt, QTimer, QLocale
+from silverestimate.infrastructure.settings import get_app_settings
 # Added QKeySequence, QColor, QDoubleValidator, QIntValidator
 from PyQt5.QtGui import QKeySequence, QColor, QDoubleValidator, QIntValidator
 # Import the UI class AND the Delegate class AND the Constants
@@ -83,21 +83,15 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         self.clear_all_rows()
         self.add_empty_row() # This now focuses correctly
         
-        # Generate a voucher number when the widget is first created
-        # Do this BEFORE connecting signals to avoid triggering load_estimate
+        # Generate a new voucher number before signals hook up to avoid unintended loads
         self.generate_voucher_silent()
-        
-        # Connect signals AFTER setting delegates and generating voucher
-        # But DO NOT connect the load_estimate signal at startup
+
+        # Connect signals after initialization; skip load on startup
         self.connect_signals(skip_load_estimate=True)
-        
+
         # Connect the load button to the safe_load_estimate method
         self.load_button.clicked.connect(self.safe_load_estimate)
-        
-        # Generate a new voucher number automatically at startup
-        # This is now done silently without the generate button
-        self.generate_voucher_silent()
-        
+
         # Set initializing flag to false after setup is complete
         self.initializing = False
 
@@ -462,7 +456,7 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
 
     # --- Column Width Persistence ---
     def _settings(self):
-        return QSettings(SETTINGS_ORG, SETTINGS_APP)
+        return get_app_settings()
 
     def _save_column_widths_setting(self):
         try:
@@ -622,7 +616,7 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
 
     def _load_table_font_size_setting(self):
         """Loads the table font size from settings and applies it on init."""
-        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+        settings = get_app_settings()
         # Use a reasonable default font size (e.g., 9)
         # Define default min/max here in case spinbox doesn't exist yet or range changes
         default_size = 9
@@ -663,7 +657,7 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
             logging.getLogger(__name__).warning(f"Failed to apply breakdown font size: {e}")
 
     def _load_breakdown_font_size_setting(self):
-        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+        settings = get_app_settings()
         default_size = 9
         min_size = 7
         max_size = 16
@@ -692,7 +686,7 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
             logging.getLogger(__name__).warning(f"Failed to apply final calculation font size: {e}")
 
     def _load_final_calc_font_size_setting(self):
-        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+        settings = get_app_settings()
         default_size = 10
         min_size = 8
         max_size = 20

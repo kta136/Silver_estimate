@@ -6,7 +6,7 @@ import warnings # To potentially filter passlib warnings if needed
 
 from PyQt5.QtWidgets import (QDialog, QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout,
                              QMessageBox, QApplication, QFormLayout)
-from PyQt5.QtCore import Qt, QSettings
+from PyQt5.QtCore import Qt
 
 # Configure passlib context for Argon2 (recommended)
 # Schemes='default' will use the first scheme listed (argon2) for hashing.
@@ -218,68 +218,3 @@ class LoginDialog(QDialog):
             import logging
             logging.getLogger(__name__).error("Error verifying password:", exc_info=True)
             return False
-
-
-# Example usage (for testing)
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-
-    # Simulate first run
-    print("Testing Setup Mode:")
-    setup_dialog = LoginDialog(is_setup=True)
-    if setup_dialog.exec_() == QDialog.Accepted:
-        pw = setup_dialog.get_password()
-        bpw = setup_dialog.get_backup_password() # Method name kept for internal consistency
-        print(f"Setup Accepted! Password: {pw}, Secondary Password: {bpw}") # Updated print statement
-        # In real app, hash and save these
-        hashed_pw = LoginDialog.hash_password(pw)
-        hashed_bpw = LoginDialog.hash_password(bpw)
-        print(f"Hashed PW: {hashed_pw}")
-        print(f"Hashed BPW: {hashed_bpw}")
-
-        # Simulate storing hashes (using QSettings for example)
-        settings = QSettings("YourCompany", "SilverEstimateApp_Test")
-        settings.setValue("security/password_hash", hashed_pw)
-        settings.setValue("security/backup_hash", hashed_bpw)
-        settings.sync()
-
-    else:
-        print("Setup Cancelled.")
-
-    print("\nTesting Login Mode:")
-    # Simulate subsequent run - load stored hashes
-    settings = QSettings("YourCompany", "SilverEstimateApp_Test")
-    stored_pw_hash = settings.value("security/password_hash")
-    stored_bpw_hash = settings.value("security/backup_hash")
-
-    if stored_pw_hash and stored_bpw_hash:
-        login_dialog = LoginDialog(is_setup=False)
-        if login_dialog.exec_() == QDialog.Accepted:
-            # Check if reset was requested first
-            if login_dialog.was_reset_requested():
-                print("Result: Reset Requested")
-                # In real app, trigger perform_data_wipe() here
-            else:
-                entered_pw = login_dialog.get_password()
-                print(f"Login Accepted! Entered Password: {entered_pw}")
-
-                # Verify against stored hashes
-                is_valid_pw = LoginDialog.verify_password(stored_pw_hash, entered_pw)
-                is_backup_pw = LoginDialog.verify_password(stored_bpw_hash, entered_pw)
-
-                if is_valid_pw:
-                    print("Result: Correct Main Password")
-                elif is_backup_pw:
-                    # Updated print statement for testing clarity
-                    print("Result: Correct Secondary Password (Triggers Wipe)")
-                else:
-                    print("Result: Incorrect Password")
-        else:
-            print("Login Cancelled.")
-    else:
-        print("No stored passwords found for login test.")
-
-    # Clean up test settings
-    settings.clear()
-
-    sys.exit(0)

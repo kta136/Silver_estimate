@@ -5,9 +5,10 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWid
                              QFormLayout, QLabel, QPushButton, QSpinBox, QFontDialog, QMessageBox, QDoubleSpinBox,
                              QLineEdit, QGroupBox, QFileDialog, QCheckBox, QStyle, QListWidget, QListWidgetItem,
                              QListView, QStackedWidget, QFrame, QComboBox)
-from PyQt5.QtCore import Qt, QSettings, pyqtSignal, QUrl, QSize
+from PyQt5.QtCore import Qt, pyqtSignal, QUrl, QSize
 from PyQt5.QtGui import QFont, QDesktopServices
-from silverestimate.infrastructure.app_constants import SETTINGS_ORG, SETTINGS_APP
+from silverestimate.infrastructure.settings import get_app_settings
+
 from PyQt5.QtPrintSupport import QPrinterInfo
 
 # Import dependent dialogs and modules
@@ -28,7 +29,7 @@ class SettingsDialog(QDialog):
         self.setMinimumWidth(640)
 
         # Load current settings
-        self.settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+        self.settings = get_app_settings()
 
         # Store temporary font objects for editing
         self._current_print_font = self._load_print_font_setting()

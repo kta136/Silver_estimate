@@ -3,10 +3,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PyQt5.QtCore import QSettings
 from PyQt5.QtGui import QFont
 
-from silverestimate.infrastructure.app_constants import SETTINGS_APP, SETTINGS_ORG
+from silverestimate.infrastructure.settings import QSettings, get_app_settings
+
 
 
 @dataclass
@@ -29,7 +29,7 @@ class FontSettings:
 
 class SettingsService:
     def __init__(self) -> None:
-        self._settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+        self._settings = get_app_settings()
 
     # --- Fonts ---------------------------------------------------------
     def load_print_font(self, default_font: QFont) -> QFont:

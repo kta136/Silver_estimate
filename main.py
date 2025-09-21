@@ -26,6 +26,10 @@ from silverestimate.infrastructure.logger import setup_logging, qt_message_handl
 from silverestimate.ui.message_bar import MessageBar
 from silverestimate.infrastructure.app_constants import APP_TITLE, APP_VERSION, SETTINGS_ORG, SETTINGS_APP, DB_PATH
 
+class StartupError(RuntimeError):
+    """Raised when the main window cannot complete initialization."""
+    pass
+
 class MainWindow(QMainWindow):
     # Thread-safe signal to apply fetched rates on the UI thread
 
@@ -40,9 +44,12 @@ class MainWindow(QMainWindow):
 
         self.settings_service = SettingsService()
 
+        if not password:
+            raise StartupError("Password not provided. Cannot start application.")
+
         # Defer database setup until password is known
         self.db = None
-        self._password = password # Store password temporarily
+        self._password = password  # Store password temporarily
 
         # Initialize UI
         self.setWindowTitle(APP_TITLE)
@@ -56,17 +63,8 @@ class MainWindow(QMainWindow):
         # Top message bar (created but not added to layout; inline status is preferred)
         self.message_bar = MessageBar(self)
 
-        # Setup database *after* getting password (if provided)
-        if self._password:
-            # Pass only password, DB Manager handles salt via QSettings
-            self.setup_database_with_password(self._password)
-        else:
-            # Handle case where no password was provided (e.g., error or cancelled login)
-            # For now, show an error and potentially exit.
-            QMessageBox.critical(self, "Authentication Error", "Password not provided. Cannot start application.")
-            # We might want to exit gracefully here, but QMainWindow doesn't easily allow exiting from __init__
-            # Let's prevent further UI setup.
-            return # Stop further initialization
+        # Setup database now that a valid password is available
+        self.setup_database_with_password(self._password)
 
         # Set up menu bar
         self.setup_menu_bar()
@@ -392,34 +390,41 @@ class MainWindow(QMainWindow):
         try:
             self.logger.info("Setting up database connection")
 
-            # Ensure database directory exists
             import os
             os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
-            # Startup recovery: if a previous temp DB exists and is newer than encrypted, offer recovery
             try:
                 from silverestimate.persistence.database_manager import DatabaseManager as DM
                 enc_path = DB_PATH
                 candidate = DM.check_recovery_candidate(enc_path)
                 if candidate:
-                    self.logger.warning(f"Found newer temporary DB candidate for recovery: {candidate}")
+                    self.logger.warning(
+                        "Found newer temporary DB candidate for recovery: %s", candidate
+                    )
+                    message = (
+                        "A newer unsaved database state was found from a previous session.\n"
+                        "Would you like to recover it now?"
+                    )
                     reply = QMessageBox.question(
                         self,
                         "Recover Unsaved Data",
-                        "A newer unsaved database state was found from a previous session.\n"
-                        "Would you like to recover it now?",
+                        message,
                         QMessageBox.Yes | QMessageBox.No,
-                        QMessageBox.Yes
+                        QMessageBox.Yes,
                     )
                     if reply == QMessageBox.Yes:
-                        if DM.recover_encrypt_plain_to_encrypted(candidate, enc_path, password, logger=self.logger):
+                        if DM.recover_encrypt_plain_to_encrypted(
+                            candidate,
+                            enc_path,
+                            password,
+                            logger=self.logger,
+                        ):
                             self.logger.info("Recovery successful. Proceeding with startup.")
                         else:
                             self.logger.error("Recovery failed. Proceeding with last encrypted state.")
-            except Exception as re:
-                self.logger.error(f"Recovery check failed: {re}", exc_info=True)
+            except Exception as recovery_exc:
+                self.logger.error("Recovery check failed: %s", recovery_exc, exc_info=True)
 
-            # DatabaseManager now handles getting/creating salt internally via QSettings
             self.db = DatabaseManager(DB_PATH, password=password)
             if hasattr(self, 'navigation_service') and self.navigation_service:
                 self.navigation_service.update_db(self.db)
@@ -427,26 +432,21 @@ class MainWindow(QMainWindow):
             if hasattr(self, 'commands') and self.commands:
                 self.commands.update_db(self.db)
 
-            # setup_database is called within DatabaseManager's __init__
             self.show_status_message("Database connected securely.", 3000, level='info')
             self.logger.info("Database connected successfully")
-            
-            return True
-        except Exception as e:
-            self.logger.critical(f"Failed to connect to encrypted database: {str(e)}", exc_info=True)
-            
-            # Show a more detailed error message
-            error_details = f"Failed to connect to encrypted database: {e}\n\n"
-            error_details += "This could be due to:\n"
-            error_details += "- Incorrect password\n"
-            error_details += "- Corrupted database file\n"
-            error_details += "- Missing permissions\n\n"
-            error_details += "The application will continue with limited functionality."
-            
-            QMessageBox.critical(self, "Database Error", error_details)
-            
-            self.db = None # Ensure db is None if setup fails
-            return False
+        except Exception as exc:
+            self.db = None
+            self.logger.critical("Failed to connect to encrypted database: %s", exc, exc_info=True)
+
+            error_details = (
+                f"Failed to connect to encrypted database: {exc}\n\n"
+                "This could be due to:\n"
+                "- Incorrect password\n"
+                "- Corrupted database file\n"
+                "- Missing permissions\n\n"
+                "The application cannot continue without a valid database connection."
+            )
+            raise StartupError(error_details) from exc
 
     def setup_menu_bar(self):
         """Set up the main menu bar."""
@@ -801,13 +801,14 @@ def main() -> int:
         password = auth_result
         logger.info("Authentication successful, initializing main window")
 
-        main_window = MainWindow(password=password, logger=logger)
-        if not getattr(main_window, 'db', None):
-            logger.critical("Failed to initialize database connection during startup")
+        try:
+            main_window = MainWindow(password=password, logger=logger)
+        except StartupError as exc:
+            logger.critical("Failed to initialize main window: %s", exc, exc_info=True)
             QMessageBox.critical(
                 None,
                 "Initialization Error",
-                "Failed to initialize database connection.\n\nThe application will now exit."
+                str(exc),
             )
             return 1
 

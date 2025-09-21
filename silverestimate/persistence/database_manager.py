@@ -7,7 +7,6 @@ import traceback
 import logging
 import time
 from datetime import datetime
-from PyQt5.QtCore import QSettings # To store/retrieve salt
 from silverestimate.security import encryption as crypto_utils
 from silverestimate.persistence import migrations as persistence_migrations
 from silverestimate.persistence.items_repository import ItemsRepository
@@ -16,6 +15,8 @@ from silverestimate.persistence.silver_bars_repository import SilverBarsReposito
 from silverestimate.persistence.flush_scheduler import FlushScheduler
 from silverestimate.infrastructure.db_session import ConnectionThreadGuard
 from silverestimate.infrastructure.item_cache import ItemCacheController
+
+from silverestimate.infrastructure.settings import get_app_settings
 
 # Cryptography imports
 from cryptography.exceptions import InvalidTag # To catch decryption errors
@@ -80,7 +81,7 @@ class DatabaseManager:
 
             # Store temp path in QSettings for crash recovery on next startup
             try:
-                settings = QSettings("YourCompany", "SilverEstimateApp")
+                settings = get_app_settings()
                 settings.setValue("security/last_temp_db_path", self.temp_db_path)
                 settings.sync()
             except Exception as se:
@@ -206,7 +207,7 @@ class DatabaseManager:
 
     def _get_or_create_salt(self):
         """Retrieves the salt from QSettings or creates and saves a new one."""
-        settings = QSettings("YourCompany", "SilverEstimateApp")
+        settings = get_app_settings()
         return crypto_utils.get_or_create_salt(settings, logger=self.logger)
 
     def _derive_key(self, password, salt):
@@ -656,7 +657,7 @@ class DatabaseManager:
                 self._cleanup_temp_db()
                 # Clear stored temp path after successful encryption and cleanup
                 try:
-                    settings = QSettings("YourCompany", "SilverEstimateApp")
+                    settings = get_app_settings()
                     settings.remove("security/last_temp_db_path")
                     settings.sync()
                 except Exception as se:
@@ -754,13 +755,13 @@ class DatabaseManager:
             return False
     @staticmethod
     def _get_or_create_salt_static(logger=None):
-        settings = QSettings("YourCompany", "SilverEstimateApp")
+        settings = get_app_settings()
         return crypto_utils.get_or_create_salt(settings, logger=logger)
 
     @staticmethod
     def check_recovery_candidate(encrypted_db_path):
         """Return path to prior temp DB if it exists and is newer than encrypted file."""
-        settings = QSettings("YourCompany", "SilverEstimateApp")
+        settings = get_app_settings()
         temp_path = settings.value("security/last_temp_db_path")
         if not temp_path or not isinstance(temp_path, str):
             return None
@@ -811,7 +812,7 @@ class DatabaseManager:
                 pass
             # Clear stored temp path
             try:
-                settings = QSettings("YourCompany", "SilverEstimateApp")
+                settings = get_app_settings()
                 settings.remove("security/last_temp_db_path")
                 settings.sync()
             except Exception:

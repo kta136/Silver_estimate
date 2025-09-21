@@ -8,7 +8,8 @@ from PyQt5.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog, QP
 import traceback # Keep for debugging
 import math # For rounding
 
-from PyQt5.QtCore import QSettings # Import QSettings
+from silverestimate.infrastructure.settings import get_app_settings
+
 
 class PrintManager:
     """Class to handle print functionality using manual formatting."""
@@ -33,7 +34,7 @@ class PrintManager:
 
         self.printer = QPrinter(QPrinter.HighResolution)
         # Load printer defaults
-        settings = QSettings("YourCompany", "SilverEstimateApp")
+        settings = get_app_settings()
         # Default printer
         try:
             default_printer_name = settings.value("print/default_printer", "", type=str)
@@ -555,7 +556,7 @@ class PrintManager:
         try:
             preview_widget = preview.findChild(QPrintPreviewWidget)
             if preview_widget:
-                settings = QSettings("YourCompany", "SilverEstimateApp")
+                settings = get_app_settings()
                 default_zoom = 1.25
                 zoom_factor = settings.value("print/preview_zoom", defaultValue=default_zoom, type=float)
                 zoom_factor = max(0.1, min(zoom_factor, 5.0))
@@ -584,7 +585,7 @@ class PrintManager:
         try:
             if preview_widget:
                 z = float(preview_widget.zoomFactor())
-                settings = QSettings("YourCompany", "SilverEstimateApp")
+                settings = get_app_settings()
                 settings.setValue("print/preview_zoom", z)
                 logging.getLogger(__name__).debug(f"Saved preview zoom: {z}")
         except Exception as save_err:
@@ -753,7 +754,7 @@ class PrintManager:
                 try:
                     # Persist selected printer name
                     prn_name = self.printer.printerName()
-                    s = QSettings("YourCompany", "SilverEstimateApp")
+                    s = get_app_settings()
                     s.setValue("print/default_printer", prn_name)
                 except Exception:
                     pass
@@ -781,7 +782,7 @@ class PrintManager:
             pdf_printer.setPageSize(self.printer.pageSize())
             pdf_printer.setOrientation(self.printer.orientation())
             # Apply current margins from settings (kept consistent across previews)
-            settings = QSettings("YourCompany", "SilverEstimateApp")
+            settings = get_app_settings()
             margins_str = settings.value("print/margins", defaultValue="10,5,10,5", type=str)
             try:
                 margins = [int(m.strip()) for m in margins_str.split(',')]

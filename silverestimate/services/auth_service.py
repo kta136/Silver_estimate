@@ -5,10 +5,11 @@ import logging
 import os
 from typing import Optional
 
-from PyQt5.QtCore import QSettings
 from PyQt5.QtWidgets import QMessageBox, QDialog
 
-from silverestimate.infrastructure.app_constants import SETTINGS_APP, SETTINGS_ORG, DB_PATH
+from silverestimate.infrastructure.settings import get_app_settings
+
+from silverestimate.infrastructure.app_constants import DB_PATH
 try:
     from silverestimate.ui.login_dialog import LoginDialog  # type: ignore
 except Exception:  # pragma: no cover - lazy import fallback
@@ -24,7 +25,7 @@ def run_authentication(logger: Optional[logging.Logger] = None) -> Optional[str]
     logger = logger or logging.getLogger(__name__)
     logger.info("Starting authentication process")
 
-    settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+    settings = get_app_settings()
     password_hash = settings.value("security/password_hash")
     backup_hash = settings.value("security/backup_hash")
 
@@ -87,7 +88,7 @@ def perform_data_wipe(
         else:
             logger.warning("Encrypted database file not found (already deleted?): %s", db_path)
 
-        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+        settings = get_app_settings()
         temp_path = settings.value("security/last_temp_db_path")
         if isinstance(temp_path, str) and temp_path and os.path.exists(temp_path):
             try:

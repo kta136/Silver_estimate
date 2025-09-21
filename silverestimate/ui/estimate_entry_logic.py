@@ -1109,8 +1109,14 @@ class EstimateLogic:
             self.db_manager.delete_silver_bars_for_estimate(voucher_no)  # This is now just a reporting function
 
         # --- Save Estimate Header and Items ---
-        regular_items_for_db = [item for item in items_to_save if not item['is_return']]
-        return_items_for_db = [item for item in items_to_save if item['is_return']]
+        regular_items_for_db = [
+            item for item in items_to_save
+            if not item['is_return'] and not item['is_silver_bar']
+        ]
+        return_items_for_db = [
+            item for item in items_to_save
+            if item['is_return'] or item['is_silver_bar']
+        ]
         save_success = self.db_manager.save_estimate_with_returns(
             voucher_no, date, silver_rate,
             regular_items_for_db, return_items_for_db, recalculated_totals

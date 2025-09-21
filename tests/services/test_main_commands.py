@@ -7,6 +7,7 @@ from silverestimate.services import main_commands
 class _MessageBoxStub:
     Yes = 1
     Cancel = 0
+
     return_warning = Yes
     information_calls = []
     critical_calls = []
@@ -77,6 +78,50 @@ def test_save_estimate_shows_info_when_missing(monkeypatch):
     commands.save_estimate()
 
     assert _MessageBoxStub.information_calls
+
+
+def test_print_estimate_invokes_widget(monkeypatch):
+    _install_stubs(monkeypatch)
+
+    calls = []
+
+    class _EstimateWidget:
+        def print_estimate(self):
+            calls.append("print")
+
+    main_window = types.SimpleNamespace(estimate_widget=_EstimateWidget())
+    commands = main_commands.MainCommands(main_window, db_manager=object(), logger=logging.getLogger("test"))
+
+    commands.print_estimate()
+
+    assert calls == ["print"]
+    assert _MessageBoxStub.information_calls == []
+
+
+def test_print_estimate_shows_info_when_missing(monkeypatch):
+    _install_stubs(monkeypatch)
+
+    main_window = types.SimpleNamespace()
+    commands = main_commands.MainCommands(main_window, db_manager=object(), logger=logging.getLogger("test"))
+
+    commands.print_estimate()
+
+    assert _MessageBoxStub.information_calls
+
+
+def test_print_estimate_handles_errors(monkeypatch):
+    _install_stubs(monkeypatch)
+
+    class _EstimateWidget:
+        def print_estimate(self):
+            raise RuntimeError("boom")
+
+    main_window = types.SimpleNamespace(estimate_widget=_EstimateWidget())
+    commands = main_commands.MainCommands(main_window, db_manager=object(), logger=logging.getLogger("test"))
+
+    commands.print_estimate()
+
+    assert _MessageBoxStub.critical_calls
 
 
 def test_delete_all_data_success(monkeypatch):

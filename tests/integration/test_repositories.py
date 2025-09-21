@@ -5,6 +5,8 @@ from typing import Any, Optional
 
 import pytest
 
+from tests.factories import estimate_totals, regular_item, return_item, silver_bar_item
+
 from silverestimate.persistence import migrations
 from silverestimate.persistence.items_repository import ItemsRepository
 from silverestimate.infrastructure.item_cache import ItemCacheController
@@ -89,26 +91,9 @@ def test_estimates_repository_save_and_fetch(fake_db):
         voucher_no='100',
         date='2025-01-01',
         silver_rate=75000.0,
-        regular_items=[{
-            'code': 'ITM001',
-            'name': 'Sample Item',
-            'gross': 10.0,
-            'poly': 0.0,
-            'net_wt': 10.0,
-            'purity': 92.5,
-            'wage_rate': 10.0,
-            'pieces': 1,
-            'wage': 100.0,
-            'fine': 9.25,
-        }],
+        regular_items=[regular_item(code='ITM001', name='Sample Item', gross=10.0, poly=0.0, net_wt=10.0, purity=92.5, wage_rate=10.0, pieces=1, wage=100.0, fine=9.25)],
         return_items=[],
-        totals={
-            'total_gross': 10.0,
-            'total_net': 10.0,
-            'net_fine': 9.25,
-            'net_wage': 100.0,
-            'note': 'Test estimate',
-        },
+        totals=estimate_totals(total_gross=10.0, total_net=10.0, net_fine=9.25, net_wage=100.0, note='Test estimate'),
     )
     assert saved
     data = repo.get_estimate_by_voucher('100')
@@ -125,12 +110,7 @@ def test_estimate_delete_cleans_silver_bars(fake_db):
         silver_rate=76000.0,
         regular_items=[],
         return_items=[],
-        totals={
-            'total_gross': 0.0,
-            'total_net': 0.0,
-            'net_fine': 0.0,
-            'net_wage': 0.0,
-        },
+        totals=estimate_totals(total_gross=0.0, total_net=0.0, net_fine=0.0, net_wage=0.0),
     )
     bar_id = silver_repo.add_silver_bar('200', 5.0, 99.9)
     assert bar_id is not None
@@ -159,59 +139,56 @@ def test_silver_bar_assignment_cycle(fake_db):
 def test_estimate_repository_load_preserves_item_types(fake_db):
     repo = EstimatesRepository(fake_db)
     voucher = '500'
-    regular = {
-        'code': 'REG001',
-        'name': 'Regular Item',
-        'gross': 12.0,
-        'poly': 1.0,
-        'net_wt': 11.0,
-        'purity': 91.6,
-        'wage_rate': 15.0,
-        'pieces': 2,
-        'wage': 165.0,
-        'fine': 10.076,
-    }
-    return_item = {
-        'code': 'RET001',
-        'name': 'Return Item',
-        'gross': 2.0,
-        'poly': 0.2,
-        'net_wt': 1.8,
-        'purity': 80.0,
-        'wage_rate': 0.0,
-        'pieces': 1,
-        'wage': 0.0,
-        'fine': 1.44,
-        'is_return': True,
-    }
-    bar_item = {
-        'code': 'BAR001',
-        'name': 'Silver Bar',
-        'gross': 5.0,
-        'poly': 0.0,
-        'net_wt': 5.0,
-        'purity': 99.9,
-        'wage_rate': 0.0,
-        'pieces': 1,
-        'wage': 0.0,
-        'fine': 4.995,
-        'is_return': False,
-        'is_silver_bar': True,
-    }
-    totals = {
-        'total_gross': 12.0,
-        'total_net': 11.0,
-        'net_fine': 10.076,
-        'net_wage': 165.0,
-        'note': 'Test persistence',
-    }
+    regular_payload = regular_item(
+        code='REG001',
+        name='Regular Item',
+        gross=12.0,
+        poly=1.0,
+        net_wt=11.0,
+        purity=91.6,
+        wage_rate=15.0,
+        pieces=2,
+        wage=165.0,
+        fine=10.076,
+    )
+    return_payload = return_item(
+        code='RET001',
+        name='Return Item',
+        gross=2.0,
+        poly=0.2,
+        net_wt=1.8,
+        purity=80.0,
+        wage_rate=0.0,
+        pieces=1,
+        wage=0.0,
+        fine=1.44,
+    )
+    bar_payload = silver_bar_item(
+        code='BAR001',
+        name='Silver Bar',
+        gross=5.0,
+        poly=0.0,
+        net_wt=5.0,
+        purity=99.9,
+        wage_rate=0.0,
+        pieces=1,
+        wage=0.0,
+        fine=4.995,
+    )
+    totals = estimate_totals(
+        total_gross=12.0,
+        total_net=11.0,
+        net_fine=10.076,
+        net_wage=165.0,
+        note='Test persistence',
+    )
 
     saved = repo.save_estimate_with_returns(
         voucher_no=voucher,
         date='2025-03-01',
         silver_rate=68000.0,
-        regular_items=[regular],
-        return_items=[return_item, bar_item],
+        regular_items=[regular_payload],
+        return_items=[return_payload, bar_payload],
         totals=totals,
     )
     assert saved

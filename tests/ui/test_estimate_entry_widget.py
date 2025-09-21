@@ -6,15 +6,18 @@ from silverestimate.persistence.database_manager import DatabaseManager
 from silverestimate.ui.estimate_entry import EstimateEntryWidget
 from silverestimate.ui.estimate_entry_logic import (
     COL_CODE,
+    COL_FINE_WT,
     COL_GROSS,
+    COL_NET_WT,
+    COL_PIECES,
     COL_POLY,
     COL_PURITY,
-    COL_WAGE_RATE,
-    COL_NET_WT,
-    COL_FINE_WT,
-    COL_WAGE_AMT,
     COL_TYPE,
+    COL_WAGE_AMT,
+    COL_WAGE_RATE,
 )
+
+from tests.factories import regular_item, return_item, silver_bar_item
 
 
 @pytest.fixture()
@@ -41,19 +44,30 @@ def fake_db(tmp_path):
     return _DB()
 
 
-def _set_row(widget, row, *, code, gross, poly, purity, wage_rate):
+def _set_row(widget, row, item):
     table = widget.item_table
     while table.rowCount() <= row:
         widget.add_empty_row()
-    table.setItem(row, COL_CODE, QTableWidgetItem(code))
-    table.setItem(row, COL_GROSS, QTableWidgetItem(str(gross)))
-    table.setItem(row, COL_POLY, QTableWidgetItem(str(poly)))
-    table.setItem(row, COL_PURITY, QTableWidgetItem(str(purity)))
-    table.setItem(row, COL_WAGE_RATE, QTableWidgetItem(str(wage_rate)))
+    table.setItem(row, COL_CODE, QTableWidgetItem(str(item["code"])))
+    table.setItem(row, COL_GROSS, QTableWidgetItem(str(item["gross"])))
+    table.setItem(row, COL_POLY, QTableWidgetItem(str(item["poly"])))
+    table.setItem(row, COL_PURITY, QTableWidgetItem(str(item["purity"])))
+    table.setItem(row, COL_WAGE_RATE, QTableWidgetItem(str(item["wage_rate"])))
+    table.setItem(row, COL_PIECES, QTableWidgetItem(str(item["pieces"])))
     widget.current_row = row
     widget.calculate_net_weight()
     widget.calculate_totals()
     widget._update_row_type_visuals(row)
+
+    type_item = table.item(row, COL_TYPE) or QTableWidgetItem()
+    if item.get("is_silver_bar"):
+        type_item.setText("Silver Bar")
+    elif item.get("is_return"):
+        type_item.setText("Return")
+    else:
+        type_item.setText("No")
+    table.setItem(row, COL_TYPE, type_item)
+
     return table
 
 
@@ -66,11 +80,7 @@ def test_widget_calculates_totals(qt_app, fake_db):
     table = _set_row(
         widget,
         0,
-        code="REG001",
-        gross=10,
-        poly=1,
-        purity=92.5,
-        wage_rate=10,
+        regular_item(gross=10, poly=1, purity=92.5, wage_rate=10),
     )
 
     assert table.item(0, COL_NET_WT).text() == "9.000"
@@ -87,17 +97,14 @@ def test_widget_calculates_totals(qt_app, fake_db):
 def test_widget_multi_row_totals(qt_app, fake_db):
     widget = _make_widget(fake_db)
 
-    # Regular row
-    _set_row(widget, 0, code="REG001", gross=10, poly=1, purity=92.5, wage_rate=10)
+    _set_row(widget, 0, regular_item(gross=10, poly=1, purity=92.5, wage_rate=10))
 
-    # Return row
     widget.toggle_return_mode()
-    _set_row(widget, 1, code="RET001", gross=2.5, poly=0.5, purity=80, wage_rate=0)
+    _set_row(widget, 1, return_item(gross=2.5, poly=0.5, purity=80, wage_rate=0))
     widget.toggle_return_mode()
 
-    # Silver bar row
     widget.toggle_silver_bar_mode()
-    _set_row(widget, 2, code="BAR001", gross=3.0, poly=0.0, purity=99.9, wage_rate=0)
+    _set_row(widget, 2, silver_bar_item(gross=3.0, poly=0.0, purity=99.9, wage_rate=0))
     widget.toggle_silver_bar_mode()
 
     table = widget.item_table
@@ -126,14 +133,14 @@ def test_widget_save_and_reload(qt_app, tmp_path, settings_stub, monkeypatch):
     widget = _make_widget(manager)
     widget.voucher_edit.setText("SAVE01")
 
-    _set_row(widget, 0, code="REG001", gross=10, poly=1, purity=92.5, wage_rate=10)
+    _set_row(widget, 0, regular_item(gross=10, poly=1, purity=92.5, wage_rate=10))
 
     widget.toggle_return_mode()
-    _set_row(widget, 1, code="RET001", gross=1.5, poly=0.3, purity=75.0, wage_rate=0)
+    _set_row(widget, 1, return_item(gross=1.5, poly=0.3, purity=75.0, wage_rate=0))
     widget.toggle_return_mode()
 
     widget.toggle_silver_bar_mode()
-    _set_row(widget, 2, code="BAR001", gross=2.0, poly=0.0, purity=99.9, wage_rate=0)
+    _set_row(widget, 2, silver_bar_item(gross=2.0, poly=0.0, purity=99.9, wage_rate=0))
     widget.toggle_silver_bar_mode()
 
     from PyQt5.QtWidgets import QMessageBox as _QtMessageBox
@@ -160,6 +167,12 @@ def test_widget_save_and_reload(qt_app, tmp_path, settings_stub, monkeypatch):
             return _QtMessageBox.Yes
 
     monkeypatch.setattr("silverestimate.ui.estimate_entry_logic.QMessageBox", _MsgBoxStub, raising=False)
+
+    type_values = []
+    for r in range(widget.item_table.rowCount()):
+        type_item = widget.item_table.item(r, COL_TYPE)
+        type_values.append(type_item.text() if type_item else None)
+    print('type_values_before_save', type_values)
 
     widget.print_estimate = lambda: None
     widget.save_estimate()
@@ -188,3 +201,4 @@ def test_widget_save_and_reload(qt_app, tmp_path, settings_stub, monkeypatch):
     widget.deleteLater()
     widget_loaded.deleteLater()
     manager.close()
+

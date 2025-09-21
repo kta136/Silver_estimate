@@ -1,4 +1,6 @@
 import pytest
+
+from tests.factories import estimate_totals, regular_item, return_item, silver_bar_item
 from silverestimate.persistence.database_manager import DatabaseManager
 
 def test_database_manager_roundtrip(tmp_path, settings_stub):
@@ -34,57 +36,55 @@ def test_database_manager_persists_estimates(tmp_path, settings_stub):
     manager.items_repo.add_item('REG001', 'Regular', 92.0, 'WT', 12.0)
     manager.items_repo.add_item('RET001', 'Return', 80.0, 'WT', 0.0)
     manager.items_repo.add_item('BAR001', 'Bar', 99.9, 'WT', 0.0)
-    regular = {
-        "code": "REG001",
-        "name": "Regular",
-        "gross": 15.0,
-        "poly": 1.5,
-        "net_wt": 13.5,
-        "purity": 92.0,
-        "wage_rate": 12.0,
-        "pieces": 3,
-        "wage": 162.0,
-        "fine": 12.42,
-    }
-    return_item = {
-        "code": "RET001",
-        "name": "Return",
-        "gross": 2.5,
-        "poly": 0.2,
-        "net_wt": 2.3,
-        "purity": 80.0,
-        "wage_rate": 0.0,
-        "pieces": 1,
-        "wage": 0.0,
-        "fine": 1.84,
-        "is_return": True,
-    }
-    bar_item = {
-        "code": "BAR001",
-        "name": "Bar",
-        "gross": 6.0,
-        "poly": 0.0,
-        "net_wt": 6.0,
-        "purity": 99.9,
-        "wage_rate": 0.0,
-        "pieces": 1,
-        "wage": 0.0,
-        "fine": 5.994,
-        "is_silver_bar": True,
-    }
-    totals = {
-        "total_gross": 15.0,
-        "total_net": 13.5,
-        "net_fine": 12.42,
-        "net_wage": 162.0,
-        "note": "Persist test",
-    }
+    regular_payload = regular_item(
+        code="REG001",
+        name="Regular",
+        gross=15.0,
+        poly=1.5,
+        net_wt=13.5,
+        purity=92.0,
+        wage_rate=12.0,
+        pieces=3,
+        wage=162.0,
+        fine=12.42,
+    )
+    return_payload = return_item(
+        code="RET001",
+        name="Return",
+        gross=2.5,
+        poly=0.2,
+        net_wt=2.3,
+        purity=80.0,
+        wage_rate=0.0,
+        pieces=1,
+        wage=0.0,
+        fine=1.84,
+    )
+    bar_payload = silver_bar_item(
+        code="BAR001",
+        name="Bar",
+        gross=6.0,
+        poly=0.0,
+        net_wt=6.0,
+        purity=99.9,
+        wage_rate=0.0,
+        pieces=1,
+        wage=0.0,
+        fine=5.994,
+    )
+    totals = estimate_totals(
+        total_gross=15.0,
+        total_net=13.5,
+        net_fine=12.42,
+        net_wage=162.0,
+        note="Persist test",
+    )
     saved = manager.estimates_repo.save_estimate_with_returns(
         voucher_no=voucher,
         date="2025-04-01",
         silver_rate=70000.0,
-        regular_items=[regular],
-        return_items=[return_item, bar_item],
+        regular_items=[regular_payload],
+        return_items=[return_payload, bar_payload],
         totals=totals,
     )
     assert saved

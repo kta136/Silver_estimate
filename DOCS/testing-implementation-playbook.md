@@ -149,11 +149,18 @@ Focus on verifying command registration, signal wiring, and error dialogs under 
 - Record significant changes in `DOCS/project-memory-bank.md` session journal.
 
 ## Roadmap
-- [ ] Introduce Hypothesis strategies for wage and fine calculations.
-- [ ] Backfill tests for navigation commands and print workflow.
-- [ ] Validate data wipe side effects with temporary settings directories.
+- [x] Introduced Hypothesis strategies for wage and fine calculations (see tests/factories/estimate_items.py).
+- [x] Backfilled tests for navigation commands and print workflow (see tests/services/test_navigation_service.py and tests/services/test_main_commands.py).
+- [x] Validated data wipe side effects with temporary settings directories (tests/services/test_auth_service.py).
 - [ ] Add regression tests for recent bug fixes (see `CHANGELOG.md`).
 - [ ] Integrate coverage thresholds into the CI pipeline.
 
 Keep this document updated as the test suite evolves.
-\n## Recent Additions\n- Added EstimateEntryWidget smoke tests covering return/silver-bar toggles and persistence reloads.\n- Introduced Hypothesis-based property tests for fine- and wage-calculation helpers (skips automatically when Hypothesis is unavailable).
+\n## Recent Additions
+- Standardised integration/database tests on estimate item factories for shared payloads.
+- Added navigation and print workflow coverage along with data-wipe failure handling tests.
+- Added Hypothesis strategies backing net/fine/wage property tests via tests.factories.
+- Added EstimateEntryWidget smoke tests covering return/silver-bar toggles and persistence reloads.\n- Introduced Hypothesis-based property tests for fine- and wage-calculation helpers (skips automatically when Hypothesis is unavailable).
+
+
+

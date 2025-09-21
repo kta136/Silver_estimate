@@ -242,64 +242,53 @@ def test_calculate_fine_full_purity(qt_app):
 
 
 try:
-    from hypothesis import given, strategies as st
+    from hypothesis import given
     _HYPOTHESIS_AVAILABLE = True
 except ModuleNotFoundError:
     _HYPOTHESIS_AVAILABLE = False
 
 if _HYPOTHESIS_AVAILABLE:
+    from tests.factories import fine_calculation_cases, wage_calculation_cases
 
-    @given(
-        net=st.floats(min_value=0.0, max_value=200.0, allow_nan=False, allow_infinity=False),
-        purity=st.floats(min_value=0.0, max_value=100.0, allow_nan=False, allow_infinity=False),
-    )
-    def test_calculate_fine_property(qt_app, net, purity):
+    @given(case=fine_calculation_cases())
+    def test_calculate_fine_property(qt_app, case):
         logic, table = _prepare_logic_with_table()
         logic.current_row = 0
-        table.setItem(0, COL_NET_WT, QTableWidgetItem(f"{net}"))
-        table.setItem(0, COL_PURITY, QTableWidgetItem(f"{purity}"))
+        table.setItem(0, COL_CODE, QTableWidgetItem('HYP001'))
+        table.setItem(0, COL_GROSS, QTableWidgetItem(f"{case.gross}"))
+        table.setItem(0, COL_POLY, QTableWidgetItem(f"{case.poly}"))
+        table.setItem(0, COL_PURITY, QTableWidgetItem(f"{case.purity}"))
+        table.setItem(0, COL_WAGE_RATE, QTableWidgetItem('0'))
+        table.setItem(0, COL_PIECES, QTableWidgetItem('1'))
 
-        logic.calculate_fine()
+        logic.calculate_net_weight()
 
-        expected = 0.0 if purity <= 0 else net * (purity / 100.0)
-        actual = float(table.item(0, COL_FINE_WT).text())
-        assert actual == pytest.approx(round(expected, 3), abs=1e-3)
+        actual_net = float(table.item(0, COL_NET_WT).text())
+        actual_fine = float(table.item(0, COL_FINE_WT).text())
+        assert actual_net == pytest.approx(case.net_weight, abs=1e-3)
+        assert actual_fine == pytest.approx(case.expected_fine, abs=1e-3)
 
-    @given(
-        net=st.floats(min_value=0.0, max_value=200.0, allow_nan=False, allow_infinity=False),
-        rate=st.floats(min_value=0.0, max_value=200.0, allow_nan=False, allow_infinity=False),
-        pieces=st.integers(min_value=0, max_value=20),
-    )
-    def test_calculate_wage_property(qt_app, net, rate, pieces):
-        lookup = lambda code: {"wage_type": "PC"} if code == "PC001" else {"wage_type": "WT"}
-        logic, table = _prepare_logic_with_table(rows=2, item_lookup=lookup)
-
-        table.setItem(0, COL_CODE, QTableWidgetItem("WT001"))
-        table.setItem(0, COL_NET_WT, QTableWidgetItem(f"{net}"))
-        table.setItem(0, COL_WAGE_RATE, QTableWidgetItem(f"{rate}"))
-        table.setItem(0, COL_PIECES, QTableWidgetItem("1"))
+    @given(case=wage_calculation_cases())
+    def test_calculate_wage_property(qt_app, case):
+        lookup = lambda code: {'wage_type': case.wage_type}
+        logic, table = _prepare_logic_with_table(item_lookup=lookup)
+        table.setItem(0, COL_CODE, QTableWidgetItem(case.code))
+        table.setItem(0, COL_NET_WT, QTableWidgetItem(f"{case.net_weight}"))
+        table.setItem(0, COL_WAGE_RATE, QTableWidgetItem(f"{case.wage_rate}"))
+        table.setItem(0, COL_PIECES, QTableWidgetItem(f"{case.pieces}"))
         logic.current_row = 0
-        logic.calculate_wage()
-        expected_wt = net * rate
-        actual_wt = float(table.item(0, COL_WAGE_AMT).text())
-        assert actual_wt == pytest.approx(round(expected_wt), abs=1)
 
-        table.setItem(1, COL_CODE, QTableWidgetItem("PC001"))
-        table.setItem(1, COL_NET_WT, QTableWidgetItem(f"{net}"))
-        table.setItem(1, COL_WAGE_RATE, QTableWidgetItem(f"{rate}"))
-        table.setItem(1, COL_PIECES, QTableWidgetItem(f"{pieces}"))
-        logic.current_row = 1
         logic.calculate_wage()
-        expected_pc = pieces * rate
-        actual_pc = float(table.item(1, COL_WAGE_AMT).text())
-        assert actual_pc == pytest.approx(round(expected_pc), abs=1)
+
+        actual = float(table.item(0, COL_WAGE_AMT).text())
+        assert actual == pytest.approx(case.expected_wage, abs=1)
 
 else:
 
-    @pytest.mark.skip(reason="hypothesis not installed")
+    @pytest.mark.skip(reason='hypothesis not installed')
     def test_calculate_fine_property(qt_app):  # pragma: no cover - dependency optional
-        pytest.skip("hypothesis not installed")
+        pytest.skip('hypothesis not installed')
 
-    @pytest.mark.skip(reason="hypothesis not installed")
+    @pytest.mark.skip(reason='hypothesis not installed')
     def test_calculate_wage_property(qt_app):  # pragma: no cover - dependency optional
-        pytest.skip("hypothesis not installed")
+        pytest.skip('hypothesis not installed')

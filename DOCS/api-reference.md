@@ -2,7 +2,7 @@
 
 ## Core Classes
 
-### DatabaseManager (database_manager.py)
+### DatabaseManager (silverestimate/persistence/database_manager.py)
 
 #### Constructor
 ```python
@@ -82,7 +82,7 @@ create_silver_bar_list(note: str = None) -> int
     """Creates new silver bar list."""
 ```
 
-### EstimateEntryWidget (estimate_entry.py)
+### EstimateEntryWidget (silverestimate/ui/estimate_entry.py)
 
 #### Constructor
 ```python

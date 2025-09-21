@@ -6,10 +6,10 @@ This document explains the architecture of the estimate loading process in the S
 
 The Silver Estimation App uses a modular architecture with clear separation between UI components, business logic, and database operations. The estimate loading process involves several components working together:
 
-1. **UI Components** (`estimate_entry_ui.py`): Defines the user interface elements for entering and displaying estimates.
-2. **Business Logic** (`estimate_entry_logic.py`): Contains the core functionality for loading, saving, and manipulating estimates.
-3. **UI + Logic Integration** (`estimate_entry.py`): Combines UI and logic into a cohesive widget.
-4. **Database Operations** (`database_manager.py`): Handles all database interactions, including loading estimates from the database.
+1. **UI Components** (silverestimate/ui/estimate_entry_ui.py): Defines the user interface elements for entering and displaying estimates.
+2. **Business Logic** (silverestimate/ui/estimate_entry_logic.py): Contains the core functionality for loading, saving, and manipulating estimates.
+3. **UI + Logic Integration** (silverestimate/ui/estimate_entry.py): Combines UI and logic into a cohesive widget.
+4. **Database Operations** (silverestimate/persistence/database_manager.py): Handles all database interactions, including loading estimates from the database.
 
 ## Signal-Slot Architecture
 
@@ -70,7 +70,7 @@ Multiple safeguards prevent loading estimates during initialization:
 
 ## Key Components
 
-### EstimateEntryUI (estimate_entry_ui.py)
+### EstimateEntryUI (silverestimate/ui/estimate_entry_ui.py)
 
 This class defines the UI components for the estimate entry screen, including:
 
@@ -81,7 +81,7 @@ This class defines the UI components for the estimate entry screen, including:
 - Item table
 - Totals section
 
-### EstimateLogic (estimate_entry_logic.py)
+### EstimateLogic (silverestimate/ui/estimate_entry_logic.py)
 
 This class contains the business logic for estimates, including:
 
@@ -90,7 +90,7 @@ This class contains the business logic for estimates, including:
 - Calculating totals
 - Handling item entry
 
-### EstimateEntryWidget (estimate_entry.py)
+### EstimateEntryWidget (silverestimate/ui/estimate_entry.py)
 
 This class combines UI and logic into a cohesive widget, handling:
 
@@ -99,7 +99,7 @@ This class combines UI and logic into a cohesive widget, handling:
 - UI state management
 - User interactions
 
-### DatabaseManager (database_manager.py)
+### DatabaseManager (silverestimate/persistence/database_manager.py)
 
 This class handles all database operations, including:
 
@@ -125,3 +125,6 @@ Through debugging and fixing the estimate loading crash issue, several important
 6. **UI Feedback**: Clear UI feedback helps users understand what's happening and what actions they can take.
 
 These lessons have been applied to improve the stability and usability of the Silver Estimation App.
+
+
+

@@ -1,6 +1,6 @@
 # Testing Implementation Playbook
 
-This document provides actionable guidance for building and maintaining a robust automated test suite for the Silver Estimation App. It complements `DOCS/testing-strategy.md` by focusing on implementation details.
+This document provides actionable guidance for building and maintaining a robust automated test suite for the Silver Estimation App. Use it as the primary reference for current testing practices.
 
 ## Goals
 - Increase confidence in core workflows (estimate entry, silver bar management, authentication).
@@ -161,6 +161,4 @@ Keep this document updated as the test suite evolves.
 - Added navigation and print workflow coverage along with data-wipe failure handling tests.
 - Added Hypothesis strategies backing net/fine/wage property tests via tests.factories.
 - Added EstimateEntryWidget smoke tests covering return/silver-bar toggles and persistence reloads.\n- Introduced Hypothesis-based property tests for fine- and wage-calculation helpers (skips automatically when Hypothesis is unavailable).
-
-
 

@@ -13,16 +13,16 @@ A comprehensive PyQt5 desktop application for silver shops to manage estimates, 
 - Implements database initialization with encryption
 
 #### Data Layer
-- **database_manager.py**: SQLite database interface with AES-GCM encryption
+- **silverestimate/persistence/database_manager.py**: SQLite database interface with AES-GCM encryption
 - Uses temporary decrypted files during runtime
 - Implements schema versioning for migrations
 - Handles CRUD operations for estimates, items, and silver bars
 
 #### UI Layer
-- **estimate_entry.py**: Main estimate creation/editing interface
-- **item_master.py**: Item catalog management
-- **silver_bar_management.py**: Silver bar inventory and list management
-- **estimate_history.py**: Historical estimate browser
+- **silverestimate/ui/estimate_entry.py**: Main estimate creation/editing interface
+- **silverestimate/ui/item_master.py**: Item catalog management
+- **silverestimate/ui/silver_bar_management.py**: Silver bar inventory and list management
+- **silverestimate/ui/estimate_history.py**: Historical estimate browser
 
 ### 2. Key Features
 

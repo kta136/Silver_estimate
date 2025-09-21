@@ -2,7 +2,7 @@
 
 ## 1. Database Layer
 
-### DatabaseManager (database_manager.py)
+### DatabaseManager (silverestimate/persistence/database_manager.py)
 
 #### Responsibilities
 - Database encryption/decryption
@@ -40,7 +40,7 @@
 
 ## 2. UI Components
 
-### EstimateEntryWidget (estimate_entry.py)
+### EstimateEntryWidget (silverestimate/ui/estimate_entry.py)
 
 #### Architecture
 - Combines UI layout (EstimateUI) with business logic (EstimateLogic)
@@ -54,7 +54,7 @@
 - Last balance tracking
 - Print preview integration
 
-### ItemMasterWidget (item_master.py)
+### ItemMasterWidget (silverestimate/ui/item_master.py)
 
 #### Features
 - Item CRUD operations
@@ -63,7 +63,7 @@
 - Duplicate prevention
 - Batch operations prevention
 
-### SilverBarDialog (silver_bar_management.py)
+### SilverBarDialog (silverestimate/ui/silver_bar_management.py)
 
 #### Version 2.0 Features
 - List-based bar organization
@@ -74,7 +74,7 @@
 
 ## 3. Security Components
 
-### LoginDialog (login_dialog.py)
+### LoginDialog (silverestimate/ui/login_dialog.py)
 
 #### Features
 - Argon2 password hashing
@@ -93,7 +93,7 @@
 
 ## 4. Utility Components
 
-### PrintManager (print_manager.py)
+### PrintManager (silverestimate/ui/print_manager.py)
 
 #### Capabilities
 - Manual text formatting
@@ -104,28 +104,28 @@
 
 ### Import/Export System
 
-#### ItemImportManager
+#### ItemImportManager (silverestimate/ui/item_import_manager.py)
 - Configurable parsing
 - Delimiter detection
 - Q-type conversion
 - Adjustment factors
 - Duplicate handling
 
-#### ItemExportManager
+#### ItemExportManager (silverestimate/ui/item_export_manager.py)
 - Pipe-delimited format
 - Header consistency
 - Batch processing
 
 ## 5. Dialog Components
 
-### SettingsDialog
+### SettingsDialog (silverestimate/ui/settings_dialog.py)
 - Centralized configuration
 - QTabWidget organization
 - Print settings
 - Security management
 - Data operations
 
-### CustomFontDialog
+### CustomFontDialog (silverestimate/ui/custom_font_dialog.py)
 - Decimal font sizes
 - Bold support
 - Preview functionality

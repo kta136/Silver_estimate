@@ -17,7 +17,7 @@ Status Key
 ### ✅ 1) Mode Switching Clarity  
 - Status: ✅ **COMPLETED** in v1.70
 - Why: Return Items/Silver Bar modes needed better visual indication
-- Files: `estimate_entry.py`, `estimate_entry_ui.py`
+- Files: `silverestimate/ui/estimate_entry.py`, `silverestimate/ui/estimate_entry_ui.py`
 - Implementation:
   - ✅ Added distinct color schemes for active modes (blue for Return, orange for Silver Bar)
   - ✅ Enhanced mode buttons with icons (↩ Return, 🥈 Silver Bar) and "ACTIVE" text
@@ -31,7 +31,7 @@ Status Key
 ### ✅ 3) Information Density Management
 - Status: ✅ **COMPLETED** in v1.70
 - Why: Header form was cramped with poor field spacing
-- Files: `estimate_entry_ui.py`
+- Files: `silverestimate/ui/estimate_entry_ui.py`
 - Implementation:
   - ✅ Added logical visual grouping with subtle "|" separators
   - ✅ Increased spacing between functional groups (15px vs original cramped layout)
@@ -41,7 +41,7 @@ Status Key
 ### 4) Table Column Organization
 - Status: ✅ **Partially Implemented**  
 - Why: 11-column table mixes user input and calculated data without clear distinction
-- Files: `estimate_entry_ui.py`, `estimate_entry.py`
+- Files: `silverestimate/ui/estimate_entry_ui.py`, `silverestimate/ui/estimate_entry.py`
 - Implementation:
   - ✅ Persist column layout using `QHeaderView.saveState()/restoreState()`
   - ✅ Debounced saves to `QSettings` while resizing
@@ -54,7 +54,7 @@ Status Key
 ### 5) Totals Section Enhancement
 - Status: ✅ **Partially Implemented**
 - Why: Complex breakdown display with many numeric values needs better hierarchy
-- Files: `estimate_entry_ui.py`
+- Files: `silverestimate/ui/estimate_entry_ui.py`
 - How:
   - ✅ Already improved with palette-friendly styling
   - 💡 Add progressive disclosure (show/hide details toggle)
@@ -75,7 +75,7 @@ Status Key
   - Keyboard: Enter to Add/Update (context aware), Esc to clear selection, Ctrl+F to focus search.
   - Bulk actions: allow multi-select rows for Delete and Export CSV.
   - Integration: buttons to Import/Export (reusing existing managers) for discoverability.
-- Files: `item_master.py`, `database_manager.py` (optional: search API range filters), add state keys in `QSettings`.
+- Files: `silverestimate/ui/item_master.py`, `silverestimate/persistence/database_manager.py` (optional: search API range filters), add state keys in `QSettings`.
 
 ### Estimate History
 - Why: Retrieval and actions on past estimates should be fast, searchable, and safe.
@@ -88,7 +88,7 @@ Status Key
   - Export: add “Export to CSV/PDF” for selected estimate(s) via `PrintManager` or a lightweight exporter.
   - Shortcuts: Enter to Open, Ctrl+P to Print, Del to Delete, Esc to close.
   - Safety: clearer delete confirmation with exact count and undo option where feasible (soft delete flag then purge).
-- Files: `estimate_history.py`, `database_manager.py` (export APIs, optional soft-delete), `print_manager.py` (batch print/export).
+- Files: `estimate_history.py`, `silverestimate/persistence/database_manager.py` (export APIs, optional soft-delete), `silverestimate/ui/print_manager.py` (batch print/export).
 
 ### Silver Bar Management
 - Why: Complex, high-density screen benefits from clarity, persistence, and bulk ergonomics.
@@ -101,7 +101,7 @@ Status Key
   - Performance: consider table model/view with `QAbstractTableModel` for large datasets to avoid widget overhead.
   - Keyboard: Enter to add selected, Backspace/Delete to remove from list, Ctrl+A select all, F5 refresh.
   - CSV import/export: export exists; add import to seed bars (admin-only), with validation and preview.
-- Files: `silver_bar_management.py`, `database_manager.py` (issued views, optional model APIs), optional `ui_utils.py` for toasts.
+- Files: `silverestimate/ui/silver_bar_management.py`, `silverestimate/persistence/database_manager.py` (issued views, optional model APIs), optional `ui_utils.py` for toasts.
 
 ### Settings Dialog
 - Why: Central hub should be discoverable, safe, and reversible.
@@ -114,7 +114,7 @@ Status Key
   - Export/Import settings: allow exporting QSettings to a JSON file and restoring, with conflict prompts.
   - Printer validation: show current default and availability; warn if selected default printer is not found.
   - Apply semantics: Apply should be enabled only when dirty (already handled) and show a subtle “Settings applied” toast.
-- Files: `settings_dialog.py`, `logger.py` (reconfigure hooks already exist), `app_constants.py` (defaults), optional `settings_exporter.py`.
+- Files: `silverestimate/ui/settings_dialog.py`, `logger.py` (reconfigure hooks already exist), `silverestimate/infrastructure/app_constants.py` (defaults), optional `settings_exporter.py`.
 
 ### Login Dialog
 - Why: First impression and critical flow for access and safety.
@@ -123,7 +123,7 @@ Status Key
   - Secondary password explanation: concise, clear description with “Learn more” link; emphasize difference from primary.
   - Error messaging: avoid generic “incorrect password”; provide UI hints and offer “Reset / Wipe” as a clearly separated path.
   - Keyboard: Enter submits, Esc cancels, Tab order audited.
-- Files: `login_dialog.py`.
+- Files: `silverestimate/ui/login_dialog.py`.
 
 ### Item Selection Dialog (Supporting)
 - Why: Speed is key during estimate composition.
@@ -132,7 +132,7 @@ Status Key
   - Recent items and favorites pinned at top; maintain per-user recency lists.
   - Keyboard-centric flow: up/down moves results, Enter selects, Esc closes, Ctrl+F jumps to search.
   - Persist window size and last filter.
-- Files: `item_selection_dialog.py`.
+- Files: `silverestimate/ui/item_selection_dialog.py`.
 
 
 ---
@@ -142,7 +142,7 @@ Status Key
 ### 6) Keyboard Navigation Standards
 - Status: 💡 **Medium Priority**
 - Why: Complex keyboard shortcuts without clear documentation or standard conventions
-- Files: `estimate_entry.py`, documentation
+- Files: `silverestimate/ui/estimate_entry.py`, documentation
 - How:
   - Add context-sensitive help (F1 key support)
   - Show available shortcuts in tooltips and status messages
@@ -162,7 +162,7 @@ Status Key
 ### 8) Typography Hierarchy
 - Status: ✅ **Partially Implemented**
 - Why: Multiple font size settings without clear hierarchy and relationships
-- Files: `settings_dialog.py`, `estimate_entry.py`
+- Files: `silverestimate/ui/settings_dialog.py`, `silverestimate/ui/estimate_entry.py`
 - How:
   - ✅ Already have separate controls for different UI areas
   - 💡 Establish clear typography scale relationships
@@ -176,7 +176,7 @@ Status Key
 ### 9) Error Recovery & Undo
 - Status: 💡 **Medium Priority**
 - Why: Limited undo functionality and error recovery capabilities
-- Files: `estimate_entry_logic.py`
+- Files: `silverestimate/ui/estimate_entry_logic.py`
 - How:
   - Add Ctrl+Z undo for recent cell changes
   - Implement auto-save for work-in-progress
@@ -186,7 +186,7 @@ Status Key
 ### 10) Bulk Operations Support
 - Status: 💡 **Low Priority**
 - Why: No support for bulk editing or multi-row operations
-- Files: `estimate_entry_ui.py`, `estimate_entry_logic.py`
+- Files: `silverestimate/ui/estimate_entry_ui.py`, `silverestimate/ui/estimate_entry_logic.py`
 - How:
   - Add multi-row selection capability
   - Implement copy/paste functionality for table data
@@ -196,7 +196,7 @@ Status Key
 ### 11) Enhanced Search & Filtering
 - Status: 💡 **Low Priority** (ItemSelectionDialog already exists)
 - Why: Limited search capabilities in item selection dialog
-- Files: `item_selection_dialog.py`
+- Files: `silverestimate/ui/item_selection_dialog.py`
 - How:
   - Add advanced filtering options (by type, purity range, etc.)
   - Implement fuzzy search algorithms
@@ -210,7 +210,7 @@ Status Key
 ### 12) Calculation Optimization
 - Status: 💡 **Low Priority**
 - Why: Real-time calculations trigger on every cell change
-- Files: `estimate_entry_logic.py`
+- Files: `silverestimate/ui/estimate_entry_logic.py`
 - How:
   - Debounce calculations with 300ms delay
   - Use progress indicators for complex calculations
@@ -244,7 +244,7 @@ Status Key
 ### 15) Enhanced Status Communication
 - Status: ✅ **Partially Implemented** (inline status exists)
 - Why: Current inline status messages need better visibility
-- Files: `estimate_entry.py`, `message_bar.py`
+- Files: `silverestimate/ui/estimate_entry.py`, `silverestimate/ui/message_bar.py`
 - How:
   - ✅ Already have inline status next to Mode indicator
   - 💡 Add toast notifications for important messages
@@ -258,7 +258,7 @@ Status Key
 ### ✅ Enhanced Tooltips System
 - Status: ✅ **COMPLETED** in v1.70
 - Why: Users needed better guidance on input formats and keyboard shortcuts
-- Files: `estimate_entry_ui.py`, `settings_dialog.py`, `login_dialog.py`, `item_selection_dialog.py`
+- Files: `silverestimate/ui/estimate_entry_ui.py`, `silverestimate/ui/settings_dialog.py`, `silverestimate/ui/login_dialog.py`, `silverestimate/ui/item_selection_dialog.py`
 - Implementation:
   - ✅ Comprehensive tooltips for all input fields with detailed format explanations
   - ✅ Keyboard shortcuts documented in all button tooltips (Ctrl+S, Ctrl+P, etc.)
@@ -284,7 +284,7 @@ Status Key
 
 ### ✅ Primary Actions Toolbar (Contextual)
 - Status: ✅ Implemented as button row in Estimate view
-- Files: `estimate_entry_ui.py`
+- Files: `silverestimate/ui/estimate_entry_ui.py`
 
 ### ✅ Window State Persistence  
 - Status: ✅ Implemented
@@ -300,27 +300,27 @@ Status Key
 
 ### ✅ Palette‑Aware Styling + Theme Support
 - Status: ✅ Groundwork Implemented
-- Files: `estimate_entry_ui.py`, `estimate_entry.py`, `item_master.py`
+- Files: `silverestimate/ui/estimate_entry_ui.py`, `silverestimate/ui/estimate_entry.py`, `silverestimate/ui/item_master.py`
 
 ### ✅ Safer Destructive Actions
 - Status: ✅ Implemented
-- Files: `estimate_entry_ui.py`, `estimate_entry_logic.py`, `estimate_entry.py`, `main.py`, `settings_dialog.py`
+- Files: `silverestimate/ui/estimate_entry_ui.py`, `silverestimate/ui/estimate_entry_logic.py`, `silverestimate/ui/estimate_entry.py`, `main.py`, `silverestimate/ui/settings_dialog.py`
 
 ### ✅ Keyboard Tab Order
 - Status: ✅ Implemented (header + table focus)
-- Files: `estimate_entry_ui.py`, `item_master.py`
+- Files: `silverestimate/ui/estimate_entry_ui.py`, `silverestimate/ui/item_master.py`
 
 ### ✅ Locale & Currency Formatting
 - Status: ✅ Implemented
-- Files: `estimate_entry_logic.py`, `print_manager.py`
+- Files: `silverestimate/ui/estimate_entry_logic.py`, `silverestimate/ui/print_manager.py`
 
 ### ✅ Progress & Responsiveness
 - Status: 🔜 In Progress (async import done)
-- Files: `settings_dialog.py`, `item_import_dialog.py`, `item_import_manager.py`, `print_manager.py`
+- Files: `silverestimate/ui/settings_dialog.py`, `item_import_dialog.py`, `silverestimate/ui/item_import_manager.py`, `silverestimate/ui/print_manager.py`
 
 ### ✅ Unified QSettings Usage
 - Status: ✅ Implemented
-- Files: `estimate_entry.py`, `settings_dialog.py`, `app_constants.py`
+- Files: `silverestimate/ui/estimate_entry.py`, `silverestimate/ui/settings_dialog.py`, `silverestimate/infrastructure/app_constants.py`
 
 ---
 
@@ -346,3 +346,4 @@ Status Key
 ✅ **Header Field Spacing** - Professional layout with logical grouping and proper spacing  
 
 These improvements provide immediate usability benefits and establish a foundation for future UX enhancements.
+

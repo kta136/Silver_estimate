@@ -13,15 +13,15 @@ This document captures the living implementation plan for the SilverEstimate ref
 
 ## Recent Updates (2025-09-19)
 - Persistence repositories for estimates and silver bars are live; DatabaseManager lazily loads them.
-- database_manager.py now leans on silverestimate.security.encryption for all crypto work.
+- silverestimate/persistence/database_manager.py now leans on silverestimate/security/encryption.py for all crypto work.
 
 - Added pytest-based repository coverage using in-memory SQLite fixtures (tests/test_repositories.py).
 
-- Authentication flow now lives in silverestimate/services/auth_service; UI code delegates to the shared service.
+- Authentication flow now lives in silverestimate/services/auth_service.py; UI code delegates to the shared service.
 
 - Main window delegates live-rate, navigation, destructive actions, and item import to shared services; startup now uses a simple main() entry point.
 
-- Migrated print and table font dialogs into silverestimate/ui/font_dialogs with SettingsService coordination.
+- Migrated print and table font dialogs into silverestimate/ui/font_dialogs.py with SettingsService coordination.
 - Consolidated legacy root-level UI/service modules under silverestimate/ui, infrastructure, and persistence to match the target layout.
 
 
@@ -41,10 +41,10 @@ Existing top-level scripts (main.py, dialogs, etc.) will gradually import from t
 ## Current State (2025-09-19)
 - [x] Package skeleton created under silverestimate/ with placeholder packages.
 - [x] Crypto helpers (silverestimate/security/encryption.py) encapsulate salt creation, PBKDF2 key derivation, and AES-GCM payload handling.
-- [x] database_manager.py delegates encryption work to the new security helpers.
+- [x] silverestimate/persistence/database_manager.py delegates encryption work to the new security helpers.
 - [x] Schema setup/migration logic lives in silverestimate/persistence/migrations.py, with DatabaseManager.setup_database calling it.
 - [x] Items CRUD routes through silverestimate/persistence/items_repository.py via a lazy-loaded repository.
-- [ ] Estimate and silver-bar workflows still live inside database_manager.py alongside UI-driven business logic.
+- [ ] Estimate and silver-bar workflows still live inside silverestimate/persistence/database_manager.py alongside UI-driven business logic.
 
 ## Near-Term Tasks
 1. **Persistence split**
@@ -53,7 +53,7 @@ Existing top-level scripts (main.py, dialogs, etc.) will gradually import from t
    - [x] Estimate and silver-bar repositories carved under silverestimate/persistence/.
    - [ ] Keep refining DatabaseManager into a thin lifecycle/encryption facade.
 2. **Security hardening**
-   - [x] Consolidate authentication flow into silverestimate/services/auth_service and remove duplicate logic from main.py.
+   - [x] Consolidate authentication flow into silverestimate/services/auth_service.py and remove duplicate logic from main.py.
    - [ ] Introduce salt rotation on password change; evaluate upgrading to Argon2id KDF (passlib already bundled).
    - [ ] Revisit handling of security/last_temp_db_path to minimise plaintext leakage.
 3. **Testing groundwork**
@@ -78,10 +78,3 @@ When completing a unit of work:
 - [ ] Record testing performed and outstanding gaps.
 
 Keeping this checklist current ensures continuity between sessions.
-
-
-
-
-
-
-

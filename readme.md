@@ -93,14 +93,14 @@ See also: `DOCS/project-architecture.md`.
 
 ## 📸 Screenshots
 
-Add screenshots here (main estimate screen, item master, silver bars, print preview).
+Capture screenshots from the running app and store them in `DOCS/images/` (keep filenames consistent so links stay valid):
 
-```
-[Main Estimate Entry Screen]
-[Item Master Screen]
-[Silver Bar Management]
-[Print Preview]
-```
+- Estimate entry workflow → `DOCS/images/estimate-entry.png`
+- Item master catalog → `DOCS/images/item-master.png`
+- Silver bar management → `DOCS/images/silver-bar-management.png`
+- Print preview → `DOCS/images/print-preview.png`
+
+(Add the PNG files when ready; the repository currently omits large assets.)
 
 ## 🛠️ Installation
 
@@ -175,7 +175,7 @@ DOCS/                                            # Deep-dive docs
 
 ## ✅ Testing
 
-Add tests as the project evolves. Focus areas: calculations, encryption cycles, history queries, print formatting.
+Refer to `DOCS/testing-implementation-playbook.md` for the current pytest plan. Focus coverage on calculations, encryption round-trips, history queries, and print formatting, and extend the suite as new workflows land.
 
 ## 🚀 Deployment
 
@@ -219,6 +219,7 @@ Troubleshooting resources:
 - [Common issues and solutions](DOCS/troubleshooting-maintenance.md)
 - [Performance optimization tips](DOCS/performance-optimization.md)
 - [Changelog](CHANGELOG.md)
+- [Changelog archive](DOCS/changelog-archive.md)
 
 ## 📄 License
 
@@ -247,4 +248,3 @@ This project is proprietary software. All rights reserved.
 - Debounced totals; minor fixes
 
 [See full changelog](CHANGELOG.md)
-

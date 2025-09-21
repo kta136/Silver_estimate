@@ -18,7 +18,7 @@ The root cause was identified as a signal-slot connection issue during initializ
 
 ## Code Changes
 
-### 1. Modified `connect_signals` in `estimate_entry_logic.py`
+### 1. Modified `connect_signals` in `silverestimate/ui/estimate_entry_logic.py`
 
 Added a parameter to skip connecting the load_estimate signal:
 
@@ -46,7 +46,7 @@ def connect_signals(self, skip_load_estimate=False):
     self.item_table.cellChanged.connect(self.handle_cell_changed)
 ```
 
-### 2. Added `initializing` Flag in `estimate_entry.py`
+### 2. Added `initializing` Flag in `silverestimate/ui/estimate_entry.py`
 
 Added a flag to prevent loading estimates during initialization:
 
@@ -69,7 +69,7 @@ def __init__(self, db_manager, main_window):
     self.initializing = False
 ```
 
-### 3. Added `generate_voucher_silent` Method in `estimate_entry.py`
+### 3. Added `generate_voucher_silent` Method in `silverestimate/ui/estimate_entry.py`
 
 Created a method to generate voucher numbers without triggering signals:
 
@@ -95,7 +95,7 @@ def generate_voucher_silent(self):
         # Don't show error message during initialization
 ```
 
-### 4. Modified `safe_load_estimate` in `estimate_entry.py`
+### 4. Modified `safe_load_estimate` in `silverestimate/ui/estimate_entry.py`
 
 Updated to check the initializing flag:
 
@@ -137,7 +137,7 @@ def safe_load_estimate(self):
         self.voucher_edit.editingFinished.connect(self.safe_load_estimate)
 ```
 
-### 5. Modified `load_estimate` in `estimate_entry_logic.py`
+### 5. Modified `load_estimate` in `silverestimate/ui/estimate_entry_logic.py`
 
 Updated to check the initializing flag:
 
@@ -188,7 +188,7 @@ def load_estimate(self):
         return
 ```
 
-### 6. UI Changes in `estimate_entry_ui.py`
+### 6. UI Changes in `silverestimate/ui/estimate_entry_ui.py`
 
 Removed the "Generate" button and added a "Load" button:
 
@@ -212,7 +212,7 @@ def _setup_header_form(self, widget):
     # Rest of the form setup...
 ```
 
-### 7. Initialization Changes in `estimate_entry.py`
+### 7. Initialization Changes in `silverestimate/ui/estimate_entry.py`
 
 Modified the initialization sequence:
 

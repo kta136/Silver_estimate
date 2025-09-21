@@ -75,6 +75,7 @@ Maintainer: SilverEstimate team (update contact as needed)
 
 
 
+
 - 2025-09-20: Created the project memory bank document to capture architecture, operations, and testing gaps.
 - 2025-09-20: Added pytest fixtures and new tests covering EstimateLogic, LiveRateService, and DatabaseManager.
 - 2025-09-20: Migrated repository tests and added authentication/navigation service coverage; full pytest suite now 22 passing.
@@ -84,11 +85,13 @@ Maintainer: SilverEstimate team (update contact as needed)
 - 2025-09-20: Added EstimateEntryWidget UI smoke test verifying net/fine/wage totals; pytest suite now includes 33 cases all passing.
 - 2025-09-20: Added persistence test verifying saved estimates reload with correct values and item types; suite now 35 passing.
 - 2025-09-20: Added EstimateEntryWidget mode toggling smoke test and Hypothesis-based calculation properties (skips when unavailable); suite now 38 cases (36 passing + 2 skipped).
+- 2025-09-20: Added multi-row/persistence UI tests and Hypothesis-backed calculation properties; test suite now 39 passing.
 ## Update Checklist for Future Sessions
 - Record a new entry in the Session Journal with date, summary, and impacted modules.
 - Note any schema or security changes explicitly so authentication and migration flows can be revalidated.
 - If new documentation is added, reference it in Package Map or relevant sections to keep navigation current.
 - Confirm APP_VERSION stays in sync with release tags and update Snapshot when it changes.
+
 
 
 

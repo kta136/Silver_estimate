@@ -156,3 +156,4 @@ Focus on verifying command registration, signal wiring, and error dialogs under 
 - [ ] Integrate coverage thresholds into the CI pipeline.
 
 Keep this document updated as the test suite evolves.
+\n## Recent Additions\n- Added EstimateEntryWidget smoke tests covering return/silver-bar toggles and persistence reloads.\n- Introduced Hypothesis-based property tests for fine- and wage-calculation helpers (skips automatically when Hypothesis is unavailable).

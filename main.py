@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QMenuBar, QMenu, QAction, QMessageBox, QDialog, QStatusBar,
                              QLabel, QStackedWidget, QToolBar, QActionGroup, QInputDialog)
 from PyQt5.QtGui import QKeySequence
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, QLocale
 import PyQt5.QtCore as QtCore
 
 # Import the custom dialogs and modules
@@ -25,6 +25,7 @@ from silverestimate.ui.font_dialogs import adjust_table_font_size, choose_print_
 from silverestimate.infrastructure.logger import setup_logging, qt_message_handler
 from silverestimate.ui.message_bar import MessageBar
 from silverestimate.infrastructure.app_constants import APP_TITLE, APP_VERSION, SETTINGS_ORG, SETTINGS_APP, DB_PATH
+from silverestimate.infrastructure.settings import get_app_settings
 
 class StartupError(RuntimeError):
     """Raised when the main window cannot complete initialization."""
@@ -63,6 +64,10 @@ class MainWindow(QMainWindow):
         # Top message bar (created but not added to layout; inline status is preferred)
         self.message_bar = MessageBar(self)
 
+        self._pending_status_message = None
+        self._live_rate_service = None
+        self._live_rate_manual_refresh = False
+        self._live_rate_ui_enabled = True
         # Setup database now that a valid password is available
         self.setup_database_with_password(self._password)
         if not self.db:
@@ -97,6 +102,13 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget(self.central_widget)
         # Insert just the main stack (inline status lives in header area)
         self.layout.addWidget(self.stack)
+        pending_status = getattr(self, '_pending_status_message', None)
+        if pending_status:
+            self._pending_status_message = None
+            try:
+                self.show_status_message(*pending_status)
+            except Exception:
+                pass
 
         self.navigation_service = NavigationService(self, self.stack, logger=self.logger)
 
@@ -149,13 +161,20 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
 
+            live_ui_enabled = True
             try:
-                self.reconfigure_rate_visibility_from_settings()
+                live_ui_enabled = self.reconfigure_rate_visibility_from_settings()
+            except Exception as visibility_error:
+                if self.logger:
+                    self.logger.debug("Could not apply live rate visibility settings: %s", visibility_error, exc_info=True)
+            try:
                 self._setup_live_rate_timer()
-                QTimer.singleShot(500, self.refresh_live_rate_now)
-                self.logger.info("Scheduled initial live-rate fetch (500ms)")
+                self.reconfigure_rate_timer_from_settings()
+                if live_ui_enabled:
+                    QTimer.singleShot(500, self.refresh_live_rate_now)
             except Exception as rate_error:
-                self.logger.debug("Live rate timer init failed: %s", rate_error)
+                if self.logger:
+                    self.logger.debug("Live rate timer init failed: %s", rate_error, exc_info=True)
         except Exception as exc:
             self.logger.critical("Failed to initialize widgets: %s", exc, exc_info=True)
             raise StartupError(f"Failed to initialize application widgets: {exc}") from exc
@@ -166,6 +185,223 @@ class MainWindow(QMainWindow):
 
     def file_print_estimate(self, *args, **kwargs):
         return self.commands.print_estimate()
+
+    def show_status_message(self, message: str, timeout: int = 3000, level: str = 'info') -> None:
+        """Display a transient status message using the inline message bar."""
+        bar = getattr(self, 'message_bar', None)
+        layout = getattr(self, 'layout', None)
+        if bar is not None and layout is not None:
+            try:
+                if layout.indexOf(bar) == -1:
+                    layout.insertWidget(0, bar)
+            except Exception:
+                try:
+                    layout.insertWidget(0, bar)
+                except Exception:
+                    pass
+            try:
+                display_timeout = timeout if isinstance(timeout, int) and timeout >= 0 else 0
+                display_level = (level or 'info') if isinstance(level, str) else 'info'
+                bar.show_message(message or "", display_timeout, display_level.lower())
+            except Exception as exc:
+                if hasattr(self, 'logger') and self.logger:
+                    self.logger.debug("Failed to show inline status message: %s", exc)
+            self._pending_status_message = None
+            return
+        self._pending_status_message = (message, timeout, level)
+        try:
+            status_bar = QMainWindow.statusBar(self)
+            if status_bar:
+                display_timeout = timeout if isinstance(timeout, int) and timeout >= 0 else 0
+                status_bar.showMessage(message or "", display_timeout)
+        except Exception:
+            pass
+        if hasattr(self, 'logger') and self.logger:
+            try:
+                self.logger.info("Status: %s", message)
+            except Exception:
+                pass
+    def refresh_live_rate_now(self):
+        """Trigger an immediate live-rate fetch using the service or a widget fallback."""
+        if not getattr(self, '_live_rate_ui_enabled', True):
+            return
+        self._live_rate_manual_refresh = True
+        service = getattr(self, '_live_rate_service', None)
+        if service:
+            try:
+                service.refresh_now()
+                self.show_status_message("Refreshing live rate…", 1500, level='info')
+                return
+            except Exception as exc:
+                if self.logger:
+                    self.logger.warning("Live rate service refresh failed: %s", exc, exc_info=True)
+        self._fallback_rate_refresh()
+
+    def _setup_live_rate_timer(self):
+        """Ensure the live-rate service object exists and is wired up."""
+        if getattr(self, '_live_rate_service', None):
+            return self._live_rate_service
+        try:
+            service = LiveRateService(parent=self, logger=self.logger)
+            service.rate_updated.connect(self._on_live_rate_updated)
+            self._live_rate_service = service
+            return service
+        except Exception as exc:
+            self._live_rate_service = None
+            if self.logger:
+                self.logger.warning("Live rate service unavailable: %s", exc, exc_info=True)
+            raise
+
+    def _fallback_rate_refresh(self):
+        """Fallback to the widget's manual refresh logic if the service is unavailable."""
+        widget = getattr(self, 'estimate_widget', None)
+        if widget and hasattr(widget, 'refresh_silver_rate'):
+            try:
+                widget.refresh_silver_rate()
+            except Exception as exc:
+                if self.logger:
+                    self.logger.warning("Manual live rate refresh failed: %s", exc, exc_info=True)
+                self.show_status_message("Live rate refresh failed", 3000, level='warning')
+            finally:
+                self._live_rate_manual_refresh = False
+        else:
+            self._live_rate_manual_refresh = False
+            self.show_status_message("Live rate refresh unavailable", 3000, level='warning')
+
+    def _on_live_rate_updated(self, broadcast_rate, api_rate, market_open):
+        """Handle live-rate updates emitted by the background service."""
+        best_rate = broadcast_rate if broadcast_rate not in (None, "") else api_rate
+        QTimer.singleShot(0, lambda: self._update_live_rate_display(best_rate, broadcast_rate, api_rate, market_open))
+
+    def _update_live_rate_display(self, effective_rate, broadcast_rate, api_rate, market_open):
+        widget = getattr(self, 'estimate_widget', None)
+        label = getattr(widget, 'live_rate_value_label', None) if widget else None
+        if label is None:
+            self._live_rate_manual_refresh = False
+            return
+        tooltip_parts = []
+        if broadcast_rate not in (None, ""):
+            tooltip_parts.append(f"Broadcast: {broadcast_rate}")
+        if api_rate not in (None, ""):
+            tooltip_parts.append(f"API: {api_rate}")
+        tooltip_parts.append("Market open" if market_open else "Market closed")
+        tooltip_text = "\n".join(tooltip_parts)
+        try:
+            if effective_rate in (None, ""):
+                label.setText("N/A /g")
+                label.setToolTip(tooltip_text)
+                if self._live_rate_manual_refresh:
+                    self.show_status_message("Live rate unavailable", 3000, level='warning')
+                self._live_rate_manual_refresh = False
+                return
+            gram_rate = float(effective_rate) / 1000.0
+        except Exception:
+            label.setText("N/A /g")
+            label.setToolTip(tooltip_text)
+            if self._live_rate_manual_refresh:
+                self.show_status_message("Live rate unavailable", 3000, level='warning')
+            self._live_rate_manual_refresh = False
+            return
+        try:
+            display_value = QLocale.system().toCurrencyString(gram_rate)
+        except Exception:
+            display_value = f"₹ {gram_rate:.2f}" if isinstance(gram_rate, float) else str(gram_rate)
+        label.setText(f"{display_value} /g")
+        label.setToolTip(tooltip_text)
+        if self._live_rate_manual_refresh:
+            self.show_status_message("Live rate updated", 2000, level='info')
+        self._live_rate_manual_refresh = False
+
+    @staticmethod
+    def _coerce_settings_bool(value, default):
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return default
+        if isinstance(value, str):
+            value = value.strip().lower()
+            if not value:
+                return default
+            return value in ("1", "true", "yes", "on", "enabled")
+        if isinstance(value, (int, float)):
+            return value != 0
+        return default
+
+    def _read_live_rate_settings(self):
+        try:
+            settings = get_app_settings()
+        except Exception as exc:
+            if self.logger:
+                self.logger.debug("Falling back to default live-rate settings: %s", exc, exc_info=True)
+            return True, True, 60
+        try:
+            ui_raw = settings.value("rates/live_enabled", True)
+            auto_raw = settings.value("rates/auto_refresh_enabled", True)
+            interval_raw = settings.value("rates/refresh_interval_sec", 60)
+        except Exception as exc:
+            if self.logger:
+                self.logger.debug("Could not read live-rate settings: %s", exc, exc_info=True)
+            return True, True, 60
+        show_ui = self._coerce_settings_bool(ui_raw, True)
+        auto_refresh = self._coerce_settings_bool(auto_raw, True)
+        try:
+            interval = int(interval_raw)
+        except Exception:
+            interval = 60
+        interval = max(5, interval)
+        return show_ui, auto_refresh, interval
+
+    def reconfigure_rate_visibility_from_settings(self):
+        show_ui, _, _ = self._read_live_rate_settings()
+        self._live_rate_ui_enabled = show_ui
+        widget = getattr(self, 'estimate_widget', None)
+        if not widget:
+            return show_ui
+        components = (
+            getattr(widget, 'live_rate_label', None),
+            getattr(widget, 'live_rate_value_label', None),
+            getattr(widget, 'refresh_rate_button', None),
+        )
+        for component in components:
+            if component is not None:
+                try:
+                    component.setVisible(show_ui)
+                except Exception:
+                    pass
+        label = getattr(widget, 'live_rate_value_label', None)
+        if label is not None:
+            try:
+                if not show_ui:
+                    label.setText('—')
+                elif label.text() in ('', '—'):
+                    label.setText('…')
+            except Exception:
+                pass
+        return show_ui
+
+    def reconfigure_rate_timer_from_settings(self):
+        show_ui, auto_refresh, _ = self._read_live_rate_settings()
+        service = getattr(self, '_live_rate_service', None)
+        if not service and (show_ui or auto_refresh):
+            try:
+                service = self._setup_live_rate_timer()
+            except Exception:
+                return
+        if not service:
+            return
+        try:
+            service.stop()
+        except Exception:
+            pass
+        if auto_refresh and show_ui:
+            try:
+                service.start()
+            except Exception as exc:
+                if self.logger:
+                    self.logger.warning("Unable to start live-rate timer: %s", exc, exc_info=True)
+        else:
+            if self.logger:
+                self.logger.info("Live rate auto-refresh disabled (ui=%s, auto=%s)", show_ui, auto_refresh)
 
     def setup_database_with_password(self, password):
         """Initialize the DatabaseManager with the provided password."""
@@ -457,6 +693,12 @@ class MainWindow(QMainWindow):
             self.settings_service.save_geometry(self)
         except Exception:
             pass
+        try:
+            service = getattr(self, '_live_rate_service', None)
+            if service:
+                service.stop()
+        except Exception:
+            pass
         # Close the database connection properly
         if hasattr(self, 'db') and self.db:
             self.logger.debug("Closing database connection")
@@ -647,3 +889,4 @@ if __name__ == "__main__":
         except Exception:
             pass
         sys.exit(1)
+

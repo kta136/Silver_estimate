@@ -48,6 +48,7 @@ class DatabaseManager:
         self.temp_db_path = None # Will hold the temporary file path
         self.conn = None
         self.cursor = None
+        self.last_error = None
         self._session = ConnectionThreadGuard(logger=self.logger)
         # Serialize encryption to avoid concurrent writers
         self._encrypt_lock = threading.Lock()
@@ -529,6 +530,7 @@ class DatabaseManager:
         return self.estimates_repo.generate_voucher_no()
 
     def save_estimate_with_returns(self, voucher_no, date, silver_rate, regular_items, return_items, totals):
+        self.last_error = None
         return self.estimates_repo.save_estimate_with_returns(voucher_no, date, silver_rate, regular_items, return_items, totals)
 
     def delete_all_estimates(self):

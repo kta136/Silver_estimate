@@ -26,6 +26,7 @@ class FakeDB:
         self._c_insert_estimate_item = None
         self._sql_insert_estimate_item = None
         self._flush_requested = False
+        self.last_error = None
 
     def _table_exists(self, table_name: str) -> bool:
         self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
@@ -87,6 +88,7 @@ def test_items_repository_roundtrip(fake_db):
 
 def test_estimates_repository_save_and_fetch(fake_db):
     repo = EstimatesRepository(fake_db)
+    ItemsRepository(fake_db).add_item('ITM001', 'Sample Item', 92.5, 'WT', 10.0)
     saved = repo.save_estimate_with_returns(
         voucher_no='100',
         date='2025-01-01',
@@ -99,6 +101,35 @@ def test_estimates_repository_save_and_fetch(fake_db):
     data = repo.get_estimate_by_voucher('100')
     assert data['header']['voucher_no'] == '100'
     assert len(data['items']) == 1
+
+
+def test_save_estimate_reports_missing_item_code(fake_db):
+    repo = EstimatesRepository(fake_db)
+    missing_item = regular_item(
+        code='MISSING001',
+        name='Missing Item',
+        gross=1.0,
+        poly=0.0,
+        net_wt=1.0,
+        purity=90.0,
+        wage_rate=0.0,
+        pieces=1,
+        wage=0.0,
+        fine=0.9,
+    )
+    totals = estimate_totals(total_gross=1.0, total_net=1.0, net_fine=0.9, net_wage=0.0)
+    saved = repo.save_estimate_with_returns(
+        voucher_no='404',
+        date='2025-01-05',
+        silver_rate=71000.0,
+        regular_items=[missing_item],
+        return_items=[],
+        totals=totals,
+    )
+    assert not saved
+    assert fake_db.last_error is not None
+    assert 'MISSING001' in fake_db.last_error
+
 
 
 def test_estimate_delete_cleans_silver_bars(fake_db):
@@ -138,6 +169,10 @@ def test_silver_bar_assignment_cycle(fake_db):
 
 def test_estimate_repository_load_preserves_item_types(fake_db):
     repo = EstimatesRepository(fake_db)
+    items_repo = ItemsRepository(fake_db)
+    items_repo.add_item('REG001', 'Regular Item', 91.6, 'WT', 15.0)
+    items_repo.add_item('RET001', 'Return Item', 80.0, 'WT', 0.0)
+    items_repo.add_item('BAR001', 'Silver Bar', 99.9, 'WT', 0.0)
     voucher = '500'
     regular_payload = regular_item(
         code='REG001',

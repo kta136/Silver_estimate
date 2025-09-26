@@ -119,6 +119,8 @@ class EstimatesRepository:
             self._logger.error("DB Error getting estimate headers: %s", exc, exc_info=True)
             return []
 
+
+
     def save_estimate_with_returns(
         self,
         voucher_no: str,
@@ -130,15 +132,32 @@ class EstimatesRepository:
     ) -> bool:
         conn, cursor = self._conn, self._cursor
         if not conn or not cursor:
+            self._set_last_error("Cannot save estimate: no active database connection is available.")
             return False
         try:
+            self._set_last_error(None)
             conn.execute('BEGIN TRANSACTION')
+            regular_items = list(regular_items or [])
+            return_items = list(return_items or [])
             cursor.execute('SELECT 1 FROM estimates WHERE voucher_no = ?', (voucher_no,))
             estimate_exists = cursor.fetchone() is not None
 
             note = totals.get('note', '')
             last_balance_silver = totals.get('last_balance_silver', 0.0)
             last_balance_amount = totals.get('last_balance_amount', 0.0)
+
+            all_items = regular_items + return_items
+            missing_codes = self._find_missing_item_codes(all_items)
+            if missing_codes:
+                conn.rollback()
+                message = self._format_missing_code_message(missing_codes, all_items)
+                self._logger.warning(
+                    "Estimate %s save aborted due to missing item codes: %s",
+                    voucher_no,
+                    ", ".join(missing_codes),
+                )
+                self._set_last_error(message)
+                return False
 
             if estimate_exists:
                 cursor.execute(
@@ -241,16 +260,27 @@ class EstimatesRepository:
 
             conn.commit()
             self._request_flush()
+            self._set_last_error(None)
             return True
+        except sqlite3.IntegrityError as exc:
+            conn.rollback()
+            detail_message = self._diagnose_integrity_error(exc, regular_items + return_items)
+            self._logger.error("DB integrity error saving estimate %s: %s", voucher_no, exc, exc_info=True)
+            if detail_message:
+                self._set_last_error(detail_message)
+            else:
+                self._set_last_error(f"Database integrity error while saving estimate '{voucher_no}': {exc}")
+            return False
         except sqlite3.Error as exc:
             conn.rollback()
             self._logger.error("DB Error saving estimate %s: %s", voucher_no, exc, exc_info=True)
+            self._set_last_error(f"Database error while saving estimate '{voucher_no}': {exc}")
             return False
         except Exception as exc:
             conn.rollback()
             self._logger.error("Unexpected error saving estimate %s: %s", voucher_no, exc, exc_info=True)
+            self._set_last_error(f"Unexpected error while saving estimate '{voucher_no}': {exc}")
             return False
-
     def delete_all_estimates(self) -> bool:
         conn, cursor = self._conn, self._cursor
         if not conn or not cursor:
@@ -312,6 +342,91 @@ class EstimatesRepository:
             conn.rollback()
             self._logger.error("Unexpected error deleting estimate %s: %s", voucher_no, exc, exc_info=True)
             return False
+
+
+
+
+    def _set_last_error(self, message: str | None) -> None:
+        try:
+            setattr(self._db, "last_error", message)
+        except Exception:
+            pass
+
+    def _find_missing_item_codes(self, items: Iterable[dict]) -> List[str]:
+        cursor = self._cursor
+        if not cursor:
+            return []
+        codes = []
+        for item in items:
+            code = (item.get('code') or '').strip()
+            if code:
+                codes.append(code)
+        if not codes:
+            return []
+        unique_codes = list(dict.fromkeys(codes))
+        placeholders = ",".join("?" for _ in unique_codes)
+        try:
+            cursor.execute(f"SELECT code FROM items WHERE code IN ({placeholders})", unique_codes)
+            rows = cursor.fetchall()
+            found = {row['code'] for row in rows}
+        except sqlite3.Error as exc:
+            self._logger.error(
+                "Failed to verify item codes before saving estimate: %s",
+                exc,
+                exc_info=True,
+            )
+            return []
+        return [code for code in unique_codes if code not in found]
+
+    def _collect_item_rows(self, items: Iterable[dict]) -> dict[str, int]:
+        row_map: dict[str, int] = {}
+        for item in items:
+            code = (item.get('code') or '').strip()
+            if not code or code in row_map:
+                continue
+            row_number = item.get('row_number') or item.get('row_index') or item.get('row')
+            if row_number is None:
+                continue
+            try:
+                row_map[code] = int(row_number)
+            except (TypeError, ValueError):
+                try:
+                    row_map[code] = int(float(row_number))
+                except (TypeError, ValueError):
+                    continue
+        return row_map
+
+    def _format_missing_code_message(self, missing_codes: List[str], items: Iterable[dict]) -> str:
+        code_to_row = self._collect_item_rows(items)
+        details: List[str] = []
+        for code in missing_codes:
+            row_number = code_to_row.get(code)
+            if row_number is not None:
+                details.append(f"'{code}' (row {row_number})")
+            else:
+                details.append(f"'{code}'")
+        if len(details) == 1:
+            return (
+                f"Item code {details[0]} is not defined in the item master. "
+                "Please add or correct it before saving."
+            )
+        joined = ", ".join(details)
+        return (
+            f"Item codes {joined} are not defined in the item master. "
+            "Please add or correct them before saving."
+        )
+
+    def _diagnose_integrity_error(self, exc: sqlite3.IntegrityError, items: Iterable[dict]) -> str | None:
+        message = str(exc)
+        if "FOREIGN KEY constraint failed" in message:
+            missing_codes = self._find_missing_item_codes(items)
+            if missing_codes:
+                return self._format_missing_code_message(missing_codes, items)
+            return (
+                "Foreign key constraint failed while saving estimate items. "
+                "Please verify all item codes exist in the item master."
+            )
+        return None
 
     # ------------------------------------------------------------------
 

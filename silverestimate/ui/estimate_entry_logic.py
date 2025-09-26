@@ -1030,6 +1030,7 @@ class EstimateLogic:
             try:
                 item_dict = {
                     'code': code,
+                    'row_number': row + 1,
                     'name': self.item_table.item(row, COL_ITEM_NAME).text() if self.item_table.item(row, COL_ITEM_NAME) else '',
                     'gross': self._get_cell_float(row, COL_GROSS),
                     'poly': self._get_cell_float(row, COL_POLY),
@@ -1232,9 +1233,16 @@ class EstimateLogic:
             self.print_estimate()
             self.clear_form(confirm=False)
         else:
-            err_msg = f"Failed to save estimate '{voucher_no}'. Check logs."
-            QMessageBox.critical(self, "Error", err_msg)
-            self._status(err_msg, 5000)
+            error_detail = getattr(self.db_manager, 'last_error', None)
+            if error_detail:
+                dialog_message = f"Estimate '{voucher_no}' could not be saved.\n\n{error_detail}"
+                status_message = f"Save Error: {error_detail}"
+            else:
+                dialog_message = f"Failed to save estimate '{voucher_no}'. Please check the logs for more details."
+                status_message = f"Save Error: Failed to save estimate '{voucher_no}'."
+            self.logger.error("Save estimate %s failed: %s", voucher_no, error_detail or 'unknown error')
+            QMessageBox.critical(self, "Save Error", dialog_message)
+            self._status(status_message.replace('\n', ' ').strip(), 5000)
 
     def refresh_silver_rate(self):
         """Fetch the live silver rate and apply it to the field and live label."""

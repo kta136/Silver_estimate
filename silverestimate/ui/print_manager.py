@@ -60,6 +60,14 @@ class PrintManager:
             self.printer.setOrientation(QPrinter.Landscape if orientation_name == 'Landscape' else QPrinter.Portrait)
         except Exception:
             self.printer.setOrientation(QPrinter.Portrait)
+
+        try:
+            layout_mode = settings.value("print/estimate_layout", "old", type=str)
+            self.estimate_layout_mode = (layout_mode or "old").lower()
+            if self.estimate_layout_mode not in {"old", "new"}:
+                self.estimate_layout_mode = "old"
+        except Exception:
+            self.estimate_layout_mode = "old"
         # Load margin settings
         default_margins = "10,5,10,5" # Default: 10mm L/R, 5mm T/B
         margins_str = settings.value("print/margins", defaultValue=default_margins, type=str)
@@ -125,7 +133,12 @@ class PrintManager:
                                 f"Estimate {voucher_no} not found.")
             return False
         try:
-            html_text = self._generate_estimate_manual_format(estimate_data)
+            layout_mode = getattr(self, "estimate_layout_mode", "old")
+            layout_mode = (layout_mode or "old").lower()
+            if layout_mode == "new":
+                html_text = self._generate_estimate_new_format(estimate_data)
+            else:
+                html_text = self._generate_estimate_old_format(estimate_data)
 
             self._open_preview_with_enhancements(
                 html_text,
@@ -201,7 +214,7 @@ class PrintManager:
         document.setPageSize(printer.pageRect(QPrinter.Point).size())
         document.print_(printer)
 
-    def _generate_estimate_manual_format(self, estimate_data):
+    def _generate_estimate_old_format(self, estimate_data):
         """Generate manually formatted text using spaces, matching preview image."""
         header = estimate_data['header']
         items = estimate_data['items']
@@ -225,13 +238,13 @@ class PrintManager:
                 else:
                     regular_items.append(item)
 
-        S = 1; W_SNO=3; W_FINE=9; W_LABOUR=8; W_QTY=10; W_POLY=7; W_NAME=18; W_SPER=7; W_PCS=8; W_WRATE=8
-        TOTAL_WIDTH = W_SNO+S+W_FINE+S+W_LABOUR+S+W_QTY+S+W_POLY+S+W_NAME+S+W_SPER+S+W_PCS+S+W_WRATE
+        S = 1; W_SNO=3; W_FINE=9; W_LBR=8; W_QTY=10; W_POLY=7; W_NAME=18; W_SPER=7; W_PCS=8; W_WRATE=8
+        TOTAL_WIDTH = W_SNO+S+W_FINE+S+W_LBR+S+W_QTY+S+W_POLY+S+W_NAME+S+W_SPER+S+W_PCS+S+W_WRATE
 
         def format_line(*args):
             # args[0] is now sno
             try:
-                sno = f"{args[0]:>{W_SNO}}"; fine = f"{args[1]:>{W_FINE}.3f}"; labour = f"{args[2]:>{W_LABOUR}.2f}"
+                sno = f"{args[0]:>{W_SNO}}"; fine = f"{args[1]:>{W_FINE}.3f}"; labour = f"{args[2]:>{W_LBR}.2f}"
                 qty = f"{args[3]:>{W_QTY}.3f}"; poly = f"{args[4]:>{W_POLY}.0f}" # Poly as integer
                 name = f"{str(args[5] or ''):<{W_NAME}.{W_NAME}}"; sper = f"{args[6]:>{W_SPER}.2f}"
                 pcs_val = args[7]; pcs_display = str(pcs_val) if pcs_val and pcs_val > 0 else ""
@@ -246,7 +259,7 @@ class PrintManager:
 
         def format_totals_line(fine, labour, qty, poly):
             # Format values, including Poly and Labour as integer
-            fine_str=f"{fine:{W_FINE}.3f}"; labour_str=f"{labour:{W_LABOUR}.0f}"
+            fine_str=f"{fine:{W_FINE}.3f}"; labour_str=f"{labour:{W_LBR}.0f}"
             qty_str=str(int(round(qty))).rjust(W_QTY); poly_str=f"{poly:{W_POLY}.0f}"
             # Construct the line with correct spacing
             sno_space=" "*(W_SNO+S); space_after_poly=" "*(S+W_NAME+S+W_SPER+S+W_PCS+S+W_WRATE)
@@ -307,7 +320,7 @@ class PrintManager:
         pad = max(1, TOTAL_WIDTH-len(voucher_str)-len(rate_str))
         output.append(f"{voucher_str}"+" "*pad+rate_str)
         sep_eq="="*TOTAL_WIDTH; sep_dash="-"*TOTAL_WIDTH; output.append(sep_eq)
-        h_sno="SNo".center(W_SNO); h_fine="Fine".center(W_FINE); h_labour="Labour".center(W_LABOUR); h_qty="Quantity".center(W_QTY); h_poly="Poly".center(W_POLY)
+        h_sno="SNo".center(W_SNO); h_fine="Fine".center(W_FINE); h_labour="Labour".center(W_LBR); h_qty="Quantity".center(W_QTY); h_poly="Poly".center(W_POLY)
         h_name="Item Name".center(W_NAME); h_sper="S.Per%".center(W_SPER); h_pcs="Pcs/Doz.".center(W_PCS); h_wrate="W.Rate".center(W_WRATE)
         header_line=f"{h_sno} {h_fine} {h_labour} {h_qty} {h_poly} {h_name} {h_sper} {h_pcs} {h_wrate}"
         output.append(f"{header_line:<{TOTAL_WIDTH}}"[:TOTAL_WIDTH]); output.append(sep_eq)
@@ -395,7 +408,7 @@ class PrintManager:
         total_cost_r = int(round(total_cost))
 
         fine_str=f"{net_fine_display:{W_FINE}.3f}"
-        wage_str=f"{net_wage_r:{W_LABOUR}.0f}"
+        wage_str=f"{net_wage_r:{W_LBR}.0f}"
         scost_label="S.Cost : "
         scost_value_formatted = self._format_currency_locale(silver_cost_r)
         scost_display = scost_label + scost_value_formatted
@@ -409,13 +422,13 @@ class PrintManager:
 
         # Construct the final line conditionally based on silver_rate
         if silver_rate > 0:
-            part1_len=W_SNO+S+W_FINE+S+W_LABOUR
+            part1_len=W_SNO+S+W_FINE+S+W_LBR
             space_before=TOTAL_WIDTH - part1_len - len(scost_pad) - len(total_pad) - 2
             pad_after_labour=max(1, space_before - 1); pad_between=1
             final_line = f"{' '*(W_SNO+S)}{fine_str} {wage_str}" + (" "*pad_after_labour) + scost_pad + (" "*pad_between) + total_pad
         else:
             # If silver rate is 0, only show Fine and Labour, omit S.Cost and Total
-            part1_len=W_SNO+S+W_FINE+S+W_LABOUR
+            part1_len=W_SNO+S+W_FINE+S+W_LBR
             remaining_space = TOTAL_WIDTH - part1_len
             final_line = f"{' '*(W_SNO+S)}{fine_str} {wage_str}" + (" " * remaining_space)
 
@@ -436,6 +449,390 @@ class PrintManager:
                     body {{ margin: 0; }}
                     </style></head><body><pre>{html_content}</pre></body></html>"""
         return html
+
+    def _generate_estimate_new_format(self, estimate_data):
+        """Generate the new layout variant for estimates."""
+        header = estimate_data['header']
+        items = estimate_data['items']
+        voucher_no = header['voucher_no']
+        silver_rate = header['silver_rate']
+
+        regular_items, silver_bar_items, return_goods, return_silver_bars = [], [], [], []
+        for item in items:
+            is_return = item.get('is_return', 0) == 1
+            is_silver_bar = item.get('is_silver_bar', 0) == 1
+
+            if is_return:
+                if is_silver_bar:
+                    return_silver_bars.append(item)
+                else:
+                    return_goods.append(item)
+            else:
+                if is_silver_bar:
+                    silver_bar_items.append(item)
+                else:
+                    regular_items.append(item)
+
+        S = 1
+        W_SNO = 3
+        W_NAME = 18
+        W_GROSS = 9
+        W_POLY = 9
+        W_NET = 9
+        W_SPER = 8
+        W_WRATE = 9
+        W_PCS = 9
+        W_FINE = 9
+        W_LBR = 9
+        TOTAL_WIDTH = (
+            W_SNO + S + W_NAME + S + W_GROSS + S + W_POLY + S + W_NET + S + W_SPER +
+            S + W_WRATE + S + W_PCS + S + W_FINE + S + W_LBR
+        )
+
+        def fmt_num(value, width):
+            if value is None:
+                return " " * width
+            try:
+                return f"{float(value):<{width}.2f}"[:width].ljust(width)
+            except Exception:
+                return " " * width
+
+        def format_line(sno, name, gross, poly, net, sper, wrate, pcs, fine, labour_amt):
+            try:
+                sno_str = "" if sno in (None, "") else str(sno)
+                sno_part = sno_str[:W_SNO].ljust(W_SNO)
+                name_part = (str(name or "")[:W_NAME]).ljust(W_NAME)
+                gross_part = fmt_num(gross, W_GROSS)
+                poly_part = fmt_num(poly, W_POLY)
+                net_part = fmt_num(net, W_NET)
+                sper_part = fmt_num(sper, W_SPER)
+                wrate_part = fmt_num(wrate, W_WRATE)
+                pcs_part = fmt_num(pcs, W_PCS) if pcs not in (None, "") else " " * W_PCS
+                fine_part = fmt_num(fine, W_FINE)
+                labour_part = fmt_num(labour_amt, W_LBR)
+
+                line_parts = [
+                    sno_part,
+                    name_part,
+                    gross_part,
+                    poly_part,
+                    net_part,
+                    sper_part,
+                    wrate_part,
+                    pcs_part,
+                    fine_part,
+                    labour_part,
+                ]
+                line = ' '.join(line_parts)
+                return f"{line:<{TOTAL_WIDTH}}"[:TOTAL_WIDTH]
+            except Exception as err:
+                import logging
+                logging.getLogger(__name__).error(
+                    f"Error formatting new layout line: {err}, Data: {(sno, name, gross, poly, net, sper, wrate, pcs, fine, labour_amt)}"
+                )
+                return " " * TOTAL_WIDTH
+
+
+        output = []
+
+        note = header.get('note', '')
+        title = "* * ESTIMATE SLIP ONLY * *"
+
+        if note:
+            title_len = len(title)
+            note_len = len(note)
+            title_pad = (TOTAL_WIDTH - title_len) // 2
+            title_end_pos = title_pad + title_len
+            space_after_title = TOTAL_WIDTH - title_end_pos - 5
+            if note_len > space_after_title:
+                note = note[:space_after_title-3] + "..."
+                note_len = len(note)
+            final_pad = (TOTAL_WIDTH - title_len - note_len - 5) // 2
+            if final_pad < 0:
+                final_pad = 0
+            line = " " * final_pad + title + " " * 5 + note
+            if len(line) > TOTAL_WIDTH:
+                line = line[:TOTAL_WIDTH]
+            output.append(line)
+        else:
+            pad = (TOTAL_WIDTH - len(title)) // 2
+            output.append(" " * pad + title)
+
+        voucher_str = str(voucher_no).ljust(15)
+        rate_str = f"S.Rate :{silver_rate:10.2f}"
+        pad = max(1, TOTAL_WIDTH - len(voucher_str) - len(rate_str))
+        output.append(f"{voucher_str}" + " " * pad + rate_str)
+        sep_eq = "=" * TOTAL_WIDTH
+        sep_dash = "-" * TOTAL_WIDTH
+        output.append(sep_eq)
+
+        header_parts = [
+            "SNo".ljust(W_SNO),
+            "Item Name".ljust(W_NAME),
+            "Gross".ljust(W_GROSS),
+            "Poly".ljust(W_POLY),
+            "Net".ljust(W_NET),
+            "S.Per%".ljust(W_SPER),
+            "W Rate".ljust(W_WRATE),
+            "PCS/Doz.".ljust(W_PCS),
+            "Fine".ljust(W_FINE),
+            "Lbr".ljust(W_LBR),
+        ]
+        header_line = ' '.join(header_parts)
+        output.append(f"{header_line:<{TOTAL_WIDTH}}"[:TOTAL_WIDTH])
+        output.append(sep_eq)
+
+        reg_f = reg_w = reg_g = reg_p = reg_n = 0.0
+        sb_f = sb_w = sb_g = sb_p = sb_n = 0.0
+        ret_gf = ret_gw = ret_gg = ret_gp = ret_gn = 0.0
+        ret_sf = ret_sw = ret_sg = ret_sp = ret_sn = 0.0
+
+        if regular_items:
+            sno = 1
+            for item in regular_items:
+                gross = item.get('gross', 0.0) or 0.0
+                poly = item.get('poly', 0.0) or 0.0
+                net = item.get('net_wt', None)
+                if net is None:
+                    net = gross - poly
+                purity = item.get('purity', 0.0)
+                wage_rate = item.get('wage_rate', 0.0)
+                pieces = item.get('pieces', 0)
+                fine = item.get('fine', 0.0) or 0.0
+                wage = item.get('wage', 0.0) or 0.0
+
+                reg_f += fine
+                reg_w += wage
+                reg_g += gross
+                reg_p += poly
+                reg_n += net
+
+                output.append(format_line(
+                    sno,
+                    item.get('item_name', ''),
+                    gross,
+                    poly,
+                    net,
+                    purity,
+                    wage_rate,
+                    pieces,
+                    fine,
+                    wage,
+                ))
+                sno += 1
+            output.append(sep_dash)
+            output.append(format_line('', 'TOTAL', reg_g, reg_p, reg_n, None, None, None, reg_f, reg_w))
+            output.append(sep_eq)
+            if silver_bar_items or return_goods or return_silver_bars:
+                output.append('')
+
+        if silver_bar_items:
+            sb_title = "* * Silver Bars * *"
+            pad = (TOTAL_WIDTH - len(sb_title)) // 2
+            output.append(" " * pad + sb_title)
+            output.append(sep_dash)
+            output.append(header_line[:TOTAL_WIDTH])
+            output.append(sep_dash)
+            sno = 1
+            for item in silver_bar_items:
+                gross = item.get('gross', 0.0) or 0.0
+                poly = item.get('poly', 0.0) or 0.0
+                net = item.get('net_wt', None)
+                if net is None:
+                    net = gross - poly
+                purity = item.get('purity', 0.0)
+                fine = item.get('fine', 0.0) or 0.0
+                wage = item.get('wage', 0.0) or 0.0
+
+                sb_f += fine
+                sb_w += wage
+                sb_g += gross
+                sb_p += poly
+                sb_n += net
+
+                output.append(format_line(
+                    sno,
+                    item.get('item_name', ''),
+                    gross,
+                    poly,
+                    net,
+                    purity,
+                    None,
+                    None,
+                    fine,
+                    wage,
+                ))
+                sno += 1
+            output.append(sep_dash)
+            output.append(format_line('', 'TOTAL', sb_g, sb_p, sb_n, None, None, None, sb_f, sb_w))
+            output.append(sep_eq)
+            if return_goods or return_silver_bars:
+                output.append('')
+
+        if return_goods:
+            rg_title = "* * Return Goods * *"
+            pad = (TOTAL_WIDTH - len(rg_title)) // 2
+            output.append(" " * pad + rg_title)
+            output.append(sep_dash)
+            output.append(header_line[:TOTAL_WIDTH])
+            output.append(sep_dash)
+            sno = 1
+            for item in return_goods:
+                gross = item.get('gross', 0.0) or 0.0
+                poly = item.get('poly', 0.0) or 0.0
+                net = item.get('net_wt', None)
+                if net is None:
+                    net = gross - poly
+                purity = item.get('purity', 0.0)
+                wage_rate = item.get('wage_rate', 0.0)
+                pieces = item.get('pieces', 0)
+                fine = item.get('fine', 0.0) or 0.0
+                wage = item.get('wage', 0.0) or 0.0
+
+                ret_gf += fine
+                ret_gw += wage
+                ret_gg += gross
+                ret_gp += poly
+                ret_gn += net
+
+                output.append(format_line(
+                    sno,
+                    item.get('item_name', ''),
+                    gross,
+                    poly,
+                    net,
+                    purity,
+                    wage_rate,
+                    pieces,
+                    fine,
+                    wage,
+                ))
+                sno += 1
+            output.append(sep_dash)
+            output.append(format_line('', 'TOTAL', ret_gg, ret_gp, ret_gn, None, None, None, ret_gf, ret_gw))
+            output.append(sep_eq)
+            if return_silver_bars:
+                output.append('')
+
+        if return_silver_bars:
+            rsb_title = "* * Return Silver Bar * *"
+            pad = (TOTAL_WIDTH - len(rsb_title)) // 2
+            output.append(" " * pad + rsb_title)
+            output.append(sep_dash)
+            output.append(header_line[:TOTAL_WIDTH])
+            output.append(sep_dash)
+            sno = 1
+            for item in return_silver_bars:
+                gross = item.get('gross', 0.0) or 0.0
+                poly = item.get('poly', 0.0) or 0.0
+                net = item.get('net_wt', None)
+                if net is None:
+                    net = gross - poly
+                purity = item.get('purity', 0.0)
+                fine = item.get('fine', 0.0) or 0.0
+                wage = item.get('wage', 0.0) or 0.0
+
+                ret_sf += fine
+                ret_sw += wage
+                ret_sg += gross
+                ret_sp += poly
+                ret_sn += net
+
+                output.append(format_line(
+                    sno,
+                    item.get('item_name', ''),
+                    gross,
+                    poly,
+                    net,
+                    purity,
+                    None,
+                    None,
+                    fine,
+                    wage,
+                ))
+                sno += 1
+            output.append(sep_dash)
+            output.append(format_line('', 'TOTAL', ret_sg, ret_sp, ret_sn, None, None, None, ret_sf, ret_sw))
+            output.append(sep_eq)
+
+        last_balance_silver = header.get('last_balance_silver', 0.0)
+        last_balance_amount = header.get('last_balance_amount', 0.0)
+
+        if last_balance_silver > 0 or last_balance_amount > 0:
+            lb_title = "* * Last Balance * *"
+            lb_pad = (TOTAL_WIDTH - len(lb_title)) // 2
+            output.append(" " * lb_pad + lb_title)
+            output.append(sep_dash)
+            lb_str = f"Silver: {last_balance_silver:.2f} g   Amount: {self._format_currency_locale(last_balance_amount)}"
+            lb_pad = (TOTAL_WIDTH - len(lb_str)) // 2
+            output.append(" " * lb_pad + lb_str)
+            output.append(sep_dash)
+
+        final_title = "Final Silver & Amount"
+        pad = (TOTAL_WIDTH - len(final_title)) // 2
+        output.append(" " * pad + final_title)
+        output.append(sep_eq)
+
+        net_fine = reg_f - sb_f - ret_gf - ret_sf
+        net_fine_display = net_fine + last_balance_silver if last_balance_silver > 0 else net_fine
+        net_wage = reg_w - sb_w - ret_gw - ret_sw
+        net_wage_display = net_wage + last_balance_amount if last_balance_amount > 0 else net_wage
+
+        silver_cost = net_fine_display * silver_rate
+        total_cost = net_wage_display + silver_cost
+
+        net_wage_r = int(round(net_wage_display))
+        silver_cost_r = int(round(silver_cost))
+        total_cost_r = int(round(total_cost))
+
+        fine_str = f"{net_fine_display:{W_FINE}.2f}"
+        wage_str = f"{net_wage_r:{W_LBR}.0f}"
+        scost_label = "S.Cost : "
+        scost_value_formatted = self._format_currency_locale(silver_cost_r)
+        scost_display = scost_label + scost_value_formatted
+        total_label = "Total: "
+        total_value_formatted = self._format_currency_locale(total_cost_r)
+        total_display = total_label + total_value_formatted
+
+        tfw = 18
+        scfw = 22
+        total_pad = total_display.rjust(tfw)
+        scost_pad = scost_display.rjust(scfw)
+
+        if silver_rate > 0:
+            part1_len = W_SNO + S + W_FINE + S + W_LBR
+            space_before = TOTAL_WIDTH - part1_len - len(scost_pad) - len(total_pad) - 2
+            pad_after_labour = max(1, space_before - 1)
+            pad_between = 1
+            final_line = (
+                f"{' ' * (W_SNO + S)}{fine_str} {wage_str}" +
+                (" " * pad_after_labour) + scost_pad + (" " * pad_between) + total_pad
+            )
+        else:
+            part1_len = W_SNO + S + W_FINE + S + W_LBR
+            remaining_space = TOTAL_WIDTH - part1_len
+            final_line = f"{' ' * (W_SNO + S)}{fine_str} {wage_str}" + (" " * remaining_space)
+
+        output.append(final_line[:TOTAL_WIDTH])
+        output.append(sep_eq)
+        note_line = "Note :-  G O O D S   N O T   R E T U R N"
+        pad = (TOTAL_WIDTH - len(note_line)) // 2
+        output.append(" " * pad + note_line)
+        output.append(" \f")
+
+        html_content = "\n".join(output)
+        html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+                    pre {{
+                        line-height: 1.0;
+                        white-space: pre;
+                        margin: 0;
+                        padding: 0;
+                        page-break-inside: avoid;
+                    }}
+                    body {{ margin: 0; }}
+                    </style></head><body><pre>{html_content}</pre></body></html>"""
+        return html
+
 
     def _generate_silver_bars_html_table(self, bars, status_filter=None):
         """Generates HTML table for the general INVENTORY report."""
@@ -828,3 +1225,5 @@ class PrintManager:
             QMessageBox.information(parent_widget or preview, "Printing", "Document sent to printer.")
         except Exception as e:
             QMessageBox.critical(parent_widget or preview, "Print Failed", f"Could not print document:\n{str(e)}")
+
+

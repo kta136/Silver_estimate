@@ -288,6 +288,14 @@ class SettingsDialog(QDialog):
         self.orientation_combo.currentIndexChanged.connect(self._mark_dirty)
         form_layout.addRow("Orientation:", self.orientation_combo)
 
+        # --- Estimate Layout ---
+        self.estimate_layout_combo = QComboBox()
+        self.estimate_layout_combo.addItem("Classic (Old)", "old")
+        self.estimate_layout_combo.addItem("Modern (New)", "new")
+        self.estimate_layout_combo.setToolTip("Choose the estimate print layout")
+        self.estimate_layout_combo.currentIndexChanged.connect(self._mark_dirty)
+        form_layout.addRow("Estimate Layout:", self.estimate_layout_combo)
+
         # Load current values into controls
         self._load_print_settings_to_ui()
 
@@ -631,6 +639,12 @@ class SettingsDialog(QDialog):
         if idx_or >= 0:
             self.orientation_combo.setCurrentIndex(idx_or)
 
+        layout_mode = self.settings.value("print/estimate_layout", "old", type=str)
+        idx_layout = self.estimate_layout_combo.findData(layout_mode)
+        if idx_layout < 0:
+            idx_layout = self.estimate_layout_combo.findData("old")
+        if idx_layout >= 0:
+            self.estimate_layout_combo.setCurrentIndex(idx_layout)
 
     def _show_print_font_dialog(self):
         """Show the custom print font dialog."""
@@ -705,6 +719,12 @@ class SettingsDialog(QDialog):
             # Save page setup defaults
             self.settings.setValue("print/page_size", self.page_size_combo.currentText())
             self.settings.setValue("print/orientation", self.orientation_combo.currentText())
+
+            layout_choice = self.estimate_layout_combo.currentData()
+            if not layout_choice:
+                layout_choice = "old"
+            self.settings.setValue("print/estimate_layout", layout_choice)
+            logging.getLogger(__name__).debug(f"Saved estimate layout: {layout_choice}")
 
             # Live Rates settings
             try:
@@ -1005,6 +1025,13 @@ class SettingsDialog(QDialog):
         except Exception:
             pass
 
+        try:
+            idx = self.estimate_layout_combo.findData("old")
+            if idx >= 0:
+                self.estimate_layout_combo.setCurrentIndex(idx)
+        except Exception:
+            pass
+
         # Logging
         self.debug_mode_checkbox.setChecked(False)
         self.enable_info_checkbox.setChecked(True)
@@ -1077,3 +1104,4 @@ if __name__ == '__main__':
     dialog = SettingsDialog(dummy_main)
     dialog.exec_()
     sys.exit(app.exec_())
+

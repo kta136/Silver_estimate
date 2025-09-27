@@ -292,6 +292,7 @@ class SettingsDialog(QDialog):
         self.estimate_layout_combo = QComboBox()
         self.estimate_layout_combo.addItem("Classic (Old)", "old")
         self.estimate_layout_combo.addItem("Modern (New)", "new")
+        self.estimate_layout_combo.addItem("Thermal (80mm)", "thermal")
         self.estimate_layout_combo.setToolTip("Choose the estimate print layout")
         self.estimate_layout_combo.currentIndexChanged.connect(self._mark_dirty)
         form_layout.addRow("Estimate Layout:", self.estimate_layout_combo)

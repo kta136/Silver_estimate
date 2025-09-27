@@ -64,7 +64,7 @@ class PrintManager:
         try:
             layout_mode = settings.value("print/estimate_layout", "old", type=str)
             self.estimate_layout_mode = (layout_mode or "old").lower()
-            if self.estimate_layout_mode not in {"old", "new"}:
+            if self.estimate_layout_mode not in {"old", "new", "thermal"}:
                 self.estimate_layout_mode = "old"
         except Exception:
             self.estimate_layout_mode = "old"
@@ -137,6 +137,8 @@ class PrintManager:
             layout_mode = (layout_mode or "old").lower()
             if layout_mode == "new":
                 html_text = self._generate_estimate_new_format(estimate_data)
+            elif layout_mode == "thermal":
+                html_text = self._generate_estimate_thermal_format(estimate_data)
             else:
                 html_text = self._generate_estimate_old_format(estimate_data)
 
@@ -820,6 +822,282 @@ class PrintManager:
         output.append(" " * pad + note_line)
         output.append(" \f")
 
+        html_content = "\n".join(output)
+        html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+                    pre {{
+                        line-height: 1.0;
+                        white-space: pre;
+                        margin: 0;
+                        padding: 0;
+                        page-break-inside: avoid;
+                    }}
+                    body {{ margin: 0; }}
+                    </style></head><body><pre>{html_content}</pre></body></html>"""
+        return html
+
+
+    def _generate_estimate_thermal_format(self, estimate_data):
+        """Generate thermal slip layout sized for ~80mm paper."""
+        header = estimate_data['header']
+        items = estimate_data['items']
+        voucher_no = header['voucher_no']
+        silver_rate = header['silver_rate']
+
+        regular_items, silver_bar_items, return_goods, return_silver_bars = [], [], [], []
+        for item in items:
+            is_return = item.get('is_return', 0) == 1
+            is_silver_bar = item.get('is_silver_bar', 0) == 1
+
+            if is_return:
+                if is_silver_bar:
+                    return_silver_bars.append(item)
+                else:
+                    return_goods.append(item)
+            else:
+                if is_silver_bar:
+                    silver_bar_items.append(item)
+                else:
+                    regular_items.append(item)
+
+        S = 1
+        W_SNO = 2
+        W_NAME = 12
+        W_GROSS = 6
+        W_POLY = 5
+        W_NET = 6
+        W_SPER = 4
+        W_WRATE = 5
+        W_PCS = 4
+        W_FINE = 6
+        W_LBR = 6
+        TOTAL_WIDTH = (
+            W_SNO + S + W_NAME + S + W_GROSS + S + W_POLY + S + W_NET + S + W_SPER +
+            S + W_WRATE + S + W_PCS + S + W_FINE + S + W_LBR
+        )
+
+        def fmt_num(value, width):
+            if value is None:
+                return " " * width
+            try:
+                return f"{float(value):<{width}.2f}"[:width].ljust(width)
+            except Exception:
+                return " " * width
+
+        def format_line(sno, name, gross, poly, net, sper, wrate, pcs, fine, labour_amt):
+            try:
+                sno_str = "" if sno in (None, "") else str(sno)
+                sno_part = sno_str[:W_SNO].ljust(W_SNO)
+                name_part = (str(name or "")[:W_NAME]).ljust(W_NAME)
+                gross_part = fmt_num(gross, W_GROSS)
+                poly_part = fmt_num(poly, W_POLY)
+                net_part = fmt_num(net, W_NET)
+                sper_part = fmt_num(sper, W_SPER)
+                wrate_part = fmt_num(wrate, W_WRATE)
+                pcs_part = fmt_num(pcs, W_PCS) if pcs not in (None, "") else " " * W_PCS
+                fine_part = fmt_num(fine, W_FINE)
+                labour_part = fmt_num(labour_amt, W_LBR)
+
+                line = ' '.join([
+                    sno_part,
+                    name_part,
+                    gross_part,
+                    poly_part,
+                    net_part,
+                    sper_part,
+                    wrate_part,
+                    pcs_part,
+                    fine_part,
+                    labour_part,
+                ])
+                return f"{line:<{TOTAL_WIDTH}}"[:TOTAL_WIDTH]
+            except Exception as err:
+                import logging
+                logging.getLogger(__name__).error(
+                    f"Error formatting thermal line: {err}, Data: {(sno, name, gross, poly, net, sper, wrate, pcs, fine, labour_amt)}"
+                )
+                return " " * TOTAL_WIDTH
+
+        output = []
+
+        note = header.get('note', '')
+        title = "* ESTIMATE SLIP *"
+        pad = max(0, (TOTAL_WIDTH - len(title)) // 2)
+        line = " " * pad + title
+        if note:
+            note_str = note[:TOTAL_WIDTH - len(line) - 1]
+            line = f"{line} {note_str}"[:TOTAL_WIDTH]
+        output.append(line)
+
+        voucher_str = str(voucher_no)
+        rate_str = f"Rate:{silver_rate:0.2f}"
+        spacer = max(1, TOTAL_WIDTH - len(voucher_str) - len(rate_str))
+        output.append(f"{voucher_str}{' ' * spacer}{rate_str}")
+        sep = "-" * TOTAL_WIDTH
+        output.append(sep)
+
+        header_parts = [
+            "SNo".ljust(W_SNO),
+            "Item".ljust(W_NAME),
+            "Grs".ljust(W_GROSS),
+            "Ply".ljust(W_POLY),
+            "Net".ljust(W_NET),
+            "%".ljust(W_SPER),
+            "Rate".ljust(W_WRATE),
+            "Pcs".ljust(W_PCS),
+            "Fine".ljust(W_FINE),
+            "Lbr".ljust(W_LBR),
+        ]
+        output.append(' '.join(header_parts)[:TOTAL_WIDTH])
+        output.append(sep)
+
+        reg_f = reg_w = reg_g = reg_p = reg_n = 0.0
+        sb_f = sb_w = sb_g = sb_p = sb_n = 0.0
+        ret_gf = ret_gw = ret_gg = ret_gp = ret_gn = 0.0
+        ret_sf = ret_sw = ret_sg = ret_sp = ret_sn = 0.0
+
+        if regular_items:
+            sno = 1
+            for item in regular_items:
+                gross = item.get('gross', 0.0) or 0.0
+                poly = item.get('poly', 0.0) or 0.0
+                net = item.get('net_wt', gross - poly)
+                purity = item.get('purity', 0.0)
+                wage_rate = item.get('wage_rate', 0.0)
+                pcs = item.get('pieces', 0)
+                fine = item.get('fine', 0.0) or 0.0
+                wage = item.get('wage', 0.0) or 0.0
+
+                reg_f += fine
+                reg_w += wage
+                reg_g += gross
+                reg_p += poly
+                reg_n += net
+
+                output.append(format_line(sno, item.get('item_name', ''), gross, poly, net, purity, wage_rate, pcs, fine, wage))
+                sno += 1
+            output.append(sep)
+            output.append(format_line('', 'TOTAL', reg_g, reg_p, reg_n, None, None, None, reg_f, reg_w))
+            output.append(sep)
+
+        if silver_bar_items:
+            sb_title = "* Bars *"
+            pad = max(0, (TOTAL_WIDTH - len(sb_title)) // 2)
+            output.append(" " * pad + sb_title)
+            output.append(sep)
+            sno = 1
+            for item in silver_bar_items:
+                gross = item.get('gross', 0.0) or 0.0
+                poly = item.get('poly', 0.0) or 0.0
+                net = item.get('net_wt', gross - poly)
+                purity = item.get('purity', 0.0)
+                fine = item.get('fine', 0.0) or 0.0
+                wage = item.get('wage', 0.0) or 0.0
+
+                sb_f += fine
+                sb_w += wage
+                sb_g += gross
+                sb_p += poly
+                sb_n += net
+
+                output.append(format_line(sno, item.get('item_name', ''), gross, poly, net, purity, None, None, fine, wage))
+                sno += 1
+            output.append(sep)
+            output.append(format_line('', 'TOTAL', sb_g, sb_p, sb_n, None, None, None, sb_f, sb_w))
+            output.append(sep)
+
+        if return_goods:
+            rg_title = "* Returns *"
+            pad = max(0, (TOTAL_WIDTH - len(rg_title)) // 2)
+            output.append(" " * pad + rg_title)
+            output.append(sep)
+            sno = 1
+            for item in return_goods:
+                gross = item.get('gross', 0.0) or 0.0
+                poly = item.get('poly', 0.0) or 0.0
+                net = item.get('net_wt', gross - poly)
+                purity = item.get('purity', 0.0)
+                wage_rate = item.get('wage_rate', 0.0)
+                pcs = item.get('pieces', 0)
+                fine = item.get('fine', 0.0) or 0.0
+                wage = item.get('wage', 0.0) or 0.0
+
+                ret_gf += fine
+                ret_gw += wage
+                ret_gg += gross
+                ret_gp += poly
+                ret_gn += net
+
+                output.append(format_line(sno, item.get('item_name', ''), gross, poly, net, purity, wage_rate, pcs, fine, wage))
+                sno += 1
+            output.append(sep)
+            output.append(format_line('', 'TOTAL', ret_gg, ret_gp, ret_gn, None, None, None, ret_gf, ret_gw))
+            output.append(sep)
+
+        if return_silver_bars:
+            rsb_title = "* Ret Bars *"
+            pad = max(0, (TOTAL_WIDTH - len(rsb_title)) // 2)
+            output.append(" " * pad + rsb_title)
+            output.append(sep)
+            sno = 1
+            for item in return_silver_bars:
+                gross = item.get('gross', 0.0) or 0.0
+                poly = item.get('poly', 0.0) or 0.0
+                net = item.get('net_wt', gross - poly)
+                purity = item.get('purity', 0.0)
+                fine = item.get('fine', 0.0) or 0.0
+                wage = item.get('wage', 0.0) or 0.0
+
+                ret_sf += fine
+                ret_sw += wage
+                ret_sg += gross
+                ret_sp += poly
+                ret_sn += net
+
+                output.append(format_line(sno, item.get('item_name', ''), gross, poly, net, purity, None, None, fine, wage))
+                sno += 1
+            output.append(sep)
+            output.append(format_line('', 'TOTAL', ret_sg, ret_sp, ret_sn, None, None, None, ret_sf, ret_sw))
+            output.append(sep)
+
+        last_balance_silver = header.get('last_balance_silver', 0.0)
+        last_balance_amount = header.get('last_balance_amount', 0.0)
+
+        if last_balance_silver > 0 or last_balance_amount > 0:
+            lb_title = "Last Balance"
+            pad = max(0, (TOTAL_WIDTH - len(lb_title)) // 2)
+            output.append(" " * pad + lb_title)
+            output.append(sep)
+            lb_str = f"Ag:{last_balance_silver:.2f} Amt:{self._format_currency_locale(last_balance_amount)}"
+            output.append(lb_str[:TOTAL_WIDTH])
+            output.append(sep)
+
+        final_title = "Final Silver & Amount"
+        pad = max(0, (TOTAL_WIDTH - len(final_title)) // 2)
+        output.append(" " * pad + final_title)
+        output.append(sep)
+
+        net_fine = reg_f - sb_f - ret_gf - ret_sf
+        net_fine_display = net_fine + last_balance_silver if last_balance_silver > 0 else net_fine
+        net_wage = reg_w - sb_w - ret_gw - ret_sw
+        net_wage_display = net_wage + last_balance_amount if last_balance_amount > 0 else net_wage
+
+        silver_cost = net_fine_display * silver_rate
+        total_cost = net_wage_display + silver_cost
+
+        fine_str = fmt_num(net_fine_display, W_FINE)
+        wage_str = fmt_num(net_wage_display, W_LBR)
+        output.append(' '.join([
+            ' ' * (W_SNO + S),
+            fine_str,
+            wage_str,
+            fmt_num(silver_cost, W_FINE),
+            fmt_num(total_cost, W_LBR),
+        ])[:TOTAL_WIDTH])
+        output.append(sep)
+        note_line = "Note: Goods Not Return"
+        pad = max(0, (TOTAL_WIDTH - len(note_line)) // 2)
+        output.append(" " * pad + note_line)
+        output.append(" \f")
         html_content = "\n".join(output)
         html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
                     pre {{

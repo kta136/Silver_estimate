@@ -141,6 +141,12 @@ class MainWindow(QMainWindow):
                 except Exception as exc:
                     if self.logger:
                         self.logger.debug("Failed to deliver pending status message: %s", exc, exc_info=True)
+
+            try:
+                self.setWindowState(self.windowState() | Qt.WindowMaximized)
+            except Exception as exc:
+                if self.logger:
+                    self.logger.debug("Failed to apply maximized window state: %s", exc, exc_info=True)
         except Exception as exc:
             self.logger.critical("Failed to initialize widgets: %s", exc, exc_info=True)
             raise StartupError(f"Failed to initialize application widgets: {exc}") from exc

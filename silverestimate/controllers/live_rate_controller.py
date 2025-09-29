@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Callable, Optional, Tuple
 
-from PyQt5.QtCore import QObject, QLocale, QTimer
+from PyQt5.QtCore import QObject, QLocale, QTimer, QDateTime
 
 from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.services.live_rate_service import LiveRateService
@@ -33,6 +33,9 @@ class LiveRateController(QObject):
         self._status_callback = status_callback or (lambda *_: None)
         self._logger = logger or logging.getLogger(__name__)
         self._service_factory = service_factory
+        self._last_refresh_at: Optional[QDateTime] = None
+        self._last_source: Optional[str] = None
+        self._last_error: Optional[str] = None
         self._settings_provider = settings_provider
         self._service: Optional[LiveRateService] = None
         self._manual_refresh = False
@@ -67,6 +70,7 @@ class LiveRateController(QObject):
         components = (
             getattr(widget, "live_rate_label", None),
             getattr(widget, "live_rate_value_label", None),
+            getattr(widget, "live_rate_meta_label", None),
             getattr(widget, "refresh_rate_button", None),
         )
         for component in components:
@@ -82,6 +86,15 @@ class LiveRateController(QObject):
                     label.setText("-")
                 elif label.text() in ("", "-"):
                     label.setText(".")
+            except Exception:
+                pass
+        meta = getattr(widget, "live_rate_meta_label", None)
+        if meta is not None:
+            try:
+                if not show_ui:
+                    meta.setText("Waiting…")
+                elif label is not None and label.text() in (".", "-"):
+                    meta.setText("Waiting…")
             except Exception:
                 pass
         return show_ui
@@ -136,6 +149,18 @@ class LiveRateController(QObject):
             self._service = None
             return None
 
+    def _set_meta_text(self, text: str) -> None:
+        widget = self._widget_getter()
+        if not widget:
+            return
+        meta_label = getattr(widget, "live_rate_meta_label", None)
+        if meta_label is None:
+            return
+        try:
+            meta_label.setText(text)
+        except Exception:
+            pass
+
     def _fallback_refresh(self) -> None:
         widget = self._widget_getter()
         if widget and hasattr(widget, "refresh_silver_rate"):
@@ -160,25 +185,44 @@ class LiveRateController(QObject):
         if label is None:
             self._manual_refresh = False
             return
-        tooltip_parts = []
+        timestamp = QDateTime.currentDateTime()
+        timestamp_display = timestamp.toString("HH:mm:ss")
+        verbose_timestamp = timestamp.toString("yyyy-MM-dd HH:mm:ss")
+        tooltip_rows = []
         if broadcast_rate not in (None, ""):
-            tooltip_parts.append(f"Broadcast: {broadcast_rate}")
+            tooltip_rows.append(f"Broadcast: {broadcast_rate}")
         if api_rate not in (None, ""):
-            tooltip_parts.append(f"API: {api_rate}")
-        tooltip_parts.append("Market open" if market_open else "Market closed")
-        tooltip_text = "\n".join(tooltip_parts)
+            tooltip_rows.append(f"API: {api_rate}")
+        market_status = "Market open" if market_open else "Market closed"
+        tooltip_rows.append(market_status)
         try:
             if effective_rate in (None, ""):
-                label.setText("N/A /g")
-                label.setToolTip(tooltip_text)
-                if self._manual_refresh:
-                    self._status_callback("Live rate unavailable", 3000, "warning")
-                self._manual_refresh = False
-                return
+                raise ValueError("No live rate available")
             gram_rate = float(effective_rate) / 1000.0
-        except Exception:
+        except ValueError as exc:
+            reason = str(exc) or "No live rate available"
             label.setText("N/A /g")
-            label.setToolTip(tooltip_text)
+            tooltip_rows.append(f"Reason: {reason}")
+            tooltip_rows.append(f"Attempt: {verbose_timestamp}")
+            label.setToolTip("\n".join(tooltip_rows))
+            self._set_meta_text(f"Failed {timestamp_display}: {reason}")
+            self._last_refresh_at = timestamp
+            self._last_source = None
+            self._last_error = reason
+            if self._manual_refresh:
+                self._status_callback("Live rate unavailable", 3000, "warning")
+            self._manual_refresh = False
+            return
+        except Exception as exc:
+            reason = f"Error: {exc}"
+            label.setText("N/A /g")
+            tooltip_rows.append(f"Reason: {reason}")
+            tooltip_rows.append(f"Attempt: {verbose_timestamp}")
+            label.setToolTip("\n".join(tooltip_rows))
+            self._set_meta_text(f"Failed {timestamp_display}: {reason}")
+            self._last_refresh_at = timestamp
+            self._last_source = None
+            self._last_error = reason
             if self._manual_refresh:
                 self._status_callback("Live rate unavailable", 3000, "warning")
             self._manual_refresh = False
@@ -186,12 +230,25 @@ class LiveRateController(QObject):
         try:
             display_value = QLocale.system().toCurrencyString(gram_rate)
         except Exception:
-            display_value = f"? {gram_rate:.2f}" if isinstance(gram_rate, float) else str(gram_rate)
+            display_value = f"₹ {gram_rate:.2f}" if isinstance(gram_rate, float) else str(gram_rate)
         label.setText(f"{display_value} /g")
-        label.setToolTip(tooltip_text)
+        if broadcast_rate not in (None, "") and str(broadcast_rate) == str(effective_rate):
+            source = "Broadcast"
+        elif api_rate not in (None, "") and str(api_rate) == str(effective_rate):
+            source = "API"
+        else:
+            source = "Manual"
+        tooltip_rows.append(f"Source: {source}")
+        tooltip_rows.append(f"Updated: {verbose_timestamp}")
+        label.setToolTip("\n".join(tooltip_rows))
+        self._set_meta_text(f"Updated {timestamp_display} via {source}")
+        self._last_refresh_at = timestamp
+        self._last_source = source
+        self._last_error = None
         if self._manual_refresh:
             self._status_callback("Live rate updated", 2000, "info")
         self._manual_refresh = False
+
 
     def _read_settings(self) -> Tuple[bool, bool, int]:
         try:

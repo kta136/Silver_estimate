@@ -25,12 +25,14 @@ COL_TYPE = 10
 
 class EstimateLogic:
     """Business logic for the estimate entry widget."""
-    
+
     def __init__(self):
         """Initialize the logger for this class."""
         self.logger = logging.getLogger(__name__)
         # Track whether an existing estimate is loaded
         self._estimate_loaded = False
+        self._unsaved_changes = False
+        self._unsaved_block = 0
         # Guard flag to prevent recursive selection handling
         self._enforcing_code_nav = False
 
@@ -38,8 +40,33 @@ class EstimateLogic:
     def _status(self, message, timeout=3000):
         if hasattr(self, 'show_status') and callable(self.show_status):
             self.show_status(message, timeout)
-        else: # Fallback if show_status isn't available (e.g. testing)
+        else:  # Fallback if show_status isn't available (e.g. testing)
             self.logger.info(f"Status: {message}")
+
+    # --- Unsaved-change tracking helpers ---
+    def _push_unsaved_block(self) -> None:
+        self._unsaved_block = getattr(self, "_unsaved_block", 0) + 1
+
+    def _pop_unsaved_block(self) -> None:
+        if getattr(self, "_unsaved_block", 0) > 0:
+            self._unsaved_block -= 1
+
+    def _set_unsaved(self, dirty: bool, *, force: bool = False) -> None:
+        if not force and dirty and getattr(self, "_unsaved_block", 0) > 0:
+            return
+        previous = getattr(self, "_unsaved_changes", False)
+        self._unsaved_changes = dirty
+        if previous != dirty or force:
+            callback = getattr(self, "_on_unsaved_state_changed", None)
+            if callable(callback):
+                try:
+                    callback(dirty)
+                except Exception:
+                    pass
+
+    def _mark_unsaved(self, *_, **__) -> None:
+        self._set_unsaved(True)
+
     # --------------------------------------------------------------------------
 
     def connect_signals(self, skip_load_estimate=False):
@@ -51,13 +78,18 @@ class EstimateLogic:
             else:
                 # Fallback to direct connection if safe method not available
                 self.voucher_edit.editingFinished.connect(self.load_estimate)
-            
+
         # Remove connection to generate button as it's been removed
-        self.silver_rate_spin.valueChanged.connect(self.calculate_totals)
-        
+        self.silver_rate_spin.valueChanged.connect(self._handle_silver_rate_changed)
+
         # Connect Last Balance button
         if hasattr(self, 'last_balance_button'):
             self.last_balance_button.clicked.connect(self.show_last_balance_dialog)
+        if hasattr(self, 'note_edit'):
+            self.note_edit.textEdited.connect(self._mark_unsaved)
+
+        if hasattr(self, 'date_edit'):
+            self.date_edit.dateChanged.connect(self._mark_unsaved)
 
         # Connect table signals
         self.item_table.cellClicked.connect(self.cell_clicked)
@@ -101,6 +133,15 @@ class EstimateLogic:
                 self.delete_estimate_button.setEnabled(False)
             except Exception:
                 pass
+
+    def _handle_silver_rate_changed(self, *_):
+        """React to manual silver-rate changes by recalculating totals and marking unsaved state."""
+        try:
+            self.calculate_totals()
+        except Exception:
+            pass
+        self._mark_unsaved()
+        self._mark_unsaved()
 
     # --- Currency formatting helper ---
     def _format_currency(self, value):
@@ -148,7 +189,6 @@ class EstimateLogic:
         except Exception:
             pass
 
-
     def add_empty_row(self):
         """Add an empty row to the item table."""
         try:
@@ -182,7 +222,7 @@ class EstimateLogic:
 
             self.processing_cell = False
             QTimer.singleShot(50, lambda: self.focus_on_code_column(row))
-            
+
         except Exception as e:
             # Log the error but don't crash the application
             self.logger.error(f"Error adding empty row: {str(e)}", exc_info=True)
@@ -196,7 +236,7 @@ class EstimateLogic:
              if not type_item:
                  self.logger.warning("Null type_item passed to _update_row_type_visuals_direct")
                  return
-                 
+
              if self.return_mode:
                  type_item.setText("Return")
                  type_item.setBackground(QColor(255, 200, 200))
@@ -209,7 +249,6 @@ class EstimateLogic:
          except Exception as e:
              # Log the error but don't crash the application
              self.logger.error(f"Error updating row type visuals: {str(e)}", exc_info=True)
-
 
     def _is_code_empty(self, row):
         try:
@@ -367,6 +406,7 @@ class EstimateLogic:
             QMessageBox.critical(self, "Calculation Error", f"{err_msg}")
         finally:
             self.item_table.blockSignals(False)
+        self._mark_unsaved()
 
     def move_to_next_cell(self):
         """Navigate to the next editable cell in the logical order."""
@@ -415,7 +455,6 @@ class EstimateLogic:
                  if item_to_edit:
                      QTimer.singleShot(10, lambda: self.item_table.editItem(item_to_edit))
 
-
     def focus_on_code_column(self, row):
         """Focus on the code column (first column) of the specified row and start editing."""
         try:
@@ -431,7 +470,6 @@ class EstimateLogic:
             # Log the error but don't crash the application
             self.logger.error(f"Error focusing on code column for row {row}: {str(e)}", exc_info=True)
 
-
     def _safe_edit_item(self, row, col):
         """Safely fetches item at row/col and calls editItem if it exists."""
         try:
@@ -439,7 +477,7 @@ class EstimateLogic:
             if row < 0 or row >= self.item_table.rowCount() or col < 0 or col >= self.item_table.columnCount():
                 self.logger.warning(f"Invalid row/col in _safe_edit_item: {row}/{col}")
                 return
-                
+
             item = self.item_table.item(row, col)
             if item:
                 self.item_table.editItem(item)
@@ -491,7 +529,6 @@ class EstimateLogic:
                  # self.item_table.item(self.current_row, COL_CODE).setText("")
                  # QTimer.singleShot(0, lambda: self.item_table.setCurrentCell(self.current_row, COL_CODE))
                  # QTimer.singleShot(10, lambda: self.item_table.editItem(self.item_table.item(self.current_row, COL_CODE)))
-
 
     def populate_item_row(self, item_data):
         """Fill in item details in the current row based on item data dictionary."""
@@ -570,7 +607,7 @@ class EstimateLogic:
              if row < 0 or row >= self.item_table.rowCount() or col < 0 or col >= self.item_table.columnCount():
                  self.logger.warning(f"Invalid row/col in _ensure_cell_exists: {row}/{col}")
                  return None
-                 
+
              item = self.item_table.item(row, col)
              if not item:
                  item = QTableWidgetItem("")
@@ -584,7 +621,6 @@ class EstimateLogic:
              # Log the error but don't crash the application
              self.logger.error(f"Error ensuring cell exists at {row}/{col}: {str(e)}", exc_info=True)
              return None
-
 
     def calculate_net_weight(self):
         """Calculate net weight (Gross - Poly) for current row and update dependents."""
@@ -603,7 +639,6 @@ class EstimateLogic:
             self.logger.error(err_msg, exc_info=True)
             self._status(err_msg, 5000)
             QMessageBox.critical(self, "Calculation Error", f"{err_msg}")
-
 
     def calculate_fine(self):
         """Calculate fine weight (Net * Purity/100) for current row and update totals."""
@@ -657,17 +692,16 @@ class EstimateLogic:
             self._status(err_msg, 5000)
             QMessageBox.critical(self, "Calculation Error", f"{err_msg}")
 
-
     def show_last_balance_dialog(self):
         """Show dialog to enter last balance values."""
         from PyQt5.QtWidgets import QDialog, QVBoxLayout, QFormLayout, QDoubleSpinBox, QDialogButtonBox, QLabel
-        
+
         dialog = QDialog(self)
         dialog.setWindowTitle("Enter Last Balance")
         layout = QVBoxLayout(dialog)
-        
+
         form_layout = QFormLayout()
-        
+
         # Silver weight input
         self.lb_silver_spin = QDoubleSpinBox()
         self.lb_silver_spin.setRange(0, 1000000)
@@ -676,7 +710,7 @@ class EstimateLogic:
         if hasattr(self, 'last_balance_silver'):
             self.lb_silver_spin.setValue(self.last_balance_silver)
         form_layout.addRow("Silver Weight:", self.lb_silver_spin)
-        
+
         # Amount input
         self.lb_amount_spin = QDoubleSpinBox()
         self.lb_amount_spin.setRange(0, 10000000)
@@ -685,15 +719,15 @@ class EstimateLogic:
         if hasattr(self, 'last_balance_amount'):
             self.lb_amount_spin.setValue(self.last_balance_amount)
         form_layout.addRow("Amount:", self.lb_amount_spin)
-        
+
         layout.addLayout(form_layout)
-        
+
         # Add buttons
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         button_box.accepted.connect(dialog.accept)
         button_box.rejected.connect(dialog.reject)
         layout.addWidget(button_box)
-        
+
         # Show dialog
         if dialog.exec_():
             self.last_balance_silver = self.lb_silver_spin.value()
@@ -701,16 +735,17 @@ class EstimateLogic:
             self.logger.info(f"Last balance set: {self.last_balance_silver:.3f} g, ₹ {self.last_balance_amount:.0f}")
             self._status(f"Last balance set: {self.last_balance_silver:.3f} g, ₹ {self.last_balance_amount:.0f}", 3000)
             self.calculate_totals()
+            self._mark_unsaved()
         else:
             self._status("Last balance not changed", 2000)
-    
+
     def calculate_totals(self):
         """Calculate and update totals for all columns, separating categories."""
         reg_gross, reg_net, reg_fine, reg_wage = 0.0, 0.0, 0.0, 0.0
         return_gross, return_net, return_fine, return_wage = 0.0, 0.0, 0.0, 0.0
         bar_gross, bar_net, bar_fine, bar_wage = 0.0, 0.0, 0.0, 0.0
         overall_gross, overall_poly = 0.0, 0.0
-        
+
         # Get last balance values if they exist
         last_balance_silver = getattr(self, 'last_balance_silver', 0.0)
         last_balance_amount = getattr(self, 'last_balance_amount', 0.0)
@@ -753,7 +788,7 @@ class EstimateLogic:
         net_fine_calc = reg_fine - bar_fine - return_fine
         net_wage_calc = reg_wage - bar_wage - return_wage # Note: bar_wage is usually 0
         net_value_calc = net_fine_calc * silver_rate
-        
+
         # Add last balance to net fine and net wage
         net_fine_with_lb = net_fine_calc + last_balance_silver
         net_wage_with_lb = net_wage_calc + last_balance_amount
@@ -832,7 +867,6 @@ class EstimateLogic:
             self.logger.error(f"Error updating UI labels in calculate_totals: {str(e)}", exc_info=True)
             self._status(f"Warning: Some UI elements could not be updated", 3000)
 
-
     def generate_voucher(self):
         """Generate a new voucher number from the database."""
         try:
@@ -844,12 +878,12 @@ class EstimateLogic:
                     self.voucher_edit.editingFinished.disconnect(self.load_estimate)
             except TypeError:
                 pass  # Signal wasn't connected, which is fine
-            
+
             voucher_no = self.db_manager.generate_voucher_no()
             self.voucher_edit.setText(voucher_no)
             self.logger.info(f"Generated new voucher: {voucher_no}")
             self._status(f"Generated new voucher: {voucher_no}", 3000)
-            
+
         except Exception as e:
             self.logger.error(f"Error generating voucher number: {str(e)}", exc_info=True)
             self._status(f"Error generating voucher number", 3000)
@@ -871,13 +905,13 @@ class EstimateLogic:
         if hasattr(self, 'initializing') and self.initializing:
             self.logger.debug("Skipping load_estimate during initialization")
             return
-            
+
         # Check if database manager is available
         if not hasattr(self, 'db_manager') or self.db_manager is None:
             self.logger.error("Cannot load estimate: database manager is not available")
             QMessageBox.critical(self, "Error", "Database connection is not available. Please restart the application.")
             return
-            
+
         # Get voucher number
         try:
             voucher_no = self.voucher_edit.text().strip()
@@ -885,13 +919,13 @@ class EstimateLogic:
             self.logger.error(f"Error getting voucher number: {str(e)}", exc_info=True)
             QMessageBox.critical(self, "Error", f"Error accessing voucher field: {str(e)}")
             return
-            
+
         if not voucher_no:
             return # No warning if field just cleared
 
         self.logger.info(f"Loading estimate {voucher_no}...")
         self._status(f"Loading estimate {voucher_no}...", 2000)
-        
+
         # Get estimate data with error handling
         try:
             estimate_data = self.db_manager.get_estimate_by_voucher(voucher_no)
@@ -900,7 +934,7 @@ class EstimateLogic:
                 QMessageBox.warning(self, "Load Error", f"Estimate voucher '{voucher_no}' not found.")
                 self._status(f"Estimate {voucher_no} not found.", 4000)
                 return
-                
+
             # Log the structure of the estimate data for debugging
             self.logger.debug(f"Estimate data structure: header keys: {list(estimate_data['header'].keys())}")
             self.logger.debug(f"Estimate items count: {len(estimate_data['items'])}")
@@ -910,6 +944,8 @@ class EstimateLogic:
             self._status(f"Error retrieving estimate {voucher_no}", 4000)
             return
 
+        loaded = False
+        self._push_unsaved_block()
         self.item_table.blockSignals(True)
         self.processing_cell = True
         try:
@@ -925,11 +961,11 @@ class EstimateLogic:
                 self.date_edit.setDate(QDate.currentDate())
 
             self.silver_rate_spin.setValue(header.get('silver_rate', 0.0))
-            
+
             # Load note if it exists
             if hasattr(self, 'note_edit') and 'note' in header:
                 self.note_edit.setText(header.get('note', ''))
-                
+
             # Load last balance if it exists
             self.last_balance_silver = header.get('last_balance_silver', 0.0)
             self.last_balance_amount = header.get('last_balance_amount', 0.0)
@@ -971,6 +1007,7 @@ class EstimateLogic:
 
             self.add_empty_row()
             self.calculate_totals()
+            loaded = True
             self.logger.info(f"Estimate {voucher_no} loaded successfully")
             self._status(f"Estimate {voucher_no} loaded successfully.", 3000)
             # Enable delete button now that an existing estimate is loaded
@@ -988,6 +1025,7 @@ class EstimateLogic:
         finally:
             self.processing_cell = False
             self.item_table.blockSignals(False)
+            self._pop_unsaved_block()
             try:
                 if self.item_table.rowCount() > 1:
                     self.focus_on_code_column(0)
@@ -998,6 +1036,8 @@ class EstimateLogic:
                 self.logger.error(f"Error focusing on code column: {str(e)}", exc_info=True)
                 self._status(f"Warning: Could not focus on first item", 3000)
 
+        if loaded:
+            self._set_unsaved(False, force=True)
 
     def save_estimate(self):
         """Save the current estimate, handling silver bar creation/deletion."""
@@ -1088,11 +1128,11 @@ class EstimateLogic:
         calc_net_wage = calc_reg_wage - calc_bar_wage - calc_ret_wage
         # Get note from the note_edit field
         note = self.note_edit.text().strip() if hasattr(self, 'note_edit') else ''
-        
+
         # Get last balance values
         last_balance_silver = getattr(self, 'last_balance_silver', 0.0)
         last_balance_amount = getattr(self, 'last_balance_amount', 0.0)
-        
+
         recalculated_totals = {
             'total_gross': calc_total_gross, 'total_net': calc_total_net,
             'net_fine': calc_net_fine, 'net_wage': calc_net_wage,
@@ -1103,7 +1143,7 @@ class EstimateLogic:
 
         # --- Check if estimate exists ---
         estimate_exists = self.db_manager.get_estimate_by_voucher(voucher_no) is not None
-        
+
         # No longer deleting silver bars - they are permanent and managed separately
         if estimate_exists:
             # Just for informational purposes, check if there are bars for this estimate
@@ -1328,7 +1368,6 @@ class EstimateLogic:
         import threading
         threading.Thread(target=worker, daemon=True).start()
 
-
     def clear_form(self, confirm=True):
         """Reset the form to create a new estimate."""
         reply = QMessageBox.No # Default if confirm is False
@@ -1338,8 +1377,10 @@ class EstimateLogic:
                                          QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
 
         if reply == QMessageBox.Yes or not confirm:
+            self._push_unsaved_block()
             self.item_table.blockSignals(True)
             self.processing_cell = True
+            cleared = False
             try:
                 self.voucher_edit.clear()
                 self.generate_voucher()
@@ -1350,31 +1391,37 @@ class EstimateLogic:
                 # Reset last balance
                 self.last_balance_silver = 0.0
                 self.last_balance_amount = 0.0
-                if self.return_mode: self.toggle_return_mode()
-                if self.silver_bar_mode: self.toggle_silver_bar_mode()
+                if self.return_mode:
+                    self.toggle_return_mode()
+                if self.silver_bar_mode:
+                    self.toggle_silver_bar_mode()
                 self.mode_indicator_label.setText("Mode: Regular")
                 self.mode_indicator_label.setStyleSheet("font-weight: bold;")
+                self._update_mode_tooltip()
 
                 while self.item_table.rowCount() > 0:
                     self.item_table.removeRow(0)
                 self.add_empty_row()
                 self.calculate_totals()
                 self._status("New estimate form cleared.", 3000)
+                cleared = True
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Error clearing form: {e}\n{traceback.format_exc()}")
                 self._status("Error clearing form.", 4000)
             finally:
-                 self.processing_cell = False
-                 self.item_table.blockSignals(False)
-                 QTimer.singleShot(50, lambda: self.focus_on_code_column(0))
-                 # Disable delete button when starting a new/unsaved estimate
-                 self._estimate_loaded = False
-                 try:
-                     if hasattr(self, 'delete_estimate_button'):
-                         self.delete_estimate_button.setEnabled(False)
-                 except Exception:
-                     pass
-
+                self.processing_cell = False
+                self.item_table.blockSignals(False)
+                QTimer.singleShot(50, lambda: self.focus_on_code_column(0))
+                # Disable delete button when starting a new/unsaved estimate
+                self._estimate_loaded = False
+                try:
+                    if hasattr(self, 'delete_estimate_button'):
+                        self.delete_estimate_button.setEnabled(False)
+                except Exception:
+                    pass
+                self._pop_unsaved_block()
+            if cleared:
+                self._set_unsaved(False, force=True)
 
     def show_history(self):
         """Show the estimate history dialog."""
@@ -1389,7 +1436,6 @@ class EstimateLogic:
                 self._status(f"Loaded estimate {voucher_no} from history.", 3000)
             else:
                  self._status("No estimate selected from history.", 2000)
-
 
     def show_silver_bars(self):
         """Open Silver Bar Management embedded in the main window when available."""
@@ -1407,7 +1453,6 @@ class EstimateLogic:
         silver_dialog.exec_()
         self._status("Closed Silver Bar Management.", 2000)
 
-
     def _update_row_type_visuals(self, row):
         """Update the visual style of the Type column for a specific row."""
         if 0 <= row < self.item_table.rowCount():
@@ -1423,7 +1468,6 @@ class EstimateLogic:
     # toggle_return_mode and toggle_silver_bar_mode are now in EstimateEntryWidget
 
     # focus_on_empty_row is now in EstimateEntryWidget
-
 
     def delete_current_row(self):
         """Delete the currently selected row from the table."""
@@ -1446,6 +1490,7 @@ class EstimateLogic:
             self.item_table.removeRow(current_row)
             self.calculate_totals()
             self._status(f"Row {current_row + 1} deleted.", 2000)
+            self._mark_unsaved()
 
             new_row_count = self.item_table.rowCount()
             if new_row_count == 0:
@@ -1454,19 +1499,26 @@ class EstimateLogic:
                  focus_row = min(current_row, new_row_count - 1)
                  QTimer.singleShot(0, lambda: self.focus_on_code_column(focus_row))
 
+    def confirm_exit(self) -> bool:
+        """Ask the user whether to discard unsaved changes before exiting."""
+        has_changes = getattr(self, "has_unsaved_changes", None)
+        if callable(has_changes):
+            if not has_changes():
+                return True
+        elif not getattr(self, "_unsaved_changes", False):
+            return True
 
-    def confirm_exit(self):
-        """Placeholder for exit confirmation logic."""
-        # Usually called from MainWindow's closeEvent
-        # Check for unsaved changes here if needed.
-        # For now, assume MainWindow handles it or there's no unsaved check.
-        import logging
-        logging.getLogger(__name__).info("Confirm exit requested (logic likely in MainWindow)")
-        # Example check (needs has_unsaved_changes method):
-        # if self.has_unsaved_changes():
-        #    # ... ask user ...
-        #    pass
-        pass
+        reply = QMessageBox.question(
+            self,
+            "Discard Unsaved Changes?",
+            "You have unsaved changes that will be lost. Exit anyway?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            return True
+        self._status("Close cancelled; current estimate still unsaved.", 2000)
+        return False
 
     def move_to_previous_cell(self):
         """Navigate to the previous editable cell in the logical order."""
@@ -1550,3 +1602,4 @@ class EstimateLogic:
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"An unexpected error occurred during deletion: {str(e)}")
                 self._status(f"Delete Error: Unexpected error for {voucher_no}", 5000)
+

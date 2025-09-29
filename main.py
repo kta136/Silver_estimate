@@ -48,7 +48,7 @@ class MainWindow(QMainWindow):
         self.db = db_manager
         self.settings_service = SettingsService()
 
-        self.setWindowTitle(APP_TITLE)
+        self.setWindowTitle(f"{APP_TITLE}[*]")
         # self.setGeometry(100, 100, 1000, 700) # Remove fixed geometry
         # self.showFullScreen() # Start in true full screen
         # We need to show the window first before maximizing it
@@ -235,6 +235,15 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """Handle window close event."""
+        estimate_widget = getattr(self, "estimate_widget", None)
+        if estimate_widget and hasattr(estimate_widget, "confirm_exit"):
+            try:
+                if not estimate_widget.confirm_exit():
+                    event.ignore()
+                    return
+            except Exception:
+                pass
+
         self.logger.info("Application closing")
         # Persist window geometry/state
         try:
@@ -425,4 +434,5 @@ if __name__ == "__main__":
         except Exception:
             pass
         sys.exit(1)
+
 

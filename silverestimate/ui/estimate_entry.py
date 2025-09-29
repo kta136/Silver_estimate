@@ -21,8 +21,6 @@ from .estimate_entry_ui import (
 from .estimate_entry_logic import EstimateLogic
 from .inline_status import InlineStatusController
 
-
-
 class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
     """Widget for silver estimate entry and management.
 
@@ -37,7 +35,6 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         # Set up database manager and main window reference
         self.db_manager = db_manager
         self.main_window = main_window # Store reference
-        
         # Flag to prevent loading estimates during initialization
         self.initializing = True
 
@@ -84,7 +81,6 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         # Make sure we start with exactly one empty row
         self.clear_all_rows()
         self.add_empty_row() # This now focuses correctly
-        
         # Generate a new voucher number before signals hook up to avoid unintended loads
         self.generate_voucher_silent()
 
@@ -138,6 +134,8 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
             label_getter=lambda: getattr(self, "status_message_label", None),
             logger=self.logger,
         )
+        self._on_unsaved_state_changed(False)
+        self._update_mode_tooltip()
 
     # --- Add helper to show status messages via main window ---
     def show_status(self, message, timeout=3000, level='info'):
@@ -145,6 +143,47 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
 
     def show_inline_status(self, message, timeout=3000, level='info'):
         self._status_helper.show(message, timeout=timeout, level=level)
+
+    def has_unsaved_changes(self) -> bool:
+        """Return True when the estimate form has unsaved edits."""
+        return bool(getattr(self, "_unsaved_changes", False))
+
+    def _on_unsaved_state_changed(self, dirty: bool) -> None:
+        """Update visual cues when the unsaved state changes."""
+        badge = getattr(self, "unsaved_badge", None)
+        if badge is not None:
+            if dirty:
+                badge.setText("● Unsaved changes")
+                badge.setVisible(True)
+            else:
+                badge.clear()
+                badge.setVisible(False)
+        main_win = getattr(self, "main_window", None)
+        if main_win and hasattr(main_win, "setWindowModified"):
+            try:
+                main_win.setWindowModified(bool(dirty))
+            except Exception:
+                pass
+
+    def _update_mode_tooltip(self) -> None:
+        label = getattr(self, "mode_indicator_label", None)
+        if label is None:
+            return
+        if getattr(self, "return_mode", False):
+            mode = "Return Items"
+        elif getattr(self, "silver_bar_mode", False):
+            mode = "Silver Bars"
+        else:
+            mode = "Regular Items"
+        tip = (
+            f"Current mode: {mode}\n"
+            "Ctrl+R: Return Items\n"
+            "Ctrl+B: Silver Bars"
+        )
+        try:
+            label.setToolTip(tip)
+        except Exception:
+            pass
 
     def request_totals_recalc(self):
         """Request a debounced totals recomputation."""
@@ -155,7 +194,6 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
                 self.calculate_totals()
             except Exception:
                 pass
-
 
     def force_focus_to_first_cell(self):
         """Force the cursor to the first cell (code column) and start editing."""
@@ -178,7 +216,6 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         self.item_table.blockSignals(False)
         self.current_row = -1 # Reset position
         self.current_column = -1
-
 
     def toggle_return_mode(self):
         """Toggle return item entry mode and update UI."""
@@ -257,7 +294,8 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         # Update the current or next empty row's type column visually
         self._refresh_empty_row_type()
         self.focus_on_empty_row(update_visuals=True)
-
+        self._update_mode_tooltip()
+        self._mark_unsaved()
 
     def toggle_silver_bar_mode(self):
         """Toggle silver bar entry mode and update UI."""
@@ -335,7 +373,8 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         # Update the current or next empty row's type column visually
         self._refresh_empty_row_type()
         self.focus_on_empty_row(update_visuals=True)
-
+        self._update_mode_tooltip()
+        self._mark_unsaved()
 
     def _refresh_empty_row_type(self):
         """Ensure the empty row reflects the active mode."""
@@ -377,7 +416,6 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         else:
             # No empty row found, add one
             self.add_empty_row() # This sets visuals and focuses
-
 
     def keyPressEvent(self, event):
         """Handle key press events for navigation and shortcuts."""
@@ -687,7 +725,6 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         size = max(min_size, min(size, max_size))
         self._apply_final_calc_font_size(size)
 
-
     def reconnect_load_estimate(self):
         """Reconnect the editingFinished signal for the voucher edit."""
         try:
@@ -695,34 +732,48 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
             self.voucher_edit.editingFinished.disconnect(self.load_estimate)
         except TypeError:
             pass # It wasn't connected, which is fine
-            
         # Use a safer approach - connect to a wrapper method that handles exceptions
         self.voucher_edit.editingFinished.connect(self.safe_load_estimate)
         import logging
         logging.getLogger(__name__).debug("Reconnected load_estimate signal with safe wrapper.")
-        
     def safe_load_estimate(self):
         """Safely load an estimate, catching any exceptions to prevent crashes."""
         # Skip loading during initialization to prevent startup crashes
         if hasattr(self, 'initializing') and self.initializing:
             self.logger.debug("Skipping load_estimate during initialization")
             return
-            
+        if self.has_unsaved_changes():
+            reply = QMessageBox.question(
+                self,
+                "Discard Unsaved Changes?",
+                "You have unsaved changes. Loading another estimate will discard them.\n\nContinue?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                self._status("Load cancelled; current estimate left unchanged.", 2500)
+                try:
+                    self.voucher_edit.setFocus()
+                    self.voucher_edit.selectAll()
+                except Exception:
+                    pass
+                return
+
         try:
             # Temporarily disconnect the signal to prevent recursive calls
             try:
                 self.voucher_edit.editingFinished.disconnect(self.safe_load_estimate)
             except TypeError:
                 pass  # It wasn't connected, which is fine
-                
+
             # Call the actual load_estimate method
             self.load_estimate()
-            
+
         except Exception as e:
             # Log the error but don't crash the application
             self.logger.error(f"Error in safe_load_estimate: {str(e)}", exc_info=True)
             self._status(f"Error loading estimate: {str(e)}", 5000)
-            
+
             # Show error message to user
             QMessageBox.critical(self, "Load Error",
                                 f"An error occurred while loading the estimate: {str(e)}\n\n"
@@ -734,26 +785,26 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
                 self.voucher_edit.editingFinished.disconnect(self.safe_load_estimate)
             except TypeError:
                 pass  # It wasn't connected, which is fine
-                
+
             self.voucher_edit.editingFinished.connect(self.safe_load_estimate)
 
     # Removed _save_table_font_size_setting as saving is handled by MainWindow
-    
+
     def generate_voucher_silent(self):
         """Generate a new voucher number without triggering signals."""
         try:
             # Get a new voucher number from the database
             voucher_no = self.db_manager.generate_voucher_no()
-            
+
             # Temporarily block signals from the voucher edit field
             self.voucher_edit.blockSignals(True)
-            
+
             # Set the voucher number
             self.voucher_edit.setText(voucher_no)
-            
+
             # Unblock signals
             self.voucher_edit.blockSignals(False)
-            
+
             self.logger.info(f"Generated new voucher silently: {voucher_no}")
             # New voucher implies no existing record loaded; disable delete button
             try:
@@ -764,7 +815,7 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         except Exception as e:
             self.logger.error(f"Error generating voucher number silently: {str(e)}", exc_info=True)
             # Don't show error message during initialization
-            
+
     def connect_load_estimate_signal(self):
         """
         Manually connect the load_estimate signal.
@@ -776,11 +827,11 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
                 self.voucher_edit.editingFinished.disconnect(self.safe_load_estimate)
             except TypeError:
                 pass  # It wasn't connected, which is fine
-                
+
             # Connect the signal
             self.voucher_edit.editingFinished.connect(self.safe_load_estimate)
             self.logger.info("Manually connected load_estimate signal")
-            
+
             # Add a button to the UI to load the estimate
             if not hasattr(self, 'load_button') or self.load_button is None:
                 from PyQt5.QtWidgets import QPushButton
@@ -790,3 +841,4 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
                 self.logger.info("Added Load Estimate button to UI")
         except Exception as e:
             self.logger.error(f"Error connecting load_estimate signal: {str(e)}", exc_info=True)
+

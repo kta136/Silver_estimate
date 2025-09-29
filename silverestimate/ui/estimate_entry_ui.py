@@ -2,7 +2,7 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QFormLayout, # Added QWidget, QFormLayout
                              QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
                              QHeaderView, QDoubleSpinBox, QDateEdit, QAbstractItemView,
-                              QCheckBox, QStyledItemDelegate, QFrame, QSpinBox, QToolButton)
+                              QCheckBox, QStyledItemDelegate, QFrame, QSpinBox, QToolButton, QSizePolicy)
 from PyQt5.QtWidgets import QStyle
 # Removed QFocusEvent, QValidator. Added QEvent
 from PyQt5.QtGui import QDoubleValidator, QIntValidator, QFont # Added QFont
@@ -179,10 +179,72 @@ class EstimateUI:
 
         # Table Actions
         table_actions_layout = QHBoxLayout()
+        table_actions_layout.setSpacing(12)
+        table_actions_layout.setContentsMargins(0, 0, 0, 0)
+
+        primary_frame = QFrame()
+        primary_frame.setObjectName("PrimaryActionStrip")
+        primary_frame.setStyleSheet("""
+            QFrame#PrimaryActionStrip {
+                background-color: palette(base);
+                border: 1px solid palette(midlight);
+                border-radius: 8px;
+            }
+            QFrame#PrimaryActionStrip QPushButton {
+                font-weight: 600;
+                padding: 6px 14px;
+                min-width: 120px;
+            }
+        """)
+        primary_layout = QHBoxLayout(primary_frame)
+        primary_layout.setSpacing(8)
+        primary_layout.setContentsMargins(12, 6, 12, 6)
+
+        self.save_button = QPushButton("Save Estimate")
+        self.save_button.setToolTip("Save the current estimate details\nKeyboard: Ctrl+S\nSaves all items and totals to database\nRequired before printing")
+        self.save_button.setCursor(Qt.PointingHandCursor)
+        primary_layout.addWidget(self.save_button)
+
+        self.print_button = QPushButton("Print Preview")
+        self.print_button.setToolTip("Preview and print the current estimate\nKeyboard: Ctrl+P\nRequires saving the estimate first\nOpens print preview dialog")
+        self.print_button.setCursor(Qt.PointingHandCursor)
+        primary_layout.addWidget(self.print_button)
+
+        self.clear_button = QPushButton("New Estimate")
+        self.clear_button.setToolTip("Clear the form to start a new estimate\nKeyboard: Ctrl+N\nResets all fields and generates new voucher\nWill ask for confirmation if unsaved changes")
+        self.clear_button.setCursor(Qt.PointingHandCursor)
+        primary_layout.addWidget(self.clear_button)
+
+        secondary_frame = QFrame()
+        secondary_frame.setObjectName("SecondaryActionStrip")
+        secondary_frame.setStyleSheet("""
+            QFrame#SecondaryActionStrip {
+                background-color: palette(window);
+                border: 1px dashed palette(mid);
+                border-radius: 8px;
+            }
+            QFrame#SecondaryActionStrip QPushButton {
+                padding: 4px 10px;
+            }
+        """)
+        secondary_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        secondary_layout = QHBoxLayout(secondary_frame)
+        secondary_layout.setSpacing(8)
+        secondary_layout.setContentsMargins(12, 6, 12, 6)
+
+        def create_action_divider():
+            divider = QFrame()
+            divider.setFrameShape(QFrame.VLine)
+            divider.setFrameShadow(QFrame.Sunken)
+            divider.setFixedHeight(28)
+            return divider
+
         self.delete_row_button = QPushButton("Delete Row")
         self.delete_row_button.setToolTip("Delete the currently selected row\nKeyboard: Ctrl+D\nRemoves the active row from the estimate\nCannot be undone")
         self.delete_row_button.clicked.connect(widget.delete_current_row)
-        table_actions_layout.addWidget(self.delete_row_button)
+        secondary_layout.addWidget(self.delete_row_button)
+        secondary_layout.addWidget(create_action_divider())
+
         self.return_toggle_button = QPushButton("↩ Return Items")
         self.return_toggle_button.setToolTip("Toggle Return Item entry mode for new rows\nKeyboard: Ctrl+R\nNew rows will be marked as Return items\nAffects calculations and item type")
         self.return_toggle_button.setCheckable(True)
@@ -200,11 +262,12 @@ class EstimateUI:
                 background-color: palette(light);
             }
         """)
-        table_actions_layout.addWidget(self.return_toggle_button)
+        secondary_layout.addWidget(self.return_toggle_button)
+
         self.silver_bar_toggle_button = QPushButton("🥈 Silver Bars")
         self.silver_bar_toggle_button.setToolTip("Toggle Silver Bar entry mode for new rows\nKeyboard: Ctrl+B\nNew rows will be marked as Silver Bar items\nCannot use both Return and Silver Bar modes")
         self.silver_bar_toggle_button.setCheckable(True)
-        # Set initial styling for inactive state  
+        # Set initial styling for inactive state
         self.silver_bar_toggle_button.setStyleSheet("""
             QPushButton {
                 background-color: palette(button);
@@ -218,33 +281,34 @@ class EstimateUI:
                 background-color: palette(light);
             }
         """)
-        table_actions_layout.addWidget(self.silver_bar_toggle_button)
-        table_actions_layout.addSpacing(20)
+        secondary_layout.addWidget(self.silver_bar_toggle_button)
+
+        secondary_layout.addWidget(create_action_divider())
+
         self.last_balance_button = QPushButton("LB")
         self.last_balance_button.setToolTip("Add Last Balance to this estimate\nAdds previous unpaid balance\nUseful for ongoing customer accounts\nWill show dialog if multiple balances available")
-        table_actions_layout.addWidget(self.last_balance_button)
-        self.save_button = QPushButton("Save Estimate")
-        self.save_button.setToolTip("Save the current estimate details\nKeyboard: Ctrl+S\nSaves all items and totals to database\nRequired before printing")
-        table_actions_layout.addWidget(self.save_button)
-        self.print_button = QPushButton("Print Preview")
-        self.print_button.setToolTip("Preview and print the current estimate\nKeyboard: Ctrl+P\nRequires saving the estimate first\nOpens print preview dialog")
-        table_actions_layout.addWidget(self.print_button)
+        secondary_layout.addWidget(self.last_balance_button)
+
+        secondary_layout.addWidget(create_action_divider())
+
         self.history_button = QPushButton("Estimate History")
         self.history_button.setToolTip("View, load, or print past estimates\nKeyboard: Ctrl+H\nBrowse all saved estimates\nDouble-click to load an estimate")
-        table_actions_layout.addWidget(self.history_button)
+        secondary_layout.addWidget(self.history_button)
+
         self.silver_bars_button = QPushButton("Manage Silver Bars")
         self.silver_bars_button.setToolTip("View and manage silver bar inventory\nAdd, edit, or assign silver bars\nTrack bar usage across estimates\nManage bar transfers")
-        table_actions_layout.addWidget(self.silver_bars_button)
-        self.clear_button = QPushButton("New Estimate")
-        self.clear_button.setToolTip("Clear the form to start a new estimate\nKeyboard: Ctrl+N\nResets all fields and generates new voucher\nWill ask for confirmation if unsaved changes")
-        table_actions_layout.addWidget(self.clear_button)
-        table_actions_layout.addSpacing(10)
+        secondary_layout.addWidget(self.silver_bars_button)
+
+        secondary_layout.addWidget(create_action_divider())
+
         self.delete_estimate_button = QPushButton("Delete This Estimate")
         self.delete_estimate_button.setToolTip("Delete the currently loaded estimate\nPermanently removes estimate from database\nOnly enabled when estimate is loaded\nCannot be undone - use with caution")
         self.delete_estimate_button.setEnabled(False)
-        table_actions_layout.addWidget(self.delete_estimate_button)
+        secondary_layout.addWidget(self.delete_estimate_button)
 
-        # Live rate display (non-editable) placed immediately after Delete button
+        secondary_layout.addStretch()
+
+        # Live rate display (non-editable) placed at the end for emphasis
         self.live_rate_label = QLabel("Live Silver Rate:")
         self.live_rate_label.setToolTip("Latest rate fetched from DDASilver.com (read-only)")
         try:
@@ -270,9 +334,22 @@ class EstimateUI:
             self.live_rate_value_label.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
         except Exception:
             pass
-        table_actions_layout.addSpacing(10)
-        table_actions_layout.addWidget(self.live_rate_label)
-        table_actions_layout.addWidget(self.live_rate_value_label)
+        self.live_rate_meta_label = QLabel("Waiting…")
+        self.live_rate_meta_label.setObjectName("LiveRateMeta")
+        self.live_rate_meta_label.setAccessibleName("Live Rate Status")
+        self.live_rate_meta_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        try:
+            self.live_rate_meta_label.setStyleSheet("color: #475569; font-size: 9pt;")
+        except Exception:
+            pass
+        rate_container = QWidget()
+        rate_layout = QVBoxLayout(rate_container)
+        rate_layout.setContentsMargins(0, 0, 0, 0)
+        rate_layout.setSpacing(2)
+        rate_layout.addWidget(self.live_rate_value_label)
+        rate_layout.addWidget(self.live_rate_meta_label)
+        secondary_layout.addWidget(self.live_rate_label)
+        secondary_layout.addWidget(rate_container)
         # Refresh button placed next to the live silver rate value
         self.refresh_rate_button = QToolButton()
         try:
@@ -283,10 +360,10 @@ class EstimateUI:
             self.refresh_rate_button.setAccessibleName("Refresh Silver Rate")
         except Exception:
             pass
-        table_actions_layout.addWidget(self.refresh_rate_button)
+        secondary_layout.addWidget(self.refresh_rate_button)
 
-        # Push remaining space to the right
-        table_actions_layout.addStretch()
+        table_actions_layout.addWidget(primary_frame, 0, Qt.AlignLeft)
+        table_actions_layout.addWidget(secondary_frame, 1)
         self.layout.addLayout(table_actions_layout)
         self.layout.addSpacing(8)
 
@@ -309,8 +386,24 @@ class EstimateUI:
             border-radius: 3px;
             padding: 2px 6px;
         """)
-        self.mode_indicator_label.setToolTip("Indicates current entry mode:\\n• Regular: Standard silver items\\n• Return Items: Items being returned by customer\\n• Silver Bars: Silver bar inventory items\\n\\nUse toggle buttons (Ctrl+R, Ctrl+B) to change mode")
+        self.mode_indicator_label.setToolTip("Shows which entry mode is active.\nCtrl+R: Return Items\nCtrl+B: Silver Bars")
+        self.unsaved_badge = QLabel("")
+        self.unsaved_badge.setObjectName("UnsavedBadge")
+        self.unsaved_badge.setAccessibleName("Unsaved Changes Indicator")
+        self.unsaved_badge.setVisible(False)
+        self.unsaved_badge.setToolTip("Indicates there are unsaved changes in this estimate")
+        self.unsaved_badge.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.unsaved_badge.setStyleSheet("""
+            QLabel#UnsavedBadge {
+                color: #b45309;
+                background-color: #fff7ed;
+                border: 1px solid #f97316;
+                border-radius: 11px;
+                padding: 2px 10px;
+                font-weight: 600;
+            }
 
+        """)
         # Single-line layout with improved spacing and subtle visual separation
         form_layout = QHBoxLayout()
         form_layout.setSpacing(10)  # Base spacing between elements
@@ -379,6 +472,9 @@ class EstimateUI:
         form_layout.addWidget(create_separator())
         form_layout.addSpacing(15)
         form_layout.addWidget(self.mode_indicator_label)
+        form_layout.addSpacing(6)
+        form_layout.addWidget(self.unsaved_badge)
+        form_layout.addSpacing(6)
         form_layout.addWidget(self.status_message_label)
         form_layout.addStretch()  # Push everything to left
         

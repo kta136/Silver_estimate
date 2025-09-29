@@ -2,7 +2,7 @@
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QPushButton, QTextEdit,
                              QLabel, QMessageBox, QApplication, QToolBar, QAction, QFileDialog, QWidgetAction)
 from PyQt5.QtGui import QFont, QTextCursor, QPageSize, QTextDocument, QFontDatabase
-from PyQt5.QtCore import Qt, QDate, QLocale
+from PyQt5.QtCore import Qt, QDate, QLocale, QSizeF
 # Import QPrintPreviewWidget
 from PyQt5.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog, QPrintPreviewWidget, QPageSetupDialog, QPrinterInfo
 import traceback # Keep for debugging
@@ -45,13 +45,17 @@ class PrintManager:
         # Page size
         try:
             page_size_name = settings.value("print/page_size", "A4", type=str)
-            size_map = {
-                'A4': QPageSize.A4,
-                'A5': QPageSize.A5,
-                'Letter': QPageSize.Letter,
-                'Legal': QPageSize.Legal,
-            }
-            self.printer.setPageSize(QPageSize(size_map.get(page_size_name, QPageSize.A4)))
+            if page_size_name == 'Thermal 80mm':
+                thermal_size = QPageSize(QSizeF(79.5, 200), QPageSize.Millimeter, 'Thermal 80mm')
+                self.printer.setPageSize(thermal_size)
+            else:
+                size_map = {
+                    'A4': QPageSize.A4,
+                    'A5': QPageSize.A5,
+                    'Letter': QPageSize.Letter,
+                    'Legal': QPageSize.Legal,
+                }
+                self.printer.setPageSize(QPageSize(size_map.get(page_size_name, QPageSize.A4)))
         except Exception:
             self.printer.setPageSize(QPageSize(QPageSize.A4))
         # Orientation
@@ -117,12 +121,12 @@ class PrintManager:
         return formatted_other + "," + last_three
 
     def _format_currency_locale(self, number):
-        """Format currency using system locale; fallback to Indian format with ₹."""
+        """Format currency using system locale; fallback to Indian format with ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¹."""
         try:
             locale = QLocale.system()
             return locale.toCurrencyString(float(round(number)))
         except Exception:
-            return f"₹ {self.format_indian_rupees(int(round(number)))}"
+            return f"ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¹ {self.format_indian_rupees(int(round(number)))}"
 
 
     def print_estimate(self, voucher_no, parent_widget=None):
@@ -859,95 +863,85 @@ class PrintManager:
                 else:
                     regular_items.append(item)
 
-        S = 1
+        TOTAL_WIDTH = 48
         W_SNO = 2
-        W_NAME = 12
-        W_GROSS = 6
-        W_POLY = 5
-        W_NET = 6
-        W_SPER = 4
-        W_WRATE = 5
-        W_PCS = 4
-        W_FINE = 6
-        W_LBR = 6
-        TOTAL_WIDTH = (
-            W_SNO + S + W_NAME + S + W_GROSS + S + W_POLY + S + W_NET + S + W_SPER +
-            S + W_WRATE + S + W_PCS + S + W_FINE + S + W_LBR
-        )
+        W_NAME = TOTAL_WIDTH - W_SNO - 1  # space between sno and name
+        W_GROSS = 10
+        W_POLY = 10
+        W_NET = 10
+        W_SPER = 8
+        W_FINE = 10
+        W_PCS = 6
+        W_LBR = 10
 
-        def fmt_num(value, width):
+        def fmt_num(label, value, width):
             if value is None:
-                return " " * width
+                return ' ' * width
             try:
-                return f"{float(value):<{width}.2f}"[:width].ljust(width)
+                body = f"{float(value):.2f}"
             except Exception:
-                return " " * width
+                body = str(value)
+            cell = f"{label}:{body}"
+            return cell[:width].ljust(width)
 
-        def format_line(sno, name, gross, poly, net, sper, wrate, pcs, fine, labour_amt):
-            try:
-                sno_str = "" if sno in (None, "") else str(sno)
-                sno_part = sno_str[:W_SNO].ljust(W_SNO)
-                name_part = (str(name or "")[:W_NAME]).ljust(W_NAME)
-                gross_part = fmt_num(gross, W_GROSS)
-                poly_part = fmt_num(poly, W_POLY)
-                net_part = fmt_num(net, W_NET)
-                sper_part = fmt_num(sper, W_SPER)
-                wrate_part = fmt_num(wrate, W_WRATE)
-                pcs_part = fmt_num(pcs, W_PCS) if pcs not in (None, "") else " " * W_PCS
-                fine_part = fmt_num(fine, W_FINE)
-                labour_part = fmt_num(labour_amt, W_LBR)
+        def fmt_text(label, value, width):
+            if value in (None, ''):
+                return ' ' * width
+            cell = f"{label}:{value}"
+            return cell[:width].ljust(width)
 
-                line = ' '.join([
-                    sno_part,
-                    name_part,
-                    gross_part,
-                    poly_part,
-                    net_part,
-                    sper_part,
-                    wrate_part,
-                    pcs_part,
-                    fine_part,
-                    labour_part,
-                ])
-                return f"{line:<{TOTAL_WIDTH}}"[:TOTAL_WIDTH]
-            except Exception as err:
-                import logging
-                logging.getLogger(__name__).error(
-                    f"Error formatting thermal line: {err}, Data: {(sno, name, gross, poly, net, sper, wrate, pcs, fine, labour_amt)}"
-                )
-                return " " * TOTAL_WIDTH
+        def append_item(lines, sno, name, gross, poly, net, sper, wrate, pcs, fine, labour, wage_type):
+            sno_str = '' if sno in (None, '') else str(sno)
+            name_line = f"{sno_str:>2} {str(name or '')[:W_NAME]}"
+            lines.append(name_line[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
+
+            metrics_line1 = ' '.join([
+                fmt_num('G', gross, W_GROSS),
+                fmt_num('P', poly, W_POLY),
+                fmt_num('N', net, W_NET),
+            ])
+            lines.append(metrics_line1[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
+
+            pcs_display = pcs
+            if pcs_display is None:
+                pcs_display = ''
+            elif isinstance(pcs_display, float) and pcs_display.is_integer():
+                pcs_display = int(pcs_display)
+
+            labour_present = abs(labour or 0.0) > 1e-6
+            labour_unit_code = (wage_type or '').strip().upper()
+            unit_map = {'PC': '/pc', 'WT': '/gm'}
+            labour_unit = unit_map.get(labour_unit_code, '') if (labour_present or abs(wrate or 0.0) > 1e-6) else ''
+
+            row2_parts = [
+                fmt_num('S%', sper, W_SPER),
+                fmt_num('Fi', fine, W_FINE),
+                fmt_text('Pc', pcs_display, W_PCS),
+            ]
+            lines.append(' '.join(row2_parts)[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
+
+            if labour_present:
+                labour_amount = fmt_num('Lb', labour, W_LBR)
+                lines.append(labour_amount[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
+
+            if labour_unit:
+                labour_unit_line = fmt_text('Lbr', labour_unit, W_LBR)
+                lines.append(labour_unit_line[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
 
         output = []
 
         note = header.get('note', '')
         title = "* ESTIMATE SLIP *"
         pad = max(0, (TOTAL_WIDTH - len(title)) // 2)
-        line = " " * pad + title
+        output.append((" " * pad + title)[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
         if note:
-            note_str = note[:TOTAL_WIDTH - len(line) - 1]
-            line = f"{line} {note_str}"[:TOTAL_WIDTH]
-        output.append(line)
+            output.append(str(note)[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
 
         voucher_str = str(voucher_no)
         rate_str = f"Rate:{silver_rate:0.2f}"
         spacer = max(1, TOTAL_WIDTH - len(voucher_str) - len(rate_str))
-        output.append(f"{voucher_str}{' ' * spacer}{rate_str}")
-        sep = "-" * TOTAL_WIDTH
-        output.append(sep)
-
-        header_parts = [
-            "SNo".ljust(W_SNO),
-            "Item".ljust(W_NAME),
-            "Grs".ljust(W_GROSS),
-            "Ply".ljust(W_POLY),
-            "Net".ljust(W_NET),
-            "%".ljust(W_SPER),
-            "Rate".ljust(W_WRATE),
-            "Pcs".ljust(W_PCS),
-            "Fine".ljust(W_FINE),
-            "Lbr".ljust(W_LBR),
-        ]
-        output.append(' '.join(header_parts)[:TOTAL_WIDTH])
+        output.append(f"{voucher_str}{' ' * spacer}{rate_str}"[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
+        sep = '-' * TOTAL_WIDTH
         output.append(sep)
 
         reg_f = reg_w = reg_g = reg_p = reg_n = 0.0
@@ -963,6 +957,7 @@ class PrintManager:
                 net = item.get('net_wt', gross - poly)
                 purity = item.get('purity', 0.0)
                 wage_rate = item.get('wage_rate', 0.0)
+                wage_type = item.get('wage_type', '')
                 pcs = item.get('pieces', 0)
                 fine = item.get('fine', 0.0) or 0.0
                 wage = item.get('wage', 0.0) or 0.0
@@ -973,16 +968,20 @@ class PrintManager:
                 reg_p += poly
                 reg_n += net
 
-                output.append(format_line(sno, item.get('item_name', ''), gross, poly, net, purity, wage_rate, pcs, fine, wage))
+                append_item(output, sno, item.get('item_name', ''), gross, poly, net, purity, wage_rate, pcs, fine, wage, wage_type)
                 sno += 1
             output.append(sep)
-            output.append(format_line('', 'TOTAL', reg_g, reg_p, reg_n, None, None, None, reg_f, reg_w))
+            output.append(f"TOTAL G:{reg_g:9.2f} P:{reg_p:9.2f} N:{reg_n:9.2f}"[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
+            line = f"      Fi:{reg_f:9.2f}"
+            if abs(reg_w) > 1e-6:
+                line += f" Lb:{reg_w:9.2f}"
+            output.append(line[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
             output.append(sep)
 
         if silver_bar_items:
             sb_title = "* Bars *"
             pad = max(0, (TOTAL_WIDTH - len(sb_title)) // 2)
-            output.append(" " * pad + sb_title)
+            output.append((" " * pad + sb_title)[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
             output.append(sep)
             sno = 1
             for item in silver_bar_items:
@@ -999,16 +998,20 @@ class PrintManager:
                 sb_p += poly
                 sb_n += net
 
-                output.append(format_line(sno, item.get('item_name', ''), gross, poly, net, purity, None, None, fine, wage))
+                append_item(output, sno, item.get('item_name', ''), gross, poly, net, purity, None, None, fine, wage, None)
                 sno += 1
             output.append(sep)
-            output.append(format_line('', 'TOTAL', sb_g, sb_p, sb_n, None, None, None, sb_f, sb_w))
+            output.append(f"TOTAL G:{sb_g:9.2f} P:{sb_p:9.2f} N:{sb_n:9.2f}"[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
+            line = f"      Fi:{sb_f:9.2f}"
+            if abs(sb_w) > 1e-6:
+                line += f" Lb:{sb_w:9.2f}"
+            output.append(line[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
             output.append(sep)
 
         if return_goods:
             rg_title = "* Returns *"
             pad = max(0, (TOTAL_WIDTH - len(rg_title)) // 2)
-            output.append(" " * pad + rg_title)
+            output.append((" " * pad + rg_title)[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
             output.append(sep)
             sno = 1
             for item in return_goods:
@@ -1017,6 +1020,7 @@ class PrintManager:
                 net = item.get('net_wt', gross - poly)
                 purity = item.get('purity', 0.0)
                 wage_rate = item.get('wage_rate', 0.0)
+                wage_type = item.get('wage_type', '')
                 pcs = item.get('pieces', 0)
                 fine = item.get('fine', 0.0) or 0.0
                 wage = item.get('wage', 0.0) or 0.0
@@ -1027,16 +1031,20 @@ class PrintManager:
                 ret_gp += poly
                 ret_gn += net
 
-                output.append(format_line(sno, item.get('item_name', ''), gross, poly, net, purity, wage_rate, pcs, fine, wage))
+                append_item(output, sno, item.get('item_name', ''), gross, poly, net, purity, wage_rate, pcs, fine, wage, wage_type)
                 sno += 1
             output.append(sep)
-            output.append(format_line('', 'TOTAL', ret_gg, ret_gp, ret_gn, None, None, None, ret_gf, ret_gw))
+            output.append(f"TOTAL G:{ret_gg:9.2f} P:{ret_gp:9.2f} N:{ret_gn:9.2f}"[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
+            line = f"      Fi:{ret_gf:9.2f}"
+            if abs(ret_gw) > 1e-6:
+                line += f" Lb:{ret_gw:9.2f}"
+            output.append(line[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
             output.append(sep)
 
         if return_silver_bars:
             rsb_title = "* Ret Bars *"
             pad = max(0, (TOTAL_WIDTH - len(rsb_title)) // 2)
-            output.append(" " * pad + rsb_title)
+            output.append((" " * pad + rsb_title)[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
             output.append(sep)
             sno = 1
             for item in return_silver_bars:
@@ -1053,10 +1061,14 @@ class PrintManager:
                 ret_sp += poly
                 ret_sn += net
 
-                output.append(format_line(sno, item.get('item_name', ''), gross, poly, net, purity, None, None, fine, wage))
+                append_item(output, sno, item.get('item_name', ''), gross, poly, net, purity, None, None, fine, wage, None)
                 sno += 1
             output.append(sep)
-            output.append(format_line('', 'TOTAL', ret_sg, ret_sp, ret_sn, None, None, None, ret_sf, ret_sw))
+            output.append(f"TOTAL G:{ret_sg:9.2f} P:{ret_sp:9.2f} N:{ret_sn:9.2f}"[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
+            line = f"      Fi:{ret_sf:9.2f}"
+            if abs(ret_sw) > 1e-6:
+                line += f" Lb:{ret_sw:9.2f}"
+            output.append(line[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
             output.append(sep)
 
         last_balance_silver = header.get('last_balance_silver', 0.0)
@@ -1065,15 +1077,13 @@ class PrintManager:
         if last_balance_silver > 0 or last_balance_amount > 0:
             lb_title = "Last Balance"
             pad = max(0, (TOTAL_WIDTH - len(lb_title)) // 2)
-            output.append(" " * pad + lb_title)
+            output.append((" " * pad + lb_title)[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
             output.append(sep)
             lb_str = f"Ag:{last_balance_silver:.2f} Amt:{self._format_currency_locale(last_balance_amount)}"
-            output.append(lb_str[:TOTAL_WIDTH])
+            output.append(lb_str[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
             output.append(sep)
 
-        final_title = "Final Silver & Amount"
-        pad = max(0, (TOTAL_WIDTH - len(final_title)) // 2)
-        output.append(" " * pad + final_title)
+        output.append("Final Silver & Amount"[:TOTAL_WIDTH].center(TOTAL_WIDTH))
         output.append(sep)
 
         net_fine = reg_f - sb_f - ret_gf - ret_sf
@@ -1084,24 +1094,17 @@ class PrintManager:
         silver_cost = net_fine_display * silver_rate
         total_cost = net_wage_display + silver_cost
 
-        fine_str = fmt_num(net_fine_display, W_FINE)
-        wage_str = fmt_num(net_wage_display, W_LBR)
-        output.append(' '.join([
-            ' ' * (W_SNO + S),
-            fine_str,
-            wage_str,
-            fmt_num(silver_cost, W_FINE),
-            fmt_num(total_cost, W_LBR),
-        ])[:TOTAL_WIDTH])
+        output.append(f"Fine:{net_fine_display:9.2f} Wage:{net_wage_display:9.2f}"[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
+        output.append(f"S.Cost:{silver_cost:8.2f} Total:{total_cost:9.2f}"[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
         output.append(sep)
         note_line = "Note: Goods Not Return"
-        pad = max(0, (TOTAL_WIDTH - len(note_line)) // 2)
-        output.append(" " * pad + note_line)
+        output.append(note_line[:TOTAL_WIDTH].ljust(TOTAL_WIDTH))
         output.append(" \f")
+
         html_content = "\n".join(output)
         html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
                     pre {{
-                        line-height: 1.0;
+                        line-height: 1.05;
                         white-space: pre;
                         margin: 0;
                         padding: 0;

@@ -276,7 +276,7 @@ class SettingsDialog(QDialog):
 
         # --- Page Size ---
         self.page_size_combo = QComboBox()
-        self.page_size_combo.addItems(["A4", "A5", "Letter", "Legal"])
+        self.page_size_combo.addItems(["A4", "A5", "Letter", "Legal", "Thermal 80mm"])
         self.page_size_combo.setToolTip("Default page size for printing")
         self.page_size_combo.currentIndexChanged.connect(self._mark_dirty)
         form_layout.addRow("Page Size:", self.page_size_combo)

@@ -26,6 +26,30 @@ The logging architecture replaces ad-hoc print() statements with a structured sy
 - Add detailed debug logging for troubleshooting
 - Complete integration with all UI components
 
+## Feature Highlights
+
+### Configurable Log Levels
+- Toggle INFO, ERROR/CRITICAL, and DEBUG handlers independently.
+- Debug logs only activate when debug mode is on, keeping day-to-day noise low.
+- Settings persist via QSettings so operator choices survive restarts.
+
+### Automatic Log Cleanup
+- Optional scheduler trims logs on a midnight cadence using `LogCleanupScheduler`.
+- Retention window is user-configurable (1–365 days) with a manual "Clean Now" action in Settings.
+- Cleanup respects both primary and archived folders under `logs/`.
+
+### Debug Mode
+- Enables verbose diagnostics (detailed DB operations, UI state changes).
+- Accessible via Settings or the `SILVER_APP_DEBUG` environment variable.
+- Expect modest performance overhead; use primarily for troubleshooting.
+
+## Log Files
+
+- `logs/silver_app.log` — INFO-level operational stream.
+- `logs/silver_app_error.log` — errors and critical failures.
+- `logs/silver_app_debug.log` — full DEBUG output (only when debug mode is active).
+- Archived copies live under `logs/archived/` once rotation thresholds are met.
+
 ### Example Implementation for Key Components
 
 #### Database Manager Integration
@@ -128,12 +152,19 @@ def get_log_config():
 
     # Get log level enable/disable settings
     enable_info = settings.value("logging/enable_info", True, type=bool)
-    enable_error = settings.value("logging/enable_critical", True, type=bool)
+    enable_error = settings.value("logging/enable_error", None, type=bool)
+    if enable_error is None:
+        enable_error = settings.value("logging/enable_critical", True, type=bool)
     enable_debug = settings.value("logging/enable_debug", True, type=bool)
 
     # Get auto-cleanup settings
     auto_cleanup = settings.value("logging/auto_cleanup", False, type=bool)
-    cleanup_days = settings.value("logging/cleanup_days", 7, type=int)
+    cleanup_days = settings.value("logging/cleanup_days", 1, type=int)
+
+    if cleanup_days < 1:
+        cleanup_days = 1
+    elif cleanup_days > 365:
+        cleanup_days = 365
 
     return {
         'debug_mode': debug_mode,
@@ -159,7 +190,10 @@ def reconfigure_logging():
     # Re-initialize logging with new settings
     logger = setup_logging(
         debug_mode=config['debug_mode'],
-        log_dir=config['log_dir']
+        log_dir=config['log_dir'],
+        enable_info=config['enable_info'],
+        enable_error=config['enable_error'],
+        enable_debug=config['enable_debug']
     )
 
     # Configure cleanup scheduler if enabled
@@ -419,7 +453,10 @@ logger.info(f"User settings: {sanitize_for_logging(user_data)}")
 2. **Debug Settings**: Enable debug mode and detailed logging
 3. **Log Levels**: Toggle INFO, ERROR/CRITICAL, and DEBUG log types
 4. **Automatic Log Cleanup**: Enable automatic deletion of old log files
-5. **Manual Cleanup**: Click "Clean Up Logs Now" to immediately remove old files
+5. **Manual Cleanup**: Click "Clean Up Logs Now" to immediately remove log files older than the configured retention window
+
+- Changes apply instantly; no restart required.
+- Use the preview labels in the dialog to confirm which files will be affected before enabling cleanup.
 
 ### Environment Variable Configuration
 
@@ -455,6 +492,12 @@ python main.py
 - Check `silver_app_error.log` for detailed error information
 - Enable debug logging for additional context when troubleshooting
 - Look for patterns like repeated warnings or errors
+
+## Operational Best Practices
+- Day-to-day: keep INFO and ERROR handlers enabled; leave debug mode off for best performance.
+- Troubleshooting: enable debug mode temporarily and capture the issue timeline, then disable it to reduce log volume.
+- Long deployments: enable automatic cleanup with a retention period that matches disk policies (7–30 days typical).
+- Sensitive data: rely on `sanitize_for_logging()` for any user-supplied payloads and avoid logging secrets explicitly.
 
 ### Advanced Usage
 

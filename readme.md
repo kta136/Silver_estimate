@@ -1,11 +1,11 @@
-# 🧾 Silver Estimation App — v1.72.4
+# 🧾 Silver Estimation App — v1.72.7
 
 A desktop application built with PyQt5 and an encrypted SQLite database for managing silver sales estimates — item-wise entries, silver bar inventory, returns, and print‑ready outputs.
 
 ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
 ![PyQt5](https://img.shields.io/badge/PyQt5-5.15+-green.svg)
 ![License](https://img.shields.io/badge/License-Proprietary-red.svg)
-![Version](https://img.shields.io/badge/version-v1.72.4-orange.svg)
+![Version](https://img.shields.io/badge/version-v1.72.7-orange.svg)
 
 ## 📋 Table of Contents
 - [Overview](#overview)
@@ -231,11 +231,19 @@ This project is proprietary software. All rights reserved.
 
 ## 🔄 Version History (highlights)
 
+### v1.72.7 (2025‑09‑16)
+- Harden shutdown so duplicate DatabaseManager closes no longer raise false critical temp-file warnings.
+
+### v1.72.5 (2025‑09‑14)
+- Ensure encryption reads a complete WAL snapshot before sealing, eliminating session-only data loss.
+- Serialise encryption with explicit locks and postpone shutdown until flush work completes.
+- Improve Item Master persistence messaging and flush lifecycle logs.
+
 ### v1.72.4 (2025‑09‑14)
-- Add refresh button next to Live Silver Rate
-- Async live rate fetch (broadcast/API fallback)
-- Fix Estimate History action methods location
-- Minor layout polish and tooltips
+- Add refresh button next to Live Silver Rate.
+- Async live rate fetch (broadcast/API fallback).
+- Fix Estimate History action methods location.
+- Minor layout polish and tooltips.
 
 ### v1.72.3 (2025‑09‑13)
 - Faster startup via lazy imports; prepared cursors

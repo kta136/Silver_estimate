@@ -7,8 +7,15 @@ API_PATH = "index.php/C_booking/get_commodity_data"
 DEFAULT_BASE_URL = "http://www.ddasilver.com/"
 TARGET_NAME = "Silver Agra Local Mohar"
 
-# Broadcast endpoint used by site UI for exact on-screen numbers
-BROADCAST_URL = "http://3.109.80.6/lmxtrade/winbullliteapi/api/v1/broadcastrates"
+# Broadcast endpoints used by site UI for exact on-screen numbers.
+# The vendor recently migrated the live feed to a new host (13.235.208.189)
+# but left the previous endpoint running with stale data. Probe the new host
+# first and fall back to the legacy endpoint to remain compatible.
+BROADCAST_URLS = (
+    "http://13.235.208.189/lmxtrade/winbullliteapi/api/v1/broadcastrates",
+    "http://3.109.80.6/lmxtrade/winbullliteapi/api/v1/broadcastrates",
+)
+BROADCAST_URL = BROADCAST_URLS[0]
 BROADCAST_CLIENT = "ddasil"
 
 
@@ -94,17 +101,29 @@ def fetch_broadcast_rate_exact(timeout: int = 10, client: str = BROADCAST_CLIENT
     com_id = 47 if prefer_static_id else (_lookup_com_id_for_target(base_url=base_url, timeout=timeout) or 47)
 
     payload = json.dumps({"client": client}).encode("utf-8")
-    req = urllib.request.Request(
-        BROADCAST_URL,
-        data=payload,
-        headers={"Content-Type": "application/json", "User-Agent": "SilverEstimate/1.0"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            text = resp.read().decode("utf-8", errors="replace")
-    except Exception:
-        return None, True, {"com_id": com_id}
+    text = None
+    endpoint_used = None
+    fetch_errors = []
+    for endpoint in BROADCAST_URLS:
+        req = urllib.request.Request(
+            endpoint,
+            data=payload,
+            headers={"Content-Type": "application/json", "User-Agent": "SilverEstimate/1.0"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                text = resp.read().decode("utf-8", errors="replace")
+            endpoint_used = endpoint
+            break
+        except Exception as exc:
+            fetch_errors.append(repr(exc))
+            continue
+    if text is None:
+        info = {"com_id": com_id}
+        if fetch_errors:
+            info["errors"] = fetch_errors
+        return None, True, info
 
     rate_val = None
     market_open = True
@@ -147,7 +166,7 @@ def fetch_broadcast_rate_exact(timeout: int = 10, client: str = BROADCAST_CLIENT
             try:
                 payload = json.dumps({"client": client}).encode("utf-8")
                 req = urllib.request.Request(
-                    BROADCAST_URL,
+                    endpoint_used or BROADCAST_URLS[0],
                     data=payload,
                     headers={"Content-Type": "application/json", "User-Agent": "SilverEstimate/1.0"},
                     method="POST",
@@ -175,7 +194,10 @@ def fetch_broadcast_rate_exact(timeout: int = 10, client: str = BROADCAST_CLIENT
 
         com_id = dyn_id or com_id
 
-    return rate_val, market_open, {"com_id": com_id}
+    info = {"com_id": com_id}
+    if endpoint_used:
+        info["endpoint"] = endpoint_used
+    return rate_val, market_open, info
 
 
 if __name__ == "__main__":

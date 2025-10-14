@@ -3,6 +3,7 @@ import types
 
 from PyQt5.QtWidgets import QDialog
 
+from silverestimate.security import credential_store
 from silverestimate.services import auth_service
 
 
@@ -58,9 +59,11 @@ def test_run_authentication_first_time(monkeypatch, settings_stub):
     result = auth_service.run_authentication(logging.getLogger("test-auth-setup"))
 
     assert result == "primary-pass"
+    assert credential_store.get_password_hash("main") == "hashed-primary-pass"
+    assert credential_store.get_password_hash("backup") == "hashed-backup-pass"
     settings = settings_stub()
-    assert settings.value("security/password_hash") == "hashed-primary-pass"
-    assert settings.value("security/backup_hash") == "hashed-backup-pass"
+    assert settings.value("security/password_hash") is None
+    assert settings.value("security/backup_hash") is None
 
 
 def test_run_authentication_existing_password(monkeypatch, settings_stub):
@@ -92,6 +95,11 @@ def test_run_authentication_existing_password(monkeypatch, settings_stub):
     result = auth_service.run_authentication(logging.getLogger("test-auth-login"))
 
     assert result == "secret"
+    # Legacy values should migrate to secure store.
+    assert credential_store.get_password_hash("main") == "stored-hash"
+    assert credential_store.get_password_hash("backup") == "backup-hash"
+    assert settings.value("security/password_hash") is None
+    assert settings.value("security/backup_hash") is None
 
 
 def test_perform_data_wipe_removes_files(tmp_path, monkeypatch, settings_stub):
@@ -102,10 +110,12 @@ def test_perform_data_wipe_removes_files(tmp_path, monkeypatch, settings_stub):
     temp_file.write_text("temp")
 
     settings = settings_stub()
-    settings.setValue("security/password_hash", "hash")
-    settings.setValue("security/backup_hash", "backup")
+    settings.setValue("security/password_hash", "legacy-hash")
+    settings.setValue("security/backup_hash", "legacy-backup")
     settings.setValue("security/db_salt", b"salt")
     settings.setValue("security/last_temp_db_path", str(temp_file))
+    credential_store.set_password_hash("main", "hash")
+    credential_store.set_password_hash("backup", "backup")
 
     monkeypatch.setattr(auth_service, "QMessageBox", _MessageBoxStub)
 
@@ -114,12 +124,9 @@ def test_perform_data_wipe_removes_files(tmp_path, monkeypatch, settings_stub):
     assert result is True
     assert not db_file.exists()
     assert not temp_file.exists()
-    for key in (
-        "security/password_hash",
-        "security/backup_hash",
-        "security/db_salt",
-        "security/last_temp_db_path",
-    ):
+    assert credential_store.get_password_hash("main") is None
+    assert credential_store.get_password_hash("backup") is None
+    for key in ("security/password_hash", "security/backup_hash", "security/db_salt", "security/last_temp_db_path"):
         assert settings.value(key) is None
 
 
@@ -130,6 +137,7 @@ def test_perform_data_wipe_failure_notifies_user(tmp_path, monkeypatch, settings
 
     settings = settings_stub()
     settings.setValue("security/password_hash", "hash")
+    credential_store.set_password_hash("main", "hash")
 
     def _boom(path):  # noqa: ARG001
         raise OSError("boom")
@@ -141,6 +149,8 @@ def test_perform_data_wipe_failure_notifies_user(tmp_path, monkeypatch, settings
 
     assert result is False
     assert db_file.exists()
+    # Secure store should still contain the credential because wipe failed.
+    assert credential_store.get_password_hash("main") == "hash"
     assert settings.value("security/password_hash") == "hash"
     assert _MessageBoxStub.critical_calls
 

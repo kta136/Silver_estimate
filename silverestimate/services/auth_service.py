@@ -10,6 +10,8 @@ from PyQt5.QtWidgets import QMessageBox, QDialog
 from silverestimate.infrastructure.settings import get_app_settings
 
 from silverestimate.infrastructure.app_constants import DB_PATH
+from silverestimate.security import credential_store
+from silverestimate.security.credential_store import CredentialStoreError
 try:
     from silverestimate.ui.login_dialog import LoginDialog  # type: ignore
 except Exception:  # pragma: no cover - lazy import fallback
@@ -26,8 +28,22 @@ def run_authentication(logger: Optional[logging.Logger] = None) -> Optional[str]
     logger.info("Starting authentication process")
 
     settings = get_app_settings()
-    password_hash = settings.value("security/password_hash")
-    backup_hash = settings.value("security/backup_hash")
+    try:
+        password_hash = credential_store.get_password_hash(
+            "main", settings=settings, logger=logger
+        )
+        backup_hash = credential_store.get_password_hash(
+            "backup", settings=settings, logger=logger
+        )
+    except CredentialStoreError as exc:
+        logger.critical("Secure credential storage unavailable: %s", exc, exc_info=True)
+        QMessageBox.critical(
+            None,
+            "Authentication Error",
+            "Secure credential storage is not available on this system. "
+            "Install and configure the Python 'keyring' backend, then restart the application.",
+        )
+        return None
 
     if password_hash and backup_hash:
         logger.debug("Found existing password hashes, showing login dialog")
@@ -65,9 +81,21 @@ def run_authentication(logger: Optional[logging.Logger] = None) -> Optional[str]
             logger.error("Failed to hash passwords during setup")
             QMessageBox.critical(None, "Setup Error", "Failed to hash passwords.")
             return None
-        settings.setValue("security/password_hash", hashed_password)
-        settings.setValue("security/backup_hash", hashed_backup)
-        settings.sync()
+        try:
+            credential_store.set_password_hash(
+                "main", hashed_password, settings=settings, logger=logger
+            )
+            credential_store.set_password_hash(
+                "backup", hashed_backup, settings=settings, logger=logger
+            )
+        except CredentialStoreError as exc:
+            logger.critical("Failed to persist passwords in secure store: %s", exc, exc_info=True)
+            QMessageBox.critical(
+                None,
+                "Setup Error",
+                "Failed to store passwords securely. Please ensure the system keyring is available.",
+            )
+            return None
         logger.info("Passwords created and stored successfully")
         QMessageBox.information(None, "Setup Complete", "Passwords created successfully.")
         return password
@@ -97,13 +125,14 @@ def perform_data_wipe(
             except OSError as exc:
                 logger.warning("Could not remove temporary plaintext DB: %s", exc)
 
-        for key in (
-            "security/password_hash",
-            "security/backup_hash",
-            "security/db_salt",
-            "security/last_temp_db_path",
-        ):
+        for key in ("security/db_salt", "security/last_temp_db_path"):
             settings.remove(key)
+        for kind in ("main", "backup"):
+            try:
+                credential_store.delete_password_hash(kind, settings=settings, logger=logger)
+            except CredentialStoreError:
+                # Delete best-effort; continue wiping remaining artifacts.
+                pass
         settings.sync()
         logger.info("Cleared password hashes and database salt from application settings.")
         return True

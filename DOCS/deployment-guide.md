@@ -9,7 +9,7 @@
 ## Local Windows Packaging
 1. Open PowerShell in the repo root.
 2. Run `pwsh scripts/build_windows.ps1`.
-3. The script creates `.venv/`, installs `requirements.txt`, and runs PyInstaller with `SilverEstimate.spec` when present.
+3. The script creates `.venv/`, installs `requirements.txt`, and runs PyInstaller with `SilverEstimate.spec` when present (the spec includes keyring/Argon2 hidden imports).
 4. Output directories:
    - `dist/SilverEstimate/` contains the default windowed build with all dependencies.
    - `dist/SilverEstimate-v<version>-win64.zip` is created automatically from the folder above. Version is read from `silverestimate/infrastructure/app_constants.py`.
@@ -22,7 +22,7 @@
 
 ### Manual PyInstaller Invocation
 - Spec file: `SilverEstimate.spec` (the build script uses `silverestimate.spec`, case-insensitive on Windows).
-- Hidden imports already listed for Argon2/bcrypt handlers.
+- Hidden imports are already listed for Argon2/bcrypt handlers and the supported `keyring` backends (Windows Credential Manager, fallback no-op).
 - Add datas or icons by editing the spec file if new resources are introduced.
 - Temporary workaround: run `python -m PyInstaller --noconfirm SilverEstimate.spec` to reuse cached venv dependencies.
 
@@ -44,14 +44,14 @@ Workflow: `.github/workflows/release-windows.yml`.
 5. Confirm the GitHub Actions build attaches the new zip to the release entry.
 
 ## Dependency Management
-- Runtime dependencies are tracked in `requirements.txt` (PyQt5, cryptography, passlib/argon2, argon2_cffi, pyinstaller, hypothesis).
+- Runtime dependencies are tracked in `requirements.txt` (PyQt5, cryptography, passlib/argon2, argon2_cffi, pyinstaller, hypothesis, keyring).
 - For local builds the helper script upgrades pip before installing requirements.
 - Add dev/test-only libraries to a `requirements-dev.txt` (not currently present) or install manually in the virtual environment.
 
 ## Testing Before Packaging
 - Run `pytest` from the repo root (requires developer dependencies such as `pytest`, `pytest-qt`, `pytest-mock`).
 - Ensure the application starts with `python main.py` before freezing.
-- Verify encrypted database handling by launching the packaged build, creating a password, saving a sample estimate, closing, and reopening.
+- Verify encrypted database handling by launching the packaged build, creating a password (ensure the OS keyring is available), saving a sample estimate, closing, and reopening.
 
 ## Common Troubleshooting
 - **Missing DLLs:** Ensure the host machine has the Microsoft Visual C++ redistributables. PyInstaller bundles the interpreter but relies on system runtimes.

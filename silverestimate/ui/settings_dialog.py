@@ -8,6 +8,8 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWid
 from PyQt5.QtCore import Qt, pyqtSignal, QUrl, QSize
 from PyQt5.QtGui import QFont, QDesktopServices
 from silverestimate.infrastructure.settings import get_app_settings
+from silverestimate.security import credential_store
+from silverestimate.security.credential_store import CredentialStoreError
 
 from PyQt5.QtPrintSupport import QPrinterInfo
 
@@ -784,8 +786,21 @@ class SettingsDialog(QDialog):
         new_secondary_pw = self.new_secondary_password_input.text()
         confirm_secondary_pw = self.confirm_new_secondary_password_input.text()
 
+        logger = logging.getLogger(__name__)
+        try:
+            stored_main_hash = credential_store.get_password_hash(
+                "main", settings=self.settings, logger=logger
+            )
+        except CredentialStoreError as exc:
+            logger.error("Secure credential store unavailable during password change: %s", exc, exc_info=True)
+            QMessageBox.critical(
+                self,
+                "Password Change Error",
+                "Secure credential storage is not available. Install and configure the system keyring, then try again.",
+            )
+            return
+
         # 1. Validate Current Password
-        stored_main_hash = self.settings.value("security/password_hash")
         if not stored_main_hash or not LoginDialog.verify_password(stored_main_hash, current_password):
             QMessageBox.warning(self, "Password Change Failed", "Incorrect current password.")
             self.current_password_input.clear() # Clear field on error
@@ -828,11 +843,14 @@ class SettingsDialog(QDialog):
              QMessageBox.critical(self, "Password Change Error", "Failed to hash new passwords. Cannot save.")
              return
 
-        # 6. Save New Hashes to QSettings
+        # 6. Persist new hashes in secure store
         try:
-            self.settings.setValue("security/password_hash", new_main_hash)
-            self.settings.setValue("security/backup_hash", new_secondary_hash) # Still use backup_hash key internally
-            self.settings.sync()
+            credential_store.set_password_hash(
+                "main", new_main_hash, settings=self.settings, logger=logger
+            )
+            credential_store.set_password_hash(
+                "backup", new_secondary_hash, settings=self.settings, logger=logger
+            )
 
             QMessageBox.information(self, "Success", "Passwords changed successfully.")
             # Clear fields after success

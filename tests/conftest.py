@@ -54,6 +54,51 @@ class _SettingsStub:
         cls._data.clear()
 
 
+class _CredentialStoreStub:
+    """In-memory stand-in for secure credential storage."""
+
+    _store = {}
+    _legacy_keys = {
+        "main": "security/password_hash",
+        "backup": "security/backup_hash",
+    }
+
+    @classmethod
+    def reset(cls):
+        cls._store = {}
+
+    @classmethod
+    def _legacy_key(cls, kind: str) -> str:
+        return cls._legacy_keys[kind]
+
+    @classmethod
+    def get_password_hash(cls, kind, *, settings=None, logger=None):
+        value = cls._store.get(kind)
+        if value is not None:
+            return value
+        if settings is None:
+            return None
+        legacy_key = cls._legacy_key(kind)
+        legacy_value = settings.value(legacy_key)
+        if legacy_value is not None:
+            cls._store[kind] = legacy_value
+            settings.remove(legacy_key)
+            return legacy_value
+        return None
+
+    @classmethod
+    def set_password_hash(cls, kind, value, *, settings=None, logger=None):
+        cls._store[kind] = value
+        if settings is not None:
+            settings.remove(cls._legacy_key(kind))
+
+    @classmethod
+    def delete_password_hash(cls, kind, *, settings=None, logger=None):
+        cls._store.pop(kind, None)
+        if settings is not None:
+            settings.remove(cls._legacy_key(kind))
+
+
 @pytest.fixture(scope="session")
 def qt_app():
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -68,11 +113,28 @@ def qt_app():
 @pytest.fixture()
 def settings_stub(monkeypatch):
     _SettingsStub.clear()
+    _CredentialStoreStub.reset()
     monkeypatch.setattr("silverestimate.persistence.database_manager.QSettings", _SettingsStub, raising=False)
     monkeypatch.setattr("silverestimate.services.auth_service.QSettings", _SettingsStub, raising=False)
     monkeypatch.setattr("silverestimate.services.live_rate_service.QSettings", _SettingsStub, raising=False)
     monkeypatch.setattr("silverestimate.ui.estimate_entry.QSettings", _SettingsStub, raising=False)
     monkeypatch.setattr("silverestimate.infrastructure.logger.QSettings", _SettingsStub, raising=False)
     monkeypatch.setattr("silverestimate.infrastructure.settings.QSettings", _SettingsStub, raising=False)
+    monkeypatch.setattr(
+        "silverestimate.security.credential_store.get_password_hash",
+        _CredentialStoreStub.get_password_hash,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "silverestimate.security.credential_store.set_password_hash",
+        _CredentialStoreStub.set_password_hash,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "silverestimate.security.credential_store.delete_password_hash",
+        _CredentialStoreStub.delete_password_hash,
+        raising=False,
+    )
     yield _SettingsStub
     _SettingsStub.clear()
+    _CredentialStoreStub.reset()

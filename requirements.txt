@@ -4,3 +4,4 @@ passlib[argon2]>=1.7.4
 argon2_cffi>=21.3.0
 pyinstaller>=6.6.0
 hypothesis>=6.0.0
+keyring>=24.3.0

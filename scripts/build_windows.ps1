@@ -24,11 +24,34 @@ if ($IsWindows) {
 Write-Host "[Build] Running PyInstaller..."
 $spec = Join-Path $PSScriptRoot "..\silverestimate.spec"
 if ($OneFile) {
-  & $py -m PyInstaller --noconfirm --onefile --windowed --name SilverEstimate --hidden-import passlib.handlers.argon2 --hidden-import passlib.handlers.bcrypt main.py
+  & $py -m PyInstaller `
+    --noconfirm `
+    --onefile `
+    --windowed `
+    --name SilverEstimate `
+    --hidden-import passlib.handlers.argon2 `
+    --hidden-import passlib.handlers.bcrypt `
+    --hidden-import keyring.backends `
+    --hidden-import keyring.backends.Windows `
+    --hidden-import keyring.backends.win32 `
+    --hidden-import keyring.backends.fail `
+    --hidden-import keyring.backends.null `
+    main.py
 } elseif (Test-Path $spec) {
   & $py -m PyInstaller --noconfirm $spec
 } else {
-  & $py -m PyInstaller --noconfirm --windowed --name SilverEstimate --hidden-import passlib.handlers.argon2 --hidden-import passlib.handlers.bcrypt main.py
+  & $py -m PyInstaller `
+    --noconfirm `
+    --windowed `
+    --name SilverEstimate `
+    --hidden-import passlib.handlers.argon2 `
+    --hidden-import passlib.handlers.bcrypt `
+    --hidden-import keyring.backends `
+    --hidden-import keyring.backends.Windows `
+    --hidden-import keyring.backends.win32 `
+    --hidden-import keyring.backends.fail `
+    --hidden-import keyring.backends.null `
+    main.py
 }
 
 Write-Host "[Build] Packaging zip..."

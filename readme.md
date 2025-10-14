@@ -78,9 +78,9 @@ See also: `DOCS/project-architecture.md`.
 - Return processing and last balance handling
 
 ### 🔒 Security
-- Encrypted database: AES‑256‑GCM file‑level encryption
-- Password hashing: Argon2 with per‑install salt (QSettings)
-- Secure settings store: minimal secrets via QSettings
+- Encrypted database: AES-256-GCM file-level encryption
+- Password hashing: Argon2 with hashes stored in the OS keyring (Python `keyring`)
+- Secure settings store: non-sensitive preferences via QSettings
 
 ### 🖨️ Printing & Reporting
 - Print‑ready estimate layouts with INR formatting
@@ -123,6 +123,8 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+> 🔐 The app relies on the operating system keyring for storing password hashes. Windows Credential Manager and macOS Keychain work out of the box. On Linux, install a SecretService-compatible keyring (for example `gnome-keyring`) or configure an alternative backend before launching the app.
+
 ## ▶️ Usage
 
 Run the application:
@@ -134,12 +136,13 @@ python main.py
 First run notes:
 - You will be prompted to create a password.
 - The password encrypts the local database file at `database/estimation.db`.
-- Keep this password safe — encrypted data cannot be recovered without it.
+- Keep this password safe - encrypted data cannot be recovered without it.
+- Hashed credentials are stored in the system keyring; ensure your OS user account can access the default credential vault.
 
 ## 🔒 Security
 
-- Encryption: AES‑256‑GCM with per‑install salt stored via QSettings
-- Passwords: Argon2 hashing (passlib) with strong parameters
+- Encryption: AES-256-GCM with per-install salt stored via QSettings
+- Passwords: Argon2 hashing (passlib) with hashes persisted in the OS keyring (Python `keyring`)
 - Files: Encrypted DB at `database/estimation.db` (ignored in Git)
 - Logs: Written to `logs/` (ignored); avoid logging sensitive data
 
@@ -182,7 +185,7 @@ Refer to `DOCS/testing-implementation-playbook.md` for the current pytest plan. 
 ### Build Locally (Windows)
 - Prereqs: Python 3.11+, PowerShell
 - Run: `pwsh scripts/build_windows.ps1`
-- One‑file exe: add `-OneFile`
+- One‑file exe: add `-OneFile` (bundles keyring and Argon2 hidden imports)
 - Output: `dist/SilverEstimate.exe` or versioned zip from script
 
 ### GitHub Release (Windows CI)

@@ -57,8 +57,13 @@ def _set_row(widget, row, item):
     table.setItem(row, COL_WAGE_RATE, QTableWidgetItem(str(item["wage_rate"])))
     table.setItem(row, COL_PIECES, QTableWidgetItem(str(item["pieces"])))
     widget.current_row = row
-    widget.calculate_net_weight()
-    widget.calculate_totals()
+    net = max(0.0, float(item["gross"]) - float(item["poly"]))
+    fine = net * (float(item["purity"]) / 100.0)
+    wage = net * float(item["wage_rate"])
+
+    table.setItem(row, COL_NET_WT, QTableWidgetItem(f"{net:.3f}"))
+    table.setItem(row, COL_FINE_WT, QTableWidgetItem(f"{fine:.3f}"))
+    table.setItem(row, COL_WAGE_AMT, QTableWidgetItem(f"{wage:.0f}"))
     widget._update_row_type_visuals(row)
 
     type_item = table.item(row, COL_TYPE) or QTableWidgetItem()
@@ -70,11 +75,92 @@ def _set_row(widget, row, item):
         type_item.setText("No")
     table.setItem(row, COL_TYPE, type_item)
 
+    widget.calculate_totals()
+
     return table
 
 
+class _RepositoryStub:
+    def __init__(self, db):
+        self.db = db
+
+    def generate_voucher_no(self):
+        return self.db.generate_voucher_no()
+
+    def load_estimate(self, voucher_no):
+        loader = getattr(self.db, "get_estimate_by_voucher", None)
+        if callable(loader):
+            return loader(voucher_no)
+        return None
+
+    def fetch_item(self, code):
+        return self.db.get_item_by_code(code)
+
+    def estimate_exists(self, voucher_no):
+        return bool(self.load_estimate(voucher_no))
+
+    def notify_silver_bars_for_estimate(self, voucher_no):
+        deleter = getattr(self.db, "delete_silver_bars_for_estimate", None)
+        if callable(deleter):
+            deleter(voucher_no)
+
+    def save_estimate(self, voucher_no, date, silver_rate, regular_items, return_items, totals):
+        saver = getattr(self.db, "save_estimate_with_returns", None)
+        if callable(saver):
+            return bool(
+                saver(
+                    voucher_no,
+                    date,
+                    silver_rate,
+                    list(regular_items or []),
+                    list(return_items or []),
+                    dict(totals or {}),
+                )
+            )
+        return True
+
+    def fetch_silver_bars_for_estimate(self, voucher_no):
+        fetcher = getattr(self.db, "get_silver_bars", None)
+        if callable(fetcher):
+            rows = fetcher(estimate_voucher_no=voucher_no) or []
+            return [dict(row) for row in rows]
+        return []
+
+    def update_silver_bar(self, bar_id, weight, purity):
+        updater = getattr(self.db, "update_silver_bar_values", None)
+        if callable(updater):
+            return bool(updater(bar_id, weight, purity))
+        return True
+
+    def add_silver_bar(self, voucher_no, weight, purity):
+        adder = getattr(self.db, "add_silver_bar", None)
+        if callable(adder):
+            return adder(voucher_no, weight, purity)
+        return None
+
+    def last_error(self):
+        return getattr(self.db, "last_error", None)
+
+    def delete_estimate(self, voucher_no):
+        deleter = getattr(self.db, "delete_single_estimate", None)
+        if callable(deleter):
+            return bool(deleter(voucher_no))
+        return True
+
+
 def _make_widget(db_manager):
-    return EstimateEntryWidget(db_manager, types.SimpleNamespace(show_inline_status=lambda *a, **k: None))
+    main_window_stub = types.SimpleNamespace(
+        show_inline_status=lambda *a, **k: None,
+        show_silver_bars=lambda: None,
+    )
+    repository = _RepositoryStub(db_manager)
+    widget = EstimateEntryWidget(db_manager, main_window_stub, repository)
+    widget.presenter.handle_item_code = lambda row, code: False
+    try:
+        widget.item_table.cellChanged.disconnect(widget.handle_cell_changed)
+    except TypeError:
+        pass
+    return widget
 
 def test_widget_generates_voucher_on_init(qt_app, fake_db):
     widget = _make_widget(fake_db)

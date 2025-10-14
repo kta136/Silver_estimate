@@ -1,12 +1,8 @@
 #!/usr/bin/env python
-# Added QStyledItemDelegate, QLineEdit, QMessageBox
-from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QShortcut, QTableWidgetItem, QCheckBox,
-                             QMessageBox, QStyledItemDelegate, QLineEdit)
-from PyQt5.QtCore import Qt, QTimer, QLocale
+from PyQt5.QtWidgets import QWidget, QShortcut, QTableWidgetItem, QMessageBox
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QKeySequence
 from silverestimate.infrastructure.settings import get_app_settings
-# Added QKeySequence, QColor, QDoubleValidator, QIntValidator
-from PyQt5.QtGui import QKeySequence, QColor, QDoubleValidator, QIntValidator
-# Import the UI class AND the Delegate class AND the Constants
 from .estimate_entry_ui import (
     EstimateUI,
     NumericDelegate,
@@ -20,6 +16,7 @@ from .estimate_entry_ui import (
 )
 from .estimate_entry_logic import EstimateLogic
 from .inline_status import InlineStatusController
+from silverestimate.presenter import EstimateEntryPresenter
 
 class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
     """Widget for silver estimate entry and management.
@@ -27,13 +24,14 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
     Combines UI and logic, uses validation delegate, interacts with status bar.
     """
 
-    def __init__(self, db_manager, main_window): # Accept main_window
+    def __init__(self, db_manager, main_window, repository):  # Accept main_window and presenter repository
         super().__init__()
         # Explicitly call EstimateLogic.__init__() to initialize the logger
         EstimateLogic.__init__(self)
 
         # Set up database manager and main window reference
         self.db_manager = db_manager
+        self.presenter = EstimateEntryPresenter(self, repository)
         self.main_window = main_window # Store reference
         # Flag to prevent loading estimates during initialization
         self.initializing = True
@@ -80,9 +78,25 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
 
         # Make sure we start with exactly one empty row
         self.clear_all_rows()
-        self.add_empty_row() # This now focuses correctly
+        self.add_empty_row()  # This now focuses correctly
+
         # Generate a new voucher number before signals hook up to avoid unintended loads
-        self.generate_voucher_silent()
+        if self.presenter is None:
+            self.logger.error("Presenter unavailable for initial voucher generation.")
+        else:
+            try:
+                self.presenter.generate_voucher(silent=True)
+                self.logger.info("Generated new voucher silently.")
+                if hasattr(self, "delete_estimate_button"):
+                    try:
+                        self.delete_estimate_button.setEnabled(False)
+                    except Exception:
+                        pass
+                self._estimate_loaded = False
+            except Exception as exc:
+                self.logger.error(
+                    "Error generating voucher number silently: %s", exc, exc_info=True
+                )
 
         # Connect signals after initialization; skip load on startup
         self.connect_signals(skip_load_estimate=True)
@@ -789,56 +803,4 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
             self.voucher_edit.editingFinished.connect(self.safe_load_estimate)
 
     # Removed _save_table_font_size_setting as saving is handled by MainWindow
-
-    def generate_voucher_silent(self):
-        """Generate a new voucher number without triggering signals."""
-        try:
-            # Get a new voucher number from the database
-            voucher_no = self.db_manager.generate_voucher_no()
-
-            # Temporarily block signals from the voucher edit field
-            self.voucher_edit.blockSignals(True)
-
-            # Set the voucher number
-            self.voucher_edit.setText(voucher_no)
-
-            # Unblock signals
-            self.voucher_edit.blockSignals(False)
-
-            self.logger.info(f"Generated new voucher silently: {voucher_no}")
-            # New voucher implies no existing record loaded; disable delete button
-            try:
-                if hasattr(self, 'delete_estimate_button'):
-                    self.delete_estimate_button.setEnabled(False)
-            except Exception:
-                pass
-        except Exception as e:
-            self.logger.error(f"Error generating voucher number silently: {str(e)}", exc_info=True)
-            # Don't show error message during initialization
-
-    def connect_load_estimate_signal(self):
-        """
-        Manually connect the load_estimate signal.
-        This should be called when the user wants to load an estimate.
-        """
-        try:
-            # First disconnect if already connected to avoid multiple connections
-            try:
-                self.voucher_edit.editingFinished.disconnect(self.safe_load_estimate)
-            except TypeError:
-                pass  # It wasn't connected, which is fine
-
-            # Connect the signal
-            self.voucher_edit.editingFinished.connect(self.safe_load_estimate)
-            self.logger.info("Manually connected load_estimate signal")
-
-            # Add a button to the UI to load the estimate
-            if not hasattr(self, 'load_button') or self.load_button is None:
-                from PyQt5.QtWidgets import QPushButton
-                self.load_button = QPushButton("Load Estimate", self)
-                self.load_button.clicked.connect(self.safe_load_estimate)
-                self.header_layout.addWidget(self.load_button)
-                self.logger.info("Added Load Estimate button to UI")
-        except Exception as e:
-            self.logger.error(f"Error connecting load_estimate signal: {str(e)}", exc_info=True)
 

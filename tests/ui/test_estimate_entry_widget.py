@@ -8,6 +8,7 @@ from silverestimate.ui.estimate_entry_logic import (
     COL_CODE,
     COL_FINE_WT,
     COL_GROSS,
+    COL_ITEM_NAME,
     COL_NET_WT,
     COL_PIECES,
     COL_POLY,
@@ -61,8 +62,8 @@ def _set_row(widget, row, item):
     fine = net * (float(item["purity"]) / 100.0)
     wage = net * float(item["wage_rate"])
 
-    table.setItem(row, COL_NET_WT, QTableWidgetItem(f"{net:.3f}"))
-    table.setItem(row, COL_FINE_WT, QTableWidgetItem(f"{fine:.3f}"))
+    table.setItem(row, COL_NET_WT, QTableWidgetItem(f"{net:.2f}"))
+    table.setItem(row, COL_FINE_WT, QTableWidgetItem(f"{fine:.2f}"))
     table.setItem(row, COL_WAGE_AMT, QTableWidgetItem(f"{wage:.0f}"))
     widget._update_row_type_visuals(row)
 
@@ -179,8 +180,9 @@ def test_widget_calculates_totals(qt_app, fake_db):
         regular_item(gross=10, poly=1, purity=92.5, wage_rate=10),
     )
 
-    assert table.item(0, COL_NET_WT).text() == "9.000"
-    assert table.item(0, COL_FINE_WT).text() == "8.325"
+    assert table.item(0, COL_NET_WT).text() == "9.00"
+    expected_fine = format((10 - 1) * (92.5 / 100.0), ".2f")
+    assert table.item(0, COL_FINE_WT).text() == expected_fine
     assert table.item(0, COL_WAGE_AMT).text() == "90"
 
     assert widget.total_gross_label.text() == "10.0"
@@ -313,3 +315,22 @@ def test_toggle_modes_updates_empty_row(qt_app, fake_db):
     widget.toggle_silver_bar_mode()
     last_row = widget.item_table.rowCount() - 1
     assert widget.item_table.item(last_row, COL_TYPE).text() == "No"
+
+
+def test_populate_row_updates_code_cell(qt_app, fake_db):
+    widget = _make_widget(fake_db)
+    try:
+        table = widget.item_table
+        if table.rowCount() == 0:
+            widget.add_empty_row()
+
+        table.setItem(0, COL_CODE, QTableWidgetItem("old-code"))
+        widget.populate_row(
+            0,
+            {"code": "new123", "name": "New Item", "purity": 91.6, "wage_rate": 10.0},
+        )
+
+        assert table.item(0, COL_CODE).text() == "NEW123"
+        assert table.item(0, COL_ITEM_NAME).text() == "New Item"
+    finally:
+        widget.deleteLater()

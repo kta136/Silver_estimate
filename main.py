@@ -16,6 +16,7 @@ import PyQt5.QtCore as QtCore
 
 # Import the custom dialogs and modules
 from silverestimate.ui.estimate_entry import EstimateEntryWidget
+from silverestimate.services.estimate_repository import DatabaseEstimateRepository
 # Lazy imports: ItemMasterWidget, SettingsDialog, SilverBarHistoryDialog
 from silverestimate.controllers.live_rate_controller import LiveRateController
 from silverestimate.controllers.navigation_controller import NavigationController
@@ -92,7 +93,8 @@ class MainWindow(QMainWindow):
 
         try:
             self.logger.info("Creating EstimateEntryWidget...")
-            self.estimate_widget = EstimateEntryWidget(self.db, self)
+            repository = DatabaseEstimateRepository(self.db)
+            self.estimate_widget = EstimateEntryWidget(self.db, self, repository)
 
             self.logger.info("Deferring ItemMasterWidget creation (lazy-load)")
             self.item_master_widget = None

@@ -246,3 +246,34 @@ def test_estimate_repository_load_preserves_item_types(fake_db):
     assert items['BAR001']['is_silver_bar'] == 1
     assert items['BAR001']['net_wt'] == pytest.approx(5.0)
     assert items['BAR001']['fine'] == pytest.approx(4.995)
+
+def test_save_estimate_accepts_mixed_case_item_codes(fake_db):
+    repo = EstimatesRepository(fake_db)
+    items_repo = ItemsRepository(fake_db)
+    items_repo.add_item('mix001', 'Mixed Item', 92.5, 'WT', 10.0)
+
+    payload = regular_item(
+        code='MIX001',
+        name='Mixed Item',
+        gross=10.0,
+        poly=0.0,
+        net_wt=10.0,
+        purity=92.5,
+        wage_rate=10.0,
+        pieces=1,
+        wage=100.0,
+        fine=9.25,
+    )
+    totals = estimate_totals(total_gross=10.0, total_net=10.0, net_fine=9.25, net_wage=100.0)
+
+    saved = repo.save_estimate_with_returns(
+        voucher_no='405',
+        date='2025-01-06',
+        silver_rate=72000.0,
+        regular_items=[payload],
+        return_items=[],
+        totals=totals,
+    )
+
+    assert saved
+    assert fake_db.last_error is None

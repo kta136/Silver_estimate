@@ -364,11 +364,18 @@ class EstimatesRepository:
         if not codes:
             return []
         unique_codes = list(dict.fromkeys(codes))
+        if not unique_codes:
+            return []
+
+        normalized_map = {code: code.upper() for code in unique_codes}
         placeholders = ",".join("?" for _ in unique_codes)
         try:
-            cursor.execute(f"SELECT code FROM items WHERE code IN ({placeholders})", unique_codes)
+            cursor.execute(
+                f"SELECT code FROM items WHERE UPPER(code) IN ({placeholders})",
+                [normalized_map[code] for code in unique_codes],
+            )
             rows = cursor.fetchall()
-            found = {row['code'] for row in rows}
+            found = {(row["code"] or "").upper() for row in rows}
         except sqlite3.Error as exc:
             self._logger.error(
                 "Failed to verify item codes before saving estimate: %s",
@@ -376,7 +383,7 @@ class EstimatesRepository:
                 exc_info=True,
             )
             return []
-        return [code for code in unique_codes if code not in found]
+        return [code for code in unique_codes if normalized_map[code] not in found]
 
     def _collect_item_rows(self, items: Iterable[dict]) -> dict[str, int]:
         row_map: dict[str, int] = {}

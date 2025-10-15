@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from PyQt5.QtWidgets import QMessageBox, QDialog
+from PyQt5.QtWidgets import QMessageBox
 
 
 class NavigationService:
@@ -124,20 +124,16 @@ class NavigationService:
             )
             return
         try:
-            from silverestimate.ui.estimate_history import EstimateHistoryDialog
-
-            history_dialog = EstimateHistoryDialog(
-                self.db, main_window_ref=self.main_window, parent=self.main_window
-            )
-            if history_dialog.exec_() == QDialog.Accepted:
-                voucher_no = history_dialog.selected_voucher
-                if voucher_no:
-                    widget.voucher_edit.setText(voucher_no)
-                    if hasattr(widget, 'safe_load_estimate'):
-                        widget.safe_load_estimate()
-                    else:
-                        widget.load_estimate()
-                    self.show_estimate()
+            show_history = getattr(widget, 'show_history', None)
+            if not callable(show_history):
+                QMessageBox.critical(
+                    self.main_window,
+                    "Error",
+                    "Estimate history cannot be opened from this view.",
+                )
+                return
+            show_history()
+            self.show_estimate()
         except Exception as exc:
             self._logger.error("Error opening estimate history: %s", exc, exc_info=True)
             QMessageBox.critical(

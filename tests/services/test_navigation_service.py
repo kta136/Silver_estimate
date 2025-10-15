@@ -208,38 +208,17 @@ def test_show_estimate_history_loads_selected_voucher(monkeypatch):
         message_box,
     )
 
-    voucher_calls = []
-
-    class _Voucher:
-        def setText(self, value):
-            voucher_calls.append(value)
-
-    load_calls = []
-
     class _EstimateWidget:
         def __init__(self):
-            self.voucher_edit = _Voucher()
+            self.calls = []
 
-        def safe_load_estimate(self):
-            load_calls.append("safe")
+        def show_history(self):
+            self.calls.append("history")
 
     estimate_widget = _EstimateWidget()
 
     main_window = types.SimpleNamespace(
         estimate_widget=estimate_widget,
-    )
-
-    class _HistoryDialog:
-        def __init__(self, db, main_window_ref, parent):
-            self.selected_voucher = "V123"
-
-        def exec_(self):
-            return QDialog.Accepted
-
-    monkeypatch.setitem(
-        sys.modules,
-        "silverestimate.ui.estimate_history",
-        types.SimpleNamespace(EstimateHistoryDialog=_HistoryDialog),
     )
 
     service = NavigationService(main_window, stack, logger=logging.getLogger("test-history"))
@@ -248,7 +227,6 @@ def test_show_estimate_history_loads_selected_voucher(monkeypatch):
 
     service.show_estimate_history()
 
-    assert voucher_calls == ["V123"]
-    assert load_calls == ["safe"]
+    assert estimate_widget.calls == ["history"]
     assert show_calls == ["show"]
     assert message_box.calls == []

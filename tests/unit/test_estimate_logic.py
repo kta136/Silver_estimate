@@ -16,6 +16,7 @@ from silverestimate.ui.estimate_entry_logic import (
     COL_WAGE_RATE,
     EstimateLogic,
 )
+from silverestimate.services.estimate_calculator import compute_fine_weight, compute_net_weight
 
 
 class _LabelStub:
@@ -36,6 +37,8 @@ def _prepare_logic_with_table(rows=1, item_lookup=None):
     logic.current_column = COL_GROSS
     if item_lookup is None:
         item_lookup = lambda code: {"wage_type": "WT"}
+    repository_stub = SimpleNamespace(fetch_item=item_lookup)
+    logic.presenter = SimpleNamespace(repository=repository_stub)
     logic.db_manager = SimpleNamespace(get_item_by_code=item_lookup)
     logic.request_totals_recalc = lambda: None
     return logic, table
@@ -52,8 +55,9 @@ def test_calculate_net_and_fine_updates_cells(qt_app):
 
     logic.calculate_net_weight()
 
-    assert table.item(0, COL_NET_WT).text() == "9.000"
-    assert table.item(0, COL_FINE_WT).text() == "8.325"
+    assert table.item(0, COL_NET_WT).text() == "9.00"
+    expected_fine = format((10.0 - 1.0) * (92.5 / 100.0), ".2f")
+    assert table.item(0, COL_FINE_WT).text() == expected_fine
     assert table.item(0, COL_WAGE_AMT).text() == "90"
 
 
@@ -231,7 +235,7 @@ def test_calculate_fine_zero_inputs(qt_app):
 
     logic.calculate_fine()
 
-    assert table.item(0, COL_FINE_WT).text() == "0.000"
+    assert table.item(0, COL_FINE_WT).text() == "0.00"
 
 
 def test_calculate_fine_full_purity(qt_app):
@@ -265,8 +269,10 @@ if _HYPOTHESIS_AVAILABLE:
 
         actual_net = float(table.item(0, COL_NET_WT).text())
         actual_fine = float(table.item(0, COL_FINE_WT).text())
-        assert actual_net == pytest.approx(case.net_weight, abs=1e-3)
-        assert actual_fine == pytest.approx(case.expected_fine, abs=1e-3)
+        expected_net = float(format(compute_net_weight(case.gross, case.poly), ".2f"))
+        expected_fine = float(format(compute_fine_weight(expected_net, case.purity), ".2f"))
+        assert actual_net == pytest.approx(expected_net, abs=1e-6)
+        assert actual_fine == pytest.approx(expected_fine, abs=1e-6)
 
     @given(case=wage_calculation_cases())
     def test_calculate_wage_property(qt_app, case):

@@ -117,7 +117,7 @@ def test_main_window_actions(qtbot, mocker, db_manager):
 Focus on verifying command registration, signal wiring, and error dialogs under mocked failures.
 
 ## Coverage Priorities
-1. `silverestimate/ui/estimate_entry_logic.py` - ensure totals, fines, wages, and validation paths are covered.
+1. `silverestimate/ui/estimate_entry_logic/` - ensure totals, fines, wages, and validation paths are covered.
 2. `silverestimate/persistence/database_manager.py` - validate decrypt/encrypt flows, flush scheduler triggers, migration failures.
 3. `silverestimate/services/live_rate_service.py` - confirm timer behavior, fallback logic, error handling.
 4. `silverestimate/services/auth_service.py` - test first-run setup, password verification, data wipe path.

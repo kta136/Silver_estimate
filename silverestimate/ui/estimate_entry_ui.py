@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QFormLayout, # Added QWidget, QFormLayout
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFormLayout, # Added QWidget, QFormLayout
                              QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
                              QHeaderView, QDoubleSpinBox, QDateEdit, QAbstractItemView,
                               QCheckBox, QStyledItemDelegate, QFrame, QSpinBox, QToolButton, QSizePolicy)
@@ -51,7 +51,7 @@ class NumericDelegate(QStyledItemDelegate):
              return editor # Return basic editor for Code/Name/Type
 
         # Install event filter ONLY on editors with validators we manage
-        editor.installEventFilter(self)
+        editor.installEventFilter(self)                                                                                               
         return editor
 
     def setEditorData(self, editor, index):
@@ -248,7 +248,6 @@ class EstimateUI:
         self.return_toggle_button = QPushButton("↩ Return Items")
         self.return_toggle_button.setToolTip("Toggle Return Item entry mode for new rows\nKeyboard: Ctrl+R\nNew rows will be marked as Return items\nAffects calculations and item type")
         self.return_toggle_button.setCheckable(True)
-        # Set initial styling for inactive state
         self.return_toggle_button.setStyleSheet("""
             QPushButton {
                 background-color: palette(button);
@@ -267,7 +266,6 @@ class EstimateUI:
         self.silver_bar_toggle_button = QPushButton("🥈 Silver Bars")
         self.silver_bar_toggle_button.setToolTip("Toggle Silver Bar entry mode for new rows\nKeyboard: Ctrl+B\nNew rows will be marked as Silver Bar items\nCannot use both Return and Silver Bar modes")
         self.silver_bar_toggle_button.setCheckable(True)
-        # Set initial styling for inactive state
         self.silver_bar_toggle_button.setStyleSheet("""
             QPushButton {
                 background-color: palette(button);
@@ -559,8 +557,13 @@ class EstimateUI:
     def _setup_totals(self):
         """Set up the totals section with Breakdown | [Stretch] | Final layout."""
 
-        main_totals_layout = QHBoxLayout()
+        totals_container = QWidget()
+        totals_container.setObjectName("TotalsContainer")
+        totals_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
+        main_totals_layout = QHBoxLayout(totals_container)
         main_totals_layout.setSpacing(15) # Spacing between sections
+        main_totals_layout.setContentsMargins(12, 8, 18, 14)
 
         # Helper function to create a form layout for a breakdown section
         def create_breakdown_form(title, labels_attrs):
@@ -636,6 +639,8 @@ class EstimateUI:
         # Final Calculation Section (using QFormLayout directly)
         final_calc_form = QFormLayout()
         final_calc_form.setSpacing(8)
+        final_calc_form.setRowWrapPolicy(QFormLayout.DontWrapRows)
+        final_calc_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
         final_title_label = QLabel("Final Calculation")
         # Increase title font size
         final_title_font = final_title_label.font()
@@ -649,6 +654,8 @@ class EstimateUI:
         self.net_fine_label = QLabel("0.0")
         self.net_fine_label.setStyleSheet("font-weight: bold;")
         self.net_fine_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.net_fine_label.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
+        self.net_fine_label.setMinimumWidth(100)
         net_fine_header = QLabel("Net Fine Wt:")
         # Increase font size
         net_fine_font = self.net_fine_label.font(); net_fine_font.setPointSize(net_fine_font.pointSize() + 1); self.net_fine_label.setFont(net_fine_font)
@@ -659,6 +666,8 @@ class EstimateUI:
         self.net_wage_label = QLabel("0")
         self.net_wage_label.setStyleSheet("font-weight: bold;")
         self.net_wage_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.net_wage_label.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
+        self.net_wage_label.setMinimumWidth(100)
         net_wage_header = QLabel("Net Wage:")
         # Increase font size
         net_wage_font = self.net_wage_label.font(); net_wage_font.setPointSize(net_wage_font.pointSize() + 1); self.net_wage_label.setFont(net_wage_font)
@@ -675,6 +684,8 @@ class EstimateUI:
         self.grand_total_label = QLabel("0")
         self.grand_total_label.setStyleSheet("font-weight: bold;")
         self.grand_total_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.grand_total_label.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
+        self.grand_total_label.setMinimumWidth(140)
         grand_total_header = QLabel("Grand Total:")
         gth_font = grand_total_header.font(); gth_font.setBold(True); grand_total_header.setFont(gth_font)
         final_calc_form.addRow(grand_total_header, self.grand_total_label)
@@ -684,7 +695,7 @@ class EstimateUI:
         main_totals_layout.addLayout(final_calc_form)
 
         # Add the main horizontal layout to the widget's main vertical layout
-        self.layout.addLayout(main_totals_layout)
+        self.layout.addWidget(totals_container)
 
         # Tab order: header fields -> table
         try:

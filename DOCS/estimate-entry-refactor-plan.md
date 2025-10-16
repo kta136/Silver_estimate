@@ -2,15 +2,17 @@
 
 ## Purpose & Scope
 - Carve the monolithic estimate entry UI logic into smaller, testable units without breaking existing workflows.
-- Cover `silverestimate/ui/estimate_entry_logic.py` (~1.6k LOC) and the widgets/services it drives, with an emphasis on introducing presenter/service seams that can be unit tested.
+- Cover the estimate-entry UI logic package (now `silverestimate/ui/estimate_entry_logic/`) and the widgets/services it drives, with an emphasis on introducing presenter/service seams that can be unit tested.
 - Provide a concrete sequence of steps, owned code locations, and test expectations to guide the refactor.
 
+> **Status update (2025-10-16):** The legacy `estimate_entry_logic.py` module has been split into a package composed of `_EstimateBaseMixin`, `_EstimateTableMixin`, `_EstimatePersistenceMixin`, and `_EstimateDialogsMixin`, re-exported via `silverestimate/ui/estimate_entry_logic/__init__.py`. References below are kept for historical context; ongoing work should target the new package modules.
+
 ## Current State Summary
-- `EstimateLogic` mixes UI wiring, domain calculations, persistence, and async workflows inside a single mixin used by `EstimateEntryWidget` (`silverestimate/ui/estimate_entry_logic.py:29` & `silverestimate/ui/estimate_entry.py:24`).
-- UI signal wiring and widget state management live alongside data operations (`silverestimate/ui/estimate_entry_logic.py:72`, `silverestimate/ui/estimate_entry_logic.py:285`, `silverestimate/ui/estimate_entry_logic.py:355`).
-- Row/total calculations are intertwined with widget manipulation instead of pure functions (`silverestimate/ui/estimate_entry_logic.py:625`, `silverestimate/ui/estimate_entry_logic.py:742`).
-- Data access uses `db_manager` directly from the UI layer, including inline SQL for specialised flows (`silverestimate/ui/estimate_entry_logic.py:503`, `silverestimate/ui/estimate_entry_logic.py:1173`).
-- External concerns such as printing and live-rate fetching are triggered synchronously from the widget (`silverestimate/ui/estimate_entry_logic.py:159`, `silverestimate/ui/estimate_entry_logic.py:1287`), making isolation and failure handling hard to test.
+- `EstimateLogic` mixes UI wiring, domain calculations, persistence, and async workflows inside a single mixin used by `EstimateEntryWidget` (see `silverestimate/ui/estimate_entry_logic/base.py` and `silverestimate/ui/estimate_entry.py`).
+- UI signal wiring and widget state management live alongside data operations (`silverestimate/ui/estimate_entry_logic/base.py`, `silverestimate/ui/estimate_entry_logic/table.py`).
+- Row/total calculations are intertwined with widget manipulation instead of pure functions (`silverestimate/ui/estimate_entry_logic/table.py`).
+- Data access uses `db_manager` directly from the UI layer, including inline SQL for specialised flows (`silverestimate/ui/estimate_entry_logic/persistence.py`).
+- External concerns such as printing and live-rate fetching are triggered synchronously from the widget (`silverestimate/ui/estimate_entry_logic/persistence.py`, `silverestimate/ui/estimate_entry_logic/base.py`), making isolation and failure handling hard to test.
 - `EstimateEntryWidget` still holds keyboard routing, mode toggles, and persistence helpers (`silverestimate/ui/estimate_entry.py:220`, `silverestimate/ui/estimate_entry.py:300`, `silverestimate/ui/estimate_entry.py:420`), reinforcing the tight coupling.
 
 ## Pain Points
@@ -34,7 +36,7 @@
    - `EstimateHeader`, `EstimateLineItem`, `EstimateTotals`, `SilverBarAssignment`.
    - Capture validation rules and derived properties that do not require Qt.
 2. **Calculation service**
-   - Move `calculate_net_weight`, `calculate_fine`, `calculate_wage`, `calculate_totals` logic into pure functions (`silverestimate/ui/estimate_entry_logic.py:625`, `silverestimate/ui/estimate_entry_logic.py:742`).
+   - Move `calculate_net_weight`, `calculate_fine`, `calculate_wage`, `calculate_totals` logic into pure functions (currently in `_EstimateTableMixin` within `silverestimate/ui/estimate_entry_logic/table.py`).
    - Presenter invokes these functions and only pushes formatted results into the view.
 3. **Repository abstraction**
    - Define `EstimateRepository` protocol wrapping existing `db_manager` methods used by the UI (`generate_voucher_no`, `get_item_by_code`, `save_estimate_with_returns`, etc.).
@@ -62,15 +64,15 @@
 
 ### Phase 2 - Repository & Service Seams
 - [x] Defined `EstimateRepository` protocol and a `DatabaseEstimateRepository` adapter to wrap the existing `db_manager` calls (`silverestimate/services/estimate_repository.py`).
-- [x] Updated `EstimateLogic` to resolve all persistence operations through the repository (item lookup, voucher generation, load/save, silver bar sync, deletion) while keeping dialog helpers on the legacy manager (`silverestimate/ui/estimate_entry_logic.py`).
+- [x] Updated `EstimateLogic` to resolve all persistence operations through the repository (item lookup, voucher generation, load/save, silver bar sync, deletion) while keeping dialog helpers on the legacy manager (`silverestimate/ui/estimate_entry_logic/persistence.py`).
 - [ ] Extract silver bar persistence heuristics from `save_estimate` into dedicated service helpers and cover the adapter with unit tests.
 
 ### Phase 3 - Presenter Introduction
 - [x] Created presenter-facing view contract and presenter module (`silverestimate/presenter/estimate_entry_presenter.py`), defining `EstimateEntryViewState`, `EstimateEntryView`, and `EstimateEntryPresenter`.
-- [x] Instantiated the presenter inside `EstimateEntryWidget` and routed voucher generation plus totals recomputation through it (`silverestimate/ui/estimate_entry.py`, `silverestimate/ui/estimate_entry_logic.py`).
-- [x] Routed item lookup and save workflows through the presenter, centralising persistence and silver-bar synchronisation (`silverestimate/ui/estimate_entry_logic.py`, `silverestimate/presenter/estimate_entry_presenter.py`).
-- [x] Migrated estimate loading to the presenter with a dedicated `LoadedEstimate` data flow, keeping UI updates in a single helper (`silverestimate/ui/estimate_entry_logic.py`, `silverestimate/presenter/estimate_entry_presenter.py`).
-- [x] Delegated estimate deletion to the presenter to consolidate repository usage and simplify UI error handling (`silverestimate/ui/estimate_entry_logic.py`, `silverestimate/presenter/estimate_entry_presenter.py`).
+- [x] Instantiated the presenter inside `EstimateEntryWidget` and routed voucher generation plus totals recomputation through it (`silverestimate/ui/estimate_entry.py`, `silverestimate/ui/estimate_entry_logic/__init__.py`).
+- [x] Routed item lookup and save workflows through the presenter, centralising persistence and silver-bar synchronisation (`silverestimate/ui/estimate_entry_logic/persistence.py`, `silverestimate/presenter/estimate_entry_presenter.py`).
+- [x] Migrated estimate loading to the presenter with a dedicated `LoadedEstimate` data flow, keeping UI updates in a single helper (`silverestimate/ui/estimate_entry_logic/persistence.py`, `silverestimate/presenter/estimate_entry_presenter.py`).
+- [x] Delegated estimate deletion to the presenter to consolidate repository usage and simplify UI error handling (`silverestimate/ui/estimate_entry_logic/persistence.py`, `silverestimate/presenter/estimate_entry_presenter.py`).
 - [x] Migrate modal dialog flows (history, silver bar management) onto the presenter-enabled view contract.
 - [x] Provide presenter-focused unit tests using a fake view capturing method calls (`tests/unit/test_estimate_entry_presenter.py`).
 
@@ -91,7 +93,7 @@
 - **Integration shims**: Lightweight Qt test (or smoke script) to ensure signals still connect post-migration before full GUI QA.
 
 ## Risks & Open Questions
-- **Threading/async**: `refresh_silver_rate` currently mixes threading and UI updates (`silverestimate/ui/estimate_entry_logic.py:1287`). Decide whether to keep QTimer-based callbacks or move to a dedicated worker abstraction.
+- **Threading/async**: `refresh_silver_rate` currently mixes threading and UI updates (`silverestimate/ui/estimate_entry_logic/base.py`). Decide whether to keep QTimer-based callbacks or move to a dedicated worker abstraction.
 - **Dialog ownership**: Presenter will need a strategy for modal dialogs (`ItemSelectionDialog`, `EstimateHistoryDialog`); ensure view contract exposes hooks to avoid presenter importing Qt modules.
 - **State synchronisation**: Presenter must keep widget selection/focus consistent; confirm we can represent selection state inside domain models or view contract without regressing keyboard navigation.
 - **Incremental delivery**: Each phase should ship as separate PRs to keep reviewable; consider feature flags to guard partially migrated behaviour.

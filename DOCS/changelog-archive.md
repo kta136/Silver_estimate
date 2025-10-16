@@ -41,7 +41,7 @@
         *   `get_bars_in_list(list_id)`
         *   `get_available_bars()` (status='In Stock', list_id IS NULL).
 
-3.  **Estimate Entry Logic (`silverestimate/ui/estimate_entry_logic.py`):**
+3.  **Estimate Entry Logic (`silverestimate/ui/estimate_entry_logic/`):**
     *   Modify `save_estimate`:
         *   If updating an existing estimate (`voucher_no` exists), call `db_manager.delete_silver_bars_for_estimate(voucher_no)` first.
         *   After saving header/items, iterate through current silver bar line items and call `db_manager.add_silver_bar` for each, passing `voucher_no`.
@@ -61,7 +61,7 @@
 - **Objective:** Implemented the planned overhaul for silver bar management.
 - **Files Modified:**
     - `silverestimate/persistence/database_manager.py`: Updated schema (`silver_bars`, `silver_bar_lists`, `bar_transfers`) and related methods (add, get, delete, list management, assign/remove).
-    - `silverestimate/ui/estimate_entry_logic.py`: Modified `save_estimate` to delete old bars and add new bars linked to the estimate voucher.
+    - `silverestimate/ui/estimate_entry_logic/`: Modified `save_estimate` to delete old bars and add new bars linked to the estimate voucher.
     - `silverestimate/ui/silver_bar_management.py`: Rewrote the GUI with separate views for available and listed bars, implemented actions (create list, add/remove bars, edit note, delete list).
     - `silverestimate/ui/print_manager.py`: Updated `_generate_list_details_html` to use the new data structure for list printing.
 - **Key Changes:**
@@ -146,7 +146,7 @@
 ## Enhanced Fix: Preserve Silver Bars in Lists When Editing Estimates (April 24, 2025)
 
 - **Issue:** Even after fixing the `delete_silver_bars_for_estimate` method, there was still an issue with the estimate saving process. When editing an estimate that had silver bars assigned to lists, those bars would be preserved in the database but would not be reflected in the saved estimate data.
-- **File:** `silverestimate/ui/estimate_entry_logic.py`
+- **File:** `silverestimate/ui/estimate_entry_logic/`
 - **Function:** `save_estimate`
 - **Fix:** 
   - Enhanced the save process to be aware of silver bars that are in lists
@@ -169,7 +169,7 @@
      - The function now returns success without deleting anything
      - Added detailed comments explaining the new approach
 
-  2. **silverestimate/ui/estimate_entry_logic.py**:
+  2. **silverestimate/ui/estimate_entry_logic/**:
      - Removed all code that attempted to delete silver bars before saving
      - Simplified the save process to only add new silver bars
      - Maintained compatibility with the existing API
@@ -203,7 +203,7 @@
 ## Fix: Prevent Duplicate Silver Bars When Saving Estimates (April 24, 2025)
 
 - **Issue:** After fixing the cascade deletion problem, we encountered another issue: when saving an estimate multiple times, new silver bars were being created each time, resulting in duplicate bars for the same estimate.
-- **File:** `silverestimate/ui/estimate_entry_logic.py`
+- **File:** `silverestimate/ui/estimate_entry_logic/`
 - **Function:** `save_estimate`
 - **Fix:** 
   - Added a check to see if silver bars already exist for the estimate before creating new ones
@@ -277,7 +277,7 @@
     - Updated save_estimate_with_returns to handle last balance values
   - `estimate_entry_ui.py`:
     - Added "LB" button to the estimate entry screen
-  - `silverestimate/ui/estimate_entry_logic.py`:
+  - `silverestimate/ui/estimate_entry_logic/`:
     - Added show_last_balance_dialog method to prompt for last balance values
     - Connected LB button to the dialog
     - Updated calculate_totals to include last balance in calculations

@@ -176,7 +176,7 @@ Status Key
 ### 9) Error Recovery & Undo
 - Status: 💡 **Medium Priority**
 - Why: Limited undo functionality and error recovery capabilities
-- Files: `silverestimate/ui/estimate_entry_logic.py`
+- Files: `silverestimate/ui/estimate_entry_logic/`
 - How:
   - Add Ctrl+Z undo for recent cell changes
   - Implement auto-save for work-in-progress
@@ -186,7 +186,7 @@ Status Key
 ### 10) Bulk Operations Support
 - Status: 💡 **Low Priority**
 - Why: No support for bulk editing or multi-row operations
-- Files: `silverestimate/ui/estimate_entry_ui.py`, `silverestimate/ui/estimate_entry_logic.py`
+- Files: `silverestimate/ui/estimate_entry_ui.py`, `silverestimate/ui/estimate_entry_logic/`
 - How:
   - Add multi-row selection capability
   - Implement copy/paste functionality for table data
@@ -210,7 +210,7 @@ Status Key
 ### 12) Calculation Optimization
 - Status: 💡 **Low Priority**
 - Why: Real-time calculations trigger on every cell change
-- Files: `silverestimate/ui/estimate_entry_logic.py`
+- Files: `silverestimate/ui/estimate_entry_logic/`
 - How:
   - Debounce calculations with 300ms delay
   - Use progress indicators for complex calculations
@@ -304,7 +304,7 @@ Status Key
 
 ### ✅ Safer Destructive Actions
 - Status: ✅ Implemented
-- Files: `silverestimate/ui/estimate_entry_ui.py`, `silverestimate/ui/estimate_entry_logic.py`, `silverestimate/ui/estimate_entry.py`, `main.py`, `silverestimate/ui/settings_dialog.py`
+- Files: `silverestimate/ui/estimate_entry_ui.py`, `silverestimate/ui/estimate_entry_logic/`, `silverestimate/ui/estimate_entry.py`, `main.py`, `silverestimate/ui/settings_dialog.py`
 
 ### ✅ Keyboard Tab Order
 - Status: ✅ Implemented (header + table focus)
@@ -312,7 +312,7 @@ Status Key
 
 ### ✅ Locale & Currency Formatting
 - Status: ✅ Implemented
-- Files: `silverestimate/ui/estimate_entry_logic.py`, `silverestimate/ui/print_manager.py`
+- Files: `silverestimate/ui/estimate_entry_logic/`, `silverestimate/ui/print_manager.py`
 
 ### ✅ Progress & Responsiveness
 - Status: 🔜 In Progress (async import done)

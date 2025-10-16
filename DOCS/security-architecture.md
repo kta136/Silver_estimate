@@ -162,7 +162,7 @@ def perform_data_wipe(
 ### 2. Temporary File Security
 - Created with restricted permissions
 - Stored in system temp directory
-- Deleted immediately after use
+- Securely wiped on shutdown (configurable recovery register via `settings.ENABLE_TEMP_DB_RECOVERY`)
 - Crash recovery cleanup
 
 ### 3. Error Handling

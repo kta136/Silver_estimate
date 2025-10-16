@@ -2,11 +2,13 @@
 import os
 import threading  # For async debounced flush
 import sqlite3
-import tempfile # For temporary decrypted DB file
+import tempfile  # For temporary decrypted DB file
 import traceback
 import logging
 import time
 from datetime import datetime
+from pathlib import Path
+from typing import Optional
 from silverestimate.security import encryption as crypto_utils
 from silverestimate.persistence import migrations as persistence_migrations
 from silverestimate.persistence.items_repository import ItemsRepository
@@ -16,6 +18,7 @@ from silverestimate.persistence.flush_scheduler import FlushScheduler
 from silverestimate.infrastructure.db_session import ConnectionThreadGuard
 from silverestimate.infrastructure.item_cache import ItemCacheController
 
+from silverestimate.infrastructure import settings as settings_module
 from silverestimate.infrastructure.settings import get_app_settings
 
 # Cryptography imports
@@ -24,6 +27,104 @@ from cryptography.exceptions import InvalidTag # To catch decryption errors
 # Constants
 SALT_KEY = crypto_utils.SALT_SETTINGS_KEY  # Legacy alias for settings key
 KDF_ITERATIONS = crypto_utils.DEFAULT_KDF_ITERATIONS  # PBKDF2 iteration count
+
+
+class _TempDatabaseStore:
+    """Manage lifecycle and optional recovery metadata for plaintext temp DB."""
+
+    SETTINGS_KEY = "security/last_temp_db_path"
+    _WIPE_CHUNK_SIZE = 1024 * 1024  # 1MiB chunks when scrubbing the file
+
+    def __init__(
+        self,
+        *,
+        logger: Optional[logging.Logger] = None,
+        store_metadata: bool = True,
+    ) -> None:
+        self._logger = logger or logging.getLogger(__name__)
+        self._path: Optional[Path] = None
+        self._registered = False
+        self._store_metadata = store_metadata
+
+    @property
+    def path(self) -> Optional[Path]:
+        return self._path
+
+    def create(self, suffix: str = ".sqlite") -> Path:
+        if self._path is not None:
+            raise RuntimeError("Temporary database already initialised.")
+        handle = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        handle.close()
+        self._path = Path(handle.name)
+        return self._path
+
+    def register_for_recovery(self) -> None:
+        if not self._store_metadata or self._path is None or self._registered:
+            return
+        try:
+            settings = get_app_settings()
+            settings.setValue(self.SETTINGS_KEY, str(self._path))
+            settings.sync()
+            self._registered = True
+        except Exception as exc:
+            self._logger.warning("Could not store temp DB path for recovery: %s", exc)
+
+    def cleanup(self, *, preserve: bool = False) -> None:
+        """Securely delete the temp file and clear recovery breadcrumbs."""
+        if not preserve:
+            self._secure_unlink()
+            self._path = None
+            self._registered = False
+            self._clear_settings_entry()
+        else:
+            # Ensure metadata is present for manual recovery.
+            if (
+                self._store_metadata
+                and self._path is not None
+                and not self._registered
+            ):
+                self.register_for_recovery()
+
+    def _secure_unlink(self) -> None:
+        if self._path is None or not self._path.exists():
+            self._clear_settings_entry()
+            return
+        try:
+            with open(self._path, "r+b", buffering=0) as handle:
+                length = handle.seek(0, os.SEEK_END)
+                handle.seek(0)
+                chunk = b"\x00" * self._WIPE_CHUNK_SIZE
+                remaining = length
+                while remaining > 0:
+                    to_write = chunk if remaining >= len(chunk) else b"\x00" * remaining
+                    handle.write(to_write)
+                    remaining -= len(to_write)
+                try:
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                except Exception:
+                    pass
+            os.remove(self._path)
+            self._logger.debug("Temporary database file securely deleted: %s", self._path)
+        except Exception as exc:
+            self._logger.warning("Could not securely delete temporary DB '%s': %s", self._path, exc)
+            try:
+                os.remove(self._path)
+            except Exception:
+                pass
+        finally:
+            self._clear_settings_entry()
+
+    def _clear_settings_entry(self) -> None:
+        if not self._store_metadata or not self._registered:
+            return
+        try:
+            settings = get_app_settings()
+            settings.remove(self.SETTINGS_KEY)
+            settings.sync()
+        except Exception as exc:
+            self._logger.warning("Could not clear temp DB recovery metadata: %s", exc)
+        self._registered = False
 
 class DatabaseManager:
     """
@@ -44,8 +145,7 @@ class DatabaseManager:
         self.password = password
         self.salt = self._get_or_create_salt() # Get or create salt using QSettings
         self.key = self._derive_key(self.password, self.salt)
-        self.temp_db_file = None # Will hold the temporary file object
-        self.temp_db_path = None # Will hold the temporary file path
+        self.temp_db_path = None  # Will hold the temporary file path
         self.conn = None
         self.cursor = None
         self.last_error = None
@@ -73,22 +173,18 @@ class DatabaseManager:
         # Ensure directory for encrypted DB exists
         os.makedirs(os.path.dirname(self.encrypted_db_path), exist_ok=True)
 
+        recovery_enabled = getattr(settings_module, "ENABLE_TEMP_DB_RECOVERY", True)
+        self._temp_store = _TempDatabaseStore(
+            logger=self.logger,
+            store_metadata=recovery_enabled,
+        )
+
         try:
             # Create a temporary file for the decrypted database
-            # delete=False is crucial as sqlite3 needs a path, not an open file handle initially
-            self.temp_db_file = tempfile.NamedTemporaryFile(delete=False, suffix=".sqlite")
-            self.temp_db_path = self.temp_db_file.name
-            self.temp_db_file.close() # Close the handle, we just need the path
-
-            # Store temp path in QSettings for crash recovery on next startup
-            try:
-                settings = get_app_settings()
-                settings.setValue("security/last_temp_db_path", self.temp_db_path)
-                settings.sync()
-            except Exception as se:
-                self.logger.warning(f"Could not store temp DB path for recovery: {se}")
-
-            self.logger.debug(f"Using temporary database at: {self.temp_db_path}")
+            temp_path = self._temp_store.create()
+            self.temp_db_path = str(temp_path)
+            self._temp_store.register_for_recovery()
+            self.logger.debug("Using temporary database at: %s", self.temp_db_path)
 
             # Attempt to decrypt the existing database
             decryption_result = self._decrypt_db()
@@ -376,20 +472,10 @@ class DatabaseManager:
 
     def _cleanup_temp_db(self, keep_file=False):
          """Safely deletes the temporary database file."""
-         path_to_delete = self.temp_db_path
-         if path_to_delete and os.path.exists(path_to_delete):
-              try:
-                   self.logger.debug(f"Cleaning up temporary database: {path_to_delete}")
-                   os.remove(path_to_delete)
-                   if not keep_file:
-                        self.temp_db_path = None
-                        self.temp_db_file = None
-                   self.logger.debug("Temporary database file deleted")
-              except OSError as e:
-                   self.logger.warning(f"Could not delete temporary database file '{path_to_delete}': {str(e)}")
-         elif not keep_file:
+         if getattr(self, "_temp_store", None) is not None:
+              self._temp_store.cleanup(preserve=keep_file)
+         if not keep_file:
               self.temp_db_path = None
-              self.temp_db_file = None
 
 
     def _table_exists(self, table_name):
@@ -654,23 +740,14 @@ class DatabaseManager:
             self.logger.debug("No active database connection to close")
 
         # Only delete the temporary file when encryption succeeded; otherwise, keep for recovery
-        try:
-            if encrypt_success:
-                self._cleanup_temp_db()
-                # Clear stored temp path after successful encryption and cleanup
-                try:
-                    settings = get_app_settings()
-                    settings.remove("security/last_temp_db_path")
-                    settings.sync()
-                except Exception as se:
-                    self.logger.warning(f"Could not clear stored temp DB path: {se}")
-            elif encryption_attempted:
-                self.logger.critical("Preserving temporary database file due to encryption failure.")
-            else:
-                # No encryption attempt (already closed earlier); nothing to report.
-                pass
-        except Exception as e:
-            self.logger.warning(f"Cleanup decision failed: {str(e)}")
+        if encrypt_success:
+            self._cleanup_temp_db()
+        elif encryption_attempted:
+            self.logger.critical("Preserving temporary database file due to encryption failure.")
+            self._cleanup_temp_db(keep_file=True)
+        else:
+            # No encryption attempt (already closed earlier); ensure temp artifacts are cleared.
+            self._cleanup_temp_db()
 
     def flush_to_encrypted(self):
         """Flush current temp DB state to encrypted file safely (atomic replace)."""

@@ -153,7 +153,8 @@ Key areas of the codebase:
 
 ## Testing
 
-Tests live under `tests/` and use pytest (with `pytest-qt` for UI hooks). Run `pytest` to exercise calculations, encryption round-trips, history queries, and print formatting. Add coverage for new workflows as they land.
+- Tests live under `tests/` and use pytest (with `pytest-qt` for UI hooks). Run `pytest` from the repo root to execute the full suite, which now includes bootstrap coverage.
+- To iterate quickly on the application builder branch, run `pytest tests/unit/test_application_builder.py`.
 
 ## Deployment
 
@@ -233,4 +234,3 @@ c 2023-2025 Silver Estimation App
 - Debounced totals; minor fixes
 
 [See full changelog](CHANGELOG.md)
-

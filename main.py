@@ -1,44 +1,34 @@
 #!/usr/bin/env python
-import sys
-import traceback
 import logging
+import sys
 
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
-    QWidget,
-    QVBoxLayout,
     QMessageBox,
     QStackedWidget,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt5.QtGui import QIcon
-from PyQt5.QtCore import Qt, QTimer
-import PyQt5.QtCore as QtCore
 
 # Import the custom dialogs and modules
-from silverestimate.ui.estimate_entry import EstimateEntryWidget
-from silverestimate.services.estimate_repository import DatabaseEstimateRepository
-# Lazy imports: ItemMasterWidget, SettingsDialog, SilverBarHistoryDialog
 from silverestimate.controllers.live_rate_controller import LiveRateController
 from silverestimate.controllers.navigation_controller import NavigationController
-from silverestimate.controllers.startup_controller import StartupController, StartupStatus
-from silverestimate.services.main_commands import MainCommands
-from silverestimate.services.navigation_service import NavigationService
-from silverestimate.services.settings_service import SettingsService
-from silverestimate.ui.font_dialogs import adjust_table_font_size, choose_print_font
-from silverestimate.infrastructure.logger import setup_logging, qt_message_handler
 from silverestimate.infrastructure.app_constants import APP_TITLE
+from silverestimate.infrastructure.application import ApplicationBuilder, StartupError
 from silverestimate.infrastructure.paths import get_asset_path
 from silverestimate.infrastructure.windows_integration import (
     apply_taskbar_icon,
     destroy_icon_handle,
-    set_app_user_model_id,
 )
-
-
-class StartupError(RuntimeError):
-    """Raised when the main window cannot complete initialization."""
-    pass
+from silverestimate.services.estimate_repository import DatabaseEstimateRepository
+from silverestimate.services.main_commands import MainCommands
+from silverestimate.services.navigation_service import NavigationService
+from silverestimate.services.settings_service import SettingsService
+from silverestimate.ui.estimate_entry import EstimateEntryWidget
+from silverestimate.ui.font_dialogs import adjust_table_font_size, choose_print_font
 
 
 class MainWindow(QMainWindow):
@@ -327,159 +317,16 @@ class MainWindow(QMainWindow):
         return self.commands.import_items()
 
 
+
 # --- Application entry point ---
 
 def main() -> int:
     """Start the SilverEstimate application and return the exit code."""
-    logger = None
-    app = None
-    cleanup_scheduler = None
-    db_manager = None
-    main_window = None
-    try:
-        from pathlib import Path
-        from silverestimate.infrastructure.logger import get_log_config, setup_logging, LogCleanupScheduler
-
-        logs_dir = Path("logs")
-        logs_dir.mkdir(exist_ok=True)
-
-        log_config = get_log_config()
-        logger = setup_logging(
-            app_name="silver_app",
-            log_dir=log_config['log_dir'],
-            debug_mode=log_config['debug_mode'],
-            enable_info=log_config['enable_info'],
-            enable_error=log_config['enable_error'],
-            enable_debug=log_config['enable_debug']
-        )
-        logger.info(f"{APP_TITLE} starting")
-        logger.debug(f"Logging configuration: {log_config}")
-
-        if log_config.get('auto_cleanup'):
-            try:
-                cleanup_scheduler = LogCleanupScheduler(
-                    log_dir=log_config['log_dir'],
-                    cleanup_days=log_config['cleanup_days']
-                )
-                cleanup_scheduler.start()
-                logger.info(
-                    "Log cleanup scheduler initialized with %s days retention",
-                    log_config['cleanup_days']
-                )
-            except Exception as exc:
-                logger.error("Failed to initialize log cleanup scheduler: %s", exc, exc_info=True)
-
-        QtCore.qInstallMessageHandler(qt_message_handler)
-        logger.debug("Qt message handler installed")
-
-        for attr in (Qt.AA_EnableHighDpiScaling, Qt.AA_UseHighDpiPixmaps):
-            try:
-                QApplication.setAttribute(attr)
-            except Exception as exc:
-                if logger:
-                    logger.warning("Failed to set Qt attribute %s: %s", attr, exc)
-
-        if sys.platform == "win32":
-            set_app_user_model_id("com.silverestimate.app")
-
-        logger.debug("Creating QApplication instance")
-        app = QApplication.instance() or QApplication(sys.argv)
-
-        try:
-            icon_path = get_asset_path("assets", "icons", "silverestimate.ico")
-            if icon_path.exists():
-                app.setWindowIcon(QIcon(str(icon_path)))
-            else:
-                logger.debug("Application icon not found at %s", icon_path)
-        except Exception as exc:
-            logger.debug("Failed to set application icon: %s", exc)
-
-        startup_controller = StartupController(logger=logger)
-        startup_result = startup_controller.authenticate_and_prepare()
-
-        if startup_result.status == StartupStatus.CANCELLED:
-            logger.info("Authentication cancelled by user. Exiting.")
-            return 0
-        if startup_result.status == StartupStatus.WIPED:
-            if not startup_result.silent_wipe:
-                logger.info("Data wipe completed. Exiting.")
-            return 0
-        if startup_result.status != StartupStatus.OK or not startup_result.db:
-            logger.critical("Startup failed during authentication or database initialization.")
-            return 1
-
-        db_manager = startup_result.db
-        logger.info("Authentication successful, initializing main window")
-
-        try:
-            main_window = MainWindow(db_manager=db_manager, logger=logger)
-        except StartupError as exc:
-            logger.critical("Failed to initialize main window: %s", exc, exc_info=True)
-            QMessageBox.critical(
-                None,
-                "Initialization Error",
-                str(exc),
-            )
-            return 1
-
-        logger.info("Showing main application window")
-        main_window.show()
-        logger.debug("Entering Qt main event loop")
-        exit_code = app.exec_()
-        logger.info("Application exiting with code %s", exit_code)
-        return exit_code
-
-    except Exception as exc:
-        if logger:
-            logger.critical("Unhandled exception during application startup", exc_info=True)
-        else:
-            print(f"CRITICAL ERROR: {exc}")
-            print(traceback.format_exc())
-        try:
-            QMessageBox.critical(
-                None,
-                "Fatal Error",
-                f"The application encountered a fatal error and cannot continue.\n\nError: {exc}"
-            )
-        except Exception:
-            pass
-        return 1
-
-    finally:
-        if cleanup_scheduler is not None:
-            try:
-                cleanup_scheduler.stop()
-            except Exception as exc:
-                if logger:
-                    logger.debug("Failed to stop cleanup scheduler: %s", exc)
-        if main_window and getattr(main_window, 'db', None):
-            try:
-                main_window.db.close()
-            except Exception as exc:
-                if logger:
-                    logger.debug("Failed to close database on exit: %s", exc)
-        elif db_manager:
-            try:
-                db_manager.close()
-            except Exception as exc:
-                if logger:
-                    logger.debug("Failed to close database on exit: %s", exc)
+    builder = ApplicationBuilder(main_window_factory=MainWindow)
+    return builder.run()
 
 
 if __name__ == "__main__":
-    try:
-        sys.exit(main())
-    except Exception as exc:#
-        print(f"CRITICAL STARTUP ERROR: {exc}")
-        print(traceback.format_exc())
-        try:
-            QMessageBox.critical(
-                None,
-                "Fatal Error",
-                f"The application encountered a fatal error and cannot continue.\n\nError: {exc}"
-            )
-        except Exception:
-            pass
-        sys.exit(1)
+    sys.exit(main())
 
 

@@ -265,7 +265,11 @@ def test_widget_save_and_reload(qt_app, tmp_path, settings_stub, monkeypatch):
         def question(*args, **kwargs):
             return _QtMessageBox.Yes
 
-    monkeypatch.setattr("silverestimate.ui.estimate_entry_logic.QMessageBox", _MsgBoxStub, raising=False)
+    monkeypatch.setattr(
+        "silverestimate.ui.estimate_entry_logic.persistence.QMessageBox",
+        _MsgBoxStub,
+        raising=False,
+    )
 
     type_values = []
     for r in range(widget.item_table.rowCount()):

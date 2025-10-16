@@ -7,9 +7,9 @@ A PyQt5 desktop application for silver shops that combines encrypted persistence
 ## Core Architecture
 
 ### 1. Application Shell
-- `main.py` bootstraps logging, installs the Qt message handler, and owns the QApplication lifecycle.
-- Instantiates controllers, presenter, and services, wiring them into the main window and stacked widgets.
-- Coordinates graceful shutdown (flush scheduler drain, encryption re-seal, controller teardown).
+- `silverestimate/infrastructure/application.py` contains the `ApplicationBuilder`, which configures logging, installs the Qt message handler, performs authentication, and owns the QApplication lifecycle before handing off to the main window.
+- `main.py` is a thin entry point that constructs the builder, retains the `MainWindow` definition, and delegates startup/shutdown.
+- Controllers, presenter, and services are still wired inside `MainWindow`, while the builder guarantees graceful shutdown (flush scheduler drain, encryption re-seal, controller teardown).
 
 ### 2. Controller Layer
 - **StartupController (`silverestimate/controllers/startup_controller.py`)**: runs authentication, optional data wipe, and DatabaseManager initialisation before the UI shows.

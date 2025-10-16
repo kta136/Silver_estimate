@@ -259,3 +259,5 @@ This project is proprietary software. All rights reserved.
 - Debounced totals; minor fixes
 
 [See full changelog](CHANGELOG.md)
+
+

@@ -74,7 +74,11 @@ class _EstimatePersistenceMixin:
             for item in loaded.items:
                 row = self.item_table.rowCount()
                 self.item_table.insertRow(row)
-                self.item_table.setItem(row, COL_CODE, QTableWidgetItem(item.code))
+                canonical_code = (item.code or "").strip()
+                display_code = canonical_code.upper() if canonical_code else ""
+                code_item = QTableWidgetItem(display_code)
+                code_item.setData(Qt.UserRole, canonical_code or None)
+                self.item_table.setItem(row, COL_CODE, code_item)
                 self.item_table.setItem(row, COL_ITEM_NAME, QTableWidgetItem(item.name))
                 self.item_table.setItem(row, COL_GROSS, QTableWidgetItem(f"{item.gross:.2f}"))
                 self.item_table.setItem(row, COL_POLY, QTableWidgetItem(f"{item.poly:.2f}"))
@@ -130,8 +134,7 @@ class _EstimatePersistenceMixin:
     def capture_state(self) -> EstimateEntryViewState:
         lines = []
         for row in range(self.item_table.rowCount()):
-            code_item = self.item_table.item(row, COL_CODE)
-            code = code_item.text().strip() if code_item else ""
+            code = self._get_row_code(row)
             if not code:
                 continue
             try:
@@ -395,8 +398,7 @@ class _EstimatePersistenceMixin:
         rows_with_errors = []
 
         for row in range(self.item_table.rowCount()):
-            code_item = self.item_table.item(row, COL_CODE)
-            code = code_item.text().strip() if code_item else ""
+            code = self._get_row_code(row)
             if not code:
                 continue
 
@@ -544,6 +546,16 @@ class _EstimatePersistenceMixin:
             )
             QMessageBox.critical(self, "Save Error", dialog_message)
             self._status(status_message.replace('\n', ' ').strip(), 5000)
+
+    def _get_row_code(self, row: int) -> str:
+        code_item = self.item_table.item(row, COL_CODE)
+        if not code_item:
+            return ""
+        data = code_item.data(Qt.UserRole)
+        if isinstance(data, str) and data.strip():
+            return data.strip()
+        text = code_item.text()
+        return text.strip() if text else ""
 
 
     def print_estimate(self):

@@ -1,5 +1,6 @@
 import types
 import pytest
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QTableWidgetItem
 
 from silverestimate.persistence.database_manager import DatabaseManager
@@ -332,5 +333,6 @@ def test_populate_row_updates_code_cell(qt_app, fake_db):
 
         assert table.item(0, COL_CODE).text() == "NEW123"
         assert table.item(0, COL_ITEM_NAME).text() == "New Item"
+        assert table.item(0, COL_CODE).data(Qt.UserRole) == "new123"
     finally:
         widget.deleteLater()

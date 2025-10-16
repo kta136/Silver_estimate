@@ -41,12 +41,12 @@ class _EstimateTableMixin:
                     row_index, col, editable=(col not in non_editable_calc_cols)
                 )
 
-            code_text = (item_data.get("code", "") or "").strip()
-            if code_text:
-                code_text = code_text.upper()
+            canonical_code = (item_data.get("code", "") or "").strip()
+            display_code = canonical_code.upper() if canonical_code else ""
             code_item = self.item_table.item(row_index, COL_CODE)
             if code_item is not None:
-                code_item.setText(code_text)
+                code_item.setText(display_code)
+                code_item.setData(Qt.UserRole, canonical_code or None)
 
             self.item_table.item(row_index, COL_ITEM_NAME).setText(
                 item_data.get("name", "")
@@ -422,6 +422,7 @@ class _EstimateTableMixin:
         code_item = self.item_table.item(self.current_row, COL_CODE)
         code = code_item.text().strip().upper()
         code_item.setText(code)
+        code_item.setData(Qt.UserRole, None)
 
         if not code:
             self._status("Enter item code first", 1500)
@@ -551,7 +552,13 @@ class _EstimateTableMixin:
             wage_rate = self._get_cell_float(self.current_row, COL_WAGE_RATE)
             pieces = self._get_cell_int(self.current_row, COL_PIECES)
             code_item = self.item_table.item(self.current_row, COL_CODE)
-            code = code_item.text().strip() if code_item else ""
+            code = ""
+            if code_item is not None:
+                data = code_item.data(Qt.UserRole)
+                if isinstance(data, str) and data.strip():
+                    code = data.strip()
+                else:
+                    code = code_item.text().strip()
             wage_basis = "WT"
             if code:
                 repo = getattr(self.presenter, "repository", None)

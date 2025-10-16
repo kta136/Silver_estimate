@@ -86,6 +86,24 @@ def test_items_repository_roundtrip(fake_db):
     assert fake_db._flush_requested
 
 
+def test_items_repository_returns_plain_dicts(fake_db):
+    repo = ItemsRepository(fake_db)
+    repo.add_item('NEW123', 'New Item', 91.0, 'WT', 12.0)
+
+    # simulate prior cache miss
+    fake_db.item_cache_controller.invalidate('NEW123')
+
+    fetched = repo.get_item_by_code('NEW123')
+    assert isinstance(fetched, dict)
+    assert fetched['name'] == 'New Item'
+
+    cached = fake_db.item_cache_controller.get('NEW123')
+    assert isinstance(cached, dict)
+
+    refetched = repo.get_item_by_code('NEW123')
+    assert isinstance(refetched, dict)
+
+
 def test_estimates_repository_save_and_fetch(fake_db):
     repo = EstimatesRepository(fake_db)
     ItemsRepository(fake_db).add_item('ITM001', 'Sample Item', 92.5, 'WT', 10.0)

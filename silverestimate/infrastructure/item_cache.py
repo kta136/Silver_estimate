@@ -29,7 +29,13 @@ class ItemCacheController:
     def store(self, code: str, value) -> None:
         if not code:
             return
-        self._cache[code.upper()] = value
+        to_store = value
+        if value is not None and not isinstance(value, dict):
+            try:
+                to_store = dict(value)
+            except Exception:
+                to_store = value
+        self._cache[code.upper()] = to_store
 
     def invalidate(self, code: str) -> None:
         if not code:

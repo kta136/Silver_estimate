@@ -36,11 +36,11 @@ class ItemsRepository:
             if cache_ctrl:
                 cached = cache_ctrl.get(code)
                 if cached is not None:
-                    return cached
+                    return self._normalize_row(cached)
             else:
                 cached = self._fallback_cache.get(key)
                 if cached is not None:
-                    return cached
+                    return self._normalize_row(cached)
 
             row = None
             try:
@@ -55,12 +55,15 @@ class ItemsRepository:
             if row is None:
                 cursor.execute('SELECT * FROM items WHERE code = ? COLLATE NOCASE', (code,))
                 row = cursor.fetchone()
-            if row is not None:
-                if cache_ctrl:
-                    cache_ctrl.store(code, row)
-                else:
-                    self._fallback_cache[key] = row
-            return row
+            if row is None:
+                return None
+
+            normalized = self._normalize_row(row)
+            if cache_ctrl:
+                cache_ctrl.store(code, normalized)
+            else:
+                self._fallback_cache[key] = normalized
+            return normalized
         except sqlite3.Error as exc:
             self._logger.error("DB Error get_item_by_code: %s", exc, exc_info=True)
             return None
@@ -165,4 +168,15 @@ class ItemsRepository:
                 self._fallback_cache.pop((code or "").upper(), None)
         except Exception:
             pass
+
+    @staticmethod
+    def _normalize_row(row):
+        if row is None:
+            return None
+        if isinstance(row, dict):
+            return row
+        try:
+            return dict(row)
+        except Exception:
+            return row
 

@@ -50,6 +50,8 @@ Grand Total = (Net Fine × Silver Rate) + Net Wage + Last Balance Amount
 2. Assign bars to lists
 3. Track status changes
 4. Generate transfer records
+5. Mark lists as issued when dispatched (sets `issued_date` and moves them to history view)
+6. Reactivate issued lists to return bars to active status (clears `issued_date`, resets bar statuses)
 
 #### Bar Lifecycle
 ```
@@ -59,7 +61,7 @@ Creation → In Stock → Assigned to List → [Sold/Melted/Returned to Stock]
 ### 4. Authentication and Security
 
 #### Login Flow
-1. Check for existing password hashes
+1. Check secure credential store for existing password hashes (migrates legacy QSettings entries if present)
 2. First run: Dual password setup
 3. Subsequent runs: Verify main password
 4. Secondary password triggers data wipe

@@ -16,7 +16,7 @@ The application implements a multi-layered security approach combining password 
 - Passwords never stored in plaintext
 - Argon2 hashing algorithm (memory-hard, resistant to GPU attacks)
 - Unique salt per password
-- Hashes stored in QSettings (platform-specific secure storage)
+- Hashes stored in the OS keyring via `silverestimate/security/credential_store.py` (legacy QSettings values are migrated on first launch)
 
 #### Password Flow
 ```
@@ -28,22 +28,26 @@ User Input → Argon2 Hash → Compare with Stored Hash → Grant/Deny Access
 1. Prompt for primary and secondary passwords
 2. Validate passwords are different
 3. Generate hashes using Argon2
-4. Store hashes in QSettings
+4. Persist hashed credentials via the credential store (Python `keyring` backend)
 5. Create initial database with encryption
 
 ### 3. Authentication Process
 ```python
-# Simplified authentication flow
-if existing_hashes_found():
+from silverestimate.security import credential_store
+
+settings = get_app_settings()
+main_hash = credential_store.get_password_hash("main", settings=settings, logger=logger)
+backup_hash = credential_store.get_password_hash("backup", settings=settings, logger=logger)
+
+if main_hash and backup_hash:
     entered_password = prompt_login()
     if verify_password(main_hash, entered_password):
         return SUCCESS
-    elif verify_password(secondary_hash, entered_password):
+    if verify_password(backup_hash, entered_password):
         return TRIGGER_WIPE
-    else:
-        return FAILURE
-else:
-    setup_new_passwords()
+    return FAILURE
+
+setup_new_passwords()
 ```
 
 ## Database Encryption
@@ -119,24 +123,40 @@ Password + Salt → PBKDF2 → Encryption Key → [Session Use] → Secure Dispo
 
 ### 1. Data Wipe Feature
 ```python
-def perform_data_wipe():
+import logging
+import os
+from typing import Optional
+from silverestimate.security import credential_store
+from silverestimate.infrastructure.settings import get_app_settings
+
+def perform_data_wipe(
+    db_path: str,
+    logger: Optional[logging.Logger] = None,
+    *,
+    silent: bool = False,
+) -> bool:
     # 1. Delete encrypted database file
-    os.remove(db_path)
+    if os.path.exists(db_path):
+        os.remove(db_path)
 
-    # 2. Clear password hashes
-    settings.remove("security/password_hash")
-    settings.remove("security/backup_hash")
+    # 2. Remove encryption salt and temp artifacts
+    settings = get_app_settings()
+    for key in ("security/db_salt", "security/last_temp_db_path"):
+        settings.remove(key)
 
-    # 3. Remove encryption salt and temp artifacts
-    settings.remove("security/db_salt")
-    settings.remove("security/last_temp_db_path")
+    # 3. Clear password hashes from the secure store
+    for kind in ("main", "backup"):
+        credential_store.delete_password_hash(
+            kind,
+            settings=settings,
+            logger=None if silent else logger,
+        )
 
-    # 4. (Silent mode only) Close log handlers and delete log directory
+    # 4. Silent wipe clears logs without emitting signals
     if silent:
-        logging.shutdown()
-        shutil.rmtree(log_dir)
+        _clear_log_artifacts()
 
-    # 5. Force application restart
+    return True
 ```
 
 ### 2. Temporary File Security

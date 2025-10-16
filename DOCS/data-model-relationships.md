@@ -78,12 +78,13 @@ silver_bars (1) ----< (M) bar_transfers
 ### 5. silver_bar_lists
 **Purpose**: Grouping mechanism for silver bars
 
-| Column         | Type    | Constraints                | Description           |
-|----------------|---------|---------------------------|-----------------------|
-| list_id        | INTEGER | PRIMARY KEY AUTOINCREMENT  | Unique list ID        |
-| list_identifier| TEXT    | UNIQUE NOT NULL           | Human-readable ID     |
-| creation_date  | TEXT    | NOT NULL                  | Creation timestamp    |
-| list_note      | TEXT    |                           | Optional description  |
+| Column         | Type    | Constraints                | Description                 |
+|----------------|---------|---------------------------|-----------------------------|
+| list_id        | INTEGER | PRIMARY KEY AUTOINCREMENT  | Unique list ID              |
+| list_identifier| TEXT    | UNIQUE NOT NULL           | Human-readable ID           |
+| creation_date  | TEXT    | NOT NULL                  | Creation timestamp          |
+| list_note      | TEXT    |                           | Optional description        |
+| issued_date    | TEXT    |                           | Timestamp when list issued  |
 
 ### 6. bar_transfers
 **Purpose**: Silver bar movement history
@@ -151,3 +152,6 @@ silver_bars (1) ----< (M) bar_transfers
 - Added silver_bar_lists table
 - Modified bar_transfers table
 - Implemented versioning system
+
+### Version 1  2
+- Added `issued_date` column to `silver_bar_lists` to capture issuance events

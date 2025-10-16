@@ -23,17 +23,34 @@ This guide documents the primary controller, service, and persistence APIs expos
 ### LiveRateController (silverestimate/controllers/live_rate_controller.py)
     LiveRateController(*, parent: QObject, widget_getter, status_callback=None, logger=None, service_factory=LiveRateService, settings_provider=get_app_settings)
 
-- **initialize(initial_refresh_delay_ms: int = 500)** – apply settings, set up timers, trigger the first refresh.
-- **shutdown()** – stop the service timer during application exit.
-- **apply_visibility_settings() -> bool** – toggle rate UI visibility based on QSettings.
-- **apply_timer_settings(force_show_ui: Optional[bool] = None)** – restart auto-refresh cadence.
-- **refresh_now()** – fire an immediate fetch, falling back to widget-side refresh on failure.
+- **initialize(initial_refresh_delay_ms: int = 500)** - apply settings, set up timers, trigger the first refresh.
+- **shutdown()** - stop the service timer during application exit.
+- **apply_visibility_settings() -> bool** - toggle rate UI visibility based on QSettings.
+- **apply_timer_settings(force_show_ui: Optional[bool] = None)** - restart auto-refresh cadence.
+- **refresh_now()** - fire an immediate fetch, falling back to widget-side refresh on failure.
+
+## Presenter Layer
+
+### EstimateEntryPresenter (silverestimate/presenter/estimate_entry_presenter.py)
+    EstimateEntryPresenter(view: EstimateEntryView, repository: EstimateRepository)
+
+- **generate_voucher(silent: bool = False) -> str** - request the next voucher number from the repository and push it to the view.
+- **calculate_totals(view_state: EstimateEntryViewState) -> TotalsResult** - compute totals via `services.estimate_calculator`.
+- **load_estimate(voucher_no: str) -> Optional[LoadedEstimate]** - retrieve persisted estimate payloads and normalise them for the view.
+- **save_estimate(payload: SavePayload) -> SaveOutcome** - persist header/items, synchronise silver bar metadata (update/add), and surface status messaging.
+- **delete_estimate(voucher_no: str) -> bool** - delegate to the repository and clean up related silver bar records.
+- **open_silver_bar_management()** / **load_item_into_row(row_index: int, code: str)** - bridge UI interactions with services/repositories.
+
+### Presenter Contracts (silverestimate/presenter/__init__.py)
+- **EstimateEntryView** protocol for Qt widgets (`capture_state`, `apply_totals`, `populate_row`, etc.).
+- Dataclasses: `EstimateEntryViewState`, `SaveItem`, `SavePayload`, `SaveOutcome`, `LoadedEstimate` encapsulate presenter inputs/outputs.
 
 ## Service Layer
 
 ### Authentication (silverestimate/services/auth_service.py)
 - **run_authentication(logger: Optional[logging.Logger] = None) -> Optional[AuthenticationResult]** - drives setup/login; returns `None` on cancel or an `AuthenticationResult` describing the password provided or a wipe request (with silent flag when triggered by the secondary password).
 - **perform_data_wipe(db_path: str = DB_PATH, logger: Optional[logging.Logger] = None, *, silent: bool = False) -> bool** - deletes the encrypted DB, removes temporary plaintext, clears credentials, and, when `silent=True`, purges application log files without emitting wipe-related log entries.
+- Uses `silverestimate/security/credential_store.py` to persist Argon2 hashes in the OS keyring (automatically migrating legacy QSettings values).
 
 ### SettingsService (silverestimate/services/settings_service.py)
     SettingsService()
@@ -110,15 +127,16 @@ Note: Legacy item/estimate helper methods remain for backwards compatibility but
 
 ## Supporting Types
 
-- **ItemCacheController (silverestimate/infrastructure/item_cache.py)** – shared cache utilised by ItemsRepository for hot lookups.
-- **FlushScheduler (silverestimate/persistence/flush_scheduler.py)** – debounced commit/encrypt worker invoked by DatabaseManager.request_flush.
-- **InlineStatusController (silverestimate/ui/inline_status.py)** – helper used across UI widgets to surface status messages without tight UI coupling.
+- **ItemCacheController (silverestimate/infrastructure/item_cache.py)** - shared cache utilised by ItemsRepository for hot lookups.
+- **FlushScheduler (silverestimate/persistence/flush_scheduler.py)** - debounced commit/encrypt worker invoked by DatabaseManager.request_flush.
+- **InlineStatusController (silverestimate/ui/inline_status.py)** - helper used across UI widgets to surface status messages without tight UI coupling.
+- **CredentialStore (silverestimate/security/credential_store.py)** - OS keyring abstraction with migration helpers for legacy QSettings credentials.
 
 ## UI Facades
 
 While the focus of this reference is the controller/service stack, the following UI entry points expose the application logic:
-- **EstimateEntryWidget (silverestimate/ui/estimate_entry.py)** – wraps EstimateLogic for calculations and exposes save_estimate(), print_estimate(), safe_load_estimate().
-- **ItemMasterWidget (silverestimate/ui/item_master.py)** – allows CRUD via load_items(), add_item(), update_item(), delete_item() (internally using ItemsRepository).
-- **SilverBarDialog (silverestimate/ui/silver_bar_management.py)** – provides load_available_bars(), load_bars_in_selected_list(), and list assignment interactions on top of SilverBarsRepository.
+- **EstimateEntryWidget (silverestimate/ui/estimate_entry.py)** - integrates `EstimateEntryPresenter` with UI helpers and logic mixins; exposes `save_estimate()`, `print_estimate()`, `safe_load_estimate()`.
+- **ItemMasterWidget (silverestimate/ui/item_master.py)** - allows CRUD via load_items(), add_item(), update_item(), delete_item() (internally using ItemsRepository).
+- **SilverBarDialog (silverestimate/ui/silver_bar_management.py)** - provides load_available_bars(), load_bars_in_selected_list(), and list assignment interactions on top of SilverBarsRepository.
 
 Use controllers and services as the primary integration surface; direct UI manipulation should be reserved for Qt widget customisations.

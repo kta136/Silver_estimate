@@ -10,7 +10,7 @@ The application implements a multi-layered security approach combining password 
 
 #### Dual Password System
 - **Primary Password**: Application access and database decryption
-- **Secondary Password**: Data wipe trigger (emergency recovery)
+- **Secondary Password**: Data wipe trigger (emergency recovery). When used, the wipe runs in silent mode—no wipe-related logs are emitted and existing log files are purged alongside the encrypted database.
 
 #### Password Storage
 - Passwords never stored in plaintext
@@ -122,15 +122,21 @@ Password + Salt → PBKDF2 → Encryption Key → [Session Use] → Secure Dispo
 def perform_data_wipe():
     # 1. Delete encrypted database file
     os.remove(db_path)
-    
+
     # 2. Clear password hashes
     settings.remove("security/password_hash")
     settings.remove("security/backup_hash")
-    
-    # 3. Remove encryption salt
+
+    # 3. Remove encryption salt and temp artifacts
     settings.remove("security/db_salt")
-    
-    # 4. Force application restart
+    settings.remove("security/last_temp_db_path")
+
+    # 4. (Silent mode only) Close log handlers and delete log directory
+    if silent:
+        logging.shutdown()
+        shutil.rmtree(log_dir)
+
+    # 5. Force application restart
 ```
 
 ### 2. Temporary File Security

@@ -7,9 +7,9 @@ This guide documents the primary controller, service, and persistence APIs expos
 ### StartupController (silverestimate/controllers/startup_controller.py)
     StartupController(logger: Optional[logging.Logger] = None)
 
-- **authenticate_and_prepare() -> StartupResult** – runs the authentication flow, performs optional wipes, and returns a database-connected StartupResult.
-- **StartupResult (dataclass)** – fields: status (StartupStatus) and db (Optional[DatabaseManager]).
-- **StartupStatus (Enum)** – values: OK, CANCELLED, WIPED, FAILED.
+- **authenticate_and_prepare() -> StartupResult** - runs the authentication flow, performs optional wipes, and returns a database-connected StartupResult.
+- **StartupResult (dataclass)** - fields: status (StartupStatus), db (Optional[DatabaseManager]), and silent_wipe (bool) indicating whether the last wipe suppressed logging.
+- **StartupStatus (Enum)** - values: OK, CANCELLED, WIPED, FAILED.
 
 ### NavigationController (silverestimate/controllers/navigation_controller.py)
     NavigationController(*, main_window, navigation_service, commands, logger: Optional[logging.Logger] = None)
@@ -32,8 +32,8 @@ This guide documents the primary controller, service, and persistence APIs expos
 ## Service Layer
 
 ### Authentication (silverestimate/services/auth_service.py)
-- **run_authentication(logger: Optional[logging.Logger] = None) -> Optional[str | Literal["wipe"]]** – drives setup/login; returns password string, the string "wipe", or None on cancel.
-- **perform_data_wipe(db_path: str = DB_PATH, logger: Optional[logging.Logger] = None) -> bool** – deletes encrypted DB, temp plaintext, and clears credentials from QSettings.
+- **run_authentication(logger: Optional[logging.Logger] = None) -> Optional[AuthenticationResult]** - drives setup/login; returns `None` on cancel or an `AuthenticationResult` describing the password provided or a wipe request (with silent flag when triggered by the secondary password).
+- **perform_data_wipe(db_path: str = DB_PATH, logger: Optional[logging.Logger] = None, *, silent: bool = False) -> bool** - deletes the encrypted DB, removes temporary plaintext, clears credentials, and, when `silent=True`, purges application log files without emitting wipe-related log entries.
 
 ### SettingsService (silverestimate/services/settings_service.py)
     SettingsService()

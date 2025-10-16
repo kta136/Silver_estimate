@@ -357,7 +357,8 @@ def main() -> int:
             logger.info("Authentication cancelled by user. Exiting.")
             return 0
         if startup_result.status == StartupStatus.WIPED:
-            logger.info("Data wipe completed. Exiting.")
+            if not startup_result.silent_wipe:
+                logger.info("Data wipe completed. Exiting.")
             return 0
         if startup_result.status != StartupStatus.OK or not startup_result.db:
             logger.critical("Startup failed during authentication or database initialization.")
@@ -424,7 +425,7 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         sys.exit(main())
-    except Exception as exc:
+    except Exception as exc:#
         print(f"CRITICAL STARTUP ERROR: {exc}")
         print(traceback.format_exc())
         try:

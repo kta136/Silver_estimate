@@ -11,7 +11,11 @@ from PyQt5.QtWidgets import QMessageBox
 
 from silverestimate.infrastructure.app_constants import DB_PATH
 from silverestimate.persistence.database_manager import DatabaseManager
-from silverestimate.services.auth_service import perform_data_wipe, run_authentication
+from silverestimate.services.auth_service import (
+    AuthenticationResult,
+    perform_data_wipe,
+    run_authentication,
+)
 
 
 class StartupStatus(Enum):
@@ -29,6 +33,7 @@ class StartupResult:
 
     status: StartupStatus
     db: Optional[DatabaseManager] = None
+    silent_wipe: bool = False
 
 
 class StartupController:
@@ -50,15 +55,20 @@ class StartupController:
             )
             return StartupResult(status=StartupStatus.FAILED)
 
-        if auth_result == "wipe":
-            self._logger.warning("Data wipe requested by operator")
+        if isinstance(auth_result, AuthenticationResult) and auth_result.is_wipe:
+            silent = auth_result.silent
+            if not silent:
+                self._logger.warning("Data wipe requested by operator")
             try:
-                if perform_data_wipe(db_path=DB_PATH, logger=self._logger):
-                    self._logger.info("Data wipe completed; exiting application")
-                    return StartupResult(status=StartupStatus.WIPED)
-                self._logger.critical("Data wipe failed")
+                if perform_data_wipe(db_path=DB_PATH, logger=self._logger, silent=silent):
+                    if not silent:
+                        self._logger.info("Data wipe completed; exiting application")
+                    return StartupResult(status=StartupStatus.WIPED, silent_wipe=silent)
+                if not silent:
+                    self._logger.critical("Data wipe failed")
             except Exception as exc:  # pragma: no cover - UX fallback
-                self._logger.critical("Data wipe raised exception: %s", exc, exc_info=True)
+                if not silent:
+                    self._logger.critical("Data wipe raised exception: %s", exc, exc_info=True)
                 QMessageBox.critical(
                     None,
                     "Data Wipe Error",
@@ -67,11 +77,15 @@ class StartupController:
                 return StartupResult(status=StartupStatus.FAILED)
             return StartupResult(status=StartupStatus.FAILED)
 
-        if not auth_result:
+        if auth_result is None:
             self._logger.info("Authentication cancelled or failed; exiting startup sequence")
             return StartupResult(status=StartupStatus.CANCELLED)
 
-        db_manager = self._initialize_database(auth_result)
+        if not isinstance(auth_result, AuthenticationResult):
+            self._logger.critical("Unexpected authentication result type: %r", auth_result)
+            return StartupResult(status=StartupStatus.FAILED)
+
+        db_manager = self._initialize_database(auth_result.password or "")
         if db_manager is None:
             return StartupResult(status=StartupStatus.FAILED)
         return StartupResult(status=StartupStatus.OK, db=db_manager)

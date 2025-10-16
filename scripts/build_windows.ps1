@@ -21,6 +21,8 @@ if ($IsWindows) {
 & $py -m pip install --upgrade pip
 & $py -m pip install -r (Join-Path $PSScriptRoot "..\requirements.txt")
 
+$iconPath = Join-Path $PSScriptRoot "..\assets\icons\silverestimate.ico"
+
 Write-Host "[Build] Running PyInstaller..."
 $spec = Join-Path $PSScriptRoot "..\silverestimate.spec"
 if ($OneFile) {
@@ -28,6 +30,7 @@ if ($OneFile) {
     --noconfirm `
     --onefile `
     --windowed `
+    --icon $iconPath `
     --name SilverEstimate `
     --hidden-import passlib.handlers.argon2 `
     --hidden-import passlib.handlers.bcrypt `
@@ -43,6 +46,7 @@ if ($OneFile) {
   & $py -m PyInstaller `
     --noconfirm `
     --windowed `
+    --icon $iconPath `
     --name SilverEstimate `
     --hidden-import passlib.handlers.argon2 `
     --hidden-import passlib.handlers.bcrypt `

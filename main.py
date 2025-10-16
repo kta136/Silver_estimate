@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QStackedWidget,
 )
+from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt, QTimer
 import PyQt5.QtCore as QtCore
 
@@ -27,10 +28,18 @@ from silverestimate.services.settings_service import SettingsService
 from silverestimate.ui.font_dialogs import adjust_table_font_size, choose_print_font
 from silverestimate.infrastructure.logger import setup_logging, qt_message_handler
 from silverestimate.infrastructure.app_constants import APP_TITLE
+from silverestimate.infrastructure.paths import get_asset_path
+from silverestimate.infrastructure.windows_integration import (
+    apply_taskbar_icon,
+    destroy_icon_handle,
+    set_app_user_model_id,
+)
+
 
 class StartupError(RuntimeError):
     """Raised when the main window cannot complete initialization."""
     pass
+
 
 class MainWindow(QMainWindow):
     # Thread-safe signal to apply fetched rates on the UI thread
@@ -48,6 +57,26 @@ class MainWindow(QMainWindow):
 
         self.db = db_manager
         self.settings_service = SettingsService()
+        self._taskbar_icon_handle = None
+
+        try:
+            icon_path = get_asset_path("assets", "icons", "silverestimate.ico")
+            if icon_path.exists():
+                icon = QIcon(str(icon_path))
+                self.setWindowIcon(icon)
+                if sys.platform == "win32":
+                    try:
+                        hwnd = int(self.winId())
+                    except Exception:
+                        hwnd = 0
+                    self._taskbar_icon_handle = apply_taskbar_icon(
+                        hwnd, icon_path, logger=self.logger
+                    )
+            else:
+                self.logger.debug("Window icon not found at %s", icon_path)
+        except Exception as exc:
+            if self.logger:
+                self.logger.debug("Failed to apply window icon: %s", exc)
 
         self.setWindowTitle(f"{APP_TITLE}[*]")
         # self.setGeometry(100, 100, 1000, 700) # Remove fixed geometry
@@ -262,6 +291,9 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'db') and self.db:
             self.logger.debug("Closing database connection")
             self.db.close()
+        if sys.platform == "win32" and self._taskbar_icon_handle:
+            destroy_icon_handle(self._taskbar_icon_handle, logger=self.logger)
+            self._taskbar_icon_handle = None
         # Optional: Add confirmation dialog if needed
         super().closeEvent(event)
 
@@ -347,8 +379,20 @@ def main() -> int:
                 if logger:
                     logger.warning("Failed to set Qt attribute %s: %s", attr, exc)
 
+        if sys.platform == "win32":
+            set_app_user_model_id("com.silverestimate.app")
+
         logger.debug("Creating QApplication instance")
         app = QApplication.instance() or QApplication(sys.argv)
+
+        try:
+            icon_path = get_asset_path("assets", "icons", "silverestimate.ico")
+            if icon_path.exists():
+                app.setWindowIcon(QIcon(str(icon_path)))
+            else:
+                logger.debug("Application icon not found at %s", icon_path)
+        except Exception as exc:
+            logger.debug("Failed to set application icon: %s", exc)
 
         startup_controller = StartupController(logger=logger)
         startup_result = startup_controller.authenticate_and_prepare()

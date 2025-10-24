@@ -16,6 +16,7 @@ from .estimate_entry_ui import (
 )
 from .estimate_entry_logic import EstimateLogic
 from .inline_status import InlineStatusController
+from .view_models import EstimateEntryViewModel
 from silverestimate.presenter import EstimateEntryPresenter
 
 class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
@@ -44,6 +45,11 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         self.processing_cell = False
         self.return_mode = False
         self.silver_bar_mode = False
+        self.view_model = EstimateEntryViewModel()
+        self.view_model.set_modes(
+            return_mode=self.return_mode,
+            silver_bar_mode=self.silver_bar_mode,
+        )
 
         # Set up UI (this creates self.item_table)
         self.setup_ui(self)
@@ -308,6 +314,7 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         # Update the current or next empty row's type column visually
         self._refresh_empty_row_type()
         self.focus_on_empty_row(update_visuals=True)
+        self._update_view_model_modes()
         self._update_mode_tooltip()
         self._mark_unsaved()
 
@@ -387,6 +394,7 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         # Update the current or next empty row's type column visually
         self._refresh_empty_row_type()
         self.focus_on_empty_row(update_visuals=True)
+        self._update_view_model_modes()
         self._update_mode_tooltip()
         self._mark_unsaved()
 

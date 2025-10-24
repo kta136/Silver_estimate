@@ -9,6 +9,7 @@ from silverestimate.services.estimate_calculator import (
     compute_net_weight,
     compute_wage_amount,
 )
+from ..adapters import EstimateTableAdapter
 
 from .constants import (
     COL_CODE,
@@ -28,55 +29,16 @@ from .constants import (
 class _EstimateTableMixin:
     """Row and table editing helpers."""
 
+    def _get_table_adapter(self) -> EstimateTableAdapter:
+        adapter = getattr(self, "_table_adapter", None)
+        if adapter is None or getattr(adapter, "_table", None) is not self.item_table:
+            adapter = EstimateTableAdapter(self, self.item_table)
+            self._table_adapter = adapter
+        return adapter
+
 
     def populate_row(self, row_index: int, item_data):
-        if row_index < 0 or row_index >= self.item_table.rowCount():
-            return
-        self.item_table.blockSignals(True)
-        previous_row = getattr(self, "current_row", -1)
-        try:
-            non_editable_calc_cols = [COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT, COL_TYPE]
-            for col in range(self.item_table.columnCount()):
-                self._ensure_cell_exists(
-                    row_index, col, editable=(col not in non_editable_calc_cols)
-                )
-
-            canonical_code = (item_data.get("code", "") or "").strip()
-            display_code = canonical_code.upper() if canonical_code else ""
-            code_item = self.item_table.item(row_index, COL_CODE)
-            if code_item is not None:
-                code_item.setText(display_code)
-                code_item.setData(Qt.UserRole, canonical_code or None)
-
-            self.item_table.item(row_index, COL_ITEM_NAME).setText(
-                item_data.get("name", "")
-            )
-            self.item_table.item(row_index, COL_PURITY).setText(
-                str(item_data.get("purity", 0.0))
-            )
-            self.item_table.item(row_index, COL_WAGE_RATE).setText(
-                str(item_data.get("wage_rate", 0.0))
-            )
-
-            pcs_item = self.item_table.item(row_index, COL_PIECES)
-            if not pcs_item.text().strip():
-                pcs_item.setText("1")
-
-            type_item = self.item_table.item(row_index, COL_TYPE)
-            self._update_row_type_visuals_direct(type_item)
-            type_item.setTextAlignment(Qt.AlignCenter)
-
-            self.current_row = row_index
-            self.calculate_net_weight()
-        except Exception as exc:
-            self.logger.error(
-                "Error populating row %s: %s", row_index + 1, exc, exc_info=True
-            )
-            QMessageBox.critical(self, "Error", f"Error populating row: {exc}")
-            self._status(f"Error populating row {row_index + 1}", 4000)
-        finally:
-            self.item_table.blockSignals(False)
-            self.current_row = previous_row
+        self._get_table_adapter().populate_row(row_index, item_data)
 
     def populate_item_row(self, item_data):
         if getattr(self, "current_row", -1) < 0:
@@ -102,37 +64,7 @@ class _EstimateTableMixin:
             pass
 
     def add_empty_row(self):
-        try:
-            if self.item_table.rowCount() > 0:
-                last_row = self.item_table.rowCount() - 1
-                last_code_item = self.item_table.item(last_row, COL_CODE)
-                if not last_code_item or not last_code_item.text().strip():
-                    QTimer.singleShot(0, lambda: self.focus_on_code_column(last_row))
-                    return
-
-            self.processing_cell = True
-            row = self.item_table.rowCount()
-            self.item_table.insertRow(row)
-
-            for col in range(self.item_table.columnCount()):
-                item = QTableWidgetItem("")
-                if col in [COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT]:
-                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-                elif col == COL_TYPE:
-                    self._update_row_type_visuals_direct(item)
-                    item.setTextAlignment(Qt.AlignCenter)
-                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-                else:
-                    item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
-                self.item_table.setItem(row, col, item)
-
-            self.processing_cell = False
-            QTimer.singleShot(50, lambda: self.focus_on_code_column(row))
-
-        except Exception as exc:
-            self.logger.error("Error adding empty row: %s", exc, exc_info=True)
-            self._status("Warning: Could not add empty row", 3000)
-            self.processing_cell = False
+        self._get_table_adapter().add_empty_row()
 
     def _update_row_type_visuals_direct(self, type_item):
         try:
@@ -673,6 +605,7 @@ class _EstimateTableMixin:
 
         self._refresh_empty_row_type()
         self.focus_on_empty_row(update_visuals=True)
+        self._update_view_model_modes()
         self._update_mode_tooltip()
         self._mark_unsaved()
 
@@ -753,45 +686,15 @@ class _EstimateTableMixin:
 
         self._refresh_empty_row_type()
         self.focus_on_empty_row(update_visuals=True)
+        self._update_view_model_modes()
         self._update_mode_tooltip()
         self._mark_unsaved()
 
     def _refresh_empty_row_type(self):
-        try:
-            table = self.item_table
-            for row in range(table.rowCount()):
-                code_item = table.item(row, COL_CODE)
-                if code_item and code_item.text().strip():
-                    continue
-                type_item = table.item(row, COL_TYPE)
-                if type_item is None:
-                    type_item = QTableWidgetItem("")
-                    type_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-                    table.setItem(row, COL_TYPE, type_item)
-                table.blockSignals(True)
-                try:
-                    self._update_row_type_visuals_direct(type_item)
-                    type_item.setTextAlignment(Qt.AlignCenter)
-                finally:
-                    table.blockSignals(False)
-        except Exception:
-            self.logger.debug("Failed to refresh empty row type", exc_info=True)
+        self._get_table_adapter().refresh_empty_row_type()
 
     def focus_on_empty_row(self, update_visuals=False):
-        empty_row_index = -1
-        for row in range(self.item_table.rowCount()):
-            code_item = self.item_table.item(row, COL_CODE)
-            if not code_item or not code_item.text().strip():
-                empty_row_index = row
-                break
-
-        if empty_row_index != -1:
-            if update_visuals:
-                self._update_row_type_visuals(empty_row_index)
-                self.calculate_totals()
-            self.focus_on_code_column(empty_row_index)
-        else:
-            self.add_empty_row()
+        self._get_table_adapter().focus_on_empty_row(update_visuals=update_visuals)
 
     def delete_current_row(self):
         current_row = self.item_table.currentRow()

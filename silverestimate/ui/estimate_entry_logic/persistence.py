@@ -11,14 +11,11 @@ from silverestimate.domain.estimate_models import (
     EstimateLineCategory,
     TotalsResult,
 )
-from silverestimate.presenter import (
-    EstimateEntryViewState,
-    LoadedEstimate,
-    SaveItem,
-    SaveOutcome,
-    SavePayload,
-)
+from silverestimate.presenter import EstimateEntryViewState, LoadedEstimate
 from silverestimate.services.estimate_calculator import compute_totals
+from silverestimate.services.estimate_entry_persistence import (
+    EstimateEntryPersistenceService,
+)
 
 from .constants import (
     COL_CODE,
@@ -33,6 +30,7 @@ from .constants import (
     COL_WAGE_AMT,
     COL_WAGE_RATE,
 )
+from silverestimate.ui.view_models import EstimateEntryRowState
 
 if TYPE_CHECKING:  # pragma: no cover - for type checking only
     from silverestimate.presenter import EstimateEntryPresenter
@@ -40,6 +38,62 @@ if TYPE_CHECKING:  # pragma: no cover - for type checking only
 
 class _EstimatePersistenceMixin:
     """Presenter and persistence oriented helpers."""
+
+    def _update_view_model_snapshot(self) -> None:
+        """Refresh the view-model with current table state when available."""
+        view_model = getattr(self, "view_model", None)
+        if view_model is None or not hasattr(self, "item_table"):
+            return
+
+        rows: list[EstimateEntryRowState] = []
+        table = self.item_table
+        for row in range(table.rowCount()):
+            try:
+                type_item = table.item(row, COL_TYPE)
+                category = EstimateLineCategory.from_label(
+                    type_item.text() if type_item else None
+                )
+                name_item = table.item(row, COL_ITEM_NAME)
+                row_state = EstimateEntryRowState(
+                    code=self._get_row_code(row),
+                    name=name_item.text() if name_item else "",
+                    gross=self._get_cell_float(row, COL_GROSS),
+                    poly=self._get_cell_float(row, COL_POLY),
+                    net_weight=self._get_cell_float(row, COL_NET_WT),
+                    purity=self._get_cell_float(row, COL_PURITY),
+                    wage_rate=self._get_cell_float(row, COL_WAGE_RATE),
+                    pieces=self._get_cell_int(row, COL_PIECES),
+                    wage_amount=self._get_cell_float(row, COL_WAGE_AMT),
+                    fine_weight=self._get_cell_float(row, COL_FINE_WT),
+                    category=category,
+                    row_index=row + 1,
+                )
+            except Exception as row_error:
+                self.logger.debug(
+                    "Skipping row %s for view-model snapshot: %s",
+                    row + 1,
+                    row_error,
+                    exc_info=True,
+                )
+                continue
+            rows.append(row_state)
+
+        view_model.set_rows(rows)
+
+        try:
+            silver_rate = float(self.silver_rate_spin.value())
+        except Exception:
+            silver_rate = 0.0
+
+        view_model.set_totals_inputs(
+            silver_rate=silver_rate,
+            last_balance_silver=getattr(self, "last_balance_silver", 0.0),
+            last_balance_amount=getattr(self, "last_balance_amount", 0.0),
+        )
+        view_model.set_modes(
+            return_mode=getattr(self, "return_mode", False),
+            silver_bar_mode=getattr(self, "silver_bar_mode", False),
+        )
 
 
     def apply_loaded_estimate(self, loaded: LoadedEstimate) -> bool:
@@ -68,30 +122,62 @@ class _EstimatePersistenceMixin:
                 except Exception:
                     self.note_edit.setText("")
 
+            view_model = getattr(self, "view_model", None)
+            row_states = EstimateEntryPersistenceService.build_row_states_from_items(
+                loaded.items
+            )
+
+            if view_model is not None:
+                view_model.set_rows(row_states)
+                view_model.set_totals_inputs(
+                    silver_rate=loaded.silver_rate,
+                    last_balance_silver=loaded.last_balance_silver,
+                    last_balance_amount=loaded.last_balance_amount,
+                )
+                view_model.set_modes(return_mode=False, silver_bar_mode=False)
+
             self.last_balance_silver = loaded.last_balance_silver
             self.last_balance_amount = loaded.last_balance_amount
 
-            for item in loaded.items:
+            for row_state in row_states:
                 row = self.item_table.rowCount()
                 self.item_table.insertRow(row)
-                canonical_code = (item.code or "").strip()
+                canonical_code = (row_state.code or "").strip()
                 display_code = canonical_code.upper() if canonical_code else ""
                 code_item = QTableWidgetItem(display_code)
                 code_item.setData(Qt.UserRole, canonical_code or None)
                 self.item_table.setItem(row, COL_CODE, code_item)
-                self.item_table.setItem(row, COL_ITEM_NAME, QTableWidgetItem(item.name))
-                self.item_table.setItem(row, COL_GROSS, QTableWidgetItem(f"{item.gross:.2f}"))
-                self.item_table.setItem(row, COL_POLY, QTableWidgetItem(f"{item.poly:.2f}"))
-                self.item_table.setItem(row, COL_NET_WT, QTableWidgetItem(f"{item.net_wt:.2f}"))
-                self.item_table.setItem(row, COL_PURITY, QTableWidgetItem(f"{item.purity:.2f}"))
-                self.item_table.setItem(row, COL_WAGE_RATE, QTableWidgetItem(f"{item.wage_rate:.2f}"))
-                self.item_table.setItem(row, COL_PIECES, QTableWidgetItem(str(item.pieces)))
-                self.item_table.setItem(row, COL_WAGE_AMT, QTableWidgetItem(f"{item.wage:.0f}"))
-                self.item_table.setItem(row, COL_FINE_WT, QTableWidgetItem(f"{item.fine:.2f}"))
+                self.item_table.setItem(
+                    row, COL_ITEM_NAME, QTableWidgetItem(row_state.name)
+                )
+                self.item_table.setItem(
+                    row, COL_GROSS, QTableWidgetItem(f"{row_state.gross:.2f}")
+                )
+                self.item_table.setItem(
+                    row, COL_POLY, QTableWidgetItem(f"{row_state.poly:.2f}")
+                )
+                self.item_table.setItem(
+                    row, COL_NET_WT, QTableWidgetItem(f"{row_state.net_weight:.2f}")
+                )
+                self.item_table.setItem(
+                    row, COL_PURITY, QTableWidgetItem(f"{row_state.purity:.2f}")
+                )
+                self.item_table.setItem(
+                    row, COL_WAGE_RATE, QTableWidgetItem(f"{row_state.wage_rate:.2f}")
+                )
+                self.item_table.setItem(
+                    row, COL_PIECES, QTableWidgetItem(str(row_state.pieces))
+                )
+                self.item_table.setItem(
+                    row, COL_WAGE_AMT, QTableWidgetItem(f"{row_state.wage_amount:.0f}")
+                )
+                self.item_table.setItem(
+                    row, COL_FINE_WT, QTableWidgetItem(f"{row_state.fine_weight:.2f}")
+                )
 
-                if item.is_return:
+                if row_state.category.is_return():
                     type_text, bg_color = "Return", QColor(255, 200, 200)
-                elif item.is_silver_bar:
+                elif row_state.category.is_silver_bar():
                     type_text, bg_color = "Silver Bar", QColor(200, 255, 200)
                 else:
                     type_text, bg_color = "No", QColor(255, 255, 255)
@@ -108,6 +194,7 @@ class _EstimatePersistenceMixin:
 
             self.add_empty_row()
             self.calculate_totals()
+            self._update_view_model_snapshot()
 
             self._estimate_loaded = True
             success = True
@@ -132,6 +219,11 @@ class _EstimatePersistenceMixin:
 
 
     def capture_state(self) -> EstimateEntryViewState:
+        view_model = getattr(self, "view_model", None)
+        if view_model is not None:
+            self._update_view_model_snapshot()
+            return view_model.as_view_state()
+
         lines = []
         for row in range(self.item_table.rowCount()):
             code = self._get_row_code(row)
@@ -379,11 +471,6 @@ class _EstimatePersistenceMixin:
             self._status("Save Error: Voucher number missing", 4000)
             return
 
-        self.logger.info("Saving estimate %s...", voucher_no)
-        self._status(f"Saving estimate {voucher_no}...", 2000)
-        date = self.date_edit.date().toString("yyyy-MM-dd")
-        silver_rate = self.silver_rate_spin.value()
-
         presenter = getattr(self, "presenter", None)
         if presenter is None:
             self.logger.error("Cannot save estimate: presenter is not available")
@@ -394,124 +481,39 @@ class _EstimatePersistenceMixin:
             )
             return
 
-        items_to_save: list[SaveItem] = []
-        rows_with_errors = []
-
-        for row in range(self.item_table.rowCount()):
-            code = self._get_row_code(row)
-            if not code:
-                continue
-
-            type_item = self.item_table.item(row, COL_TYPE)
-            item_type_str = type_item.text() if type_item else "No"
-            is_return = item_type_str == "Return"
-            is_silver_bar = item_type_str == "Silver Bar"
-
-            try:
-                name_item = self.item_table.item(row, COL_ITEM_NAME)
-                save_item = SaveItem(
-                    code=code,
-                    row_number=row + 1,
-                    name=name_item.text() if name_item else "",
-                    gross=self._get_cell_float(row, COL_GROSS),
-                    poly=self._get_cell_float(row, COL_POLY),
-                    net_wt=self._get_cell_float(row, COL_NET_WT),
-                    purity=self._get_cell_float(row, COL_PURITY),
-                    wage_rate=self._get_cell_float(row, COL_WAGE_RATE),
-                    pieces=self._get_cell_int(row, COL_PIECES),
-                    wage=self._get_cell_float(row, COL_WAGE_AMT),
-                    fine=self._get_cell_float(row, COL_FINE_WT),
-                    is_return=is_return,
-                    is_silver_bar=is_silver_bar,
-                )
-                if save_item.net_wt < 0 or save_item.fine < 0 or save_item.wage < 0:
-                    raise ValueError(
-                        "Calculated values (Net, Fine, Wage) cannot be negative."
-                    )
-                items_to_save.append(save_item)
-            except Exception as exc:
-                rows_with_errors.append(row + 1)
-                self.logger.error(
-                    "Error processing row %s for saving: %s", row + 1, exc, exc_info=True
-                )
-                continue
-
-        if rows_with_errors:
-            error_msg = (
-                "Could not process data in row(s): "
-                + ", ".join(map(str, rows_with_errors))
-                + ". These rows were skipped."
+        view_model = getattr(self, "view_model", None)
+        if view_model is None:
+            self.logger.error("Cannot save estimate: view-model is not available")
+            QMessageBox.critical(
+                self,
+                "Save Error",
+                "Estimate view-model is unavailable. Please restart the application.",
             )
-            self.logger.warning(error_msg)
-            QMessageBox.warning(self, "Data Error", error_msg)
-            self._status(
-                f"Save Error: Invalid data in row(s) {', '.join(map(str, rows_with_errors))}",
-                5000,
-            )
-
-        if not items_to_save:
-            self.logger.warning("Save Error: No valid items to save")
-            QMessageBox.warning(self, "Input Error", "No valid items found to save.")
-            self._status("Save Error: No valid items to save", 4000)
             return
 
-        calc_total_gross, calc_total_net = 0.0, 0.0
-        calc_net_fine, calc_net_wage = 0.0, 0.0
-        calc_reg_fine, calc_reg_wage = 0.0, 0.0
-        calc_bar_fine, calc_bar_wage = 0.0, 0.0
-        calc_ret_fine, calc_ret_wage = 0.0, 0.0
-        for item in items_to_save:
-            calc_total_gross += item.gross
-            calc_total_net += item.net_wt
-            if item.is_return:
-                calc_ret_fine += item.fine
-                calc_ret_wage += item.wage
-            elif item.is_silver_bar:
-                calc_bar_fine += item.fine
-                calc_bar_wage += item.wage
-            else:
-                calc_reg_fine += item.fine
-                calc_reg_wage += item.wage
-        calc_net_fine = calc_reg_fine - calc_bar_fine - calc_ret_fine
-        calc_net_wage = calc_reg_wage - calc_bar_wage - calc_ret_wage
+        self.logger.info("Saving estimate %s...", voucher_no)
+        self._status(f"Saving estimate {voucher_no}...", 2000)
+
+        # Ensure the view-model reflects the latest UI state
+        self._update_view_model_snapshot()
 
         note = self.note_edit.text().strip() if hasattr(self, "note_edit") else ""
+        date = self.date_edit.date().toString("yyyy-MM-dd")
 
-        last_balance_silver = getattr(self, "last_balance_silver", 0.0)
-        last_balance_amount = getattr(self, "last_balance_amount", 0.0)
-
-        recalculated_totals = {
-            "total_gross": calc_total_gross,
-            "total_net": calc_total_net,
-            "net_fine": calc_net_fine,
-            "net_wage": calc_net_wage,
-            "note": note,
-            "last_balance_silver": last_balance_silver,
-            "last_balance_amount": last_balance_amount,
-        }
-
-        regular_items = [
-            item for item in items_to_save if not item.is_return and not item.is_silver_bar
-        ]
-        return_items = [
-            item for item in items_to_save if item.is_return or item.is_silver_bar
-        ]
-
-        payload = SavePayload(
-            voucher_no=voucher_no,
-            date=date,
-            silver_rate=silver_rate,
-            note=note,
-            last_balance_silver=last_balance_silver,
-            last_balance_amount=last_balance_amount,
-            items=tuple(items_to_save),
-            regular_items=tuple(regular_items),
-            return_items=tuple(return_items),
-            totals=recalculated_totals,
-        )
-
+        service = EstimateEntryPersistenceService(view_model)
         try:
-            outcome = presenter.save_estimate(payload)
+            outcome, preparation = service.execute_save(
+                voucher_no=voucher_no,
+                date=date,
+                note=note,
+                presenter=presenter,
+            )
+        except ValueError as exc:
+            message = str(exc)
+            self.logger.warning("Save Error: %s", message)
+            QMessageBox.warning(self, "Input Error", message)
+            self._status(f"Save Error: {message}", 4000)
+            return
         except Exception as exc:
             self.logger.error(
                 "Unexpected error saving estimate %s: %s", voucher_no, exc, exc_info=True
@@ -523,6 +525,21 @@ class _EstimatePersistenceMixin:
             )
             self._status("Save Error: Unexpected exception during save", 5000)
             return
+
+        if preparation.skipped_rows:
+            row_list = ", ".join(map(str, preparation.skipped_rows))
+            error_msg = (
+                "Could not process data in row(s): "
+                f"{row_list}. These rows were skipped."
+            )
+            self.logger.warning(error_msg)
+            for row_number, detail in preparation.row_errors.items():
+                self.logger.error("Row %s skipped during save: %s", row_number, detail)
+            QMessageBox.warning(self, "Data Error", error_msg)
+            self._status(
+                f"Save Error: Invalid data in row(s) {row_list}",
+                5000,
+            )
 
         if outcome.success:
             self._status(outcome.message, 5000)

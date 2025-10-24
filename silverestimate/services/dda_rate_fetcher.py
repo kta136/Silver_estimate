@@ -1,11 +1,19 @@
 #!/usr/bin/env python
 import json
-import urllib.request
+import re
 import urllib.error
+import urllib.request
+from html import unescape
+from typing import Optional
 
-API_PATH = "index.php/C_booking/get_commodity_data"
 DEFAULT_BASE_URL = "http://www.ddasilver.com/"
 TARGET_NAME = "Silver Agra Local Mohar"
+
+SCRAPE_HEADERS = {
+    "User-Agent": "SilverEstimate/1.0 (+https://ddasilver.com)",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Connection": "close",
+}
 
 # Broadcast endpoints used by site UI for exact on-screen numbers.
 # The vendor recently migrated the live feed to a new host (13.235.208.189)
@@ -21,63 +29,121 @@ BROADCAST_CLIENT = "ddasil"
 
 def fetch_silver_agra_local_mohar_rate(base_url: str = DEFAULT_BASE_URL, timeout: int = 10):
     """
-    Fetch the live rate for 'Silver Agra Local Mohar' from DDASilver.
+    Fetch the live rate for 'Silver Agra Local Mohar' by scraping the DDASilver homepage.
 
     Returns a tuple: (rate_int_or_none, metadata_dict)
-    - rate is an integer (rounded according to allowed decimals), or None on failure
-    - metadata contains the raw item record when available
+    - rate is an integer (rounded) or None when the content could not be parsed
+    - metadata contains the raw hidden-row fields when available
     """
-    url = base_url.rstrip("/") + "/" + API_PATH
-    req = urllib.request.Request(url, headers={
-        "User-Agent": "SilverEstimate/1.0 (+https://ddasilver.com)"
-    })
+    url = base_url.rstrip("/") + "/"
+    headers = dict(SCRAPE_HEADERS)
+    headers.setdefault("Referer", url)
+    req = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            # Expect JSON response
-            data = json.loads(resp.read().decode("utf-8", errors="replace"))
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError):
+            html = resp.read().decode("utf-8", errors="replace")
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError):
         return None, {}
 
-    try:
-        commodities = data.get("commodity", {}).get("commoditydetails", [])
-        for item in commodities:
-            # Defensive: names can differ in case
-            if str(item.get("com_name", "")).strip().lower() == TARGET_NAME.lower():
-                raw_rate = item.get("sell_rate")
-                allowed_decimals = item.get("allowed_decimals", "0")
-                try:
-                    decimals = int(str(allowed_decimals))
-                except Exception:
-                    decimals = 0
+    return _parse_scraped_rate(html, TARGET_NAME)
 
-                rate_float = float(raw_rate) if raw_rate is not None else None
-                if rate_float is None:
-                    return None, item
 
-                # Round according to allowed_decimals and cast to int if 0 decimals
-                if decimals <= 0:
-                    rate_val = int(round(rate_float))
-                else:
-                    # Keep decimals as integer value e.g., 123.45 -> 12345 when decimals=2?
-                    # For our UI (QDoubleSpinBox), we only need a numeric value.
-                    # Return the float rounded to 'decimals'; caller can format.
-                    rate_val = round(rate_float, decimals)
-                return rate_val, item
+def _parse_scraped_rate(html: str, target_name: str):
+    """Parse the commodity table markup and extract the rate plus related metadata."""
+    row_pattern = re.compile(
+        r"<tr[^>]*>\s*<td[^>]*>\s*"
+        + re.escape(target_name)
+        + r"\s*</td>(?P<body>.*?)</tr>",
+        re.IGNORECASE | re.DOTALL,
+    )
+    row_match = row_pattern.search(html)
+    if not row_match:
         return None, {}
-    except Exception:
-        return None, {}
+
+    cells_html = row_match.group("body")
+    metadata = {}
+
+    for div_match in re.finditer(
+        r'<div\s+[^>]*class="([^"]+)"[^>]*>\s*([^<]*)</div>',
+        cells_html,
+        re.IGNORECASE | re.DOTALL,
+    ):
+        key = div_match.group(1).strip()
+        if not key:
+            continue
+        value = unescape(div_match.group(2).strip())
+        metadata[key] = value
+
+    display_match = re.search(
+        r'<div[^>]*class="[^"]*(?:redround|greenround)[^"]*"[^>]*>\s*([^<]*)</div>',
+        cells_html,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if display_match:
+        display_value = unescape(display_match.group(1).strip())
+        if display_value:
+            metadata.setdefault("display_rate", display_value)
+
+    metadata["source"] = "scraped"
+
+    def _convert_to_float(raw_val: Optional[str]) -> Optional[float]:
+        if raw_val is None:
+            return None
+        cleaned = raw_val.replace(",", "").strip()
+        if cleaned in {"", "-", "--"}:
+            return None
+        # Strip currency symbols if present
+        cleaned = cleaned.lstrip("₹").strip()
+        try:
+            return float(cleaned)
+        except Exception:
+            return None
+
+    rate_float = None
+    source = None
+    sell_rate_val = _convert_to_float(metadata.get("sell_rate"))
+    if sell_rate_val is not None:
+        rate_float = sell_rate_val
+        source = "sell_rate"
+        diff_val = _convert_to_float(metadata.get("sell_diff"))
+        if diff_val is not None and diff_val != 0:
+            rate_float = sell_rate_val - diff_val
+            metadata["applied_diff"] = diff_val
+            metadata["applied_adjustment"] = "sell_rate - sell_diff"
+    if rate_float is None:
+        display_val = _convert_to_float(metadata.get("display_rate"))
+        if display_val is not None:
+            rate_float = display_val
+            source = "display_rate"
+
+    if rate_float is None:
+        return None, metadata
+
+    decimals = 0
+    rate_str = f"{rate_float}"
+    if "." in rate_str:
+        decimals = len(rate_str.split(".", 1)[1].rstrip("0"))
+    if decimals <= 0:
+        rate_val = int(round(rate_float))
+    else:
+        decimals = min(decimals, 4)
+        rate_val = round(rate_float, decimals)
+    metadata["parsed_decimals"] = decimals
+    if source:
+        metadata["raw_source"] = source
+    return rate_val, metadata
 
 def _main():
     rate, meta = fetch_silver_agra_local_mohar_rate()
     if rate is None:
-        print("Failed to fetch rate from commodity API; attempting broadcast…")
+        print("Failed to scrape rate from homepage; attempting broadcast...")
         br, open_, info = fetch_broadcast_rate_exact()
         print(br, open_, info)
     else:
         print(rate)
 
 def _lookup_com_id_for_target(base_url: str = DEFAULT_BASE_URL, timeout: int = 10):
-    """Resolve com_id for TARGET_NAME via the commodity API."""
+    """Resolve com_id for TARGET_NAME via the scraped metadata."""
     rate, item = fetch_silver_agra_local_mohar_rate(base_url=base_url, timeout=timeout)
     try:
         return int(item.get("com_id")) if item else None

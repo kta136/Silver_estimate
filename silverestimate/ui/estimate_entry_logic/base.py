@@ -35,6 +35,8 @@ class _EstimateBaseMixin:
         self.current_column = COL_CODE
         self.last_balance_silver = 0.0
         self.last_balance_amount = 0.0
+        self.view_model = None
+        self._table_adapter = None
 
     # --- Status helpers -------------------------------------------------
     def _status(self, message, timeout=3000):
@@ -76,6 +78,16 @@ class _EstimateBaseMixin:
             editor.setText(voucher_no)
         finally:
             editor.blockSignals(False)
+
+    def _update_view_model_modes(self) -> None:
+        """Synchronize mode flags with the view-model when available."""
+        view_model = getattr(self, "view_model", None)
+        if view_model is None:
+            return
+        view_model.set_modes(
+            return_mode=getattr(self, "return_mode", False),
+            silver_bar_mode=getattr(self, "silver_bar_mode", False),
+        )
 
     # --- Signal wiring --------------------------------------------------
     def connect_signals(self, skip_load_estimate: bool = False) -> None:
@@ -285,8 +297,17 @@ class _EstimateBaseMixin:
                 except Exception:
                     pass
                 self._pop_unsaved_block()
+
             if cleared:
                 self._set_unsaved(False, force=True)
+            updater = getattr(self, "_update_view_model_snapshot", None)
+            if callable(updater):
+                try:
+                    updater()
+                except Exception:
+                    self.logger.debug(
+                        "View-model snapshot update failed during clear_form", exc_info=True
+                    )
 
     def confirm_exit(self) -> bool:
         has_changes = getattr(self, "has_unsaved_changes", None)

@@ -1165,9 +1165,7 @@ class PrintManager:
         """Generates HTML content for printing a single list's details (v2.0 schema)."""
         # Use dictionary-style access with checks for sqlite3.Row compatibility
         li = list_info['list_identifier'] if 'list_identifier' in list_info.keys() and list_info['list_identifier'] is not None else 'N/A'
-        cd = list_info['creation_date'] if 'creation_date' in list_info.keys() and list_info['creation_date'] is not None else 'N/A'
         ln = list_info['list_note'] if 'list_note' in list_info.keys() and list_info['list_note'] is not None else ''
-        pd = QDate.currentDate().toString("yyyy-MM-dd")
 
         html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Silver Bar List - {li}</title><style>
                    body{{font-family:Arial,sans-serif;font-size:8pt;margin:0}}table{{border-collapse:collapse;width:100%;margin-top:15px;page-break-inside:auto}}
@@ -1179,9 +1177,7 @@ class PrintManager:
                    <div class="header-title">Silver Bar List Details</div>
                    <div class="list-info">
                        <span><b>List ID:</b> {li}</span>
-                       <span><b>Created:</b> {cd}</span>
-                       <span><b>Printed:</b> {pd}</span>
-                   </div>
+                    </div>
                    <div class="list-note"><b>Note:</b> {ln if ln else 'N/A'}</div>
                     <table>
                         <thead>

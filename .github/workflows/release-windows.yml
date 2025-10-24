@@ -27,7 +27,15 @@ jobs:
 
       - name: Build executable (OneFile)
         run: |
-          python -m PyInstaller --noconfirm --onefile --windowed --name SilverEstimate --hidden-import passlib.handlers.argon2 --hidden-import passlib.handlers.bcrypt main.py
+          python -m PyInstaller --noconfirm --onefile --windowed --name SilverEstimate `
+            --hidden-import passlib.handlers.argon2 `
+            --hidden-import passlib.handlers.bcrypt `
+            --hidden-import keyring.backends `
+            --hidden-import keyring.backends.Windows `
+            --hidden-import keyring.backends.win32 `
+            --hidden-import keyring.backends.fail `
+            --hidden-import keyring.backends.null `
+            main.py
 
       - name: Rename executable with version and package artifact
         shell: pwsh

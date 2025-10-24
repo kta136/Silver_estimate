@@ -21,21 +21,48 @@ if ($IsWindows) {
 & $py -m pip install --upgrade pip
 & $py -m pip install -r (Join-Path $PSScriptRoot "..\requirements.txt")
 
+$iconPath = Join-Path $PSScriptRoot "..\assets\icons\silverestimate.ico"
+
 Write-Host "[Build] Running PyInstaller..."
 $spec = Join-Path $PSScriptRoot "..\silverestimate.spec"
 if ($OneFile) {
-  & $py -m PyInstaller --noconfirm --onefile --windowed --name SilverEstimate --hidden-import passlib.handlers.argon2 --hidden-import passlib.handlers.bcrypt main.py
+  & $py -m PyInstaller `
+    --noconfirm `
+    --onefile `
+    --windowed `
+    --icon $iconPath `
+    --name SilverEstimate `
+    --hidden-import passlib.handlers.argon2 `
+    --hidden-import passlib.handlers.bcrypt `
+    --hidden-import keyring.backends `
+    --hidden-import keyring.backends.Windows `
+    --hidden-import keyring.backends.win32 `
+    --hidden-import keyring.backends.fail `
+    --hidden-import keyring.backends.null `
+    main.py
 } elseif (Test-Path $spec) {
   & $py -m PyInstaller --noconfirm $spec
 } else {
-  & $py -m PyInstaller --noconfirm --windowed --name SilverEstimate --hidden-import passlib.handlers.argon2 --hidden-import passlib.handlers.bcrypt main.py
+  & $py -m PyInstaller `
+    --noconfirm `
+    --windowed `
+    --icon $iconPath `
+    --name SilverEstimate `
+    --hidden-import passlib.handlers.argon2 `
+    --hidden-import passlib.handlers.bcrypt `
+    --hidden-import keyring.backends `
+    --hidden-import keyring.backends.Windows `
+    --hidden-import keyring.backends.win32 `
+    --hidden-import keyring.backends.fail `
+    --hidden-import keyring.backends.null `
+    main.py
 }
 
 Write-Host "[Build] Packaging zip..."
 $outDir = Join-Path $PSScriptRoot "..\dist\SilverEstimate"
 if (!(Test-Path $outDir)) { throw "Output directory not found: $outDir" }
 
-$versionFile = Join-Path $PSScriptRoot "..\app_constants.py"
+$versionFile = Join-Path $PSScriptRoot '..\silverestimate\infrastructure\app_constants.py'
 $version = (Get-Content $versionFile | Select-String -Pattern 'APP_VERSION\s*=\s*"([^"]+)' -AllMatches).Matches.Groups[1].Value
 if (-not $version) { $version = "dev" }
 
@@ -45,3 +72,7 @@ if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 Compress-Archive -Path (Join-Path $PSScriptRoot "..\dist\SilverEstimate\*") -DestinationPath $zipPath
 
 Write-Host "[Build] Done: $zipPath"
+
+
+
+

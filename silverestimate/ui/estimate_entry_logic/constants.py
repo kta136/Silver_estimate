@@ -1,0 +1,25 @@
+COL_CODE = 0
+COL_ITEM_NAME = 1
+COL_GROSS = 2
+COL_POLY = 3
+COL_NET_WT = 4
+COL_PURITY = 5
+COL_WAGE_RATE = 6
+COL_PIECES = 7
+COL_WAGE_AMT = 8
+COL_FINE_WT = 9
+COL_TYPE = 10
+
+__all__ = [
+    "COL_CODE",
+    "COL_ITEM_NAME",
+    "COL_GROSS",
+    "COL_POLY",
+    "COL_NET_WT",
+    "COL_PURITY",
+    "COL_WAGE_RATE",
+    "COL_PIECES",
+    "COL_WAGE_AMT",
+    "COL_FINE_WT",
+    "COL_TYPE",
+]

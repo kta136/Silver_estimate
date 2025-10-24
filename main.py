@@ -1,51 +1,74 @@
 #!/usr/bin/env python
-import sys
-import os
-import traceback
 import logging
-import threading
+import sys
 
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QShortcut,
-                             QMenuBar, QMenu, QAction, QMessageBox, QDialog, QStatusBar,
-                             QLabel, QStackedWidget, QToolBar, QActionGroup, QInputDialog)
-from PyQt5.QtGui import QKeySequence, QFont
-from PyQt5.QtCore import Qt, QSettings, QTimer # Import QSettings
-import PyQt5.QtCore as QtCore
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QMessageBox,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 # Import the custom dialogs and modules
-from custom_font_dialog import CustomFontDialog
-from login_dialog import LoginDialog # Import the new login dialog
-from estimate_entry import EstimateEntryWidget
-from database_manager import DatabaseManager
-# from advanced_tools_dialog import AdvancedToolsDialog # Remove old import
-# Lazy imports: ItemMasterWidget, SettingsDialog, SilverBarHistoryDialog
-from logger import setup_logging, qt_message_handler
-from message_bar import MessageBar
-from app_constants import APP_TITLE, APP_VERSION, SETTINGS_ORG, SETTINGS_APP, DB_PATH
-from dda_rate_fetcher import (
-    fetch_silver_agra_local_mohar_rate,
-    fetch_broadcast_rate_exact,
+from silverestimate.controllers.live_rate_controller import LiveRateController
+from silverestimate.controllers.navigation_controller import NavigationController
+from silverestimate.infrastructure.app_constants import APP_TITLE
+from silverestimate.infrastructure.application import ApplicationBuilder, StartupError
+from silverestimate.infrastructure.paths import get_asset_path
+from silverestimate.infrastructure.windows_integration import (
+    apply_taskbar_icon,
+    destroy_icon_handle,
 )
+from silverestimate.services.estimate_repository import DatabaseEstimateRepository
+from silverestimate.services.main_commands import MainCommands
+from silverestimate.services.navigation_service import NavigationService
+from silverestimate.services.settings_service import SettingsService
+from silverestimate.ui.estimate_entry import EstimateEntryWidget
+from silverestimate.ui.font_dialogs import adjust_table_font_size, choose_print_font
 
 
 class MainWindow(QMainWindow):
     # Thread-safe signal to apply fetched rates on the UI thread
-    rate_updated = QtCore.pyqtSignal(object, object, object)  # (brate, api_rate, is_open)
+
     """Main application window for the Silver Estimation App."""
 
-    def __init__(self, password=None, logger=None): # Add password and logger arguments
+    def __init__(self, db_manager, logger=None):
         super().__init__()
-        
-        # Set up logging
+
         self.logger = logger or logging.getLogger(__name__)
         self.logger.info("Initializing MainWindow")
 
-        # Defer database setup until password is known
-        self.db = None
-        self._password = password # Store password temporarily
+        if db_manager is None:
+            raise StartupError("Database manager not provided. Cannot start application.")
 
-        # Initialize UI
-        self.setWindowTitle(APP_TITLE)
+        self.db = db_manager
+        self.settings_service = SettingsService()
+        self._taskbar_icon_handle = None
+
+        try:
+            icon_path = get_asset_path("assets", "icons", "silverestimate.ico")
+            if icon_path.exists():
+                icon = QIcon(str(icon_path))
+                self.setWindowIcon(icon)
+                if sys.platform == "win32":
+                    try:
+                        hwnd = int(self.winId())
+                    except Exception:
+                        hwnd = 0
+                    self._taskbar_icon_handle = apply_taskbar_icon(
+                        hwnd, icon_path, logger=self.logger
+                    )
+            else:
+                self.logger.debug("Window icon not found at %s", icon_path)
+        except Exception as exc:
+            if self.logger:
+                self.logger.debug("Failed to apply window icon: %s", exc)
+
+        self.setWindowTitle(f"{APP_TITLE}[*]")
         # self.setGeometry(100, 100, 1000, 700) # Remove fixed geometry
         # self.showFullScreen() # Start in true full screen
         # We need to show the window first before maximizing it
@@ -53,958 +76,237 @@ class MainWindow(QMainWindow):
         # Let's try setting the window state directly (Moved to end of __init__)
         # self.setWindowState(Qt.WindowMaximized)
 
-        # Top message bar (created but not added to layout; inline status is preferred)
-        self.message_bar = MessageBar(self)
+        self._pending_status_message = None
 
-        # Connect live-rate signal
+        default_font = QApplication.font()
         try:
-            self.rate_updated.connect(self._apply_live_rate)
-        except Exception:
-            pass
+            self.print_font = self.settings_service.load_print_font(default_font)
+        except Exception as exc:
+            self.logger.warning("Failed to load print font settings: %s", exc)
+            self.print_font = default_font
 
-        # Setup database *after* getting password (if provided)
-        if self._password:
-            # Pass only password, DB Manager handles salt via QSettings
-            self.setup_database_with_password(self._password)
-        else:
-            # Handle case where no password was provided (e.g., error or cancelled login)
-            # For now, show an error and potentially exit.
-            QMessageBox.critical(self, "Authentication Error", "Password not provided. Cannot start application.")
-            # We might want to exit gracefully here, but QMainWindow doesn't easily allow exiting from __init__
-            # Let's prevent further UI setup.
-            return # Stop further initialization
-
-        # Set up menu bar
-        self.setup_menu_bar()
-
-        # Load settings (including font) before setting up UI elements that use them
-        self.load_settings() # Password hashes will be loaded/checked elsewhere (login dialog)
-
-        # Ensure any QMainWindow footer status bar is hidden to free space
-        try:
-            sb = QMainWindow.statusBar(self)  # creates if not exists
-            if sb:
-                sb.hide()
-        except Exception:
-            pass
-
-        # Initial user-facing message will be shown inline after widgets are ready
-
-        # Central widget
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         self.layout = QVBoxLayout(self.central_widget)
-        # Navigation stack for primary views
         self.stack = QStackedWidget(self.central_widget)
-        # Insert just the main stack (inline status lives in header area)
         self.layout.addWidget(self.stack)
 
-        # Initialize widgets, passing main window and db manager
-        # Ensure db is initialized before creating widgets that need it
-        if self.db:
+        self.navigation_service = NavigationService(self, self.stack, logger=self.logger)
+        self.commands = MainCommands(self, self.db, logger=self.logger)
+
+        self.navigation_controller = NavigationController(
+            main_window=self,
+            navigation_service=self.navigation_service,
+            commands=self.commands,
+            logger=self.logger,
+        )
+
+        self.live_rate_controller = LiveRateController(
+            parent=self,
+            widget_getter=lambda: getattr(self, 'estimate_widget', None),
+            status_callback=self.show_status_message,
+            logger=self.logger,
+        )
+
+        self.navigation_controller.initialize()
+
+        try:
+            self.logger.info("Creating EstimateEntryWidget...")
+            repository = DatabaseEstimateRepository(self.db)
+            self.estimate_widget = EstimateEntryWidget(self.db, self, repository)
+
+            self.logger.info("Deferring ItemMasterWidget creation (lazy-load)")
+            self.item_master_widget = None
+            self.logger.info("Deferring SilverBar view creation (lazy-load)")
+            self.silver_bar_widget = None
+
+            self.stack.addWidget(self.estimate_widget)
+            self.stack.setCurrentWidget(self.estimate_widget)
+
             try:
-                # Create widgets with robust error handling
-                self.logger.info("Creating EstimateEntryWidget...")
-                self.estimate_widget = EstimateEntryWidget(self.db, self) # Pass main window instance
-                
-                # Lazy-load Item Master on demand (rarely used)
-                self.logger.info("Deferring ItemMasterWidget creation (lazy-load)")
-                self.item_master_widget = None
-                # Lazy-load Silver Bar Management view on demand
-                self.logger.info("Deferring SilverBar view creation (lazy-load)")
-                self.silver_bar_widget = None
+                if hasattr(self.db, 'on_flush_queued'):
+                    def _on_flush_q():
+                        QTimer.singleShot(0, lambda: self.estimate_widget.show_inline_status("Saving.", 1000, 'info'))
 
-                # Add Estimate view to navigation stack
-                self.stack.addWidget(self.estimate_widget)
+                    def _on_flush_done():
+                        QTimer.singleShot(0, lambda: self.estimate_widget.show_inline_status("", 0))
 
-                # Initially show estimate entry
-                self.stack.setCurrentWidget(self.estimate_widget)
+                    self.db.on_flush_queued = _on_flush_q
+                    self.db.on_flush_done = _on_flush_done
+            except Exception as callback_error:
+                self.logger.debug("Could not hook flush callbacks: %s", callback_error)
 
-                # Hook DB flush callbacks to inline status in the estimate view
-                try:
-                    if hasattr(self.db, 'on_flush_queued'):
-                        def _on_flush_q():
-                            QTimer.singleShot(0, lambda: self.estimate_widget.show_inline_status("Saving…", 1000, 'info'))
-                        def _on_flush_done():
-                            QTimer.singleShot(0, lambda: self.estimate_widget.show_inline_status("", 0))
-                        self.db.on_flush_queued = _on_flush_q
-                        self.db.on_flush_done = _on_flush_done
-                except Exception as _cb_e:
-                    self.logger.debug(f"Could not hook flush callbacks: {_cb_e}")
-
-                # Preload item cache off the UI thread for faster code lookups
-                try:
-                    if hasattr(self.db, 'start_preload_item_cache'):
-                        self.db.start_preload_item_cache()
-                except Exception as _pre_e:
-                    self.logger.debug(f"Item cache preload failed: {_pre_e}")
-                
-                self.logger.info("Widgets initialized successfully")
-                # Now that widgets exist, show initial Ready status inline
-                try:
-                    self.show_status_message("Ready", 2000, level='info')
-                except Exception:
-                    pass
-
-                # Configure and start live rate updates
-                try:
-                    # Apply visibility first, then timer setup per settings
-                    self.reconfigure_rate_visibility_from_settings()
-                    self._setup_live_rate_timer()
-                    # Trigger an initial fetch shortly after UI is ready
-                    QTimer.singleShot(500, self.refresh_live_rate_now)
-                    try:
-                        self.logger.info("Scheduled initial live-rate fetch (500ms)")
-                    except Exception:
-                        pass
-                except Exception as _rate_e:
-                    self.logger.debug(f"Live rate timer init failed: {_rate_e}")
-            except Exception as e:
-                # Catch any exceptions during widget initialization
-                self.logger.critical(f"Failed to initialize widgets: {str(e)}", exc_info=True)
-                QMessageBox.critical(self, "Initialization Error",
-                                    f"Failed to initialize application widgets: {str(e)}\n\n"
-                                    "The application may not function correctly.")
-                
-                # Create placeholder widgets to prevent crashes
-                self.logger.info("Creating placeholder widgets...")
-                placeholder = QWidget()
-                placeholder_layout = QVBoxLayout(placeholder)
-                error_label = QLabel("Application initialization error. Please restart the application.")
-                error_label.setStyleSheet("color: red; font-weight: bold; font-size: 14px;")
-                placeholder_layout.addWidget(error_label)
-                
-                # Add placeholder to layout
-                self.layout.addWidget(placeholder)
-                
-                # Store None for the widgets to prevent attribute errors
-                self.estimate_widget = None
-                self.item_master_widget = None
-        else:
-             # Handle case where db failed to initialize
-             self.logger.critical("Database initialization failed. Cannot create widgets.")
-             QMessageBox.critical(self, "Database Error", "Failed to initialize database. Application cannot continue.")
-             
-             # Create placeholder widget with error message
-             placeholder = QWidget()
-             placeholder_layout = QVBoxLayout(placeholder)
-             error_label = QLabel("Database connection failed. Please restart the application.")
-             error_label.setStyleSheet("color: red; font-weight: bold; font-size: 14px;")
-             placeholder_layout.addWidget(error_label)
-             
-             # Add placeholder to layout
-             self.layout.addWidget(placeholder)
-             
-             # Store None for the widgets to prevent attribute errors
-             self.estimate_widget = None
-             self.item_master_widget = None
-
-
-        # Set up shortcuts (if needed)
-#        self.setup_shortcuts()
-
-        # Restore window geometry/state if available; otherwise maximize
-        try:
-            settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
-            restored = False
-            geo = settings.value("ui/main_geometry")
-            if geo is not None:
-                self.restoreGeometry(geo)
-                restored = True
-            state = settings.value("ui/main_state")
-            if state is not None:
-                self.restoreState(state)
-            if not restored:
-                self.setWindowState(Qt.WindowMaximized)
-        except Exception:
-            # Fall back to maximized if restore fails
-            self.setWindowState(Qt.WindowMaximized)
-
-    def show_status_message(self, message, timeout=3000, level='info'):
-        """Show a transient message inline next to Mode when possible."""
-        # Prefer inline status on the active Estimate view
-        try:
-            if hasattr(self, 'estimate_widget') and self.estimate_widget is not None:
-                if hasattr(self.estimate_widget, 'show_inline_status'):
-                    self.estimate_widget.show_inline_status(message, timeout, level)
-                    return
-        except Exception:
-            pass
-        # No inline target yet; skip showing tAo avoid UI flicker
-
-    # --- Live Rate Integration ---
-    def _setup_live_rate_timer(self):
-        """Initialize or reconfigure the live rate refresh timer from settings."""
-        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
-        # Robust bool parsing (QSettings may store as string)
-        raw_enabled = settings.value("rates/auto_refresh_enabled", True)
-        if isinstance(raw_enabled, bool):
-            auto_enabled = raw_enabled
-        elif isinstance(raw_enabled, str):
-            auto_enabled = raw_enabled.strip().lower() in ("1", "true", "yes", "on")
-        else:
-            auto_enabled = True
-
-        try:
-            interval_sec = int(settings.value("rates/refresh_interval_sec", 60))
-        except Exception:
-            interval_sec = 60
-        try:
-            interval_ms = max(5, int(interval_sec)) * 1000
-        except Exception:
-            interval_ms = 60000
-
-        if not hasattr(self, '_live_rate_timer') or self._live_rate_timer is None:
-            self._live_rate_timer = QTimer(self)
-            self._live_rate_timer.setSingleShot(False)
-            self._live_rate_timer.timeout.connect(self.refresh_live_rate_now)
-
-        self._live_rate_timer.setInterval(interval_ms)
-        if auto_enabled:
-            if not self._live_rate_timer.isActive():
-                self._live_rate_timer.start()
-                try:
-                    self.logger.info(f"Live-rate timer started: every {interval_ms} ms")
-                except Exception:
-                    pass
-        else:
-            if self._live_rate_timer.isActive():
-                self._live_rate_timer.stop()
             try:
-                self.logger.info("Live-rate timer disabled via settings")
+                if hasattr(self.db, 'start_preload_item_cache'):
+                    self.db.start_preload_item_cache()
+            except Exception as preload_error:
+                self.logger.debug("Item cache preload failed: %s", preload_error)
+
+            self.logger.info("Widgets initialized successfully")
+            try:
+                self.show_status_message("Ready", 2000, level='info')
             except Exception:
                 pass
 
-        # State flag to prevent overlapping fetches
-        self._rate_fetch_in_progress = False
-
-    def reconfigure_rate_timer_from_settings(self):
-        """Public hook to update the timer when settings change."""
-        try:
-            self._setup_live_rate_timer()
-            # Optional immediate refresh when settings are applied
-            self.refresh_live_rate_now()
-        except Exception as e:
-            self.logger.debug(f"Failed to reconfigure rate timer: {e}")
-
-    def refresh_live_rate_now(self):
-        """Kick off a background fetch of the latest DDASilver rate."""
-        # Skip entirely if live is disabled
-        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
-        live_enabled = settings.value("rates/live_enabled", True, type=bool)
-        if not live_enabled:
-            return
-        if getattr(self, '_rate_fetch_in_progress', False):
-            return
-        self._rate_fetch_in_progress = True
-        try:
-            self.logger.info("Live-rate fetch started")
-        except Exception:
-            pass
-
-        def _worker():
             try:
-                # Prefer exact on-screen broadcast
-                brate, is_open, info = fetch_broadcast_rate_exact(timeout=5)
-                # Fallback to commodity API if broadcast missing
-                api_rate = None
-                if brate is None:
-                    api_rate, _ = fetch_silver_agra_local_mohar_rate(timeout=5)
+                self.live_rate_controller.initialize()
+            except Exception as rate_error:
+                if self.logger:
+                    self.logger.debug("Live rate initialization failed: %s", rate_error, exc_info=True)
+
+            pending = getattr(self, '_pending_status_message', None)
+            if pending:
+                self._pending_status_message = None
                 try:
-                    self.logger.info(f"LiveRate fetch: broadcast={brate}, open={is_open}, api={api_rate}")
-                except Exception:
-                    pass
-            except Exception as e:
-                # Broadcast fetch failed (network/firewall/etc). Try API fallback.
-                self.logger.warning(f"Rate fetch error (broadcast): {e}")
-                brate, is_open = None, True
-                try:
-                    api_rate, _ = fetch_silver_agra_local_mohar_rate(timeout=5)
-                except Exception as e2:
-                    self.logger.warning(f"Rate fetch error (API fallback): {e2}")
-                    api_rate = None
+                    self.show_status_message(*pending)
+                except Exception as exc:
+                    if self.logger:
+                        self.logger.debug("Failed to deliver pending status message: %s", exc, exc_info=True)
 
-            # Deliver to UI thread via signal
             try:
-                self.rate_updated.emit(brate, api_rate, is_open)
-            finally:
-                # In case signal delivery is delayed, we still clear the in-progress flag in UI method
-                pass
-
-        threading.Thread(target=_worker, daemon=True).start()
-
-    def _apply_live_rate(self, brate, api_rate, is_open):
-        """Apply the fetched rate on the UI thread (signal handler)."""
-        # If live disabled mid-flight, do nothing
-        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
-        if not settings.value("rates/live_enabled", True, type=bool):
-            self._rate_fetch_in_progress = False
-            return
-        try:
-            self.logger.info("Live-rate UI apply: entered")
-        except Exception:
-            pass
-        try:
-            if not hasattr(self, 'estimate_widget') or self.estimate_widget is None:
-                self.logger.warning("Live-rate UI apply: estimate_widget not ready")
-                return
-
-            # Read current value to decide if we should seed when closed
-            try:
-                current_val = float(self.estimate_widget.silver_rate_spin.value())
-            except Exception:
-                current_val = 0.0
-
-            # Update read-only label
-            def _set_label(val):
-                if hasattr(self.estimate_widget, 'live_rate_value_label') and self.estimate_widget.live_rate_value_label is not None:
-                    self.estimate_widget.live_rate_value_label.setText(str(int(float(val))))
-
-            if brate is not None:
-                self.logger.info(f"Live-rate UI apply: setting broadcast value {brate}")
-                _set_label(brate)
-                self.show_status_message("Live rate updated", 1200, level='info')
-                self.logger.info(f"Live-rate applied from broadcast: {brate} (open={is_open})")
-            elif api_rate is not None:
-                self.logger.info(f"Live-rate UI apply: setting API value {api_rate}")
-                _set_label(api_rate)
-                self.show_status_message("Rate loaded (API fallback)", 1500, level='warning')
-                self.logger.info(f"Live-rate applied from API: {api_rate}")
-            else:
-                # Show placeholder if nothing could be fetched
-                if hasattr(self.estimate_widget, 'live_rate_value_label') and self.estimate_widget.live_rate_value_label is not None:
-                    self.estimate_widget.live_rate_value_label.setText("—")
-                self.show_status_message("Live rate fetch failed", 2000, level='error')
-                self.logger.warning("Live rate fetch failed: both broadcast and API returned None")
-        finally:
-            self._rate_fetch_in_progress = False
-
-    def reconfigure_rate_visibility_from_settings(self):
-        """Show/Hide live rate UI and enable/disable manual refresh based on settings."""
-        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
-        live_enabled = settings.value("rates/live_enabled", True, type=bool)
-        try:
-            if hasattr(self, 'estimate_widget') and self.estimate_widget is not None:
-                if hasattr(self.estimate_widget, 'live_rate_label') and self.estimate_widget.live_rate_label is not None:
-                    self.estimate_widget.live_rate_label.setVisible(live_enabled)
-                if hasattr(self.estimate_widget, 'live_rate_value_label') and self.estimate_widget.live_rate_value_label is not None:
-                    self.estimate_widget.live_rate_value_label.setVisible(live_enabled)
-            # Toggle manual refresh action if present
-            if hasattr(self, 'refresh_rate_action') and self.refresh_rate_action is not None:
-                self.refresh_rate_action.setEnabled(live_enabled)
-        except Exception:
-            pass
+                self.setWindowState(self.windowState() | Qt.WindowMaximized)
+            except Exception as exc:
+                if self.logger:
+                    self.logger.debug("Failed to apply maximized window state: %s", exc, exc_info=True)
+        except Exception as exc:
+            self.logger.critical("Failed to initialize widgets: %s", exc, exc_info=True)
+            raise StartupError(f"Failed to initialize application widgets: {exc}") from exc
 
     # --- File menu action handlers ---
-    def file_save_estimate(self):
-        """Invoke save on the active estimate view if available."""
-        try:
-            if hasattr(self, 'estimate_widget') and self.estimate_widget:
-                self.estimate_widget.save_estimate()
-            else:
-                QMessageBox.information(self, "Save", "Estimate view is not available.")
-        except Exception as e:
-            self.logger.error(f"Save action failed: {e}", exc_info=True)
-            QMessageBox.critical(self, "Save Error", str(e))
+    def file_save_estimate(self, *args, **kwargs):
+        return self.commands.save_estimate()
 
-    def file_print_estimate(self):
-        """Invoke print on the active estimate view if available."""
-        try:
-            if hasattr(self, 'estimate_widget') and self.estimate_widget:
-                self.estimate_widget.print_estimate()
-            else:
-                QMessageBox.information(self, "Print", "Estimate view is not available.")
-        except Exception as e:
-            self.logger.error(f"Print action failed: {e}", exc_info=True)
-            QMessageBox.critical(self, "Print Error", str(e))
+    def file_print_estimate(self, *args, **kwargs):
+        return self.commands.print_estimate()
 
-    def setup_database_with_password(self, password):
-        """Initialize the DatabaseManager with the provided password."""
-        try:
-            self.logger.info("Setting up database connection")
-
-            # Ensure database directory exists
-            import os
-            os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-
-            # Startup recovery: if a previous temp DB exists and is newer than encrypted, offer recovery
+    def show_status_message(self, message: str, timeout: int = 3000, level: str = 'info') -> None:
+        """Display a transient status message inline within the estimate view."""
+        widget = getattr(self, 'estimate_widget', None)
+        show_inline = getattr(widget, 'show_inline_status', None)
+        if callable(show_inline):
             try:
-                from database_manager import DatabaseManager as DM
-                enc_path = DB_PATH
-                candidate = DM.check_recovery_candidate(enc_path)
-                if candidate:
-                    self.logger.warning(f"Found newer temporary DB candidate for recovery: {candidate}")
-                    reply = QMessageBox.question(
-                        self,
-                        "Recover Unsaved Data",
-                        "A newer unsaved database state was found from a previous session.\n"
-                        "Would you like to recover it now?",
-                        QMessageBox.Yes | QMessageBox.No,
-                        QMessageBox.Yes
-                    )
-                    if reply == QMessageBox.Yes:
-                        if DM.recover_encrypt_plain_to_encrypted(candidate, enc_path, password, logger=self.logger):
-                            self.logger.info("Recovery successful. Proceeding with startup.")
-                        else:
-                            self.logger.error("Recovery failed. Proceeding with last encrypted state.")
-            except Exception as re:
-                self.logger.error(f"Recovery check failed: {re}", exc_info=True)
+                show_inline(message, timeout=timeout, level=level)
+            except Exception as exc:
+                if self.logger:
+                    self.logger.debug("Failed to show inline status message: %s", exc)
+            return
+        self._pending_status_message = (message, timeout, level)
+        if self.logger:
+            try:
+                self.logger.info("Status: %s", message)
+            except Exception:
+                pass
+    def refresh_live_rate_now(self):
+        controller = getattr(self, 'live_rate_controller', None)
+        if controller:
+            return controller.refresh_now()
+        return None
 
-            # DatabaseManager now handles getting/creating salt internally via QSettings
-            self.db = DatabaseManager(DB_PATH, password=password)
-
-            # setup_database is called within DatabaseManager's __init__
-            self.show_status_message("Database connected securely.", 3000, level='info')
-            self.logger.info("Database connected successfully")
-            
+    def reconfigure_rate_visibility_from_settings(self):
+        controller = getattr(self, 'live_rate_controller', None)
+        if not controller:
             return True
-        except Exception as e:
-            self.logger.critical(f"Failed to connect to encrypted database: {str(e)}", exc_info=True)
-            
-            # Show a more detailed error message
-            error_details = f"Failed to connect to encrypted database: {e}\n\n"
-            error_details += "This could be due to:\n"
-            error_details += "- Incorrect password\n"
-            error_details += "- Corrupted database file\n"
-            error_details += "- Missing permissions\n\n"
-            error_details += "The application will continue with limited functionality."
-            
-            QMessageBox.critical(self, "Database Error", error_details)
-            
-            self.db = None # Ensure db is None if setup fails
-            return False
+        return controller.apply_visibility_settings()
 
-    def setup_menu_bar(self):
-        """Set up the main menu bar."""
-        menu_bar = self.menuBar()
-
-        # File menu
-        file_menu = menu_bar.addMenu("&File")
-
-        # Estimate action
-        estimate_action = QAction("&Estimate Entry", self)
-        estimate_action.setShortcut("Alt+E")
-        estimate_action.triggered.connect(self.show_estimate)
-        file_menu.addAction(estimate_action)
-
-        # Item master action
-        item_master_action = QAction("&Item Master", self)
-        item_master_action.setShortcut("Alt+I")
-        item_master_action.triggered.connect(self.show_item_master)
-        file_menu.addAction(item_master_action)
-
-        # Standard actions for current estimate
-        file_menu.addSeparator()
-        from PyQt5.QtGui import QKeySequence
-        save_action = QAction("&Save", self)
-        save_action.setShortcut(QKeySequence.Save)
-        save_action.setShortcutContext(Qt.ApplicationShortcut)
-        save_action.triggered.connect(self.file_save_estimate)
-        file_menu.addAction(save_action)
-
-        print_action = QAction("&Print", self)
-        print_action.setShortcut(QKeySequence.Print)
-        print_action.setShortcutContext(Qt.ApplicationShortcut)
-        print_action.triggered.connect(self.file_print_estimate)
-        file_menu.addAction(print_action)
-
-        # Exit action
-        file_menu.addSeparator()
-        exit_action = QAction("E&xit", self)
-        exit_action.setShortcut(QKeySequence.Quit)
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
-
-        # Tools menu
-        tools_menu = menu_bar.addMenu("&Tools")
-
-        # Silver bar management (also accessible in View/Toolbar)
-        silver_bars_action = QAction("&Silver Bar Management", self)
-        silver_bars_action.setStatusTip("Add, view, transfer, or assign silver bars to lists")
-        silver_bars_action.triggered.connect(self.show_silver_bars)
-        tools_menu.addAction(silver_bars_action)
-
-        # Silver bar history
-        silver_history_action = QAction("Silver Bar &History", self)
-        silver_history_action.setStatusTip("View history of all silver bars and issued lists")
-        silver_history_action.triggered.connect(self.show_silver_bar_history)
-        tools_menu.addAction(silver_history_action)
-
-        tools_menu.addSeparator()
-
-        # Settings Dialog Action (Replaces Advanced Tools)
-        settings_action = QAction("&Settings...", self)
-        settings_action.setStatusTip("Configure application settings")
-        settings_action.triggered.connect(self.show_settings_dialog) # Connect to new method
-        tools_menu.addAction(settings_action)
-
-        # Manual live-rate refresh for troubleshooting
-        self.refresh_rate_action = QAction("Refresh Live Rate Now", self)
-        self.refresh_rate_action.setStatusTip("Fetch the latest live silver rate immediately")
-        self.refresh_rate_action.triggered.connect(self.refresh_live_rate_now)
-        tools_menu.addAction(self.refresh_rate_action)
-
-        # Removed Import Item List action from here
-        # tools_menu.addSeparator()
-        # import_item_action = QAction(...)
-        # tools_menu.addAction(import_item_action)
-
-        # View menu (switch primary views)
-        view_menu = menu_bar.addMenu("&View")
-        view_group = QActionGroup(self)
-        view_group.setExclusive(True)
-
-        self._view_estimate_action = QAction("&Estimate Entry", self, checkable=True)
-        self._view_item_master_action = QAction("&Item Master", self, checkable=True)
-        self._view_silver_bars_action = QAction("&Silver Bars", self, checkable=True)
-        view_group.addAction(self._view_estimate_action)
-        view_group.addAction(self._view_item_master_action)
-        view_group.addAction(self._view_silver_bars_action)
-
-        # Initial state reflects initial view
-        self._view_estimate_action.setChecked(True)
-
-        self._view_estimate_action.triggered.connect(self.show_estimate)
-        self._view_item_master_action.triggered.connect(self.show_item_master)
-        self._view_silver_bars_action.triggered.connect(self.show_silver_bars)
-
-        view_menu.addAction(self._view_estimate_action)
-        view_menu.addAction(self._view_item_master_action)
-        view_menu.addAction(self._view_silver_bars_action)
-
-        # Reports menu
-        reports_menu = menu_bar.addMenu("&Reports")
-
-        # Estimate history
-        history_action = QAction("Estimate &History", self)
-        history_action.triggered.connect(self.show_estimate_history)
-        reports_menu.addAction(history_action)
-
-        # Help menu
-        help_menu = menu_bar.addMenu("&Help")
-
-        # About action
-        about_action = QAction("&About", self)
-        about_action.triggered.connect(self.show_about)
-        help_menu.addAction(about_action)
-
-        # Keep references for sync with toolbar
-        self._menu_estimate_action = estimate_action
-        self._menu_item_master_action = item_master_action
-        self._menu_silver_action = silver_bars_action
-
-    def setup_navigation_toolbar(self):
-        """Create a persistent toolbar to switch between primary views."""
-        try:
-            toolbar = QToolBar("Navigation", self)
-            toolbar.setMovable(False)
-            toolbar.setAllowedAreas(Qt.TopToolBarArea)
-            self.addToolBar(Qt.TopToolBarArea, toolbar)
-
-            # Exclusive selection between two views
-            group = QActionGroup(self)
-            group.setExclusive(True)
-
-            self.nav_estimate_action = QAction("Estimate Entry", self, checkable=True)
-            self.nav_item_master_action = QAction("Item Master", self, checkable=True)
-            self.nav_silver_action = QAction("Silver Bars", self, checkable=True)
-
-            group.addAction(self.nav_estimate_action)
-            group.addAction(self.nav_item_master_action)
-            group.addAction(self.nav_silver_action)
-
-            # Initial state -> Estimate view
-            self.nav_estimate_action.setChecked(True)
-
-            # Wire actions
-            self.nav_estimate_action.triggered.connect(self.show_estimate)
-            self.nav_item_master_action.triggered.connect(self.show_item_master)
-            self.nav_silver_action.triggered.connect(self.show_silver_bars)
-
-            toolbar.addAction(self.nav_estimate_action)
-            toolbar.addAction(self.nav_item_master_action)
-            toolbar.addAction(self.nav_silver_action)
-
-            # Prefer text-only for clarity (icons can be added later)
-            toolbar.setToolButtonStyle(Qt.ToolButtonTextOnly)
-
-            self._nav_toolbar = toolbar
-        except Exception as e:
-            self.logger.warning(f"Failed to create navigation toolbar: {e}")
-
-    #def setup_shortcuts(self):
-      #  """Set up keyboard shortcuts."""
-        # Alt+E for Estimate Entry
-        #self.shortcut_estimate = QShortcut(QKeySequence("Alt+E"), self)
-        #self.shortcut_estimate.activated.connect(self.show_estimate)
-
-        # Alt+I for Item Master
-        #self.shortcut_item = QShortcut(QKeySequence("Alt+I"), self)
-        #self.shortcut_item.activated.connect(self.show_item_master)
-
-        # Alt+X for Exit
-        #self.shortcut_exit = QShortcut(QKeySequence("Alt+X"), self)
-        #self.shortcut_exit.activated.connect(self.close)
+    def reconfigure_rate_timer_from_settings(self):
+        controller = getattr(self, 'live_rate_controller', None)
+        if controller:
+            controller.apply_timer_settings()
 
     def show_estimate(self):
-        """Switch to Estimate Entry screen."""
-        # Check if widgets exist
-        if not hasattr(self, 'estimate_widget') or self.estimate_widget is None:
-            self.logger.error("Cannot show estimate: estimate_widget is not available")
-            QMessageBox.critical(self, "Error", "Estimate entry is not available. Please restart the application.")
-            return
-        # Switch via stacked widget
-        if hasattr(self, 'stack') and self.stack:
-            self.stack.setCurrentWidget(self.estimate_widget)
-        # Sync toolbar/menu states if present
-        if hasattr(self, 'nav_estimate_action'):
-            self.nav_estimate_action.setChecked(True)
-        if hasattr(self, '_menu_estimate_action'):
-            try:
-                self._menu_estimate_action.setChecked(True)
-            except Exception:
-                pass
-        if hasattr(self, '_view_estimate_action'):
-            try:
-                self._view_estimate_action.setChecked(True)
-            except Exception:
-                pass
+        return self.navigation_controller.show_estimate()
+
 
     def show_item_master(self):
-        """Switch to Item Master screen."""
-        # Lazy-create Item Master when first requested
-        if not hasattr(self, 'item_master_widget') or self.item_master_widget is None:
-            try:
-                self.logger.info("Creating ItemMasterWidget on demand...")
-                from item_master import ItemMasterWidget
-                self.item_master_widget = ItemMasterWidget(self.db, self)
-                if hasattr(self, 'stack') and self.stack:
-                    self.stack.addWidget(self.item_master_widget)
-            except Exception as e:
-                self.logger.error(f"Failed to create ItemMasterWidget: {e}", exc_info=True)
-                QMessageBox.critical(self, "Error", f"Item master could not be initialized: {e}")
-                return
-        # Switch via stacked widget
-        if hasattr(self, 'stack') and self.stack:
-            self.stack.setCurrentWidget(self.item_master_widget)
-        # Sync toolbar/menu states if present
-        if hasattr(self, 'nav_item_master_action'):
-            self.nav_item_master_action.setChecked(True)
-        if hasattr(self, '_menu_item_master_action'):
-            try:
-                self._menu_item_master_action.setChecked(True)
-            except Exception:
-                pass
-        if hasattr(self, '_view_item_master_action'):
-            try:
-                self._view_item_master_action.setChecked(True)
-            except Exception:
-                pass
+        return self.navigation_controller.show_item_master()
+
 
     def show_silver_bars(self):
-        """Switch to Silver Bar Management screen (embedded)."""
-        # Check DB
-        if not hasattr(self, 'db') or self.db is None:
-            self.logger.error("Cannot show silver bars: database connection is not available")
-            QMessageBox.critical(self, "Error", "Database connection is not available. Please restart the application.")
-            return
-        # Lazy-create view
-        if not hasattr(self, 'silver_bar_widget') or self.silver_bar_widget is None:
-            try:
-                from silver_bar_management import SilverBarDialog
-                self.logger.info("Creating SilverBar view on demand...")
-                # Use the dialog class as a widget inside the stack
-                self.silver_bar_widget = SilverBarDialog(self.db, self)
-                if hasattr(self, 'stack') and self.stack:
-                    self.stack.addWidget(self.silver_bar_widget)
-            except Exception as e:
-                self.logger.error(f"Failed to create SilverBar view: {e}", exc_info=True)
-                QMessageBox.critical(self, "Error", f"Silver Bar Management could not be initialized: {e}")
-                return
-        # Switch to the silver bar view
-        if hasattr(self, 'stack') and self.stack:
-            self.stack.setCurrentWidget(self.silver_bar_widget)
-            # Proactively refresh data when navigating to the view
-            try:
-                self.silver_bar_widget.load_available_bars()
-                self.silver_bar_widget.load_bars_in_selected_list()
-            except Exception:
-                pass
-        # Sync toolbar/menu states
-        if hasattr(self, 'nav_silver_action'):
-            self.nav_silver_action.setChecked(True)
-        if hasattr(self, '_view_silver_bars_action'):
-            try:
-                self._view_silver_bars_action.setChecked(True)
-            except Exception:
-                pass
-        if hasattr(self, '_menu_silver_action'):
-            try:
-                self._menu_silver_action.setChecked(True)
-            except Exception:
-                pass
+        return self.navigation_controller.show_silver_bars()
 
-    def delete_all_data(self): # Renamed method
-        """Drop and recreate all database tables, effectively deleting all data."""
-        # Check if database is available
-        if not hasattr(self, 'db') or self.db is None:
-            self.logger.error("Cannot delete all data: database connection is not available")
-            QMessageBox.critical(self, "Error", "Database connection is not available. Please restart the application.")
-            return
-            
-        # Use QMessageBox.warning for more emphasis
-        reply = QMessageBox.warning(self, "CONFIRM DELETE ALL DATA",
-                                     "Are you absolutely sure you want to delete ALL data?\n"
-                                     "This includes all items, estimates, silver bars, and lists.\n"
-                                     "THIS ACTION CANNOT BE UNDONE.",
-                                     QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
 
-        if reply == QMessageBox.Yes:
-            # Second explicit confirmation: require typing DELETE
-            text, ok = QInputDialog.getText(
-                self,
-                "Type DELETE to Confirm",
-                "This will permanently erase ALL data.\n\nType DELETE to proceed:")
-            if not ok or text.strip().upper() != "DELETE":
-                QMessageBox.information(self, "Cancelled", "Delete all data cancelled.")
-                return
-            try:
-                # Use the drop_tables method instead of removing the file
-                success = self.db.drop_tables() # This method drops all tables
+    def delete_all_data(self, *args, **kwargs):
+        return self.navigation_controller.delete_all_data()
 
-                if success:
-                    # Recreate tables
-                    self.db.setup_database()
-
-                    # Refresh the widgets to reflect empty state if they exist
-                    if hasattr(self, 'item_master_widget') and self.item_master_widget is not None:
-                        self.item_master_widget.load_items()
-                        
-                    if hasattr(self, 'estimate_widget') and self.estimate_widget is not None:
-                        self.estimate_widget.clear_form(confirm=False) # Clear estimate form without confirmation
-
-                    QMessageBox.information(self, "Success", "All data has been deleted successfully.") # Updated success message
-                else:
-                    QMessageBox.critical(self, "Error", "Failed to delete all data (dropping tables failed).") # Updated error message
-            except Exception as e:
-                self.logger.error(f"Error deleting all data: {str(e)}", exc_info=True)
-                QMessageBox.critical(self, "Error", f"Failed to delete all data: {str(e)}") # Updated error message
-
-    def delete_all_estimates(self):
-        """Handle the 'Delete All Estimates' action."""
-        # Check if database is available
-        if not hasattr(self, 'db') or self.db is None:
-            self.logger.error("Cannot delete all estimates: database connection is not available")
-            QMessageBox.critical(self, "Error", "Database connection is not available. Please restart the application.")
-            return
-            
-        reply = QMessageBox.warning(self, "Confirm Delete All Estimates",
-                                     "Are you absolutely sure you want to delete ALL estimates?\n"
-                                     "This action cannot be undone.",
-                                     QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
-
-        if reply == QMessageBox.Yes:
-            try:
-                success = self.db.delete_all_estimates()
-                if success:
-                    QMessageBox.information(self, "Success", "All estimates have been deleted successfully.")
-                    # Clear the current estimate form as well if it exists
-                    if hasattr(self, 'estimate_widget') and self.estimate_widget is not None:
-                        try:
-                            self.estimate_widget.clear_form(confirm=False)
-                        except Exception as form_e:
-                            self.logger.error(f"Error clearing estimate form: {str(form_e)}", exc_info=True)
-                            # Don't show error to user, just log it
-                    else:
-                        self.logger.warning("Could not clear estimate form: estimate_widget is not available")
-                else:
-                    QMessageBox.critical(self, "Error", "Failed to delete all estimates (database error).")
-            except Exception as e:
-                self.logger.error(f"Error deleting all estimates: {str(e)}", exc_info=True)
-                QMessageBox.critical(self, "Error", f"An unexpected error occurred: {str(e)}")
-
-    # old modal method replaced by embedded view above
+    def delete_all_estimates(self, *args, **kwargs):
+        return self.navigation_controller.delete_all_estimates()
 
     def show_silver_bar_history(self):
-        """Show Silver Bar History dialog."""
-        # Check if database is available
-        if not hasattr(self, 'db') or self.db is None:
-            self.logger.error("Cannot show silver bar history: database connection is not available")
-            QMessageBox.critical(self, "Error", "Database connection is not available. Please restart the application.")
-            return
-        
-        try:
-            self.logger.info("Opening Silver Bar History dialog")
-            from silver_bar_history import SilverBarHistoryDialog
-            dialog = SilverBarHistoryDialog(self.db, self)
-            dialog.exec_()
-        except Exception as e:
-            self.logger.error(f"Error opening Silver Bar History: {str(e)}", exc_info=True)
-            QMessageBox.critical(self, "Error", f"Failed to open Silver Bar History: {str(e)}")
+        return self.navigation_controller.show_silver_bar_history()
+
 
     def show_estimate_history(self):
-        """Show estimate history dialog."""
-        # Check if estimate_widget exists
-        if not hasattr(self, 'estimate_widget') or self.estimate_widget is None:
-            self.logger.error("Cannot show estimate history: estimate_widget is not available")
-            QMessageBox.critical(self, "Error", "Estimate entry is not available. Please restart the application.")
-            return
-            
-        from estimate_history import EstimateHistoryDialog
-        # Pass db_manager, the explicit main_window_ref (self), and parent (self)
-        history_dialog = EstimateHistoryDialog(self.db, main_window_ref=self, parent=self)
-        if history_dialog.exec_() == QDialog.Accepted:
-            voucher_no = history_dialog.selected_voucher
-            if voucher_no:
-                try:
-                    # Set the voucher number in the edit field
-                    self.estimate_widget.voucher_edit.setText(voucher_no)
-                    
-                    # Use safe_load_estimate if available, otherwise fall back to load_estimate
-                    if hasattr(self.estimate_widget, 'safe_load_estimate'):
-                        self.estimate_widget.safe_load_estimate()
-                    else:
-                        self.estimate_widget.load_estimate()
-                        
-                    self.show_estimate()
-                except Exception as e:
-                    # Log the error but don't crash the application
-                    self.logger.error(f"Error loading estimate from history: {str(e)}", exc_info=True)
-                    QMessageBox.critical(self, "Load Error",
-                                        f"An error occurred while loading estimate {voucher_no}: {str(e)}")
+        return self.navigation_controller.show_estimate_history()
+
 
     def show_about(self):
-        """Show about dialog."""
-        QMessageBox.about(self, "About Silver Estimation App",
-                          "Silver Estimation App\n\n"
-                          f"Version {APP_VERSION}\n\n" # Make sure this matches window title
-                          "A comprehensive tool for managing silver estimations, "
-                          "item inventory, and silver bars.\n\n"
-                          "© 2023-2025 Silver Estimation App") # Update copyright year maybe
+        return self.navigation_controller.show_about()
 
     # --- Methods called by Advanced Tools Dialog ---
     def show_font_dialog(self):
         """Show the font selection dialog and store the chosen print font."""
-        # Use the currently stored print_font to initialize the dialog
-        # Ensure the float_size attribute exists on it from loading/previous setting
-        if not hasattr(self.print_font, 'float_size'):
-             # If missing (e.g., first run before saving), initialize from pointSize
-             self.print_font.float_size = float(self.print_font.pointSize())
-
-        dialog = CustomFontDialog(self.print_font, self)
-        # Connect the custom signal
-        # dialog.fontSelected.connect(self.handle_font_selected) # Alternative way
-
-        if dialog.exec_() == QDialog.Accepted:
-            selected_font = dialog.get_selected_font()
-            # The dialog ensures min size 5.0 internally via spinbox range
-            # Store the selected font for printing, don't apply to UI
-            self.print_font = selected_font
-            self.save_settings(selected_font) # Pass the selected font to save
-            self.logger.debug(
-                f"Stored print font: {self.print_font.family()}, Size: {getattr(self.print_font, 'float_size', self.print_font.pointSize())}pt, Bold={self.print_font.bold()}"
-            )
+        self.print_font = choose_print_font(
+            parent=self,
+            settings=self.settings_service,
+            current_font=self.print_font,
+            logger=self.logger,
+        )
 
     # Removed apply_font_settings as we no longer apply to UI directly from here
 
-    def load_settings(self):
-        """Load application settings, including font."""
-        settings = QSettings(SETTINGS_ORG, SETTINGS_APP) # Use consistent names
-        default_family = QApplication.font().family()
-        default_size = float(QApplication.font().pointSize())
-        default_bold = QApplication.font().bold()
-
-        # Read values explicitly checking types
-        font_family_raw = settings.value("font/family")
-        font_size_raw = settings.value("font/size_float")
-        font_bold_raw = settings.value("font/bold")
-
-        font_family = font_family_raw if isinstance(font_family_raw, str) else default_family
-        # Use the type hint in settings.value for loading float
-        font_size_float = settings.value("font/size_float", default_size, type=float)
-        # Explicit boolean conversion check
-        if isinstance(font_bold_raw, str): # Handle 'true'/'false' strings if saved that way
-             font_bold = font_bold_raw.lower() == 'true'
-        elif isinstance(font_bold_raw, bool):
-             font_bold = font_bold_raw
-        else: # Fallback for other types or None
-             font_bold = default_bold
-
-        # Ensure minimum size on load
-        if font_size_float < 5.0:
-            font_size_float = 5.0
-
-        # Create the font using the integer size for QFont, but store the float size
-        loaded_font = QFont(font_family, int(round(font_size_float)))
-        loaded_font.setBold(font_bold)
-        loaded_font.float_size = font_size_float # Store the float size
-
-        # Apply the loaded font settings during initialization
-        # We need to ensure widgets exist before applying.
-        # Applying here might be too early. Let's apply after widgets are created.
-        # Store the loaded font settings for printing
-        self.print_font = loaded_font
-
-
-    def save_settings(self, font_to_save):
-        """Save application settings, specifically the print font."""
-        settings = QSettings(SETTINGS_ORG, SETTINGS_APP) # Use consistent names
-        # Use the font passed (which is intended for printing)
-        float_size = getattr(font_to_save, 'float_size', float(font_to_save.pointSize()))
-        # Ensure we save as float
-        settings.setValue("font/family", font_to_save.family())
-        settings.setValue("font/size_float", float(float_size)) # Explicitly save as float
-        settings.setValue("font/bold", bool(font_to_save.bold())) # Explicitly save as bool
-        settings.sync() # Ensure settings are written immediately
-
     def closeEvent(self, event):
         """Handle window close event."""
+        estimate_widget = getattr(self, "estimate_widget", None)
+        if estimate_widget and hasattr(estimate_widget, "confirm_exit"):
+            try:
+                if not estimate_widget.confirm_exit():
+                    event.ignore()
+                    return
+            except Exception:
+                pass
+
         self.logger.info("Application closing")
         # Persist window geometry/state
         try:
-            settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
-            settings.setValue("ui/main_geometry", self.saveGeometry())
-            settings.setValue("ui/main_state", self.saveState())
-            settings.sync()
+            self.settings_service.save_geometry(self)
         except Exception:
             pass
+        controller = getattr(self, 'live_rate_controller', None)
+        if controller:
+            try:
+                controller.shutdown()
+            except Exception:
+                pass
         # Close the database connection properly
         if hasattr(self, 'db') and self.db:
             self.logger.debug("Closing database connection")
             self.db.close()
+        if sys.platform == "win32" and self._taskbar_icon_handle:
+            destroy_icon_handle(self._taskbar_icon_handle, logger=self.logger)
+            self._taskbar_icon_handle = None
         # Optional: Add confirmation dialog if needed
-        # self.save_settings() # Save settings on close if desired, though saving after change is often better
         super().closeEvent(event)
 
     def show_table_font_size_dialog(self):
         """Show dialog to change estimate table font size."""
-        from table_font_size_dialog import TableFontSizeDialog
-        from PyQt5.QtGui import QFont
-        from PyQt5.QtCore import QSettings
+        apply_callback = None
+        if hasattr(self, 'estimate_widget') and hasattr(self.estimate_widget, '_apply_table_font_size'):
+            apply_callback = self.estimate_widget._apply_table_font_size
 
-        # 1. Load current setting
-        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
-        current_size = settings.value("ui/table_font_size", defaultValue=9, type=int)
+        new_size = adjust_table_font_size(
+            parent=self,
+            settings=self.settings_service,
+            apply_callback=apply_callback,
+            logger=self.logger,
+        )
 
-        # 2. Show dialog
-        dialog = TableFontSizeDialog(current_size=current_size, parent=self)
-        if dialog.exec_() == QDialog.Accepted:
-            new_size = dialog.get_selected_size()
-
-            # 3. Save new setting
-            settings.setValue("ui/table_font_size", new_size)
-            settings.sync()
-
-            # 4. Apply to estimate widget's table (if widget exists)
-            if hasattr(self, 'estimate_widget') and hasattr(self.estimate_widget, '_apply_table_font_size'):
-                self.estimate_widget._apply_table_font_size(new_size)
-            else:
-                 self.logger.warning("Estimate widget or apply method not found.")
+        if new_size is not None and apply_callback is None:
+            self.logger.warning("Estimate widget or apply method not found.")
 
     # --- Method to show the new Settings dialog ---
     def show_settings_dialog(self):
         """Show the centralized settings dialog."""
-        from settings_dialog import SettingsDialog
+        from silverestimate.ui.settings_dialog import SettingsDialog
         dialog = SettingsDialog(main_window_ref=self, parent=self)
         # Connect the signal if needed for immediate UI updates beyond fonts
         # dialog.settings_applied.connect(self.handle_settings_applied)
@@ -1012,392 +314,19 @@ class MainWindow(QMainWindow):
     # Removed show_advanced_tools_dialog method
 
     def show_import_dialog(self):
-        """Show the item import dialog and handle the import process."""
-        from item_import_dialog import ItemImportDialog
-        from item_import_manager import ItemImportManager
-
-        # Only allow if user is authenticated and DB is available
-        if not hasattr(self, 'db') or not self.db:
-            QMessageBox.warning(self, "Authentication Required",
-                               "Database is not connected. Please log in first.")
-            return
-
-        # Create dialog and import manager
-        dialog = ItemImportDialog(self)
-        # Pass the authenticated DatabaseManager instance
-        manager = ItemImportManager(self.db)
-
-        # Move manager to a dedicated thread for responsiveness
-        from PyQt5.QtCore import QThread
-        worker_thread = QThread(self)
-        manager.moveToThread(worker_thread)
-        worker_thread.start()
-
-        # --- Signal Connections ---
-        # Start import when dialog requests it (pass file path and settings dict)
-        dialog.importStarted.connect(manager.import_from_file) # Queued to worker thread
-
-        # Update dialog UI based on manager progress/status
-        manager.progress_updated.connect(dialog.update_progress)
-        manager.status_updated.connect(dialog.update_status)
-        manager.import_finished.connect(dialog.import_finished)
-
-        # Handle dialog close/cancel: If rejected, request manager to stop
-        dialog.rejected.connect(manager.cancel_import) # Connect reject signal
-        dialog.rejected.connect(worker_thread.quit)
-
-        # --- Execute Dialog ---
-        dialog.exec_() # Show the dialog modally
-
-        # Ensure worker thread stops after dialog closes
-        try:
-            worker_thread.quit()
-            worker_thread.wait(2000)
-        except Exception:
-            pass
-
-        # --- Post-Import Actions ---
-        # Refresh item master table if it's currently visible to show new/updated items
-        if hasattr(self, 'item_master_widget') and self.item_master_widget.isVisible():
-            self.logger.info("Refreshing Item Master list after import.")
-            self.item_master_widget.load_items()
-
-        # Clean up manager object (optional, depends if it holds resources)
-        # In this case, it's likely fine to let it be garbage collected.
+        return self.commands.import_items()
 
 
-# --- Authentication and Data Wipe Logic ---
 
-def run_authentication(logger=None):
-    """
-    Handles the authentication process using LoginDialog.
-    Returns the password on success, 'wipe' if wipe requested, or None on failure/cancel.
-    
-    Args:
-        logger: Logger instance for authentication events
-    """
-    logger = logger or logging.getLogger(__name__)
-    logger.info("Starting authentication process")
-    
-    settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
-    password_hash = settings.value("security/password_hash")
-    backup_hash = settings.value("security/backup_hash")
-    # Salt is handled internally by DatabaseManager now
+# --- Application entry point ---
 
-    if password_hash and backup_hash:
-        # --- Existing User: Show Login Dialog ---
-        logger.debug("Found existing password hashes, showing login dialog")
-        login_dialog = LoginDialog(is_setup=False)
-        result = login_dialog.exec_()
+def main() -> int:
+    """Start the SilverEstimate application and return the exit code."""
+    builder = ApplicationBuilder(main_window_factory=MainWindow)
+    return builder.run()
 
-        if result == QDialog.Accepted:
-            # Check if reset was requested FIRST
-            if login_dialog.was_reset_requested():
-                logger.warning("Data wipe requested via reset button")
-                return 'wipe' # Request data wipe via reset button
-
-            # If not reset, proceed with password verification
-            entered_password = login_dialog.get_password()
-            # Verify against main password
-            if LoginDialog.verify_password(password_hash, entered_password):
-                logger.info("Authentication successful")
-                return entered_password # Success!
-            # Verify against secondary password
-            elif LoginDialog.verify_password(backup_hash, entered_password):
-                logger.warning("Secondary password used - triggering data wipe")
-                return 'wipe' # Internal signal to trigger data wipe
-            else:
-                logger.warning("Authentication failed: incorrect password")
-                QMessageBox.warning(None, "Login Failed", "Incorrect password.")
-                return None # Incorrect password
-        else:
-            logger.info("Login cancelled by user")
-            return None # Login cancelled
-
-    else:
-        # --- First Run: Show Setup Dialog ---
-        # No need to check config file here, just check if hashes exist in QSettings
-        logger.info("Password hashes not found in settings. Starting first-time setup.")
-        setup_dialog = LoginDialog(is_setup=True)
-        result = setup_dialog.exec_()
-
-        if result == QDialog.Accepted:
-            logger.info("First-time setup completed")
-            password = setup_dialog.get_password()
-            backup_password = setup_dialog.get_backup_password()
-
-            # Hash passwords using passlib (via static method in LoginDialog)
-            hashed_password = LoginDialog.hash_password(password)
-            hashed_backup = LoginDialog.hash_password(backup_password) # Hash secondary password
-
-            if not hashed_password or not hashed_backup:
-                 logger.error("Failed to hash passwords during setup")
-                 QMessageBox.critical(None, "Setup Error", "Failed to hash passwords.")
-                 return None # Hashing failed
-
-            # Salt is generated and saved internally by DatabaseManager on first init
-            # Save hashes to QSettings
-            settings = QSettings(SETTINGS_ORG, SETTINGS_APP) # Need settings object here
-            settings.setValue("security/password_hash", hashed_password)
-            settings.setValue("security/backup_hash", hashed_backup) # Store secondary hash
-            settings.sync() # Ensure they are saved immediately
-
-            logger.info("Passwords created and stored successfully")
-            QMessageBox.information(None, "Setup Complete", "Passwords created successfully.")
-            # Return the new password. Salt will be handled by DB Manager.
-            return password
-        else:
-            logger.info("Setup cancelled by user")
-            return None # Setup cancelled
-
-def perform_data_wipe(db_path=DB_PATH, logger=None):
-    """
-    Performs the data wipe operation: deletes the *encrypted* database file
-    and clears password hashes and the database salt from QSettings.
-    Returns True on success, False on failure.
-    
-    Args:
-        db_path: Path to the encrypted database file
-        logger: Logger instance for data wipe events
-    """
-    logger = logger or logging.getLogger(__name__)
-    # This function is triggered internally by entering the secondary password
-    # or clicking the explicit Reset button.
-    logger.warning(f"Initiating data wipe for encrypted database: {db_path}")
-    try:
-        # Ensure any potential database connection is closed (though it shouldn't be open yet)
-
-        # Delete the *encrypted* database file
-        if os.path.exists(db_path):
-            os.remove(db_path)
-            logger.info(f"Successfully deleted encrypted database file: {db_path}")
-        else:
-            logger.warning(f"Encrypted database file not found (already deleted?): {db_path}")
-
-        # Clear password hashes AND the database salt from settings
-        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
-        # Best-effort: remove any leftover plaintext temp DB
-        try:
-            temp_path = settings.value("security/last_temp_db_path")
-            if isinstance(temp_path, str) and temp_path and os.path.exists(temp_path):
-                os.remove(temp_path)
-                logger.info(f"Removed temporary plaintext DB: {temp_path}")
-        except Exception as te:
-            logger.warning(f"Could not remove temporary plaintext DB: {te}")
-        settings.remove("security/password_hash")
-        settings.remove("security/backup_hash")
-        settings.remove("security/db_salt") # CRITICAL: Remove the salt!
-        settings.remove("security/last_temp_db_path")
-        settings.sync()
-        logger.info("Cleared password hashes and database salt from application settings.")
-
-        # Removed user notification for successful wipe to make it silent
-        # QMessageBox.information(None, "Data Wipe Complete", ...)
-        logger.info("Data wipe successful (silent to user).")
-        return True
-    except Exception as e:
-        # Still show critical error if wipe fails
-        error_message = f"A critical error occurred during data wipe: {e}"
-        logger.critical(error_message, exc_info=True)
-        QMessageBox.critical(None, "Data Wipe Error", error_message)
-        return False
-
-
-# --- Main Application Execution ---
-
-def safe_start_app():
-    """
-    Safe application startup with comprehensive error handling.
-    This function wraps the entire application initialization in a try-except block.
-    """
-    # Initialize minimal variables
-    logger = None
-    app = None
-    cleanup_scheduler = None
-    
-    try:
-        # Initialize logging before anything else
-        import os
-        from pathlib import Path
-        from logger import get_log_config, setup_logging, LogCleanupScheduler
-        
-        # Ensure logs directory exists
-        logs_dir = Path("logs")
-        logs_dir.mkdir(exist_ok=True)
-        
-        # Get logging configuration
-        log_config = get_log_config()
-        
-        # Initialize logging with configuration
-        logger = setup_logging(
-            app_name="silver_app",
-            log_dir=log_config['log_dir'],
-            debug_mode=log_config['debug_mode'],
-            enable_info=log_config['enable_info'],
-            enable_error=log_config['enable_error'],
-            enable_debug=log_config['enable_debug']
-        )
-        
-        # Log startup information
-        logger.info(f"{APP_TITLE} starting")
-        logger.debug(f"Logging configuration: {log_config}")
-        
-        # Initialize cleanup scheduler if enabled
-        cleanup_scheduler = None
-        if log_config['auto_cleanup']:
-            try:
-                cleanup_scheduler = LogCleanupScheduler(
-                    log_dir=log_config['log_dir'],
-                    cleanup_days=log_config['cleanup_days']
-                )
-                cleanup_scheduler.start()
-                logger.info(f"Log cleanup scheduler initialized with {log_config['cleanup_days']} days retention")
-            except Exception as e:
-                logger.error(f"Failed to initialize log cleanup scheduler: {e}", exc_info=True)
-                # Continue without cleanup scheduler
-        
-        # Set up Qt message redirection
-        QtCore.qInstallMessageHandler(qt_message_handler)
-        logger.debug("Qt message handler installed")
-        
-        # Create the application object early for dialogs
-        # Required for QSettings and QMessageBox before MainWindow exists
-        # Enable HiDPI scaling for crisp UI on high‑resolution displays
-        try:
-            QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
-            QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
-            logger.debug("HiDPI attributes enabled")
-        except Exception as e:
-            logger.warning(f"Failed to set HiDPI attributes: {e}")
-
-        logger.debug("Creating QApplication instance")
-        app = QApplication.instance() or QApplication(sys.argv)
-
-        # --- Authentication Step ---
-        try:
-            auth_result = run_authentication(logger)
-        except Exception as auth_e:
-            logger.critical(f"Authentication failed with error: {str(auth_e)}", exc_info=True)
-            QMessageBox.critical(None, "Authentication Error",
-                                f"Failed to authenticate: {str(auth_e)}\n\nThe application will now exit.")
-            return 1
-
-        if auth_result == 'wipe':
-            # --- Perform Data Wipe ---
-            logger.warning("Data wipe requested, performing wipe operation")
-            try:
-                if perform_data_wipe(db_path=DB_PATH, logger=logger): # Only need DB path now
-                    # Exit cleanly after successful wipe. User needs to restart manually.
-                    logger.info("Exiting application after successful data wipe.")
-                    return 0
-                else:
-                    # Wipe failed, critical error. Exit with error status.
-                    logger.critical("Exiting application due to data wipe failure.")
-                    return 1
-            except Exception as wipe_e:
-                logger.critical(f"Data wipe failed with error: {str(wipe_e)}", exc_info=True)
-                QMessageBox.critical(None, "Data Wipe Error",
-                                    f"Failed to wipe data: {str(wipe_e)}\n\nThe application will now exit.")
-                return 1
-
-        elif auth_result: # Password provided (login or setup successful)
-            # --- Start Main Application ---
-            password = auth_result # auth_result is just the password now
-            logger.info("Authentication successful, initializing main window")
-            
-            # Create main window with error handling
-            try:
-                # Pass password to main window. DB Manager handles salt.
-                main_window = MainWindow(password=password, logger=logger)
-            except Exception as window_e:
-                logger.critical(f"Failed to create main window: {str(window_e)}", exc_info=True)
-                QMessageBox.critical(None, "Initialization Error",
-                                    f"Failed to initialize application window: {str(window_e)}\n\nThe application will now exit.")
-                return 1
-
-            # Check if MainWindow initialization and DB setup were successful
-            # setup_database_with_password is called within MainWindow.__init__
-            if main_window.db: # Check if db object was successfully created
-                try:
-                    # Show the window (maximized state is set in __init__)
-                    logger.info("Showing main application window")
-                    main_window.show()
-                    
-                    # Enter the Qt main event loop
-                    logger.debug("Entering Qt main event loop")
-                    exit_code = app.exec_()
-                    
-                    # Clean up resources on exit
-                    logger.debug("Cleaning up resources before exit")
-                    
-                    # Stop log cleanup scheduler if running
-                    if cleanup_scheduler is not None:
-                        logger.debug("Stopping log cleanup scheduler")
-                        cleanup_scheduler.stop()
-                    
-                    # Close DB connection cleanly on exit
-                    if hasattr(main_window, 'db') and main_window.db:
-                        logger.debug("Closing database connection on exit")
-                        main_window.db.close() # Ensure close is called
-                    
-                    logger.info(f"Application exiting with code {exit_code}")
-                    return exit_code
-                except Exception as run_e:
-                    logger.critical(f"Error during application execution: {str(run_e)}", exc_info=True)
-                    QMessageBox.critical(None, "Runtime Error",
-                                        f"The application encountered an error during execution: {str(run_e)}\n\nThe application will now exit.")
-                    return 1
-            else:
-                # MainWindow init failed (likely DB issue shown in its init)
-                logger.critical("Exiting application due to MainWindow initialization failure (Database connection?).")
-                QMessageBox.critical(None, "Initialization Error",
-                                    "Failed to initialize database connection.\n\nThe application will now exit.")
-                return 1
-
-        else: # Authentication failed or cancelled
-            logger.info("Authentication failed or was cancelled by the user. Exiting.")
-            return 0 # Exit cleanly without error
-            
-    except Exception as e:
-        # Catch any unhandled exceptions during startup
-        try:
-            if logger:
-                logger.critical("Unhandled exception during application startup", exc_info=True)
-            else:
-                # If logger isn't initialized, fall back to print
-                print(f"CRITICAL ERROR: {str(e)}")
-                print(traceback.format_exc())
-        except:
-            # If logging fails, fall back to print
-            print(f"CRITICAL ERROR: {str(e)}")
-            print(traceback.format_exc())
-        
-        # Show error to user
-        try:
-            QMessageBox.critical(None, "Fatal Error",
-                                f"The application encountered a fatal error and cannot continue.\n\n"
-                                f"Error: {str(e)}")
-        except:
-            # If QMessageBox fails, fall back to print
-            print(f"FATAL ERROR: {str(e)}")
-        
-        return 1
 
 if __name__ == "__main__":
-    # Wrap the entire application in a try-except block
-    try:
-        exit_code = safe_start_app()
-        sys.exit(exit_code)
-    except Exception as e:
-        # Last resort error handling
-        print(f"CRITICAL STARTUP ERROR: {str(e)}")
-        print(traceback.format_exc())
-        
-        try:
-            QMessageBox.critical(None, "Fatal Error",
-                                f"The application encountered a fatal error and cannot continue.\n\n"
-                                f"Error: {str(e)}")
-        except:
-            pass
-            
-        sys.exit(1)
+    sys.exit(main())
+
+

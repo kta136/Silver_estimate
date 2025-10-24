@@ -1,569 +1,142 @@
-# API Reference - Silver Estimation App
-
-## Core Classes
-
-### DatabaseManager (database_manager.py)
-
-#### Constructor
-```python
-DatabaseManager(db_path: str, password: str)
-```
-- `db_path`: Path to encrypted database file
-- `password`: User password for key derivation
-
-#### Key Methods
-
-##### Encryption/Decryption
-```python
-_encrypt_db() -> bool
-    """Encrypts temporary DB to permanent file."""
-    
-_decrypt_db() -> str
-    """Decrypts DB to temporary file. Returns status."""
-    
-_derive_key(password: str, salt: bytes) -> bytes
-    """Derives encryption key using PBKDF2."""
-```
-
-##### Schema Management
-```python
-setup_database() -> None
-    """Creates/updates database schema."""
-    
-_check_schema_version() -> int
-    """Returns current schema version."""
-    
-_update_schema_version(new_version: int) -> bool
-    """Updates schema version in database."""
-```
-
-##### Item Operations
-```python
-add_item(code: str, name: str, purity: float, 
-         wage_type: str, wage_rate: float) -> bool
-    """Adds new item to catalog."""
-    
-update_item(code: str, name: str, purity: float,
-           wage_type: str, wage_rate: float) -> bool
-    """Updates existing item."""
-    
-get_item_by_code(code: str) -> sqlite3.Row
-    """Retrieves item by code."""
-    
-search_items(search_term: str) -> List[sqlite3.Row]
-    """Searches items by code or name."""
-```
-
-##### Estimate Operations
-```python
-save_estimate_with_returns(voucher_no: str, date: str, 
-                          silver_rate: float, regular_items: List[dict],
-                          return_items: List[dict], totals: dict) -> bool
-    """Saves complete estimate with all item types."""
-    
-get_estimate_by_voucher(voucher_no: str) -> dict
-    """Retrieves estimate with header and items."""
-    
-delete_single_estimate(voucher_no: str) -> bool
-    """Deletes estimate and associated data."""
-```
-
-##### Silver Bar Operations
-```python
-add_silver_bar(estimate_voucher_no: str, weight: float, 
-               purity: float) -> int
-    """Creates new silver bar record."""
-    
-assign_bar_to_list(bar_id: int, list_id: int, 
-                   note: str = None) -> bool
-    """Assigns bar to list."""
-    
-create_silver_bar_list(note: str = None) -> int
-    """Creates new silver bar list."""
-```
-
-### EstimateEntryWidget (estimate_entry.py)
-
-#### Constructor
-```python
-EstimateEntryWidget(db_manager: DatabaseManager, 
-                    main_window: QMainWindow)
-```
-
-#### Key Methods
-
-##### UI Setup
-```python
-connect_signals() -> None
-    """Connects UI signals to handlers."""
-    
-add_empty_row() -> None
-    """Adds new row to item table."""
-```
-
-##### Calculation Logic
-```python
-calculate_net_weight() -> None
-    """Calculates net weight for current row."""
-    
-calculate_fine() -> None
-    """Calculates fine weight based on purity."""
-    
-calculate_wage() -> None
-    """Calculates wage based on type and rate."""
-    
-calculate_totals() -> None
-    """Updates all summary totals."""
-```
-
-##### Data Operations
-```python
-save_estimate() -> None
-    """Saves current estimate to database."""
-    
-load_estimate() -> None
-    """Loads estimate by voucher number."""
-    
-clear_form(confirm: bool = True) -> None
-    """Resets form for new estimate."""
-```
-
-##### Navigation
-```python
-move_to_next_cell() -> None
-    """Navigates to next editable cell."""
-    
-move_to_previous_cell() -> None
-    """Navigates to previous editable cell."""
-```
-
-### PrintManager (print_manager.py)
-
-#### Constructor
-```python
-PrintManager(db_manager: DatabaseManager, 
-             print_font: QFont = None)
-```
-
-#### Key Methods
-
-```python
-print_estimate(voucher_no: str, parent_widget: QWidget = None) -> bool
-    """Generates print preview for estimate."""
-    
-print_silver_bars(status_filter: str = None, 
-                 parent_widget: QWidget = None) -> bool
-    """Prints silver bar inventory."""
-    
-print_silver_bar_list_details(list_info: dict, 
-                             bars_in_list: List[dict],
-                             parent_widget: QWidget = None) -> bool
-    """Prints specific silver bar list."""
-```
-
-### ItemMasterWidget (item_master.py)
-
-#### Constructor
-```python
-ItemMasterWidget(db_manager: DatabaseManager, 
-                 main_window: QMainWindow = None)
-```
-
-#### Key Methods
-
-```python
-load_items(search_term: str = None) -> None
-    """Loads items into table."""
-    
-add_item() -> None
-    """Adds new item from form data."""
-    
-update_item() -> None
-    """Updates selected item."""
-    
-delete_item() -> None
-    """Deletes selected item."""
-```
-
-### SilverBarDialog (silver_bar_management.py)
-
-#### Constructor
-```python
-SilverBarDialog(db_manager: DatabaseManager, 
-                parent: QWidget = None)
-```
-
-#### Key Methods
-
-```python
-load_available_bars() -> None
-    """Loads unassigned silver bars."""
-    
-load_lists() -> None
-    """Populates list selection."""
-    
-create_new_list() -> None
-    """Creates new silver bar list."""
-    
-add_selected_to_list() -> None
-    """Assigns bars to current list."""
-```
-
-### LoginDialog (login_dialog.py)
-
-#### Constructor
-```python
-LoginDialog(is_setup: bool = False, parent: QWidget = None)
-```
-
-#### Key Methods
-
-```python
-get_password() -> str
-    """Returns entered main password."""
-    
-get_backup_password() -> str
-    """Returns secondary password (setup only)."""
-    
-@staticmethod
-hash_password(password: str) -> str
-    """Hashes password using Argon2."""
-    
-@staticmethod
-verify_password(stored_hash: str, provided_password: str) -> bool
-    """Verifies password against hash."""
-```
-
-### NumericDelegate (estimate_entry_ui.py)
-
-#### Key Methods
-
-```python
-createEditor(parent, option, index) -> QWidget
-    """Creates editor with appropriate validator."""
-    
-setEditorData(editor, index) -> None
-    """Populates editor with model data."""
-    
-setModelData(editor, model, index) -> None
-    """Updates model from editor data."""
-```
-
-## Signal Reference
-
-### EstimateEntryWidget Signals
-- `voucher_edit.editingFinished`: Triggers estimate load
-- `item_table.cellChanged`: Triggers calculations
-- `silver_rate_spin.valueChanged`: Updates totals
-
-### Dialog Signals
-- `LoginDialog.accepted`: Login successful
-- `ItemSelectionDialog.accepted`: Item selected
-- `SettingsDialog.settings_applied`: Settings changed
-
-### Custom Signals
-```python
-# ItemImportManager
-progress_updated = pyqtSignal(int, int)  # current, total
-status_updated = pyqtSignal(str)  # message
-import_finished = pyqtSignal(int, int, str)  # success, total, error
-
-# CustomFontDialog
-fontSelected = pyqtSignal(QFont)  # Selected font
-```
-
-## Constants
-
-### Column Indices
-```python
-COL_CODE = 0
-COL_ITEM_NAME = 1
-COL_GROSS = 2
-COL_POLY = 3
-COL_NET_WT = 4
-COL_PURITY = 5
-COL_WAGE_RATE = 6
-COL_PIECES = 7
-COL_WAGE_AMT = 8
-COL_FINE_WT = 9
-COL_TYPE = 10
-```
-
-### Security Constants
-```python
-SALT_KEY = "security/db_salt"
-KDF_ITERATIONS = 100000
-```
-
-### UI Settings
-```python
-DEFAULT_TABLE_FONT_SIZE = 9
-DEFAULT_MARGINS = "10,5,10,5"
-DEFAULT_PREVIEW_ZOOM = 1.25
-```
-
-## Utility Functions
-
-### Formatting
-```python
-format_indian_rupees(number: float) -> str
-    """Formats number in Indian numbering system."""
-    # Example: 1234567 → "12,34,567"
-    
-_get_cell_float(row: int, col: int, default: float = 0.0) -> float
-    """Safely extracts float from table cell."""
-    
-_get_cell_int(row: int, col: int, default: int = 1) -> int
-    """Safely extracts integer from table cell."""
-    
-_parse_float(text: str, default: float = 0.0) -> float
-    """Converts locale-aware string to float."""
-```
-
-### Navigation
-```python
-focus_on_code_column(row: int) -> None
-    """Sets focus to code column of specified row."""
-    
-_safe_edit_item(row: int, col: int) -> None
-    """Safely starts editing cell at row/col."""
-    
-_ensure_cell_exists(row: int, col: int, editable: bool = True) -> QTableWidgetItem
-    """Ensures cell exists and returns item."""
-```
-
-### UI Helpers
-```python
-_update_row_type_visuals(row: int) -> None
-    """Updates visual style for item type."""
-    
-_get_font_display_text(font: QFont) -> str
-    """Generates display text for font settings."""
-    
-show_status(message: str, timeout: int = 3000) -> None
-    """Displays status message in status bar."""
-```
-
-## Exception Handling
-
-### Custom Exceptions
-```python
-class DatabaseError(Exception):
-    """Raised for database operation failures."""
-    
-class EncryptionError(Exception):
-    """Raised for encryption/decryption failures."""
-    
-class ValidationError(Exception):
-    """Raised for input validation failures."""
-```
-
-### Error Patterns
-```python
-# Database operations
-try:
-    self.conn.execute('BEGIN TRANSACTION')
-    # Multiple operations
-    self.conn.commit()
-except sqlite3.Error as e:
-    self.conn.rollback()
-    raise DatabaseError(f"Operation failed: {e}")
-
-# UI operations
-try:
-    self.table.blockSignals(True)
-    # Batch updates
-finally:
-    self.table.blockSignals(False)
-```
-
-## Configuration
-
-### QSettings Keys
-```python
-# Font settings
-"font/family"          # Print font family
-"font/size_float"      # Print font size (float)
-"font/bold"           # Print font bold flag
-
-# UI settings
-"ui/table_font_size"   # Estimate table font size
-
-# Print settings
-"print/margins"        # Page margins (L,T,R,B)
-"print/preview_zoom"   # Default preview zoom
-
-# Security settings
-"security/password_hash"  # Main password hash
-"security/backup_hash"    # Secondary password hash
-"security/db_salt"        # Database encryption salt
-```
-
-### Default Values
-```python
-DEFAULT_FONT = QFont("Courier New", 7)
-DEFAULT_MARGINS = "10,5,10,5"
-DEFAULT_ZOOM = 1.25
-DEFAULT_TABLE_SIZE = 9
-DEFAULT_PURITY = 0.0
-DEFAULT_WAGE_TYPE = "WT"
-```
-
-## Database Schema
-
-### SQL Definitions
-```sql
--- Items table
-CREATE TABLE items (
-    code TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    purity REAL DEFAULT 0,
-    wage_type TEXT DEFAULT 'P',
-    wage_rate REAL DEFAULT 0
-);
-
--- Estimates table
-CREATE TABLE estimates (
-    voucher_no TEXT PRIMARY KEY,
-    date TEXT NOT NULL,
-    silver_rate REAL DEFAULT 0,
-    total_gross REAL DEFAULT 0,
-    total_net REAL DEFAULT 0,
-    total_fine REAL DEFAULT 0,
-    total_wage REAL DEFAULT 0,
-    note TEXT,
-    last_balance_silver REAL DEFAULT 0,
-    last_balance_amount REAL DEFAULT 0
-);
-
--- Estimate items table
-CREATE TABLE estimate_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    voucher_no TEXT,
-    item_code TEXT,
-    item_name TEXT,
-    gross REAL DEFAULT 0,
-    poly REAL DEFAULT 0,
-    net_wt REAL DEFAULT 0,
-    purity REAL DEFAULT 0,
-    wage_rate REAL DEFAULT 0,
-    pieces INTEGER DEFAULT 1,
-    wage REAL DEFAULT 0,
-    fine REAL DEFAULT 0,
-    is_return INTEGER DEFAULT 0,
-    is_silver_bar INTEGER DEFAULT 0,
-    FOREIGN KEY (voucher_no) REFERENCES estimates (voucher_no) ON DELETE CASCADE,
-    FOREIGN KEY (item_code) REFERENCES items (code) ON DELETE SET NULL
-);
-```
-
-## Event Handling
-
-### Keyboard Events
-```python
-def keyPressEvent(event: QKeyEvent) -> None:
-    """Handles keyboard navigation."""
-    
-    Key Mappings:
-    - Enter/Tab: Move to next cell
-    - Shift+Tab: Move to previous cell
-    - Escape: Confirm exit
-    - Ctrl+D: Delete row
-    - Ctrl+R: Toggle return mode
-    - Ctrl+B: Toggle silver bar mode
-    - Ctrl+S: Save estimate
-    - Ctrl+P: Print preview
-    - Ctrl+H: Show history
-    - Ctrl+N: New estimate
-```
-
-### Cell Events
-```python
-def handle_cell_changed(row: int, column: int) -> None:
-    """Processes cell value changes."""
-    
-    Column Handlers:
-    - COL_CODE: Item lookup
-    - COL_GROSS/COL_POLY: Net weight calculation
-    - COL_PURITY: Fine weight calculation
-    - COL_WAGE_RATE/COL_PIECES: Wage calculation
-```
-
-## Import/Export
-
-### ItemImportManager Methods
-```python
-import_from_file(file_path: str, import_settings: dict) -> None
-    """Imports items from file with settings."""
-    
-    Settings structure:
-    {
-        'delimiter': str,
-        'code_column': int,
-        'name_column': int,
-        'type_column': int,
-        'rate_column': int,
-        'purity_column': int,
-        'skip_header': bool,
-        'use_filter': bool,
-        'wage_adjustment_factor': str,
-        'duplicate_mode': int
-    }
-```
-
-### ItemExportManager Methods
-```python
-export_to_file(file_path: str) -> None
-    """Exports all items to file."""
-    
-    Format: Pipe-delimited with header
-    Columns: Code|Name|Purity|Wage Type|Wage Rate
-```
-
-## Thread Safety
-
-### UI Updates
-```python
-# Use QTimer for thread-safe updates
-QTimer.singleShot(0, lambda: self.update_ui())
-
-# Block signals during batch updates
-self.table.blockSignals(True)
-try:
-    # Perform updates
-finally:
-    self.table.blockSignals(False)
-```
-
-### Database Operations
-```python
-# Use transaction for thread safety
-with self.db_lock:  # threading.Lock
-    self.conn.execute('BEGIN TRANSACTION')
-    try:
-        # Multiple operations
-        self.conn.commit()
-    except:
-        self.conn.rollback()
-        raise
-```
-
-## Performance Tips
-
-### Table Operations
-- Block signals during batch updates
-- Use viewport().update() for forced refresh
-- Defer operations with QTimer.singleShot
-- Batch row insertion/deletion
-
-### Database Operations
-- Use transactions for multi-row operations
-- Implement proper indexing
-- Regular VACUUM maintenance
-- Batch insert/update operations
-
-### Memory Management
-- Clean up temporary files immediately
-- Release large objects explicitly
-- Use context managers
-- Monitor long-running operations
+# API Reference – Silver Estimation App
+
+This guide documents the primary controller, service, and persistence APIs exposed by the modern SilverEstimate architecture. Namespace paths are relative to the repository root.
+
+## Controller Layer
+
+### StartupController (silverestimate/controllers/startup_controller.py)
+    StartupController(logger: Optional[logging.Logger] = None)
+
+- **authenticate_and_prepare() -> StartupResult** - runs the authentication flow, performs optional wipes, and returns a database-connected StartupResult.
+- **StartupResult (dataclass)** - fields: status (StartupStatus), db (Optional[DatabaseManager]), and silent_wipe (bool) indicating whether the last wipe suppressed logging.
+- **StartupStatus (Enum)** - values: OK, CANCELLED, WIPED, FAILED.
+
+### NavigationController (silverestimate/controllers/navigation_controller.py)
+    NavigationController(*, main_window, navigation_service, commands, logger: Optional[logging.Logger] = None)
+
+- **initialize()** – builds menu/toolbar actions and wires them to services.
+- **show_estimate() / show_item_master() / show_silver_bars()** – delegate to NavigationService to switch stacked widgets.
+- **show_estimate_history() / show_silver_bar_history()** – launch history dialogs with lazy instantiation.
+- **refresh_live_rate()** – asks the LiveRateController to perform an immediate refresh.
+- **delete_all_data() / delete_all_estimates()** – forward destructive operations to MainCommands.
+
+### LiveRateController (silverestimate/controllers/live_rate_controller.py)
+    LiveRateController(*, parent: QObject, widget_getter, status_callback=None, logger=None, service_factory=LiveRateService, settings_provider=get_app_settings)
+
+- **initialize(initial_refresh_delay_ms: int = 500)** - apply settings, set up timers, trigger the first refresh.
+- **shutdown()** - stop the service timer during application exit.
+- **apply_visibility_settings() -> bool** - toggle rate UI visibility based on QSettings.
+- **apply_timer_settings(force_show_ui: Optional[bool] = None)** - restart auto-refresh cadence.
+- **refresh_now()** - fire an immediate fetch, falling back to widget-side refresh on failure.
+
+## Presenter Layer
+
+### EstimateEntryPresenter (silverestimate/presenter/estimate_entry_presenter.py)
+    EstimateEntryPresenter(view: EstimateEntryView, repository: EstimateRepository)
+
+- **generate_voucher(silent: bool = False) -> str** - request the next voucher number from the repository and push it to the view.
+- **calculate_totals(view_state: EstimateEntryViewState) -> TotalsResult** - compute totals via `services.estimate_calculator`.
+- **load_estimate(voucher_no: str) -> Optional[LoadedEstimate]** - retrieve persisted estimate payloads and normalise them for the view.
+- **save_estimate(payload: SavePayload) -> SaveOutcome** - persist header/items, synchronise silver bar metadata (update/add), and surface status messaging.
+- **delete_estimate(voucher_no: str) -> bool** - delegate to the repository and clean up related silver bar records.
+- **open_silver_bar_management()** / **load_item_into_row(row_index: int, code: str)** - bridge UI interactions with services/repositories.
+
+### Presenter Contracts (silverestimate/presenter/__init__.py)
+- **EstimateEntryView** protocol for Qt widgets (`capture_state`, `apply_totals`, `populate_row`, etc.).
+- Dataclasses: `EstimateEntryViewState`, `SaveItem`, `SavePayload`, `SaveOutcome`, `LoadedEstimate` encapsulate presenter inputs/outputs.
+
+## Service Layer
+
+### Authentication (silverestimate/services/auth_service.py)
+- **run_authentication(logger: Optional[logging.Logger] = None) -> Optional[AuthenticationResult]** - drives setup/login; returns `None` on cancel or an `AuthenticationResult` describing the password provided or a wipe request (with silent flag when triggered by the secondary password).
+- **perform_data_wipe(db_path: str = DB_PATH, logger: Optional[logging.Logger] = None, *, silent: bool = False) -> bool** - deletes the encrypted DB, removes temporary plaintext, clears credentials, and, when `silent=True`, purges application log files without emitting wipe-related log entries.
+- Uses `silverestimate/security/credential_store.py` to persist Argon2 hashes in the OS keyring (automatically migrating legacy QSettings values).
+
+### SettingsService (silverestimate/services/settings_service.py)
+    SettingsService()
+
+- **load_print_font(default_font: QFont) -> QFont / save_print_font(font: QFont)** – round-trip print font selections.
+- **load_table_font_size(default_size: int = 9) -> int / save_table_font_size(size: int)** – persist grid font sizing.
+- **restore_geometry(window) -> bool / save_geometry(window)** – handle main window geometry and state.
+- **get(key, default=None, type=None)** and **set(key, value)** – thin wrappers around QSettings.
+- **raw() -> QSettings** – direct access for advanced scenarios.
+
+### NavigationService (silverestimate/services/navigation_service.py)
+    NavigationService(main_window, stack_widget, logger: Optional[logging.Logger] = None)
+
+- **update_db(db_manager)** – swap the active DatabaseManager after re-authentication.
+- **show_estimate() / show_item_master() / show_silver_bars()** – ensure widgets exist (lazy creation) and set the stacked widget.
+- **show_estimate_history() / show_silver_bar_history()** – open modal dialogs and coordinate selection hand-off.
+
+### MainCommands (silverestimate/services/main_commands.py)
+    MainCommands(main_window, db_manager, logger: Optional[logging.Logger] = None)
+
+- **update_db(db_manager)** – synchronise command targets after DB reconnects.
+- **save_estimate() / print_estimate()** – forward actions to EstimateEntryWidget.
+- **delete_all_data() / delete_all_estimates()** – handle confirmation flows, drop/reseed tables, and refresh views.
+- **import_items()** – launch the async item import workflow and refresh tables on completion.
+
+### LiveRateService (silverestimate/services/live_rate_service.py)
+    LiveRateService(parent: Optional[QObject] = None, logger: Optional[logging.Logger] = None)
+
+- **rate_updated** – Qt signal emitting (broadcast_rate, api_rate, market_open) tuples.
+- **start() / stop()** – manage the auto-refresh timer using settings for cadence and enablement.
+- **refresh_now()** – fetch the latest rates (broadcast first, API fallback) in a background thread and emit results.
+
+## Persistence Layer
+
+### DatabaseManager (silverestimate/persistence/database_manager.py)
+    DatabaseManager(db_path: str, password: str)
+
+Responsibilities:
+- Create/delete the decrypted temp database, manage WAL checkpoints, and re-encrypt changes on flush/close.
+- Expose repository accessors: items_repo, estimates_repo, silver_bars_repo.
+- Coordinate cache controllers, flush scheduling, and recovery helpers.
+
+Key Public Methods:
+- **setup_database() -> None** – ensure schema and migrations are applied.
+- **generate_voucher_no() -> str** – delegate to EstimatesRepository while keeping legacy compatibility.
+- **save_estimate_with_returns(... ) -> bool** – transactional save for headers/items, with bar sync.
+- **get_estimate_by_voucher(voucher_no: str) -> Optional[dict]** – retrieve composite estimate payloads.
+- **delete_all_estimates() / delete_single_estimate(voucher_no)** – destructive operations used by MainCommands.
+- **request_flush(delay_seconds: float = 2.0)** and **flush_to_encrypted()** – trigger immediate or delayed encryption cycles.
+- **close()** – commit outstanding work, stop flush scheduler, remove temp files.
+- **Static helpers**: check_recovery_candidate, recover_encrypt_plain_to_encrypted, _get_or_create_salt_static.
+
+Note: Legacy item/estimate helper methods remain for backwards compatibility but new code should favour the repositories below.
+
+### ItemsRepository (silverestimate/persistence/items_repository.py)
+- **get_item_by_code(code: str)** – fetch item rows with cache support.
+- **search_items(search_term: str) / get_all_items()** – list items with filtering.
+- **add_item(...) / update_item(...) / delete_item(code: str)** – maintain catalog entries and trigger flushes.
+
+### EstimatesRepository (silverestimate/persistence/estimates_repository.py)
+- **generate_voucher_no() -> str** – sequential voucher generator with error fallback.
+- **get_estimate_by_voucher(voucher_no: str)** – return header plus line items in a dict payload.
+- **get_estimates(...) / get_estimate_headers(...)** – filtered reporting queries.
+- **save_estimate_with_returns(voucher_no, date, silver_rate, regular_items, return_items, totals) -> bool** – transactional save/update, including validation for missing item codes.
+- **delete_single_estimate(voucher_no: str) -> bool** – cleanup helper used by DatabaseManager.
+
+### SilverBarsRepository (silverestimate/persistence/silver_bars_repository.py)
+- **create_list(note: Optional[str] = None) -> Optional[int] / get_lists(include_issued: bool = True)** – manage bar list metadata.
+- **assign_bar_to_list(bar_id: int, list_id: int, note: str = ...) -> bool** – move bars into lists with transfer logging.
+- **remove_bar_from_list(bar_id: int, note: str = ...) -> bool** – reverse assignments, recording transfer history.
+- **get_available_bars(...) / get_bars_in_list(list_id: int)** – query stock by status.
+- **delete_list(list_id: int) -> Tuple[bool, str]** – drop lists and safely unassign bars.
+- **add_silver_bar(...) / update_silver_bar_values(...)** – maintain silver bar records linked to estimates.
+
+## Supporting Types
+
+- **ItemCacheController (silverestimate/infrastructure/item_cache.py)** - shared cache utilised by ItemsRepository for hot lookups.
+- **FlushScheduler (silverestimate/persistence/flush_scheduler.py)** - debounced commit/encrypt worker invoked by DatabaseManager.request_flush.
+- **InlineStatusController (silverestimate/ui/inline_status.py)** - helper used across UI widgets to surface status messages without tight UI coupling.
+- **CredentialStore (silverestimate/security/credential_store.py)** - OS keyring abstraction with migration helpers for legacy QSettings credentials.
+
+## UI Facades
+
+While the focus of this reference is the controller/service stack, the following UI entry points expose the application logic:
+- **EstimateEntryWidget (silverestimate/ui/estimate_entry.py)** - integrates `EstimateEntryPresenter` with UI helpers and logic mixins; exposes `save_estimate()`, `print_estimate()`, `safe_load_estimate()`.
+- **ItemMasterWidget (silverestimate/ui/item_master.py)** - allows CRUD via load_items(), add_item(), update_item(), delete_item() (internally using ItemsRepository).
+- **SilverBarDialog (silverestimate/ui/silver_bar_management.py)** - provides load_available_bars(), load_bars_in_selected_list(), and list assignment interactions on top of SilverBarsRepository.
+
+Use controllers and services as the primary integration surface; direct UI manipulation should be reserved for Qt widget customisations.

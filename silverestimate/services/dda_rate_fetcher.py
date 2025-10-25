@@ -150,8 +150,13 @@ def _lookup_com_id_for_target(base_url: str = DEFAULT_BASE_URL, timeout: int = 1
     except Exception:
         return None
 
-def fetch_broadcast_rate_exact(timeout: int = 10, client: str = BROADCAST_CLIENT, target_name: str = TARGET_NAME,
-                               base_url: str = DEFAULT_BASE_URL, prefer_static_id: bool = True):
+def fetch_broadcast_rate_exact(
+    timeout: int = 10,
+    client: str = BROADCAST_CLIENT,
+    target_name: str = TARGET_NAME,
+    base_url: str = DEFAULT_BASE_URL,
+    prefer_static_id: bool = True,
+):
     """
     Fetch the exact on-screen rate via the broadcast endpoint the site uses.
 
@@ -167,57 +172,87 @@ def fetch_broadcast_rate_exact(timeout: int = 10, client: str = BROADCAST_CLIENT
     com_id = 47 if prefer_static_id else (_lookup_com_id_for_target(base_url=base_url, timeout=timeout) or 47)
 
     payload = json.dumps({"client": client}).encode("utf-8")
-    text = None
     endpoint_used = None
     fetch_errors = []
-    for endpoint in BROADCAST_URLS:
-        req = urllib.request.Request(
-            endpoint,
-            data=payload,
-            headers={"Content-Type": "application/json", "User-Agent": "SilverEstimate/1.0"},
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                text = resp.read().decode("utf-8", errors="replace")
-            endpoint_used = endpoint
-            break
-        except Exception as exc:
-            fetch_errors.append(repr(exc))
-            continue
-    if text is None:
-        info = {"com_id": com_id}
-        if fetch_errors:
-            info["errors"] = fetch_errors
-        return None, True, info
-
     rate_val = None
     market_open = True
 
-    lines = text.splitlines()
-    for line in lines:
+    for endpoint in BROADCAST_URLS:
+        try:
+            text = _fetch_broadcast_payload(endpoint, payload, timeout=timeout)
+        except Exception as exc:  # pragma: no cover - network errors vary
+            fetch_errors.append(repr(exc))
+            continue
+
+        candidate_rate, candidate_open = _parse_broadcast_payload(text, com_id)
+        # Record the latest market status even if the rate was missing.
+        market_open = candidate_open
+        if candidate_rate is not None:
+            rate_val = candidate_rate
+            endpoint_used = endpoint
+            break
+
+    # If not found and we didn't try dynamic lookup, try once more by resolving com_id dynamically
+    if rate_val is None and prefer_static_id:
+        dyn_id = _lookup_com_id_for_target(base_url=base_url, timeout=timeout)
+        if dyn_id and dyn_id != com_id:
+            for endpoint in BROADCAST_URLS:
+                try:
+                    text = _fetch_broadcast_payload(endpoint, payload, timeout=timeout)
+                except Exception:
+                    continue
+                candidate_rate, candidate_open = _parse_broadcast_payload(text, dyn_id)
+                market_open = candidate_open
+                if candidate_rate is not None:
+                    rate_val = candidate_rate
+                    endpoint_used = endpoint
+                    break
+            com_id = dyn_id or com_id
+
+    if rate_val is None and fetch_errors:
+        info = {"com_id": com_id, "errors": fetch_errors}
+        return None, market_open, info
+
+    info = {"com_id": com_id}
+    if endpoint_used:
+        info["endpoint"] = endpoint_used
+    return rate_val, market_open, info
+
+
+def _fetch_broadcast_payload(endpoint: str, payload: bytes, timeout: int) -> str:
+    req = urllib.request.Request(
+        endpoint,
+        data=payload,
+        headers={"Content-Type": "application/json", "User-Agent": "SilverEstimate/1.0"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read().decode("utf-8", errors="replace")
+
+
+def _parse_broadcast_payload(text: str, target_com_id: int):
+    rate_val = None
+    market_open = True
+
+    for line in text.splitlines():
         parts = line.split("\t")
         if not parts or len(parts) < 2:
             continue
         rec_type = parts[0]
-        # Market/Message status record
         if rec_type == "4":
             try:
-                # parts[3] == 0 => closed; parts[4] == 1 => message mode
                 closed_flag = int(parts[3]) == 0
                 message_flag = int(parts[4]) == 1
                 if closed_flag or message_flag:
                     market_open = False
             except Exception:
-                pass
-        # Commodity rate record
-        if rec_type == "3":
+                continue
+        elif rec_type == "3":
             try:
                 cid = int(parts[1])
             except Exception:
                 continue
-            if cid == com_id:
-                # Indexes as per site JS: [3]=buy, [4]=sell
+            if cid == target_com_id:
                 try:
                     rate_val = int(float(parts[4]))
                 except Exception:
@@ -225,45 +260,10 @@ def fetch_broadcast_rate_exact(timeout: int = 10, client: str = BROADCAST_CLIENT
                         rate_val = int(round(float(parts[4])))
                     except Exception:
                         rate_val = None
-    # If not found and we didn't try dynamic lookup, try once more by resolving com_id dynamically
-    if rate_val is None and prefer_static_id:
-        dyn_id = _lookup_com_id_for_target(base_url=base_url, timeout=timeout)
-        if dyn_id and dyn_id != com_id:
-            try:
-                payload = json.dumps({"client": client}).encode("utf-8")
-                req = urllib.request.Request(
-                    endpoint_used or BROADCAST_URLS[0],
-                    data=payload,
-                    headers={"Content-Type": "application/json", "User-Agent": "SilverEstimate/1.0"},
-                    method="POST",
-                )
-                with urllib.request.urlopen(req, timeout=timeout) as resp:
-                    text = resp.read().decode("utf-8", errors="replace")
-                for line in text.splitlines():
-                    parts = line.split("\t")
-                    if parts and parts[0] == "3":
-                        try:
-                            cid = int(parts[1])
-                        except Exception:
-                            continue
-                        if cid == dyn_id:
-                            try:
-                                rate_val = int(float(parts[4]))
-                            except Exception:
-                                try:
-                                    rate_val = int(round(float(parts[4])))
-                                except Exception:
-                                    rate_val = None
-                            break
-            except Exception:
-                pass
+                if rate_val is not None:
+                    break
 
-        com_id = dyn_id or com_id
-
-    info = {"com_id": com_id}
-    if endpoint_used:
-        info["endpoint"] = endpoint_used
-    return rate_val, market_open, info
+    return rate_val, market_open
 
 
 if __name__ == "__main__":

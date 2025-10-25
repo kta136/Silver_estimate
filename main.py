@@ -6,10 +6,8 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
     QApplication,
-    QFrame,
     QMainWindow,
     QMessageBox,
-    QScrollArea,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -88,19 +86,10 @@ class MainWindow(QMainWindow):
             self.print_font = default_font
 
         self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
         self.layout = QVBoxLayout(self.central_widget)
         self.stack = QStackedWidget(self.central_widget)
         self.layout.addWidget(self.stack)
-
-        self._scroll_container = QScrollArea()
-        self._scroll_container.setObjectName("MainScrollArea")
-        self._scroll_container.setWidgetResizable(True)
-        self._scroll_container.setFrameShape(QFrame.NoFrame)
-        self._scroll_container.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self._scroll_container.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self._scroll_container.setWidget(self.central_widget)
-        # Keep backwards compatibility for any code that expects a QWidget here
-        self.setCentralWidget(self._scroll_container)
 
         self.navigation_service = NavigationService(self, self.stack, logger=self.logger)
         self.commands = MainCommands(self, self.db, logger=self.logger)

@@ -55,13 +55,31 @@ class _EstimateTableMixin:
                 0, lambda: self.item_table.setCurrentCell(row_index, COL_GROSS)
             )
             QTimer.singleShot(
-                10,
-                lambda: self.item_table.editItem(
-                    self.item_table.item(row_index, COL_GROSS)
-                ),
+                10, lambda: self._safe_edit_item(row_index, COL_GROSS)
             )
         except Exception:
             pass
+
+    def _schedule_cell_edit(self, row: int, column: int) -> None:
+        """Guarded helper to focus/edit a cell after the event loop cycles."""
+        def _do_edit():
+            table = getattr(self, "item_table", None)
+            if not table:
+                return
+            if not (0 <= row < table.rowCount() and 0 <= column < table.columnCount()):
+                return
+            cell = table.item(row, column)
+            if cell is None:
+                cell = self._ensure_cell_exists(row, column)
+            if not cell or not (cell.flags() & Qt.ItemIsEditable):
+                return
+            try:
+                table.editItem(cell)
+            except RuntimeError:
+                # Item was removed before the edit fired; ignore.
+                pass
+
+        QTimer.singleShot(0, _do_edit)
 
     def add_empty_row(self):
         self._get_table_adapter().add_empty_row()
@@ -165,9 +183,7 @@ class _EstimateTableMixin:
             cell = self._ensure_cell_exists(row, col)
             if cell and (cell.flags() & Qt.ItemIsEditable):
                 if not (prev_empty_code and row != prev_row):
-                    QTimer.singleShot(
-                        0, lambda c=cell: self.item_table.editItem(c)
-                    )
+                    self._schedule_cell_edit(row, col)
 
     def current_cell_changed(self, currentRow, currentCol, previousRow, previousCol):
         try:
@@ -190,9 +206,7 @@ class _EstimateTableMixin:
         if currentCol in editable_cols and 0 <= currentRow < self.item_table.rowCount():
             cell = self._ensure_cell_exists(currentRow, currentCol)
             if cell and (cell.flags() & Qt.ItemIsEditable):
-                QTimer.singleShot(
-                    0, lambda c=cell: self.item_table.editItem(c)
-                )
+                self._schedule_cell_edit(currentRow, currentCol)
 
     def handle_cell_changed(self, row, column):
         if self.processing_cell:
@@ -298,11 +312,9 @@ class _EstimateTableMixin:
         ):
             self.item_table.setCurrentCell(next_row, next_col)
             if next_col in editable_cols:
-                item_to_edit = self.item_table.item(next_row, next_col)
-                if item_to_edit:
-                    QTimer.singleShot(
-                        10, lambda: self.item_table.editItem(item_to_edit)
-                    )
+                QTimer.singleShot(
+                    10, lambda: self._safe_edit_item(next_row, next_col)
+                )
 
     def focus_on_code_column(self, row):
         try:
@@ -784,9 +796,7 @@ class _EstimateTableMixin:
         ):
             self.item_table.setCurrentCell(prev_row, prev_col)
             if prev_col in editable_cols:
-                item_to_edit = self.item_table.item(prev_row, prev_col)
-                if item_to_edit:
-                    QTimer.singleShot(
-                        10, lambda: self.item_table.editItem(item_to_edit)
-                    )
+                QTimer.singleShot(
+                    10, lambda: self._safe_edit_item(prev_row, prev_col)
+                )
 

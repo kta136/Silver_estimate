@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from PyQt5.QtWidgets import QWidget, QShortcut, QTableWidgetItem, QMessageBox
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, QSignalBlocker
 from PyQt5.QtGui import QKeySequence
 from silverestimate.infrastructure.settings import get_app_settings
 from .estimate_entry_ui import (
@@ -36,6 +36,7 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         self.main_window = main_window # Store reference
         # Flag to prevent loading estimates during initialization
         self.initializing = True
+        self._loading_estimate = False
 
         # Initialize tracking variables
         # Use COL_CODE for initialization consistency
@@ -112,6 +113,10 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
 
         # Set initializing flag to false after setup is complete
         self.initializing = False
+
+        # Allow pressing Enter/Tab in the voucher field to trigger loading
+        # Delay signal connection to prevent premature loads during initialization
+        QTimer.singleShot(100, self.reconnect_load_estimate)
 
         # Column width persistence is hooked in UI setup via header.sectionResized
         # Debounced totals recalculation timer (improves UI responsiveness)
@@ -748,22 +753,35 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         self._apply_final_calc_font_size(size)
 
     def reconnect_load_estimate(self):
-        """Reconnect the editingFinished signal for the voucher edit."""
+        """Reconnect keyboard-triggered loading for the voucher field."""
         try:
-            # Ensure it's not connected multiple times
+            self.voucher_edit.editingFinished.disconnect(self.safe_load_estimate)
+        except TypeError:
+            pass
+        try:
             self.voucher_edit.editingFinished.disconnect(self.load_estimate)
         except TypeError:
-            pass # It wasn't connected, which is fine
-        # Use a safer approach - connect to a wrapper method that handles exceptions
+            pass
+
+        # Use only the safe wrapper; returnPressed triggers editingFinished.
         self.voucher_edit.editingFinished.connect(self.safe_load_estimate)
+
         import logging
-        logging.getLogger(__name__).debug("Reconnected load_estimate signal with safe wrapper.")
+        logging.getLogger(__name__).debug("Reconnected voucher load handlers.")
+
     def safe_load_estimate(self):
         """Safely load an estimate, catching any exceptions to prevent crashes."""
+        if getattr(self, "_loading_estimate", False):
+            self.logger.debug("Load request ignored; voucher load already in progress.")
+            return
         # Skip loading during initialization to prevent startup crashes
         if hasattr(self, 'initializing') and self.initializing:
             self.logger.debug("Skipping load_estimate during initialization")
             return
+        # Additional guard: Don't auto-load the generated voucher number on startup
+        voucher_text = self.voucher_edit.text().strip()
+        if not voucher_text:
+            return  # No voucher number entered, nothing to load
         if self.has_unsaved_changes():
             reply = QMessageBox.question(
                 self,
@@ -779,15 +797,13 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
                     self.voucher_edit.selectAll()
                 except Exception:
                     pass
+                self._loading_estimate = False
                 return
 
-        try:
-            # Temporarily disconnect the signal to prevent recursive calls
-            try:
-                self.voucher_edit.editingFinished.disconnect(self.safe_load_estimate)
-            except TypeError:
-                pass  # It wasn't connected, which is fine
+        self._loading_estimate = True
 
+        blocker = QSignalBlocker(self.voucher_edit)
+        try:
             # Call the actual load_estimate method
             self.load_estimate()
 
@@ -801,14 +817,8 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
                                 f"An error occurred while loading the estimate: {str(e)}\n\n"
                                 "Your changes have not been saved.")
         finally:
-            # Reconnect the signal
-            try:
-                # Ensure it's not connected multiple times
-                self.voucher_edit.editingFinished.disconnect(self.safe_load_estimate)
-            except TypeError:
-                pass  # It wasn't connected, which is fine
-
-            self.voucher_edit.editingFinished.connect(self.safe_load_estimate)
+            del blocker
+            self._loading_estimate = False
 
     # Removed _save_table_font_size_setting as saving is handled by MainWindow
 

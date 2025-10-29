@@ -1,11 +1,11 @@
-# Silver Estimation App - v1.72.7
+# Silver Estimation App - v2.0.3
 
 A desktop application built with PyQt5 and an encrypted SQLite database for managing silver sales estimates - item-wise entries, silver bar inventory, returns, and print-ready outputs.
 
 ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
 ![PyQt5](https://img.shields.io/badge/PyQt5-5.15+-green.svg)
 ![License](https://img.shields.io/badge/License-Proprietary-red.svg)
-![Version](https://img.shields.io/badge/version-v1.72.7-orange.svg)
+![Version](https://img.shields.io/badge/version-v2.0.3-orange.svg)
 
 ## Table of Contents
 - [Overview](#overview)
@@ -209,28 +209,28 @@ c 2023-2025 Silver Estimation App
 
 ## Version History (highlights)
 
+### v2.0.3 (2025-10-29)
+- Fix UI layout issues on small screens
+- Set maximum width for toggle buttons to prevent expansion
+- Shorten button text when active (Return/Silver Bar modes)
+
+### v2.0.2 (2025-10-29)
+- Fix segmentation fault on startup by delaying signal connection
+- Add guard to prevent auto-loading empty voucher numbers
+- Fix RuntimeError with deleted QTableWidgetItem in table operations
+
+### v2.0.1 (2025-09-16)
+- Fix broadcast rate fetch and improve error handling
+
+### v2.0.0 (2025-09-15)
+- Major version bump for architectural improvements
+- Enhanced stability and performance
+
 ### v1.72.7 (2025-09-16)
-- Harden shutdown so duplicate DatabaseManager closes no longer raise false critical temp-file warnings.
+- Harden shutdown so duplicate DatabaseManager closes no longer raise false critical temp-file warnings
 
 ### v1.72.5 (2025-09-14)
-- Ensure encryption reads a complete WAL snapshot before sealing, eliminating session-only data loss.
-- Serialise encryption with explicit locks and postpone shutdown until flush work completes.
-- Improve Item Master persistence messaging and flush lifecycle logs.
-
-### v1.72.4 (2025-09-14)
-- Add refresh button next to Live Silver Rate.
-- Async live rate fetch (broadcast/API fallback).
-- Fix Estimate History action methods location.
-- Minor layout polish and tooltips.
-
-### v1.72.3 (2025-09-13)
-- Faster startup via lazy imports; prepared cursors
-- Indexed lookups and batched inserts
-- Async flush hygiene on close; inline "Saving." hint
-
-### v1.72.2 (2025-09-13)
-- Debounced async encryption flush
-- Optimized history aggregations and UI batching
-- Debounced totals; minor fixes
+- Ensure encryption reads a complete WAL snapshot before sealing
+- Serialise encryption with explicit locks
 
 [See full changelog](CHANGELOG.md)

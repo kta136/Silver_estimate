@@ -249,7 +249,7 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
             self.silver_bar_mode = False
             self.silver_bar_toggle_button.setChecked(False)
             # Use the tooltip text directly if needed, or just reset
-            self.silver_bar_toggle_button.setText("🥈 Silver Bars (Ctrl+B)")
+            self.silver_bar_toggle_button.setText("🥈 Silver Bars")
             self.silver_bar_toggle_button.setStyleSheet("""
                 QPushButton {
                     background-color: palette(button);
@@ -271,7 +271,7 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
 
         # Update button appearance and Mode Label
         if self.return_mode:
-            self.return_toggle_button.setText("↩ Return Items Mode ACTIVE (Ctrl+R)")
+            self.return_toggle_button.setText("↩ RETURN ON")
             self.return_toggle_button.setStyleSheet("""
                 QPushButton {
                     background-color: #e8f4fd;
@@ -289,7 +289,7 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
             self.mode_indicator_label.setStyleSheet("font-weight: bold; color: #0066cc;")
             self.show_status("Return Items mode activated", 2000)
         else:
-            self.return_toggle_button.setText("↩ Return Items (Ctrl+R)")
+            self.return_toggle_button.setText("↩ Return Items")
             self.return_toggle_button.setStyleSheet("""
                 QPushButton {
                     background-color: palette(button);
@@ -329,7 +329,7 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
         if not self.silver_bar_mode and self.return_mode:
             self.return_mode = False
             self.return_toggle_button.setChecked(False)
-            self.return_toggle_button.setText("↩ Return Items (Ctrl+R)")
+            self.return_toggle_button.setText("↩ Return Items")
             self.return_toggle_button.setStyleSheet("""
                 QPushButton {
                     background-color: palette(button);
@@ -351,7 +351,7 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
 
         # Update button appearance and Mode Label
         if self.silver_bar_mode:
-            self.silver_bar_toggle_button.setText("🥈 Silver Bar Mode ACTIVE (Ctrl+B)")
+            self.silver_bar_toggle_button.setText("🥈 BAR ON")
             self.silver_bar_toggle_button.setStyleSheet("""
                 QPushButton {
                     background-color: #fff4e6;
@@ -369,7 +369,7 @@ class EstimateEntryWidget(QWidget, EstimateUI, EstimateLogic):
             self.mode_indicator_label.setStyleSheet("font-weight: bold; color: #cc6600;")
             self.show_status("Silver Bars mode activated", 2000)
         else:
-            self.silver_bar_toggle_button.setText("🥈 Silver Bars (Ctrl+B)")
+            self.silver_bar_toggle_button.setText("🥈 Silver Bars")
             self.silver_bar_toggle_button.setStyleSheet("""
                 QPushButton {
                     background-color: palette(button);

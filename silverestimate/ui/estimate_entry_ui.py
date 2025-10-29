@@ -248,6 +248,7 @@ class EstimateUI:
         self.return_toggle_button = QPushButton("↩ Return Items")
         self.return_toggle_button.setToolTip("Toggle Return Item entry mode for new rows\nKeyboard: Ctrl+R\nNew rows will be marked as Return items\nAffects calculations and item type")
         self.return_toggle_button.setCheckable(True)
+        self.return_toggle_button.setMaximumWidth(150)
         self.return_toggle_button.setStyleSheet("""
             QPushButton {
                 background-color: palette(button);
@@ -266,6 +267,7 @@ class EstimateUI:
         self.silver_bar_toggle_button = QPushButton("🥈 Silver Bars")
         self.silver_bar_toggle_button.setToolTip("Toggle Silver Bar entry mode for new rows\nKeyboard: Ctrl+B\nNew rows will be marked as Silver Bar items\nCannot use both Return and Silver Bar modes")
         self.silver_bar_toggle_button.setCheckable(True)
+        self.silver_bar_toggle_button.setMaximumWidth(150)
         self.silver_bar_toggle_button.setStyleSheet("""
             QPushButton {
                 background-color: palette(button);

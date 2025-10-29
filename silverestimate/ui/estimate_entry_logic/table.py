@@ -565,7 +565,7 @@ class _EstimateTableMixin:
         self.return_toggle_button.setChecked(self.return_mode)
 
         if self.return_mode:
-            self.return_toggle_button.setText("↩ Return Items Mode ACTIVE")
+            self.return_toggle_button.setText("↩ RETURN ON")
             self.return_toggle_button.setStyleSheet(
                 """
                 QPushButton {
@@ -646,7 +646,7 @@ class _EstimateTableMixin:
         self.silver_bar_toggle_button.setChecked(self.silver_bar_mode)
 
         if self.silver_bar_mode:
-            self.silver_bar_toggle_button.setText("🥈 Silver Bar Mode ACTIVE")
+            self.silver_bar_toggle_button.setText("🥈 BAR ON")
             self.silver_bar_toggle_button.setStyleSheet(
                 """
                 QPushButton {

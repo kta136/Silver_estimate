@@ -169,6 +169,7 @@ desktop.ini
 # Codex/MCP local config
 .codex/
 .claude/
+.serena/
 
 # Temporary helper files created during tooling exploration
 servers_readme.md

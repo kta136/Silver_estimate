@@ -11,7 +11,6 @@ A desktop application built with PyQt5 and an encrypted SQLite database for mana
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [Features](#features)
-- [Screenshots](#screenshots)
 - [Installation](#installation)
 - [Usage](#usage)
 - [Security](#security)
@@ -73,17 +72,6 @@ See also: `DOCS/project-architecture.md`.
 - Import items from delimited files
 - Export item catalogs for backup
 - Duplicate handling with safe merges
-
-## Screenshots
-
-Capture screenshots from the running app and store them in `DOCS/images/` (keep filenames consistent so links stay valid):
-
-- Estimate entry workflow -> `DOCS/images/estimate-entry.png`
-- Item master catalog -> `DOCS/images/item-master.png`
-- Silver bar management -> `DOCS/images/silver-bar-management.png`
-- Print preview -> `DOCS/images/print-preview.png`
-
-(Add the PNG files when ready; the repository currently omits large assets.)
 
 ## Installation
 

@@ -541,9 +541,14 @@ class _EstimateTableMixin:
                 self.item_table.blockSignals(False)
 
     def toggle_return_mode(self):
+        # Block signals to prevent recursion when button state changes
+        from PyQt5.QtCore import QSignalBlocker
+
         if not getattr(self, "return_mode", False) and getattr(self, "silver_bar_mode", False):
             self.silver_bar_mode = False
+            blocker = QSignalBlocker(self.silver_bar_toggle_button)
             self.silver_bar_toggle_button.setChecked(False)
+            blocker.unblock()
             self.silver_bar_toggle_button.setText("🥈 Silver Bars")
             self.silver_bar_toggle_button.setStyleSheet(
                 """
@@ -562,7 +567,9 @@ class _EstimateTableMixin:
             )
 
         self.return_mode = not getattr(self, "return_mode", False)
+        blocker = QSignalBlocker(self.return_toggle_button)
         self.return_toggle_button.setChecked(self.return_mode)
+        blocker.unblock()
 
         if self.return_mode:
             self.return_toggle_button.setText("↩ RETURN ON")
@@ -622,9 +629,14 @@ class _EstimateTableMixin:
         self._mark_unsaved()
 
     def toggle_silver_bar_mode(self):
+        # Block signals to prevent recursion when button state changes
+        from PyQt5.QtCore import QSignalBlocker
+
         if not getattr(self, "silver_bar_mode", False) and getattr(self, "return_mode", False):
             self.return_mode = False
+            blocker = QSignalBlocker(self.return_toggle_button)
             self.return_toggle_button.setChecked(False)
+            blocker.unblock()
             self.return_toggle_button.setText("↩ Return Items")
             self.return_toggle_button.setStyleSheet(
                 """
@@ -643,7 +655,9 @@ class _EstimateTableMixin:
             )
 
         self.silver_bar_mode = not getattr(self, "silver_bar_mode", False)
+        blocker = QSignalBlocker(self.silver_bar_toggle_button)
         self.silver_bar_toggle_button.setChecked(self.silver_bar_mode)
+        blocker.unblock()
 
         if self.silver_bar_mode:
             self.silver_bar_toggle_button.setText("🥈 BAR ON")

@@ -223,3 +223,41 @@ class TotalsPanel(QWidget):
         self.net_fine_label.setText("0.0")
         self.net_wage_label.setText("0")
         self.grand_total_label.setText("₹ 0")
+
+    # Font size methods for EstimateLogic compatibility
+
+    def set_breakdown_font_size(self, size: int) -> None:
+        """Apply font size to breakdown totals labels.
+
+        Args:
+            size: Font point size
+        """
+        labels = [
+            self.overall_gross_label, self.overall_poly_label,
+            self.total_gross_label, self.total_net_label, self.total_fine_label,
+            self.return_gross_label, self.return_net_label, self.return_fine_label,
+            self.bar_gross_label, self.bar_net_label, self.bar_fine_label
+        ]
+        for label in labels:
+            font = label.font()
+            font.setPointSize(int(size))
+            label.setFont(font)
+
+    def set_final_calc_font_size(self, size: int) -> None:
+        """Apply font size to final calculation labels.
+
+        Args:
+            size: Font point size
+        """
+        # Preserve stylesheet while setting font size
+        for label in [self.net_fine_label, self.net_wage_label]:
+            font = label.font()
+            font.setPointSize(int(size))
+            label.setFont(font)
+
+        # Grand total - preserve bold and color
+        font = self.grand_total_label.font()
+        font.setPointSize(int(size))
+        self.grand_total_label.setFont(font)
+        # Keep color in stylesheet
+        self.grand_total_label.setStyleSheet("font-weight: bold; color: #059669;")

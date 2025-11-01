@@ -259,14 +259,34 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         self.secondary_actions.refresh_rate_clicked.connect(self._on_refresh_rate_clicked)
 
     def _on_return_mode_toggled(self, enabled):
-        """Handle return mode toggle from component."""
-        if enabled != self.return_mode:
-            self.toggle_return_mode()
+        """Handle return mode toggle from component.
+
+        The button's checked state has already changed when this signal fires.
+        However, toggle_return_mode() will toggle the state again, so we need
+        to revert the button state first, then let the mixin toggle it properly.
+        """
+        # Temporarily block signals to prevent recursion
+        blocker = QSignalBlocker(self.return_toggle_button)
+        # Revert button to previous state
+        self.return_toggle_button.setChecked(not enabled)
+        blocker.unblock()
+        # Now call mixin's toggle which will change state and update button
+        self.toggle_return_mode()
 
     def _on_silver_bar_mode_toggled(self, enabled):
-        """Handle silver bar mode toggle from component."""
-        if enabled != self.silver_bar_mode:
-            self.toggle_silver_bar_mode()
+        """Handle silver bar mode toggle from component.
+
+        The button's checked state has already changed when this signal fires.
+        However, toggle_silver_bar_mode() will toggle the state again, so we need
+        to revert the button state first, then let the mixin toggle it properly.
+        """
+        # Temporarily block signals to prevent recursion
+        blocker = QSignalBlocker(self.silver_bar_toggle_button)
+        # Revert button to previous state
+        self.silver_bar_toggle_button.setChecked(not enabled)
+        blocker.unblock()
+        # Now call mixin's toggle which will change state and update button
+        self.toggle_silver_bar_mode()
 
     def _on_last_balance_clicked(self):
         """Handle last balance button click."""

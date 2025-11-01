@@ -5,6 +5,7 @@ from __future__ import annotations
 from PyQt5.QtCore import QDate, pyqtSignal
 from PyQt5.QtWidgets import (
     QDateEdit,
+    QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -27,6 +28,7 @@ class VoucherToolbar(QWidget):
     history_clicked = pyqtSignal()
     delete_clicked = pyqtSignal()
     new_clicked = pyqtSignal()
+    print_clicked = pyqtSignal()
     voucher_number_changed = pyqtSignal(str)
     date_changed = pyqtSignal(QDate)
     note_changed = pyqtSignal(str)
@@ -129,6 +131,22 @@ class VoucherToolbar(QWidget):
         layout.addWidget(note_label)
         layout.addWidget(self.note_edit)
 
+        # Silver rate (added for EstimateLogic compatibility)
+        silver_rate_label = QLabel("Silver Rate:")
+        self.silver_rate_spin = QDoubleSpinBox()
+        self.silver_rate_spin.setRange(0, 1000000)
+        self.silver_rate_spin.setDecimals(2)
+        self.silver_rate_spin.setValue(75000.0)
+        self.silver_rate_spin.setMaximumWidth(120)
+        self.silver_rate_spin.setToolTip("Silver rate per kg")
+        layout.addWidget(silver_rate_label)
+        layout.addWidget(self.silver_rate_spin)
+
+        # Status message label (hidden, for EstimateLogic compatibility)
+        self.status_message_label = QLabel("")
+        self.status_message_label.setVisible(False)
+        layout.addWidget(self.status_message_label)
+
         layout.addStretch()
 
         # Action buttons
@@ -139,6 +157,13 @@ class VoucherToolbar(QWidget):
             "Updates existing estimate if voucher loaded"
         )
         layout.addWidget(self.save_button)
+
+        self.print_button = QPushButton("Print")
+        self.print_button.setToolTip(
+            "Print the current estimate\n"
+            "Generates a formatted printout"
+        )
+        layout.addWidget(self.print_button)
 
         self.history_button = QPushButton("History")
         self.history_button.setToolTip(
@@ -175,6 +200,7 @@ class VoucherToolbar(QWidget):
         self.history_button.clicked.connect(self.history_clicked.emit)
         self.delete_button.clicked.connect(self.delete_clicked.emit)
         self.new_button.clicked.connect(self.new_clicked.emit)
+        self.print_button.clicked.connect(self.print_clicked.emit)
 
         self.voucher_edit.textChanged.connect(self.voucher_number_changed.emit)
         self.date_edit.dateChanged.connect(self.date_changed.emit)

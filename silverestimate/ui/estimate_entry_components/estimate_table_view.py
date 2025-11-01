@@ -1,0 +1,278 @@
+"""Table view component for estimate entry."""
+
+from __future__ import annotations
+
+from typing import Optional
+
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtWidgets import QAction, QHeaderView, QMenu, QTableView
+
+from silverestimate.ui.models.estimate_table_model import EstimateTableModel
+from silverestimate.ui.view_models.estimate_entry_view_model import (
+    EstimateEntryRowState,
+)
+
+
+class EstimateTableView(QTableView):
+    """Table view for displaying and editing estimate entries.
+
+    This component displays estimate data using the EstimateTableModel and
+    provides keyboard shortcuts, context menus, and cell editing capabilities.
+    """
+
+    # Signals
+    item_lookup_requested = pyqtSignal(int, str)  # row, code
+    row_deleted = pyqtSignal(int)  # row index
+    cell_edited = pyqtSignal(int, int)  # row, column
+    history_requested = pyqtSignal()
+    column_layout_reset_requested = pyqtSignal()
+
+    def __init__(self, parent=None):
+        """Initialize the estimate table view.
+
+        Args:
+            parent: Optional parent widget
+        """
+        super().__init__(parent)
+        self._table_model = EstimateTableModel(self)
+        self._setup_ui()
+        self._setup_shortcuts()
+        self._connect_signals()
+
+    def _setup_ui(self) -> None:
+        """Set up the user interface."""
+        # Set the model
+        self.setModel(self._table_model)
+
+        # Table appearance
+        self.setAlternatingRowColors(True)
+        self.setSelectionBehavior(QTableView.SelectRows)
+        self.setSelectionMode(QTableView.SingleSelection)
+        self.setShowGrid(True)
+        self.setCornerButtonEnabled(False)
+
+        # Enable sorting
+        self.setSortingEnabled(False)  # Disable for now to maintain order
+
+        # Header configuration
+        horizontal_header = self.horizontalHeader()
+        horizontal_header.setStretchLastSection(False)
+        horizontal_header.setSectionResizeMode(QHeaderView.Interactive)
+        horizontal_header.setDefaultAlignment(Qt.AlignLeft)
+
+        # Vertical header
+        vertical_header = self.verticalHeader()
+        vertical_header.setVisible(True)
+        vertical_header.setDefaultSectionSize(30)
+
+        # Context menu
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._show_context_menu)
+
+    def _setup_shortcuts(self) -> None:
+        """Set up keyboard shortcuts."""
+        # Delete row shortcut (Ctrl+D)
+        delete_action = QAction("Delete Row", self)
+        delete_action.setShortcut("Ctrl+D")
+        delete_action.triggered.connect(self._delete_current_row)
+        self.addAction(delete_action)
+
+        # History shortcut (Ctrl+H)
+        history_action = QAction("Show History", self)
+        history_action.setShortcut("Ctrl+H")
+        history_action.triggered.connect(self.history_requested.emit)
+        self.addAction(history_action)
+
+    def _connect_signals(self) -> None:
+        """Connect internal signals."""
+        # Connect model data changed signal
+        self._table_model.data_changed_detailed.connect(
+            lambda row, col, old, new: self.cell_edited.emit(row, col)
+        )
+
+    def _show_context_menu(self, position) -> None:
+        """Show context menu at the given position.
+
+        Args:
+            position: The position where to show the menu
+        """
+        menu = QMenu(self)
+
+        # Reset column layout action
+        reset_action = QAction("Reset Column Layout", self)
+        reset_action.triggered.connect(self.column_layout_reset_requested.emit)
+        menu.addAction(reset_action)
+
+        menu.addSeparator()
+
+        # Delete row action
+        delete_action = QAction("Delete Current Row", self)
+        delete_action.setShortcut("Ctrl+D")
+        delete_action.triggered.connect(self._delete_current_row)
+        menu.addAction(delete_action)
+
+        menu.exec_(self.viewport().mapToGlobal(position))
+
+    def _delete_current_row(self) -> None:
+        """Delete the currently selected row."""
+        current_index = self.currentIndex()
+        if current_index.isValid():
+            row = current_index.row()
+            self.row_deleted.emit(row)
+
+    # Public methods for managing rows
+
+    def add_row(self, row_data: Optional[EstimateEntryRowState] = None) -> int:
+        """Add a new row to the table.
+
+        Args:
+            row_data: Optional row data. If None, adds an empty row.
+
+        Returns:
+            The index of the newly added row
+        """
+        return self._table_model.add_row(row_data)
+
+    def delete_row(self, row_idx: int) -> bool:
+        """Delete a row from the table.
+
+        Args:
+            row_idx: The index of the row to delete
+
+        Returns:
+            True if the row was deleted, False otherwise
+        """
+        return self._table_model.remove_row(row_idx)
+
+    def clear_rows(self) -> None:
+        """Remove all rows from the table."""
+        self._table_model.clear_rows()
+
+    def get_row(self, row_idx: int) -> Optional[EstimateEntryRowState]:
+        """Get the row data at the given index.
+
+        Args:
+            row_idx: The row index
+
+        Returns:
+            The row data, or None if the index is invalid
+        """
+        return self._table_model.get_row(row_idx)
+
+    def set_row(self, row_idx: int, row_data: EstimateEntryRowState) -> bool:
+        """Set the row data at the given index.
+
+        Args:
+            row_idx: The row index
+            row_data: The new row data
+
+        Returns:
+            True if the row was set, False otherwise
+        """
+        return self._table_model.set_row(row_idx, row_data)
+
+    def get_all_rows(self) -> list[EstimateEntryRowState]:
+        """Get all row data.
+
+        Returns:
+            A list of all rows
+        """
+        return self._table_model.get_all_rows()
+
+    def set_all_rows(self, rows: list[EstimateEntryRowState]) -> None:
+        """Set all rows at once.
+
+        Args:
+            rows: The new list of rows
+        """
+        self._table_model.set_all_rows(rows)
+
+    def focus_cell(self, row: int, column: int) -> None:
+        """Set focus to a specific cell.
+
+        Args:
+            row: The row index
+            column: The column index
+        """
+        if 0 <= row < self._table_model.rowCount():
+            index = self._table_model.index(row, column)
+            self.setCurrentIndex(index)
+            self.edit(index)
+
+    def get_current_row(self) -> int:
+        """Get the current row index.
+
+        Returns:
+            The current row index, or -1 if no row is selected
+        """
+        current_index = self.currentIndex()
+        return current_index.row() if current_index.isValid() else -1
+
+    def get_current_column(self) -> int:
+        """Get the current column index.
+
+        Returns:
+            The current column index, or -1 if no column is selected
+        """
+        current_index = self.currentIndex()
+        return current_index.column() if current_index.isValid() else -1
+
+    def get_model(self) -> EstimateTableModel:
+        """Get the underlying table model.
+
+        Returns:
+            The EstimateTableModel instance
+        """
+        return self._table_model
+
+    def save_column_widths(self) -> dict[int, int]:
+        """Save the current column widths.
+
+        Returns:
+            A dictionary mapping column index to width
+        """
+        widths = {}
+        for col in range(self._table_model.columnCount()):
+            widths[col] = self.columnWidth(col)
+        return widths
+
+    def restore_column_widths(self, widths: dict[int, int]) -> None:
+        """Restore column widths from saved data.
+
+        Args:
+            widths: A dictionary mapping column index to width
+        """
+        for col, width in widths.items():
+            if col < self._table_model.columnCount():
+                self.setColumnWidth(col, width)
+
+    def reset_column_widths(self) -> None:
+        """Reset column widths to default values."""
+        # Default widths for each column
+        default_widths = {
+            0: 100,  # Code
+            1: 200,  # Item Name
+            2: 80,   # Gross
+            3: 80,   # Poly
+            4: 80,   # Net Wt
+            5: 80,   # Purity
+            6: 80,   # Wage Rate
+            7: 80,   # Pieces
+            8: 80,   # Wage Amt
+            9: 80,   # Fine Wt
+            10: 80,  # Type
+        }
+        self.restore_column_widths(default_widths)
+
+    def set_column_stretch(self, column: int, stretch: bool = True) -> None:
+        """Set whether a column should stretch to fill available space.
+
+        Args:
+            column: The column index
+            stretch: True to stretch, False to use fixed width
+        """
+        header = self.horizontalHeader()
+        if stretch:
+            header.setSectionResizeMode(column, QHeaderView.Stretch)
+        else:
+            header.setSectionResizeMode(column, QHeaderView.Interactive)

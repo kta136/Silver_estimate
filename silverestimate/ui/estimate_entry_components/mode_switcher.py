@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (
     QAction,
     QFrame,
     QHBoxLayout,
+    QLabel,
     QPushButton,
     QSizePolicy,
     QWidget,
@@ -53,6 +54,19 @@ class ModeSwitcher(QWidget):
         layout = QHBoxLayout(self)
         layout.setSpacing(8)
         layout.setContentsMargins(12, 6, 12, 6)
+
+        # Mode indicator label (for EstimateLogic compatibility)
+        self.mode_label = QLabel("Mode: Regular")
+        self.mode_label.setStyleSheet("""
+            font-weight: bold;
+            color: palette(windowText);
+            background-color: palette(window);
+            border: 1px solid palette(mid);
+            border-radius: 3px;
+            padding: 2px 6px;
+        """)
+        self.mode_label.setVisible(False)  # Hidden by default, toolbar has its own
+        layout.addWidget(self.mode_label)
 
         # Return mode toggle
         self.return_toggle_button = QPushButton("↩ Return Items")
@@ -113,6 +127,10 @@ class ModeSwitcher(QWidget):
             }
         """)
         layout.addWidget(self.silver_bar_toggle_button)
+
+        # Backward compatibility aliases
+        self.return_button = self.return_toggle_button
+        self.silver_bar_button = self.silver_bar_toggle_button
 
         layout.addStretch()
 

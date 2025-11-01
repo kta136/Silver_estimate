@@ -61,6 +61,14 @@ class EstimateEntryViewModel:
         self.last_balance_silver: float = 0.0
         self.last_balance_amount: float = 0.0
 
+        # Voucher metadata
+        self.voucher_number: str = ""
+        self.voucher_date: str = ""  # ISO format date string
+        self.voucher_note: str = ""
+
+        # Unsaved changes tracking
+        self._has_unsaved_changes: bool = False
+
     # ------------------------------------------------------------------ #
     # Row management
     # ------------------------------------------------------------------ #
@@ -131,6 +139,61 @@ class EstimateEntryViewModel:
             self.return_mode = bool(return_mode)
         if silver_bar_mode is not None:
             self.silver_bar_mode = bool(silver_bar_mode)
+
+    # ------------------------------------------------------------------ #
+    # Voucher metadata management
+    # ------------------------------------------------------------------ #
+    def set_voucher_metadata(
+        self,
+        *,
+        voucher_number: str | None = None,
+        voucher_date: str | None = None,
+        voucher_note: str | None = None,
+    ) -> None:
+        """Update voucher metadata fields.
+
+        Args:
+            voucher_number: The voucher number
+            voucher_date: The voucher date (ISO format string)
+            voucher_note: The voucher note
+        """
+        if voucher_number is not None:
+            self.voucher_number = str(voucher_number)
+        if voucher_date is not None:
+            self.voucher_date = str(voucher_date)
+        if voucher_note is not None:
+            self.voucher_note = str(voucher_note)
+
+    def get_voucher_metadata(self) -> dict[str, str]:
+        """Get all voucher metadata as a dictionary.
+
+        Returns:
+            A dictionary with voucher_number, voucher_date, and voucher_note
+        """
+        return {
+            "voucher_number": self.voucher_number,
+            "voucher_date": self.voucher_date,
+            "voucher_note": self.voucher_note,
+        }
+
+    # ------------------------------------------------------------------ #
+    # Unsaved changes tracking
+    # ------------------------------------------------------------------ #
+    def mark_as_changed(self) -> None:
+        """Mark the view model as having unsaved changes."""
+        self._has_unsaved_changes = True
+
+    def mark_as_saved(self) -> None:
+        """Mark the view model as saved (no unsaved changes)."""
+        self._has_unsaved_changes = False
+
+    def has_unsaved_changes(self) -> bool:
+        """Check if there are unsaved changes.
+
+        Returns:
+            True if there are unsaved changes, False otherwise
+        """
+        return self._has_unsaved_changes
 
     # ------------------------------------------------------------------ #
     # Derived values

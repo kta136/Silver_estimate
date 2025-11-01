@@ -179,19 +179,19 @@ class TotalsPanel(QWidget):
         self.overall_poly_label.setText(f"{totals.overall_poly:.2f}")
 
         # Regular items
-        self.total_gross_label.setText(f"{totals.regular_gross:.2f}")
-        self.total_net_label.setText(f"{totals.regular_net:.2f}")
-        self.total_fine_label.setText(f"{totals.regular_fine:.2f}")
+        self.total_gross_label.setText(f"{totals.regular.gross:.2f}")
+        self.total_net_label.setText(f"{totals.regular.net:.2f}")
+        self.total_fine_label.setText(f"{totals.regular.fine:.2f}")
 
         # Return items
-        self.return_gross_label.setText(f"{totals.return_gross:.2f}")
-        self.return_net_label.setText(f"{totals.return_net:.2f}")
-        self.return_fine_label.setText(f"{totals.return_fine:.2f}")
+        self.return_gross_label.setText(f"{totals.returns.gross:.2f}")
+        self.return_net_label.setText(f"{totals.returns.net:.2f}")
+        self.return_fine_label.setText(f"{totals.returns.fine:.2f}")
 
         # Silver bars
-        self.bar_gross_label.setText(f"{totals.bar_gross:.2f}")
-        self.bar_net_label.setText(f"{totals.bar_net:.2f}")
-        self.bar_fine_label.setText(f"{totals.bar_fine:.2f}")
+        self.bar_gross_label.setText(f"{totals.silver_bars.gross:.2f}")
+        self.bar_net_label.setText(f"{totals.silver_bars.net:.2f}")
+        self.bar_fine_label.setText(f"{totals.silver_bars.fine:.2f}")
 
         # Final calculations
         self.net_fine_label.setText(f"{totals.net_fine:.2f}")

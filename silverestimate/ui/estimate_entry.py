@@ -169,7 +169,9 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         # Expose mode switcher widgets
         self.return_toggle_button = self.mode_switcher.return_button
         self.silver_bar_toggle_button = self.mode_switcher.silver_bar_button
-        self.mode_indicator_label = self.mode_switcher.mode_label
+
+        # Use toolbar's visible mode indicator (mode_switcher's is hidden)
+        self.mode_indicator_label = self.toolbar.mode_indicator_label
 
         # Expose totals panel widgets for EstimateLogic
         self.overall_gross_label = self.totals_panel.overall_gross_label

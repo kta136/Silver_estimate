@@ -17,7 +17,6 @@ def test_initial_state(toolbar):
     assert toolbar.get_voucher_number() == ""
     assert toolbar.get_note() == ""
     assert toolbar.get_date() == QDate.currentDate()
-    assert not toolbar.delete_button.isEnabled()
     assert not toolbar.unsaved_badge.isVisible()
 
 
@@ -40,17 +39,6 @@ def test_set_note(toolbar):
     toolbar.set_note("Test note")
     assert toolbar.get_note() == "Test note"
     assert toolbar.note_edit.text() == "Test note"
-
-
-def test_enable_delete(toolbar):
-    """Test enabling/disabling delete button."""
-    assert not toolbar.delete_button.isEnabled()
-
-    toolbar.enable_delete(True)
-    assert toolbar.delete_button.isEnabled()
-
-    toolbar.enable_delete(False)
-    assert not toolbar.delete_button.isEnabled()
 
 
 def test_set_mode_indicator(toolbar):
@@ -80,7 +68,6 @@ def test_clear_voucher_metadata(toolbar):
     toolbar.set_voucher_number("EST001")
     toolbar.set_note("Test note")
     toolbar.set_date(QDate(2024, 1, 15))
-    toolbar.enable_delete(True)
     toolbar.show_unsaved_badge(True)
 
     # Clear it
@@ -90,17 +77,7 @@ def test_clear_voucher_metadata(toolbar):
     assert toolbar.get_voucher_number() == ""
     assert toolbar.get_note() == ""
     assert toolbar.get_date() == QDate.currentDate()
-    assert not toolbar.delete_button.isEnabled()
     assert not toolbar.unsaved_badge.isVisible()
-
-
-def test_save_clicked_signal(toolbar):
-    """Test that save button emits signal."""
-    signal_received = []
-    toolbar.save_clicked.connect(lambda: signal_received.append(True))
-
-    toolbar.save_button.click()
-    assert len(signal_received) == 1
 
 
 def test_load_clicked_signal(toolbar):
@@ -109,34 +86,6 @@ def test_load_clicked_signal(toolbar):
     toolbar.load_clicked.connect(lambda: signal_received.append(True))
 
     toolbar.load_button.click()
-    assert len(signal_received) == 1
-
-
-def test_history_clicked_signal(toolbar):
-    """Test that history button emits signal."""
-    signal_received = []
-    toolbar.history_clicked.connect(lambda: signal_received.append(True))
-
-    toolbar.history_button.click()
-    assert len(signal_received) == 1
-
-
-def test_delete_clicked_signal(toolbar):
-    """Test that delete button emits signal when enabled."""
-    signal_received = []
-    toolbar.delete_clicked.connect(lambda: signal_received.append(True))
-
-    toolbar.enable_delete(True)
-    toolbar.delete_button.click()
-    assert len(signal_received) == 1
-
-
-def test_new_clicked_signal(toolbar):
-    """Test that new button emits signal."""
-    signal_received = []
-    toolbar.new_clicked.connect(lambda: signal_received.append(True))
-
-    toolbar.new_button.click()
     assert len(signal_received) == 1
 
 

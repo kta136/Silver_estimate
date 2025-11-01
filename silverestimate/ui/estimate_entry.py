@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer, QSignalBlocker
 from PyQt5.QtGui import QKeySequence
 from silverestimate.infrastructure.settings import get_app_settings
-from .estimate_entry_components import VoucherToolbar, SecondaryActionsBar, TotalsPanel
+from .estimate_entry_components import VoucherToolbar, PrimaryActionsBar, SecondaryActionsBar, TotalsPanel
 from .estimate_entry_ui import NumericDelegate, COL_CODE, COL_ITEM_NAME, COL_GROSS, COL_POLY, COL_PURITY, COL_WAGE_RATE, COL_PIECES
 from .estimate_entry_logic import EstimateLogic
 from .inline_status import InlineStatusController
@@ -78,7 +78,7 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
             try:
                 self.presenter.generate_voucher(silent=True)
                 self.logger.info("Generated new voucher silently.")
-                self.toolbar.enable_delete(False)
+                self.primary_actions.enable_delete_estimate(False)
                 self._estimate_loaded = False
             except Exception as exc:
                 self.logger.error(
@@ -122,7 +122,7 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         layout = QVBoxLayout(self)
         layout.setSpacing(5)
 
-        # Toolbar component (voucher metadata and actions)
+        # Toolbar component (voucher metadata form)
         self.toolbar = VoucherToolbar()
         layout.addWidget(self.toolbar)
 
@@ -133,9 +133,19 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         layout.addWidget(line)
         layout.addSpacing(8)
 
+        # Action bars side-by-side (Primary on left, Secondary on right)
+        actions_layout = QHBoxLayout()
+        actions_layout.setSpacing(10)
+
+        # Primary actions bar (Save, Print, New, Delete, History)
+        self.primary_actions = PrimaryActionsBar()
+        actions_layout.addWidget(self.primary_actions, stretch=1)
+
         # Secondary actions bar (mode switcher, buttons, live rate)
         self.secondary_actions = SecondaryActionsBar()
-        layout.addWidget(self.secondary_actions)
+        actions_layout.addWidget(self.secondary_actions, stretch=2)
+
+        layout.addLayout(actions_layout)
         layout.addSpacing(8)
 
         # Create table (QTableWidget - keeping for EstimateLogic compatibility)
@@ -152,18 +162,20 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         self.note_edit = self.toolbar.note_edit
         self.silver_rate_spin = self.toolbar.silver_rate_spin
         self.load_button = self.toolbar.load_button
-        self.save_button = self.toolbar.save_button
-        self.print_button = self.toolbar.print_button
-        self.clear_button = self.toolbar.new_button
+
+        # Expose primary actions bar widgets
+        self.save_button = self.primary_actions.save_button
+        self.print_button = self.primary_actions.print_button
+        self.clear_button = self.primary_actions.new_button
+        self.delete_estimate_button = self.primary_actions.delete_estimate_button
+        self.history_button = self.primary_actions.history_button
 
         # Expose secondary actions bar widgets
         self.delete_row_button = self.secondary_actions.delete_row_button
         self.return_toggle_button = self.secondary_actions.return_button
         self.silver_bar_toggle_button = self.secondary_actions.silver_bar_button
         self.last_balance_button = self.secondary_actions.last_balance_button
-        self.history_button = self.secondary_actions.history_button
         self.silver_bars_button = self.secondary_actions.silver_bars_button
-        self.delete_estimate_button = self.secondary_actions.delete_estimate_button
         self.live_rate_label = self.secondary_actions.live_rate_label
         self.live_rate_value_label = self.secondary_actions.live_rate_value_label
         self.live_rate_meta_label = self.secondary_actions.live_rate_meta_label
@@ -242,11 +254,14 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
     def _wire_component_signals(self):
         """Wire component signals to handlers."""
         # Toolbar signals
-        self.toolbar.save_clicked.connect(self.save_estimate)
         self.toolbar.load_clicked.connect(self.safe_load_estimate)
-        self.toolbar.new_clicked.connect(self.clear_form)
-        self.toolbar.print_clicked.connect(self.print_estimate)
-        # Note: toolbar also has history/delete but we use secondary_actions ones
+
+        # Primary actions bar signals
+        self.primary_actions.save_clicked.connect(self.save_estimate)
+        self.primary_actions.print_clicked.connect(self.print_estimate)
+        self.primary_actions.new_clicked.connect(self.clear_form)
+        self.primary_actions.delete_estimate_clicked.connect(self.delete_current_estimate)
+        self.primary_actions.history_clicked.connect(self.show_history)
 
         # Secondary actions bar signals
         self.secondary_actions.delete_row_clicked.connect(self.delete_current_row)
@@ -254,9 +269,7 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         self.return_toggle_button.clicked.connect(self.toggle_return_mode)
         self.silver_bar_toggle_button.clicked.connect(self.toggle_silver_bar_mode)
         self.secondary_actions.last_balance_clicked.connect(self._on_last_balance_clicked)
-        self.secondary_actions.history_clicked.connect(self.show_history)
         self.secondary_actions.silver_bars_clicked.connect(self._on_silver_bars_clicked)
-        self.secondary_actions.delete_estimate_clicked.connect(self.delete_current_estimate)
         self.secondary_actions.refresh_rate_clicked.connect(self._on_refresh_rate_clicked)
 
     def _on_last_balance_clicked(self):

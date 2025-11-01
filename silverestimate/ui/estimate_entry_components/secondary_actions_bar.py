@@ -24,9 +24,7 @@ class SecondaryActionsBar(QWidget):
     - Delete Row button
     - Return mode and Silver Bar mode toggles
     - Last Balance button
-    - Estimate History button (moved from toolbar)
     - Manage Silver Bars button
-    - Delete This Estimate button (moved from toolbar)
     - Live Silver Rate display with refresh button
     """
 
@@ -35,9 +33,7 @@ class SecondaryActionsBar(QWidget):
     return_mode_toggled = pyqtSignal(bool)
     silver_bar_mode_toggled = pyqtSignal(bool)
     last_balance_clicked = pyqtSignal()
-    history_clicked = pyqtSignal()
     silver_bars_clicked = pyqtSignal()
-    delete_estimate_clicked = pyqtSignal()
     refresh_rate_clicked = pyqtSignal()
 
     def __init__(self, parent=None):
@@ -172,16 +168,6 @@ class SecondaryActionsBar(QWidget):
 
         layout.addWidget(self._create_divider())
 
-        # History button (moved from toolbar to match original UI)
-        self.history_button = QPushButton("Estimate History")
-        self.history_button.setToolTip(
-            "View, load, or print past estimates\n"
-            "Keyboard: Ctrl+H\n"
-            "Browse all saved estimates\n"
-            "Double-click to load an estimate"
-        )
-        layout.addWidget(self.history_button)
-
         # Manage Silver Bars button
         self.silver_bars_button = QPushButton("Manage Silver Bars")
         self.silver_bars_button.setToolTip(
@@ -191,19 +177,6 @@ class SecondaryActionsBar(QWidget):
             "Manage bar transfers"
         )
         layout.addWidget(self.silver_bars_button)
-
-        layout.addWidget(self._create_divider())
-
-        # Delete This Estimate button (moved from toolbar)
-        self.delete_estimate_button = QPushButton("Delete This Estimate")
-        self.delete_estimate_button.setToolTip(
-            "Delete the currently loaded estimate\n"
-            "Permanently removes estimate from database\n"
-            "Only enabled when estimate is loaded\n"
-            "Cannot be undone - use with caution"
-        )
-        self.delete_estimate_button.setEnabled(False)
-        layout.addWidget(self.delete_estimate_button)
 
         layout.addStretch()
 
@@ -288,21 +261,13 @@ class SecondaryActionsBar(QWidget):
         silver_bar_action.triggered.connect(self._toggle_silver_bar_mode)
         self.addAction(silver_bar_action)
 
-        # History shortcut (Ctrl+H)
-        history_action = QAction("Show History", self)
-        history_action.setShortcut("Ctrl+H")
-        history_action.triggered.connect(self.history_clicked.emit)
-        self.addAction(history_action)
-
     def _connect_signals(self) -> None:
         """Connect internal signals."""
         self.delete_row_button.clicked.connect(self.delete_row_clicked.emit)
         self.return_toggle_button.toggled.connect(self._on_return_toggled)
         self.silver_bar_toggle_button.toggled.connect(self._on_silver_bar_toggled)
         self.last_balance_button.clicked.connect(self.last_balance_clicked.emit)
-        self.history_button.clicked.connect(self.history_clicked.emit)
         self.silver_bars_button.clicked.connect(self.silver_bars_clicked.emit)
-        self.delete_estimate_button.clicked.connect(self.delete_estimate_clicked.emit)
         self.refresh_rate_button.clicked.connect(self.refresh_rate_clicked.emit)
 
     def _toggle_return_mode(self) -> None:
@@ -375,11 +340,3 @@ class SecondaryActionsBar(QWidget):
         """Reset both modes to disabled state."""
         self.return_toggle_button.setChecked(False)
         self.silver_bar_toggle_button.setChecked(False)
-
-    def enable_delete_estimate(self, enabled: bool) -> None:
-        """Enable or disable the delete estimate button.
-
-        Args:
-            enabled: True to enable, False to disable
-        """
-        self.delete_estimate_button.setEnabled(enabled)

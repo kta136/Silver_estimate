@@ -16,19 +16,14 @@ from PyQt5.QtWidgets import (
 
 
 class VoucherToolbar(QWidget):
-    """Toolbar for voucher metadata and primary actions.
+    """Header form for voucher metadata.
 
-    This component manages the voucher number, date, note, and provides
-    buttons for save, load, history, delete, and new estimate operations.
+    This component manages the voucher number, date, note, and silver rate fields.
+    Action buttons are in separate PrimaryActionsBar and SecondaryActionsBar components.
     """
 
     # Signals
-    save_clicked = pyqtSignal()
     load_clicked = pyqtSignal()
-    history_clicked = pyqtSignal()
-    delete_clicked = pyqtSignal()
-    new_clicked = pyqtSignal()
-    print_clicked = pyqtSignal()
     voucher_number_changed = pyqtSignal(str)
     date_changed = pyqtSignal(QDate)
     note_changed = pyqtSignal(str)
@@ -147,61 +142,9 @@ class VoucherToolbar(QWidget):
         self.status_message_label.setVisible(False)
         layout.addWidget(self.status_message_label)
 
-        layout.addStretch()
-
-        # Action buttons
-        self.save_button = QPushButton("Save")
-        self.save_button.setToolTip(
-            "Save the current estimate to database.\n"
-            "Generates voucher number if new estimate\n"
-            "Updates existing estimate if voucher loaded"
-        )
-        layout.addWidget(self.save_button)
-
-        self.print_button = QPushButton("Print")
-        self.print_button.setToolTip(
-            "Print the current estimate\n"
-            "Generates a formatted printout"
-        )
-        layout.addWidget(self.print_button)
-
-        self.history_button = QPushButton("History")
-        self.history_button.setToolTip(
-            "View, load, or print past estimates\n"
-            "Keyboard: Ctrl+H\n"
-            "Browse all saved estimates\n"
-            "Double-click to load an estimate"
-        )
-        layout.addWidget(self.history_button)
-
-        self.delete_button = QPushButton("Delete")
-        self.delete_button.setToolTip(
-            "Delete the currently loaded estimate\n"
-            "Permanently removes estimate from database\n"
-            "Only enabled when estimate is loaded\n"
-            "Cannot be undone - use with caution"
-        )
-        self.delete_button.setEnabled(False)
-        layout.addWidget(self.delete_button)
-
-        self.new_button = QPushButton("New")
-        self.new_button.setToolTip(
-            "Clear the form to start a new estimate\n"
-            "Keyboard: Ctrl+N\n"
-            "Resets all fields and generates new voucher\n"
-            "Will ask for confirmation if unsaved changes"
-        )
-        layout.addWidget(self.new_button)
-
     def _connect_signals(self) -> None:
         """Connect internal widget signals."""
-        self.save_button.clicked.connect(self.save_clicked.emit)
         self.load_button.clicked.connect(self.load_clicked.emit)
-        self.history_button.clicked.connect(self.history_clicked.emit)
-        self.delete_button.clicked.connect(self.delete_clicked.emit)
-        self.new_button.clicked.connect(self.new_clicked.emit)
-        self.print_button.clicked.connect(self.print_clicked.emit)
-
         self.voucher_edit.textChanged.connect(self.voucher_number_changed.emit)
         self.date_edit.dateChanged.connect(self.date_changed.emit)
         self.note_edit.textChanged.connect(self.note_changed.emit)
@@ -256,14 +199,6 @@ class VoucherToolbar(QWidget):
         """
         return self.note_edit.text()
 
-    def enable_delete(self, enabled: bool) -> None:
-        """Enable or disable the delete button.
-
-        Args:
-            enabled: True to enable, False to disable
-        """
-        self.delete_button.setEnabled(enabled)
-
     def set_mode_indicator(self, mode_text: str) -> None:
         """Set the mode indicator text.
 
@@ -287,5 +222,4 @@ class VoucherToolbar(QWidget):
         self.voucher_edit.clear()
         self.date_edit.setDate(QDate.currentDate())
         self.note_edit.clear()
-        self.enable_delete(False)
         self.show_unsaved_badge(False)

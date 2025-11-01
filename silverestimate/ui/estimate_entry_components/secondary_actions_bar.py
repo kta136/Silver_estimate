@@ -270,6 +270,12 @@ class SecondaryActionsBar(QWidget):
 
     def _setup_shortcuts(self) -> None:
         """Set up keyboard shortcuts."""
+        # Delete row shortcut (Ctrl+D)
+        delete_row_action = QAction("Delete Row", self)
+        delete_row_action.setShortcut("Ctrl+D")
+        delete_row_action.triggered.connect(self.delete_row_clicked.emit)
+        self.addAction(delete_row_action)
+
         # Return mode shortcut (Ctrl+R)
         return_action = QAction("Toggle Return Mode", self)
         return_action.setShortcut("Ctrl+R")
@@ -281,6 +287,12 @@ class SecondaryActionsBar(QWidget):
         silver_bar_action.setShortcut("Ctrl+B")
         silver_bar_action.triggered.connect(self._toggle_silver_bar_mode)
         self.addAction(silver_bar_action)
+
+        # History shortcut (Ctrl+H)
+        history_action = QAction("Show History", self)
+        history_action.setShortcut("Ctrl+H")
+        history_action.triggered.connect(self.history_clicked.emit)
+        self.addAction(history_action)
 
     def _connect_signals(self) -> None:
         """Connect internal signals."""

@@ -287,19 +287,12 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
             self.main_window.refresh_live_rate()
 
     def _setup_keyboard_shortcuts(self):
-        """Set up keyboard shortcuts."""
-        self.delete_row_shortcut = QShortcut(QKeySequence("Ctrl+D"), self)
-        self.delete_row_shortcut.activated.connect(self.delete_current_row)
+        """Set up keyboard shortcuts.
 
-        self.return_toggle_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
-        self.return_toggle_shortcut.activated.connect(self.toggle_return_mode)
-
-        self.silver_bar_toggle_shortcut = QShortcut(QKeySequence("Ctrl+B"), self)
-        self.silver_bar_toggle_shortcut.activated.connect(self.toggle_silver_bar_mode)
-
-        self.history_shortcut = QShortcut(QKeySequence("Ctrl+H"), self)
-        self.history_shortcut.activated.connect(self.show_history)
-
+        Note: Ctrl+R, Ctrl+B, Ctrl+D, and Ctrl+H are handled by SecondaryActionsBar.
+        Only setting up shortcuts not handled by components.
+        """
+        # Ctrl+N - New estimate
         self.new_shortcut = QShortcut(QKeySequence("Ctrl+N"), self)
         self.new_shortcut.activated.connect(self.clear_form)
 

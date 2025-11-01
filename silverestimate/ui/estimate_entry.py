@@ -244,7 +244,7 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         self.toolbar.save_clicked.connect(self.save_estimate)
         self.toolbar.load_clicked.connect(self.safe_load_estimate)
         self.toolbar.history_clicked.connect(self.show_history)
-        self.toolbar.delete_clicked.connect(self.delete_estimate)
+        self.toolbar.delete_clicked.connect(self.delete_current_estimate)
         self.toolbar.new_clicked.connect(self.clear_form)
         self.toolbar.print_clicked.connect(self.print_estimate)
 

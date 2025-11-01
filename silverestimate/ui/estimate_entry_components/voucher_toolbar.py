@@ -136,7 +136,7 @@ class VoucherToolbar(QWidget):
         self.silver_rate_spin = QDoubleSpinBox()
         self.silver_rate_spin.setRange(0, 1000000)
         self.silver_rate_spin.setDecimals(2)
-        self.silver_rate_spin.setValue(75000.0)
+        self.silver_rate_spin.setValue(0.0)  # No default, will be set by EstimateLogic
         self.silver_rate_spin.setMaximumWidth(120)
         self.silver_rate_spin.setToolTip("Silver rate per kg")
         layout.addWidget(silver_rate_label)

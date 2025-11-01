@@ -262,45 +262,25 @@ class SecondaryActionsBar(QWidget):
         self.addAction(silver_bar_action)
 
     def _connect_signals(self) -> None:
-        """Connect internal signals."""
+        """Connect internal signals.
+
+        Note: Return and Silver Bar mode toggle buttons are NOT connected here.
+        They are connected directly to the mixin toggle methods in estimate_entry.py
+        to avoid signal routing conflicts.
+        """
         self.delete_row_button.clicked.connect(self.delete_row_clicked.emit)
-        self.return_toggle_button.toggled.connect(self._on_return_toggled)
-        self.silver_bar_toggle_button.toggled.connect(self._on_silver_bar_toggled)
+        # NOTE: return_toggle_button and silver_bar_toggle_button are connected externally
         self.last_balance_button.clicked.connect(self.last_balance_clicked.emit)
         self.silver_bars_button.clicked.connect(self.silver_bars_clicked.emit)
         self.refresh_rate_button.clicked.connect(self.refresh_rate_clicked.emit)
 
     def _toggle_return_mode(self) -> None:
-        """Toggle return mode state."""
+        """Toggle return mode state (called by keyboard shortcut)."""
         self.return_toggle_button.setChecked(not self.return_toggle_button.isChecked())
 
     def _toggle_silver_bar_mode(self) -> None:
-        """Toggle silver bar mode state."""
+        """Toggle silver bar mode state (called by keyboard shortcut)."""
         self.silver_bar_toggle_button.setChecked(not self.silver_bar_toggle_button.isChecked())
-
-    def _on_return_toggled(self, checked: bool) -> None:
-        """Handle return mode toggle.
-
-        Args:
-            checked: True if return mode is enabled
-        """
-        # If enabling return mode, disable silver bar mode
-        if checked and self.silver_bar_toggle_button.isChecked():
-            self.silver_bar_toggle_button.setChecked(False)
-
-        self.return_mode_toggled.emit(checked)
-
-    def _on_silver_bar_toggled(self, checked: bool) -> None:
-        """Handle silver bar mode toggle.
-
-        Args:
-            checked: True if silver bar mode is enabled
-        """
-        # If enabling silver bar mode, disable return mode
-        if checked and self.return_toggle_button.isChecked():
-            self.return_toggle_button.setChecked(False)
-
-        self.silver_bar_mode_toggled.emit(checked)
 
     # Public methods
 

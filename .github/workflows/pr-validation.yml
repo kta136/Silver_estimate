@@ -1,0 +1,194 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches:
+      - master
+      - main
+  push:
+    branches:
+      - master
+      - main
+
+jobs:
+  lint-and-format:
+    name: Code Quality Checks
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Check code formatting with Black
+        run: black --check --diff silverestimate tests
+
+      - name: Check import sorting with isort
+        run: isort --check-only --diff silverestimate tests
+
+      - name: Lint with flake8
+        run: |
+          flake8 silverestimate --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 silverestimate --count --max-line-length=88 --extend-ignore=E203,W503 --statistics
+
+      - name: Lint with pylint
+        run: pylint silverestimate --rcfile=pyproject.toml
+        continue-on-error: true  # Don't fail build on pylint issues initially
+
+  type-check:
+    name: Type Checking
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Type check with mypy
+        run: mypy silverestimate --config-file=pyproject.toml
+        continue-on-error: true  # Don't fail build on mypy issues initially
+
+  test:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run tests with pytest
+        run: pytest --cov --cov-report=xml --cov-report=term-missing -v
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: matrix.python-version == '3.11'
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+  security:
+    name: Security Checks
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install bandit[toml] safety
+
+      - name: Run Bandit security checks
+        run: bandit -c pyproject.toml -r silverestimate
+        continue-on-error: true
+
+      - name: Check for known security vulnerabilities
+        run: safety check --json
+        continue-on-error: true
+
+  build-check:
+    name: Build Check
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Test PyInstaller build
+        run: |
+          pyinstaller --version
+          pyinstaller SilverEstimate.spec --noconfirm --log-level=INFO
+        continue-on-error: false
+
+      - name: Check if executable was created
+        run: |
+          if (Test-Path "dist/SilverEstimate/SilverEstimate.exe") {
+            Write-Output "✓ Executable created successfully"
+            Get-Item "dist/SilverEstimate/SilverEstimate.exe" | Select-Object Name, Length, LastWriteTime
+          } else {
+            Write-Error "✗ Executable not found"
+            exit 1
+          }
+
+  all-checks-passed:
+    name: All Checks Passed
+    needs: [lint-and-format, type-check, test, security, build-check]
+    runs-on: windows-latest
+    if: always()
+
+    steps:
+      - name: Check all job statuses
+        run: |
+          $needs = @{
+            'lint-and-format' = '${{ needs.lint-and-format.result }}'
+            'type-check' = '${{ needs.type-check.result }}'
+            'test' = '${{ needs.test.result }}'
+            'security' = '${{ needs.security.result }}'
+            'build-check' = '${{ needs.build-check.result }}'
+          }
+
+          $failed = $needs.GetEnumerator() | Where-Object { $_.Value -ne 'success' }
+
+          if ($failed) {
+            Write-Output "The following checks failed or were skipped:"
+            $failed | ForEach-Object { Write-Output "  - $($_.Key): $($_.Value)" }
+            exit 1
+          } else {
+            Write-Output "All checks passed successfully!"
+          }

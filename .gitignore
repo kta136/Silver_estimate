@@ -165,6 +165,7 @@ database/*
 .DS_Store
 Thumbs.db
 desktop.ini
+nul
 
 # Codex/MCP local config
 .codex/

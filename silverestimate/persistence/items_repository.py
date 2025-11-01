@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from typing import Any
+from typing import Any, Optional
 
 
 class ItemsRepository:
@@ -15,18 +15,18 @@ class ItemsRepository:
         self._fallback_cache = {}
 
     @property
-    def _conn(self):
+    def _conn(self) -> Optional[sqlite3.Connection]:
         return getattr(self._db, "conn", None)
 
     @property
-    def _cache_controller(self):
+    def _cache_controller(self) -> Optional[Any]:
         return getattr(self._db, "item_cache_controller", None)
 
     @property
-    def _cursor(self):
+    def _cursor(self) -> Optional[sqlite3.Cursor]:
         return getattr(self._db, "cursor", None)
 
-    def get_item_by_code(self, code: str):
+    def get_item_by_code(self, code: str) -> Optional[dict[str, Any]]:
         cursor = self._cursor
         if not cursor:
             return None
@@ -68,7 +68,7 @@ class ItemsRepository:
             self._logger.error("DB Error get_item_by_code: %s", exc, exc_info=True)
             return None
 
-    def search_items(self, search_term: str):
+    def search_items(self, search_term: str) -> list[dict[str, Any]]:
         cursor = self._cursor
         if not cursor:
             return []
@@ -83,7 +83,7 @@ class ItemsRepository:
             self._logger.error("DB Error search_items: %s", exc, exc_info=True)
             return []
 
-    def get_all_items(self):
+    def get_all_items(self) -> list[tuple[Any, ...]]:
         cursor = self._cursor
         if not cursor:
             return []
@@ -170,7 +170,7 @@ class ItemsRepository:
             pass
 
     @staticmethod
-    def _normalize_row(row):
+    def _normalize_row(row: Any) -> Optional[dict[str, Any]]:
         if row is None:
             return None
         if isinstance(row, dict):

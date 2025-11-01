@@ -4,10 +4,12 @@ from .voucher_toolbar import VoucherToolbar
 from .estimate_table_view import EstimateTableView
 from .totals_panel import TotalsPanel
 from .mode_switcher import ModeSwitcher
+from .secondary_actions_bar import SecondaryActionsBar
 
 __all__ = [
     "VoucherToolbar",
     "EstimateTableView",
     "TotalsPanel",
     "ModeSwitcher",
+    "SecondaryActionsBar",
 ]

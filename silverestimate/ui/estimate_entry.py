@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer, QSignalBlocker
 from PyQt5.QtGui import QKeySequence
 from silverestimate.infrastructure.settings import get_app_settings
-from .estimate_entry_components import VoucherToolbar, ModeSwitcher, TotalsPanel
+from .estimate_entry_components import VoucherToolbar, SecondaryActionsBar, TotalsPanel
 from .estimate_entry_ui import NumericDelegate, COL_CODE, COL_ITEM_NAME, COL_GROSS, COL_POLY, COL_PURITY, COL_WAGE_RATE, COL_PIECES
 from .estimate_entry_logic import EstimateLogic
 from .inline_status import InlineStatusController
@@ -133,17 +133,9 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         layout.addWidget(line)
         layout.addSpacing(8)
 
-        # Mode switcher and action buttons row
-        actions_row = QHBoxLayout()
-        actions_row.setSpacing(12)
-
-        self.mode_switcher = ModeSwitcher()
-        actions_row.addWidget(self.mode_switcher)
-
-        # TODO: Add other action buttons here (delete row, etc.) in future refactoring
-        actions_row.addStretch()
-
-        layout.addLayout(actions_row)
+        # Secondary actions bar (mode switcher, buttons, live rate)
+        self.secondary_actions = SecondaryActionsBar()
+        layout.addWidget(self.secondary_actions)
         layout.addSpacing(8)
 
         # Create table (QTableWidget - keeping for EstimateLogic compatibility)
@@ -161,16 +153,23 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         self.silver_rate_spin = self.toolbar.silver_rate_spin
         self.load_button = self.toolbar.load_button
         self.save_button = self.toolbar.save_button
-        self.delete_estimate_button = self.toolbar.delete_button
-        self.clear_button = self.toolbar.new_button
-        self.history_button = self.toolbar.history_button
         self.print_button = self.toolbar.print_button
+        self.clear_button = self.toolbar.new_button
 
-        # Expose mode switcher widgets
-        self.return_toggle_button = self.mode_switcher.return_button
-        self.silver_bar_toggle_button = self.mode_switcher.silver_bar_button
+        # Expose secondary actions bar widgets
+        self.delete_row_button = self.secondary_actions.delete_row_button
+        self.return_toggle_button = self.secondary_actions.return_button
+        self.silver_bar_toggle_button = self.secondary_actions.silver_bar_button
+        self.last_balance_button = self.secondary_actions.last_balance_button
+        self.history_button = self.secondary_actions.history_button
+        self.silver_bars_button = self.secondary_actions.silver_bars_button
+        self.delete_estimate_button = self.secondary_actions.delete_estimate_button
+        self.live_rate_label = self.secondary_actions.live_rate_label
+        self.live_rate_value_label = self.secondary_actions.live_rate_value_label
+        self.live_rate_meta_label = self.secondary_actions.live_rate_meta_label
+        self.refresh_rate_button = self.secondary_actions.refresh_rate_button
 
-        # Use toolbar's visible mode indicator (mode_switcher's is hidden)
+        # Use toolbar's visible mode indicator (secondary_actions has hidden one)
         self.mode_indicator_label = self.toolbar.mode_indicator_label
 
         # Expose totals panel widgets for EstimateLogic
@@ -245,14 +244,19 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         # Toolbar signals
         self.toolbar.save_clicked.connect(self.save_estimate)
         self.toolbar.load_clicked.connect(self.safe_load_estimate)
-        self.toolbar.history_clicked.connect(self.show_history)
-        self.toolbar.delete_clicked.connect(self.delete_current_estimate)
         self.toolbar.new_clicked.connect(self.clear_form)
         self.toolbar.print_clicked.connect(self.print_estimate)
+        # Note: toolbar also has history/delete but we use secondary_actions ones
 
-        # Mode switcher signals
-        self.mode_switcher.return_mode_toggled.connect(self._on_return_mode_toggled)
-        self.mode_switcher.silver_bar_mode_toggled.connect(self._on_silver_bar_mode_toggled)
+        # Secondary actions bar signals
+        self.secondary_actions.delete_row_clicked.connect(self.delete_current_row)
+        self.secondary_actions.return_mode_toggled.connect(self._on_return_mode_toggled)
+        self.secondary_actions.silver_bar_mode_toggled.connect(self._on_silver_bar_mode_toggled)
+        self.secondary_actions.last_balance_clicked.connect(self._on_last_balance_clicked)
+        self.secondary_actions.history_clicked.connect(self.show_history)
+        self.secondary_actions.silver_bars_clicked.connect(self._on_silver_bars_clicked)
+        self.secondary_actions.delete_estimate_clicked.connect(self.delete_current_estimate)
+        self.secondary_actions.refresh_rate_clicked.connect(self._on_refresh_rate_clicked)
 
     def _on_return_mode_toggled(self, enabled):
         """Handle return mode toggle from component."""
@@ -263,6 +267,24 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         """Handle silver bar mode toggle from component."""
         if enabled != self.silver_bar_mode:
             self.toggle_silver_bar_mode()
+
+    def _on_last_balance_clicked(self):
+        """Handle last balance button click."""
+        # This will be connected to the actual implementation in EstimateLogic
+        if hasattr(self, 'add_last_balance'):
+            self.add_last_balance()
+
+    def _on_silver_bars_clicked(self):
+        """Handle silver bars button click."""
+        # This will be connected to the actual implementation via main window
+        if self.main_window and hasattr(self.main_window, 'show_silver_bars_management'):
+            self.main_window.show_silver_bars_management()
+
+    def _on_refresh_rate_clicked(self):
+        """Handle refresh rate button click."""
+        # This will be connected to LiveRateController via main window
+        if self.main_window and hasattr(self.main_window, 'refresh_live_rate'):
+            self.main_window.refresh_live_rate()
 
     def _setup_keyboard_shortcuts(self):
         """Set up keyboard shortcuts."""

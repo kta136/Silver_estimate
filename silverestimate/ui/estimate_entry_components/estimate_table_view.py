@@ -465,6 +465,18 @@ class EstimateTableView(QTableView):
         index = self._table_model.index(row, column)
         self.setCurrentIndex(index)
 
+    def editItem(self, item) -> None:
+        """Start editing an item (QTableWidget compatibility).
+
+        Args:
+            item: The QTableWidgetItem to edit (ModelBackedTableItem)
+        """
+        if isinstance(item, ModelBackedTableItem):
+            # Get the index from the item and start editing
+            index = self._table_model.index(item._row, item._column)
+            self.setCurrentIndex(index)
+            self.edit(index)
+
     def item(self, row: int, column: int):
         """Get the item at the specified row and column (QTableWidget compatibility).
 

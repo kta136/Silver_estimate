@@ -1,15 +1,51 @@
 # Testing Improvements for Estimate Entry Widget
 
-## Problem Identified
+## Problems Identified
 
-The `insertRow` AttributeError wasn't caught by tests because:
+### 1. Adapter Layer Not Tested
+The `insertRow`, `removeRow`, `setCurrentCell`, and `editItem` AttributeErrors weren't caught because:
 
 1. **Tests bypass the adapter layer** - Tests call `widget.add_empty_row()` directly instead of clicking the "Add Row" button
 2. **Signals are disconnected** - Tests disconnect `cellChanged` signal to avoid event chains
 3. **No integration tests** - No tests simulate real user interactions (button clicks, typing, etc.)
 4. **Manual data population** - Tests manually create QTableWidgetItem objects instead of using the adapter
 
+### 2. Timer-Delayed Operations Not Tested ⚠️ CRITICAL
+The `editItem` error was particularly insidious because:
+
+1. **QTimer.singleShot delays execution** - `force_focus_to_first_cell()` is called 100ms after widget creation
+2. **Tests complete before timers fire** - Synchronous tests call `widget.deleteLater()` immediately
+3. **No event loop waiting** - Tests don't wait for pending Qt events/timers to complete
+
+This is a **classic async testing gap** that's common in Qt applications!
+
 ## Recommended Test Additions
+
+### Critical Priority - Async/Timer Tests ⚠️
+
+```python
+def test_widget_initialization_with_timers(qt_app, fake_db):
+    """Test delayed initialization operations execute properly."""
+    from PyQt5.QtTest import QTest
+
+    widget = _make_widget(fake_db)
+    try:
+        # CRITICAL: Wait for QTimer.singleShot operations to complete
+        QTest.qWait(200)  # Wait for 100ms timer + buffer
+
+        # Now test the delayed operation
+        current_index = widget.item_table.currentIndex()
+        assert current_index.isValid()
+        assert current_index.column() == COL_CODE
+    finally:
+        widget.deleteLater()
+```
+
+**Key Technique**: Always use `QTest.qWait()` when testing code that uses:
+- `QTimer.singleShot()`
+- `QTimer` with intervals
+- Signal emissions that trigger delayed operations
+- Any async Qt operations
 
 ### High Priority - Integration Tests
 

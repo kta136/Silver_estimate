@@ -516,3 +516,57 @@ def test_adapter_refresh_empty_row_type(qt_app, fake_db):
                 assert type_item.text() == "return"  # enum value
     finally:
         widget.deleteLater()
+
+
+# ============================================================================
+# Async/Timer Tests (Critical for catching delayed operations)
+# ============================================================================
+
+def test_widget_initialization_with_timers(qt_app, fake_db):
+    """Test that widget initialization completes including timer-delayed operations.
+
+    This test catches issues with QTimer.singleShot operations like
+    force_focus_to_first_cell() which are missed by synchronous tests.
+    """
+    from PyQt5.QtTest import QTest
+    from PyQt5.QtCore import Qt
+
+    widget = _make_widget(fake_db)
+    try:
+        # Wait for all pending timers to execute (100ms + buffer)
+        QTest.qWait(200)
+
+        # Verify force_focus_to_first_cell() executed
+        # It calls setCurrentCell() and editItem()
+        current_index = widget.item_table.currentIndex()
+        assert current_index.isValid(), "Should have focused on a cell"
+        assert current_index.column() == COL_CODE, "Should focus on code column"
+
+        # Verify table has at least one row
+        assert widget.item_table.rowCount() > 0
+    finally:
+        widget.deleteLater()
+
+
+def test_edititem_compatibility_method(qt_app, fake_db):
+    """Test that editItem() compatibility method works with ModelBackedTableItem."""
+    widget = _make_widget(fake_db)
+    try:
+        table = widget.item_table
+
+        # Ensure we have a row
+        if table.rowCount() == 0:
+            widget.table_adapter.add_empty_row()
+
+        # Get item
+        item = table.item(0, COL_CODE)
+        assert item is not None
+
+        # Call editItem (should not raise AttributeError)
+        table.editItem(item)
+
+        # Verify it set the current index
+        assert table.currentIndex().row() == 0
+        assert table.currentIndex().column() == COL_CODE
+    finally:
+        widget.deleteLater()

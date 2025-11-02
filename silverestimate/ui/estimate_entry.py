@@ -319,8 +319,8 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         self.save_button.clicked.connect(self.save_estimate)
         self.clear_button.clicked.connect(self.clear_form)
         self.print_button.clicked.connect(self.print_estimate)
-        self.return_toggle_button.clicked.connect(self.toggle_return_mode)
-        self.silver_bar_toggle_button.clicked.connect(self.toggle_silver_bar_mode)
+        # Mode toggle buttons already connected in _wire_component_signals()
+        # Removed duplicate connections to prevent signal routing conflicts
 
         if hasattr(self, "history_button"):
             self.history_button.clicked.connect(self.show_history)

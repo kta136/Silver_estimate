@@ -92,15 +92,22 @@ class _EstimateTableMixin:
                 )
                 return
 
+            # Use enum values (model stores "return", "silver_bar", "regular")
+            # not display names ("Return", "Silver Bar", "No")
             if getattr(self, "return_mode", False):
-                type_item.setText("Return")
+                self.logger.debug("Setting row type to 'return'")
+                type_item.setText("return")  # Enum value, not "Return"
                 type_item.setBackground(QColor(255, 200, 200))
             elif getattr(self, "silver_bar_mode", False):
-                type_item.setText("Silver Bar")
+                self.logger.debug("Setting row type to 'silver_bar'")
+                type_item.setText("silver_bar")  # Enum value, not "Silver Bar"
                 type_item.setBackground(QColor(200, 255, 200))
             else:
-                type_item.setText("No")
+                self.logger.debug("Setting row type to 'regular'")
+                type_item.setText("regular")  # Enum value, not "No"
                 type_item.setBackground(QColor(255, 255, 255))
+
+            self.logger.debug(f"After setText: type_item.text() = '{type_item.text()}'")
         except Exception as exc:
             self.logger.error(
                 "Error updating row type visuals: %s", exc, exc_info=True

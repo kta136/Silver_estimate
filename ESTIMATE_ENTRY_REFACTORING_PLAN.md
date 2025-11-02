@@ -1,8 +1,42 @@
 # Refactoring Plan: `estimate_entry.py` Decomposition
 
-**Status**: 🟢 Phase 1 Complete - Ready for Phase 2
+**Status**: 🟡 Phase 3 In Progress - Components Created, Widget Integration Partial
 **Created**: 2025-11-01
-**Last Updated**: 2025-11-01
+**Last Updated**: 2025-11-02
+
+## Quick Status Summary
+
+### Completed ✅
+- **Phase 1**: Snapshot & Guardrails (3 hours)
+- **Phase 2**: Extract Data/Logic Layers (2.5 hours)
+  - EstimateTableModel (334 lines, 12 tests)
+  - Enhanced ViewModel with voucher metadata & change tracking
+  - Calculations helper module (80 lines)
+
+### In Progress 🟡
+- **Phase 3**: Break Up the Widget (~5 hours spent, 3-4 hours remaining)
+  - **Completed**: 6 components created (1,484 lines total)
+    - VoucherToolbar (225 lines)
+    - EstimateTableView (278 lines) - **not integrated yet**
+    - TotalsPanel (263 lines)
+    - ModeSwitcher (225 lines)
+    - PrimaryActionsBar (171 lines)
+    - SecondaryActionsBar (322 lines)
+  - **Partial**: Widget integration
+    - Reduced from 824 → 660 lines (20% reduction)
+    - Uses 4 of 6 components (VoucherToolbar, PrimaryActionsBar, SecondaryActionsBar, TotalsPanel)
+    - Still using QTableWidget (migration to EstimateTableView deferred)
+  - **Remaining**: Complete table migration or defer, reduce widget to ~250 lines
+
+### Not Started ⬜
+- **Phase 4**: Presenter & Service Wiring (3-4 hours)
+- **Phase 5**: Polish & Documentation (2-3 hours)
+
+### Metrics
+- **Widget**: 660/250 lines (target not met, 410 lines over)
+- **Tests**: 99 passing (vs 52 documented - significant improvement!)
+- **Components**: 6 created (vs 4 planned)
+- **Test Coverage**: ~16% overall (Phase 2 components well-tested)
 
 ---
 
@@ -223,130 +257,105 @@ EstimateEntryWidget (824 lines)
 
 ## Phase 3: Break Up the Widget
 
-**Status**: ✅ Complete (Option A)
+**Status**: 🟡 In Progress - Components Created, Integration Partial
 **Estimated Duration**: 6-8 hours
-**Actual Duration**: ~5 hours
+**Actual Duration**: ~5 hours (components only)
+**Remaining Work**: Full widget integration with components (~3-4 hours estimated)
 
 ### 3.1 Create Component Package
 - [x] Create `silverestimate/ui/estimate_entry_components/` package
 - [x] Create `__init__.py` with exports
 
 ### 3.2 Create VoucherToolbar Component
-- [ ] Create `voucher_toolbar.py`
-- [ ] Implement `VoucherToolbar(QWidget)`:
-  - [ ] UI elements:
-    - [ ] Voucher number display (QLineEdit, read-only)
-    - [ ] Date picker (QDateEdit)
-    - [ ] Note field (QLineEdit)
-    - [ ] History button
-    - [ ] Save button
-    - [ ] Delete button
-    - [ ] New estimate button
-  - [ ] Signals:
-    - [ ] `save_clicked`
-    - [ ] `load_clicked`
-    - [ ] `history_clicked`
-    - [ ] `delete_clicked`
-    - [ ] `new_clicked`
-  - [ ] Methods:
-    - [ ] `set_voucher_number(number: str)`
-    - [ ] `get_voucher_number() -> str`
-    - [ ] `set_date(date: QDate)`
-    - [ ] `get_date() -> QDate`
-    - [ ] `set_note(note: str)`
-    - [ ] `get_note() -> str`
-    - [ ] `enable_delete(enabled: bool)`
-- [ ] Write pytest-qt tests
+- [x] Create `voucher_toolbar.py` (225 lines)
+- [x] Implement `VoucherToolbar(QWidget)`:
+  - [x] UI elements:
+    - [x] Voucher number display (QLineEdit)
+    - [x] Date picker (QDateEdit)
+    - [x] Note field (QLineEdit)
+    - [x] Silver rate field (QDoubleSpinBox)
+    - [x] Mode indicator label
+    - [x] Unsaved changes badge
+    - [x] Load button
+  - [x] Signals:
+    - [x] `load_clicked`
+    - [x] `voucher_number_changed`
+    - [x] `date_changed`
+    - [x] `note_changed`
+  - [x] Methods implemented
+- [ ] Write pytest-qt tests (pending)
 
 ### 3.3 Create EstimateTableView Component
-- [ ] Create `estimate_table_view.py`
-- [ ] Implement `EstimateTableView(QTableView)`:
-  - [ ] Use `EstimateTableModel` from Phase 2
-  - [ ] Set up `NumericDelegate` for numeric columns
-  - [ ] Implement keyboard shortcuts:
-    - [ ] Ctrl+D for delete row
-    - [ ] Ctrl+H for history
-  - [ ] Implement context menu:
-    - [ ] Reset column layout
-  - [ ] Column management:
-    - [ ] Save/restore widths
-    - [ ] Auto-stretch item name column
-  - [ ] Signals:
-    - [ ] `item_lookup_requested(row: int, code: str)`
-    - [ ] `row_deleted(row: int)`
-    - [ ] `cell_edited(row: int, column: int)`
-    - [ ] `history_requested`
-  - [ ] Methods:
-    - [ ] `add_row()`
-    - [ ] `delete_row(index: int)`
-    - [ ] `clear_rows()`
-    - [ ] `focus_cell(row: int, column: int)`
-- [ ] Write pytest-qt tests
+- [x] Create `estimate_table_view.py` (278 lines)
+- [x] Implement `EstimateTableView(QTableView)`:
+  - [x] Uses `EstimateTableModel` from Phase 2
+  - [x] Keyboard shortcuts implemented:
+    - [x] Ctrl+D for delete row
+    - [x] Ctrl+H for history
+  - [x] Context menu implemented:
+    - [x] Reset column layout
+  - [x] Signals:
+    - [x] `item_lookup_requested(row: int, code: str)`
+    - [x] `row_deleted(row: int)`
+    - [x] `cell_edited(row: int, column: int)`
+    - [x] `history_requested`
+    - [x] `column_layout_reset_requested`
+  - [x] Methods implemented
+- [ ] Write pytest-qt tests (pending)
+- [ ] ⚠️ **Note**: Main widget still uses QTableWidget, not EstimateTableView (migration deferred)
 
 ### 3.4 Create TotalsPanel Component
-- [ ] Create `totals_panel.py`
-- [ ] Implement `TotalsPanel(QWidget)`:
-  - [ ] UI elements:
-    - [ ] Silver rate display
-    - [ ] Gross weight total
-    - [ ] Net weight total
-    - [ ] Fine weight total
-    - [ ] Wage total
-    - [ ] Last balance (silver)
-    - [ ] Last balance (amount)
-    - [ ] Silver bar indicators
-  - [ ] Methods:
-    - [ ] `set_totals(totals: TotalsResult)`
-    - [ ] `set_silver_rate(rate: float)`
-    - [ ] `set_balances(silver: float, amount: float)`
-    - [ ] `set_mode_indicators(return_mode: bool, silver_bar_mode: bool)`
-- [ ] Write pytest-qt tests
+- [x] Create `totals_panel.py` (263 lines)
+- [x] Implement `TotalsPanel(QWidget)`:
+  - [x] UI elements:
+    - [x] Breakdown table (items, weights, wage)
+    - [x] Final calculations (totals, balance, payable)
+    - [x] Font size controls for both sections
+  - [x] Methods:
+    - [x] `set_breakdown_data()`
+    - [x] `set_final_calculations()`
+    - [x] Font size management
+  - [x] Signals implemented
+- [ ] Write pytest-qt tests (pending)
 
 ### 3.5 Create ModeSwitcher Component
-- [ ] Create `mode_switcher.py`
-- [ ] Implement `ModeSwitcher(QWidget)`:
-  - [ ] UI elements:
-    - [ ] Return mode checkbox/toggle
-    - [ ] Silver bar mode checkbox/toggle
-    - [ ] Mode indicator labels
-  - [ ] Keyboard shortcuts:
-    - [ ] Ctrl+R (Return mode)
-    - [ ] Ctrl+Shift+S (Silver bar mode)
-  - [ ] Signals:
-    - [ ] `return_mode_toggled(enabled: bool)`
-    - [ ] `silver_bar_mode_toggled(enabled: bool)`
-  - [ ] Methods:
-    - [ ] `set_return_mode(enabled: bool)`
-    - [ ] `set_silver_bar_mode(enabled: bool)`
-    - [ ] `get_return_mode() -> bool`
-    - [ ] `get_silver_bar_mode() -> bool`
-- [ ] Write pytest-qt tests
+- [x] Create `mode_switcher.py` (225 lines)
+- [x] Implement `ModeSwitcher(QWidget)`:
+  - [x] UI elements:
+    - [x] Return mode toggle button
+    - [x] Silver bar mode toggle button
+    - [x] Mode indicator labels
+  - [x] Keyboard shortcuts:
+    - [x] Ctrl+R (Return mode)
+    - [x] Ctrl+B (Silver bar mode) - NOTE: Code uses Ctrl+B not Ctrl+Shift+S
+  - [x] Signals:
+    - [x] `return_mode_toggled(enabled: bool)`
+    - [x] `silver_bar_mode_toggled(enabled: bool)`
+  - [x] Methods:
+    - [x] `set_return_mode(enabled: bool)`
+    - [x] `set_silver_bar_mode(enabled: bool)`
+    - [x] `get_return_mode() -> bool`
+    - [x] `get_silver_bar_mode() -> bool`
+- [ ] Write pytest-qt tests (pending)
 
-### 3.6 Refactor EstimateEntryWidget
-- [ ] Slim down `EstimateEntryWidget`:
-  - [ ] Remove direct UI creation (use components)
-  - [ ] Compose the 4 components:
-    - [ ] VoucherToolbar
-    - [ ] EstimateTableView
-    - [ ] TotalsPanel
-    - [ ] ModeSwitcher
-  - [ ] Wire component signals:
-    - [ ] Toolbar signals → presenter methods
-    - [ ] Table signals → presenter methods
-    - [ ] Mode signals → view model updates
-  - [ ] Implement view protocol methods:
-    - [ ] `capture_state()`
-    - [ ] `apply_totals()`
-    - [ ] `set_voucher_number()`
-    - [ ] `show_status()`
-    - [ ] `populate_row()`
-    - [ ] `prompt_item_selection()`
-    - [ ] `focus_after_item_lookup()`
-    - [ ] `open_history_dialog()`
-    - [ ] `show_silver_bar_management()`
-    - [ ] `apply_loaded_estimate()`
-  - [ ] Keep only coordination logic
-- [ ] Target: ~200-300 lines
+### 3.6 Additional Components Created
+- [x] Create `primary_actions_bar.py` (171 lines) - Save, Print, New, Delete, History buttons
+- [x] Create `secondary_actions_bar.py` (322 lines) - Mode switcher, Add Row, Clear, Silver Bar buttons, Live Rate
+
+### 3.7 Refactor EstimateEntryWidget
+- [~] Partial integration of components:
+  - [x] Uses VoucherToolbar component
+  - [x] Uses PrimaryActionsBar component
+  - [x] Uses SecondaryActionsBar component
+  - [x] Uses TotalsPanel component
+  - [ ] ⚠️ Still uses QTableWidget (not EstimateTableView)
+  - [x] Component signals wired to widget methods
+  - [x] View protocol methods still implemented via mixins
+  - [x] Coordination logic preserved
+- **Current**: 660 lines (down from 824 = 20% reduction)
+- **Target**: ~250 lines (requires 62% further reduction)
+- [ ] Complete table migration to EstimateTableView
+- [ ] Reduce mixin dependencies
 - [ ] Update widget tests
 
 ---
@@ -630,8 +639,31 @@ EstimateEntryWidget (824 lines)
 - ✅ **Phase 2 Complete** (~2.5 hours, under estimate)
 - 🟢 **Next**: Begin Phase 3 - Break Up the Widget
 
-### [Date TBD]
-- Phase 3 tasks...
+### 2025-11-02 (Session 4+) - Phase 3 Partial
+- ✅ **Phase 3.1-3.5**: Created all component files
+  - VoucherToolbar (225 lines) - voucher metadata form
+  - EstimateTableView (278 lines) - table with model/view architecture
+  - TotalsPanel (263 lines) - breakdown and final calculations display
+  - ModeSwitcher (225 lines) - return/silver bar mode toggles
+  - PrimaryActionsBar (171 lines) - main action buttons
+  - SecondaryActionsBar (322 lines) - mode switcher, add/clear/silver bar
+  - Total: 1,484 lines across 6 components
+- ✅ **Phase 3.6**: Partial widget integration
+  - EstimateEntryWidget reduced from 824 to 660 lines (20% reduction)
+  - Uses 4 components: VoucherToolbar, PrimaryActionsBar, SecondaryActionsBar, TotalsPanel
+  - Component signals wired to widget methods
+  - Still uses QTableWidget (EstimateTableView not integrated yet)
+  - Still relies on EstimateLogic mixins
+- ✅ **Testing**: Test suite expanded
+  - 99 unit tests passing (vs 52 documented earlier)
+  - 12 tests for EstimateTableModel
+  - All Phase 2 tests still passing
+- 🟡 **Phase 3 Status**: In Progress
+  - Components created ✅
+  - Partial integration ✅
+  - Table migration pending ⚠️
+  - Widget line reduction incomplete (660 vs 250 target) ⚠️
+- 🟢 **Next**: Complete table migration or proceed to Phase 4
 
 ### [Date TBD]
 - Phase 4 tasks...
@@ -646,17 +678,26 @@ EstimateEntryWidget (824 lines)
 ### Architectural Decisions
 - **Decision**: Use QAbstractTableModel instead of QTableWidget
   **Rationale**: Better separation of data and presentation, more testable, follows Qt best practices
+  **Status**: Model created, but migration deferred (QTableWidget still in use)
 
 - **Decision**: Create 4 main components (Toolbar, Table, Totals, ModeSwitcher)
   **Rationale**: Each has clear responsibility, can be developed and tested independently
+  **Actual**: Created 6 components (added PrimaryActionsBar, SecondaryActionsBar for better separation)
 
 - **Decision**: Keep presenter interface stable
   **Rationale**: Minimize changes to already-tested business logic layer
+  **Status**: ✅ Achieved - presenter unchanged, all 9 presenter tests passing
+
+- **Decision**: Defer table migration to EstimateTableView (2025-11-02)
+  **Rationale**: QTableWidget integration is complex; components can be tested independently first
+  **Impact**: Widget remains at 660 lines instead of target 250 lines
 
 ### Open Questions
+- [ ] Should we complete table migration to EstimateTableView or defer to later?
 - [ ] Should we extract the inline status controller into a component?
 - [ ] Should font size management be its own service?
-- [ ] How to handle column width persistence in the new table view?
+- [ ] How to handle column width persistence when migrating to EstimateTableView?
+- [ ] What's the priority: finish Phase 3 widget reduction or move to Phase 4?
 
 ### Future Improvements
 - Consider using signals/slots instead of direct method calls between components

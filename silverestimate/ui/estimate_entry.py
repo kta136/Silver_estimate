@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer, QSignalBlocker
 from PyQt5.QtGui import QKeySequence
 from silverestimate.infrastructure.settings import get_app_settings
-from .estimate_entry_components import VoucherToolbar, PrimaryActionsBar, SecondaryActionsBar, TotalsPanel
+from .estimate_entry_components import VoucherToolbar, PrimaryActionsBar, SecondaryActionsBar, TotalsPanel, EstimateTableView
 from .estimate_entry_ui import NumericDelegate, COL_CODE, COL_ITEM_NAME, COL_GROSS, COL_POLY, COL_PURITY, COL_WAGE_RATE, COL_PIECES
 from .estimate_entry_logic import EstimateLogic
 from .inline_status import InlineStatusController
@@ -69,6 +69,13 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         if self._use_stretch_for_item_name:
             QTimer.singleShot(0, self._auto_stretch_item_name)
 
+        # Status helper (needed before clear_all_rows)
+        self._status_helper = InlineStatusController(
+            parent=self,
+            label_getter=lambda: getattr(self.toolbar, "status_message_label", None),
+            logger=self.logger,
+        )
+
         # Initialize with one empty row
         self.clear_all_rows()
         self.add_empty_row()
@@ -98,12 +105,7 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         # Set up keyboard shortcuts
         self._setup_keyboard_shortcuts()
 
-        # Status helper
-        self._status_helper = InlineStatusController(
-            parent=self,
-            label_getter=lambda: getattr(self.toolbar, "status_message_label", None),
-            logger=self.logger,
-        )
+        # Update UI state
         self._on_unsaved_state_changed(False)
         self._update_mode_tooltip()
 
@@ -148,8 +150,8 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         layout.addLayout(actions_layout)
         layout.addSpacing(8)
 
-        # Create table (QTableWidget - keeping for EstimateLogic compatibility)
-        self.item_table = self._create_table()
+        # Create table using EstimateTableView component
+        self.item_table = EstimateTableView()
         layout.addWidget(self.item_table)
 
         # Totals panel component
@@ -206,42 +208,6 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         # Status message label from toolbar
         self.status_message_label = self.toolbar.status_message_label
 
-    def _create_table(self):
-        """Create the item table widget."""
-        table = QTableWidget()
-        table.setColumnCount(11)
-
-        headers = [
-            "Code", "Item Name", "Gross Wt", "Poly Wt", "Net Wt",
-            "Purity %", "Wage Rate", "Pieces", "Wage Amt", "Fine Wt", "Type"
-        ]
-        table.setHorizontalHeaderLabels(headers)
-
-        # Table appearance
-        table.setAlternatingRowColors(True)
-        table.setSelectionBehavior(QTableWidget.SelectItems)
-        table.setSelectionMode(QTableWidget.SingleSelection)
-
-        # Column widths
-        header = table.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.Interactive)
-        header.setContextMenuPolicy(Qt.CustomContextMenu)
-        header.customContextMenuRequested.connect(self._show_header_context_menu)
-        header.sectionResized.connect(self._on_item_table_section_resized)
-
-        table.setColumnWidth(COL_CODE, 80)
-        table.setColumnWidth(COL_GROSS, 85)
-        table.setColumnWidth(COL_POLY, 85)
-        table.setColumnWidth(4, 85)  # Net Wt
-        table.setColumnWidth(COL_PURITY, 80)
-        table.setColumnWidth(COL_WAGE_RATE, 80)
-        table.setColumnWidth(COL_PIECES, 60)
-        table.setColumnWidth(8, 85)  # Wage Amt
-        table.setColumnWidth(9, 85)  # Fine Wt
-        table.setColumnWidth(10, 80)  # Type
-
-        return table
-
     def _setup_table_delegates(self):
         """Set up input delegates for table validation."""
         numeric_delegate = NumericDelegate(parent=self.item_table)
@@ -250,6 +216,24 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         self.item_table.setItemDelegateForColumn(COL_PURITY, numeric_delegate)
         self.item_table.setItemDelegateForColumn(COL_WAGE_RATE, numeric_delegate)
         self.item_table.setItemDelegateForColumn(COL_PIECES, numeric_delegate)
+
+        # Set up column widths
+        self.item_table.setColumnWidth(COL_CODE, 80)
+        self.item_table.setColumnWidth(COL_GROSS, 85)
+        self.item_table.setColumnWidth(COL_POLY, 85)
+        self.item_table.setColumnWidth(4, 85)  # Net Wt
+        self.item_table.setColumnWidth(COL_PURITY, 80)
+        self.item_table.setColumnWidth(COL_WAGE_RATE, 80)
+        self.item_table.setColumnWidth(COL_PIECES, 60)
+        self.item_table.setColumnWidth(8, 85)  # Wage Amt
+        self.item_table.setColumnWidth(9, 85)  # Fine Wt
+        self.item_table.setColumnWidth(10, 80)  # Type
+
+        # Wire header signals
+        header = self.item_table.horizontalHeader()
+        header.setContextMenuPolicy(Qt.CustomContextMenu)
+        header.customContextMenuRequested.connect(self._show_header_context_menu)
+        header.sectionResized.connect(self._on_item_table_section_resized)
 
     def _wire_component_signals(self):
         """Wire component signals to handlers."""
@@ -272,6 +256,10 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         self.secondary_actions.silver_bars_clicked.connect(self._on_silver_bars_clicked)
         self.secondary_actions.refresh_rate_clicked.connect(self._on_refresh_rate_clicked)
 
+        # EstimateTableView signals - wire to adapters that convert to QTableWidget-style signals
+        self.item_table.cell_edited.connect(self._on_table_cell_edited)
+        # The EstimateTableView handles Ctrl+D and Ctrl+H internally via shortcuts
+
     def _on_last_balance_clicked(self):
         """Handle last balance button click."""
         # This will be connected to the actual implementation in EstimateLogic
@@ -289,6 +277,65 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         # This will be connected to LiveRateController via main window
         if self.main_window and hasattr(self.main_window, 'refresh_live_rate'):
             self.main_window.refresh_live_rate()
+
+    def _on_table_cell_edited(self, row: int, column: int):
+        """Adapter method to handle cell edits from EstimateTableView.
+
+        Converts from the Model/View signal to what the mixins expect.
+        """
+        # The mixins expect handle_cell_changed to be called
+        # We need to trigger it with the appropriate cell
+        if hasattr(self, 'handle_cell_changed'):
+            # QTableView uses model indices, mixins expect QTableWidgetItem behavior
+            # Call handle_cell_changed which will process the edit
+            self.handle_cell_changed(row, column)
+
+    def connect_signals(self, skip_load_estimate: bool = False) -> None:
+        """Override base connect_signals to work with QTableView instead of QTableWidget.
+
+        Args:
+            skip_load_estimate: If True, skip connecting load estimate signal
+        """
+        # Connect non-table signals using parent implementation
+        if not skip_load_estimate:
+            if hasattr(self, "safe_load_estimate"):
+                self.voucher_edit.editingFinished.connect(self.safe_load_estimate)
+            else:
+                self.voucher_edit.editingFinished.connect(self.load_estimate)
+
+        self.silver_rate_spin.valueChanged.connect(self._handle_silver_rate_changed)
+
+        if hasattr(self, "last_balance_button"):
+            self.last_balance_button.clicked.connect(self.show_last_balance_dialog)
+        if hasattr(self, "note_edit"):
+            self.note_edit.textEdited.connect(self._mark_unsaved)
+        if hasattr(self, "date_edit"):
+            self.date_edit.dateChanged.connect(self._mark_unsaved)
+
+        # NOTE: QTableView signals are different from QTableWidget signals
+        # EstimateTableView provides cell_edited signal instead of cellChanged
+        # cellClicked, itemSelectionChanged, currentCellChanged not available in QTableView
+        # These are handled via the model's dataChanged signals and view's selection model
+
+        self.save_button.clicked.connect(self.save_estimate)
+        self.clear_button.clicked.connect(self.clear_form)
+        self.print_button.clicked.connect(self.print_estimate)
+        self.return_toggle_button.clicked.connect(self.toggle_return_mode)
+        self.silver_bar_toggle_button.clicked.connect(self.toggle_silver_bar_mode)
+
+        if hasattr(self, "history_button"):
+            self.history_button.clicked.connect(self.show_history)
+        if hasattr(self, "silver_bars_button"):
+            self.silver_bars_button.clicked.connect(self.show_silver_bars)
+        if hasattr(self, "refresh_rate_button"):
+            self.refresh_rate_button.clicked.connect(self.refresh_silver_rate)
+
+        if hasattr(self, "delete_estimate_button"):
+            self.delete_estimate_button.clicked.connect(self.delete_current_estimate)
+            try:
+                self.delete_estimate_button.setEnabled(False)
+            except Exception:
+                pass
 
     def _setup_keyboard_shortcuts(self):
         """Set up keyboard shortcuts.

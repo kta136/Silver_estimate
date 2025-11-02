@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QModelIndex, QItemSelection
 from PyQt5.QtWidgets import QAction, QHeaderView, QMenu, QTableView
 
 from silverestimate.ui.models.estimate_table_model import EstimateTableModel
@@ -18,14 +18,22 @@ class EstimateTableView(QTableView):
 
     This component displays estimate data using the EstimateTableModel and
     provides keyboard shortcuts, context menus, and cell editing capabilities.
+
+    Provides QTableWidget-compatible signals for backward compatibility with mixins.
     """
 
-    # Signals
+    # Modern signals
     item_lookup_requested = pyqtSignal(int, str)  # row, code
     row_deleted = pyqtSignal(int)  # row index
     cell_edited = pyqtSignal(int, int)  # row, column
     history_requested = pyqtSignal()
     column_layout_reset_requested = pyqtSignal()
+
+    # QTableWidget-compatible signals (for mixin compatibility)
+    cellChanged = pyqtSignal(int, int)  # row, column
+    cellClicked = pyqtSignal(int, int)  # row, column
+    itemSelectionChanged = pyqtSignal()  # no args
+    currentCellChanged = pyqtSignal(int, int, int, int)  # currentRow, currentCol, prevRow, prevCol
 
     def __init__(self, parent=None):
         """Initialize the estimate table view.
@@ -85,10 +93,56 @@ class EstimateTableView(QTableView):
 
     def _connect_signals(self) -> None:
         """Connect internal signals."""
-        # Connect model data changed signal
-        self._table_model.data_changed_detailed.connect(
-            lambda row, col, old, new: self.cell_edited.emit(row, col)
-        )
+        # Store previous cell for currentCellChanged signal
+        self._prev_row = -1
+        self._prev_col = -1
+
+        # Connect model data changed signal to both modern and compatibility signals
+        self._table_model.data_changed_detailed.connect(self._on_data_changed_detailed)
+
+        # Connect view's clicked signal to cellClicked compatibility signal
+        self.clicked.connect(self._on_cell_clicked)
+
+        # Connect selection model signals to compatibility signals
+        selection_model = self.selectionModel()
+        if selection_model:
+            selection_model.selectionChanged.connect(self._on_selection_changed)
+            selection_model.currentChanged.connect(self._on_current_changed)
+
+    def _on_data_changed_detailed(self, row: int, col: int, old_value, new_value) -> None:
+        """Handle detailed data changed from model.
+
+        Emits both modern cell_edited and QTableWidget-compatible cellChanged signals.
+        """
+        self.cell_edited.emit(row, col)
+        self.cellChanged.emit(row, col)
+
+    def _on_cell_clicked(self, index: QModelIndex) -> None:
+        """Handle cell clicked.
+
+        Emits QTableWidget-compatible cellClicked signal.
+        """
+        if index.isValid():
+            self.cellClicked.emit(index.row(), index.column())
+
+    def _on_selection_changed(self, selected: QItemSelection, deselected: QItemSelection) -> None:
+        """Handle selection changed.
+
+        Emits QTableWidget-compatible itemSelectionChanged signal.
+        """
+        self.itemSelectionChanged.emit()
+
+    def _on_current_changed(self, current: QModelIndex, previous: QModelIndex) -> None:
+        """Handle current cell changed.
+
+        Emits QTableWidget-compatible currentCellChanged signal.
+        """
+        current_row = current.row() if current.isValid() else -1
+        current_col = current.column() if current.isValid() else -1
+        prev_row = previous.row() if previous.isValid() else -1
+        prev_col = previous.column() if previous.isValid() else -1
+
+        self.currentCellChanged.emit(current_row, current_col, prev_row, prev_col)
 
     def _show_context_menu(self, position) -> None:
         """Show context menu at the given position.
@@ -170,6 +224,22 @@ class EstimateTableView(QTableView):
             True if the row was set, False otherwise
         """
         return self._table_model.set_row(row_idx, row_data)
+
+    def rowCount(self) -> int:
+        """Get the number of rows (QTableWidget compatibility adapter).
+
+        Returns:
+            The number of rows in the table
+        """
+        return self._table_model.rowCount()
+
+    def columnCount(self) -> int:
+        """Get the number of columns (QTableWidget compatibility adapter).
+
+        Returns:
+            The number of columns in the table
+        """
+        return self._table_model.columnCount()
 
     def get_all_rows(self) -> list[EstimateEntryRowState]:
         """Get all row data.

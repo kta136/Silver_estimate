@@ -128,18 +128,28 @@ class EstimateTableAdapter:
     # Mode / visuals helpers
     # ------------------------------------------------------------------ #
     def refresh_empty_row_type(self) -> None:
+        """Refresh the type column for empty rows.
+
+        Note: This now checks if code is ACTUALLY empty, not just if the cell
+        exists. This is important because when the user is editing the code
+        column, the item exists but may be empty.
+        """
         table = self._table
         owner = self._owner
         owner.logger.info(f"EstimateTableAdapter.refresh_empty_row_type() called, rowCount={table.rowCount()}")
         try:
             for row in range(table.rowCount()):
                 code_item = table.item(row, COL_CODE)
-                code_text = code_item.text() if code_item else ""
-                owner.logger.info(f"Row {row}: code='{code_text}'")
-                if code_item and code_item.text().strip():
-                    owner.logger.info(f"Row {row} has code, skipping")
+                # Get the actual text, handling both None and empty string
+                code_text = code_item.text().strip() if code_item else ""
+                owner.logger.info(f"Row {row}: code='{code_text}' (len={len(code_text)})")
+
+                # Only skip rows that have ACTUAL content (not just a focused empty cell)
+                if code_text:  # Non-empty string
+                    owner.logger.info(f"Row {row} has code '{code_text}', skipping")
                     continue
-                owner.logger.info(f"Row {row} is empty, updating type")
+
+                owner.logger.info(f"Row {row} is empty (code='{code_text}'), updating type")
                 type_item = table.item(row, COL_TYPE)
                 owner.logger.info(f"Got type_item: {type_item}, type={type(type_item).__name__ if type_item else 'None'}")
                 if type_item is None:

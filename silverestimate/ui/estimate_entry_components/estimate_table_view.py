@@ -40,6 +40,10 @@ class ModelBackedTableItem(QTableWidgetItem):
         if data is not None:
             super().setText(str(data))
 
+        # Set flags from model
+        model_flags = self._model.flags(index)
+        self.setFlags(model_flags)
+
     def setText(self, text: str) -> None:
         """Set the text of this item and update the model.
 
@@ -440,6 +444,26 @@ class EstimateTableView(QTableView):
             row: The row index where the new row should be inserted
         """
         self._table_model.add_row()
+
+    def removeRow(self, row: int) -> None:
+        """Remove a row at the specified position (QTableWidget compatibility).
+
+        Args:
+            row: The row index to remove
+        """
+        self._table_model.remove_row(row)
+        # Clear cache when rows change
+        self._item_cache.clear()
+
+    def setCurrentCell(self, row: int, column: int) -> None:
+        """Set the current cell (QTableWidget compatibility).
+
+        Args:
+            row: The row index
+            column: The column index
+        """
+        index = self._table_model.index(row, column)
+        self.setCurrentIndex(index)
 
     def item(self, row: int, column: int):
         """Get the item at the specified row and column (QTableWidget compatibility).

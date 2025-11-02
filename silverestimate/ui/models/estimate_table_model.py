@@ -223,7 +223,12 @@ class EstimateTableModel(QAbstractTableModel):
         if not index.isValid():
             return Qt.NoItemFlags
 
-        # All columns are editable
+        # Calculated columns are read-only
+        col = index.column()
+        if col in (COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT, COL_TYPE):
+            return Qt.ItemIsEnabled | Qt.ItemIsSelectable
+
+        # All other columns are editable
         return Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable
 
     # Custom methods for managing rows

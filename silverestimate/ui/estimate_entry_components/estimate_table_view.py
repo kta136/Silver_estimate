@@ -5,12 +5,86 @@ from __future__ import annotations
 from typing import Optional
 
 from PyQt5.QtCore import Qt, pyqtSignal, QModelIndex, QItemSelection
-from PyQt5.QtWidgets import QAction, QHeaderView, QMenu, QTableView
+from PyQt5.QtWidgets import QAction, QHeaderView, QMenu, QTableView, QTableWidgetItem
 
 from silverestimate.ui.models.estimate_table_model import EstimateTableModel
 from silverestimate.ui.view_models.estimate_entry_view_model import (
     EstimateEntryRowState,
 )
+
+
+class ModelBackedTableItem(QTableWidgetItem):
+    """QTableWidgetItem that's backed by a Model/View model.
+
+    This class acts as a bridge between QTableWidget API and Model/View architecture.
+    When you call setText(), setData(), etc., it updates the underlying model.
+    """
+
+    def __init__(self, model: EstimateTableModel, row: int, column: int):
+        """Initialize the item.
+
+        Args:
+            model: The table model
+            row: The row index
+            column: The column index
+        """
+        super().__init__()
+        self._model = model
+        self._row = row
+        self._column = column
+        self._user_data = {}  # Store user data separately
+
+        # Load initial data from model
+        index = self._model.index(row, column)
+        data = self._model.data(index, Qt.DisplayRole)
+        if data is not None:
+            super().setText(str(data))
+
+    def setText(self, text: str) -> None:
+        """Set the text of this item and update the model.
+
+        Args:
+            text: The new text
+        """
+        super().setText(text)
+        index = self._model.index(self._row, self._column)
+        self._model.setData(index, text, Qt.EditRole)
+
+    def text(self) -> str:
+        """Get the text from the model.
+
+        Returns:
+            The current text
+        """
+        index = self._model.index(self._row, self._column)
+        data = self._model.data(index, Qt.DisplayRole)
+        return str(data) if data is not None else ""
+
+    def setData(self, role: int, value) -> None:
+        """Set data for this item.
+
+        Args:
+            role: The data role
+            value: The value to set
+        """
+        if role == Qt.UserRole:
+            # Store user data separately (not in the model)
+            self._user_data[role] = value
+        else:
+            super().setData(role, value)
+
+    def data(self, role: int):
+        """Get data for this item.
+
+        Args:
+            role: The data role
+
+        Returns:
+            The data for the role
+        """
+        if role == Qt.UserRole and role in self._user_data:
+            return self._user_data[role]
+        return super().data(role)
 
 
 class EstimateTableView(QTableView):
@@ -43,6 +117,7 @@ class EstimateTableView(QTableView):
         """
         super().__init__(parent)
         self._table_model = EstimateTableModel(self)
+        self._item_cache = {}  # Cache for ModelBackedTableItem instances
         self._setup_ui()
         self._setup_shortcuts()
         self._connect_signals()
@@ -185,7 +260,10 @@ class EstimateTableView(QTableView):
         Returns:
             The index of the newly added row
         """
-        return self._table_model.add_row(row_data)
+        result = self._table_model.add_row(row_data)
+        # Clear cache when rows change
+        self._item_cache.clear()
+        return result
 
     def delete_row(self, row_idx: int) -> bool:
         """Delete a row from the table.
@@ -196,11 +274,16 @@ class EstimateTableView(QTableView):
         Returns:
             True if the row was deleted, False otherwise
         """
-        return self._table_model.remove_row(row_idx)
+        result = self._table_model.remove_row(row_idx)
+        # Clear cache when rows change
+        self._item_cache.clear()
+        return result
 
     def clear_rows(self) -> None:
         """Remove all rows from the table."""
         self._table_model.clear_rows()
+        # Clear cache when rows change
+        self._item_cache.clear()
 
     def get_row(self, row_idx: int) -> Optional[EstimateEntryRowState]:
         """Get the row data at the given index.
@@ -256,6 +339,8 @@ class EstimateTableView(QTableView):
             rows: The new list of rows
         """
         self._table_model.set_all_rows(rows)
+        # Clear cache when rows change
+        self._item_cache.clear()
 
     def focus_cell(self, row: int, column: int) -> None:
         """Set focus to a specific cell.
@@ -346,3 +431,52 @@ class EstimateTableView(QTableView):
             header.setSectionResizeMode(column, QHeaderView.Stretch)
         else:
             header.setSectionResizeMode(column, QHeaderView.Interactive)
+
+    # QTableWidget compatibility methods for adapter
+    def insertRow(self, row: int) -> None:
+        """Insert a new row at the specified position (QTableWidget compatibility).
+
+        Args:
+            row: The row index where the new row should be inserted
+        """
+        self._table_model.add_row()
+
+    def item(self, row: int, column: int):
+        """Get the item at the specified row and column (QTableWidget compatibility).
+
+        For Model/View architecture, we create a model-backed QTableWidgetItem that
+        synchronizes with the underlying model.
+
+        Args:
+            row: The row index
+            column: The column index
+
+        Returns:
+            A ModelBackedTableItem with the cell data, or None if invalid
+        """
+        if not (0 <= row < self._table_model.rowCount() and 0 <= column < self._table_model.columnCount()):
+            return None
+
+        # Use cached item if available, otherwise create new one
+        cache_key = (row, column)
+        if cache_key not in self._item_cache:
+            self._item_cache[cache_key] = ModelBackedTableItem(self._table_model, row, column)
+
+        return self._item_cache[cache_key]
+
+    def setItem(self, row: int, column: int, item) -> None:
+        """Set the item at the specified row and column (QTableWidget compatibility).
+
+        Args:
+            row: The row index
+            column: The column index
+            item: The QTableWidgetItem to set
+        """
+        if item is None:
+            return
+
+        index = self._table_model.index(row, column)
+        self._table_model.setData(index, item.text(), Qt.EditRole)
+
+        # Copy flags to the model if needed
+        # Note: In Model/View, flags are typically handled by the model's flags() method

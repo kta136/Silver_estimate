@@ -130,24 +130,32 @@ class EstimateTableAdapter:
     def refresh_empty_row_type(self) -> None:
         table = self._table
         owner = self._owner
+        owner.logger.info(f"EstimateTableAdapter.refresh_empty_row_type() called, rowCount={table.rowCount()}")
         try:
             for row in range(table.rowCount()):
                 code_item = table.item(row, COL_CODE)
+                code_text = code_item.text() if code_item else ""
+                owner.logger.info(f"Row {row}: code='{code_text}'")
                 if code_item and code_item.text().strip():
+                    owner.logger.info(f"Row {row} has code, skipping")
                     continue
+                owner.logger.info(f"Row {row} is empty, updating type")
                 type_item = table.item(row, COL_TYPE)
+                owner.logger.info(f"Got type_item: {type_item}, type={type(type_item).__name__ if type_item else 'None'}")
                 if type_item is None:
+                    owner.logger.info("type_item is None, creating new QTableWidgetItem")
                     type_item = QTableWidgetItem("")
                     type_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                     table.setItem(row, COL_TYPE, type_item)
                 table.blockSignals(True)
                 try:
+                    owner.logger.info(f"Calling owner._update_row_type_visuals_direct()")
                     owner._update_row_type_visuals_direct(type_item)
                     type_item.setTextAlignment(Qt.AlignCenter)
                 finally:
                     table.blockSignals(False)
-        except Exception:  # pragma: no cover
-            owner.logger.debug("Failed to refresh empty row type", exc_info=True)
+        except Exception as exc:  # pragma: no cover
+            owner.logger.error(f"Failed to refresh empty row type: {exc}", exc_info=True)
 
     def focus_on_empty_row(self, *, update_visuals: bool = False) -> None:
         table = self._table

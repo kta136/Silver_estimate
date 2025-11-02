@@ -551,7 +551,13 @@ class _EstimateTableMixin:
         # Block signals to prevent recursion when button state changes
         from PyQt5.QtCore import QSignalBlocker
 
+        self.logger.info("=== toggle_return_mode() called ===")
+        current_return = getattr(self, "return_mode", False)
+        current_silver = getattr(self, "silver_bar_mode", False)
+        self.logger.info(f"Current state: return_mode={current_return}, silver_bar_mode={current_silver}")
+
         if not getattr(self, "return_mode", False) and getattr(self, "silver_bar_mode", False):
+            self.logger.info("Disabling silver bar mode (mutual exclusion)")
             self.silver_bar_mode = False
             blocker = QSignalBlocker(self.silver_bar_toggle_button)
             self.silver_bar_toggle_button.setChecked(False)
@@ -629,7 +635,10 @@ class _EstimateTableMixin:
                 )
             self._status("Return Items mode deactivated", 2000)
 
+        self.logger.info(f"After toggle: return_mode={self.return_mode}")
+        self.logger.info("Calling _refresh_empty_row_type()")
         self._refresh_empty_row_type()
+        self.logger.info("Calling focus_on_empty_row()")
         self.focus_on_empty_row(update_visuals=True)
         self._update_view_model_modes()
         self._update_mode_tooltip()
@@ -724,7 +733,11 @@ class _EstimateTableMixin:
         self._mark_unsaved()
 
     def _refresh_empty_row_type(self):
-        self._get_table_adapter().refresh_empty_row_type()
+        self.logger.info("_refresh_empty_row_type() called")
+        adapter = self._get_table_adapter()
+        self.logger.info(f"Got adapter: {adapter}")
+        adapter.refresh_empty_row_type()
+        self.logger.info("adapter.refresh_empty_row_type() completed")
 
     def focus_on_empty_row(self, update_visuals=False):
         self._get_table_adapter().focus_on_empty_row(update_visuals=update_visuals)

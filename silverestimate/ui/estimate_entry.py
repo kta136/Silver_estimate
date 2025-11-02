@@ -231,8 +231,6 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
 
         # Wire header signals
         header = self.item_table.horizontalHeader()
-        header.setContextMenuPolicy(Qt.CustomContextMenu)
-        header.customContextMenuRequested.connect(self._show_header_context_menu)
         header.sectionResized.connect(self._on_item_table_section_resized)
 
     def _wire_component_signals(self):
@@ -258,6 +256,7 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
 
         # EstimateTableView signals - wire to adapters that convert to QTableWidget-style signals
         self.item_table.cell_edited.connect(self._on_table_cell_edited)
+        self.item_table.column_layout_reset_requested.connect(self._reset_columns_layout)
         # The EstimateTableView handles Ctrl+D and Ctrl+H internally via shortcuts
 
     def _on_last_balance_clicked(self):
@@ -522,18 +521,6 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
     def closeEvent(self, event):
         self._save_column_widths_setting()
         super().closeEvent(event)
-
-    def _show_header_context_menu(self, pos):
-        try:
-            header = self.item_table.horizontalHeader()
-            from PyQt5.QtWidgets import QMenu
-            menu = QMenu(self)
-            reset_action = menu.addAction("Reset Column Layout")
-            action = menu.exec_(header.mapToGlobal(pos))
-            if action == reset_action:
-                self._reset_columns_layout()
-        except Exception:
-            pass
 
     def _reset_columns_layout(self):
         try:

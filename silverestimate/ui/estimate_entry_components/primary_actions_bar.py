@@ -24,7 +24,7 @@ class PrimaryActionsBar(QWidget):
         self._connect_signals()
 
     def _setup_ui(self) -> None:
-        """Set up the user interface."""
+        """Set up the user interface with improved spacing and visual hierarchy."""
         self.setObjectName("PrimaryActionStrip")
         self.setStyleSheet("""
             QWidget#PrimaryActionStrip {
@@ -34,44 +34,46 @@ class PrimaryActionsBar(QWidget):
             }
             QWidget#PrimaryActionStrip QPushButton {
                 font-weight: 600;
-                padding: 6px 14px;
-                min-width: 120px;
+                padding: 8px 16px;
+                min-width: 110px;
+                min-height: 32px;
+                font-size: 10pt;
             }
             QWidget#PrimaryActionStrip QPushButton:hover {
                 background-color: palette(light);
+            }
+            QWidget#PrimaryActionStrip QPushButton:disabled {
+                color: palette(mid);
             }
         """)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         layout = QHBoxLayout(self)
-        layout.setSpacing(8)
-        layout.setContentsMargins(12, 6, 12, 6)
+        layout.setSpacing(12)  # Increased from 8
+        layout.setContentsMargins(16, 10, 16, 10)  # Increased padding
 
-        # Save button
-        self.save_button = QPushButton("Save Estimate")
+        # Save button (primary action - will get emphasis later)
+        self.save_button = QPushButton("💾 Save")
         self.save_button.setToolTip(
-            "Save the current estimate details\n"
-            "Keyboard: Ctrl+S\n"
+            "Save the current estimate details (Ctrl+S)\n\n"
             "Saves all items and totals to database\n"
             "Required before printing"
         )
         layout.addWidget(self.save_button)
 
         # Print button
-        self.print_button = QPushButton("Print Preview")
+        self.print_button = QPushButton("🖨 Print")
         self.print_button.setToolTip(
-            "Preview and print the current estimate\n"
-            "Keyboard: Ctrl+P\n"
+            "Preview and print the current estimate (Ctrl+P)\n\n"
             "Requires saving the estimate first\n"
             "Opens print preview dialog"
         )
         layout.addWidget(self.print_button)
 
         # New button
-        self.new_button = QPushButton("New Estimate")
+        self.new_button = QPushButton("📄 New")
         self.new_button.setToolTip(
-            "Clear the form to start a new estimate\n"
-            "Keyboard: Ctrl+N\n"
+            "Clear the form to start a new estimate (Ctrl+N)\n\n"
             "Resets all fields and generates new voucher\n"
             "Will ask for confirmation if unsaved changes"
         )

@@ -59,23 +59,32 @@ class SecondaryActionsBar(QWidget):
         self._connect_signals()
 
     def _setup_ui(self) -> None:
-        """Set up the user interface."""
+        """Set up the user interface with improved spacing and organization."""
         self.setObjectName("SecondaryActionStrip")
         self.setStyleSheet("""
             QWidget#SecondaryActionStrip {
                 background-color: palette(window);
-                border: 1px dashed palette(mid);
+                border: 1px solid palette(mid);
                 border-radius: 8px;
             }
             QWidget#SecondaryActionStrip QPushButton {
-                padding: 4px 10px;
+                padding: 6px 12px;
+                min-height: 30px;
+                font-size: 9pt;
+            }
+            QWidget#SecondaryActionStrip QPushButton:hover {
+                background-color: palette(light);
+            }
+            QWidget#SecondaryActionStrip QPushButton:checked {
+                background-color: palette(midlight);
+                border: 2px solid palette(highlight);
             }
         """)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         layout = QHBoxLayout(self)
-        layout.setSpacing(8)
-        layout.setContentsMargins(12, 6, 12, 6)
+        layout.setSpacing(12)  # Increased from 8
+        layout.setContentsMargins(16, 10, 16, 10)  # Increased padding
 
         # Delete Row button
         self.delete_row_button = QPushButton("Delete Row")

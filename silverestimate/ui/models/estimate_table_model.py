@@ -110,7 +110,7 @@ class EstimateTableModel(QAbstractTableModel):
             elif col == COL_FINE_WT:
                 return row_data.fine_weight
             elif col == COL_TYPE:
-                return row_data.category.value if row_data.category else ""
+                return row_data.category.display_name() if row_data.category else ""
             return None
 
         if role == Qt.BackgroundRole and col == COL_TYPE:
@@ -177,8 +177,8 @@ class EstimateTableModel(QAbstractTableModel):
                 if isinstance(value, EstimateLineCategory):
                     new_row = replace(old_row, category=value)
                 else:
-                    # Try to convert string to category
-                    category = EstimateLineCategory(str(value)) if value else EstimateLineCategory.REGULAR
+                    # Use from_label to convert display name or enum value to category
+                    category = EstimateLineCategory.from_label(str(value)) if value else EstimateLineCategory.REGULAR
                     new_row = replace(old_row, category=category)
             else:
                 return False

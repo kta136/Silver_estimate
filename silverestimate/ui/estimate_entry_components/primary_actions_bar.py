@@ -2,41 +2,23 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtWidgets import (
-    QAction,
-    QHBoxLayout,
-    QPushButton,
-    QSizePolicy,
-    QWidget,
-)
+from PyQt5.QtGui import QKeySequence
+from PyQt5.QtWidgets import QHBoxLayout, QPushButton, QSizePolicy, QWidget, QShortcut
 
 
 class PrimaryActionsBar(QWidget):
-    """Primary action buttons for estimate entry.
+    """Primary action buttons styled to match the classic estimate form."""
 
-    This component provides the main action buttons:
-    - Save: Save the current estimate
-    - Print: Print the estimate
-    - New: Create a new estimate
-    - Delete This Estimate: Delete the currently loaded estimate
-    - Estimate History: View past estimates
-    """
-
-    # Signals
     save_clicked = pyqtSignal()
     print_clicked = pyqtSignal()
     new_clicked = pyqtSignal()
-    delete_estimate_clicked = pyqtSignal()
-    history_clicked = pyqtSignal()
 
-    def __init__(self, parent=None):
-        """Initialize the primary actions bar.
-
-        Args:
-            parent: Optional parent widget
-        """
+    def __init__(self, parent: Optional[QWidget] = None, shortcut_parent: Optional[QWidget] = None):
         super().__init__(parent)
+        self._shortcut_parent = shortcut_parent
         self._setup_ui()
         self._setup_shortcuts()
         self._connect_signals()
@@ -46,126 +28,78 @@ class PrimaryActionsBar(QWidget):
         self.setObjectName("PrimaryActionStrip")
         self.setStyleSheet("""
             QWidget#PrimaryActionStrip {
-                background-color: #f0f9ff;
-                border: 2px solid #0ea5e9;
+                background-color: palette(base);
+                border: 1px solid palette(midlight);
                 border-radius: 8px;
             }
             QWidget#PrimaryActionStrip QPushButton {
-                background-color: #0284c7;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 6px 16px;
                 font-weight: 600;
-                min-width: 80px;
+                padding: 6px 14px;
+                min-width: 120px;
             }
             QWidget#PrimaryActionStrip QPushButton:hover {
-                background-color: #0369a1;
-            }
-            QWidget#PrimaryActionStrip QPushButton:pressed {
-                background-color: #075985;
-            }
-            QWidget#PrimaryActionStrip QPushButton:disabled {
-                background-color: #cbd5e1;
-                color: #94a3b8;
+                background-color: palette(light);
             }
         """)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         layout = QHBoxLayout(self)
-        layout.setSpacing(10)
-        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(8)
+        layout.setContentsMargins(12, 6, 12, 6)
 
         # Save button
-        self.save_button = QPushButton("Save")
+        self.save_button = QPushButton("Save Estimate")
         self.save_button.setToolTip(
-            "Save the current estimate\n"
+            "Save the current estimate details\n"
             "Keyboard: Ctrl+S\n"
-            "Creates new estimate or updates existing one"
+            "Saves all items and totals to database\n"
+            "Required before printing"
         )
         layout.addWidget(self.save_button)
 
         # Print button
-        self.print_button = QPushButton("Print")
+        self.print_button = QPushButton("Print Preview")
         self.print_button.setToolTip(
-            "Print the current estimate\n"
+            "Preview and print the current estimate\n"
             "Keyboard: Ctrl+P\n"
+            "Requires saving the estimate first\n"
             "Opens print preview dialog"
         )
         layout.addWidget(self.print_button)
 
         # New button
-        self.new_button = QPushButton("New")
+        self.new_button = QPushButton("New Estimate")
         self.new_button.setToolTip(
-            "Create a new estimate\n"
+            "Clear the form to start a new estimate\n"
             "Keyboard: Ctrl+N\n"
-            "Clears current estimate and starts fresh"
+            "Resets all fields and generates new voucher\n"
+            "Will ask for confirmation if unsaved changes"
         )
         layout.addWidget(self.new_button)
-
-        # Delete This Estimate button
-        self.delete_estimate_button = QPushButton("Delete This Estimate")
-        self.delete_estimate_button.setToolTip(
-            "Delete the currently loaded estimate\n"
-            "Permanently removes estimate from database\n"
-            "Only enabled when estimate is loaded\n"
-            "Cannot be undone - use with caution"
-        )
-        self.delete_estimate_button.setEnabled(False)
-        layout.addWidget(self.delete_estimate_button)
-
-        # Estimate History button
-        self.history_button = QPushButton("Estimate History")
-        self.history_button.setToolTip(
-            "View, load, or print past estimates\n"
-            "Keyboard: Ctrl+H\n"
-            "Browse all saved estimates\n"
-            "Double-click to load an estimate"
-        )
-        layout.addWidget(self.history_button)
 
         layout.addStretch()
 
     def _setup_shortcuts(self) -> None:
-        """Set up keyboard shortcuts."""
-        # Save shortcut (Ctrl+S)
-        save_action = QAction("Save", self)
-        save_action.setShortcut("Ctrl+S")
-        save_action.triggered.connect(self.save_clicked.emit)
-        self.addAction(save_action)
+        """Set up keyboard shortcuts.
 
-        # Print shortcut (Ctrl+P)
-        print_action = QAction("Print", self)
-        print_action.setShortcut("Ctrl+P")
-        print_action.triggered.connect(self.print_clicked.emit)
-        self.addAction(print_action)
+        NOTE: Ctrl+S and Ctrl+P shortcuts are NOT registered here to avoid
+        conflicts with the application-wide menu shortcuts in NavigationController.
+        Those are registered as QActions with ApplicationShortcut context.
 
-        # New shortcut (Ctrl+N)
-        new_action = QAction("New", self)
-        new_action.setShortcut("Ctrl+N")
-        new_action.triggered.connect(self.new_clicked.emit)
-        self.addAction(new_action)
+        Ctrl+N is registered here as it's specific to the estimate entry widget.
+        """
+        target = self._shortcut_parent if isinstance(self._shortcut_parent, QWidget) else self
+        self._shortcuts: list[QShortcut] = []
 
-        # History shortcut (Ctrl+H)
-        history_action = QAction("Show History", self)
-        history_action.setShortcut("Ctrl+H")
-        history_action.triggered.connect(self.history_clicked.emit)
-        self.addAction(history_action)
+        # Ctrl+S and Ctrl+P are handled by menu bar (ApplicationShortcut)
+        # Only register Ctrl+N here for new estimate
+        new_shortcut = QShortcut(QKeySequence("Ctrl+N"), target)
+        new_shortcut.setContext(Qt.WindowShortcut)
+        new_shortcut.activated.connect(self.new_clicked.emit)
+        self._shortcuts.append(new_shortcut)
 
     def _connect_signals(self) -> None:
         """Connect internal signals."""
         self.save_button.clicked.connect(self.save_clicked.emit)
         self.print_button.clicked.connect(self.print_clicked.emit)
         self.new_button.clicked.connect(self.new_clicked.emit)
-        self.delete_estimate_button.clicked.connect(self.delete_estimate_clicked.emit)
-        self.history_button.clicked.connect(self.history_clicked.emit)
-
-    # Public methods
-
-    def enable_delete_estimate(self, enabled: bool) -> None:
-        """Enable or disable the delete estimate button.
-
-        Args:
-            enabled: True to enable, False to disable
-        """
-        self.delete_estimate_button.setEnabled(enabled)

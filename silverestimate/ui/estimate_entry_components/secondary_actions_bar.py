@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
-    QAction,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -14,6 +16,7 @@ from PyQt5.QtWidgets import (
     QToolButton,
     QVBoxLayout,
     QWidget,
+    QShortcut,
 )
 
 
@@ -24,7 +27,9 @@ class SecondaryActionsBar(QWidget):
     - Delete Row button
     - Return mode and Silver Bar mode toggles
     - Last Balance button
+    - Estimate History button
     - Manage Silver Bars button
+    - Delete Estimate button
     - Live Silver Rate display with refresh button
     """
 
@@ -33,16 +38,22 @@ class SecondaryActionsBar(QWidget):
     return_mode_toggled = pyqtSignal(bool)
     silver_bar_mode_toggled = pyqtSignal(bool)
     last_balance_clicked = pyqtSignal()
+    history_clicked = pyqtSignal()
     silver_bars_clicked = pyqtSignal()
     refresh_rate_clicked = pyqtSignal()
+    delete_estimate_clicked = pyqtSignal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: Optional[QWidget] = None, *, shortcut_parent: Optional[QWidget] = None):
         """Initialize the secondary actions bar.
 
         Args:
-            parent: Optional parent widget
+            parent: Optional parent widget.
+            shortcut_parent: Optional widget that should own the shortcuts. When
+                provided, keyboard shortcuts are bound to that container so they
+                work regardless of which child has focus.
         """
         super().__init__(parent)
+        self._shortcut_parent = shortcut_parent
         self._setup_ui()
         self._setup_shortcuts()
         self._connect_signals()
@@ -100,24 +111,6 @@ class SecondaryActionsBar(QWidget):
         )
         self.return_toggle_button.setCheckable(True)
         self.return_toggle_button.setMaximumWidth(150)
-        self.return_toggle_button.setStyleSheet("""
-            QPushButton {
-                background-color: palette(button);
-                border: 1px solid palette(mid);
-                border-radius: 4px;
-                font-weight: normal;
-                color: palette(buttonText);
-                padding: 4px 8px;
-            }
-            QPushButton:hover {
-                background-color: palette(light);
-            }
-            QPushButton:checked {
-                background-color: #fef3c7;
-                border: 2px solid #f59e0b;
-                font-weight: bold;
-            }
-        """)
         layout.addWidget(self.return_toggle_button)
 
         # Silver bar mode toggle
@@ -130,24 +123,6 @@ class SecondaryActionsBar(QWidget):
         )
         self.silver_bar_toggle_button.setCheckable(True)
         self.silver_bar_toggle_button.setMaximumWidth(150)
-        self.silver_bar_toggle_button.setStyleSheet("""
-            QPushButton {
-                background-color: palette(button);
-                border: 1px solid palette(mid);
-                border-radius: 4px;
-                font-weight: normal;
-                color: palette(buttonText);
-                padding: 4px 8px;
-            }
-            QPushButton:hover {
-                background-color: palette(light);
-            }
-            QPushButton:checked {
-                background-color: #e0e7ff;
-                border: 2px solid #6366f1;
-                font-weight: bold;
-            }
-        """)
         layout.addWidget(self.silver_bar_toggle_button)
 
         # Backward compatibility aliases
@@ -168,6 +143,18 @@ class SecondaryActionsBar(QWidget):
 
         layout.addWidget(self._create_divider())
 
+        # Estimate history button
+        self.history_button = QPushButton("Estimate History")
+        self.history_button.setToolTip(
+            "View, load, or print past estimates\n"
+            "Keyboard: Ctrl+H\n"
+            "Browse all saved estimates\n"
+            "Double-click to load an estimate"
+        )
+        layout.addWidget(self.history_button)
+
+        layout.addWidget(self._create_divider())
+
         # Manage Silver Bars button
         self.silver_bars_button = QPushButton("Manage Silver Bars")
         self.silver_bars_button.setToolTip(
@@ -177,6 +164,19 @@ class SecondaryActionsBar(QWidget):
             "Manage bar transfers"
         )
         layout.addWidget(self.silver_bars_button)
+
+        layout.addWidget(self._create_divider())
+
+        # Delete estimate button
+        self.delete_estimate_button = QPushButton("Delete This Estimate")
+        self.delete_estimate_button.setToolTip(
+            "Delete the currently loaded estimate\n"
+            "Permanently removes estimate from database\n"
+            "Only enabled when estimate is loaded\n"
+            "Cannot be undone - use with caution"
+        )
+        self.delete_estimate_button.setEnabled(False)
+        layout.addWidget(self.delete_estimate_button)
 
         layout.addStretch()
 
@@ -242,24 +242,34 @@ class SecondaryActionsBar(QWidget):
         return divider
 
     def _setup_shortcuts(self) -> None:
-        """Set up keyboard shortcuts."""
-        # Delete row shortcut (Ctrl+D)
-        delete_row_action = QAction("Delete Row", self)
-        delete_row_action.setShortcut("Ctrl+D")
-        delete_row_action.triggered.connect(self.delete_row_clicked.emit)
-        self.addAction(delete_row_action)
+        """Set up keyboard shortcuts.
 
-        # Return mode shortcut (Ctrl+R)
-        return_action = QAction("Toggle Return Mode", self)
-        return_action.setShortcut("Ctrl+R")
-        return_action.triggered.connect(self._toggle_return_mode)
-        self.addAction(return_action)
+        Uses WindowShortcut context so shortcuts work even when table cells
+        are being edited (cell editors are not considered children in Qt's
+        shortcut propagation).
+        """
+        target = self._shortcut_parent if isinstance(self._shortcut_parent, QWidget) else self
+        self._shortcuts: list[QShortcut] = []
 
-        # Silver bar mode shortcut (Ctrl+B)
-        silver_bar_action = QAction("Toggle Silver Bar Mode", self)
-        silver_bar_action.setShortcut("Ctrl+B")
-        silver_bar_action.triggered.connect(self._toggle_silver_bar_mode)
-        self.addAction(silver_bar_action)
+        delete_row_shortcut = QShortcut(QKeySequence("Ctrl+D"), target)
+        delete_row_shortcut.setContext(Qt.WindowShortcut)
+        delete_row_shortcut.activated.connect(self.delete_row_clicked.emit)
+        self._shortcuts.append(delete_row_shortcut)
+
+        return_shortcut = QShortcut(QKeySequence("Ctrl+R"), target)
+        return_shortcut.setContext(Qt.WindowShortcut)
+        return_shortcut.activated.connect(self._toggle_return_mode)
+        self._shortcuts.append(return_shortcut)
+
+        silver_bar_shortcut = QShortcut(QKeySequence("Ctrl+B"), target)
+        silver_bar_shortcut.setContext(Qt.WindowShortcut)
+        silver_bar_shortcut.activated.connect(self._toggle_silver_bar_mode)
+        self._shortcuts.append(silver_bar_shortcut)
+
+        history_shortcut = QShortcut(QKeySequence("Ctrl+H"), target)
+        history_shortcut.setContext(Qt.WindowShortcut)
+        history_shortcut.activated.connect(self.history_clicked.emit)
+        self._shortcuts.append(history_shortcut)
 
     def _connect_signals(self) -> None:
         """Connect internal signals.
@@ -271,16 +281,21 @@ class SecondaryActionsBar(QWidget):
         self.delete_row_button.clicked.connect(self.delete_row_clicked.emit)
         # NOTE: return_toggle_button and silver_bar_toggle_button are connected externally
         self.last_balance_button.clicked.connect(self.last_balance_clicked.emit)
+        self.history_button.clicked.connect(self.history_clicked.emit)
         self.silver_bars_button.clicked.connect(self.silver_bars_clicked.emit)
         self.refresh_rate_button.clicked.connect(self.refresh_rate_clicked.emit)
+        self.delete_estimate_button.clicked.connect(self.delete_estimate_clicked.emit)
 
     def _toggle_return_mode(self) -> None:
         """Toggle return mode state (called by keyboard shortcut)."""
-        self.return_toggle_button.setChecked(not self.return_toggle_button.isChecked())
+        if self.return_toggle_button.isEnabled():
+            # Use click so downstream handlers wired to clicked() also run
+            self.return_toggle_button.click()
 
     def _toggle_silver_bar_mode(self) -> None:
         """Toggle silver bar mode state (called by keyboard shortcut)."""
-        self.silver_bar_toggle_button.setChecked(not self.silver_bar_toggle_button.isChecked())
+        if self.silver_bar_toggle_button.isEnabled():
+            self.silver_bar_toggle_button.click()
 
     # Public methods
 
@@ -320,3 +335,7 @@ class SecondaryActionsBar(QWidget):
         """Reset both modes to disabled state."""
         self.return_toggle_button.setChecked(False)
         self.silver_bar_toggle_button.setChecked(False)
+
+    def enable_delete_estimate(self, enabled: bool) -> None:
+        """Enable or disable the delete estimate button."""
+        self.delete_estimate_button.setEnabled(enabled)

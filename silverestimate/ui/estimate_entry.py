@@ -85,7 +85,7 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
             try:
                 self.presenter.generate_voucher(silent=True)
                 self.logger.info("Generated new voucher silently.")
-                self.primary_actions.enable_delete_estimate(False)
+                self.secondary_actions.enable_delete_estimate(False)
                 self._estimate_loaded = False
             except Exception as exc:
                 self.logger.error(
@@ -140,11 +140,11 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         actions_layout.setSpacing(10)
 
         # Primary actions bar (Save, Print, New, Delete, History)
-        self.primary_actions = PrimaryActionsBar()
+        self.primary_actions = PrimaryActionsBar(shortcut_parent=self)
         actions_layout.addWidget(self.primary_actions, stretch=1)
 
         # Secondary actions bar (mode switcher, buttons, live rate)
-        self.secondary_actions = SecondaryActionsBar()
+        self.secondary_actions = SecondaryActionsBar(shortcut_parent=self)
         actions_layout.addWidget(self.secondary_actions, stretch=2)
 
         layout.addLayout(actions_layout)
@@ -169,8 +169,8 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         self.save_button = self.primary_actions.save_button
         self.print_button = self.primary_actions.print_button
         self.clear_button = self.primary_actions.new_button
-        self.delete_estimate_button = self.primary_actions.delete_estimate_button
-        self.history_button = self.primary_actions.history_button
+        self.delete_estimate_button = self.secondary_actions.delete_estimate_button
+        self.history_button = self.secondary_actions.history_button
 
         # Expose secondary actions bar widgets
         self.delete_row_button = self.secondary_actions.delete_row_button
@@ -242,8 +242,6 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         self.primary_actions.save_clicked.connect(self.save_estimate)
         self.primary_actions.print_clicked.connect(self.print_estimate)
         self.primary_actions.new_clicked.connect(self.clear_form)
-        self.primary_actions.delete_estimate_clicked.connect(self.delete_current_estimate)
-        self.primary_actions.history_clicked.connect(self.show_history)
 
         # Secondary actions bar signals
         self.secondary_actions.delete_row_clicked.connect(self.delete_current_row)
@@ -251,13 +249,17 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         self.return_toggle_button.clicked.connect(self.toggle_return_mode)
         self.silver_bar_toggle_button.clicked.connect(self.toggle_silver_bar_mode)
         self.secondary_actions.last_balance_clicked.connect(self._on_last_balance_clicked)
+        self.secondary_actions.history_clicked.connect(self.show_history)
         self.secondary_actions.silver_bars_clicked.connect(self._on_silver_bars_clicked)
         self.secondary_actions.refresh_rate_clicked.connect(self._on_refresh_rate_clicked)
+        self.secondary_actions.delete_estimate_clicked.connect(self.delete_current_estimate)
 
         # EstimateTableView signals - wire to adapters that convert to QTableWidget-style signals
         self.item_table.cell_edited.connect(self._on_table_cell_edited)
         self.item_table.column_layout_reset_requested.connect(self._reset_columns_layout)
-        # The EstimateTableView handles Ctrl+D and Ctrl+H internally via shortcuts
+        self.item_table.row_deleted.connect(self._on_table_row_delete_requested)
+        self.item_table.history_requested.connect(self.show_history)
+        # Keyboard shortcuts are installed via Primary/Secondary action bars on the widget container
 
     def _on_last_balance_clicked(self):
         """Handle last balance button click."""
@@ -288,6 +290,21 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
             # QTableView uses model indices, mixins expect QTableWidgetItem behavior
             # Call handle_cell_changed which will process the edit
             self.handle_cell_changed(row, column)
+
+    def _on_table_row_delete_requested(self, row: int):
+        """Handle delete-row requests emitted from the table component."""
+        if row < 0 or row >= self.item_table.rowCount():
+            return
+        target_col = self.current_column
+        if target_col is None or target_col < 0 or target_col >= self.item_table.columnCount():
+            target_col = COL_CODE
+        try:
+            self.item_table.setCurrentCell(row, target_col)
+        except Exception:
+            pass
+        self.current_row = row
+        self.current_column = target_col
+        self.delete_current_row()
 
     def connect_signals(self, skip_load_estimate: bool = False) -> None:
         """Override base connect_signals to work with QTableView instead of QTableWidget.
@@ -339,12 +356,14 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
     def _setup_keyboard_shortcuts(self):
         """Set up keyboard shortcuts.
 
-        Note: Ctrl+R, Ctrl+B, Ctrl+D, and Ctrl+H are handled by SecondaryActionsBar.
-        Only setting up shortcuts not handled by components.
+        Note: Keyboard shortcuts are handled by different components:
+        - Ctrl+S, Ctrl+P: Menu bar (NavigationController) with ApplicationShortcut
+        - Ctrl+N: PrimaryActionsBar with WindowShortcut
+        - Ctrl+R, Ctrl+B, Ctrl+D, Ctrl+H: SecondaryActionsBar with WindowShortcut
+
+        This method is kept for future expansion if needed.
         """
-        # Ctrl+N - New estimate
-        self.new_shortcut = QShortcut(QKeySequence("Ctrl+N"), self)
-        self.new_shortcut.activated.connect(self.clear_form)
+        pass
 
     # Helper methods for status and unsaved changes
     def show_status(self, message, timeout=3000, level='info'):
@@ -654,9 +673,21 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         except Exception:
             pass
 
-        # Shortcut handlers
+        # Ctrl shortcuts handling:
+        # - Ctrl+S, Ctrl+P: Handled by menu bar (NavigationController) with ApplicationShortcut
+        # - Ctrl+N: Handled by PrimaryActionsBar with WindowShortcut
+        # - Ctrl+R, Ctrl+B, Ctrl+D, Ctrl+H: Handled by SecondaryActionsBar with WindowShortcut
+        #
+        # We still provide fallback handling here for backward compatibility with tests
+        # that send key events directly to the widget.
         if modifiers == Qt.ControlModifier:
-            if key == Qt.Key_R:
+            if key == Qt.Key_N:
+                # Trigger new via primary actions bar
+                if hasattr(self, 'primary_actions'):
+                    self.primary_actions.new_clicked.emit()
+                    event.accept()
+                    return
+            elif key == Qt.Key_R:
                 self.toggle_return_mode()
                 event.accept()
                 return
@@ -668,6 +699,12 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
                 self.delete_current_row()
                 event.accept()
                 return
+            elif key == Qt.Key_H:
+                # Trigger history via secondary actions bar
+                if hasattr(self, 'secondary_actions'):
+                    self.secondary_actions.history_clicked.emit()
+                    event.accept()
+                    return
 
         # Standard navigation
         if key in [Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right,

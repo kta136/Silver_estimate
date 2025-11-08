@@ -59,18 +59,19 @@ class SecondaryActionsBar(QWidget):
         self._connect_signals()
 
     def _setup_ui(self) -> None:
-        """Set up the user interface with improved spacing and organization."""
+        """Set up the user interface with compact spacing."""
         self.setObjectName("SecondaryActionStrip")
         self.setStyleSheet("""
             QWidget#SecondaryActionStrip {
                 background-color: palette(window);
                 border: 1px solid palette(mid);
-                border-radius: 8px;
+                border-radius: 6px;
             }
             QWidget#SecondaryActionStrip QPushButton {
-                padding: 6px 12px;
-                min-height: 30px;
-                font-size: 9pt;
+                padding: 4px 10px;
+                min-height: 26px;
+                max-height: 26px;
+                font-size: 8pt;
             }
             QWidget#SecondaryActionStrip QPushButton:hover {
                 background-color: palette(light);
@@ -83,8 +84,8 @@ class SecondaryActionsBar(QWidget):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         layout = QHBoxLayout(self)
-        layout.setSpacing(12)  # Increased from 8
-        layout.setContentsMargins(16, 10, 16, 10)  # Increased padding
+        layout.setSpacing(8)
+        layout.setContentsMargins(10, 6, 10, 6)
 
         # Delete Row button
         self.delete_row_button = QPushButton("Delete Row")
@@ -119,7 +120,7 @@ class SecondaryActionsBar(QWidget):
             "Affects calculations and item type"
         )
         self.return_toggle_button.setCheckable(True)
-        self.return_toggle_button.setMaximumWidth(150)
+        self.return_toggle_button.setMaximumWidth(130)
         layout.addWidget(self.return_toggle_button)
 
         # Silver bar mode toggle
@@ -131,7 +132,7 @@ class SecondaryActionsBar(QWidget):
             "Cannot use both Return and Silver Bar modes"
         )
         self.silver_bar_toggle_button.setCheckable(True)
-        self.silver_bar_toggle_button.setMaximumWidth(150)
+        self.silver_bar_toggle_button.setMaximumWidth(130)
         layout.addWidget(self.silver_bar_toggle_button)
 
         # Backward compatibility aliases
@@ -247,7 +248,7 @@ class SecondaryActionsBar(QWidget):
         divider = QFrame()
         divider.setFrameShape(QFrame.VLine)
         divider.setFrameShadow(QFrame.Sunken)
-        divider.setFixedHeight(28)
+        divider.setFixedHeight(22)
         return divider
 
     def _setup_shortcuts(self) -> None:

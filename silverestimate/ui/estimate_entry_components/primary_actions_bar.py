@@ -24,20 +24,21 @@ class PrimaryActionsBar(QWidget):
         self._connect_signals()
 
     def _setup_ui(self) -> None:
-        """Set up the user interface with improved spacing and visual hierarchy."""
+        """Set up the user interface with compact spacing."""
         self.setObjectName("PrimaryActionStrip")
         self.setStyleSheet("""
             QWidget#PrimaryActionStrip {
                 background-color: palette(base);
                 border: 1px solid palette(midlight);
-                border-radius: 8px;
+                border-radius: 6px;
             }
             QWidget#PrimaryActionStrip QPushButton {
                 font-weight: 600;
-                padding: 8px 16px;
-                min-width: 110px;
-                min-height: 32px;
-                font-size: 10pt;
+                padding: 4px 12px;
+                min-width: 90px;
+                min-height: 26px;
+                max-height: 26px;
+                font-size: 9pt;
             }
             QWidget#PrimaryActionStrip QPushButton:hover {
                 background-color: palette(light);
@@ -49,8 +50,8 @@ class PrimaryActionsBar(QWidget):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         layout = QHBoxLayout(self)
-        layout.setSpacing(12)  # Increased from 8
-        layout.setContentsMargins(16, 10, 16, 10)  # Increased padding
+        layout.setSpacing(8)
+        layout.setContentsMargins(10, 6, 10, 6)
 
         # Save button (primary action - will get emphasis later)
         self.save_button = QPushButton("💾 Save")

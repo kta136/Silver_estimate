@@ -155,11 +155,13 @@ class ModeSwitcher(QWidget):
 
     def _toggle_return_mode(self) -> None:
         """Toggle return mode state."""
-        self.return_toggle_button.setChecked(not self.return_toggle_button.isChecked())
+        if self.return_toggle_button.isEnabled():
+            self.return_toggle_button.click()
 
     def _toggle_silver_bar_mode(self) -> None:
         """Toggle silver bar mode state."""
-        self.silver_bar_toggle_button.setChecked(not self.silver_bar_toggle_button.isChecked())
+        if self.silver_bar_toggle_button.isEnabled():
+            self.silver_bar_toggle_button.click()
 
     def _on_return_toggled(self, checked: bool) -> None:
         """Handle return mode toggle.

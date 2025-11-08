@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from PyQt5.QtCore import QAbstractTableModel, QModelIndex, Qt, pyqtSignal
+from PyQt5.QtGui import QColor, QBrush
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.ui.estimate_entry_logic.constants import (
@@ -84,34 +85,45 @@ class EstimateTableModel(QAbstractTableModel):
         if not index.isValid() or not (0 <= index.row() < len(self._rows)):
             return None
 
-        if role not in (Qt.DisplayRole, Qt.EditRole):
-            return None
-
         row_data = self._rows[index.row()]
         col = index.column()
 
-        if col == COL_CODE:
-            return row_data.code
-        elif col == COL_ITEM_NAME:
-            return row_data.name
-        elif col == COL_GROSS:
-            return row_data.gross
-        elif col == COL_POLY:
-            return row_data.poly
-        elif col == COL_NET_WT:
-            return row_data.net_weight
-        elif col == COL_PURITY:
-            return row_data.purity
-        elif col == COL_WAGE_RATE:
-            return row_data.wage_rate
-        elif col == COL_PIECES:
-            return row_data.pieces
-        elif col == COL_WAGE_AMT:
-            return row_data.wage_amount
-        elif col == COL_FINE_WT:
-            return row_data.fine_weight
-        elif col == COL_TYPE:
-            return row_data.category.value if row_data.category else ""
+        if role in (Qt.DisplayRole, Qt.EditRole):
+            if col == COL_CODE:
+                return row_data.code
+            elif col == COL_ITEM_NAME:
+                return row_data.name
+            elif col == COL_GROSS:
+                return row_data.gross
+            elif col == COL_POLY:
+                return row_data.poly
+            elif col == COL_NET_WT:
+                return row_data.net_weight
+            elif col == COL_PURITY:
+                return row_data.purity
+            elif col == COL_WAGE_RATE:
+                return row_data.wage_rate
+            elif col == COL_PIECES:
+                return row_data.pieces
+            elif col == COL_WAGE_AMT:
+                return row_data.wage_amount
+            elif col == COL_FINE_WT:
+                return row_data.fine_weight
+            elif col == COL_TYPE:
+                return row_data.category.value if row_data.category else ""
+            return None
+
+        if role == Qt.BackgroundRole and col == COL_TYPE:
+            category = row_data.category
+            if category is EstimateLineCategory.RETURN:
+                return QBrush(QColor(255, 200, 200))
+            if category is EstimateLineCategory.SILVER_BAR:
+                return QBrush(QColor(200, 255, 200))
+            # Regular rows use default palette (white)
+            return QBrush(QColor(255, 255, 255))
+
+        if role == Qt.TextAlignmentRole and col == COL_TYPE:
+            return Qt.AlignCenter
 
         return None
 

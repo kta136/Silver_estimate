@@ -123,7 +123,6 @@ class EstimateTableView(QTableView):
         self._table_model = EstimateTableModel(self)
         self._item_cache = {}  # Cache for ModelBackedTableItem instances
         self._setup_ui()
-        self._setup_shortcuts()
         self._connect_signals()
 
     def _setup_ui(self) -> None:
@@ -155,20 +154,6 @@ class EstimateTableView(QTableView):
         # Context menu
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_context_menu)
-
-    def _setup_shortcuts(self) -> None:
-        """Set up keyboard shortcuts."""
-        # Delete row shortcut (Ctrl+D)
-        delete_action = QAction("Delete Row", self)
-        delete_action.setShortcut("Ctrl+D")
-        delete_action.triggered.connect(self._delete_current_row)
-        self.addAction(delete_action)
-
-        # History shortcut (Ctrl+H)
-        history_action = QAction("Show History", self)
-        history_action.setShortcut("Ctrl+H")
-        history_action.triggered.connect(self.history_requested.emit)
-        self.addAction(history_action)
 
     def _connect_signals(self) -> None:
         """Connect internal signals."""
@@ -240,9 +225,13 @@ class EstimateTableView(QTableView):
 
         # Delete row action
         delete_action = QAction("Delete Current Row", self)
-        delete_action.setShortcut("Ctrl+D")
         delete_action.triggered.connect(self._delete_current_row)
         menu.addAction(delete_action)
+
+        # Estimate history action
+        history_action = QAction("Open Estimate History", self)
+        history_action.triggered.connect(self.history_requested.emit)
+        menu.addAction(history_action)
 
         menu.exec_(self.viewport().mapToGlobal(position))
 
@@ -375,6 +364,15 @@ class EstimateTableView(QTableView):
         """
         current_index = self.currentIndex()
         return current_index.column() if current_index.isValid() else -1
+
+    # QTableWidget compatibility helpers
+    def currentRow(self) -> int:
+        """QTableWidget-compatible accessor for current row."""
+        return self.get_current_row()
+
+    def currentColumn(self) -> int:
+        """QTableWidget-compatible accessor for current column."""
+        return self.get_current_column()
 
     def get_model(self) -> EstimateTableModel:
         """Get the underlying table model.

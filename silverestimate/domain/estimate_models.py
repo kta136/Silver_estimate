@@ -17,9 +17,15 @@ class EstimateLineCategory(Enum):
     def from_label(cls, value: str | None) -> "EstimateLineCategory":
         """Map UI text to the corresponding category."""
         normalized = (value or "").strip().lower()
-        if normalized == "return":
+        if not normalized:
+            return cls.REGULAR
+
+        # Accept both display labels ("Silver Bar") and stored enum values ("silver_bar")
+        normalized = normalized.replace("_", " ")
+
+        if normalized in {"return", "return items"}:
             return cls.RETURN
-        if normalized == "silver bar":
+        if normalized in {"silver bar", "silver bars"}:
             return cls.SILVER_BAR
         return cls.REGULAR
 

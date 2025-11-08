@@ -762,17 +762,35 @@ class _EstimateTableMixin:
         )
 
         if reply == QMessageBox.Yes:
-            self.item_table.removeRow(current_row)
-            self.calculate_totals()
-            self._status(f"Row {current_row + 1} deleted.", 2000)
-            self._mark_unsaved()
+            # Store the row number before deletion for status message
+            deleted_row_num = current_row + 1
 
+            # Remove the row from the table
+            self.item_table.removeRow(current_row)
+
+            # Recalculate totals and mark as unsaved
+            self.calculate_totals()
+            self._mark_unsaved()
+            self._status(f"Row {deleted_row_num} deleted.", 2000)
+
+            # Handle focus after deletion
             new_row_count = self.item_table.rowCount()
             if new_row_count == 0:
+                # If no rows left, add an empty row
                 self.add_empty_row()
             else:
+                # Focus on the row that took the place of the deleted row
+                # or the last row if we deleted the last row
                 focus_row = min(current_row, new_row_count - 1)
-                QTimer.singleShot(0, lambda: self.focus_on_code_column(focus_row))
+                # Use a safer approach to set focus without editing
+                def safe_focus():
+                    try:
+                        if 0 <= focus_row < self.item_table.rowCount():
+                            self.item_table.setCurrentCell(focus_row, COL_CODE)
+                    except Exception as exc:
+                        self.logger.error(f"Error focusing after row deletion: {exc}", exc_info=True)
+
+                QTimer.singleShot(0, safe_focus)
 
     def move_to_previous_cell(self):
         if self.processing_cell:

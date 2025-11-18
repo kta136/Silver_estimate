@@ -1,5 +1,5 @@
 APP_NAME = "Silver Estimation App"
-APP_VERSION = "1.51"
+APP_VERSION = "2.51"
 APP_TITLE = f"{APP_NAME} v{APP_VERSION}"
 
 # Keep QSettings identifiers consistent to avoid breaking existing settings.

@@ -66,35 +66,19 @@ class NavigationService:
     def show_silver_bars(self) -> None:
         if not self._ensure_db():
             return
-        widget = getattr(self.main_window, 'silver_bar_widget', None)
-        if widget is None:
-            try:
-                from silverestimate.ui.silver_bar_management import SilverBarDialog
-
-                self._logger.info("Creating SilverBar view on demand...")
-                widget = SilverBarDialog(self.db, self.main_window)
-                setattr(self.main_window, 'silver_bar_widget', widget)
-                if self.stack:
-                    self.stack.addWidget(widget)
-            except Exception as exc:
-                self._logger.error("Failed to create SilverBar view: %s", exc, exc_info=True)
-                QMessageBox.critical(
-                    self.main_window,
-                    "Error",
-                    f"Silver Bar Management could not be initialized: {exc}",
-                )
-                return
-        self._switch_widget(widget)
         try:
-            widget.load_available_bars()
-            widget.load_bars_in_selected_list()
-        except Exception:
-            pass
-        self._sync_actions(
-            nav=getattr(self.main_window, 'nav_silver_action', None),
-            menu=getattr(self.main_window, '_menu_silver_action', None),
-            view=getattr(self.main_window, '_view_silver_bars_action', None),
-        )
+            from silverestimate.ui.silver_bar_management import SilverBarDialog
+
+            self._logger.info("Opening Silver Bar Management dialog")
+            dialog = SilverBarDialog(self.db, self.main_window)
+            dialog.exec_()
+        except Exception as exc:
+            self._logger.error("Failed to open Silver Bar Management: %s", exc, exc_info=True)
+            QMessageBox.critical(
+                self.main_window,
+                "Error",
+                f"Silver Bar Management could not be opened: {exc}",
+            )
 
     def show_silver_bar_history(self) -> None:
         if not self._ensure_db():

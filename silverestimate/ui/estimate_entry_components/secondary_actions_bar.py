@@ -67,16 +67,19 @@ class SecondaryActionsBar(QWidget):
                 border: 1px solid palette(mid);
                 border-radius: 6px;
             }
-            QWidget#SecondaryActionStrip QPushButton {
-                padding: 4px 10px;
-                min-height: 26px;
-                max-height: 26px;
+            QWidget#SecondaryActionStrip QPushButton,
+            QWidget#SecondaryActionStrip QToolButton {
+                padding: 2px 8px;
+                min-height: 24px;
+                max-height: 24px;
                 font-size: 8pt;
             }
-            QWidget#SecondaryActionStrip QPushButton:hover {
+            QWidget#SecondaryActionStrip QPushButton:hover,
+            QWidget#SecondaryActionStrip QToolButton:hover {
                 background-color: palette(light);
             }
-            QWidget#SecondaryActionStrip QPushButton:checked {
+            QWidget#SecondaryActionStrip QPushButton:checked,
+            QWidget#SecondaryActionStrip QToolButton:checked {
                 background-color: palette(midlight);
                 border: 2px solid palette(highlight);
             }
@@ -84,17 +87,18 @@ class SecondaryActionsBar(QWidget):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         layout = QHBoxLayout(self)
-        layout.setSpacing(8)
-        layout.setContentsMargins(10, 6, 10, 6)
+        layout.setSpacing(6)
+        layout.setContentsMargins(6, 4, 6, 4)
 
         # Delete Row button
-        self.delete_row_button = QPushButton("Delete Row")
+        self.delete_row_button = QPushButton("Delete")
         self.delete_row_button.setToolTip(
             "Delete the currently selected row\n"
             "Keyboard: Ctrl+D\n"
             "Removes the active row from the estimate\n"
             "Cannot be undone"
         )
+        self.delete_row_button.setMaximumWidth(72)
         layout.addWidget(self.delete_row_button)
         layout.addWidget(self._create_divider())
 
@@ -112,7 +116,7 @@ class SecondaryActionsBar(QWidget):
         layout.addWidget(self.mode_label)
 
         # Return mode toggle
-        self.return_toggle_button = QPushButton("↩ Return Items")
+        self.return_toggle_button = QPushButton("Return")
         self.return_toggle_button.setToolTip(
             "Toggle Return Item entry mode for new rows\n"
             "Keyboard: Ctrl+R\n"
@@ -120,11 +124,11 @@ class SecondaryActionsBar(QWidget):
             "Affects calculations and item type"
         )
         self.return_toggle_button.setCheckable(True)
-        self.return_toggle_button.setMaximumWidth(130)
+        self.return_toggle_button.setMaximumWidth(96)
         layout.addWidget(self.return_toggle_button)
 
         # Silver bar mode toggle
-        self.silver_bar_toggle_button = QPushButton("🥈 Silver Bars")
+        self.silver_bar_toggle_button = QPushButton("Bar Mode")
         self.silver_bar_toggle_button.setToolTip(
             "Toggle Silver Bar entry mode for new rows\n"
             "Keyboard: Ctrl+B\n"
@@ -132,7 +136,7 @@ class SecondaryActionsBar(QWidget):
             "Cannot use both Return and Silver Bar modes"
         )
         self.silver_bar_toggle_button.setCheckable(True)
-        self.silver_bar_toggle_button.setMaximumWidth(130)
+        self.silver_bar_toggle_button.setMaximumWidth(96)
         layout.addWidget(self.silver_bar_toggle_button)
 
         # Backward compatibility aliases
@@ -142,43 +146,50 @@ class SecondaryActionsBar(QWidget):
         layout.addWidget(self._create_divider())
 
         # Last Balance button
-        self.last_balance_button = QPushButton("LB")
+        self.last_balance_button = QToolButton()
+        self.last_balance_button.setText("Balance")
         self.last_balance_button.setToolTip(
             "Add Last Balance to this estimate\n"
             "Adds previous unpaid balance\n"
             "Useful for ongoing customer accounts\n"
             "Will show dialog if multiple balances available"
         )
+        self.last_balance_button.setAutoRaise(True)
         layout.addWidget(self.last_balance_button)
 
         layout.addWidget(self._create_divider())
 
         # Estimate history button
-        self.history_button = QPushButton("Estimate History")
+        self.history_button = QToolButton()
+        self.history_button.setText("History")
         self.history_button.setToolTip(
             "View, load, or print past estimates\n"
             "Keyboard: Ctrl+H\n"
             "Browse all saved estimates\n"
             "Double-click to load an estimate"
         )
+        self.history_button.setAutoRaise(True)
         layout.addWidget(self.history_button)
 
         layout.addWidget(self._create_divider())
 
         # Manage Silver Bars button
-        self.silver_bars_button = QPushButton("Manage Silver Bars")
+        self.silver_bars_button = QToolButton()
+        self.silver_bars_button.setText("Bar List")
         self.silver_bars_button.setToolTip(
             "View and manage silver bar inventory\n"
             "Add, edit, or assign silver bars\n"
             "Track bar usage across estimates\n"
             "Manage bar transfers"
         )
+        self.silver_bars_button.setAutoRaise(True)
         layout.addWidget(self.silver_bars_button)
 
         layout.addWidget(self._create_divider())
 
         # Delete estimate button
-        self.delete_estimate_button = QPushButton("Delete This Estimate")
+        self.delete_estimate_button = QToolButton()
+        self.delete_estimate_button.setText("Delete Est.")
         self.delete_estimate_button.setToolTip(
             "Delete the currently loaded estimate\n"
             "Permanently removes estimate from database\n"
@@ -186,58 +197,71 @@ class SecondaryActionsBar(QWidget):
             "Cannot be undone - use with caution"
         )
         self.delete_estimate_button.setEnabled(False)
+        self.delete_estimate_button.setAutoRaise(True)
         layout.addWidget(self.delete_estimate_button)
 
         layout.addStretch()
 
-        # Live rate display (read-only)
-        self.live_rate_label = QLabel("Live Silver Rate:")
-        self.live_rate_label.setToolTip("Latest rate fetched from DDASilver.com (read-only)")
-        self.live_rate_label.setStyleSheet("font-weight: 600; color: #222;")
-        layout.addWidget(self.live_rate_label)
+        # Compatibility label (not shown) so legacy controllers can still target it
+        self.live_rate_label = QLabel("")
+        self.live_rate_label.setVisible(False)
 
         # Live rate value and meta info in vertical layout
         rate_container = QWidget()
-        rate_layout = QVBoxLayout(rate_container)
-        rate_layout.setContentsMargins(0, 0, 0, 0)
-        rate_layout.setSpacing(2)
+        rate_container.setObjectName("LiveRateCard")
+        rate_container.setStyleSheet("""
+            QWidget#LiveRateCard {
+                background-color: #e6f0ff;
+                border: 1px solid #93c5fd;
+                border-radius: 12px;
+            }
+        """)
+        rate_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+        rate_layout = QHBoxLayout(rate_container)
+        rate_layout.setContentsMargins(8, 4, 6, 4)
+        rate_layout.setSpacing(6)
+
+        left_stack = QVBoxLayout()
+        left_stack.setContentsMargins(0, 0, 0, 0)
+        left_stack.setSpacing(0)
+
+        value_row = QHBoxLayout()
+        value_row.setContentsMargins(0, 0, 0, 0)
+        value_row.setSpacing(4)
 
         self.live_rate_value_label = QLabel("…")
         self.live_rate_value_label.setObjectName("LiveRateValue")
         self.live_rate_value_label.setStyleSheet("""
             QLabel#LiveRateValue {
                 color: #0f172a;
-                background-color: #e6f0ff;
-                border: 1px solid #93c5fd;
-                border-radius: 10px;
-                padding: 2px 8px;
                 font-weight: 700;
                 font-size: 11pt;
             }
         """)
-        self.live_rate_value_label.setMinimumWidth(110)
-        self.live_rate_value_label.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
-        rate_layout.addWidget(self.live_rate_value_label)
+        self.live_rate_value_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        value_row.addWidget(self.live_rate_value_label)
 
-        self.live_rate_meta_label = QLabel("Waiting…")
-        self.live_rate_meta_label.setObjectName("LiveRateMeta")
-        self.live_rate_meta_label.setAccessibleName("Live Rate Status")
-        self.live_rate_meta_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self.live_rate_meta_label.setStyleSheet("color: #475569; font-size: 9pt;")
-        rate_layout.addWidget(self.live_rate_meta_label)
-
-        layout.addWidget(rate_container)
-
-        # Refresh rate button
         self.refresh_rate_button = QToolButton()
         self.refresh_rate_button.setToolTip("Refresh live silver rate and set it here")
-        self.refresh_rate_button.setIcon(
-            self.style().standardIcon(QStyle.SP_BrowserReload)
-        )
+        self.refresh_rate_button.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
         self.refresh_rate_button.setAutoRaise(True)
         self.refresh_rate_button.setCursor(Qt.PointingHandCursor)
         self.refresh_rate_button.setAccessibleName("Refresh Silver Rate")
-        layout.addWidget(self.refresh_rate_button)
+        value_row.addWidget(self.refresh_rate_button)
+
+        left_stack.addLayout(value_row)
+
+        self.live_rate_meta_label = QLabel("")
+        self.live_rate_meta_label.setObjectName("LiveRateMeta")
+        self.live_rate_meta_label.setAccessibleName("Live Rate Status")
+        self.live_rate_meta_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.live_rate_meta_label.setStyleSheet("color: #475569; font-size: 8pt;")
+        left_stack.addWidget(self.live_rate_meta_label)
+
+        rate_layout.addLayout(left_stack)
+
+        layout.addWidget(rate_container)
 
     def _create_divider(self) -> QFrame:
         """Create a vertical divider line.

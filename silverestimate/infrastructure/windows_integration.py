@@ -95,4 +95,31 @@ def destroy_icon_handle(handle: Optional[int], logger=None) -> None:
             logger.debug("Failed to destroy icon handle: %s", exc)
 
 
-__all__ = ["set_app_user_model_id", "apply_taskbar_icon", "destroy_icon_handle"]
+def hide_console_window(logger=None) -> None:
+    """
+    Hide the attached Windows console window if the app was launched via python.exe.
+
+    Many users double-click the script or shortcut, which opens an extra console window
+    titled "python". Hiding it prevents the phantom window while still allowing developers
+    to opt in by setting SILVER_SHOW_CONSOLE=1.
+    """
+    if sys.platform != "win32":
+        return
+
+    try:  # pragma: no cover - Windows API
+        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        if hwnd:
+            ctypes.windll.user32.ShowWindow(hwnd, 0)  # SW_HIDE
+            # Detach so the phantom window does not reappear when stdout/stderr flush.
+            ctypes.windll.kernel32.FreeConsole()
+    except Exception as exc:
+        if logger:
+            logger.debug("Failed to hide console window: %s", exc)
+
+
+__all__ = [
+    "set_app_user_model_id",
+    "apply_taskbar_icon",
+    "destroy_icon_handle",
+    "hide_console_window",
+]

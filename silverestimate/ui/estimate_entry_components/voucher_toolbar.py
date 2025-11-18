@@ -12,6 +12,8 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QPushButton,
     QSizePolicy,
+    QToolButton,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -36,36 +38,30 @@ class VoucherToolbar(QWidget):
             parent: Optional parent widget
         """
         super().__init__(parent)
+        self.setObjectName("VoucherToolbar")
         self._setup_ui()
         self._connect_signals()
 
     def _setup_ui(self) -> None:
-        """Set up a compact single-row interface to maximize table space."""
-        # Main layout - single row, minimal padding
-        main_layout = QHBoxLayout(self)
-        main_layout.setSpacing(10)
-        main_layout.setContentsMargins(8, 4, 8, 4)  # Minimal padding for compactness
-
-        # Mode indicator (first for visibility)
-        self.mode_indicator_label = QLabel("Regular")
-        self.mode_indicator_label.setAlignment(Qt.AlignCenter)
-        self.mode_indicator_label.setMinimumWidth(90)
-        self.mode_indicator_label.setMaximumHeight(28)
-        self.mode_indicator_label.setStyleSheet("""
-            QLabel {
-                font-weight: bold;
-                color: palette(windowText);
-                background-color: #dbeafe;
-                border: 1px solid #3b82f6;
-                border-radius: 4px;
-                padding: 3px 8px;
-                font-size: 9pt;
+        """Set up a compact ribbon with optional detail drawer."""
+        container_layout = QVBoxLayout(self)
+        container_layout.setSpacing(2)
+        container_layout.setContentsMargins(6, 2, 6, 2)
+        self.setStyleSheet(
+            """
+            QWidget#VoucherToolbar {
+                background-color: transparent;
             }
-        """)
-        self.mode_indicator_label.setToolTip(
-            "Entry mode (Ctrl+R: Return | Ctrl+B: Silver Bars)"
+            QLabel#NotePreviewLabel {
+                min-height: 22px;
+            }
+            """
         )
-        main_layout.addWidget(self.mode_indicator_label)
+
+        # Main layout - single row, minimal padding
+        main_layout = QHBoxLayout()
+        main_layout.setSpacing(6)
+        container_layout.addLayout(main_layout)
 
         # Unsaved changes badge (compact)
         self.unsaved_badge = QLabel("")
@@ -96,7 +92,7 @@ class VoucherToolbar(QWidget):
         voucher_label = QLabel("V#:")
         voucher_label.setMaximumHeight(28)
         self.voucher_edit = QLineEdit()
-        self.voucher_edit.setMaximumWidth(120)
+        self.voucher_edit.setMaximumWidth(90)
         self.voucher_edit.setMaximumHeight(28)
         self.voucher_edit.setToolTip("Voucher number (Enter to load)")
         main_layout.addWidget(voucher_label)
@@ -104,7 +100,7 @@ class VoucherToolbar(QWidget):
 
         # Load button (compact)
         self.load_button = QPushButton("Load")
-        self.load_button.setMaximumWidth(60)
+        self.load_button.setMaximumWidth(56)
         self.load_button.setMaximumHeight(28)
         self.load_button.setToolTip("Load estimate (Enter)")
         main_layout.addWidget(self.load_button)
@@ -118,7 +114,7 @@ class VoucherToolbar(QWidget):
         self.date_edit = QDateEdit()
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDate(QDate.currentDate())
-        self.date_edit.setMaximumWidth(110)
+        self.date_edit.setMaximumWidth(90)
         self.date_edit.setMaximumHeight(28)
         self.date_edit.setToolTip("Estimate date")
         main_layout.addWidget(date_label)
@@ -134,28 +130,66 @@ class VoucherToolbar(QWidget):
         self.silver_rate_spin.setRange(0, 1000000)
         self.silver_rate_spin.setDecimals(2)
         self.silver_rate_spin.setValue(0.0)
-        self.silver_rate_spin.setMaximumWidth(100)
+        self.silver_rate_spin.setMaximumWidth(85)
         self.silver_rate_spin.setMaximumHeight(28)
         self.silver_rate_spin.setToolTip("Silver rate (₹/kg)")
         main_layout.addWidget(silver_rate_label)
         main_layout.addWidget(self.silver_rate_spin)
 
-        # Compact divider
-        main_layout.addWidget(self._create_vertical_divider())
+        # Push infrequently used controls to the right edge
+        main_layout.addStretch(1)
 
-        # Note field (takes remaining space)
+        # Detail toggle manages a collapsible drawer for extra voucher metadata
+        self.details_toggle = QToolButton()
+        self.details_toggle.setText("Details")
+        self.details_toggle.setToolTip(
+            "Show or hide rarely edited voucher fields (notes, inline status)."
+        )
+        self.details_toggle.setCheckable(True)
+        self.details_toggle.setChecked(False)
+        self.details_toggle.setArrowType(Qt.RightArrow)
+        self.details_toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.details_toggle.setAutoRaise(True)
+        self.details_toggle.setMaximumHeight(28)
+        main_layout.addWidget(self.details_toggle)
+
+        self.note_preview_label = QLabel("")
+        self.note_preview_label.setObjectName("NotePreviewLabel")
+        self.note_preview_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.note_preview_label.setStyleSheet(
+            "color: palette(mid); font-style: italic; padding-left: 4px;"
+        )
+        self.note_preview_label.setVisible(False)
+        main_layout.addWidget(self.note_preview_label, stretch=1)
+
+        # Drawer content with note + inline status
+        self.details_container = QFrame()
+        self.details_container.setObjectName("VoucherDetailsContainer")
+        self.details_container.setFrameShape(QFrame.NoFrame)
+        self.details_container.setVisible(False)
+
+        details_layout = QHBoxLayout(self.details_container)
+        details_layout.setContentsMargins(6, 0, 0, 0)
+        details_layout.setSpacing(8)
+
         note_label = QLabel("Note:")
         note_label.setMaximumHeight(28)
         self.note_edit = QLineEdit()
         self.note_edit.setPlaceholderText("Customer, instructions...")
         self.note_edit.setMaximumHeight(28)
         self.note_edit.setToolTip("Optional notes")
-        main_layout.addWidget(note_label)
-        main_layout.addWidget(self.note_edit, stretch=1)  # Takes remaining space
+        details_layout.addWidget(note_label)
+        details_layout.addWidget(self.note_edit, stretch=1)
+        container_layout.addWidget(self.details_container)
 
         # Status message label (hidden, for EstimateLogic compatibility)
         self.status_message_label = QLabel("")
         self.status_message_label.setVisible(False)
+        details_layout.addWidget(self.status_message_label)
+
+        # Hidden mode indicator kept for backward compatibility (actual badge moved to totals panel)
+        self.mode_indicator_label = QLabel("Regular")
+        self.mode_indicator_label.setVisible(False)
 
     def _create_vertical_divider(self) -> QFrame:
         """Create a vertical divider line.
@@ -175,6 +209,11 @@ class VoucherToolbar(QWidget):
         self.voucher_edit.textChanged.connect(self.voucher_number_changed.emit)
         self.date_edit.dateChanged.connect(self.date_changed.emit)
         self.note_edit.textChanged.connect(self.note_changed.emit)
+        self.note_edit.textChanged.connect(self._update_note_preview)
+        self.details_toggle.toggled.connect(self._on_details_toggled)
+
+        # Initialize preview state
+        self._update_note_preview(self.note_edit.text())
 
     # Public methods for data access
 
@@ -217,6 +256,7 @@ class VoucherToolbar(QWidget):
             note: The note text to display
         """
         self.note_edit.setText(note)
+        self._update_note_preview(note)
 
     def get_note(self) -> str:
         """Get the current note text.
@@ -225,6 +265,27 @@ class VoucherToolbar(QWidget):
             The note text
         """
         return self.note_edit.text()
+
+    # Internal helpers -------------------------------------------------
+
+    def _on_details_toggled(self, expanded: bool) -> None:
+        """Show or hide the secondary voucher metadata drawer."""
+        self.details_toggle.setArrowType(Qt.DownArrow if expanded else Qt.RightArrow)
+        self.details_container.setVisible(expanded)
+        self._update_note_preview(self.note_edit.text())
+
+    def _update_note_preview(self, text: str) -> None:
+        """Refresh the compact note preview when the drawer is collapsed."""
+        trimmed = (text or "").strip()
+        if not trimmed or self.details_toggle.isChecked():
+            self.note_preview_label.clear()
+            self.note_preview_label.setVisible(False)
+            return
+
+        if len(trimmed) > 48:
+            trimmed = f"{trimmed[:45]}…"
+        self.note_preview_label.setText(trimmed)
+        self.note_preview_label.setVisible(True)
 
     def set_mode_indicator(self, mode_text: str) -> None:
         """Set the mode indicator text with color coding.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from PyQt5 import sip
 from PyQt5.QtCore import QLocale, QTimer, Qt
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QApplication, QMessageBox, QTableWidgetItem
@@ -68,15 +69,27 @@ class _EstimateTableMixin:
                 return
             if not (0 <= row < table.rowCount() and 0 <= column < table.columnCount()):
                 return
-            cell = table.item(row, column)
-            if cell is None:
-                cell = self._ensure_cell_exists(row, column)
-            if not cell or not (cell.flags() & Qt.ItemIsEditable):
+            
+            # Get model directly instead of creating an item
+            model = table.model()
+            if not model or sip.isdeleted(model):
                 return
+            
+            # Create index directly
+            index = model.index(row, column)
+            if not index.isValid():
+                return
+            
+            # Check if editable
+            if not (model.flags(index) & Qt.ItemIsEditable):
+                return
+            
             try:
-                table.editItem(cell)
-            except RuntimeError:
-                # Item was removed before the edit fired; ignore.
+                # Edit directly using the view
+                table.setCurrentIndex(index)
+                table.edit(index)
+            except (RuntimeError, AttributeError):
+                # Item/model was removed before the edit fired; ignore.
                 pass
 
         QTimer.singleShot(0, _do_edit)
@@ -124,6 +137,12 @@ class _EstimateTableMixin:
         if self._enforcing_code_nav:
             return True
         try:
+            if not self._is_table_valid():
+                return True
+            # Allow focus changes that move outside the table (e.g., toolbar buttons)
+            if target_row is None or target_col is None or target_row < 0 or target_col < 0:
+                return True
+
             if 0 <= getattr(self, "current_row", -1) < self.item_table.rowCount():
                 if self._is_code_empty(self.current_row):
                     if target_row != self.current_row or target_col != COL_CODE:
@@ -142,11 +161,6 @@ class _EstimateTableMixin:
 
     def cell_clicked(self, row, column):
         prev_row = getattr(self, "current_row", -1)
-        prev_empty_code = (
-            self._is_code_empty(prev_row)
-            if 0 <= prev_row < self.item_table.rowCount()
-            else False
-        )
         self.current_row = row
         self.current_column = column
         editable_cols = [
@@ -158,10 +172,23 @@ class _EstimateTableMixin:
             COL_PIECES,
         ]
         if column in editable_cols:
-            item = self.item_table.item(row, column)
-            if item and (item.flags() & Qt.ItemIsEditable):
-                if not (prev_empty_code and row != prev_row):
-                    self.item_table.editItem(item)
+            # Get model directly instead of creating an item
+            model = self.item_table.model()
+            if not model or sip.isdeleted(model):
+                return
+            
+            # Create index directly
+            index = model.index(row, column)
+            if not index.isValid():
+                return
+            
+            # Check if editable
+            if model.flags(index) & Qt.ItemIsEditable:
+                try:
+                    self.item_table.setCurrentIndex(index)
+                    self.item_table.edit(index)
+                except (RuntimeError, AttributeError):
+                    pass
 
     def selection_changed(self):
         selected_items = self.item_table.selectedItems()
@@ -171,11 +198,6 @@ class _EstimateTableMixin:
         row = self.item_table.row(item)
         col = self.item_table.column(item)
         prev_row = getattr(self, "current_row", -1)
-        prev_empty_code = (
-            self._is_code_empty(prev_row)
-            if 0 <= prev_row < self.item_table.rowCount()
-            else False
-        )
         self.current_row = row
         self.current_column = col
         editable_cols = [
@@ -189,8 +211,7 @@ class _EstimateTableMixin:
         if col in editable_cols:
             cell = self._ensure_cell_exists(row, col)
             if cell and (cell.flags() & Qt.ItemIsEditable):
-                if not (prev_empty_code and row != prev_row):
-                    self._schedule_cell_edit(row, col)
+                self._schedule_cell_edit(row, col)
 
     def current_cell_changed(self, currentRow, currentCol, previousRow, previousCol):
         try:
@@ -314,55 +335,158 @@ class _EstimateTableMixin:
             COL_PIECES,
         ]
         if (
-            0 <= next_row < self.item_table.rowCount()
+            self._is_table_valid()
+            and 0 <= next_row < self.item_table.rowCount()
             and 0 <= next_col < self.item_table.columnCount()
         ):
-            self.item_table.setCurrentCell(next_row, next_col)
+            self.item_table.blockSignals(True)
+            try:
+                self.item_table.setCurrentCell(next_row, next_col)
+            finally:
+                self.item_table.blockSignals(False)
             if next_col in editable_cols:
                 QTimer.singleShot(
                     10, lambda: self._safe_edit_item(next_row, next_col)
                 )
 
     def focus_on_code_column(self, row):
-        try:
-            if 0 <= row < self.item_table.rowCount():
-                self._ensure_cell_exists(row, COL_CODE)
-                self.item_table.setCurrentCell(row, COL_CODE)
-                target_row, target_col = row, COL_CODE
-                QTimer.singleShot(
-                    10, lambda: self._safe_edit_item(target_row, target_col)
+        def _apply_focus(target_row):
+            try:
+                if not self._is_table_valid():
+                    return
+                if 0 <= target_row < self.item_table.rowCount():
+                    self._ensure_cell_exists(target_row, COL_CODE)
+                    self.item_table.blockSignals(True)
+                    try:
+                        self.item_table.setCurrentCell(target_row, COL_CODE)
+                    finally:
+                        self.item_table.blockSignals(False)
+                    QTimer.singleShot(
+                        10, lambda: self._safe_edit_item(target_row, COL_CODE)
+                    )
+                else:
+                    self.logger.debug(
+                        "Skipping focus_on_code_column for invalid row %s (rowCount=%s)",
+                        target_row,
+                        self.item_table.rowCount() if self._is_table_valid() else "n/a",
+                    )
+            except Exception as exc:
+                self.logger.error(
+                    "Error focusing on code column for row %s: %s",
+                    target_row,
+                    exc,
+                    exc_info=True,
                 )
-            else:
-                self.logger.warning(
-                    "Invalid row %s in focus_on_code_column (rowCount: %s)",
-                    row,
-                    self.item_table.rowCount(),
-                )
-        except Exception as exc:
-            self.logger.error(
-                "Error focusing on code column for row %s: %s", row, exc, exc_info=True
-            )
+
+        # Defer to event loop to avoid acting on stale/deleted tables synchronously
+        timer = getattr(self, "_code_focus_timer", None)
+        if timer is None:
+            timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.timeout.connect(lambda: _apply_focus(getattr(self, "_pending_focus_row", 0)))
+            self._code_focus_timer = timer
+        timer.stop()
+        self._pending_focus_row = row
+        timer.start(0)
 
     def _safe_edit_item(self, row, col):
         try:
+            table = getattr(self, "item_table", None)
+            if not table or sip.isdeleted(table):
+                return
+            if getattr(self, "_loading_estimate", False):
+                return
+            if not table.isVisible():
+                # Qt can segfault if we force-edit a hidden/deleted view
+                return
+            app = QApplication.instance()
+            if app:
+                if app.closingDown():
+                    return
+                if app.activeModalWidget():
+                    # Defer until modal dialogs (e.g., warnings) are closed
+                    return
             if (
                 row < 0
-                or row >= self.item_table.rowCount()
+                or row >= table.rowCount()
                 or col < 0
-                or col >= self.item_table.columnCount()
+                or col >= table.columnCount()
             ):
                 self.logger.warning(
                     "Invalid row/col in _safe_edit_item: %s/%s", row, col
                 )
                 return
 
-            item = self.item_table.item(row, col)
-            if item:
-                self.item_table.editItem(item)
+            # Prefer each view's safe editItem implementation when available.
+            # EstimateTableView overrides editItem with extra guards that prevent
+            # the access violation we are seeing in the crash report.
+            item = None
+            try:
+                item = table.item(row, col) if hasattr(table, "item") else None
+            except Exception:
+                item = None
+
+            if item is not None and hasattr(table, "editItem"):
+                try:
+                    if hasattr(table, "setCurrentCell"):
+                        table.setCurrentCell(row, col)
+                    table.editItem(item)
+                    return
+                except (RuntimeError, AttributeError, SystemError):
+                    # Fall back to index-based editing if the helper fails.
+                    pass
+
+            if not self._is_table_valid():
+                return
+
+            # Get the model directly instead of creating an item
+            model = table.model()
+            if not model or sip.isdeleted(model):
+                return
+
+            # Create index directly
+            index = model.index(row, col)
+            if not index.isValid():
+                return
+
+            # Check if editable
+            if not (model.flags(index) & Qt.ItemIsEditable):
+                return
+
+            # Edit directly using the view
+            table.setCurrentIndex(index)
+            table.edit(index)
         except Exception as exc:
             self.logger.error(
                 "Error in _safe_edit_item(%s, %s): %s", row, col, exc, exc_info=True
             )
+
+    def _is_table_valid(self) -> bool:
+        try:
+            table = getattr(self, "item_table", None)
+            return table is not None and not sip.isdeleted(table)
+        except Exception:
+            return False
+
+    def _should_force_code_focus(self) -> bool:
+        """Return True when the table (or one of its editors) owns focus."""
+        try:
+            table = getattr(self, "item_table", None)
+            if table is None or sip.isdeleted(table):
+                return False
+            app = QApplication.instance()
+            if app is None:
+                return True
+            focus_widget = app.focusWidget()
+            if focus_widget is None:
+                return True
+            if focus_widget is table:
+                return True
+            if hasattr(table, "isAncestorOf") and table.isAncestorOf(focus_widget):
+                return True
+            return False
+        except Exception:
+            return False
 
     def process_item_code(self):
         if self.processing_cell:
@@ -377,7 +501,8 @@ class _EstimateTableMixin:
 
         if not code:
             self._status("Enter item code first", 1500)
-            QTimer.singleShot(0, lambda: self.focus_on_code_column(self.current_row))
+            if self._should_force_code_focus():
+                QTimer.singleShot(0, lambda: self.focus_on_code_column(self.current_row))
             return
 
         presenter = getattr(self, "presenter", None)

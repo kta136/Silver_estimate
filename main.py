@@ -15,8 +15,17 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-# Enable Python-level crash dumps for segmentation faults
-faulthandler.enable()
+# Fix sys.stdout and sys.stderr for GUI mode (Windows without console)
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, 'w')
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, 'w')
+
+# Enable Python-level crash dumps for segmentation faults (only if stderr is available)
+try:
+    faulthandler.enable()
+except Exception:
+    pass  # Silently ignore if faulthandler fails to enable
 
 # Import the custom dialogs and modules
 from silverestimate.controllers.live_rate_controller import LiveRateController

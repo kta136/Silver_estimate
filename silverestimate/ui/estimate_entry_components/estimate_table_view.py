@@ -4,14 +4,24 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt5.QtCore import Qt, pyqtSignal, QModelIndex, QItemSelection
-from PyQt5.QtWidgets import QAction, QHeaderView, QMenu, QTableView, QTableWidgetItem
+from PyQt5.QtCore import Qt, pyqtSignal, QModelIndex, QItemSelection, QTimer
+from PyQt5.QtGui import QColor, QPalette
+from PyQt5.QtWidgets import (
+    QAction,
+    QApplication,
+    QHeaderView,
+    QMenu,
+    QTableView,
+    QTableWidgetItem,
+)
 
 from silverestimate.ui.models.estimate_table_model import EstimateTableModel
 from silverestimate.ui.view_models.estimate_entry_view_model import (
     EstimateEntryRowState,
 )
 
+
+from PyQt5 import sip
 
 class ModelBackedTableItem(QTableWidgetItem):
     """QTableWidgetItem that's backed by a Model/View model.
@@ -34,15 +44,21 @@ class ModelBackedTableItem(QTableWidgetItem):
         self._column = column
         self._user_data = {}  # Store user data separately
 
-        # Load initial data from model
-        index = self._model.index(row, column)
-        data = self._model.data(index, Qt.DisplayRole)
-        if data is not None:
-            super().setText(str(data))
+        # Load initial data from model with safety checks
+        try:
+            if model and not sip.isdeleted(model):
+                index = self._model.index(row, column)
+                if index.isValid():
+                    data = self._model.data(index, Qt.DisplayRole)
+                    if data is not None:
+                        super().setText(str(data))
 
-        # Set flags from model
-        model_flags = self._model.flags(index)
-        self.setFlags(model_flags)
+                    # Set flags from model
+                    model_flags = self._model.flags(index)
+                    self.setFlags(model_flags)
+        except (RuntimeError, AttributeError):
+            # Model might be invalid, set default flags
+            self.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
 
     def setText(self, text: str) -> None:
         """Set the text of this item and update the model.
@@ -51,8 +67,14 @@ class ModelBackedTableItem(QTableWidgetItem):
             text: The new text
         """
         super().setText(text)
-        index = self._model.index(self._row, self._column)
-        self._model.setData(index, text, Qt.EditRole)
+        try:
+            if self._model and not sip.isdeleted(self._model):
+                index = self._model.index(self._row, self._column)
+                if index.isValid():
+                    self._model.setData(index, text, Qt.EditRole)
+        except (RuntimeError, AttributeError):
+            # Model is invalid, just update the item text
+            pass
 
     def text(self) -> str:
         """Get the text from the model.
@@ -60,9 +82,17 @@ class ModelBackedTableItem(QTableWidgetItem):
         Returns:
             The current text
         """
-        index = self._model.index(self._row, self._column)
-        data = self._model.data(index, Qt.DisplayRole)
-        return str(data) if data is not None else ""
+        try:
+            if self._model and not sip.isdeleted(self._model):
+                index = self._model.index(self._row, self._column)
+                if index.isValid():
+                    data = self._model.data(index, Qt.DisplayRole)
+                    return str(data) if data is not None else ""
+        except (RuntimeError, AttributeError):
+            pass
+        
+        # Fallback to cached text if model is unavailable
+        return super().text()
 
     def setData(self, role: int, value) -> None:
         """Set data for this item.
@@ -154,6 +184,42 @@ class EstimateTableView(QTableView):
         # Context menu
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_context_menu)
+
+        # Palette and style adjustments to match the ribbon aesthetics
+        palette = self.palette()
+        palette.setColor(QPalette.Base, QColor("#ffffff"))
+        palette.setColor(QPalette.AlternateBase, QColor("#f4f6f8"))
+        palette.setColor(QPalette.Highlight, QColor("#dbeafe"))
+        palette.setColor(QPalette.HighlightedText, QColor("#111827"))
+        self.setPalette(palette)
+
+        self.setStyleSheet(
+            """
+            QTableView {
+                gridline-color: #e0e0e0;
+                selection-background-color: #e2e8f0;
+                selection-color: #111827;
+            }
+            QTableView::item {
+                padding: 2px 4px;
+            }
+            QTableView::item:hover {
+                background-color: #f3f4f6;
+            }
+            QHeaderView::section {
+                background-color: #f9fafb;
+                color: #1f2937;
+                border: 0px;
+                border-right: 1px solid #e5e7eb;
+                font-weight: 600;
+                padding: 4px 6px;
+            }
+            QTableCornerButton::section {
+                background-color: #f9fafb;
+                border: none;
+            }
+            """
+        )
 
     def _connect_signals(self) -> None:
         """Connect internal signals."""
@@ -469,11 +535,59 @@ class EstimateTableView(QTableView):
         Args:
             item: The QTableWidgetItem to edit (ModelBackedTableItem)
         """
-        if isinstance(item, ModelBackedTableItem):
-            # Get the index from the item and start editing
-            index = self._table_model.index(item._row, item._column)
-            self.setCurrentIndex(index)
-            self.edit(index)
+        if not isinstance(item, ModelBackedTableItem):
+            return
+            
+        host = getattr(self, "host_widget", None)
+        if host is not None and getattr(host, "_loading_estimate", False):
+            return
+
+        # Safety checks to prevent segmentation faults
+        try:
+            # Work with local copies so they remain stable inside the queued call
+            target_row = item._row
+            target_col = item._column
+
+            def _begin_edit() -> None:
+                try:
+                    app = QApplication.instance()
+                    if app and app.closingDown():
+                        return
+                    if app and app.activeModalWidget():
+                        return
+                    if sip.isdeleted(self):
+                        return
+                    if not self.isVisible() or not self.isEnabled():
+                        return
+                    if self.signalsBlocked():
+                        return
+                    window = self.window()
+                    if window and sip.isdeleted(window):
+                        return
+                    if window and not window.isVisible():
+                        return
+                    model = self._table_model
+                    if not model or sip.isdeleted(model):
+                        return
+                    if target_row < 0 or target_row >= model.rowCount():
+                        return
+                    if target_col < 0 or target_col >= model.columnCount():
+                        return
+                    index = model.index(target_row, target_col)
+                    if not index.isValid():
+                        return
+                    if not (model.flags(index) & Qt.ItemIsEditable):
+                        return
+                    self.setCurrentIndex(index)
+                    self.edit(index)
+                except (RuntimeError, AttributeError, SystemError):
+                    pass
+
+            # Delay slightly to allow pending model/view updates to settle
+            QTimer.singleShot(25, _begin_edit)
+        except (RuntimeError, AttributeError, SystemError):
+            # Handle cases where Qt objects have been deleted or in invalid state
+            pass
 
     def item(self, row: int, column: int):
         """Get the item at the specified row and column (QTableWidget compatibility).
@@ -488,15 +602,23 @@ class EstimateTableView(QTableView):
         Returns:
             A ModelBackedTableItem with the cell data, or None if invalid
         """
+        # Safety check: verify model is valid
+        if not self._table_model or sip.isdeleted(self._table_model):
+            return None
+            
         if not (0 <= row < self._table_model.rowCount() and 0 <= column < self._table_model.columnCount()):
             return None
 
         # Use cached item if available, otherwise create new one
         cache_key = (row, column)
         if cache_key not in self._item_cache:
-            self._item_cache[cache_key] = ModelBackedTableItem(self._table_model, row, column)
+            try:
+                self._item_cache[cache_key] = ModelBackedTableItem(self._table_model, row, column)
+            except (RuntimeError, AttributeError):
+                # Model might have been deleted during item creation
+                return None
 
-        return self._item_cache[cache_key]
+        return self._item_cache.get(cache_key)
 
     def setItem(self, row: int, column: int, item) -> None:
         """Set the item at the specified row and column (QTableWidget compatibility).

@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 """Estimate entry widget - refactored to use component architecture."""
+from PyQt5 import sip
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
-    QHeaderView, QFrame, QShortcut, QMessageBox, QSizePolicy
+    QHeaderView, QShortcut, QMessageBox, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QTimer, QSignalBlocker
 from PyQt5.QtGui import QKeySequence
@@ -122,36 +123,48 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
     def _setup_ui(self):
         """Set up the user interface using components."""
         layout = QVBoxLayout(self)
-        layout.setSpacing(5)
+        layout.setSpacing(6)
+        layout.setContentsMargins(0, 0, 0, 0)
 
-        # Toolbar component (voucher metadata form)
+        # Header ribbon: voucher metadata on left, actions on a single row to the right
+        header_container = QWidget()
+        header_container.setObjectName("EstimateHeaderContainer")
+        header_container.setStyleSheet(
+            """
+            QWidget#EstimateHeaderContainer {
+                background-color: palette(base);
+                border: 1px solid palette(midlight);
+                border-radius: 6px;
+            }
+            """
+        )
+        header_layout = QHBoxLayout(header_container)
+        header_layout.setContentsMargins(6, 4, 6, 4)
+        header_layout.setSpacing(8)
+
         self.toolbar = VoucherToolbar()
-        layout.addWidget(self.toolbar)
+        self.toolbar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        header_layout.addWidget(self.toolbar, 5)
 
-        # Separator
-        line = QFrame()
-        line.setFrameShape(QFrame.HLine)
-        line.setFrameShadow(QFrame.Sunken)
-        layout.addWidget(line)
-        layout.addSpacing(8)
+        actions_panel = QWidget()
+        actions_panel_layout = QHBoxLayout(actions_panel)
+        actions_panel_layout.setContentsMargins(0, 0, 0, 0)
+        actions_panel_layout.setSpacing(8)
 
-        # Action bars side-by-side (Primary on left, Secondary on right)
-        actions_layout = QHBoxLayout()
-        actions_layout.setSpacing(10)
-
-        # Primary actions bar (Save, Print, New, Delete, History)
         self.primary_actions = PrimaryActionsBar(shortcut_parent=self)
-        actions_layout.addWidget(self.primary_actions, stretch=1)
+        self.primary_actions.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        actions_panel_layout.addWidget(self.primary_actions, 1)
 
-        # Secondary actions bar (mode switcher, buttons, live rate)
         self.secondary_actions = SecondaryActionsBar(shortcut_parent=self)
-        actions_layout.addWidget(self.secondary_actions, stretch=2)
+        self.secondary_actions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        actions_panel_layout.addWidget(self.secondary_actions, 2)
 
-        layout.addLayout(actions_layout)
-        layout.addSpacing(8)
+        header_layout.addWidget(actions_panel, 7)
+        layout.addWidget(header_container)
 
         # Create table using EstimateTableView component
         self.item_table = EstimateTableView()
+        self.item_table.host_widget = self
         layout.addWidget(self.item_table)
 
         # Totals panel component
@@ -183,8 +196,8 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         self.live_rate_meta_label = self.secondary_actions.live_rate_meta_label
         self.refresh_rate_button = self.secondary_actions.refresh_rate_button
 
-        # Use toolbar's visible mode indicator (secondary_actions has hidden one)
-        self.mode_indicator_label = self.toolbar.mode_indicator_label
+        # Mode indicator now lives alongside totals for better visibility
+        self.mode_indicator_label = self.totals_panel.mode_indicator_label
 
         # Expose totals panel widgets for EstimateLogic
         self.overall_gross_label = self.totals_panel.overall_gross_label
@@ -339,19 +352,8 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
         # Mode toggle buttons already connected in _wire_component_signals()
         # Removed duplicate connections to prevent signal routing conflicts
 
-        if hasattr(self, "history_button"):
-            self.history_button.clicked.connect(self.show_history)
-        if hasattr(self, "silver_bars_button"):
-            self.silver_bars_button.clicked.connect(self.show_silver_bars)
-        if hasattr(self, "refresh_rate_button"):
-            self.refresh_rate_button.clicked.connect(self.refresh_silver_rate)
-
-        if hasattr(self, "delete_estimate_button"):
-            self.delete_estimate_button.clicked.connect(self.delete_current_estimate)
-            try:
-                self.delete_estimate_button.setEnabled(False)
-            except Exception:
-                pass
+        # Action handlers are wired via SecondaryActionsBar component signals in
+        # _wire_component_signals() to avoid duplicate invocations.
 
     def _setup_keyboard_shortcuts(self):
         """Set up keyboard shortcuts.
@@ -417,12 +419,44 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
 
     def force_focus_to_first_cell(self):
         """Force the cursor to the first cell (code column) and start editing."""
+        if not self._has_live_table():
+            return
         if self.item_table.rowCount() > 0:
             self.item_table.setCurrentCell(0, COL_CODE)
             self.current_row = 0
             self.current_column = COL_CODE
-            if self.item_table.item(0, COL_CODE):
-                self.item_table.editItem(self.item_table.item(0, COL_CODE))
+
+            def _edit_first():
+                try:
+                    if not self._has_live_table():
+                        return
+                    if not self.item_table.isVisible():
+                        return
+                    if sip.isdeleted(self.item_table):
+                        return
+
+                    # Get the model and verify it's valid
+                    model = self.item_table.model()
+                    if not model or sip.isdeleted(model):
+                        return
+
+                    # Create index directly instead of getting item
+                    index = model.index(0, COL_CODE)
+                    if not index.isValid():
+                        return
+
+                    # Verify cell is editable
+                    if not (model.flags(index) & Qt.ItemIsEditable):
+                        return
+
+                    # Set current and attempt to edit
+                    self.item_table.setCurrentIndex(index)
+                    self.item_table.edit(index)
+                except Exception:
+                    # Silently fail if editing doesn't work
+                    pass
+
+            QTimer.singleShot(100, _edit_first)
 
     def clear_all_rows(self):
         """Clear all rows from the table."""
@@ -456,6 +490,12 @@ class EstimateEntryWidget(QWidget, EstimateLogic):
                 pass
         except Exception:
             pass
+
+    def _has_live_table(self) -> bool:
+        try:
+            return hasattr(self, "item_table") and self.item_table and not sip.isdeleted(self.item_table)
+        except Exception:
+            return False
 
     def _load_column_widths_setting(self):
         try:

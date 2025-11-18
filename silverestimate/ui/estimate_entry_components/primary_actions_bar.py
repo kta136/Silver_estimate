@@ -34,11 +34,11 @@ class PrimaryActionsBar(QWidget):
             }
             QWidget#PrimaryActionStrip QPushButton {
                 font-weight: 600;
-                padding: 4px 12px;
-                min-width: 90px;
-                min-height: 26px;
-                max-height: 26px;
-                font-size: 9pt;
+                padding: 2px 8px;
+                min-width: 78px;
+                min-height: 24px;
+                max-height: 24px;
+                font-size: 8.5pt;
             }
             QWidget#PrimaryActionStrip QPushButton:hover {
                 background-color: palette(light);
@@ -50,11 +50,11 @@ class PrimaryActionsBar(QWidget):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         layout = QHBoxLayout(self)
-        layout.setSpacing(8)
-        layout.setContentsMargins(10, 6, 10, 6)
+        layout.setSpacing(6)
+        layout.setContentsMargins(8, 4, 8, 4)
 
         # Save button (primary action - will get emphasis later)
-        self.save_button = QPushButton("💾 Save")
+        self.save_button = QPushButton("Save")
         self.save_button.setToolTip(
             "Save the current estimate details (Ctrl+S)\n\n"
             "Saves all items and totals to database\n"
@@ -63,7 +63,7 @@ class PrimaryActionsBar(QWidget):
         layout.addWidget(self.save_button)
 
         # Print button
-        self.print_button = QPushButton("🖨 Print")
+        self.print_button = QPushButton("Print")
         self.print_button.setToolTip(
             "Preview and print the current estimate (Ctrl+P)\n\n"
             "Requires saving the estimate first\n"
@@ -72,7 +72,7 @@ class PrimaryActionsBar(QWidget):
         layout.addWidget(self.print_button)
 
         # New button
-        self.new_button = QPushButton("📄 New")
+        self.new_button = QPushButton("New")
         self.new_button.setToolTip(
             "Clear the form to start a new estimate (Ctrl+N)\n\n"
             "Resets all fields and generates new voucher\n"

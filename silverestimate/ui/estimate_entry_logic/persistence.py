@@ -439,15 +439,18 @@ class _EstimatePersistenceMixin:
             return
 
         if loaded_estimate is None:
-            self.logger.warning("Estimate voucher '%s' not found", voucher_no)
-            QMessageBox.warning(
-                self, "Load Error", f"Estimate voucher '{voucher_no}' not found."
+            self.logger.info(
+                "Estimate voucher '%s' not found; starting new estimate entry", voucher_no
             )
-            self._status(f"Estimate {voucher_no} not found.", 4000)
+            self._status(f"Estimate {voucher_no} not found. Starting new entry.", 4000)
             self._estimate_loaded = False
             try:
                 if hasattr(self, "delete_estimate_button"):
                     self.delete_estimate_button.setEnabled(False)
+            except Exception:
+                pass
+            try:
+                self.focus_on_code_column(max(self.current_row or 0, 0))
             except Exception:
                 pass
             return

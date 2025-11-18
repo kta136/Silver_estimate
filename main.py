@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 import logging
+import os
 import sys
+import faulthandler
 
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QIcon
@@ -13,6 +15,9 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+# Enable Python-level crash dumps for segmentation faults
+faulthandler.enable()
+
 # Import the custom dialogs and modules
 from silverestimate.controllers.live_rate_controller import LiveRateController
 from silverestimate.controllers.navigation_controller import NavigationController
@@ -22,6 +27,7 @@ from silverestimate.infrastructure.paths import get_asset_path
 from silverestimate.infrastructure.windows_integration import (
     apply_taskbar_icon,
     destroy_icon_handle,
+    hide_console_window,
 )
 from silverestimate.services.estimate_repository import DatabaseEstimateRepository
 from silverestimate.services.main_commands import MainCommands
@@ -90,6 +96,15 @@ class MainWindow(QMainWindow):
         self.layout = QVBoxLayout(self.central_widget)
         self.stack = QStackedWidget(self.central_widget)
         self.layout.addWidget(self.stack)
+
+        self._geometry_restored = False
+        try:
+            self._geometry_restored = self.settings_service.restore_geometry(self)
+        except Exception as exc:
+            self.logger.debug("Failed to restore window geometry: %s", exc)
+        if not self._geometry_restored:
+            # Give first-run sessions a sensible default size before maximizing later.
+            self.resize(1280, 800)
 
         self.navigation_service = NavigationService(self, self.stack, logger=self.logger)
         self.commands = MainCommands(self, self.db, logger=self.logger)
@@ -163,11 +178,12 @@ class MainWindow(QMainWindow):
                     if self.logger:
                         self.logger.debug("Failed to deliver pending status message: %s", exc, exc_info=True)
 
-            try:
-                self.setWindowState(self.windowState() | Qt.WindowMaximized)
-            except Exception as exc:
-                if self.logger:
-                    self.logger.debug("Failed to apply maximized window state: %s", exc, exc_info=True)
+            if not self._geometry_restored:
+                try:
+                    self.setWindowState(self.windowState() | Qt.WindowMaximized)
+                except Exception as exc:
+                    if self.logger:
+                        self.logger.debug("Failed to apply maximized window state: %s", exc, exc_info=True)
         except Exception as exc:
             self.logger.critical("Failed to initialize widgets: %s", exc, exc_info=True)
             raise StartupError(f"Failed to initialize application widgets: {exc}") from exc
@@ -322,6 +338,8 @@ class MainWindow(QMainWindow):
 
 def main() -> int:
     """Start the SilverEstimate application and return the exit code."""
+    if os.name == "nt" and os.environ.get("SILVER_SHOW_CONSOLE") != "1":
+        hide_console_window()
     builder = ApplicationBuilder(main_window_factory=MainWindow)
     return builder.run()
 

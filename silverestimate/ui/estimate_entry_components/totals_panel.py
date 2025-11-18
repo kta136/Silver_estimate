@@ -36,9 +36,13 @@ class TotalsPanel(QWidget):
         self.setObjectName("TotalsContainer")
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
+        # Hidden compatibility label so existing logic can continue to update it
+        self.mode_indicator_label = QLabel("Mode: Regular")
+        self.mode_indicator_label.setVisible(False)
+
         main_layout = QHBoxLayout(self)
         main_layout.setSpacing(15)
-        main_layout.setContentsMargins(12, 8, 18, 14)
+        main_layout.setContentsMargins(12, 6, 18, 10)
 
         # Helper function to create a form layout for a breakdown section
         def create_breakdown_form(title, labels_attrs):

@@ -128,26 +128,44 @@ class EstimateTableAdapter:
     # Mode / visuals helpers
     # ------------------------------------------------------------------ #
     def refresh_empty_row_type(self) -> None:
+        """Refresh the type column for empty rows.
+
+        Note: This now checks if code is ACTUALLY empty, not just if the cell
+        exists. This is important because when the user is editing the code
+        column, the item exists but may be empty.
+        """
         table = self._table
         owner = self._owner
+        owner.logger.info(f"EstimateTableAdapter.refresh_empty_row_type() called, rowCount={table.rowCount()}")
         try:
             for row in range(table.rowCount()):
                 code_item = table.item(row, COL_CODE)
-                if code_item and code_item.text().strip():
+                # Get the actual text, handling both None and empty string
+                code_text = code_item.text().strip() if code_item else ""
+                owner.logger.info(f"Row {row}: code='{code_text}' (len={len(code_text)})")
+
+                # Only skip rows that have ACTUAL content (not just a focused empty cell)
+                if code_text:  # Non-empty string
+                    owner.logger.info(f"Row {row} has code '{code_text}', skipping")
                     continue
+
+                owner.logger.info(f"Row {row} is empty (code='{code_text}'), updating type")
                 type_item = table.item(row, COL_TYPE)
+                owner.logger.info(f"Got type_item: {type_item}, type={type(type_item).__name__ if type_item else 'None'}")
                 if type_item is None:
+                    owner.logger.info("type_item is None, creating new QTableWidgetItem")
                     type_item = QTableWidgetItem("")
                     type_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                     table.setItem(row, COL_TYPE, type_item)
                 table.blockSignals(True)
                 try:
+                    owner.logger.info(f"Calling owner._update_row_type_visuals_direct()")
                     owner._update_row_type_visuals_direct(type_item)
                     type_item.setTextAlignment(Qt.AlignCenter)
                 finally:
                     table.blockSignals(False)
-        except Exception:  # pragma: no cover
-            owner.logger.debug("Failed to refresh empty row type", exc_info=True)
+        except Exception as exc:  # pragma: no cover
+            owner.logger.error(f"Failed to refresh empty row type: {exc}", exc_info=True)
 
     def focus_on_empty_row(self, *, update_visuals: bool = False) -> None:
         table = self._table

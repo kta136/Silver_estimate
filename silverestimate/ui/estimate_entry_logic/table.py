@@ -92,15 +92,22 @@ class _EstimateTableMixin:
                 )
                 return
 
+            # Use enum values (model stores "return", "silver_bar", "regular")
+            # not display names ("Return", "Silver Bar", "No")
             if getattr(self, "return_mode", False):
-                type_item.setText("Return")
+                self.logger.debug("Setting row type to 'return'")
+                type_item.setText("return")  # Enum value, not "Return"
                 type_item.setBackground(QColor(255, 200, 200))
             elif getattr(self, "silver_bar_mode", False):
-                type_item.setText("Silver Bar")
+                self.logger.debug("Setting row type to 'silver_bar'")
+                type_item.setText("silver_bar")  # Enum value, not "Silver Bar"
                 type_item.setBackground(QColor(200, 255, 200))
             else:
-                type_item.setText("No")
+                self.logger.debug("Setting row type to 'regular'")
+                type_item.setText("regular")  # Enum value, not "No"
                 type_item.setBackground(QColor(255, 255, 255))
+
+            self.logger.debug(f"After setText: type_item.text() = '{type_item.text()}'")
         except Exception as exc:
             self.logger.error(
                 "Error updating row type visuals: %s", exc, exc_info=True
@@ -541,9 +548,20 @@ class _EstimateTableMixin:
                 self.item_table.blockSignals(False)
 
     def toggle_return_mode(self):
+        # Block signals to prevent recursion when button state changes
+        from PyQt5.QtCore import QSignalBlocker
+
+        self.logger.info("=== toggle_return_mode() called ===")
+        current_return = getattr(self, "return_mode", False)
+        current_silver = getattr(self, "silver_bar_mode", False)
+        self.logger.info(f"Current state: return_mode={current_return}, silver_bar_mode={current_silver}")
+
         if not getattr(self, "return_mode", False) and getattr(self, "silver_bar_mode", False):
+            self.logger.info("Disabling silver bar mode (mutual exclusion)")
             self.silver_bar_mode = False
+            blocker = QSignalBlocker(self.silver_bar_toggle_button)
             self.silver_bar_toggle_button.setChecked(False)
+            blocker.unblock()
             self.silver_bar_toggle_button.setText("🥈 Silver Bars")
             self.silver_bar_toggle_button.setStyleSheet(
                 """
@@ -562,7 +580,9 @@ class _EstimateTableMixin:
             )
 
         self.return_mode = not getattr(self, "return_mode", False)
+        blocker = QSignalBlocker(self.return_toggle_button)
         self.return_toggle_button.setChecked(self.return_mode)
+        blocker.unblock()
 
         if self.return_mode:
             self.return_toggle_button.setText("↩ RETURN ON")
@@ -615,16 +635,24 @@ class _EstimateTableMixin:
                 )
             self._status("Return Items mode deactivated", 2000)
 
+        self.logger.info(f"After toggle: return_mode={self.return_mode}")
+        self.logger.info("Calling _refresh_empty_row_type()")
         self._refresh_empty_row_type()
+        self.logger.info("Calling focus_on_empty_row()")
         self.focus_on_empty_row(update_visuals=True)
         self._update_view_model_modes()
         self._update_mode_tooltip()
         self._mark_unsaved()
 
     def toggle_silver_bar_mode(self):
+        # Block signals to prevent recursion when button state changes
+        from PyQt5.QtCore import QSignalBlocker
+
         if not getattr(self, "silver_bar_mode", False) and getattr(self, "return_mode", False):
             self.return_mode = False
+            blocker = QSignalBlocker(self.return_toggle_button)
             self.return_toggle_button.setChecked(False)
+            blocker.unblock()
             self.return_toggle_button.setText("↩ Return Items")
             self.return_toggle_button.setStyleSheet(
                 """
@@ -643,7 +671,9 @@ class _EstimateTableMixin:
             )
 
         self.silver_bar_mode = not getattr(self, "silver_bar_mode", False)
+        blocker = QSignalBlocker(self.silver_bar_toggle_button)
         self.silver_bar_toggle_button.setChecked(self.silver_bar_mode)
+        blocker.unblock()
 
         if self.silver_bar_mode:
             self.silver_bar_toggle_button.setText("🥈 BAR ON")
@@ -703,7 +733,11 @@ class _EstimateTableMixin:
         self._mark_unsaved()
 
     def _refresh_empty_row_type(self):
-        self._get_table_adapter().refresh_empty_row_type()
+        self.logger.info("_refresh_empty_row_type() called")
+        adapter = self._get_table_adapter()
+        self.logger.info(f"Got adapter: {adapter}")
+        adapter.refresh_empty_row_type()
+        self.logger.info("adapter.refresh_empty_row_type() completed")
 
     def focus_on_empty_row(self, update_visuals=False):
         self._get_table_adapter().focus_on_empty_row(update_visuals=update_visuals)
@@ -728,17 +762,35 @@ class _EstimateTableMixin:
         )
 
         if reply == QMessageBox.Yes:
-            self.item_table.removeRow(current_row)
-            self.calculate_totals()
-            self._status(f"Row {current_row + 1} deleted.", 2000)
-            self._mark_unsaved()
+            # Store the row number before deletion for status message
+            deleted_row_num = current_row + 1
 
+            # Remove the row from the table
+            self.item_table.removeRow(current_row)
+
+            # Recalculate totals and mark as unsaved
+            self.calculate_totals()
+            self._mark_unsaved()
+            self._status(f"Row {deleted_row_num} deleted.", 2000)
+
+            # Handle focus after deletion
             new_row_count = self.item_table.rowCount()
             if new_row_count == 0:
+                # If no rows left, add an empty row
                 self.add_empty_row()
             else:
+                # Focus on the row that took the place of the deleted row
+                # or the last row if we deleted the last row
                 focus_row = min(current_row, new_row_count - 1)
-                QTimer.singleShot(0, lambda: self.focus_on_code_column(focus_row))
+                # Use a safer approach to set focus without editing
+                def safe_focus():
+                    try:
+                        if 0 <= focus_row < self.item_table.rowCount():
+                            self.item_table.setCurrentCell(focus_row, COL_CODE)
+                    except Exception as exc:
+                        self.logger.error(f"Error focusing after row deletion: {exc}", exc_info=True)
+
+                QTimer.singleShot(0, safe_focus)
 
     def move_to_previous_cell(self):
         if self.processing_cell:

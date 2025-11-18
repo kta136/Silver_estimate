@@ -1,11 +1,11 @@
-# Silver Estimation App - v2.0.3
+# Silver Estimation App - v2.5
 
 A desktop application built with PyQt5 and an encrypted SQLite database for managing silver sales estimates - item-wise entries, silver bar inventory, returns, and print-ready outputs.
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![PyQt5](https://img.shields.io/badge/PyQt5-5.15+-green.svg)](https://www.riverbankcomputing.com/software/pyqt/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v2.0.3-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v2.5-orange.svg)](CHANGELOG.md)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Imports: isort](https://img.shields.io/badge/%20imports-isort-%231674b1?style=flat&labelColor=ef8336)](https://pycqa.github.io/isort/)
 [![Type checking: mypy](https://img.shields.io/badge/type%20checking-mypy-blue.svg)](http://mypy-lang.org/)
@@ -202,6 +202,11 @@ c 2023-2025 Silver Estimation App
 ---
 
 ## Version History (highlights)
+
+### v2.5 (2025-11-18)
+- Break down estimate entry workflow for better readability and a denser UI
+- Make action bars/toolbar controls more compact for smaller resolutions
+- Expand keyboard shortcuts and fix Ctrl+D row deletion crash
 
 ### v2.0.3 (2025-10-29)
 - Fix UI layout issues on small screens

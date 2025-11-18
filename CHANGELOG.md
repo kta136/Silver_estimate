@@ -5,6 +5,18 @@ All notable changes to the Silver Estimation App will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5] - 2025-11-18
+
+### Changed
+- Decomposed the estimate entry workflow to improve readability and UI information density
+- Made action bars and toolbar buttons more compact for smaller displays
+- Expanded keyboard shortcut coverage (Ctrl+S/P/N/R/B/D/H) and resolved conflicts
+
+### Fixed
+- Prevented segmentation faults when deleting rows with Ctrl+D
+- Ensured mode toggle buttons keep row types and display names in sync
+- Clarified empty row detection and reduced layout regressions introduced in prior releases
+
 ## [2.0.3] - 2025-10-29
 
 ### Fixed

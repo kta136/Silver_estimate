@@ -4,6 +4,18 @@ import os
 import sys
 import faulthandler
 
+# Proactively hide the console as early as possible on Windows when not explicitly requested.
+if os.name == "nt" and os.environ.get("SILVER_SHOW_CONSOLE") != "1":
+    try:
+        import ctypes
+
+        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        if hwnd:
+            ctypes.windll.user32.ShowWindow(hwnd, 0)  # SW_HIDE
+        ctypes.windll.kernel32.FreeConsole()
+    except Exception:
+        pass
+
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
@@ -20,6 +32,13 @@ if sys.stderr is None:
     sys.stderr = open(os.devnull, 'w')
 if sys.stdout is None:
     sys.stdout = open(os.devnull, 'w')
+
+# Immediately hide the console window on Windows unless explicitly requested.
+if os.name == "nt" and os.environ.get("SILVER_SHOW_CONSOLE") != "1":
+    try:
+        hide_console_window()
+    except Exception:
+        pass
 
 # Enable Python-level crash dumps for segmentation faults (only if stderr is available)
 try:
@@ -309,6 +328,18 @@ class MainWindow(QMainWindow):
         if sys.platform == "win32" and self._taskbar_icon_handle:
             destroy_icon_handle(self._taskbar_icon_handle, logger=self.logger)
             self._taskbar_icon_handle = None
+        try:
+            # Best-effort hide any lingering console window before quitting
+            if sys.platform == "win32" and os.environ.get("SILVER_SHOW_CONSOLE") != "1":
+                hide_console_window()
+        except Exception:
+            pass
+        try:
+            app = QApplication.instance()
+            if app:
+                app.quit()
+        except Exception:
+            pass
         # Optional: Add confirmation dialog if needed
         super().closeEvent(event)
 

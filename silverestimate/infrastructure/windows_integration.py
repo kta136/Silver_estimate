@@ -107,11 +107,27 @@ def hide_console_window(logger=None) -> None:
         return
 
     try:  # pragma: no cover - Windows API
-        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        SW_HIDE = 0
+
+        hwnd = kernel32.GetConsoleWindow()
+        if not hwnd:
+            # Fall back to finding by class name if no console handle is attached.
+            hwnd = user32.FindWindowW("ConsoleWindowClass", None)
+
         if hwnd:
-            ctypes.windll.user32.ShowWindow(hwnd, 0)  # SW_HIDE
-            # Detach so the phantom window does not reappear when stdout/stderr flush.
-            ctypes.windll.kernel32.FreeConsole()
+            try:
+                user32.ShowWindow(hwnd, SW_HIDE)
+                user32.UpdateWindow(hwnd)
+            except Exception:
+                pass
+
+        # Detach so the phantom window does not reappear when stdout/stderr flush.
+        try:
+            kernel32.FreeConsole()
+        except Exception:
+            pass
     except Exception as exc:
         if logger:
             logger.debug("Failed to hide console window: %s", exc)

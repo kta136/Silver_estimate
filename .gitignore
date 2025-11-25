@@ -172,10 +172,6 @@ nul
 .claude/
 .serena/
 
-# Temporary helper files created during tooling exploration
-servers_readme.md
-fs_npm_readme.md
-git_mcp_readme.md
-npm_search*.json
+
 
 # Ignore local database files

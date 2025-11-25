@@ -211,6 +211,18 @@ class ApplicationBuilder:
         app = QApplication.instance() or QApplication(sys.argv)
         context.app = app
 
+        # Apply modern theme
+        try:
+            from qt_material import apply_stylesheet
+            # Using a light theme to complement the recent UI modernization
+            apply_stylesheet(app, theme='light_blue.xml')
+        except ImportError:
+            if context.logger:
+                context.logger.warning("qt-material library not found; skipping theme application.")
+        except Exception as exc:
+            if context.logger:
+                context.logger.warning("Failed to apply application theme: %s", exc)
+
         try:
             icon_path = self._asset_resolver("assets", "icons", "silverestimate.ico")
             if icon_path.exists():

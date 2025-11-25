@@ -177,106 +177,69 @@ class EstimateUI:
         self.layout.addWidget(line_header)
         self.layout.addSpacing(8)
 
-        # Table Actions - Modernized Toolbar
+        # Table Actions
         table_actions_layout = QHBoxLayout()
         table_actions_layout.setSpacing(12)
         table_actions_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Primary Action Frame with Modern Styling
         primary_frame = QFrame()
         primary_frame.setObjectName("PrimaryActionStrip")
         primary_frame.setStyleSheet("""
             QFrame#PrimaryActionStrip {
-                background-color: #263238;
-                border: 1px solid #455a64;
+                background-color: palette(base);
+                border: 1px solid palette(midlight);
                 border-radius: 8px;
             }
             QFrame#PrimaryActionStrip QPushButton {
-                background-color: #009688;
-                color: white;
-                border: none;
-                border-radius: 6px;
                 font-weight: 600;
-                padding: 8px 16px;
+                padding: 6px 14px;
                 min-width: 120px;
-                font-size: 10pt;
-            }
-            QFrame#PrimaryActionStrip QPushButton:hover {
-                background-color: #26a69a;
-            }
-            QFrame#PrimaryActionStrip QPushButton:pressed {
-                background-color: #00796b;
-                padding: 9px 15px 7px 17px;
-            }
-            QFrame#PrimaryActionStrip QPushButton:disabled {
-                background-color: #455a64;
-                color: #78909c;
             }
         """)
         primary_layout = QHBoxLayout(primary_frame)
-        primary_layout.setSpacing(10)
-        primary_layout.setContentsMargins(14, 8, 14, 8)
+        primary_layout.setSpacing(8)
+        primary_layout.setContentsMargins(12, 6, 12, 6)
 
-        self.save_button = QPushButton("💾 Save")
+        self.save_button = QPushButton("Save Estimate")
         self.save_button.setToolTip("Save the current estimate details\nKeyboard: Ctrl+S\nSaves all items and totals to database\nRequired before printing")
         self.save_button.setCursor(Qt.PointingHandCursor)
         primary_layout.addWidget(self.save_button)
 
-        self.print_button = QPushButton("🖨 Print")
+        self.print_button = QPushButton("Print Preview")
         self.print_button.setToolTip("Preview and print the current estimate\nKeyboard: Ctrl+P\nRequires saving the estimate first\nOpens print preview dialog")
         self.print_button.setCursor(Qt.PointingHandCursor)
         primary_layout.addWidget(self.print_button)
 
-        self.clear_button = QPushButton("📄 New")
+        self.clear_button = QPushButton("New Estimate")
         self.clear_button.setToolTip("Clear the form to start a new estimate\nKeyboard: Ctrl+N\nResets all fields and generates new voucher\nWill ask for confirmation if unsaved changes")
         self.clear_button.setCursor(Qt.PointingHandCursor)
         primary_layout.addWidget(self.clear_button)
 
-        # Secondary Action Frame with Modern Styling
         secondary_frame = QFrame()
         secondary_frame.setObjectName("SecondaryActionStrip")
         secondary_frame.setStyleSheet("""
             QFrame#SecondaryActionStrip {
-                background-color: #37474f;
-                border: 1px solid #455a64;
+                background-color: palette(window);
+                border: 1px dashed palette(mid);
                 border-radius: 8px;
             }
             QFrame#SecondaryActionStrip QPushButton {
-                background-color: #455a64;
-                color: #eceff1;
-                border: 1px solid #546e7a;
-                border-radius: 5px;
-                padding: 6px 12px;
-                font-size: 9pt;
-                font-weight: 500;
-            }
-            QFrame#SecondaryActionStrip QPushButton:hover {
-                background-color: #546e7a;
-                border-color: #78909c;
-            }
-            QFrame#SecondaryActionStrip QPushButton:pressed {
-                background-color: #263238;
-                padding: 7px 11px 5px 13px;
-            }
-            QFrame#SecondaryActionStrip QPushButton:disabled {
-                background-color: #263238;
-                color: #546e7a;
-                border-color: #455a64;
+                padding: 4px 10px;
             }
         """)
         secondary_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         secondary_layout = QHBoxLayout(secondary_frame)
-        secondary_layout.setSpacing(10)
-        secondary_layout.setContentsMargins(14, 8, 14, 8)
+        secondary_layout.setSpacing(8)
+        secondary_layout.setContentsMargins(12, 6, 12, 6)
 
         def create_action_divider():
             divider = QFrame()
             divider.setFrameShape(QFrame.VLine)
-            divider.setStyleSheet("background-color: #546e7a; max-width: 1px;")
-            divider.setFixedHeight(24)
+            divider.setFrameShadow(QFrame.Sunken)
+            divider.setFixedHeight(28)
             return divider
 
-        self.delete_row_button = QPushButton("🗑 Delete Row")
+        self.delete_row_button = QPushButton("Delete Row")
         self.delete_row_button.setToolTip("Delete the currently selected row\nKeyboard: Ctrl+D\nRemoves the active row from the estimate\nCannot be undone")
         self.delete_row_button.clicked.connect(widget.delete_current_row)
         secondary_layout.addWidget(self.delete_row_button)
@@ -288,54 +251,34 @@ class EstimateUI:
         self.return_toggle_button.setMaximumWidth(150)
         self.return_toggle_button.setStyleSheet("""
             QPushButton {
-                background-color: #fffbeb;
-                border: 1px solid #fcd34d;
-                border-radius: 5px;
-                color: #92400e;
-                font-weight: 600;
-                padding: 6px 12px;
-                font-size: 9pt;
+                background-color: palette(button);
+                border: 1px solid palette(mid);
+                border-radius: 4px;
+                font-weight: normal;
+                color: palette(buttonText);
+                padding: 4px 8px;
             }
             QPushButton:hover {
-                background-color: #fef3c7;
-                border-color: #f59e0b;
-            }
-            QPushButton:checked {
-                background-color: #f59e0b;
-                border-color: #d97706;
-                color: white;
-            }
-            QPushButton:checked:hover {
-                background-color: #d97706;
+                background-color: palette(light);
             }
         """)
         secondary_layout.addWidget(self.return_toggle_button)
 
-        self.silver_bar_toggle_button = QPushButton("🥈 Silver Bar")
+        self.silver_bar_toggle_button = QPushButton("🥈 Silver Bars")
         self.silver_bar_toggle_button.setToolTip("Toggle Silver Bar entry mode for new rows\nKeyboard: Ctrl+B\nNew rows will be marked as Silver Bar items\nCannot use both Return and Silver Bar modes")
         self.silver_bar_toggle_button.setCheckable(True)
         self.silver_bar_toggle_button.setMaximumWidth(150)
         self.silver_bar_toggle_button.setStyleSheet("""
             QPushButton {
-                background-color: #eff6ff;
-                border: 1px solid #93c5fd;
-                border-radius: 5px;
-                color: #1e40af;
-                font-weight: 600;
-                padding: 6px 12px;
-                font-size: 9pt;
+                background-color: palette(button);
+                border: 1px solid palette(mid);
+                border-radius: 4px;
+                font-weight: normal;
+                color: palette(buttonText);
+                padding: 4px 8px;
             }
             QPushButton:hover {
-                background-color: #dbeafe;
-                border-color: #60a5fa;
-            }
-            QPushButton:checked {
-                background-color: #3b82f6;
-                border-color: #2563eb;
-                color: white;
-            }
-            QPushButton:checked:hover {
-                background-color: #2563eb;
+                background-color: palette(light);
             }
         """)
         secondary_layout.addWidget(self.silver_bar_toggle_button)
@@ -369,7 +312,7 @@ class EstimateUI:
         self.live_rate_label = QLabel("Live Silver Rate:")
         self.live_rate_label.setToolTip("Latest rate fetched from DDASilver.com (read-only)")
         try:
-            self.live_rate_label.setStyleSheet("font-weight: 600; color: #eceff1;")
+            self.live_rate_label.setStyleSheet("font-weight: 600; color: #222;")
         except Exception:
             pass
         self.live_rate_value_label = QLabel("…")
@@ -378,9 +321,9 @@ class EstimateUI:
             # Subtle, readable styling (less distracting)
             self.live_rate_value_label.setStyleSheet("""
                 QLabel#LiveRateValue {
-                  color: #e3f2fd;
-                  background-color: #1a237e;
-                  border: 1px solid #3949ab;
+                  color: #0f172a;
+                  background-color: #e6f0ff;
+                  border: 1px solid #93c5fd;
                   border-radius: 10px;
                   padding: 2px 8px;
                   font-weight: 700;
@@ -396,7 +339,7 @@ class EstimateUI:
         self.live_rate_meta_label.setAccessibleName("Live Rate Status")
         self.live_rate_meta_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         try:
-            self.live_rate_meta_label.setStyleSheet("color: #90a4ae; font-size: 9pt;")
+            self.live_rate_meta_label.setStyleSheet("color: #475569; font-size: 9pt;")
         except Exception:
             pass
         rate_container = QWidget()
@@ -452,9 +395,9 @@ class EstimateUI:
         self.unsaved_badge.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.unsaved_badge.setStyleSheet("""
             QLabel#UnsavedBadge {
-                color: #ffcc80;
-                background-color: #3e2723;
-                border: 1px solid #ff9800;
+                color: #b45309;
+                background-color: #fff7ed;
+                border: 1px solid #f97316;
                 border-radius: 11px;
                 padding: 2px 10px;
                 font-weight: 600;
@@ -506,7 +449,7 @@ class EstimateUI:
         self.status_message_label.setObjectName("InlineStatusLabel")
         self.status_message_label.setWordWrap(False)
         self.status_message_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.status_message_label.setStyleSheet("color: #b0bec5; padding-left: 8px;")
+        self.status_message_label.setStyleSheet("color: #445; padding-left: 8px;")
         
         # Add all widgets to single row with logical grouping and separators
         form_layout.addWidget(voucher_label)
@@ -605,335 +548,155 @@ class EstimateUI:
         self.item_table.setSelectionBehavior(QAbstractItemView.SelectItems)
         self.item_table.setSelectionMode(QTableWidget.SingleSelection)
         self.item_table.setAlternatingRowColors(True)
-
-        # Modern table styling with improved visual hierarchy
         self.item_table.setStyleSheet("""
             QTableWidget {
-                background-color: #232629;
-                alternate-background-color: #2a3035;
-                gridline-color: #455a64;
-                border: 1px solid #455a64;
-                border-radius: 6px;
-                selection-background-color: #009688;
-                selection-color: #ffffff;
-                font-size: 10pt;
-                color: #eceff1;
-            }
-
-            QTableWidget::item {
-                padding: 8px 6px;
-                border-bottom: 1px solid #37474f;
-            }
-
-            QTableWidget::item:hover {
-                background-color: #37474f;
-            }
-
-            QTableWidget::item:selected {
-                background-color: #009688;
-                color: #ffffff;
-                border: 1px solid #4db6ac;
-            }
-
-            QTableWidget::item:focus {
-                background-color: #00796b;
-                border: 2px solid #80cbc4;
-                outline: none;
-            }
-
-            QHeaderView::section {
-                background-color: #37474f;
-                color: #eceff1;
-                padding: 8px 6px;
-                border: none;
-                border-right: 1px solid #455a64;
-                border-bottom: 2px solid #546e7a;
-                font-weight: 600;
-                font-size: 9pt;
-                text-transform: none;
-            }
-
-            QHeaderView::section:hover {
-                background-color: #455a64;
-            }
-
-            QHeaderView::section:first {
-                border-top-left-radius: 6px;
-            }
-
-            QHeaderView::section:last {
-                border-top-right-radius: 6px;
-                border-right: none;
-            }
-
-            QTableWidget QTableCornerButton::section {
-                background-color: #37474f;
-                border: none;
-                border-right: 1px solid #455a64;
-                border-bottom: 2px solid #546e7a;
-            }
-
-            QTableWidget::item:alternate {
-                background-color: #2a3035;
-            }
-
-            QTableWidget::item:alternate:hover {
-                background-color: #37474f;
-            }
-
-            QScrollBar:vertical {
-                background: #232629;
-                width: 12px;
-                border-radius: 6px;
-            }
-
-            QScrollBar::handle:vertical {
-                background: #546e7a;
-                border-radius: 6px;
-                min-height: 30px;
-            }
-
-            QScrollBar::handle:vertical:hover {
-                background: #78909c;
-            }
-
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-
-            QScrollBar:horizontal {
-                background: #232629;
-                height: 12px;
-                border-radius: 6px;
-            }
-
-            QScrollBar::handle:horizontal {
-                background: #546e7a;
-                border-radius: 6px;
-                min-width: 30px;
-            }
-
-            QScrollBar::handle:horizontal:hover {
-                background: #78909c;
-            }
-
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-                width: 0px;
+                background-color: palette(base);
+                alternate-background-color: palette(alternate-base);
+                gridline-color: palette(mid);
             }
         """)
 
     def _setup_totals(self):
-        """Set up the totals section with modern card-based layout."""
+        """Set up the totals section with Breakdown | [Stretch] | Final layout."""
 
         totals_container = QWidget()
         totals_container.setObjectName("TotalsContainer")
         totals_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        # Add background styling to the entire totals container
-        totals_container.setStyleSheet("""
-            QWidget#TotalsContainer {
-                background-color: #263238;
-                border-top: 2px solid #455a64;
-                border-radius: 0px;
-                padding: 12px;
-            }
-        """)
 
         main_totals_layout = QHBoxLayout(totals_container)
-        main_totals_layout.setSpacing(12)
-        main_totals_layout.setContentsMargins(8, 12, 8, 12)
+        main_totals_layout.setSpacing(15) # Spacing between sections
+        main_totals_layout.setContentsMargins(12, 8, 18, 14)
 
-        # Helper function to create a styled card for breakdown sections
-        def create_breakdown_card(title, labels_attrs, bg_color="#37474f", title_color="#eceff1"):
-            card = QFrame()
-            card.setObjectName(f"{title}Card")
-            card.setStyleSheet(f"""
-                QFrame#{title}Card {{
-                    background-color: {bg_color};
-                    border: 1px solid #455a64;
-                    border-radius: 8px;
-                    padding: 8px 12px;
-                }}
-            """)
-            card.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
-
-            card_layout = QVBoxLayout(card)
-            card_layout.setSpacing(6)
-            card_layout.setContentsMargins(8, 8, 8, 8)
-
-            # Title with styling
-            title_label = QLabel(f"<b>{title}</b>")
-            title_label.setStyleSheet(f"color: {title_color}; font-size: 9pt; padding-bottom: 4px;")
-            title_label.setAlignment(Qt.AlignCenter)
-            card_layout.addWidget(title_label)
-
-            # Add a subtle separator line
-            separator = QFrame()
-            separator.setFrameShape(QFrame.HLine)
-            separator.setStyleSheet("background-color: #546e7a; max-height: 1px;")
-            card_layout.addWidget(separator)
-
-            # Add labels in a form layout
+        # Helper function to create a form layout for a breakdown section
+        def create_breakdown_form(title, labels_attrs):
             form = QFormLayout()
-            form.setSpacing(4)
-            form.setContentsMargins(4, 4, 4, 4)
-            
+            form.setSpacing(5)
+            form.addRow(QLabel(f"<b><u>{title}</u></b>"))
             for label_text, attr_name, default_value in labels_attrs:
-                row_label = QLabel(label_text)
-                row_label.setStyleSheet("color: #b0bec5; font-size: 9pt;")
-                
-                value_label = QLabel(default_value)
-                value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                value_label.setStyleSheet("color: #ffffff; font-weight: 600; font-size: 10pt;")
-                setattr(self, attr_name, value_label)
-                
-                form.addRow(row_label, value_label)
-            
-            card_layout.addLayout(form)
-            return card
+                label = QLabel(default_value)
+                label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                setattr(self, attr_name, label)
+                form.addRow(label_text, label)
+            # REMOVED Spacer row and QVBoxLayout wrapper
+            return form # Return the QFormLayout directly
 
-        # Overall Totals Card (gray theme)
+        # Overall Totals (leftmost): Total Gross and Total Poly
         overall_labels = [
             ("Total Gross Wt:", 'overall_gross_label', "0.0"),
             ("Total Poly Wt:", 'overall_poly_label', "0.0"),
         ]
-        overall_card = create_breakdown_card("Totals", overall_labels, "#37474f", "#eceff1")
-        main_totals_layout.addWidget(overall_card)
+        main_totals_layout.addLayout(create_breakdown_form("Totals", overall_labels))
 
-        # Regular Items Card (green theme - dark)
+        # Vertical Separator before Regular
+        sep0 = QFrame()
+        sep0.setFrameShape(QFrame.VLine)
+        sep0.setFrameShadow(QFrame.Sunken)
+        main_totals_layout.addWidget(sep0)
+
+        # Regular Items
         regular_labels = [
             ("Gross Wt:", 'total_gross_label', "0.0"),
             ("Net Wt:", 'total_net_label', "0.0"),
             ("Fine Wt:", 'total_fine_label', "0.0"),
         ]
-        regular_card = create_breakdown_card("Regular", regular_labels, "#1b5e20", "#a5d6a7")
-        main_totals_layout.addWidget(regular_card)
+        main_totals_layout.addLayout(create_breakdown_form("Regular", regular_labels))
 
-        # Return Items Card (amber theme - dark)
+        # Vertical Separator 1
+        sep1 = QFrame()
+        sep1.setFrameShape(QFrame.VLine)
+        sep1.setFrameShadow(QFrame.Sunken)
+        main_totals_layout.addWidget(sep1)
+
+        # Return Items
         return_labels = [
             ("Gross Wt:", 'return_gross_label', "0.0"),
             ("Net Wt:", 'return_net_label', "0.0"),
             ("Fine Wt:", 'return_fine_label', "0.0"),
         ]
-        return_card = create_breakdown_card("Return", return_labels, "#3e2723", "#ffcc80") # Dark Brown/Amber
-        main_totals_layout.addWidget(return_card)
+        main_totals_layout.addLayout(create_breakdown_form("Return", return_labels))
 
-        # Silver Bars Card (blue theme - dark)
+        # Vertical Separator 2
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.VLine)
+        sep2.setFrameShadow(QFrame.Sunken)
+        main_totals_layout.addWidget(sep2)
+
+        # Silver Bars
         bar_labels = [
             ("Gross Wt:", 'bar_gross_label', "0.0"),
             ("Net Wt:", 'bar_net_label', "0.0"),
             ("Fine Wt:", 'bar_fine_label', "0.0"),
         ]
-        bar_card = create_breakdown_card("Silver Bar", bar_labels, "#0d47a1", "#90caf9")
-        main_totals_layout.addWidget(bar_card)
+        main_totals_layout.addLayout(create_breakdown_form("Silver Bar", bar_labels))
 
         # Add stretch to push Final Calculation to the right
         main_totals_layout.addStretch(1)
 
-        # Final Calculation Card - PROMINENT DESIGN
-        final_card = QFrame()
-        final_card.setObjectName("FinalCalculationCard")
-        final_card.setStyleSheet("""
-            QFrame#FinalCalculationCard {
-                background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #263238, stop:1 #37474f);
-                border: 2px solid #009688;
-                border-radius: 10px;
-                padding: 12px 16px;
-            }
-        """)
-        final_card.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        # Vertical Separator 3 (Before Final Calc)
+        sep3 = QFrame()
+        sep3.setFrameShape(QFrame.VLine)
+        sep3.setFrameShadow(QFrame.Sunken)
+        main_totals_layout.addWidget(sep3)
 
-        final_layout = QVBoxLayout(final_card)
-        final_layout.setSpacing(8)
-        final_layout.setContentsMargins(12, 10, 12, 10)
+        # Final Calculation Section (using QFormLayout directly)
+        final_calc_form = QFormLayout()
+        final_calc_form.setSpacing(8)
+        final_calc_form.setRowWrapPolicy(QFormLayout.DontWrapRows)
+        final_calc_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        final_title_label = QLabel("Final Calculation")
+        # Increase title font size
+        final_title_font = final_title_label.font()
+        final_title_font.setPointSize(final_title_font.pointSize() + 1)
+        final_title_font.setBold(True)
+        final_title_font.setUnderline(True)
+        final_title_label.setFont(final_title_font)
+        final_calc_form.addRow(final_title_label) # Title for the section
 
-        # Final Calculation Title
-        final_title = QLabel("Final Calculation")
-        final_title.setAlignment(Qt.AlignCenter)
-        final_title.setStyleSheet("""
-            color: #80cbc4;
-            font-weight: bold;
-            font-size: 10pt;
-            padding-bottom: 6px;
-        """)
-        final_layout.addWidget(final_title)
-
-        # Separator
-        sep_line = QFrame()
-        sep_line.setFrameShape(QFrame.HLine)
-        sep_line.setStyleSheet("background-color: #009688; max-height: 2px;")
-        final_layout.addWidget(sep_line)
-
-        # Net Fine Wt
-        net_fine_container = QHBoxLayout()
-        net_fine_label_text = QLabel("Net Fine Wt:")
-        net_fine_label_text.setStyleSheet("color: #80cbc4; font-weight: 600; font-size: 10pt;")
+        # Net Fine
         self.net_fine_label = QLabel("0.0")
+        self.net_fine_label.setStyleSheet("font-weight: bold;")
         self.net_fine_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.net_fine_label.setStyleSheet("color: #ffffff; font-weight: bold; font-size: 11pt;")
-        self.net_fine_label.setMinimumWidth(80)
-        net_fine_container.addWidget(net_fine_label_text)
-        net_fine_container.addStretch()
-        net_fine_container.addWidget(self.net_fine_label)
-        final_layout.addLayout(net_fine_container)
+        self.net_fine_label.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
+        self.net_fine_label.setMinimumWidth(100)
+        net_fine_header = QLabel("Net Fine Wt:")
+        # Increase font size
+        net_fine_font = self.net_fine_label.font(); net_fine_font.setPointSize(net_fine_font.pointSize() + 1); self.net_fine_label.setFont(net_fine_font)
+        net_fine_header_font = net_fine_header.font(); net_fine_header_font.setPointSize(net_fine_header_font.pointSize() + 1); net_fine_header_font.setBold(True); net_fine_header.setFont(net_fine_header_font)
+        final_calc_form.addRow(net_fine_header, self.net_fine_label)
 
         # Net Wage
-        net_wage_container = QHBoxLayout()
-        net_wage_label_text = QLabel("Net Wage:")
-        net_wage_label_text.setStyleSheet("color: #80cbc4; font-weight: 600; font-size: 10pt;")
         self.net_wage_label = QLabel("0")
+        self.net_wage_label.setStyleSheet("font-weight: bold;")
         self.net_wage_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.net_wage_label.setStyleSheet("color: #ffffff; font-weight: bold; font-size: 11pt;")
-        self.net_wage_label.setMinimumWidth(80)
-        net_wage_container.addWidget(net_wage_label_text)
-        net_wage_container.addStretch()
-        net_wage_container.addWidget(self.net_wage_label)
-        final_layout.addLayout(net_wage_container)
+        self.net_wage_label.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
+        self.net_wage_label.setMinimumWidth(100)
+        net_wage_header = QLabel("Net Wage:")
+        # Increase font size
+        net_wage_font = self.net_wage_label.font(); net_wage_font.setPointSize(net_wage_font.pointSize() + 1); self.net_wage_label.setFont(net_wage_font)
+        net_wage_header_font = net_wage_header.font(); net_wage_header_font.setPointSize(net_wage_header_font.pointSize() + 1); net_wage_header_font.setBold(True); net_wage_header.setFont(net_wage_header_font)
+        final_calc_form.addRow(net_wage_header, self.net_wage_label)
 
         # Separator before Grand Total
-        grand_sep = QFrame()
-        grand_sep.setFrameShape(QFrame.HLine)
-        grand_sep.setStyleSheet("background-color: #009688; max-height: 2px;")
-        final_layout.addWidget(grand_sep)
+        line_before_grand = QFrame()
+        line_before_grand.setFrameShape(QFrame.HLine)
+        line_before_grand.setFrameShadow(QFrame.Sunken)
+        final_calc_form.addRow(line_before_grand)
 
-        # GRAND TOTAL - Extra Prominent
-        grand_total_container = QWidget()
-        grand_total_container.setStyleSheet("""
-            background-color: #00695c;
-            border-radius: 6px;
-            padding: 8px 12px;
-        """)
-        grand_layout = QHBoxLayout(grand_total_container)
-        grand_layout.setContentsMargins(8, 6, 8, 6)
-        grand_layout.setSpacing(0)
-
-        grand_total_label_text = QLabel("GRAND TOTAL:")
-        grand_total_label_text.setStyleSheet("""
-            color: #e0f2f1;
-            font-weight: bold;
-            font-size: 12pt;
-            letter-spacing: 0.5px;
-        """)
-
+        # Grand Total
         self.grand_total_label = QLabel("0")
+        self.grand_total_label.setStyleSheet("font-weight: bold;")
         self.grand_total_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.grand_total_label.setStyleSheet("""
-            color: #ffffff;
-            font-weight: bold;
-            font-size: 16pt;
-            padding-left: 12px;
-        """)
-        self.grand_total_label.setMinimumWidth(120)
+        self.grand_total_label.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
+        self.grand_total_label.setMinimumWidth(140)
+        grand_total_header = QLabel("Grand Total:")
+        gth_font = grand_total_header.font(); gth_font.setBold(True); grand_total_header.setFont(gth_font)
+        final_calc_form.addRow(grand_total_header, self.grand_total_label)
 
-        grand_layout.addWidget(grand_total_label_text)
-        grand_layout.addStretch()
-        grand_layout.addWidget(self.grand_total_label)
+        # REMOVED QVBoxLayout wrapper for Final Calc
+        # Add Final Calc form layout directly to the main horizontal layout
+        main_totals_layout.addLayout(final_calc_form)
 
-        final_layout.addWidget(grand_total_container)
-
-        main_totals_layout.addWidget(final_card)
-
-        # Add the main container to the widget's layout
+        # Add the main horizontal layout to the widget's main vertical layout
         self.layout.addWidget(totals_container)
 
         # Tab order: header fields -> table

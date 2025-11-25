@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import sys
 import traceback
 from dataclasses import dataclass
@@ -23,10 +22,7 @@ from silverestimate.infrastructure.logger import (
     setup_logging,
 )
 from silverestimate.infrastructure.paths import get_asset_path
-from silverestimate.infrastructure.windows_integration import (
-    hide_console_window,
-    set_app_user_model_id,
-)
+from silverestimate.infrastructure.windows_integration import set_app_user_model_id
 
 if TYPE_CHECKING:
     from PyQt5.QtWidgets import QMainWindow
@@ -108,11 +104,6 @@ class ApplicationBuilder:
         """Build and execute the application, returning an exit code."""
         context = ApplicationContext()
         try:
-            if sys.platform == "win32" and os.environ.get("SILVER_SHOW_CONSOLE") != "1":
-                try:
-                    hide_console_window()
-                except Exception:
-                    pass
             return self._run(context)
         except StartupError as exc:
             logger = context.logger or logging.getLogger(__name__)
@@ -136,12 +127,6 @@ class ApplicationBuilder:
         """Internal orchestration for startup."""
         self._configure_logging(context)
         self._configure_qt(context)
-        # Best-effort hide any lingering console right after Qt init (Windows).
-        if sys.platform == "win32" and os.environ.get("SILVER_SHOW_CONSOLE") != "1":
-            try:
-                hide_console_window(context.logger)
-            except Exception:
-                pass
         db_manager, early_exit = self._authenticate(context)
         if early_exit is not None:
             return early_exit
@@ -192,12 +177,6 @@ class ApplicationBuilder:
         if context.logger:
             context.logger.debug("Qt message handler installed")
 
-        # Ensure the app terminates cleanly when the last window closes.
-        try:
-            QApplication.setQuitOnLastWindowClosed(True)
-        except Exception:
-            pass
-
         for attr in self._qt_attributes:
             try:
                 QApplication.setAttribute(attr)
@@ -210,18 +189,6 @@ class ApplicationBuilder:
 
         app = QApplication.instance() or QApplication(sys.argv)
         context.app = app
-
-        # Apply modern theme
-        try:
-            from qt_material import apply_stylesheet
-            # Using a dark theme for better contrast and professional look
-            apply_stylesheet(app, theme='dark_teal.xml')
-        except ImportError:
-            if context.logger:
-                context.logger.warning("qt-material library not found; skipping theme application.")
-        except Exception as exc:
-            if context.logger:
-                context.logger.warning("Failed to apply application theme: %s", exc)
 
         try:
             icon_path = self._asset_resolver("assets", "icons", "silverestimate.ico")
@@ -291,12 +258,8 @@ class ApplicationBuilder:
                 "Unhandled exception during application startup", exc_info=True
             )
         else:
-            try:
-                print(f"CRITICAL ERROR: {exc}")
-                print(traceback.format_exc())
-            except Exception:
-                # Only best-effort when console handles are unavailable (e.g., hidden on Windows).
-                pass
+            print(f"CRITICAL ERROR: {exc}")
+            print(traceback.format_exc())
 
         message = (
             "The application encountered a fatal error and cannot continue.\n\n"

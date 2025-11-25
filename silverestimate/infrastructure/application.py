@@ -214,8 +214,8 @@ class ApplicationBuilder:
         # Apply modern theme
         try:
             from qt_material import apply_stylesheet
-            # Using a light theme to complement the recent UI modernization
-            apply_stylesheet(app, theme='light_blue.xml')
+            # Using a dark theme for better contrast and professional look
+            apply_stylesheet(app, theme='dark_teal.xml')
         except ImportError:
             if context.logger:
                 context.logger.warning("qt-material library not found; skipping theme application.")

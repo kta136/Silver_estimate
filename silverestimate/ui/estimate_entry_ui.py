@@ -187,14 +187,12 @@ class EstimateUI:
         primary_frame.setObjectName("PrimaryActionStrip")
         primary_frame.setStyleSheet("""
             QFrame#PrimaryActionStrip {
-                background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #f8fafc, stop:1 #f1f5f9);
-                border: 1px solid #cbd5e1;
+                background-color: #263238;
+                border: 1px solid #455a64;
                 border-radius: 8px;
             }
             QFrame#PrimaryActionStrip QPushButton {
-                background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #3b82f6, stop:1 #2563eb);
+                background-color: #009688;
                 color: white;
                 border: none;
                 border-radius: 6px;
@@ -204,16 +202,15 @@ class EstimateUI:
                 font-size: 10pt;
             }
             QFrame#PrimaryActionStrip QPushButton:hover {
-                background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #2563eb, stop:1 #1d4ed8);
+                background-color: #26a69a;
             }
             QFrame#PrimaryActionStrip QPushButton:pressed {
-                background-color: #1e40af;
+                background-color: #00796b;
                 padding: 9px 15px 7px 17px;
             }
             QFrame#PrimaryActionStrip QPushButton:disabled {
-                background-color: #cbd5e1;
-                color: #64748b;
+                background-color: #455a64;
+                color: #78909c;
             }
         """)
         primary_layout = QHBoxLayout(primary_frame)
@@ -240,31 +237,31 @@ class EstimateUI:
         secondary_frame.setObjectName("SecondaryActionStrip")
         secondary_frame.setStyleSheet("""
             QFrame#SecondaryActionStrip {
-                background-color: #ffffff;
-                border: 1px solid #e2e8f0;
+                background-color: #37474f;
+                border: 1px solid #455a64;
                 border-radius: 8px;
             }
             QFrame#SecondaryActionStrip QPushButton {
-                background-color: #f8fafc;
-                color: #334155;
-                border: 1px solid #cbd5e1;
+                background-color: #455a64;
+                color: #eceff1;
+                border: 1px solid #546e7a;
                 border-radius: 5px;
                 padding: 6px 12px;
                 font-size: 9pt;
                 font-weight: 500;
             }
             QFrame#SecondaryActionStrip QPushButton:hover {
-                background-color: #e2e8f0;
-                border-color: #94a3b8;
+                background-color: #546e7a;
+                border-color: #78909c;
             }
             QFrame#SecondaryActionStrip QPushButton:pressed {
-                background-color: #cbd5e1;
+                background-color: #263238;
                 padding: 7px 11px 5px 13px;
             }
             QFrame#SecondaryActionStrip QPushButton:disabled {
-                background-color: #f1f5f9;
-                color: #94a3b8;
-                border-color: #e2e8f0;
+                background-color: #263238;
+                color: #546e7a;
+                border-color: #455a64;
             }
         """)
         secondary_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -275,7 +272,7 @@ class EstimateUI:
         def create_action_divider():
             divider = QFrame()
             divider.setFrameShape(QFrame.VLine)
-            divider.setStyleSheet("background-color: #cbd5e1; max-width: 1px;")
+            divider.setStyleSheet("background-color: #546e7a; max-width: 1px;")
             divider.setFixedHeight(24)
             return divider
 
@@ -372,7 +369,7 @@ class EstimateUI:
         self.live_rate_label = QLabel("Live Silver Rate:")
         self.live_rate_label.setToolTip("Latest rate fetched from DDASilver.com (read-only)")
         try:
-            self.live_rate_label.setStyleSheet("font-weight: 600; color: #222;")
+            self.live_rate_label.setStyleSheet("font-weight: 600; color: #eceff1;")
         except Exception:
             pass
         self.live_rate_value_label = QLabel("…")
@@ -381,9 +378,9 @@ class EstimateUI:
             # Subtle, readable styling (less distracting)
             self.live_rate_value_label.setStyleSheet("""
                 QLabel#LiveRateValue {
-                  color: #0f172a;
-                  background-color: #e6f0ff;
-                  border: 1px solid #93c5fd;
+                  color: #e3f2fd;
+                  background-color: #1a237e;
+                  border: 1px solid #3949ab;
                   border-radius: 10px;
                   padding: 2px 8px;
                   font-weight: 700;
@@ -399,7 +396,7 @@ class EstimateUI:
         self.live_rate_meta_label.setAccessibleName("Live Rate Status")
         self.live_rate_meta_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         try:
-            self.live_rate_meta_label.setStyleSheet("color: #475569; font-size: 9pt;")
+            self.live_rate_meta_label.setStyleSheet("color: #90a4ae; font-size: 9pt;")
         except Exception:
             pass
         rate_container = QWidget()
@@ -455,9 +452,9 @@ class EstimateUI:
         self.unsaved_badge.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.unsaved_badge.setStyleSheet("""
             QLabel#UnsavedBadge {
-                color: #b45309;
-                background-color: #fff7ed;
-                border: 1px solid #f97316;
+                color: #ffcc80;
+                background-color: #3e2723;
+                border: 1px solid #ff9800;
                 border-radius: 11px;
                 padding: 2px 10px;
                 font-weight: 600;
@@ -509,7 +506,7 @@ class EstimateUI:
         self.status_message_label.setObjectName("InlineStatusLabel")
         self.status_message_label.setWordWrap(False)
         self.status_message_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.status_message_label.setStyleSheet("color: #445; padding-left: 8px;")
+        self.status_message_label.setStyleSheet("color: #b0bec5; padding-left: 8px;")
         
         # Add all widgets to single row with logical grouping and separators
         form_layout.addWidget(voucher_label)
@@ -612,52 +609,52 @@ class EstimateUI:
         # Modern table styling with improved visual hierarchy
         self.item_table.setStyleSheet("""
             QTableWidget {
-                background-color: #ffffff;
-                alternate-background-color: #f8fafc;
-                gridline-color: #e2e8f0;
-                border: 1px solid #cbd5e1;
+                background-color: #232629;
+                alternate-background-color: #2a3035;
+                gridline-color: #455a64;
+                border: 1px solid #455a64;
                 border-radius: 6px;
-                selection-background-color: #dbeafe;
-                selection-color: #1e40af;
+                selection-background-color: #009688;
+                selection-color: #ffffff;
                 font-size: 10pt;
+                color: #eceff1;
             }
 
             QTableWidget::item {
                 padding: 8px 6px;
-                border-bottom: 1px solid #f1f5f9;
+                border-bottom: 1px solid #37474f;
             }
 
             QTableWidget::item:hover {
-                background-color: #f1f5f9;
+                background-color: #37474f;
             }
 
             QTableWidget::item:selected {
-                background-color: #dbeafe;
-                color: #1e40af;
-                border: 1px solid #93c5fd;
+                background-color: #009688;
+                color: #ffffff;
+                border: 1px solid #4db6ac;
             }
 
             QTableWidget::item:focus {
-                background-color: #bfdbfe;
-                border: 2px solid #3b82f6;
+                background-color: #00796b;
+                border: 2px solid #80cbc4;
                 outline: none;
             }
 
             QHeaderView::section {
-                background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #f8fafc, stop:1 #e2e8f0);
-                color: #334155;
+                background-color: #37474f;
+                color: #eceff1;
                 padding: 8px 6px;
                 border: none;
-                border-right: 1px solid #cbd5e1;
-                border-bottom: 2px solid #94a3b8;
+                border-right: 1px solid #455a64;
+                border-bottom: 2px solid #546e7a;
                 font-weight: 600;
                 font-size: 9pt;
                 text-transform: none;
             }
 
             QHeaderView::section:hover {
-                background-color: #e2e8f0;
+                background-color: #455a64;
             }
 
             QHeaderView::section:first {
@@ -670,34 +667,34 @@ class EstimateUI:
             }
 
             QTableWidget QTableCornerButton::section {
-                background-color: #f8fafc;
+                background-color: #37474f;
                 border: none;
-                border-right: 1px solid #cbd5e1;
-                border-bottom: 2px solid #94a3b8;
+                border-right: 1px solid #455a64;
+                border-bottom: 2px solid #546e7a;
             }
 
             QTableWidget::item:alternate {
-                background-color: #f8fafc;
+                background-color: #2a3035;
             }
 
             QTableWidget::item:alternate:hover {
-                background-color: #f1f5f9;
+                background-color: #37474f;
             }
 
             QScrollBar:vertical {
-                background: #f8fafc;
+                background: #232629;
                 width: 12px;
                 border-radius: 6px;
             }
 
             QScrollBar::handle:vertical {
-                background: #cbd5e1;
+                background: #546e7a;
                 border-radius: 6px;
                 min-height: 30px;
             }
 
             QScrollBar::handle:vertical:hover {
-                background: #94a3b8;
+                background: #78909c;
             }
 
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
@@ -705,19 +702,19 @@ class EstimateUI:
             }
 
             QScrollBar:horizontal {
-                background: #f8fafc;
+                background: #232629;
                 height: 12px;
                 border-radius: 6px;
             }
 
             QScrollBar::handle:horizontal {
-                background: #cbd5e1;
+                background: #546e7a;
                 border-radius: 6px;
                 min-width: 30px;
             }
 
             QScrollBar::handle:horizontal:hover {
-                background: #94a3b8;
+                background: #78909c;
             }
 
             QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
@@ -734,8 +731,8 @@ class EstimateUI:
         # Add background styling to the entire totals container
         totals_container.setStyleSheet("""
             QWidget#TotalsContainer {
-                background-color: #f8fafc;
-                border-top: 2px solid #e2e8f0;
+                background-color: #263238;
+                border-top: 2px solid #455a64;
                 border-radius: 0px;
                 padding: 12px;
             }
@@ -746,13 +743,13 @@ class EstimateUI:
         main_totals_layout.setContentsMargins(8, 12, 8, 12)
 
         # Helper function to create a styled card for breakdown sections
-        def create_breakdown_card(title, labels_attrs, bg_color="#ffffff", title_color="#475569"):
+        def create_breakdown_card(title, labels_attrs, bg_color="#37474f", title_color="#eceff1"):
             card = QFrame()
             card.setObjectName(f"{title}Card")
             card.setStyleSheet(f"""
                 QFrame#{title}Card {{
                     background-color: {bg_color};
-                    border: 1px solid #e2e8f0;
+                    border: 1px solid #455a64;
                     border-radius: 8px;
                     padding: 8px 12px;
                 }}
@@ -772,7 +769,7 @@ class EstimateUI:
             # Add a subtle separator line
             separator = QFrame()
             separator.setFrameShape(QFrame.HLine)
-            separator.setStyleSheet("background-color: #e2e8f0; max-height: 1px;")
+            separator.setStyleSheet("background-color: #546e7a; max-height: 1px;")
             card_layout.addWidget(separator)
 
             # Add labels in a form layout
@@ -782,11 +779,11 @@ class EstimateUI:
             
             for label_text, attr_name, default_value in labels_attrs:
                 row_label = QLabel(label_text)
-                row_label.setStyleSheet("color: #64748b; font-size: 9pt;")
+                row_label.setStyleSheet("color: #b0bec5; font-size: 9pt;")
                 
                 value_label = QLabel(default_value)
                 value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                value_label.setStyleSheet("color: #1e293b; font-weight: 600; font-size: 10pt;")
+                value_label.setStyleSheet("color: #ffffff; font-weight: 600; font-size: 10pt;")
                 setattr(self, attr_name, value_label)
                 
                 form.addRow(row_label, value_label)
@@ -799,34 +796,34 @@ class EstimateUI:
             ("Total Gross Wt:", 'overall_gross_label', "0.0"),
             ("Total Poly Wt:", 'overall_poly_label', "0.0"),
         ]
-        overall_card = create_breakdown_card("Totals", overall_labels, "#f1f5f9", "#334155")
+        overall_card = create_breakdown_card("Totals", overall_labels, "#37474f", "#eceff1")
         main_totals_layout.addWidget(overall_card)
 
-        # Regular Items Card (green theme)
+        # Regular Items Card (green theme - dark)
         regular_labels = [
             ("Gross Wt:", 'total_gross_label', "0.0"),
             ("Net Wt:", 'total_net_label', "0.0"),
             ("Fine Wt:", 'total_fine_label', "0.0"),
         ]
-        regular_card = create_breakdown_card("Regular", regular_labels, "#f0fdf4", "#166534")
+        regular_card = create_breakdown_card("Regular", regular_labels, "#1b5e20", "#a5d6a7")
         main_totals_layout.addWidget(regular_card)
 
-        # Return Items Card (amber theme)
+        # Return Items Card (amber theme - dark)
         return_labels = [
             ("Gross Wt:", 'return_gross_label', "0.0"),
             ("Net Wt:", 'return_net_label', "0.0"),
             ("Fine Wt:", 'return_fine_label', "0.0"),
         ]
-        return_card = create_breakdown_card("Return", return_labels, "#fffbeb", "#92400e")
+        return_card = create_breakdown_card("Return", return_labels, "#3e2723", "#ffcc80") # Dark Brown/Amber
         main_totals_layout.addWidget(return_card)
 
-        # Silver Bars Card (blue theme)
+        # Silver Bars Card (blue theme - dark)
         bar_labels = [
             ("Gross Wt:", 'bar_gross_label', "0.0"),
             ("Net Wt:", 'bar_net_label', "0.0"),
             ("Fine Wt:", 'bar_fine_label', "0.0"),
         ]
-        bar_card = create_breakdown_card("Silver Bar", bar_labels, "#eff6ff", "#1e40af")
+        bar_card = create_breakdown_card("Silver Bar", bar_labels, "#0d47a1", "#90caf9")
         main_totals_layout.addWidget(bar_card)
 
         # Add stretch to push Final Calculation to the right
@@ -838,8 +835,8 @@ class EstimateUI:
         final_card.setStyleSheet("""
             QFrame#FinalCalculationCard {
                 background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #dbeafe, stop:1 #bfdbfe);
-                border: 2px solid #3b82f6;
+                    stop:0 #263238, stop:1 #37474f);
+                border: 2px solid #009688;
                 border-radius: 10px;
                 padding: 12px 16px;
             }
@@ -854,7 +851,7 @@ class EstimateUI:
         final_title = QLabel("Final Calculation")
         final_title.setAlignment(Qt.AlignCenter)
         final_title.setStyleSheet("""
-            color: #1e40af;
+            color: #80cbc4;
             font-weight: bold;
             font-size: 10pt;
             padding-bottom: 6px;
@@ -864,16 +861,16 @@ class EstimateUI:
         # Separator
         sep_line = QFrame()
         sep_line.setFrameShape(QFrame.HLine)
-        sep_line.setStyleSheet("background-color: #93c5fd; max-height: 2px;")
+        sep_line.setStyleSheet("background-color: #009688; max-height: 2px;")
         final_layout.addWidget(sep_line)
 
         # Net Fine Wt
         net_fine_container = QHBoxLayout()
         net_fine_label_text = QLabel("Net Fine Wt:")
-        net_fine_label_text.setStyleSheet("color: #1e40af; font-weight: 600; font-size: 10pt;")
+        net_fine_label_text.setStyleSheet("color: #80cbc4; font-weight: 600; font-size: 10pt;")
         self.net_fine_label = QLabel("0.0")
         self.net_fine_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.net_fine_label.setStyleSheet("color: #1e293b; font-weight: bold; font-size: 11pt;")
+        self.net_fine_label.setStyleSheet("color: #ffffff; font-weight: bold; font-size: 11pt;")
         self.net_fine_label.setMinimumWidth(80)
         net_fine_container.addWidget(net_fine_label_text)
         net_fine_container.addStretch()
@@ -883,10 +880,10 @@ class EstimateUI:
         # Net Wage
         net_wage_container = QHBoxLayout()
         net_wage_label_text = QLabel("Net Wage:")
-        net_wage_label_text.setStyleSheet("color: #1e40af; font-weight: 600; font-size: 10pt;")
+        net_wage_label_text.setStyleSheet("color: #80cbc4; font-weight: 600; font-size: 10pt;")
         self.net_wage_label = QLabel("0")
         self.net_wage_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.net_wage_label.setStyleSheet("color: #1e293b; font-weight: bold; font-size: 11pt;")
+        self.net_wage_label.setStyleSheet("color: #ffffff; font-weight: bold; font-size: 11pt;")
         self.net_wage_label.setMinimumWidth(80)
         net_wage_container.addWidget(net_wage_label_text)
         net_wage_container.addStretch()
@@ -896,13 +893,13 @@ class EstimateUI:
         # Separator before Grand Total
         grand_sep = QFrame()
         grand_sep.setFrameShape(QFrame.HLine)
-        grand_sep.setStyleSheet("background-color: #3b82f6; max-height: 2px;")
+        grand_sep.setStyleSheet("background-color: #009688; max-height: 2px;")
         final_layout.addWidget(grand_sep)
 
         # GRAND TOTAL - Extra Prominent
         grand_total_container = QWidget()
         grand_total_container.setStyleSheet("""
-            background-color: #1e40af;
+            background-color: #00695c;
             border-radius: 6px;
             padding: 8px 12px;
         """)
@@ -912,7 +909,7 @@ class EstimateUI:
 
         grand_total_label_text = QLabel("GRAND TOTAL:")
         grand_total_label_text.setStyleSheet("""
-            color: #ffffff;
+            color: #e0f2f1;
             font-weight: bold;
             font-size: 12pt;
             letter-spacing: 0.5px;

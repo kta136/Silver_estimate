@@ -241,7 +241,7 @@ class LiveRateController(QObject):
         tooltip_rows.append(f"Source: {source}")
         tooltip_rows.append(f"Updated: {verbose_timestamp}")
         label.setToolTip("\n".join(tooltip_rows))
-        self._set_meta_text(f"Updated {timestamp_display} via {source}")
+        self._set_meta_text(timestamp_display)
         self._last_refresh_at = timestamp
         self._last_source = source
         self._last_error = None

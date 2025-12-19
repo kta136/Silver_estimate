@@ -235,12 +235,17 @@ class SecondaryActionsBar(QWidget):
         self.live_rate_value_label.setStyleSheet("""
             QLabel#LiveRateValue {
                 color: #0f172a;
+                background-color: #e6f0ff;
+                border: 1px solid #93c5fd;
+                border-radius: 10px;
+                padding: 2px 8px;
                 font-weight: 700;
                 font-size: 11pt;
             }
         """)
-        self.live_rate_value_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        value_row.addWidget(self.live_rate_value_label)
+        self.live_rate_value_label.setMinimumWidth(110)
+        self.live_rate_value_label.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
+        rate_layout.addWidget(self.live_rate_value_label)
 
         self.refresh_rate_button = QToolButton()
         self.refresh_rate_button.setToolTip("Refresh live silver rate and set it here")

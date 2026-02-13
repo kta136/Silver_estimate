@@ -10,6 +10,9 @@ on:
       - master
       - main
 
+permissions:
+  contents: write
+
 jobs:
   lint-and-format:
     name: Code Quality Checks
@@ -179,6 +182,39 @@ jobs:
           path: dist/SilverEstimate.exe
           if-no-files-found: error
           retention-days: 14
+
+      - name: Prepare release asset bundle
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/master'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = (Select-String -Path 'silverestimate\infrastructure\app_constants.py' -Pattern 'APP_VERSION\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
+          $sha = "${{ github.sha }}"
+          $shortSha = $sha.Substring(0, 7)
+          $assetExe = "dist\SilverEstimate-v$version-$shortSha.exe"
+          Move-Item -Force -Path "dist\SilverEstimate.exe" -Destination $assetExe
+          $assetZip = "dist\SilverEstimate-v$version-$shortSha-win64.zip"
+          if (Test-Path $assetZip) { Remove-Item -Force $assetZip }
+          Compress-Archive -Path $assetExe -DestinationPath $assetZip
+          @"
+          Version: v$version
+          Commit: $sha
+          Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          Built At (UTC): $(Get-Date -Format u)
+          "@ | Set-Content -Path "dist\release-notes.txt"
+
+      - name: Update rolling prerelease
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: ncipollo/release-action@v1
+        with:
+          tag: latest-ci
+          name: Latest CI Build
+          bodyFile: dist/release-notes.txt
+          artifacts: dist/*.zip,dist/*.exe,dist/release-notes.txt
+          prerelease: true
+          allowUpdates: true
+          removeArtifacts: true
+          replacesArtifacts: true
 
   all-checks-passed:
     name: All Checks Passed

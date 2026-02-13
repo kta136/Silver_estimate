@@ -1,24 +1,15 @@
 from __future__ import annotations
 
-from .base import _EstimateBaseMixin
 from .constants import *  # noqa: F401,F403
-from .dialogs import _EstimateDialogsMixin
-from .persistence import _EstimatePersistenceMixin
-from .table import _EstimateTableMixin
+
+__all__ = ["EstimateLogic"] + [
+    name for name in globals().keys() if name.startswith("COL_")
+]
 
 
-class EstimateLogic(
-    _EstimateDialogsMixin,
-    _EstimatePersistenceMixin,
-    _EstimateTableMixin,
-    _EstimateBaseMixin,
-):
-    """Composite mixin that retains the original EstimateLogic API."""
+def __getattr__(name: str):
+    if name == "EstimateLogic":
+        from .logic import EstimateLogic
 
-    def __init__(self) -> None:
-        _EstimateBaseMixin.__init__(self)
-
-
-__all__ = [
-    "EstimateLogic",
-] + [name for name in globals().keys() if name.startswith("COL_")]
+        return EstimateLogic
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

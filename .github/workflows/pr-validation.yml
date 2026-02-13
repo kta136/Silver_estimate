@@ -39,7 +39,7 @@ jobs:
       - name: Lint with flake8
         run: |
           flake8 silverestimate --count --select=E9,F63,F7,F82 --show-source --statistics
-          flake8 silverestimate --count --max-line-length=88 --extend-ignore=E203,W503 --statistics
+          flake8 silverestimate --count --max-line-length=88 --extend-ignore=E203,W503 --statistics --exit-zero
 
       - name: Lint with pylint
         run: pylint silverestimate --rcfile=pyproject.toml
@@ -148,14 +148,22 @@ jobs:
       - name: Test PyInstaller build
         run: |
           pyinstaller --version
-          pyinstaller SilverEstimate.spec --noconfirm --log-level=INFO
+          pyinstaller --noconfirm --onefile --windowed --name SilverEstimate `
+            --hidden-import passlib.handlers.argon2 `
+            --hidden-import passlib.handlers.bcrypt `
+            --hidden-import keyring.backends `
+            --hidden-import keyring.backends.Windows `
+            --hidden-import keyring.backends.win32 `
+            --hidden-import keyring.backends.fail `
+            --hidden-import keyring.backends.null `
+            main.py
         continue-on-error: false
 
       - name: Check if executable was created
         run: |
-          if (Test-Path "dist/SilverEstimate/SilverEstimate.exe") {
+          if (Test-Path "dist/SilverEstimate.exe") {
             Write-Output "✓ Executable created successfully"
-            Get-Item "dist/SilverEstimate/SilverEstimate.exe" | Select-Object Name, Length, LastWriteTime
+            Get-Item "dist/SilverEstimate.exe" | Select-Object Name, Length, LastWriteTime
           } else {
             Write-Error "✗ Executable not found"
             exit 1

@@ -5,15 +5,17 @@ from __future__ import annotations
 import logging
 import threading
 import traceback
+import time
 from typing import Optional, Dict, TYPE_CHECKING
 
 from PyQt5 import sip
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
     QHeaderView, QShortcut, QMessageBox, QSizePolicy, QApplication,
-    QDialog, QDialogButtonBox, QDoubleSpinBox, QLabel, QFormLayout
+    QDialog, QDialogButtonBox, QDoubleSpinBox, QLabel, QFormLayout,
+    QAbstractItemView,
 )
-from PyQt5.QtCore import Qt, QTimer, QSignalBlocker, QDate, QLocale
+from PyQt5.QtCore import Qt, QTimer, QSignalBlocker, QDate, QLocale, pyqtSignal
 from PyQt5.QtGui import QKeySequence, QColor, QFont
 
 from silverestimate.infrastructure.settings import get_app_settings
@@ -56,6 +58,15 @@ class EstimateEntryWidget(QWidget):
     Refactored to eliminate EstimateLogic mixins. Now implements the full
     EstimateEntryView protocol directly or via components.
     """
+    live_rate_fetched = pyqtSignal(object)
+    EDITABLE_ENTRY_COLS = (
+        COL_CODE,
+        COL_GROSS,
+        COL_POLY,
+        COL_PURITY,
+        COL_WAGE_RATE,
+        COL_PIECES,
+    )
 
     def __init__(self, db_manager, main_window, repository):
         super().__init__()
@@ -66,6 +77,7 @@ class EstimateEntryWidget(QWidget):
         self.db_manager = db_manager
         self.main_window = main_window
         self.presenter = EstimateEntryPresenter(self, repository)
+        self.live_rate_fetched.connect(self._apply_refreshed_live_rate)
 
         # State flags (formerly in _EstimateBaseMixin)
         self.initializing = True
@@ -81,6 +93,9 @@ class EstimateEntryWidget(QWidget):
         self.last_balance_amount = 0.0
         
         self._table_adapter = None
+        self._last_manual_row_nav_ts = 0.0
+        self._edit_request_token = 0
+        self._manual_row_nav_edit_delay_ms = 35
 
         # Mode state
         self.return_mode = False
@@ -291,8 +306,6 @@ class EstimateEntryWidget(QWidget):
         self.primary_actions.new_clicked.connect(self.clear_form)
 
         self.secondary_actions.delete_row_clicked.connect(self.delete_current_row)
-        self.return_toggle_button.clicked.connect(self.toggle_return_mode)
-        self.silver_bar_toggle_button.clicked.connect(self.toggle_silver_bar_mode)
         self.secondary_actions.last_balance_clicked.connect(self.show_last_balance_dialog)
         self.secondary_actions.history_clicked.connect(self.show_history)
         self.secondary_actions.silver_bars_clicked.connect(self.show_silver_bars)
@@ -321,6 +334,10 @@ class EstimateEntryWidget(QWidget):
         self.item_table.itemSelectionChanged.connect(self.selection_changed)
         self.item_table.currentCellChanged.connect(self.current_cell_changed)
         self.item_table.cellChanged.connect(self.handle_cell_changed)
+
+        # Mode toggles
+        self.return_toggle_button.clicked.connect(self.toggle_return_mode)
+        self.silver_bar_toggle_button.clicked.connect(self.toggle_silver_bar_mode)
 
     def _setup_keyboard_shortcuts(self):
         pass
@@ -399,8 +416,10 @@ class EstimateEntryWidget(QWidget):
             self._table_adapter = EstimateTableAdapter(self, self.item_table)
         return self._table_adapter
 
-    def populate_row(self, row_index: int, item_data):
-        self._get_table_adapter().populate_row(row_index, item_data)
+    @property
+    def table_adapter(self) -> EstimateTableAdapter:
+        """Public adapter accessor for tests and legacy integration points."""
+        return self._get_table_adapter()
 
     def populate_item_row(self, item_data):
         if self.current_row < 0:
@@ -438,48 +457,50 @@ class EstimateEntryWidget(QWidget):
     def cell_clicked(self, row, column):
         self.current_row = row
         self.current_column = column
-        editable_cols = [COL_CODE, COL_GROSS, COL_POLY, COL_PURITY, COL_WAGE_RATE, COL_PIECES]
-        if column in editable_cols:
-             model = self.item_table.model()
-             if model and not sip.isdeleted(model):
-                 index = model.index(row, column)
-                 if index.isValid() and (model.flags(index) & Qt.ItemIsEditable):
-                     try:
-                         self.item_table.setCurrentIndex(index)
-                         self.item_table.edit(index)
-                     except Exception:
-                         pass
+        if column in self.EDITABLE_ENTRY_COLS:
+            self._request_edit_cell(row, column, delay_ms=0)
 
     def selection_changed(self):
-        selected_items = self.item_table.selectedItems()
-        if not selected_items:
+        index = self.item_table.currentIndex()
+        if not index.isValid():
+            selected_indexes = self.item_table.selectedIndexes()
+            if not selected_indexes:
+                return
+            index = selected_indexes[0]
+        if not index.isValid():
             return
-        item = selected_items[0]
-        row = self.item_table.row(item)
-        col = self.item_table.column(item)
-        self.current_row = row
-        self.current_column = col
-        editable_cols = [COL_CODE, COL_GROSS, COL_POLY, COL_PURITY, COL_WAGE_RATE, COL_PIECES]
-        if col in editable_cols:
-            cell = self._ensure_cell_exists(row, col)
-            if cell and (cell.flags() & Qt.ItemIsEditable):
-                self._schedule_cell_edit(row, col)
+        self.current_row = index.row()
+        self.current_column = index.column()
 
     def current_cell_changed(self, currentRow, currentCol, previousRow, previousCol):
         try:
             mouse_pressed = QApplication.mouseButtons() != Qt.NoButton
         except Exception:
             mouse_pressed = False
+        row_changed = (
+            previousRow is not None
+            and previousRow >= 0
+            and currentRow is not None
+            and currentRow >= 0
+            and currentRow != previousRow
+        )
+        if row_changed and not mouse_pressed:
+            # Arrow-key row navigation often lands here without bubbling keyPressEvent.
+            self._mark_manual_row_navigation()
         if not mouse_pressed:
             if not self._enforce_code_required(currentRow, currentCol):
                 return
         self.current_row = currentRow
         self.current_column = currentCol
-        editable_cols = [COL_CODE, COL_GROSS, COL_POLY, COL_PURITY, COL_WAGE_RATE, COL_PIECES]
-        if currentCol in editable_cols and 0 <= currentRow < self.item_table.rowCount():
-            cell = self._ensure_cell_exists(currentRow, currentCol)
-            if cell and (cell.flags() & Qt.ItemIsEditable):
-                self._schedule_cell_edit(currentRow, currentCol)
+        if currentCol in self.EDITABLE_ENTRY_COLS and 0 <= currentRow < self.item_table.rowCount():
+            if row_changed and self._manual_row_nav_recent():
+                self._request_edit_cell(
+                    currentRow,
+                    currentCol,
+                    delay_ms=self._manual_row_nav_edit_delay_ms,
+                )
+                return
+            self._request_edit_cell(currentRow, currentCol, delay_ms=0)
 
     def handle_cell_changed(self, row, column):
         if self.processing_cell:
@@ -494,13 +515,13 @@ class EstimateEntryWidget(QWidget):
                 self.process_item_code()
             elif column in [COL_GROSS, COL_POLY]:
                 self.calculate_net_weight()
-                QTimer.singleShot(0, self.move_to_next_cell)
+                self._schedule_auto_advance_from(row, column)
             elif column == COL_PURITY:
                 self.calculate_fine()
-                QTimer.singleShot(0, self.move_to_next_cell)
+                self._schedule_auto_advance_from(row, column)
             elif column == COL_WAGE_RATE:
                 self.calculate_wage()
-                QTimer.singleShot(0, self.move_to_next_cell)
+                self._schedule_auto_advance_from(row, column)
             elif column == COL_PIECES:
                 self.calculate_wage()
                 if row == self.item_table.rowCount() - 1:
@@ -508,7 +529,7 @@ class EstimateEntryWidget(QWidget):
                     if code_item and code_item.text().strip():
                         QTimer.singleShot(10, self.add_empty_row)
                 else:
-                    QTimer.singleShot(10, lambda: self.focus_on_code_column(row + 1))
+                    self._schedule_focus_code_from(row, column, row + 1, delay_ms=10)
             else:
                 self.calculate_totals()
 
@@ -518,6 +539,42 @@ class EstimateEntryWidget(QWidget):
         finally:
             self.item_table.blockSignals(False)
         self._mark_unsaved()
+
+    def _schedule_auto_advance_from(self, row: int, col: int) -> None:
+        """Advance only if the user did not navigate away before timer fires."""
+        QTimer.singleShot(0, lambda: self._auto_advance_if_origin_unchanged(row, col))
+
+    def _auto_advance_if_origin_unchanged(self, row: int, col: int) -> None:
+        if self._manual_row_nav_recent():
+            return
+        if self.current_row != row or self.current_column != col:
+            return
+        self.move_to_next_cell()
+
+    def _schedule_focus_code_from(
+        self, origin_row: int, origin_col: int, target_row: int, *, delay_ms: int
+    ) -> None:
+        """Focus next row code only if cursor is still on the originating cell."""
+        QTimer.singleShot(
+            delay_ms,
+            lambda: self._focus_code_if_origin_unchanged(origin_row, origin_col, target_row),
+        )
+
+    def _focus_code_if_origin_unchanged(
+        self, origin_row: int, origin_col: int, target_row: int
+    ) -> None:
+        if self._manual_row_nav_recent():
+            return
+        if self.current_row != origin_row or self.current_column != origin_col:
+            return
+        self.focus_on_code_column(target_row)
+
+    def _mark_manual_row_navigation(self) -> None:
+        """Record recent manual row navigation intent (e.g. arrow up/down)."""
+        self._last_manual_row_nav_ts = time.monotonic()
+
+    def _manual_row_nav_recent(self, *, threshold_seconds: float = 0.25) -> bool:
+        return (time.monotonic() - self._last_manual_row_nav_ts) <= threshold_seconds
 
     def process_item_code(self):
         if self.processing_cell: return
@@ -579,25 +636,17 @@ class EstimateEntryWidget(QWidget):
 
         current_col = self.current_column
         current_row = self.current_row
-        next_col = -1
-        next_row = current_row
+
+        if current_row is None or current_row < 0:
+            self.focus_on_code_column(0)
+            return
 
         if current_col == COL_CODE and self._is_code_empty(current_row):
             self._status("Enter item code first", 1500)
             self.focus_on_code_column(current_row)
             return
 
-        # Determine next column
-        if current_col == COL_CODE: next_col = COL_GROSS
-        elif current_col == COL_GROSS: next_col = COL_POLY
-        elif current_col == COL_POLY: next_col = COL_PURITY
-        elif current_col == COL_PURITY: next_col = COL_WAGE_RATE
-        elif current_col == COL_WAGE_RATE: next_col = COL_PIECES
-        elif current_col == COL_PIECES:
-            next_row = current_row + 1
-            next_col = COL_CODE
-        else:
-            next_col = COL_CODE
+        next_row, next_col = self._next_edit_target(current_row, current_col)
 
         if next_row >= self.item_table.rowCount():
             last_code_item = self.item_table.item(current_row, COL_CODE)
@@ -607,44 +656,71 @@ class EstimateEntryWidget(QWidget):
             next_row = current_row
             next_col = current_col
 
-        editable_cols = [COL_CODE, COL_GROSS, COL_POLY, COL_PURITY, COL_WAGE_RATE, COL_PIECES]
         if self._is_table_valid() and 0 <= next_row < self.item_table.rowCount():
             self.item_table.blockSignals(True)
             try:
                 self.item_table.setCurrentCell(next_row, next_col)
             finally:
                 self.item_table.blockSignals(False)
-            if next_col in editable_cols:
+            if next_col in self.EDITABLE_ENTRY_COLS:
                 QTimer.singleShot(10, lambda: self._safe_edit_item(next_row, next_col))
 
     def move_to_previous_cell(self):
         if self.processing_cell: return
         current_col = self.current_column
         current_row = self.current_row
-        prev_col = -1
-        prev_row = current_row
         
-        # Simple previous logic
-        if current_col == COL_PIECES: prev_col = COL_WAGE_RATE
-        elif current_col == COL_WAGE_RATE: prev_col = COL_PURITY
-        elif current_col == COL_PURITY: prev_col = COL_POLY
-        elif current_col == COL_POLY: prev_col = COL_GROSS
-        elif current_col == COL_GROSS: prev_col = COL_CODE
-        elif current_col == COL_CODE:
-            if current_row > 0:
-                prev_row = current_row - 1
-                prev_col = COL_PIECES
-            else:
-                prev_row = 0
-                prev_col = COL_CODE
-        else:
-            prev_col = COL_CODE
+        if current_row is None or current_row < 0:
+            self.focus_on_code_column(0)
+            return
+
+        prev_row, prev_col = self._previous_edit_target(current_row, current_col)
 
         if 0 <= prev_row < self.item_table.rowCount():
             self.item_table.setCurrentCell(prev_row, prev_col)
             QTimer.singleShot(10, lambda: self._safe_edit_item(prev_row, prev_col))
 
+    def _next_edit_target(self, row: int, col: int) -> tuple[int, int]:
+        """Return next editable cell target for enter/tab-like navigation."""
+        if col == COL_CODE:
+            return row, COL_GROSS
+        if col == COL_GROSS:
+            return row, COL_POLY
+        if col == COL_POLY:
+            return row, COL_PURITY
+        if col == COL_PURITY:
+            return row, COL_WAGE_RATE
+        if col == COL_WAGE_RATE:
+            return row, COL_PIECES
+        if col == COL_PIECES:
+            return row + 1, COL_CODE
+        return row, COL_CODE
+
+    def _previous_edit_target(self, row: int, col: int) -> tuple[int, int]:
+        """Return previous editable cell target for shift-tab/backspace navigation."""
+        if col == COL_PIECES:
+            return row, COL_WAGE_RATE
+        if col == COL_WAGE_RATE:
+            return row, COL_PURITY
+        if col == COL_PURITY:
+            return row, COL_POLY
+        if col == COL_POLY:
+            return row, COL_GROSS
+        if col == COL_GROSS:
+            return row, COL_CODE
+        if col == COL_CODE:
+            if row > 0:
+                return row - 1, COL_PIECES
+            return 0, COL_CODE
+        return row, COL_CODE
+
     def focus_on_code_column(self, row):
+        try:
+            if sip.isdeleted(self):
+                return
+        except RuntimeError:
+            return
+
         def _apply_focus(target_row):
             try:
                 if not self._is_table_valid(): return
@@ -659,12 +735,15 @@ class EstimateEntryWidget(QWidget):
             except Exception: pass
 
         timer = getattr(self, "_code_focus_timer", None)
-        if timer is None:
+        if timer is None or sip.isdeleted(timer):
             timer = QTimer(self)
             timer.setSingleShot(True)
             timer.timeout.connect(lambda: _apply_focus(getattr(self, "_pending_focus_row", 0)))
             self._code_focus_timer = timer
-        timer.stop()
+        try:
+            timer.stop()
+        except RuntimeError:
+            return
         self._pending_focus_row = row
         timer.start(0)
 
@@ -673,6 +752,10 @@ class EstimateEntryWidget(QWidget):
             table = self.item_table
             if not table or sip.isdeleted(table) or not table.isVisible(): return
             if self._loading_estimate: return
+            if table.state() == QAbstractItemView.EditingState:
+                current = table.currentIndex()
+                if current.isValid() and current.row() == row and current.column() == col:
+                    return
             
             # Use Model/View edit
             model = table.model()
@@ -734,7 +817,28 @@ class EstimateEntryWidget(QWidget):
             return default
 
     def _schedule_cell_edit(self, row, col):
-        QTimer.singleShot(0, lambda: self._safe_edit_item(row, col))
+        self._request_edit_cell(row, col, delay_ms=0)
+
+    def _request_edit_cell(self, row: int, col: int, *, delay_ms: int = 0) -> None:
+        """Queue a single latest edit request to prevent signal-induced edit storms."""
+        self._edit_request_token += 1
+        token = self._edit_request_token
+        QTimer.singleShot(delay_ms, lambda: self._run_edit_request(token, row, col))
+
+    def _run_edit_request(self, token: int, row: int, col: int) -> None:
+        if token != self._edit_request_token:
+            return
+        if self.processing_cell or self._loading_estimate:
+            return
+        if not self._is_table_valid():
+            return
+        if row < 0 or col < 0 or row >= self.item_table.rowCount():
+            return
+        if col not in self.EDITABLE_ENTRY_COLS:
+            return
+        cell = self._ensure_cell_exists(row, col)
+        if cell and (cell.flags() & Qt.ItemIsEditable):
+            self._safe_edit_item(row, col)
 
     # --- Calculations -------------------------------------------------------
 
@@ -777,7 +881,12 @@ class EstimateEntryWidget(QWidget):
                     item_data = repo.fetch_item(code)
                     if item_data: wage_basis = item_data.get("wage_type", "WT")
 
-            wage = compute_wage_amount(wage_basis, net, wage_rate, pieces)
+            wage = compute_wage_amount(
+                wage_basis,
+                net_weight=net,
+                wage_rate=wage_rate,
+                pieces=pieces,
+            )
             wage_item = self._ensure_cell_exists(self.current_row, COL_WAGE_AMT, editable=False)
             wage_item.setText(f"{wage:.0f}")
             self.calculate_totals()
@@ -1176,29 +1285,50 @@ class EstimateEntryWidget(QWidget):
     # --- Live Rate ----------------------------------------------------------
     
     def refresh_silver_rate(self):
+        button = getattr(self, "refresh_rate_button", None)
+        if button is not None:
+            button.setEnabled(False)
         self._status("Refreshing live silver rate...", 2000)
-        
+
         def worker():
             try:
-                from silverestimate.services.dda_rate_fetcher import fetch_broadcast_rate_exact
+                from silverestimate.services.dda_rate_fetcher import (
+                    fetch_broadcast_rate_exact,
+                    fetch_silver_agra_local_mohar_rate,
+                )
+
                 rate, _, _ = fetch_broadcast_rate_exact(timeout=7)
-                return rate
+                if rate is None:
+                    rate, _ = fetch_silver_agra_local_mohar_rate(timeout=7)
+                self.live_rate_fetched.emit(rate)
             except:
-                return None
-            
-        def on_done(rate):
-            if rate:
+                self.live_rate_fetched.emit(None)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _apply_refreshed_live_rate(self, rate) -> None:
+        button = getattr(self, "refresh_rate_button", None)
+        if button is not None:
+            button.setEnabled(True)
+        if rate:
+            try:
                 gram_rate = float(rate) / 1000.0
-                if hasattr(self, "live_rate_value_label"):
-                    self.live_rate_value_label.setText(f"₹ {gram_rate:.2f} /g")
-                self._status("Live rate refreshed.", 2000)
-            else:
+            except (TypeError, ValueError):
+                gram_rate = None
+            if gram_rate is None:
                 if hasattr(self, "live_rate_value_label"):
                     self.live_rate_value_label.setText("N/A")
                 self._status("Live rate unavailable.", 3000)
-                
-        threading.Thread(target=lambda: QTimer.singleShot(0, lambda: on_done(worker()))).start()
-    def _handle_silver_rate_changed(self):
+                return
+            if hasattr(self, "live_rate_value_label"):
+                self.live_rate_value_label.setText(f"₹ {gram_rate:.2f} /g")
+            self._status("Live rate refreshed.", 2000)
+            return
+        if hasattr(self, "live_rate_value_label"):
+            self.live_rate_value_label.setText("N/A")
+        self._status("Live rate unavailable.", 3000)
+
+    def _handle_silver_rate_changed(self, *_):
         self.calculate_totals()
         self._mark_unsaved()
 
@@ -1350,13 +1480,34 @@ class EstimateEntryWidget(QWidget):
 
     def keyPressEvent(self, event):
         key = event.key()
-        if key in [Qt.Key_Return, Qt.Key_Enter, Qt.Key_Tab]:
+        modifiers = event.modifiers()
+
+        if modifiers & Qt.ControlModifier:
+            if key == Qt.Key_R:
+                self.toggle_return_mode()
+                event.accept()
+                return
+            if key == Qt.Key_B:
+                self.toggle_silver_bar_mode()
+                event.accept()
+                return
+
+        focus_widget = QApplication.focusWidget()
+        table_has_focus = (
+            focus_widget is self.item_table
+            or (focus_widget is not None and self.item_table.isAncestorOf(focus_widget))
+        )
+
+        if table_has_focus and key in [Qt.Key_Return, Qt.Key_Enter, Qt.Key_Tab]:
             self.move_to_next_cell()
             event.accept()
-        elif key == Qt.Key_Backtab:
+        elif table_has_focus and key == Qt.Key_Backtab:
             self.move_to_previous_cell()
             event.accept()
-        elif key == Qt.Key_Escape:
+        elif table_has_focus and key in [Qt.Key_Up, Qt.Key_Down]:
+            self._mark_manual_row_navigation()
+            super().keyPressEvent(event)
+        elif table_has_focus and key == Qt.Key_Escape:
             self.confirm_exit()
             event.accept()
         else:

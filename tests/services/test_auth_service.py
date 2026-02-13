@@ -37,7 +37,7 @@ class _MessageBoxStub:
 def test_run_authentication_first_time(monkeypatch, settings_stub):
     _MessageBoxStub.reset()
     class _SetupDialog:
-        def __init__(self, is_setup=False):
+        def __init__(self, is_setup=False, parent=None):
             assert is_setup is True
 
         def exec_(self):
@@ -75,7 +75,7 @@ def test_run_authentication_existing_password(monkeypatch, settings_stub):
     settings.setValue("security/backup_hash", "backup-hash")
 
     class _LoginDialog:
-        def __init__(self, is_setup=False):
+        def __init__(self, is_setup=False, parent=None):
             assert is_setup is False
 
         def exec_(self):
@@ -113,7 +113,7 @@ def test_run_authentication_secondary_password_triggers_silent_wipe(monkeypatch,
     settings.setValue("security/backup_hash", "backup-hash")
 
     class _LoginDialog:
-        def __init__(self, is_setup=False):
+        def __init__(self, is_setup=False, parent=None):
             assert is_setup is False
 
         def exec_(self):

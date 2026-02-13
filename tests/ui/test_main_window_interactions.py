@@ -256,8 +256,8 @@ def test_user_entry_updates_totals_and_view_model(main_window_fixture):
     assert float(widget.overall_gross_label.text()) == pytest.approx(10.0)
     assert float(widget.overall_poly_label.text()) == pytest.approx(0.5)
     assert float(widget.total_net_label.text()) == pytest.approx(9.5)
-    assert float(widget.total_fine_label.text()) == pytest.approx(8.8, rel=1e-3)
-    assert float(widget.net_fine_label.text()) == pytest.approx(8.8, rel=1e-3)
+    assert float(widget.total_fine_label.text()) == pytest.approx(8.79, rel=1e-3)
+    assert float(widget.net_fine_label.text()) == pytest.approx(8.79, rel=1e-3)
 
     # View-model captures the active row for downstream workflows.
     active_rows = widget.view_model.active_rows()

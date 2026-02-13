@@ -149,12 +149,18 @@ class NumericDelegate(QStyledItemDelegate):
                     # Get the main estimate widget (parent of the table)
                     table_widget = self.parent()
                     if table_widget:
-                        estimate_widget = table_widget.parent()
+                        estimate_widget = getattr(table_widget, "host_widget", None) or table_widget.parent()
                         if estimate_widget and hasattr(estimate_widget, 'move_to_previous_cell'):
                             # Use QTimer to ensure focus change happens after editor closes
                             from PyQt5.QtCore import QTimer
                             QTimer.singleShot(0, estimate_widget.move_to_previous_cell)
                     return True # Event handled
+                elif key in (Qt.Key_Up, Qt.Key_Down):
+                    table_widget = self.parent()
+                    if table_widget:
+                        estimate_widget = getattr(table_widget, "host_widget", None) or table_widget.parent()
+                        if estimate_widget and hasattr(estimate_widget, "_mark_manual_row_navigation"):
+                            estimate_widget._mark_manual_row_navigation()
 
         # For all other events or conditions, use the default behavior
         return super().eventFilter(editor, event)

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from PyQt5.QtWidgets import QMessageBox, QDialog
+from PyQt5.QtWidgets import QMessageBox, QDialog, QWidget
 
 from silverestimate.infrastructure.settings import get_app_settings
 
@@ -36,6 +36,8 @@ class AuthenticationResult:
 
 def run_authentication(
     logger: Optional[logging.Logger] = None,
+    *,
+    parent: Optional[QWidget] = None,
 ) -> Optional[AuthenticationResult]:
     """Handle authentication flow using the LoginDialog."""
     global LoginDialog
@@ -56,7 +58,7 @@ def run_authentication(
     except CredentialStoreError as exc:
         logger.critical("Secure credential storage unavailable: %s", exc, exc_info=True)
         QMessageBox.critical(
-            None,
+            parent,
             "Authentication Error",
             "Secure credential storage is not available on this system. "
             "Install and configure the Python 'keyring' backend, then restart the application.",
@@ -65,7 +67,7 @@ def run_authentication(
 
     if password_hash and backup_hash:
         logger.debug("Found existing password hashes, showing login dialog")
-        login_dialog = LoginDialog(is_setup=False)
+        login_dialog = LoginDialog(is_setup=False, parent=parent)
         result = login_dialog.exec_()
 
         if result == QDialog.Accepted:
@@ -83,7 +85,7 @@ def run_authentication(
                 return AuthenticationResult(wipe_requested=True, silent=True)
             if logger:
                 logger.warning("Authentication failed: incorrect password")
-            QMessageBox.warning(None, "Login Failed", "Incorrect password.")
+            QMessageBox.warning(parent, "Login Failed", "Incorrect password.")
             return None
         if logger:
             logger.info("Login cancelled by user")
@@ -91,7 +93,7 @@ def run_authentication(
 
     if logger:
         logger.info("Password hashes not found in settings. Starting first-time setup.")
-    setup_dialog = LoginDialog(is_setup=True)
+    setup_dialog = LoginDialog(is_setup=True, parent=parent)
     result = setup_dialog.exec_()
     if result == QDialog.Accepted:
         if logger:
@@ -103,7 +105,7 @@ def run_authentication(
         if not hashed_password or not hashed_backup:
             if logger:
                 logger.error("Failed to hash passwords during setup")
-            QMessageBox.critical(None, "Setup Error", "Failed to hash passwords.")
+            QMessageBox.critical(parent, "Setup Error", "Failed to hash passwords.")
             return None
         try:
             credential_store.set_password_hash(
@@ -115,14 +117,14 @@ def run_authentication(
         except CredentialStoreError as exc:
             logger.critical("Failed to persist passwords in secure store: %s", exc, exc_info=True)
             QMessageBox.critical(
-                None,
+                parent,
                 "Setup Error",
                 "Failed to store passwords securely. Please ensure the system keyring is available.",
             )
             return None
         if logger:
             logger.info("Passwords created and stored successfully")
-        QMessageBox.information(None, "Setup Complete", "Passwords created successfully.")
+        QMessageBox.information(parent, "Setup Complete", "Passwords created successfully.")
         return AuthenticationResult(password=password)
     if logger:
         logger.info("Setup cancelled by user")
@@ -134,6 +136,7 @@ def perform_data_wipe(
     logger: Optional[logging.Logger] = None,
     *,
     silent: bool = False,
+    parent: Optional[QWidget] = None,
 ) -> bool:
     """Delete encrypted DB and clear credentials from settings."""
     logger = logger or logging.getLogger(__name__)
@@ -181,7 +184,7 @@ def perform_data_wipe(
         error_message = f"A critical error occurred during data wipe: {exc}"
         if not silent:
             logger.critical(error_message, exc_info=True)
-        QMessageBox.critical(None, "Data Wipe Error", error_message)
+        QMessageBox.critical(parent, "Data Wipe Error", error_message)
         return False
 
 

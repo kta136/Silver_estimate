@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from typing import Mapping
+import weakref
 
 from PyQt5.QtCore import Qt, QTimer
+from PyQt5 import sip
 from PyQt5.QtWidgets import QMessageBox, QTableWidget, QTableWidgetItem
 
 from ..estimate_entry_logic.constants import (
@@ -30,6 +32,23 @@ class EstimateTableAdapter:
     def __init__(self, owner, table: QTableWidget) -> None:
         self._owner = owner
         self._table = table
+
+    @staticmethod
+    def _safe_focus_owner_code(owner_ref: "weakref.ReferenceType", row: int) -> None:
+        """Best-effort focus helper for deferred timers.
+
+        Timers can fire after the widget is closed; ignore those safely.
+        """
+        owner = owner_ref()
+        if owner is None:
+            return
+        try:
+            if sip.isdeleted(owner):
+                return
+            owner.focus_on_code_column(row)
+        except RuntimeError:
+            # Wrapped Qt object was deleted between checks.
+            return
 
     # ------------------------------------------------------------------ #
     # Row population helpers
@@ -98,7 +117,11 @@ class EstimateTableAdapter:
                 last_row = table.rowCount() - 1
                 last_code_item = table.item(last_row, COL_CODE)
                 if not last_code_item or not last_code_item.text().strip():
-                    QTimer.singleShot(0, lambda: owner.focus_on_code_column(last_row))
+                    owner_ref = weakref.ref(owner)
+                    QTimer.singleShot(
+                        0,
+                        lambda: self._safe_focus_owner_code(owner_ref, last_row),
+                    )
                     return
 
             owner.processing_cell = True
@@ -117,7 +140,11 @@ class EstimateTableAdapter:
                     item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
                 table.setItem(row, col, item)
 
-            QTimer.singleShot(50, lambda: owner.focus_on_code_column(row))
+            owner_ref = weakref.ref(owner)
+            QTimer.singleShot(
+                50,
+                lambda: self._safe_focus_owner_code(owner_ref, row),
+            )
         except Exception as exc:  # pragma: no cover
             owner.logger.error("Error adding empty row: %s", exc, exc_info=True)
             owner._status("Unable to add new row", 3500)

@@ -11,7 +11,7 @@ from typing import Any, Callable, Optional, TYPE_CHECKING, Tuple
 from PyQt5.QtCore import Qt
 import PyQt5.QtCore as QtCore
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QMessageBox
+from PyQt5.QtWidgets import QApplication, QMessageBox, QWidget
 
 from silverestimate.controllers.startup_controller import StartupController, StartupStatus
 from silverestimate.infrastructure.app_constants import APP_TITLE
@@ -46,6 +46,7 @@ class ApplicationContext:
     cleanup_scheduler: Optional[LogCleanupScheduler] = None
     db_manager: Optional["DatabaseManager"] = None
     main_window: Optional["QMainWindow"] = None
+    dialog_parent: Optional[QWidget] = None
 
     def shutdown(self) -> None:
         """Release resources created during startup."""
@@ -189,6 +190,10 @@ class ApplicationBuilder:
 
         app = QApplication.instance() or QApplication(sys.argv)
         context.app = app
+        # Hidden parent widget for dialogs shown before the main window exists.
+        dialog_parent = QWidget()
+        dialog_parent.setAttribute(Qt.WA_DontShowOnScreen, True)
+        context.dialog_parent = dialog_parent
 
         try:
             icon_path = self._asset_resolver("assets", "icons", "silverestimate.ico")
@@ -203,7 +208,13 @@ class ApplicationBuilder:
     def _authenticate(
         self, context: ApplicationContext
     ) -> Tuple[Optional["DatabaseManager"], Optional[int]]:
-        controller = self._startup_controller_factory(logger=context.logger)
+        try:
+            controller = self._startup_controller_factory(
+                logger=context.logger,
+                parent=context.dialog_parent,
+            )
+        except TypeError:
+            controller = self._startup_controller_factory(logger=context.logger)
         result = controller.authenticate_and_prepare()
 
         if result.status == StartupStatus.CANCELLED:

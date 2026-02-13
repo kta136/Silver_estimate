@@ -38,7 +38,8 @@ class EstimateHistoryDialog(QDialog):
         filter_layout.addWidget(QLabel("From:"))
         self.date_from = QDateEdit()
         self.date_from.setCalendarPopup(True)
-        self.date_from.setDate(QDate.currentDate().addMonths(-1))  # Default to 1 month ago
+        first_estimate_date = self._resolve_first_estimate_date()
+        self.date_from.setDate(first_estimate_date)
         filter_layout.addWidget(self.date_from)
 
         filter_layout.addWidget(QLabel("To:"))
@@ -111,6 +112,21 @@ class EstimateHistoryDialog(QDialog):
         button_layout.addWidget(self.close_button)
 
         layout.addLayout(button_layout)
+
+    def _resolve_first_estimate_date(self):
+        """Resolve the earliest estimate date, falling back to today."""
+        today = QDate.currentDate()
+        getter = getattr(self.db_manager, "get_first_estimate_date", None)
+        if not callable(getter):
+            return today
+        try:
+            first_date_str = getter()
+            if not first_date_str:
+                return today
+            parsed = QDate.fromString(str(first_date_str), "yyyy-MM-dd")
+            return parsed if parsed.isValid() else today
+        except Exception:
+            return today
 
     def load_estimates(self):
         """Load estimates based on search criteria (runs queries in a background thread)."""

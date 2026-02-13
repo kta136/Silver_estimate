@@ -33,13 +33,6 @@ if sys.stderr is None:
 if sys.stdout is None:
     sys.stdout = open(os.devnull, 'w')
 
-# Immediately hide the console window on Windows unless explicitly requested.
-if os.name == "nt" and os.environ.get("SILVER_SHOW_CONSOLE") != "1":
-    try:
-        hide_console_window()
-    except Exception:
-        pass
-
 # Enable Python-level crash dumps for segmentation faults (only if stderr is available)
 try:
     faulthandler.enable()

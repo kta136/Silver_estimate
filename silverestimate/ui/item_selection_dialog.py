@@ -1,8 +1,19 @@
 #!/usr/bin/env python
-from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-                             QPushButton, QTableWidget, QTableWidgetItem,
-                             QHeaderView, QAbstractItemView, QLineEdit)
-from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import (
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QAbstractItemView,
+    QLineEdit,
+    QShortcut,
+)
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QKeySequence, QColor, QBrush
 
 
 class ItemSelectionDialog(QDialog):
@@ -13,6 +24,9 @@ class ItemSelectionDialog(QDialog):
         self.db_manager = db_manager
         self.search_term = search_term
         self.selected_item = None
+        self._filter_timer = QTimer(self)
+        self._filter_timer.setSingleShot(True)
+        self._filter_timer.timeout.connect(self._apply_filter_now)
         self.init_ui()
 
     def init_ui(self):
@@ -20,6 +34,7 @@ class ItemSelectionDialog(QDialog):
         self.setWindowTitle("Select Item")
         self.setMinimumWidth(500)
         self.setMinimumHeight(300)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
 
         layout = QVBoxLayout(self)
 
@@ -32,7 +47,7 @@ class ItemSelectionDialog(QDialog):
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText("Type to filter...") # Add placeholder
         self.search_edit.setToolTip("Search by item code or name\nFilters the list as you type\nPartial matches supported\nClear to show all items")
-        self.search_edit.textChanged.connect(self.filter_items) # Connect to filter method
+        self.search_edit.textChanged.connect(self._schedule_filter) # Connect to filter method
         search_layout.addWidget(self.search_edit)
         layout.addLayout(search_layout)
 
@@ -46,7 +61,16 @@ class ItemSelectionDialog(QDialog):
         self.items_table.setSelectionMode(QTableWidget.SingleSelection)
         self.items_table.itemDoubleClicked.connect(self.accept)
         self.items_table.setToolTip("Double-click to select an item\nOr single-click and press Select button\nShows code, name, purity, type, and rate")
+        self.items_table.horizontalHeader().setSortIndicatorShown(True)
+        self.items_table.setSortingEnabled(True)
         layout.addWidget(self.items_table)
+
+        # Empty state
+        self.empty_label = QLabel("No matching items.")
+        self.empty_label.setAlignment(Qt.AlignCenter)
+        self.empty_label.setStyleSheet("color: #666; font-style: italic;")
+        self.empty_label.hide()
+        layout.addWidget(self.empty_label)
 
         # Load all items instead of filtering
         self.load_all_items()
@@ -66,6 +90,13 @@ class ItemSelectionDialog(QDialog):
 
         layout.addLayout(button_layout)
 
+        # Keyboard shortcuts
+        QShortcut(QKeySequence.Find, self, activated=self._focus_search)
+        QShortcut(QKeySequence(Qt.Key_Return), self, activated=self._accept_if_selected)
+        QShortcut(QKeySequence(Qt.Key_Enter), self, activated=self._accept_if_selected)
+
+        QTimer.singleShot(0, self._focus_search)
+
     def load_all_items(self):
         """Load all items from the database."""
         table = self.items_table
@@ -78,26 +109,47 @@ class ItemSelectionDialog(QDialog):
             for row, item in enumerate(items):
                 table.setItem(row, 0, QTableWidgetItem(item['code']))
                 table.setItem(row, 1, QTableWidgetItem(item['name']))
-                table.setItem(row, 2, QTableWidgetItem(str(item['purity'])))
+                purity_item = QTableWidgetItem(str(item['purity']))
+                purity_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                table.setItem(row, 2, purity_item)
                 table.setItem(row, 3, QTableWidgetItem(item['wage_type']))
-                table.setItem(row, 4, QTableWidgetItem(str(item['wage_rate'])))
+                rate_item = QTableWidgetItem(str(item['wage_rate']))
+                rate_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                table.setItem(row, 4, rate_item)
             # Select the first row if available
             if table.rowCount() > 0:
                 table.selectRow(0)
             # Set initial search text if provided
             if self.search_term:
                 self.search_edit.setText(self.search_term)
-                self.filter_items(self.search_term)  # Apply initial filter
+                self._apply_filter_now()  # Apply initial filter
         finally:
             table.setSortingEnabled(True)
             table.blockSignals(False)
             table.setUpdatesEnabled(True)
             table.viewport().update()
 
+    def _focus_search(self):
+        self.search_edit.setFocus()
+        self.search_edit.selectAll()
+
+    def _accept_if_selected(self):
+        if self.items_table.selectedItems():
+            self.accept()
+
+    def _schedule_filter(self, _text):
+        # Debounce to keep typing smooth with larger lists
+        self._filter_timer.start(150)
+
+    def _apply_filter_now(self):
+        self.filter_items(self.search_edit.text())
+
     def filter_items(self, text):
         """Filter table rows based on search text in Code or Name columns."""
         search_text = text.lower().strip()
         first_visible_row = -1
+        visible_rows = 0
+        highlight_color = QColor(255, 246, 196)
 
         for row in range(self.items_table.rowCount()):
             code_item = self.items_table.item(row, 0)
@@ -109,10 +161,22 @@ class ItemSelectionDialog(QDialog):
 
             if code_matches or name_matches:
                 self.items_table.setRowHidden(row, False)
+                visible_rows += 1
                 if first_visible_row == -1:
                     first_visible_row = row
+                for item, matches in ((code_item, code_matches), (name_item, name_matches)):
+                    if item is None:
+                        continue
+                    if search_text and matches:
+                        item.setBackground(highlight_color)
+                    else:
+                        item.setBackground(QBrush())
             else:
                 self.items_table.setRowHidden(row, True)
+                if code_item is not None:
+                    code_item.setBackground(QBrush())
+                if name_item is not None:
+                    name_item.setBackground(QBrush())
 
         # Select the first visible row after filtering
         if first_visible_row != -1:
@@ -120,6 +184,7 @@ class ItemSelectionDialog(QDialog):
         else:
             # If no rows are visible, clear selection
             self.items_table.clearSelection()
+        self.empty_label.setVisible(visible_rows == 0)
 
     # Removed jump_to_item method
 

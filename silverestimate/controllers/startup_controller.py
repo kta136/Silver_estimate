@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Optional
 
-from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtWidgets import QMessageBox, QWidget
 
 from silverestimate.infrastructure.app_constants import DB_PATH
 from silverestimate.persistence.database_manager import DatabaseManager
@@ -39,17 +39,23 @@ class StartupResult:
 class StartupController:
     """Coordinate authentication, optional wipes, and database setup."""
 
-    def __init__(self, *, logger: Optional[logging.Logger] = None) -> None:
+    def __init__(
+        self,
+        *,
+        logger: Optional[logging.Logger] = None,
+        parent: Optional[QWidget] = None,
+    ) -> None:
         self._logger = logger or logging.getLogger(__name__)
+        self._parent = parent
 
     def authenticate_and_prepare(self) -> StartupResult:
         """Authenticate the operator and return a initialized database manager."""
         try:
-            auth_result = run_authentication(self._logger)
+            auth_result = run_authentication(self._logger, parent=self._parent)
         except Exception as exc:  # pragma: no cover - defensive UX handling
             self._logger.critical("Authentication failed with error: %s", exc, exc_info=True)
             QMessageBox.critical(
-                None,
+                self._parent,
                 "Authentication Error",
                 f"Failed to authenticate: {exc}\n\nThe application will now exit.",
             )
@@ -60,7 +66,12 @@ class StartupController:
             if not silent:
                 self._logger.warning("Data wipe requested by operator")
             try:
-                if perform_data_wipe(db_path=DB_PATH, logger=self._logger, silent=silent):
+                if perform_data_wipe(
+                    db_path=DB_PATH,
+                    logger=self._logger,
+                    silent=silent,
+                    parent=self._parent,
+                ):
                     if not silent:
                         self._logger.info("Data wipe completed; exiting application")
                     return StartupResult(status=StartupStatus.WIPED, silent_wipe=silent)
@@ -70,7 +81,7 @@ class StartupController:
                 if not silent:
                     self._logger.critical("Data wipe raised exception: %s", exc, exc_info=True)
                 QMessageBox.critical(
-                    None,
+                    self._parent,
                     "Data Wipe Error",
                     f"Failed to wipe data: {exc}\n\nThe application will now exit.",
                 )
@@ -97,7 +108,7 @@ class StartupController:
         except OSError as exc:
             self._logger.critical("Failed to prepare database directory: %s", exc, exc_info=True)
             QMessageBox.critical(
-                None,
+                self._parent,
                 "Database Error",
                 f"Unable to prepare database directory: {exc}",
             )
@@ -116,7 +127,7 @@ class StartupController:
                 "Would you like to recover it now?"
             )
             reply = QMessageBox.question(
-                None,
+                self._parent,
                 "Recover Unsaved Data",
                 message,
                 QMessageBox.Yes | QMessageBox.No,
@@ -150,5 +161,5 @@ class StartupController:
                 "- Missing permissions\n\n"
                 "The application cannot continue without a valid database connection."
             )
-            QMessageBox.critical(None, "Database Error", error_details)
+            QMessageBox.critical(self._parent, "Database Error", error_details)
             return None

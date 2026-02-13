@@ -5,6 +5,17 @@ All notable changes to the Silver Estimation App will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.53] - 2026-02-13
+
+### Changed
+- Reworked estimate table cursor and row-navigation behavior for manual and keyboard movement
+- Enabled arrow-key movement for the in-cell text cursor during estimate entry
+- Estimate History now initializes `From` date to the first available estimate date
+
+### Fixed
+- Removed row-jump loops that could lock the UI when moving to previous rows
+- Prevented not-responding behavior triggered by row clicks during active editing
+
 ## [2.5] - 2025-11-18
 
 ### Changed

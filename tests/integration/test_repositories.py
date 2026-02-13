@@ -121,6 +121,38 @@ def test_estimates_repository_save_and_fetch(fake_db):
     assert len(data['items']) == 1
 
 
+def test_estimates_repository_returns_first_estimate_date(fake_db):
+    repo = EstimatesRepository(fake_db)
+    assert repo.get_first_estimate_date() is None
+
+    repo.save_estimate_with_returns(
+        voucher_no='901',
+        date='2025-03-10',
+        silver_rate=71000.0,
+        regular_items=[],
+        return_items=[],
+        totals=estimate_totals(total_gross=0.0, total_net=0.0, net_fine=0.0, net_wage=0.0),
+    )
+    repo.save_estimate_with_returns(
+        voucher_no='902',
+        date='2025-01-12',
+        silver_rate=71000.0,
+        regular_items=[],
+        return_items=[],
+        totals=estimate_totals(total_gross=0.0, total_net=0.0, net_fine=0.0, net_wage=0.0),
+    )
+    repo.save_estimate_with_returns(
+        voucher_no='903',
+        date='2025-02-05',
+        silver_rate=71000.0,
+        regular_items=[],
+        return_items=[],
+        totals=estimate_totals(total_gross=0.0, total_net=0.0, net_fine=0.0, net_wage=0.0),
+    )
+
+    assert repo.get_first_estimate_date() == '2025-01-12'
+
+
 def test_save_estimate_reports_missing_item_code(fake_db):
     repo = EstimatesRepository(fake_db)
     missing_item = regular_item(

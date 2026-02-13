@@ -143,18 +143,16 @@ def test_show_silver_bars_lazy_creation(monkeypatch):
     )
 
     created = {}
-    load_calls = []
+    exec_calls = []
 
     class _SilverBarDialog:
         def __init__(self, db, main_window):
             created["db"] = db
             created["main_window"] = main_window
 
-        def load_available_bars(self):
-            load_calls.append("available")
-
-        def load_bars_in_selected_list(self):
-            load_calls.append("selected")
+        def exec_(self):
+            exec_calls.append("exec")
+            return QDialog.Accepted
 
     module = types.SimpleNamespace(SilverBarDialog=_SilverBarDialog)
     monkeypatch.setitem(sys.modules, "silverestimate.ui.silver_bar_management", module)
@@ -169,12 +167,11 @@ def test_show_silver_bars_lazy_creation(monkeypatch):
     service = NavigationService(main_window, stack, logger=logging.getLogger("test-silver"))
     service.show_silver_bars()
 
-    widget = getattr(main_window, "silver_bar_widget")
-    assert widget is not None
-    assert stack.current is widget
-    assert widget in stack.added
+    assert not hasattr(main_window, "silver_bar_widget")
+    assert stack.current is None
+    assert stack.added == []
     assert created["db"] is main_window.db
-    assert load_calls == ["available", "selected"]
+    assert exec_calls == ["exec"]
     assert message_box.calls == []
 
 

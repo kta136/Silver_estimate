@@ -119,6 +119,22 @@ class EstimatesRepository:
             self._logger.error("DB Error getting estimate headers: %s", exc, exc_info=True)
             return []
 
+    def get_first_estimate_date(self):
+        """Return the earliest estimate date (yyyy-MM-dd) or None when unavailable."""
+        cursor = self._cursor
+        if not cursor:
+            return None
+        try:
+            cursor.execute("SELECT MIN(date) AS first_date FROM estimates")
+            row = cursor.fetchone()
+            if not row:
+                return None
+            first_date = row["first_date"] if isinstance(row, sqlite3.Row) else row[0]
+            return str(first_date) if first_date else None
+        except sqlite3.Error as exc:
+            self._logger.error("DB Error getting first estimate date: %s", exc, exc_info=True)
+            return None
+
 
 
     def save_estimate_with_returns(

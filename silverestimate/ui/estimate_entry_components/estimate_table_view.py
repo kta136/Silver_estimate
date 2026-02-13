@@ -440,6 +440,27 @@ class EstimateTableView(QTableView):
         """QTableWidget-compatible accessor for current column."""
         return self.get_current_column()
 
+    def selectedItems(self) -> list[ModelBackedTableItem]:
+        """QTableWidget-compatible accessor for selected cells."""
+        items: list[ModelBackedTableItem] = []
+        for index in self.selectedIndexes():
+            item = self.item(index.row(), index.column())
+            if item is not None:
+                items.append(item)
+        return items
+
+    def row(self, item) -> int:
+        """QTableWidget-compatible row lookup for an item."""
+        if isinstance(item, ModelBackedTableItem):
+            return item._row
+        return -1
+
+    def column(self, item) -> int:
+        """QTableWidget-compatible column lookup for an item."""
+        if isinstance(item, ModelBackedTableItem):
+            return item._column
+        return -1
+
     def get_model(self) -> EstimateTableModel:
         """Get the underlying table model.
 

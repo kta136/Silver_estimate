@@ -612,6 +612,9 @@ class DatabaseManager:
     def get_estimate_headers(self, date_from=None, date_to=None, voucher_search=None):
         return self.estimates_repo.get_estimate_headers(date_from=date_from, date_to=date_to, voucher_search=voucher_search)
 
+    def get_first_estimate_date(self):
+        return self.estimates_repo.get_first_estimate_date()
+
     def generate_voucher_no(self):
         return self.estimates_repo.generate_voucher_no()
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+from functools import partial
+
 from PyQt5.QtCore import QDate, QObject, Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import (
     QAbstractItemView,
@@ -180,23 +182,23 @@ class EstimateHistoryDialog(QDialog):
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.data_ready.connect(
-            lambda headers, agg, rid=request_id: self._populate_table(headers, agg, rid)
+            partial(self._populate_table, request_id=request_id)
         )
         worker.error.connect(
-            lambda msg, rid=request_id: self._handle_load_error(msg, rid)
+            partial(self._handle_load_error, request_id=request_id)
         )
         worker.finished.connect(
-            lambda rid=request_id: self._loading_done(thread, worker, rid)
+            partial(self._loading_done, thread, worker, request_id)
         )
         thread.start()
         return
 
-    def _handle_load_error(self, message, request_id):
+    def _handle_load_error(self, message, request_id, *_) -> None:
         if request_id != self._load_request_id:
             return
         QMessageBox.warning(self, "Load Error", message)
 
-    def _populate_table(self, headers, agg_map, request_id=None):
+    def _populate_table(self, headers, agg_map, request_id=None, *_) -> None:
         if request_id is not None and request_id != self._load_request_id:
             return
         table = self.estimates_table
@@ -235,7 +237,7 @@ class EstimateHistoryDialog(QDialog):
             table.setUpdatesEnabled(True)
             table.viewport().update()
 
-    def _loading_done(self, thread, worker, request_id=None):
+    def _loading_done(self, thread, worker, request_id=None, *_) -> None:
         try:
             thread.quit()
             thread.wait(1000)

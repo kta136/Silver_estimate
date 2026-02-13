@@ -3,7 +3,7 @@
 ## Overview
 - Primary target: Windows 10/11 desktops.
 - Build system: PyInstaller 6.x driven from a PowerShell helper script.
-- Runtime Python: 3.11 (matches `on: windows-latest` CI image).
+- Runtime Python: 3.13.
 - Artifacts: unpacked directory build plus optional one-file executable zip.
 
 ## Local Windows Packaging
@@ -31,7 +31,7 @@ Workflow: `.github/workflows/release-windows.yml`.
 - Trigger: pushing a tag matching `v*` (e.g., `v1.72.7`).
 - Jobs:
   - Checkout repository.
-  - Install Python 3.11 and pip requirements.
+  - Install Python 3.13 and pip requirements.
   - Build one-file executable with PyInstaller (same flags as `-OneFile`).
   - Rename artifact to `SilverEstimate-<tag>.exe` and zip as `SilverEstimate-<tag>-win64.zip`.
   - Publish the zip to the GitHub Release using `softprops/action-gh-release`.

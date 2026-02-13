@@ -110,7 +110,9 @@ class NavigationController:
 
         tools_menu = menu_bar.addMenu("&Tools")
 
-        silver_bars_action = QAction("&Silver Bar Management", self._main_window)
+        silver_bars_action = QAction(
+            "Open &Silver Bar Management Dialog...", self._main_window
+        )
         silver_bars_action.setStatusTip(
             "Add, view, transfer, or assign silver bars to lists"
         )
@@ -150,7 +152,7 @@ class NavigationController:
             "&Item Master", self._main_window, checkable=True
         )
         view_silver_bars_action = QAction(
-            "&Silver Bars", self._main_window, checkable=True
+            "Open &Silver Bars Dialog", self._main_window, checkable=True
         )
 
         view_group.addAction(view_estimate_action)

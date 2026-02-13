@@ -6,6 +6,8 @@ import logging
 import sqlite3
 from typing import Any, Optional
 
+from silverestimate.domain.item_validation import ItemValidationError, validate_item
+
 
 class ItemsRepository:
     """Encapsulate item-related database operations."""
@@ -104,14 +106,30 @@ class ItemsRepository:
         if not conn or not cursor:
             return False
         try:
+            validated = validate_item(
+                code=code,
+                name=name,
+                purity=purity,
+                wage_type=wage_type,
+                wage_rate=wage_rate,
+            )
             cursor.execute(
                 "INSERT INTO items (code, name, purity, wage_type, wage_rate) VALUES (?, ?, ?, ?, ?)",
-                (code, name, purity, wage_type, wage_rate),
+                (
+                    validated.code,
+                    validated.name,
+                    validated.purity,
+                    validated.wage_type,
+                    validated.wage_rate,
+                ),
             )
             conn.commit()
             self._request_flush()
-            self._invalidate_cache(code)
+            self._invalidate_cache(validated.code)
             return True
+        except ItemValidationError as exc:
+            self._logger.warning("Rejected invalid item payload: %s", exc)
+            return False
         except sqlite3.Error as exc:
             self._logger.error("DB Error adding item: %s", exc, exc_info=True)
             conn.rollback()
@@ -124,15 +142,31 @@ class ItemsRepository:
         if not conn or not cursor:
             return False
         try:
+            validated = validate_item(
+                code=code,
+                name=name,
+                purity=purity,
+                wage_type=wage_type,
+                wage_rate=wage_rate,
+            )
             cursor.execute(
                 "UPDATE items SET name = ?, purity = ?, wage_type = ?, wage_rate = ? WHERE code = ?",
-                (name, purity, wage_type, wage_rate, code),
+                (
+                    validated.name,
+                    validated.purity,
+                    validated.wage_type,
+                    validated.wage_rate,
+                    validated.code,
+                ),
             )
             conn.commit()
             if cursor.rowcount > 0:
                 self._request_flush()
-                self._invalidate_cache(code)
+                self._invalidate_cache(validated.code)
                 return True
+            return False
+        except ItemValidationError as exc:
+            self._logger.warning("Rejected invalid item update: %s", exc)
             return False
         except sqlite3.Error as exc:
             self._logger.error("DB Error updating item: %s", exc, exc_info=True)

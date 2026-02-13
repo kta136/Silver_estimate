@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
     QDialog,
     QFormLayout,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -117,10 +118,12 @@ class LoginDialog(QDialog):
         button_layout.addStretch()
         # Add Reset button only in login mode
         if not self.is_setup:
-            self.reset_button = QPushButton("Reset / Wipe All Data")
+            self.reset_button = QPushButton("Wipe All Data...")
             self.reset_button.setStyleSheet("color: red;")  # Make it stand out
             self.reset_button.setToolTip(
-                "Reset application settings\nUse if you need to start fresh\nWill require password setup again"
+                "Permanently delete all application data and credentials\n"
+                "Includes items, estimates, silver bars, and lists\n"
+                "Requires typing DELETE to confirm"
             )
             button_layout.addWidget(self.reset_button)
             button_layout.addSpacing(20)  # Add some space
@@ -210,16 +213,28 @@ class LoginDialog(QDialog):
         """Handle the Reset / Wipe All Data button click."""
         reply = QMessageBox.warning(
             self,
-            "Confirm Data Wipe",
-            "Are you absolutely sure you want to reset?\n\n"
-            "This will permanently delete ALL application data (items, estimates, lists, etc.) "
-            "and password settings.\n\n"
+            "Confirm Full Data Wipe",
+            "This will permanently delete ALL application data and credentials.\n"
+            "Items, estimates, silver bars, lists, and passwords will be removed.\n\n"
             "THIS ACTION CANNOT BE UNDONE.",
             QMessageBox.Yes | QMessageBox.Cancel,
             QMessageBox.Cancel,
         )
 
         if reply == QMessageBox.Yes:
+            typed, ok = QInputDialog.getText(
+                self,
+                "Type DELETE to Confirm",
+                "Type DELETE to perform an irreversible full data wipe:",
+            )
+            if not ok or typed.strip().upper() != "DELETE":
+                QMessageBox.information(
+                    self,
+                    "Wipe Cancelled",
+                    "Confirmation text did not match. No data was deleted.",
+                )
+                self.reset_requested = False
+                return
             self.reset_requested = True
             self.accept()  # Close the dialog, main logic will check the flag
 

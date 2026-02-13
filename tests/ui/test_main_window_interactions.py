@@ -89,7 +89,9 @@ class FakeDbManager:
     def delete_silver_bars_for_estimate(self, voucher_no: str) -> None:
         self.deleted_bars_for = voucher_no
 
-    def get_silver_bars(self, estimate_voucher_no: str) -> List[Dict[str, Any]]:
+    def get_silver_bars(
+        self, estimate_voucher_no: Optional[str] = None, **kwargs
+    ) -> List[Dict[str, Any]]:
         return []
 
     def update_silver_bar_values(

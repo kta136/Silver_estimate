@@ -17,6 +17,8 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from silverestimate.domain.item_validation import ItemValidationError, validate_item
+
 
 class ItemMasterWidget(QWidget):
     """Widget for managing silver item catalog."""
@@ -70,9 +72,8 @@ class ItemMasterWidget(QWidget):
         self.purity_edit.setToolTip(
             "Default silver purity percentage."
         )  # Updated tooltip
-        # Apply Validator
-        # Removed upper limit (set to a large number)
-        purity_validator = QDoubleValidator(0.00, 999999.99, 2, self.purity_edit)
+        # Apply validator with realistic purity range.
+        purity_validator = QDoubleValidator(0.00, 100.00, 2, self.purity_edit)
         purity_validator.setNotation(QDoubleValidator.StandardNotation)
         purity_validator.setLocale(
             QLocale.system()
@@ -285,39 +286,50 @@ class ItemMasterWidget(QWidget):
         """Add a new item to the database."""
         code = self.code_edit.text().strip()
         name = self.name_edit.text().strip()
-        # Safely convert text from QLineEdit to float
         purity = self._parse_float(self.purity_edit.text(), 0.0)
         wage_type = self.wage_type_combo.currentText()
         wage_rate = self._parse_float(self.wage_rate_edit.text(), 0.0)
 
-        # Removed explicit purity range check (validator handles format)
-        # if not (0 <= purity <= 100):
-        #     QMessageBox.warning(self, "Input Error", "Purity must be between 0 and 100.")
-        #     self.show_status("Add Item Error: Invalid purity value.", 3000)
-        #     return
-
-        if not code or not name:
-            QMessageBox.warning(self, "Input Error", "Item Code and Name are required.")
-            self.show_status("Add Item Error: Code and Name required.", 3000)
+        try:
+            validated = validate_item(
+                code=code,
+                name=name,
+                purity=purity,
+                wage_type=wage_type,
+                wage_rate=wage_rate,
+            )
+        except ItemValidationError as exc:
+            QMessageBox.warning(self, "Input Error", str(exc))
+            self.show_status(f"Add Item Error: {exc}", 3000)
             return
 
-        if self.db_manager.get_item_by_code(code):
+        if self.db_manager.get_item_by_code(validated.code):
             QMessageBox.warning(
                 self,
                 "Duplicate Code",
-                f"Item with code '{code}' already exists. Use Update or choose a different code.",
+                f"Item with code '{validated.code}' already exists. Use Update or choose a different code.",
             )
-            self.show_status(f"Add Item Error: Code '{code}' already exists.", 3000)
+            self.show_status(
+                f"Add Item Error: Code '{validated.code}' already exists.", 3000
+            )
             return
 
-        success = self.db_manager.add_item(code, name, purity, wage_type, wage_rate)
+        success = self.db_manager.add_item(
+            validated.code,
+            validated.name,
+            validated.purity,
+            validated.wage_type,
+            validated.wage_rate,
+        )
         if success:
-            self.show_status(f"Item '{code}' added successfully.", 3000)
+            self.show_status(f"Item '{validated.code}' added successfully.", 3000)
             self.clear_form()
             self.load_items()
         else:
             QMessageBox.critical(
-                self, "Database Error", "Failed to add item. See console/logs."
+                self,
+                "Save Failed",
+                "Failed to add item. Please verify values and try again.",
             )
             self.show_status("Add Item Error: Database operation failed.", 4000)
 
@@ -325,38 +337,43 @@ class ItemMasterWidget(QWidget):
         """Update an existing item in the database."""
         code = self.code_edit.text().strip()
         name = self.name_edit.text().strip()
-        # Safely convert text from QLineEdit to float
         purity = self._parse_float(self.purity_edit.text(), 0.0)
         wage_type = self.wage_type_combo.currentText()
         wage_rate = self._parse_float(self.wage_rate_edit.text(), 0.0)
 
-        # Removed explicit purity range check (validator handles format)
-        # if not (0 <= purity <= 100):
-        #     QMessageBox.warning(self, "Input Error", "Purity must be between 0 and 100.")
-        #     self.show_status("Update Item Error: Invalid purity value.", 3000)
-        #     return
-
-        if not code:
-            QMessageBox.warning(self, "Update Error", "No item selected to update.")
-            self.show_status("Update Item Error: No item selected", 3000)
-            return
-        if not name:
-            QMessageBox.warning(self, "Input Error", "Item Name cannot be empty.")
-            self.show_status("Update Item Error: Name required", 3000)
+        try:
+            validated = validate_item(
+                code=code,
+                name=name,
+                purity=purity,
+                wage_type=wage_type,
+                wage_rate=wage_rate,
+            )
+        except ItemValidationError as exc:
+            QMessageBox.warning(self, "Input Error", str(exc))
+            self.show_status(f"Update Item Error: {exc}", 3000)
             return
 
-        # Confirmation removed as per request
-        success = self.db_manager.update_item(code, name, purity, wage_type, wage_rate)
+        success = self.db_manager.update_item(
+            validated.code,
+            validated.name,
+            validated.purity,
+            validated.wage_type,
+            validated.wage_rate,
+        )
         if success:
-            self.show_status(f"Item '{code}' updated successfully.", 3000)
+            self.show_status(f"Item '{validated.code}' updated successfully.", 3000)
             self.clear_form()
             self.load_items()
         else:
             QMessageBox.critical(
-                self, "Database Error", "Failed to update item. See console/logs."
+                self,
+                "Save Failed",
+                "Failed to update item. Please verify values and try again.",
             )
             self.show_status(
-                f"Update Item Error: Database operation failed for '{code}'.", 4000
+                f"Update Item Error: Database operation failed for '{validated.code}'.",
+                4000,
             )
 
     def delete_item(self):

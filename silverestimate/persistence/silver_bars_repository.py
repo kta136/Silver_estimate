@@ -308,15 +308,32 @@ class SilverBarsRepository:
 
     # --- Queries ------------------------------------------------------------
 
-    def get_bars_in_list(self, list_id: int):
+    def get_bars_in_list(
+        self,
+        list_id: int,
+        *,
+        limit: Optional[int] = None,
+        offset: int = 0,
+    ):
         cursor = self._cursor
         if not cursor:
             return []
         try:
-            cursor.execute(
-                "SELECT * FROM silver_bars WHERE list_id = ? ORDER BY bar_id",
-                (list_id,),
+            query = (
+                "SELECT sb.*, e.note AS estimate_note "
+                "FROM silver_bars sb "
+                "LEFT JOIN estimates e ON sb.estimate_voucher_no = e.voucher_no "
+                "WHERE sb.list_id = ? "
+                "ORDER BY sb.bar_id"
             )
+            params: List[Any] = [list_id]
+            if isinstance(limit, int) and limit > 0:
+                query += " LIMIT ?"
+                params.append(int(limit))
+                if isinstance(offset, int) and offset > 0:
+                    query += " OFFSET ?"
+                    params.append(int(offset))
+            cursor.execute(query, params)
             return cursor.fetchall()
         except sqlite3.Error as exc:
             self._logger.error(
@@ -413,37 +430,44 @@ class SilverBarsRepository:
         min_purity: Optional[float] = None,
         max_purity: Optional[float] = None,
         date_range: Optional[Tuple[Optional[str], Optional[str]]] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
     ):
         cursor = self._cursor
         if not cursor:
             return []
-        query = "SELECT * FROM silver_bars WHERE 1=1"
+        query = (
+            "SELECT sb.*, e.note AS estimate_note "
+            "FROM silver_bars sb "
+            "LEFT JOIN estimates e ON sb.estimate_voucher_no = e.voucher_no "
+            "WHERE 1=1"
+        )
         params: List[Any] = []
         if status:
-            query += " AND status = ?"
+            query += " AND sb.status = ?"
             params.append(status)
         if weight_query is not None:
             try:
                 target = float(weight_query)
                 tol = float(weight_tolerance) if weight_tolerance is not None else 0.001
-                query += " AND weight BETWEEN ? AND ?"
+                query += " AND sb.weight BETWEEN ? AND ?"
                 params.extend([target - tol, target + tol])
             except ValueError:
                 self._logger.warning(
                     "Invalid weight query '%s'. Ignoring weight filter.", weight_query
                 )
         if estimate_voucher_no:
-            query += " AND estimate_voucher_no LIKE ?"
+            query += " AND sb.estimate_voucher_no LIKE ?"
             params.append(f"%{estimate_voucher_no}%")
         if min_purity is not None:
             try:
-                query += " AND purity >= ?"
+                query += " AND sb.purity >= ?"
                 params.append(float(min_purity))
             except (TypeError, ValueError):
                 pass
         if max_purity is not None:
             try:
-                query += " AND purity <= ?"
+                query += " AND sb.purity <= ?"
                 params.append(float(max_purity))
             except (TypeError, ValueError):
                 pass
@@ -454,12 +478,18 @@ class SilverBarsRepository:
         ):
             start_iso, end_iso = date_range
             if start_iso:
-                query += " AND date_added >= ?"
+                query += " AND sb.date_added >= ?"
                 params.append(start_iso)
             if end_iso:
-                query += " AND date_added <= ?"
+                query += " AND sb.date_added <= ?"
                 params.append(end_iso)
-        query += " ORDER BY date_added DESC, bar_id DESC"
+        query += " ORDER BY sb.date_added DESC, sb.bar_id DESC"
+        if isinstance(limit, int) and limit > 0:
+            query += " LIMIT ?"
+            params.append(int(limit))
+            if isinstance(offset, int) and offset > 0:
+                query += " OFFSET ?"
+                params.append(int(offset))
         try:
             cursor.execute(query, params)
             return cursor.fetchall()

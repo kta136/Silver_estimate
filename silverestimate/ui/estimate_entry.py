@@ -1380,7 +1380,12 @@ class EstimateEntryWidget(QWidget):
             try:
                 date = QDate.fromString(loaded.date, "yyyy-MM-dd")
                 self.date_edit.setDate(date if date.isValid() else QDate.currentDate())
-            except:
+            except Exception as exc:
+                self.logger.debug(
+                    "Failed to parse loaded estimate date '%s': %s",
+                    loaded.date,
+                    exc,
+                )
                 self.date_edit.setDate(QDate.currentDate())
 
             self.silver_rate_spin.setValue(loaded.silver_rate)
@@ -1475,7 +1480,10 @@ class EstimateEntryWidget(QWidget):
                 if rate is None:
                     rate, _ = fetch_silver_agra_local_mohar_rate(timeout=7)
                 self.live_rate_fetched.emit(rate)
-            except:
+            except Exception as exc:
+                self.logger.warning(
+                    "Live silver rate refresh failed: %s", exc, exc_info=True
+                )
                 self.live_rate_fetched.emit(None)
 
         threading.Thread(target=worker, daemon=True).start()
@@ -1534,7 +1542,12 @@ class EstimateEntryWidget(QWidget):
                         row_index=row + 1,
                     )
                 )
-            except:
+            except Exception as exc:
+                self.logger.debug(
+                    "Skipping invalid row while syncing view model (row=%s): %s",
+                    row,
+                    exc,
+                )
                 continue
 
         self.view_model.set_rows(rows)
@@ -1602,8 +1615,8 @@ class EstimateEntryWidget(QWidget):
             self._settings().setValue(
                 "ui/estimate_table_column_widths", ",".join(widths)
             )
-        except:
-            pass
+        except Exception as exc:
+            self.logger.debug("Failed to save column widths setting: %s", exc)
 
     def _load_column_widths_setting(self):
         val = self._settings().value("ui/estimate_table_column_widths", type=str)
@@ -1614,7 +1627,8 @@ class EstimateEntryWidget(QWidget):
                     if i < self.item_table.columnCount():
                         self.item_table.setColumnWidth(i, w)
                 self._use_stretch_for_item_name = False
-            except:
+            except (TypeError, ValueError) as exc:
+                self.logger.debug("Failed to restore column widths setting: %s", exc)
                 self._use_stretch_for_item_name = True
         else:
             self._use_stretch_for_item_name = True
@@ -1657,21 +1671,77 @@ class EstimateEntryWidget(QWidget):
 
     def _load_table_font_size_setting(self):
         size = self._settings().value("ui/table_font_size", defaultValue=9, type=int)
-        font = self.item_table.font()
-        font.setPointSize(size)
-        self.item_table.setFont(font)
+        self.apply_table_font_size(size)
 
     def _load_breakdown_font_size_setting(self):
         size = self._settings().value(
             "ui/breakdown_font_size", defaultValue=9, type=int
         )
-        self.totals_panel.set_breakdown_font_size(size)
+        self.apply_breakdown_font_size(size)
 
     def _load_final_calc_font_size_setting(self):
         size = self._settings().value(
             "ui/final_calc_font_size", defaultValue=10, type=int
         )
-        self.totals_panel.set_final_calc_font_size(size)
+        self.apply_final_calc_font_size(size)
+
+    def apply_table_font_size(self, size: int) -> bool:
+        """Apply estimate-table font size at runtime."""
+        try:
+            size_i = int(size)
+        except (TypeError, ValueError):
+            self.logger.warning("Invalid table font size value: %r", size)
+            return False
+        size_i = max(7, min(16, size_i))
+        try:
+            font = self.item_table.font()
+            font.setPointSize(size_i)
+            self.item_table.setFont(font)
+            self.item_table.viewport().update()
+            return True
+        except Exception as exc:
+            self.logger.warning("Failed to apply table font size: %s", exc)
+            return False
+
+    def apply_breakdown_font_size(self, size: int) -> bool:
+        """Apply totals-breakdown font size at runtime."""
+        try:
+            size_i = int(size)
+        except (TypeError, ValueError):
+            self.logger.warning("Invalid breakdown font size value: %r", size)
+            return False
+        size_i = max(7, min(16, size_i))
+        try:
+            self.totals_panel.set_breakdown_font_size(size_i)
+            return True
+        except Exception as exc:
+            self.logger.warning("Failed to apply breakdown font size: %s", exc)
+            return False
+
+    def apply_final_calc_font_size(self, size: int) -> bool:
+        """Apply final-calculation panel font size at runtime."""
+        try:
+            size_i = int(size)
+        except (TypeError, ValueError):
+            self.logger.warning("Invalid final calculation font size value: %r", size)
+            return False
+        size_i = max(8, min(20, size_i))
+        try:
+            self.totals_panel.set_final_calc_font_size(size_i)
+            return True
+        except Exception as exc:
+            self.logger.warning("Failed to apply final calculation font size: %s", exc)
+            return False
+
+    # Backward-compatible private aliases still referenced by older callers.
+    def _apply_table_font_size(self, size: int) -> bool:
+        return self.apply_table_font_size(size)
+
+    def _apply_breakdown_font_size(self, size: int) -> bool:
+        return self.apply_breakdown_font_size(size)
+
+    def _apply_final_calc_font_size(self, size: int) -> bool:
+        return self.apply_final_calc_font_size(size)
 
     # --- Keyboard -----------------------------------------------------------
 
@@ -1717,6 +1787,8 @@ class EstimateEntryWidget(QWidget):
     def reconnect_load_estimate(self):
         try:
             self.voucher_edit.editingFinished.disconnect(self.safe_load_estimate)
-        except:
-            pass
+        except (TypeError, RuntimeError) as exc:
+            self.logger.debug(
+                "Could not disconnect voucher editingFinished handler: %s", exc
+            )
         self.voucher_edit.editingFinished.connect(self.safe_load_estimate)

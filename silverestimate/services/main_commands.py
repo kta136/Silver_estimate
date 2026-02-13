@@ -120,9 +120,9 @@ class MainCommands:
         dialog.importStarted.connect(manager.import_from_file)
         manager.progress_updated.connect(dialog.update_progress)
         manager.status_updated.connect(dialog.update_status)
+        manager.import_summary_updated.connect(dialog.set_import_summary)
         manager.import_finished.connect(dialog.import_finished)
-        dialog.rejected.connect(manager.cancel_import)
-        dialog.rejected.connect(worker_thread.quit)
+        dialog.rejected.connect(lambda: manager.cancel_import())
 
         try:
             dialog.exec_()

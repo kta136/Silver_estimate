@@ -29,9 +29,9 @@ from PyQt5.QtWidgets import (
 
 # Fix sys.stdout and sys.stderr for GUI mode (Windows without console)
 if sys.stderr is None:
-    sys.stderr = open(os.devnull, 'w')
+    sys.stderr = open(os.devnull, "w")
 if sys.stdout is None:
-    sys.stdout = open(os.devnull, 'w')
+    sys.stdout = open(os.devnull, "w")
 
 # Enable Python-level crash dumps for segmentation faults (only if stderr is available)
 try:
@@ -70,7 +70,9 @@ class MainWindow(QMainWindow):
         self.logger.info("Initializing MainWindow")
 
         if db_manager is None:
-            raise StartupError("Database manager not provided. Cannot start application.")
+            raise StartupError(
+                "Database manager not provided. Cannot start application."
+            )
 
         self.db = db_manager
         self.settings_service = SettingsService()
@@ -127,7 +129,9 @@ class MainWindow(QMainWindow):
             # Give first-run sessions a sensible default size before maximizing later.
             self.resize(1280, 800)
 
-        self.navigation_service = NavigationService(self, self.stack, logger=self.logger)
+        self.navigation_service = NavigationService(
+            self, self.stack, logger=self.logger
+        )
         self.commands = MainCommands(self, self.db, logger=self.logger)
 
         self.navigation_controller = NavigationController(
@@ -139,7 +143,7 @@ class MainWindow(QMainWindow):
 
         self.live_rate_controller = LiveRateController(
             parent=self,
-            widget_getter=lambda: getattr(self, 'estimate_widget', None),
+            widget_getter=lambda: getattr(self, "estimate_widget", None),
             status_callback=self.show_status_message,
             logger=self.logger,
         )
@@ -160,12 +164,20 @@ class MainWindow(QMainWindow):
             self.stack.setCurrentWidget(self.estimate_widget)
 
             try:
-                if hasattr(self.db, 'on_flush_queued'):
+                if hasattr(self.db, "on_flush_queued"):
+
                     def _on_flush_q():
-                        QTimer.singleShot(0, lambda: self.estimate_widget.show_inline_status("Saving.", 1000, 'info'))
+                        QTimer.singleShot(
+                            0,
+                            lambda: self.estimate_widget.show_inline_status(
+                                "Saving.", 1000, "info"
+                            ),
+                        )
 
                     def _on_flush_done():
-                        QTimer.singleShot(0, lambda: self.estimate_widget.show_inline_status("", 0))
+                        QTimer.singleShot(
+                            0, lambda: self.estimate_widget.show_inline_status("", 0)
+                        )
 
                     self.db.on_flush_queued = _on_flush_q
                     self.db.on_flush_done = _on_flush_done
@@ -173,14 +185,14 @@ class MainWindow(QMainWindow):
                 self.logger.debug("Could not hook flush callbacks: %s", callback_error)
 
             try:
-                if hasattr(self.db, 'start_preload_item_cache'):
+                if hasattr(self.db, "start_preload_item_cache"):
                     self.db.start_preload_item_cache()
             except Exception as preload_error:
                 self.logger.debug("Item cache preload failed: %s", preload_error)
 
             self.logger.info("Widgets initialized successfully")
             try:
-                self.show_status_message("Ready", 2000, level='info')
+                self.show_status_message("Ready", 2000, level="info")
             except Exception:
                 pass
 
@@ -188,26 +200,38 @@ class MainWindow(QMainWindow):
                 self.live_rate_controller.initialize()
             except Exception as rate_error:
                 if self.logger:
-                    self.logger.debug("Live rate initialization failed: %s", rate_error, exc_info=True)
+                    self.logger.debug(
+                        "Live rate initialization failed: %s", rate_error, exc_info=True
+                    )
 
-            pending = getattr(self, '_pending_status_message', None)
+            pending = getattr(self, "_pending_status_message", None)
             if pending:
                 self._pending_status_message = None
                 try:
                     self.show_status_message(*pending)
                 except Exception as exc:
                     if self.logger:
-                        self.logger.debug("Failed to deliver pending status message: %s", exc, exc_info=True)
+                        self.logger.debug(
+                            "Failed to deliver pending status message: %s",
+                            exc,
+                            exc_info=True,
+                        )
 
             if not self._geometry_restored:
                 try:
                     self.setWindowState(self.windowState() | Qt.WindowMaximized)
                 except Exception as exc:
                     if self.logger:
-                        self.logger.debug("Failed to apply maximized window state: %s", exc, exc_info=True)
+                        self.logger.debug(
+                            "Failed to apply maximized window state: %s",
+                            exc,
+                            exc_info=True,
+                        )
         except Exception as exc:
             self.logger.critical("Failed to initialize widgets: %s", exc, exc_info=True)
-            raise StartupError(f"Failed to initialize application widgets: {exc}") from exc
+            raise StartupError(
+                f"Failed to initialize application widgets: {exc}"
+            ) from exc
 
     # --- File menu action handlers ---
     def file_save_estimate(self, *args, **kwargs):
@@ -216,10 +240,12 @@ class MainWindow(QMainWindow):
     def file_print_estimate(self, *args, **kwargs):
         return self.commands.print_estimate()
 
-    def show_status_message(self, message: str, timeout: int = 3000, level: str = 'info') -> None:
+    def show_status_message(
+        self, message: str, timeout: int = 3000, level: str = "info"
+    ) -> None:
         """Display a transient status message inline within the estimate view."""
-        widget = getattr(self, 'estimate_widget', None)
-        show_inline = getattr(widget, 'show_inline_status', None)
+        widget = getattr(self, "estimate_widget", None)
+        show_inline = getattr(widget, "show_inline_status", None)
         if callable(show_inline):
             try:
                 show_inline(message, timeout=timeout, level=level)
@@ -233,34 +259,32 @@ class MainWindow(QMainWindow):
                 self.logger.info("Status: %s", message)
             except Exception:
                 pass
+
     def refresh_live_rate_now(self):
-        controller = getattr(self, 'live_rate_controller', None)
+        controller = getattr(self, "live_rate_controller", None)
         if controller:
             return controller.refresh_now()
         return None
 
     def reconfigure_rate_visibility_from_settings(self):
-        controller = getattr(self, 'live_rate_controller', None)
+        controller = getattr(self, "live_rate_controller", None)
         if not controller:
             return True
         return controller.apply_visibility_settings()
 
     def reconfigure_rate_timer_from_settings(self):
-        controller = getattr(self, 'live_rate_controller', None)
+        controller = getattr(self, "live_rate_controller", None)
         if controller:
             controller.apply_timer_settings()
 
     def show_estimate(self):
         return self.navigation_controller.show_estimate()
 
-
     def show_item_master(self):
         return self.navigation_controller.show_item_master()
 
-
     def show_silver_bars(self):
         return self.navigation_controller.show_silver_bars()
-
 
     def delete_all_data(self, *args, **kwargs):
         return self.navigation_controller.delete_all_data()
@@ -271,10 +295,8 @@ class MainWindow(QMainWindow):
     def show_silver_bar_history(self):
         return self.navigation_controller.show_silver_bar_history()
 
-
     def show_estimate_history(self):
         return self.navigation_controller.show_estimate_history()
-
 
     def show_about(self):
         return self.navigation_controller.show_about()
@@ -308,14 +330,14 @@ class MainWindow(QMainWindow):
             self.settings_service.save_geometry(self)
         except Exception:
             pass
-        controller = getattr(self, 'live_rate_controller', None)
+        controller = getattr(self, "live_rate_controller", None)
         if controller:
             try:
                 controller.shutdown()
             except Exception:
                 pass
         # Close the database connection properly
-        if hasattr(self, 'db') and self.db:
+        if hasattr(self, "db") and self.db:
             self.logger.debug("Closing database connection")
             self.db.close()
         if sys.platform == "win32" and self._taskbar_icon_handle:
@@ -339,7 +361,13 @@ class MainWindow(QMainWindow):
     def show_table_font_size_dialog(self):
         """Show dialog to change estimate table font size."""
         apply_callback = None
-        if hasattr(self, 'estimate_widget') and hasattr(self.estimate_widget, '_apply_table_font_size'):
+        if hasattr(self, "estimate_widget") and hasattr(
+            self.estimate_widget, "apply_table_font_size"
+        ):
+            apply_callback = self.estimate_widget.apply_table_font_size
+        elif hasattr(self, "estimate_widget") and hasattr(
+            self.estimate_widget, "_apply_table_font_size"
+        ):
             apply_callback = self.estimate_widget._apply_table_font_size
 
         new_size = adjust_table_font_size(
@@ -356,18 +384,20 @@ class MainWindow(QMainWindow):
     def show_settings_dialog(self):
         """Show the centralized settings dialog."""
         from silverestimate.ui.settings_dialog import SettingsDialog
+
         dialog = SettingsDialog(main_window_ref=self, parent=self)
         # Connect the signal if needed for immediate UI updates beyond fonts
         # dialog.settings_applied.connect(self.handle_settings_applied)
         dialog.exec_()
+
     # Removed show_advanced_tools_dialog method
 
     def show_import_dialog(self):
         return self.commands.import_items()
 
 
-
 # --- Application entry point ---
+
 
 def main() -> int:
     """Start the SilverEstimate application and return the exit code."""
@@ -379,5 +409,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
-

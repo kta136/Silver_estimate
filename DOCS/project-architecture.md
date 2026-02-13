@@ -83,7 +83,7 @@ MainWindow
 ```
 
 ## Technical Stack
-- Python 3.11+
+- Python 3.13+
 - PyQt5 5.15+
 - SQLite 3 with WAL mode for concurrency-friendly access
 - `cryptography` for AES-GCM payload encryption

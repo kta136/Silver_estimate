@@ -146,6 +146,47 @@ def test_run_authentication_secondary_password_triggers_silent_wipe(
     assert result.silent is True
 
 
+def test_run_authentication_retries_after_incorrect_password(
+    monkeypatch, settings_stub
+):
+    _MessageBoxStub.reset()
+    settings = settings_stub()
+    settings.setValue("security/password_hash", "stored-hash")
+    settings.setValue("security/backup_hash", "backup-hash")
+
+    attempts = {"count": 0}
+
+    class _LoginDialog:
+        def __init__(self, is_setup=False, parent=None):
+            assert is_setup is False
+            attempts["count"] += 1
+            self._attempt = attempts["count"]
+
+        def exec_(self):
+            return QDialog.Accepted
+
+        def was_reset_requested(self):
+            return False
+
+        def get_password(self):
+            return "wrong-pass" if self._attempt == 1 else "secret"
+
+        @staticmethod
+        def verify_password(stored, provided):
+            return stored == "stored-hash" and provided == "secret"
+
+    monkeypatch.setattr(auth_service, "LoginDialog", _LoginDialog)
+    monkeypatch.setattr(auth_service, "QMessageBox", _MessageBoxStub)
+
+    result = auth_service.run_authentication(logging.getLogger("test-auth-retry"))
+
+    assert isinstance(result, auth_service.AuthenticationResult)
+    assert result.password == "secret"
+    assert result.wipe_requested is False
+    assert attempts["count"] == 2
+    assert len(_MessageBoxStub.warning_calls) == 1
+
+
 def test_perform_data_wipe_removes_files(tmp_path, monkeypatch, settings_stub):
     _MessageBoxStub.reset()
     db_file = tmp_path / "estimation.db"

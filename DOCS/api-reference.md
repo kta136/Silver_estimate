@@ -35,11 +35,13 @@ This guide documents the primary controller, service, and persistence APIs expos
     EstimateEntryPresenter(view: EstimateEntryView, repository: EstimateRepository)
 
 - **generate_voucher(silent: bool = False) -> str** - request the next voucher number from the repository and push it to the view.
-- **calculate_totals(view_state: EstimateEntryViewState) -> TotalsResult** - compute totals via `services.estimate_calculator`.
+- **refresh_totals() -> TotalsResult** - capture current view state and recompute totals via `services.estimate_calculator`.
 - **load_estimate(voucher_no: str) -> Optional[LoadedEstimate]** - retrieve persisted estimate payloads and normalise them for the view.
+- **open_history() -> None** - open the history dialog, load the chosen voucher, and apply it to the view.
+- **handle_item_code(row_index: int, code: str) -> bool** - resolve item code from repository or selection dialog, then populate/focus the row.
 - **save_estimate(payload: SavePayload) -> SaveOutcome** - persist header/items, synchronise silver bar metadata (update/add), and surface status messaging.
 - **delete_estimate(voucher_no: str) -> bool** - delegate to the repository and clean up related silver bar records.
-- **open_silver_bar_management()** / **load_item_into_row(row_index: int, code: str)** - bridge UI interactions with services/repositories.
+- **open_silver_bar_management() -> None** - request the view to open silver bar management with UI-safe error reporting.
 
 ### Presenter Contracts (silverestimate/presenter/__init__.py)
 - **EstimateEntryView** protocol for Qt widgets (`capture_state`, `apply_totals`, `populate_row`, etc.).
@@ -48,7 +50,7 @@ This guide documents the primary controller, service, and persistence APIs expos
 ## Service Layer
 
 ### Authentication (silverestimate/services/auth_service.py)
-- **run_authentication(logger: Optional[logging.Logger] = None) -> Optional[AuthenticationResult]** - drives setup/login; returns `None` on cancel or an `AuthenticationResult` describing the password provided or a wipe request (with silent flag when triggered by the secondary password).
+- **run_authentication(logger: Optional[logging.Logger] = None, *, parent: Optional[QWidget] = None) -> Optional[AuthenticationResult]** - drives setup/login with retry-on-invalid-password behavior; returns `None` only when the dialog is cancelled, otherwise returns an `AuthenticationResult` describing the password provided or a wipe request (with silent flag when triggered by the secondary password).
 - **perform_data_wipe(db_path: str = DB_PATH, logger: Optional[logging.Logger] = None, *, silent: bool = False) -> bool** - deletes the encrypted DB, removes temporary plaintext, clears credentials, and, when `silent=True`, purges application log files without emitting wipe-related log entries.
 - Uses `silverestimate/security/credential_store.py` to persist Argon2 hashes in the OS keyring (automatically migrating legacy QSettings values).
 

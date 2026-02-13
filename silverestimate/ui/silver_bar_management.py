@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import logging
 import traceback  # Added for error handling in actions
 from datetime import datetime, timedelta
 
@@ -46,6 +47,7 @@ class SilverBarDialog(QDialog):
     def __init__(self, db_manager, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
+        self.logger = logging.getLogger(__name__)
         self.current_list_id = None  # Track the currently selected list
         self.init_ui()
         self.load_lists()
@@ -163,7 +165,7 @@ class SilverBarDialog(QDialog):
             self.weight_search_edit.setClearButtonEnabled(True)
         except Exception:
             pass
-        self.weight_search_edit.textChanged.connect(self.load_available_bars)
+        self.weight_search_edit.textChanged.connect(self._schedule_available_reload)
         weight_row.addWidget(self.weight_search_edit)
         weight_row.addStretch()
         filters_layout.addLayout(weight_row)
@@ -193,7 +195,7 @@ class SilverBarDialog(QDialog):
                 max-width: 80px;
             }
         """)
-        self.purity_min_spin.valueChanged.connect(self.load_available_bars)
+        self.purity_min_spin.valueChanged.connect(self._schedule_available_reload)
         purity_tol_row.addWidget(self.purity_min_spin)
 
         range_lbl = QLabel("% to")
@@ -214,7 +216,7 @@ class SilverBarDialog(QDialog):
                 max-width: 80px;
             }
         """)
-        self.purity_max_spin.valueChanged.connect(self.load_available_bars)
+        self.purity_max_spin.valueChanged.connect(self._schedule_available_reload)
         purity_tol_row.addWidget(self.purity_max_spin)
 
         percent_lbl = QLabel("%")
@@ -244,7 +246,7 @@ class SilverBarDialog(QDialog):
                 max-width: 100px;
             }
         """)
-        self.weight_tol_spin.valueChanged.connect(self.load_available_bars)
+        self.weight_tol_spin.valueChanged.connect(self._schedule_available_reload)
         purity_tol_row.addWidget(self.weight_tol_spin)
 
         purity_tol_row.addStretch()
@@ -262,7 +264,9 @@ class SilverBarDialog(QDialog):
             self.date_range_combo.addItems(
                 ["Any", "Today", "Last 7 days", "Last 30 days", "This Month"]
             )
-            self.date_range_combo.currentIndexChanged.connect(self.load_available_bars)
+            self.date_range_combo.currentIndexChanged.connect(
+                self._schedule_available_reload
+            )
             self.date_range_combo.setStyleSheet("""
                 QComboBox {
                     padding: 4px 8px;
@@ -277,6 +281,36 @@ class SilverBarDialog(QDialog):
             pass
         date_row.addStretch()
         filters_layout.addLayout(date_row)
+
+        # Result limit row
+        limit_row = QHBoxLayout()
+        limit_row.setSpacing(6)
+        limit_label = QLabel("Max Rows:")
+        limit_label.setStyleSheet("font-weight: 600; font-size: 13px; min-width: 90px;")
+        limit_row.addWidget(limit_label)
+        self.available_limit_spin = QSpinBox()
+        self.available_limit_spin.setRange(100, 50000)
+        self.available_limit_spin.setSingleStep(100)
+        default_limit = 1500
+        try:
+            settings = get_app_settings()
+            default_limit = settings.value(
+                "silver_bar/available_max_rows", defaultValue=1500, type=int
+            )
+        except Exception:
+            default_limit = 1500
+        self.available_limit_spin.setValue(max(100, int(default_limit or 1500)))
+        self.available_limit_spin.setSuffix(" rows")
+        self.available_limit_spin.setToolTip(
+            "Limit maximum rows loaded in Available Bars table to keep UI responsive."
+        )
+        self.available_limit_spin.valueChanged.connect(self._schedule_available_reload)
+        self.available_limit_spin.valueChanged.connect(
+            self._save_available_limit_setting
+        )
+        limit_row.addWidget(self.available_limit_spin)
+        limit_row.addStretch()
+        filters_layout.addLayout(limit_row)
 
         # Add filters group to left layout
         left_layout.addWidget(filters_group)
@@ -1004,6 +1038,11 @@ class SilverBarDialog(QDialog):
         self._auto_refresh_timer.setInterval(5000)
         self._auto_refresh_timer.timeout.connect(self.load_available_bars)
 
+        self._filter_reload_timer = QTimer(self)
+        self._filter_reload_timer.setSingleShot(True)
+        self._filter_reload_timer.setInterval(180)
+        self._filter_reload_timer.timeout.connect(self.load_available_bars)
+
     # Ensure fresh data when the view becomes visible (embedded or modal)
     def showEvent(self, event):
         try:
@@ -1011,14 +1050,38 @@ class SilverBarDialog(QDialog):
             self.load_available_bars()
             if self.current_list_id is not None:
                 self.load_bars_in_selected_list()
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.warning(
+                "Failed to refresh silver bar data on showEvent: %s",
+                exc,
+                exc_info=True,
+            )
         try:
             super().showEvent(event)
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug("Base showEvent raised: %s", exc, exc_info=True)
 
     # --- Data Loading Methods ---
+
+    def _schedule_available_reload(self, *args, **kwargs):
+        try:
+            self._filter_reload_timer.start()
+        except Exception as exc:
+            self.logger.debug("Failed to start available reload timer: %s", exc)
+            self.load_available_bars()
+
+    def _save_available_limit_setting(self, value):
+        try:
+            get_app_settings().setValue("silver_bar/available_max_rows", int(value))
+        except Exception as exc:
+            self.logger.debug("Could not persist available row limit: %s", exc)
+
+    def _table_result_limit(self) -> int:
+        try:
+            return max(100, int(self.available_limit_spin.value()))
+        except Exception as exc:
+            self.logger.debug("Invalid available table row limit value: %s", exc)
+            return 1500
 
     def load_available_bars(self):
         """Loads bars with status 'In Stock' and no list_id, applying weight filter."""
@@ -1053,6 +1116,7 @@ class SilverBarDialog(QDialog):
                 min_purity=min_purity,
                 max_purity=max_purity,
                 date_range=self._current_date_range(),
+                limit=self._table_result_limit(),
             )
             # Filter further to ensure list_id is NULL (get_silver_bars doesn't have this filter yet)
             available_bars = [bar for bar in available_bars if bar["list_id"] is None]
@@ -1068,8 +1132,10 @@ class SilverBarDialog(QDialog):
             self._update_selection_summaries()
             try:
                 QApplication.restoreOverrideCursor()
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug(
+                    "Failed to restore cursor after load_available_bars: %s", exc
+                )
 
     def load_lists(self):
         """Populates the list selection combo box."""
@@ -1100,8 +1166,10 @@ class SilverBarDialog(QDialog):
             # Try to restore previously selected list before firing change
             try:
                 self._restore_selected_list_from_settings()
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug(
+                    "Failed to restore selected list from settings: %s", exc
+                )
             self.list_combo.blockSignals(False)
             self.list_selection_changed()  # Update UI based on initial selection
 
@@ -1115,11 +1183,11 @@ class SilverBarDialog(QDialog):
         self.print_list_button.setEnabled(is_list_selected)
         try:
             self.export_list_button.setEnabled(is_list_selected)
-        except Exception:
+        except AttributeError:
             pass
         try:
             self.print_bottom_button.setEnabled(is_list_selected)
-        except Exception:
+        except AttributeError:
             pass
         self.delete_list_button.setEnabled(is_list_selected)
         self.mark_issued_button.setEnabled(is_list_selected)
@@ -1134,7 +1202,7 @@ class SilverBarDialog(QDialog):
                     note_val = (
                         details["list_note"] if "list_note" in details.keys() else None
                     )
-                except Exception:
+                except (AttributeError, KeyError, TypeError):
                     # sqlite3.Row supports keys(); if not, fallback to attribute or None
                     note_val = getattr(details, "list_note", None)
                 if note_val:
@@ -1156,7 +1224,9 @@ class SilverBarDialog(QDialog):
         # print(f"Loading bars for list ID: {self.current_list_id}") # Optional: Keep for debugging
         try:
             QApplication.setOverrideCursor(Qt.WaitCursor)
-            bars_in_list = self.db_manager.get_bars_in_list(self.current_list_id)
+            bars_in_list = self.db_manager.get_bars_in_list(
+                self.current_list_id, limit=self._table_result_limit()
+            )
             self._populate_table(self.list_bars_table, bars_in_list)
         except Exception as e:
             QMessageBox.critical(
@@ -1170,8 +1240,11 @@ class SilverBarDialog(QDialog):
             self._update_selection_summaries()
             try:
                 QApplication.restoreOverrideCursor()
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug(
+                    "Failed to restore cursor after load_bars_in_selected_list: %s",
+                    exc,
+                )
 
     # --- Action Methods ---
 
@@ -1798,18 +1871,12 @@ class SilverBarDialog(QDialog):
                         else "N/A"
                     )
 
-                    # Get the note for this estimate
-                    note = ""
-                    try:
-                        self.db_manager.cursor.execute(
-                            "SELECT note FROM estimates WHERE voucher_no = ?",
-                            (voucher_no,),
-                        )
-                        result = self.db_manager.cursor.fetchone()
-                        if result and result["note"]:
-                            note = result["note"]
-                    except Exception:
-                        pass
+                    note = (
+                        bar_row["estimate_note"]
+                        if "estimate_note" in bar_row.keys()
+                        and bar_row["estimate_note"] is not None
+                        else ""
+                    )
 
                     # Create display text with voucher and note
                     display_text = voucher_no
@@ -2285,20 +2352,35 @@ class SilverBarDialog(QDialog):
 
     def _clear_filters(self):
         try:
-            self.weight_search_edit.clear()
-            # Voucher search removed
             try:
-                self.weight_tol_spin.setValue(0.001)
-                self.purity_min_spin.setValue(0.0)
-                self.purity_max_spin.setValue(100.0)
-                idx = self.date_range_combo.findText("Any")
-                if idx >= 0:
-                    self.date_range_combo.setCurrentIndex(idx)
+                self._filter_reload_timer.stop()
             except Exception:
                 pass
+            inputs = [
+                self.weight_search_edit,
+                self.weight_tol_spin,
+                self.purity_min_spin,
+                self.purity_max_spin,
+                getattr(self, "date_range_combo", None),
+            ]
+            for widget in inputs:
+                if widget is not None:
+                    widget.blockSignals(True)
+            self.weight_search_edit.clear()
+            self.weight_tol_spin.setValue(0.001)
+            self.purity_min_spin.setValue(0.0)
+            self.purity_max_spin.setValue(100.0)
+            date_combo = getattr(self, "date_range_combo", None)
+            if date_combo is not None:
+                idx = date_combo.findText("Any")
+                if idx >= 0:
+                    date_combo.setCurrentIndex(idx)
+            for widget in inputs:
+                if widget is not None:
+                    widget.blockSignals(False)
             self.load_available_bars()
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.warning("Failed to clear silver bar filters: %s", exc)
 
     def add_all_filtered_to_list(self):
         """Assign all bars currently shown in the Available table to the selected list."""
@@ -2447,14 +2529,15 @@ class SilverBarDialog(QDialog):
                 self._auto_refresh_timer.start()
             else:
                 self._auto_refresh_timer.stop()
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug("Failed to toggle auto refresh: %s", exc)
 
     def _current_date_range(self):
         """Return (start_iso, end_iso) or None based on date range combo."""
         try:
             text = self.date_range_combo.currentText()
-        except Exception:
+        except Exception as exc:
+            self.logger.debug("Could not read date range combo value: %s", exc)
             return None
         now = datetime.now()
         start = end = None
@@ -2855,7 +2938,16 @@ if __name__ == "__main__":
             ]
 
         def get_silver_bars(
-            self, status=None, weight_query=None, estimate_voucher_no=None
+            self,
+            status=None,
+            weight_query=None,
+            estimate_voucher_no=None,
+            weight_tolerance=0.001,
+            min_purity=None,
+            max_purity=None,
+            date_range=None,
+            limit=None,
+            offset=0,
         ):  # Updated mock signature
             print(
                 f"Mock DB: get_silver_bars(status={status}, weight_query={weight_query})"
@@ -2890,14 +2982,19 @@ if __name__ == "__main__":
                 try:
                     target = float(weight_query)
                     filtered_bars = [
-                        b for b in filtered_bars if abs(b["weight"] - target) < 0.001
+                        b
+                        for b in filtered_bars
+                        if abs(b["weight"] - target) < float(weight_tolerance or 0.001)
                     ]
                 except ValueError:
                     pass  # Ignore invalid weight query
+            if isinstance(limit, int) and limit > 0:
+                start = int(offset or 0)
+                filtered_bars = filtered_bars[start : start + int(limit)]
             return filtered_bars
 
-        def get_bars_in_list(self, list_id):
-            return (
+        def get_bars_in_list(self, list_id, limit=None, offset=0):
+            bars = (
                 [
                     {
                         "bar_id": 102,
@@ -2913,6 +3010,10 @@ if __name__ == "__main__":
                 if list_id == 1
                 else []
             )
+            if isinstance(limit, int) and limit > 0:
+                start = int(offset or 0)
+                bars = bars[start : start + int(limit)]
+            return bars
 
         def get_silver_bar_list_details(self, list_id):
             return (

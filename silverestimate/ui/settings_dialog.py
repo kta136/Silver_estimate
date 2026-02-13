@@ -814,7 +814,24 @@ class SettingsDialog(QDialog):
 
     def apply_settings(self):
         """Save currently selected settings and apply immediate changes."""
-        logging.getLogger(__name__).debug("Applying settings...")
+        logger = logging.getLogger(__name__)
+        logger.debug("Applying settings...")
+
+        def _apply_estimate_widget_value(method_name, legacy_method_name, value, label):
+            widget = getattr(self.main_window, "estimate_widget", None)
+            if widget is None:
+                return
+            method = getattr(widget, method_name, None)
+            if not callable(method):
+                method = getattr(widget, legacy_method_name, None)
+            if not callable(method):
+                raise RuntimeError(
+                    f"Estimate view does not support '{method_name}' for {label}."
+                )
+            result = method(value)
+            if result is False:
+                raise RuntimeError(f"Estimate view rejected {label} value {value}.")
+
         try:
             # Save Print Font
             font_to_save = self._current_print_font
@@ -824,80 +841,52 @@ class SettingsDialog(QDialog):
             self.settings.setValue("font/family", font_to_save.family())
             self.settings.setValue("font/size_float", float(float_size))
             self.settings.setValue("font/bold", bool(font_to_save.bold()))
-            # Apply immediately to main window's print_font attribute
             self.main_window.print_font = font_to_save
-            logging.getLogger(__name__).debug(
-                f"Applied print font: {self._get_font_display_text(font_to_save)}"
+            logger.debug(
+                "Applied print font: %s",
+                self._get_font_display_text(font_to_save),
             )
 
-            # Save Table Font Size
             new_table_size = self.table_font_size_spin.value()
             self.settings.setValue("ui/table_font_size", new_table_size)
-            # Apply immediately by calling main window's method (which applies to estimate widget)
-            if hasattr(self.main_window, "estimate_widget") and hasattr(
-                self.main_window.estimate_widget, "_apply_table_font_size"
-            ):
-                self.main_window.estimate_widget._apply_table_font_size(new_table_size)
-                logging.getLogger(__name__).debug(
-                    f"Applied table font size: {new_table_size}pt"
-                )
-            else:
-                logging.getLogger(__name__).warning(
-                    "Could not apply table font size immediately."
-                )
+            _apply_estimate_widget_value(
+                "apply_table_font_size",
+                "_apply_table_font_size",
+                new_table_size,
+                "table font size",
+            )
 
-            # Save Breakdown Totals Font Size
             new_breakdown_size = self.breakdown_font_size_spin.value()
             self.settings.setValue("ui/breakdown_font_size", new_breakdown_size)
-            if hasattr(self.main_window, "estimate_widget") and hasattr(
-                self.main_window.estimate_widget, "_apply_breakdown_font_size"
-            ):
-                self.main_window.estimate_widget._apply_breakdown_font_size(
-                    new_breakdown_size
-                )
-                logging.getLogger(__name__).debug(
-                    f"Applied breakdown totals font size: {new_breakdown_size}pt"
-                )
-            else:
-                logging.getLogger(__name__).warning(
-                    "Could not apply breakdown totals font size immediately."
-                )
+            _apply_estimate_widget_value(
+                "apply_breakdown_font_size",
+                "_apply_breakdown_font_size",
+                new_breakdown_size,
+                "breakdown font size",
+            )
 
-            # Save Final Calculation Font Size
             new_final_calc_size = self.final_calc_font_size_spin.value()
             self.settings.setValue("ui/final_calc_font_size", new_final_calc_size)
-            if hasattr(self.main_window, "estimate_widget") and hasattr(
-                self.main_window.estimate_widget, "_apply_final_calc_font_size"
-            ):
-                self.main_window.estimate_widget._apply_final_calc_font_size(
-                    new_final_calc_size
-                )
-                logging.getLogger(__name__).debug(
-                    f"Applied final calculation font size: {new_final_calc_size}pt"
-                )
-            else:
-                logging.getLogger(__name__).warning(
-                    "Could not apply final calculation font size immediately."
-                )
+            _apply_estimate_widget_value(
+                "apply_final_calc_font_size",
+                "_apply_final_calc_font_size",
+                new_final_calc_size,
+                "final calculation font size",
+            )
 
-            # Save Printing Settings
             margins = f"{self.margin_left_spin.value()},{self.margin_top_spin.value()},{self.margin_right_spin.value()},{self.margin_bottom_spin.value()}"
             self.settings.setValue("print/margins", margins)
-            logging.getLogger(__name__).debug(f"Saved margins: {margins}")
+            logger.debug("Saved margins: %s", margins)
 
             preview_zoom = self.preview_zoom_spin.value()
             self.settings.setValue("print/preview_zoom", preview_zoom)
-            logging.getLogger(__name__).debug(f"Saved preview zoom: {preview_zoom}")
+            logger.debug("Saved preview zoom: %s", preview_zoom)
 
-            # Save printer settings
             default_printer = self.printer_combo.currentText().strip()
             if default_printer:
                 self.settings.setValue("print/default_printer", default_printer)
-                logging.getLogger(__name__).debug(
-                    f"Saved default printer: {default_printer}"
-                )
+                logger.debug("Saved default printer: %s", default_printer)
 
-            # Save page setup defaults
             self.settings.setValue(
                 "print/page_size", self.page_size_combo.currentText()
             )
@@ -905,38 +894,22 @@ class SettingsDialog(QDialog):
                 "print/orientation", self.orientation_combo.currentText()
             )
 
-            layout_choice = self.estimate_layout_combo.currentData()
-            if not layout_choice:
-                layout_choice = "old"
+            layout_choice = self.estimate_layout_combo.currentData() or "old"
             self.settings.setValue("print/estimate_layout", layout_choice)
-            logging.getLogger(__name__).debug(f"Saved estimate layout: {layout_choice}")
+            logger.debug("Saved estimate layout: %s", layout_choice)
 
             # Live Rates settings
-            try:
-                ui_enabled = bool(self.live_enabled_checkbox.isChecked())
-                auto_enabled = bool(self.live_enable_checkbox.isChecked())
-                live_interval = int(self.live_interval_spin.value())
-                self.settings.setValue("rates/live_enabled", ui_enabled)
-                self.settings.setValue("rates/auto_refresh_enabled", auto_enabled)
-                self.settings.setValue(
-                    "rates/refresh_interval_sec", max(5, live_interval)
-                )
-                # Notify main window to reconfigure timer and visibility immediately
-                if hasattr(
-                    self.main_window, "reconfigure_rate_visibility_from_settings"
-                ):
-                    self.main_window.reconfigure_rate_visibility_from_settings()
-                if hasattr(self.main_window, "reconfigure_rate_timer_from_settings"):
-                    self.main_window.reconfigure_rate_timer_from_settings()
-            except Exception:
-                logging.getLogger(__name__).warning(
-                    "Could not apply live rates settings immediately."
-                )
-                logging.getLogger(__name__).debug(
-                    f"Saved page setup: size={self.page_size_combo.currentText()}, orient={self.orientation_combo.currentText()}"
-                )
+            ui_enabled = bool(self.live_enabled_checkbox.isChecked())
+            auto_enabled = bool(self.live_enable_checkbox.isChecked())
+            live_interval = int(self.live_interval_spin.value())
+            self.settings.setValue("rates/live_enabled", ui_enabled)
+            self.settings.setValue("rates/auto_refresh_enabled", auto_enabled)
+            self.settings.setValue("rates/refresh_interval_sec", max(5, live_interval))
+            if hasattr(self.main_window, "reconfigure_rate_visibility_from_settings"):
+                self.main_window.reconfigure_rate_visibility_from_settings()
+            if hasattr(self.main_window, "reconfigure_rate_timer_from_settings"):
+                self.main_window.reconfigure_rate_timer_from_settings()
 
-            # Save logging settings (outside inner try/except)
             self.settings.setValue(
                 "logging/debug_mode", self.debug_mode_checkbox.isChecked()
             )
@@ -956,31 +929,30 @@ class SettingsDialog(QDialog):
                 "logging/cleanup_days", self.cleanup_days_spin.value()
             )
 
-            # Apply logging settings immediately
             from silverestimate.infrastructure.logger import reconfigure_logging
 
             reconfigure_logging()
-            logging.getLogger(__name__).info("Logging settings applied.")
-
-            # Save other settings...
+            logger.info("Logging settings applied.")
 
             # Also persist both modern and legacy keys for error log toggle
             self.settings.setValue(
                 "logging/enable_error", self.enable_critical_checkbox.isChecked()
             )
             self.settings.sync()
-            self.settings_applied.emit()  # Emit signal
-            logging.getLogger(__name__).info("Settings applied and saved.")
-            # Optionally disable Apply button until changes are made again
-            self.buttonBox.button(QDialogButtonBox.Apply).setEnabled(False)
-            # Also reflect button disabled state on OK (still closes)
-            self._dirty = False
+            self.settings_applied.emit()
+            logger.info("Settings applied and saved.")
 
+            self.buttonBox.button(QDialogButtonBox.Apply).setEnabled(False)
+            self._dirty = False
+            return True
         except Exception as e:
             QMessageBox.critical(
                 self, "Error Applying Settings", f"Could not apply settings: {e}"
             )
-            logging.getLogger(__name__).error("Error applying settings:", exc_info=True)
+            logger.error("Error applying settings:", exc_info=True)
+            self._dirty = True
+            self.buttonBox.button(QDialogButtonBox.Apply).setEnabled(True)
+            return False
 
     def _handle_password_change(self):
         """Handle the logic for changing both passwords."""
@@ -1239,7 +1211,8 @@ class SettingsDialog(QDialog):
     def accept(self):
         """Apply settings and close the dialog."""
         # Apply non-password settings first
-        self.apply_settings()
+        if not self.apply_settings():
+            return
         # Password changes are handled separately by the button click
         super().accept()
 

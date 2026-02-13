@@ -727,8 +727,10 @@ class DatabaseManager:
             bar_id, note=note, perform_commit=perform_commit
         )
 
-    def get_bars_in_list(self, list_id):
-        return self.silver_bars_repo.get_bars_in_list(list_id)
+    def get_bars_in_list(self, list_id, limit=None, offset=0):
+        return self.silver_bars_repo.get_bars_in_list(
+            list_id, limit=limit, offset=offset
+        )
 
     def get_available_bars(self):
         return self.silver_bars_repo.get_available_bars()
@@ -748,6 +750,8 @@ class DatabaseManager:
         min_purity=None,
         max_purity=None,
         date_range=None,
+        limit=None,
+        offset=0,
     ):
         return self.silver_bars_repo.get_silver_bars(
             status=status,
@@ -757,6 +761,8 @@ class DatabaseManager:
             min_purity=min_purity,
             max_purity=max_purity,
             date_range=date_range,
+            limit=limit,
+            offset=offset,
         )
 
     def delete_silver_bars_for_estimate(self, voucher_no):

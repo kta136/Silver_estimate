@@ -246,6 +246,50 @@ def test_silver_bar_assignment_cycle(fake_db):
     assert bars_in_list == []
 
 
+def test_silver_bar_query_limit_and_offset(fake_db):
+    repo = SilverBarsRepository(fake_db)
+    bar_ids = []
+    for i in range(1, 5):
+        bar_id = repo.add_silver_bar(f"V{i}", float(i), 99.0)
+        assert bar_id is not None
+        bar_ids.append(bar_id)
+
+    limited = repo.get_silver_bars(limit=2)
+    assert len(limited) == 2
+    # get_silver_bars orders by date_added DESC, bar_id DESC
+    assert [row["bar_id"] for row in limited] == sorted(
+        [row["bar_id"] for row in limited], reverse=True
+    )
+
+    offset_rows = repo.get_silver_bars(limit=1, offset=1)
+    assert len(offset_rows) == 1
+    assert offset_rows[0]["bar_id"] == limited[1]["bar_id"]
+
+
+def test_silver_bar_list_query_limit_and_offset(fake_db):
+    repo = SilverBarsRepository(fake_db)
+    list_id = repo.create_list("Limited List")
+    assert list_id is not None
+
+    created = []
+    for i in range(1, 5):
+        bar_id = repo.add_silver_bar(f"L{i}", float(i), 98.5)
+        assert bar_id is not None
+        assert repo.assign_bar_to_list(bar_id, list_id)
+        created.append(bar_id)
+
+    limited = repo.get_bars_in_list(list_id, limit=2)
+    assert len(limited) == 2
+    # get_bars_in_list orders by bar_id ASC
+    assert [row["bar_id"] for row in limited] == sorted(
+        [row["bar_id"] for row in limited]
+    )
+
+    offset_rows = repo.get_bars_in_list(list_id, limit=1, offset=1)
+    assert len(offset_rows) == 1
+    assert offset_rows[0]["bar_id"] == limited[1]["bar_id"]
+
+
 def test_estimate_repository_load_preserves_item_types(fake_db):
     repo = EstimatesRepository(fake_db)
     items_repo = ItemsRepository(fake_db)

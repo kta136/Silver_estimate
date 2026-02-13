@@ -71,10 +71,17 @@ def run_authentication(
 
     if password_hash and backup_hash:
         logger.debug("Found existing password hashes, showing login dialog")
-        login_dialog = LoginDialog(is_setup=False, parent=parent)
-        result = login_dialog.exec_()
+        attempt = 0
+        while True:
+            attempt += 1
+            login_dialog = LoginDialog(is_setup=False, parent=parent)
+            result = login_dialog.exec_()
 
-        if result == QDialog.Accepted:
+            if result != QDialog.Accepted:
+                if logger:
+                    logger.info("Login cancelled by user")
+                return None
+
             if login_dialog.was_reset_requested():
                 if logger:
                     logger.warning("Data wipe requested via reset button")
@@ -83,17 +90,20 @@ def run_authentication(
             entered_password = login_dialog.get_password()
             if LoginDialog.verify_password(password_hash, entered_password):
                 if logger:
-                    logger.info("Authentication successful")
+                    logger.info("Authentication successful on attempt %s", attempt)
                 return AuthenticationResult(password=entered_password)
             if LoginDialog.verify_password(backup_hash, entered_password):
                 return AuthenticationResult(wipe_requested=True, silent=True)
+
             if logger:
-                logger.warning("Authentication failed: incorrect password")
-            QMessageBox.warning(parent, "Login Failed", "Incorrect password.")
-            return None
-        if logger:
-            logger.info("Login cancelled by user")
-        return None
+                logger.warning(
+                    "Authentication failed: incorrect password (attempt %s)", attempt
+                )
+            QMessageBox.warning(
+                parent,
+                "Login Failed",
+                "Incorrect password. Please try again or use Wipe All Data.",
+            )
 
     if logger:
         logger.info("Password hashes not found in settings. Starting first-time setup.")

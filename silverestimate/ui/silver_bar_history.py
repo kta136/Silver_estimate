@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import logging
 import traceback
 from datetime import datetime, timedelta
 
@@ -37,6 +38,7 @@ from PyQt5.QtWidgets import (
 )
 
 from silverestimate.infrastructure.app_constants import SETTINGS_APP, SETTINGS_ORG
+from silverestimate.infrastructure.settings import get_app_settings
 
 
 class SilverBarHistoryDialog(QDialog):
@@ -45,8 +47,14 @@ class SilverBarHistoryDialog(QDialog):
     def __init__(self, db_manager, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
+        self.logger = logging.getLogger(__name__)
         self.setWindowTitle("Silver Bar History")
         self.setMinimumSize(1200, 800)
+        self._suppress_search = False
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.setInterval(180)
+        self._search_timer.timeout.connect(self.search_bars)
 
         self.init_ui()
         self.load_all_bars()
@@ -162,7 +170,7 @@ class SilverBarHistoryDialog(QDialog):
                 border-color: #007acc;
             }
         """)
-        self.voucher_edit.textChanged.connect(self.search_bars)
+        self.voucher_edit.textChanged.connect(self._schedule_search)
         search_row1.addWidget(self.voucher_edit)
 
         # Weight search
@@ -186,7 +194,7 @@ class SilverBarHistoryDialog(QDialog):
                 border-color: #007acc;
             }
         """)
-        self.weight_edit.textChanged.connect(self.search_bars)
+        self.weight_edit.textChanged.connect(self._schedule_search)
         search_row1.addWidget(self.weight_edit)
 
         search_row1.addStretch()
@@ -217,8 +225,35 @@ class SilverBarHistoryDialog(QDialog):
                 border-color: #007acc;
             }
         """)
-        self.status_combo.currentTextChanged.connect(self.search_bars)
+        self.status_combo.currentTextChanged.connect(self._schedule_search)
         search_row2.addWidget(self.status_combo)
+
+        # Max rows limit
+        limit_label = QLabel("Max Rows:")
+        limit_label.setStyleSheet(
+            "font-weight: 600; min-width: 80px; margin-left: 20px;"
+        )
+        search_row2.addWidget(limit_label)
+
+        self.max_rows_spin = QSpinBox()
+        self.max_rows_spin.setRange(100, 50000)
+        self.max_rows_spin.setSingleStep(100)
+        default_limit = 2000
+        try:
+            default_limit = get_app_settings().value(
+                "silver_bar/history_max_rows", defaultValue=2000, type=int
+            )
+        except Exception as exc:
+            self.logger.debug(
+                "Could not read persisted history max rows setting: %s", exc
+            )
+        self.max_rows_spin.setValue(max(100, int(default_limit or 2000)))
+        self.max_rows_spin.setSuffix(" rows")
+        self.max_rows_spin.setToolTip(
+            "Limit maximum rows loaded in history tables to keep UI responsive."
+        )
+        self.max_rows_spin.valueChanged.connect(self._on_row_limit_changed)
+        search_row2.addWidget(self.max_rows_spin)
 
         search_row2.addStretch()
 
@@ -495,9 +530,9 @@ class SilverBarHistoryDialog(QDialog):
             LEFT JOIN silver_bar_lists sbl ON sb.list_id = sbl.list_id
             LEFT JOIN estimates e ON sb.estimate_voucher_no = e.voucher_no
             ORDER BY sb.date_added DESC
+            LIMIT ?
             """
-
-            self.db_manager.cursor.execute(query)
+            self.db_manager.cursor.execute(query, (self._table_result_limit(),))
             results = self.db_manager.cursor.fetchall()
 
             self.populate_bars_table(results)
@@ -505,7 +540,38 @@ class SilverBarHistoryDialog(QDialog):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load silver bars: {e}")
         finally:
-            QApplication.restoreOverrideCursor()
+            try:
+                QApplication.restoreOverrideCursor()
+            except Exception as exc:
+                self.logger.debug(
+                    "Failed to restore cursor after load_all_bars: %s", exc
+                )
+
+    def _schedule_search(self, *args, **kwargs):
+        if self._suppress_search:
+            return
+        try:
+            self._search_timer.start()
+        except Exception as exc:
+            self.logger.debug("Failed to start history search timer: %s", exc)
+            self.search_bars()
+
+    def _table_result_limit(self) -> int:
+        try:
+            return max(100, int(self.max_rows_spin.value()))
+        except Exception as exc:
+            self.logger.debug("Invalid history row limit value: %s", exc)
+            return 2000
+
+    def _save_row_limit_setting(self, value: int) -> None:
+        try:
+            get_app_settings().setValue("silver_bar/history_max_rows", int(value))
+        except Exception as exc:
+            self.logger.debug("Could not persist history max rows setting: %s", exc)
+
+    def _on_row_limit_changed(self, value: int) -> None:
+        self._save_row_limit_setting(value)
+        self._schedule_search()
 
     def populate_bars_table(self, bars_data):
         """Populate the bars table with data."""
@@ -572,7 +638,9 @@ class SilverBarHistoryDialog(QDialog):
             for col_idx, item in enumerate(items):
                 self.bars_table.setItem(row_idx, col_idx, item)
 
-        self.bars_summary.setText(f"Total Bars: {len(bars_data)}")
+        self.bars_summary.setText(
+            f"Loaded Bars: {len(bars_data)} (max {self._table_result_limit()})"
+        )
 
     def load_issued_lists(self):
         """Load all issued lists."""
@@ -580,16 +648,24 @@ class SilverBarHistoryDialog(QDialog):
             # Get all issued lists
             lists = self.db_manager.get_silver_bar_lists(include_issued=True)
             issued_lists = [lst for lst in lists if lst["issued_date"] is not None]
+            list_ids = [int(lst["list_id"]) for lst in issued_lists if lst["list_id"]]
+            counts_by_list = {}
+            if list_ids:
+                placeholders = ",".join(["?"] * len(list_ids))
+                self.db_manager.cursor.execute(
+                    f"SELECT list_id, COUNT(*) as count FROM silver_bars "
+                    f"WHERE list_id IN ({placeholders}) GROUP BY list_id",
+                    list_ids,
+                )
+                counts_by_list = {
+                    int(row["list_id"]): int(row["count"])
+                    for row in self.db_manager.cursor.fetchall()
+                }
 
             self.lists_table.setRowCount(len(issued_lists))
 
             for row_idx, lst in enumerate(issued_lists):
-                # Get bar count for this list
-                self.db_manager.cursor.execute(
-                    "SELECT COUNT(*) as count FROM silver_bars WHERE list_id = ?",
-                    (lst["list_id"],),
-                )
-                bar_count = self.db_manager.cursor.fetchone()["count"]
+                bar_count = counts_by_list.get(int(lst["list_id"]), 0)
 
                 items = [
                     QTableWidgetItem(str(lst["list_id"])),
@@ -656,7 +732,8 @@ class SilverBarHistoryDialog(QDialog):
             else:
                 query = base_query
 
-            query += " ORDER BY sb.date_added DESC"
+            query += " ORDER BY sb.date_added DESC LIMIT ?"
+            params.append(self._table_result_limit())
 
             self.db_manager.cursor.execute(query, params)
             results = self.db_manager.cursor.fetchall()
@@ -666,13 +743,26 @@ class SilverBarHistoryDialog(QDialog):
         except Exception as e:
             QMessageBox.critical(self, "Search Error", f"Failed to search bars: {e}")
         finally:
-            QApplication.restoreOverrideCursor()
+            try:
+                QApplication.restoreOverrideCursor()
+            except Exception as exc:
+                self.logger.debug("Failed to restore cursor after search_bars: %s", exc)
 
     def clear_filters(self):
         """Clear all search filters."""
+        self._suppress_search = True
+        try:
+            self._search_timer.stop()
+        except Exception as exc:
+            self.logger.debug("Failed to stop history search timer: %s", exc)
+        for widget in (self.voucher_edit, self.weight_edit, self.status_combo):
+            widget.blockSignals(True)
         self.voucher_edit.clear()
         self.weight_edit.clear()
         self.status_combo.setCurrentIndex(0)
+        for widget in (self.voucher_edit, self.weight_edit, self.status_combo):
+            widget.blockSignals(False)
+        self._suppress_search = False
         self.load_all_bars()
 
     def list_selection_changed(self):
@@ -691,22 +781,16 @@ class SilverBarHistoryDialog(QDialog):
     def load_list_bars(self, list_id):
         """Load bars for the selected list."""
         try:
-            bars = self.db_manager.get_bars_in_list(list_id)
+            bars = self.db_manager.get_bars_in_list(
+                list_id, limit=self._table_result_limit()
+            )
             self.list_bars_table.setRowCount(len(bars))
 
             for row_idx, bar in enumerate(bars):
-                # Get estimate note
                 voucher_display = bar["estimate_voucher_no"] or "N/A"
-                try:
-                    self.db_manager.cursor.execute(
-                        "SELECT note FROM estimates WHERE voucher_no = ?",
-                        (bar["estimate_voucher_no"],),
-                    )
-                    result = self.db_manager.cursor.fetchone()
-                    if result and result["note"]:
-                        voucher_display += f" ({result['note']})"
-                except Exception:
-                    pass
+                note = bar["estimate_note"] if "estimate_note" in bar.keys() else None
+                if note:
+                    voucher_display += f" ({note})"
 
                 items = [
                     QTableWidgetItem(str(bar["bar_id"])),
@@ -797,8 +881,10 @@ class SilverBarHistoryDialog(QDialog):
             elif action == copy_action:
                 self.copy_selected_rows(self.bars_table)
 
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.warning(
+                "Failed to show bars context menu: %s", exc, exc_info=True
+            )
 
     def show_lists_context_menu(self, pos):
         """Show context menu for lists table."""
@@ -822,8 +908,10 @@ class SilverBarHistoryDialog(QDialog):
             elif action == copy_action:
                 self.copy_selected_rows(self.lists_table)
 
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.warning(
+                "Failed to show lists context menu: %s", exc, exc_info=True
+            )
 
     def copy_selected_rows(self, table):
         """Copy selected rows to clipboard."""
@@ -844,8 +932,8 @@ class SilverBarHistoryDialog(QDialog):
             text = "\n".join(rows)
             QApplication.clipboard().setText(text)
 
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.warning("Failed to copy selected rows: %s", exc, exc_info=True)
 
 
 # Example usage (if run directly)
@@ -859,7 +947,7 @@ if __name__ == "__main__":
         def get_silver_bar_lists(self, include_issued=True):
             return []
 
-        def get_bars_in_list(self, list_id):
+        def get_bars_in_list(self, list_id, limit=None, offset=0):
             return []
 
     app = QApplication(sys.argv)

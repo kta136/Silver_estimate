@@ -37,6 +37,7 @@ class ItemImportDialog(QDialog):
         self.setWindowTitle("Import Item List")
         self.setMinimumWidth(600)
         self.setMinimumHeight(600)
+        self._last_import_summary = None
         self.setup_ui()
 
     def setup_ui(self):
@@ -434,6 +435,7 @@ class ItemImportDialog(QDialog):
         if file_path == "No file selected":
             QMessageBox.warning(self, "No File", "Please select a file to import.")
             return
+        self._last_import_summary = None
 
         # Collect all parsing settings
         import_settings = {
@@ -472,6 +474,11 @@ class ItemImportDialog(QDialog):
         """Update the status message."""
         self.status_label.setText(message)
 
+    def set_import_summary(self, summary):
+        """Store latest summary emitted by the import manager."""
+        if isinstance(summary, dict):
+            self._last_import_summary = dict(summary)
+
     def import_finished(self, success_count, total_count, error_message=None):
         """Called when the import process completes."""
         # Ensure progress bar is full
@@ -492,11 +499,22 @@ class ItemImportDialog(QDialog):
                 f"An error occurred during import:\n{error_message}",
             )
         else:
+            summary = self._last_import_summary or {}
+            inserted = int(summary.get("inserted", 0))
+            updated = int(summary.get("updated", 0))
+            skipped = int(summary.get("skipped", 0))
+            errors = int(summary.get("errors", 0))
             self.update_status(
-                f"Import complete: {success_count} of {total_count} items processed."
+                f"Import complete: {success_count} of {total_count} rows processed "
+                f"(inserted={inserted}, updated={updated}, skipped={skipped}, errors={errors})."
             )
             QMessageBox.information(
                 self,
                 "Import Complete",
-                f"Successfully processed {success_count} out of {total_count} items based on selected mode.",
+                "Import completed.\n\n"
+                f"Processed rows: {success_count} / {total_count}\n"
+                f"Inserted: {inserted}\n"
+                f"Updated: {updated}\n"
+                f"Skipped: {skipped}\n"
+                f"Errors: {errors}",
             )

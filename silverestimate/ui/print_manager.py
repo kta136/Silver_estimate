@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import html as html_lib
 import math  # For rounding
 import traceback  # Keep for debugging
 
@@ -283,6 +284,20 @@ class PrintManager:
         document.setHtml(html_content)
         document.setPageSize(printer.pageRect(QPrinter.Point).size())
         document.print_(printer)
+
+    @staticmethod
+    def _build_preformatted_html(content: str, *, line_height: float = 1.0) -> str:
+        escaped_content = html_lib.escape(content or "")
+        return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+                    pre {{
+                        line-height: {line_height};
+                        white-space: pre;
+                        margin: 0;
+                        padding: 0;
+                        page-break-inside: avoid;
+                    }}
+                    body {{ margin: 0; }}
+                    </style></head><body><pre>{escaped_content}</pre></body></html>"""
 
     def _generate_estimate_old_format(self, estimate_data):
         """Generate manually formatted text using spaces, matching preview image."""
@@ -667,18 +682,7 @@ class PrintManager:
         output.append(" \f")
 
         html_content = "\n".join(output)
-        # Rely on _print_html's setDefaultFont for styling
-        html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-                    pre {{
-                        line-height: 1.0;
-                        white-space: pre;
-                        margin: 0;
-                        padding: 0;
-                        page-break-inside: avoid;
-                    }}
-                    body {{ margin: 0; }}
-                    </style></head><body><pre>{html_content}</pre></body></html>"""
-        return html
+        return self._build_preformatted_html(html_content, line_height=1.0)
 
     def _generate_estimate_new_format(self, estimate_data):
         """Generate the new layout variant for estimates."""
@@ -1124,17 +1128,7 @@ class PrintManager:
         output.append(" \f")
 
         html_content = "\n".join(output)
-        html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-                    pre {{
-                        line-height: 1.0;
-                        white-space: pre;
-                        margin: 0;
-                        padding: 0;
-                        page-break-inside: avoid;
-                    }}
-                    body {{ margin: 0; }}
-                    </style></head><body><pre>{html_content}</pre></body></html>"""
-        return html
+        return self._build_preformatted_html(html_content, line_height=1.0)
 
     def _generate_estimate_thermal_format(self, estimate_data):
         """Generate thermal slip layout sized for ~80mm paper."""
@@ -1504,22 +1498,14 @@ class PrintManager:
         output.append(" \f")
 
         html_content = "\n".join(output)
-        html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-                    pre {{
-                        line-height: 1.05;
-                        white-space: pre;
-                        margin: 0;
-                        padding: 0;
-                        page-break-inside: avoid;
-                    }}
-                    body {{ margin: 0; }}
-                    </style></head><body><pre>{html_content}</pre></body></html>"""
-        return html
+        return self._build_preformatted_html(html_content, line_height=1.05)
 
     def _generate_silver_bars_html_table(self, bars, status_filter=None):
         """Generates HTML table for the general INVENTORY report."""
-        status_text = f" - {status_filter}" if status_filter else " - All"
-        current_date = QDate.currentDate().toString("yyyy-MM-dd")
+        status_text = (
+            f" - {html_lib.escape(str(status_filter))}" if status_filter else " - All"
+        )
+        current_date = html_lib.escape(QDate.currentDate().toString("yyyy-MM-dd"))
         html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Silver Bar Inventory</title><style>
                    body{{font-family:Arial,sans-serif;font-size:8pt;margin:0;}} /* Increased font size */
                    table{{border-collapse:collapse;width:100%;margin-bottom:10px;page-break-inside:auto}}
@@ -1576,19 +1562,23 @@ class PrintManager:
                     if "status" in bar.keys() and bar["status"] is not None
                     else ""
                 )
+                bid_display = html_lib.escape(str(bid))
+                evch_display = html_lib.escape(str(evch))
+                da_display = html_lib.escape(str(da))
+                st_display = html_lib.escape(str(st))
 
                 bar_count += 1
                 total_weight += bw
                 total_fine += bfw
 
                 html += f"""<tr>
-                    <td>{bid}</td>
-                    <td>{evch}</td>
+                    <td>{bid_display}</td>
+                    <td>{evch_display}</td>
                     <td class="right">{bw:.3f}</td>
                     <td class="right">{bp:.2f}</td>
                     <td class="right">{bfw:.3f}</td>
-                    <td>{da}</td>
-                    <td>{st}</td>
+                    <td>{da_display}</td>
+                    <td>{st_display}</td>
                 </tr>"""
         else:
             html += '<tr><td colspan="7" style="text-align:center;padding:5px 0;">-- No Bars Found --</td></tr>'
@@ -1609,8 +1599,10 @@ class PrintManager:
             if "list_note" in list_info.keys() and list_info["list_note"] is not None
             else ""
         )
+        li_display = html_lib.escape(str(li))
+        ln_display = html_lib.escape(str(ln)) if ln else "N/A"
 
-        html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Silver Bar List - {li}</title><style>
+        html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Silver Bar List - {li_display}</title><style>
                    body{{font-family:Arial,sans-serif;font-size:8pt;margin:0}}table{{border-collapse:collapse;width:100%;margin-top:15px;page-break-inside:auto}}
                    th,td{{border:1px solid #ccc;padding:4px 6px;text-align:left;word-wrap:break-word}}tr{{page-break-inside:avoid;page-break-after:auto}}
                    thead{{display:table-header-group}}th{{border-bottom:1px solid #000;background-color:#f0f0f0;font-weight:bold}}
@@ -1619,9 +1611,9 @@ class PrintManager:
                    .totals{{margin-top:15px;font-weight:bold;border-top:1px double #000;padding-top:5px;text-align:right}}.right{{text-align:right}}</style></head><body>
                    <div class="header-title">Silver Bar List Details</div>
                    <div class="list-info">
-                       <span><b>List ID:</b> {li}</span>
+                       <span><b>List ID:</b> {li_display}</span>
                     </div>
-                   <div class="list-note"><b>Note:</b> {ln if ln else 'N/A'}</div>
+                   <div class="list-note"><b>Note:</b> {ln_display}</div>
                     <table>
                         <thead>
                             <tr>

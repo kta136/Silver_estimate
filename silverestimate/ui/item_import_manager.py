@@ -234,9 +234,7 @@ class ItemImportManager(QObject):
                             action = "Skipping duplicate (unknown mode)"
                             summary["skipped"] += 1
 
-                    self.status_updated.emit(
-                        f"{action}: {parsed.code} - {parsed.name}"
-                    )
+                    self.status_updated.emit(f"{action}: {parsed.code} - {parsed.name}")
 
                     # Add or update item
                     if should_import:

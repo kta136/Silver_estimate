@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QSize, QTimer, Qt, pyqtSignal
+from PyQt5.QtCore import QSize, Qt, QTimer, pyqtSignal
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QFormLayout,
@@ -387,7 +387,9 @@ class TotalsPanel(QWidget):
 
         self._horizontal_main_layout.addStretch(1)
         self._horizontal_main_layout.addWidget(self._create_separator())
-        self._horizontal_main_layout.addLayout(self._create_horizontal_final_calc_form())
+        self._horizontal_main_layout.addLayout(
+            self._create_horizontal_final_calc_form()
+        )
         self._restore_display_state(snapshot)
 
     def _create_sidebar_section_card(
@@ -565,9 +567,7 @@ class TotalsPanel(QWidget):
                 item = QListWidgetItem()
                 item.setData(Qt.UserRole, section_key)
                 item.setFlags(
-                    Qt.ItemIsEnabled
-                    | Qt.ItemIsSelectable
-                    | Qt.ItemIsDragEnabled
+                    Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsDragEnabled
                 )
                 self._summary_sections_list.addItem(item)
                 self._summary_sections_list.setItemWidget(item, card)

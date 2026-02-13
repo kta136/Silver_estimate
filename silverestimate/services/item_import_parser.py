@@ -5,10 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Sequence, Tuple
 
-from silverestimate.domain.item_validation import (
-    ItemValidationError,
-    validate_item,
-)
+from silverestimate.domain.item_validation import ItemValidationError, validate_item
 
 
 class ItemImportParseError(ValueError):
@@ -42,7 +39,9 @@ def parse_adjustment_factor(raw_value: str) -> Tuple[Optional[str], Optional[flo
         ) from exc
 
     if operator == "/" and value == 0:
-        raise ItemImportParseError("Invalid wage adjustment factor '/0': divide by zero.")
+        raise ItemImportParseError(
+            "Invalid wage adjustment factor '/0': divide by zero."
+        )
     return operator, value
 
 

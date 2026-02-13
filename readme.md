@@ -1,11 +1,11 @@
-# Silver Estimation App - v2.54
+# Silver Estimation App - v2.6
 
 A desktop application built with PyQt5 and an encrypted SQLite database for managing silver sales estimates - item-wise entries, silver bar inventory, returns, and print-ready outputs.
 
 [![Python](https://img.shields.io/badge/Python-3.13+-blue.svg)](https://www.python.org/)
 [![PyQt5](https://img.shields.io/badge/PyQt5-5.15+-green.svg)](https://www.riverbankcomputing.com/software/pyqt/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v2.54-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v2.6-orange.svg)](CHANGELOG.md)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Imports: isort](https://img.shields.io/badge/%20imports-isort-%231674b1?style=flat&labelColor=ef8336)](https://pycqa.github.io/isort/)
 [![Type checking: mypy](https://img.shields.io/badge/type%20checking-mypy-blue.svg)](http://mypy-lang.org/)
@@ -203,6 +203,11 @@ c 2023-2025 Silver Estimation App
 ---
 
 ## Version History (highlights)
+
+### v2.6 (2026-02-13)
+- Updated CI workflow so Windows `.exe` build runs at completion even when earlier checks fail
+- Improved summary cards drag/drop behavior with reliable swap-on-drop handling
+- Enabled moving the `Final Calculation` card as part of summary ordering
 
 ### v2.54 (2026-02-13)
 - Added draggable summary cards with saved custom ordering across sessions

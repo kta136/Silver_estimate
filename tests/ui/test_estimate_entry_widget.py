@@ -353,17 +353,24 @@ def test_totals_position_switching_and_persistence(qt_app, fake_db, settings_stu
         widget._apply_totals_position("left")
         assert splitter.orientation() == Qt.Horizontal
         assert splitter.widget(0) is widget.totals_panel
-        assert widget._settings().value("ui/estimate_totals_position", type=str) == "left"
+        assert (
+            widget._settings().value("ui/estimate_totals_position", type=str) == "left"
+        )
 
         widget._on_totals_position_requested("bottom")
         assert splitter.orientation() == Qt.Vertical
         assert splitter.widget(1) is widget.totals_panel
-        assert widget._settings().value("ui/estimate_totals_position", type=str) == "bottom"
+        assert (
+            widget._settings().value("ui/estimate_totals_position", type=str)
+            == "bottom"
+        )
 
         widget._on_totals_position_requested("right")
         assert splitter.orientation() == Qt.Horizontal
         assert splitter.widget(1) is widget.totals_panel
-        assert widget._settings().value("ui/estimate_totals_position", type=str) == "right"
+        assert (
+            widget._settings().value("ui/estimate_totals_position", type=str) == "right"
+        )
     finally:
         widget.deleteLater()
 
@@ -377,10 +384,9 @@ def test_totals_section_order_sync_and_persistence(qt_app, fake_db, settings_stu
 
         assert widget._totals_panel_sidebar.section_order() == expected_order
         assert widget._totals_panel_bottom.section_order() == expected_order
-        assert (
-            widget._settings().value("ui/estimate_totals_section_order", type=str)
-            == ",".join(expected_order)
-        )
+        assert widget._settings().value(
+            "ui/estimate_totals_section_order", type=str
+        ) == ",".join(expected_order)
 
         widget_loaded = _make_widget(fake_db)
         try:

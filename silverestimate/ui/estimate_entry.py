@@ -281,7 +281,9 @@ class EstimateEntryWidget(QWidget):
         self._totals_panel_sidebar.setMaximumWidth(420)
 
         self._totals_panel_bottom = TotalsPanel(layout_mode="horizontal")
-        self._totals_panel_bottom.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+        self._totals_panel_bottom.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Maximum
+        )
         self._totals_panel_bottom.setMinimumWidth(0)
         self._totals_panel_bottom.setMaximumWidth(16777215)
         self._totals_panel_bottom.setMaximumHeight(280)
@@ -450,9 +452,7 @@ class EstimateEntryWidget(QWidget):
     def _on_totals_section_order_changed(self, order) -> None:
         sender = self.sender()
         source_panel = sender if isinstance(sender, TotalsPanel) else None
-        self._apply_totals_section_order(
-            order, persist=True, source_panel=source_panel
-        )
+        self._apply_totals_section_order(order, persist=True, source_panel=source_panel)
 
     def _apply_totals_position(self, position: str, *, persist: bool = True) -> None:
         normalized = self._normalize_totals_position(position)

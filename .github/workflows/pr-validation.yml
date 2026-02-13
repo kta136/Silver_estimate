@@ -128,6 +128,8 @@ jobs:
 
   build-check:
     name: Build Check
+    needs: [lint-and-format, type-check, test, security]
+    if: always()
     runs-on: windows-latest
 
     steps:
@@ -168,6 +170,15 @@ jobs:
             Write-Error "✗ Executable not found"
             exit 1
           }
+
+      - name: Upload Windows executable artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SilverEstimate-exe-${{ github.run_number }}
+          path: dist/SilverEstimate.exe
+          if-no-files-found: error
+          retention-days: 14
 
   all-checks-passed:
     name: All Checks Passed

@@ -5,6 +5,13 @@ All notable changes to the Silver Estimation App will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6] - 2026-02-13
+
+### Changed
+- Updated CI so the Windows executable build runs at workflow completion (`if: always()`)
+- Added artifact upload for the built `SilverEstimate.exe` in PR validation workflow runs
+- Improved summary totals drag/drop so dropping on a card swaps reliably and supports moving `Final Calculation`
+
 ## [2.54] - 2026-02-13
 
 ### Changed

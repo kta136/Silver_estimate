@@ -64,6 +64,7 @@ class SettingsDialog(QDialog):
         self._current_table_font_size = self._load_table_font_size_setting()
         self._current_breakdown_font_size = self._load_breakdown_font_size_setting()
         self._current_final_calc_font_size = self._load_final_calc_font_size_setting()
+        self._current_totals_position = self._load_totals_position_setting()
         # Add more settings variables as needed
 
         # Sidebar + pages (cleaner than rotated west tabs)
@@ -239,6 +240,22 @@ class SettingsDialog(QDialog):
         form_layout.addRow(
             "Final Calculation Font Size:", self.final_calc_font_size_spin
         )
+
+        # Totals/final panel position
+        self.totals_position_combo = QComboBox()
+        self.totals_position_combo.addItem("Right Side", "right")
+        self.totals_position_combo.addItem("Left Side", "left")
+        self.totals_position_combo.addItem("Bottom", "bottom")
+        idx_totals = self.totals_position_combo.findData(self._current_totals_position)
+        if idx_totals >= 0:
+            self.totals_position_combo.setCurrentIndex(idx_totals)
+        self.totals_position_combo.setToolTip(
+            "Choose where totals/final calculation appears.\n"
+            "Right/Left preserves maximum table height.\n"
+            "Bottom uses footer area and can reduce visible rows."
+        )
+        self.totals_position_combo.currentIndexChanged.connect(self._mark_dirty)
+        form_layout.addRow("Totals Panel Position:", self.totals_position_combo)
 
         # Add more UI settings here...
 
@@ -745,6 +762,14 @@ class SettingsDialog(QDialog):
         )
         return max(min_size, min(size, max_size))
 
+    def _load_totals_position_setting(self):
+        value = self.settings.value(
+            "ui/estimate_totals_position", defaultValue="right", type=str
+        )
+        if value in {"left", "right", "bottom"}:
+            return value
+        return "right"
+
     def _load_print_settings_to_ui(self):
         """Load current printing settings into the UI controls."""
         margins = self.settings.value(
@@ -872,6 +897,15 @@ class SettingsDialog(QDialog):
                 "_apply_final_calc_font_size",
                 new_final_calc_size,
                 "final calculation font size",
+            )
+
+            new_totals_position = self.totals_position_combo.currentData() or "right"
+            self.settings.setValue("ui/estimate_totals_position", new_totals_position)
+            _apply_estimate_widget_value(
+                "apply_totals_position",
+                "_apply_totals_position",
+                new_totals_position,
+                "totals panel position",
             )
 
             margins = f"{self.margin_left_spin.value()},{self.margin_top_spin.value()},{self.margin_right_spin.value()},{self.margin_bottom_spin.value()}"
@@ -1264,6 +1298,9 @@ class SettingsDialog(QDialog):
         self.table_font_size_spin.setValue(9)
         self.breakdown_font_size_spin.setValue(9)
         self.final_calc_font_size_spin.setValue(10)
+        idx_totals = self.totals_position_combo.findData("right")
+        if idx_totals >= 0:
+            self.totals_position_combo.setCurrentIndex(idx_totals)
 
         # Printing
         self.margin_left_spin.setValue(10)

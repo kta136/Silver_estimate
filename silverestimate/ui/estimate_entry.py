@@ -25,6 +25,7 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QShortcut,
     QSizePolicy,
+    QSplitter,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -140,9 +141,21 @@ class EstimateEntryWidget(QWidget):
         # Column sizing state
         self._use_stretch_for_item_name = False
         self._programmatic_resizing = False
+        self._auto_fit_columns_by_content = True
+        self._pending_autofit_columns: set[int] = set()
+        self._column_autofit_timer = QTimer(self)
+        self._column_autofit_timer.setSingleShot(True)
+        self._column_autofit_timer.setInterval(70)
+        self._column_autofit_timer.timeout.connect(self._apply_pending_column_autofit)
 
         # Set up UI with components
         self._setup_ui()
+
+        # Restore preferred summary section order
+        self._load_totals_section_order_setting()
+
+        # Restore preferred totals panel position (right/left/bottom)
+        self._load_totals_position_setting()
 
         # Initialize table delegates
         self._setup_table_delegates()
@@ -212,7 +225,7 @@ class EstimateEntryWidget(QWidget):
     def _setup_ui(self):
         """Set up the user interface using components."""
         layout = QVBoxLayout(self)
-        layout.setSpacing(6)
+        layout.setSpacing(4)
         layout.setContentsMargins(0, 0, 0, 0)
 
         # Header ribbon
@@ -226,8 +239,8 @@ class EstimateEntryWidget(QWidget):
             }
             """)
         header_layout = QHBoxLayout(header_container)
-        header_layout.setContentsMargins(6, 4, 6, 4)
-        header_layout.setSpacing(8)
+        header_layout.setContentsMargins(4, 2, 4, 2)
+        header_layout.setSpacing(6)
 
         self.toolbar = VoucherToolbar()
         self.toolbar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -236,7 +249,7 @@ class EstimateEntryWidget(QWidget):
         actions_panel = QWidget()
         actions_panel_layout = QHBoxLayout(actions_panel)
         actions_panel_layout.setContentsMargins(0, 0, 0, 0)
-        actions_panel_layout.setSpacing(8)
+        actions_panel_layout.setSpacing(6)
 
         self.primary_actions = PrimaryActionsBar(shortcut_parent=self)
         self.primary_actions.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
@@ -247,16 +260,44 @@ class EstimateEntryWidget(QWidget):
         actions_panel_layout.addWidget(self.secondary_actions, 2)
 
         header_layout.addWidget(actions_panel, 7)
-        layout.addWidget(header_container)
+        layout.addWidget(header_container, 0)
 
-        # Create table using EstimateTableView component
+        # Table + summary sidebar row (keeps vertical space dedicated to rows)
+        self._content_splitter = QSplitter(Qt.Horizontal)
+        self._content_splitter.setChildrenCollapsible(False)
+        self._content_splitter.setOpaqueResize(True)
+
         self.item_table = EstimateTableView()
         self.item_table.host_widget = self
-        layout.addWidget(self.item_table)
+        self.item_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._content_splitter.addWidget(self.item_table)
 
-        # Totals panel component
-        self.totals_panel = TotalsPanel()
-        layout.addWidget(self.totals_panel)
+        # Totals panel components (sidebar + bottom variants)
+        self._totals_panel_sidebar = TotalsPanel(layout_mode="sidebar")
+        self._totals_panel_sidebar.setSizePolicy(
+            QSizePolicy.Preferred, QSizePolicy.Expanding
+        )
+        self._totals_panel_sidebar.setMinimumWidth(275)
+        self._totals_panel_sidebar.setMaximumWidth(420)
+
+        self._totals_panel_bottom = TotalsPanel(layout_mode="horizontal")
+        self._totals_panel_bottom.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+        self._totals_panel_bottom.setMinimumWidth(0)
+        self._totals_panel_bottom.setMaximumWidth(16777215)
+        self._totals_panel_bottom.setMaximumHeight(280)
+
+        self.totals_panel = self._totals_panel_sidebar
+        self._content_splitter.addWidget(self.totals_panel)
+
+        self._content_splitter.setStretchFactor(0, 1)
+        self._content_splitter.setStretchFactor(1, 0)
+        self._content_splitter.setSizes([1080, 300])
+
+        layout.addWidget(self._content_splitter, 1)
+
+        # Prioritize vertical space for the table/splitter row.
+        layout.setStretch(0, 0)
+        layout.setStretch(1, 1)
 
         # Expose widgets (for legacy method compatibility)
         self.voucher_edit = self.toolbar.voucher_edit
@@ -281,22 +322,7 @@ class EstimateEntryWidget(QWidget):
         self.live_rate_meta_label = self.secondary_actions.live_rate_meta_label
         self.refresh_rate_button = self.secondary_actions.refresh_rate_button
 
-        self.mode_indicator_label = self.totals_panel.mode_indicator_label
-
-        self.overall_gross_label = self.totals_panel.overall_gross_label
-        self.overall_poly_label = self.totals_panel.overall_poly_label
-        self.total_gross_label = self.totals_panel.total_gross_label
-        self.total_net_label = self.totals_panel.total_net_label
-        self.total_fine_label = self.totals_panel.total_fine_label
-        self.return_gross_label = self.totals_panel.return_gross_label
-        self.return_net_label = self.totals_panel.return_net_label
-        self.return_fine_label = self.totals_panel.return_fine_label
-        self.bar_gross_label = self.totals_panel.bar_gross_label
-        self.bar_net_label = self.totals_panel.bar_net_label
-        self.bar_fine_label = self.totals_panel.bar_fine_label
-        self.net_fine_label = self.totals_panel.net_fine_label
-        self.net_wage_label = self.totals_panel.net_wage_label
-        self.grand_total_label = self.totals_panel.grand_total_label
+        self._bind_totals_panel_labels()
 
         self.unsaved_badge = self.toolbar.unsaved_badge
         self.status_message_label = self.toolbar.status_message_label
@@ -311,16 +337,16 @@ class EstimateEntryWidget(QWidget):
         self.item_table.setItemDelegateForColumn(COL_PIECES, numeric_delegate)
 
         # Set up column widths
-        self.item_table.setColumnWidth(COL_CODE, 80)
-        self.item_table.setColumnWidth(COL_GROSS, 85)
-        self.item_table.setColumnWidth(COL_POLY, 85)
-        self.item_table.setColumnWidth(4, 85)  # Net Wt
+        self.item_table.setColumnWidth(COL_CODE, 82)
+        self.item_table.setColumnWidth(COL_GROSS, 80)
+        self.item_table.setColumnWidth(COL_POLY, 80)
+        self.item_table.setColumnWidth(4, 82)  # Net Wt
         self.item_table.setColumnWidth(COL_PURITY, 80)
-        self.item_table.setColumnWidth(COL_WAGE_RATE, 80)
+        self.item_table.setColumnWidth(COL_WAGE_RATE, 82)
         self.item_table.setColumnWidth(COL_PIECES, 60)
-        self.item_table.setColumnWidth(8, 85)  # Wage Amt
-        self.item_table.setColumnWidth(9, 85)  # Fine Wt
-        self.item_table.setColumnWidth(10, 80)  # Type
+        self.item_table.setColumnWidth(8, 82)  # Wage Amt
+        self.item_table.setColumnWidth(9, 82)  # Fine Wt
+        self.item_table.setColumnWidth(10, 78)  # Type
 
         # Wire header signals
         header = self.item_table.horizontalHeader()
@@ -351,6 +377,157 @@ class EstimateEntryWidget(QWidget):
         )
         self.item_table.row_deleted.connect(self._on_table_row_delete_requested)
         self.item_table.history_requested.connect(self.show_history)
+        self._totals_panel_sidebar.section_order_changed.connect(
+            self._on_totals_section_order_changed
+        )
+        self._totals_panel_bottom.section_order_changed.connect(
+            self._on_totals_section_order_changed
+        )
+
+    def _bind_totals_panel_labels(self) -> None:
+        """Refresh convenience references to totals labels after panel rebuilds."""
+        self.mode_indicator_label = self.totals_panel.mode_indicator_label
+
+        self.overall_gross_label = self.totals_panel.overall_gross_label
+        self.overall_poly_label = self.totals_panel.overall_poly_label
+        self.total_gross_label = self.totals_panel.total_gross_label
+        self.total_net_label = self.totals_panel.total_net_label
+        self.total_fine_label = self.totals_panel.total_fine_label
+        self.return_gross_label = self.totals_panel.return_gross_label
+        self.return_net_label = self.totals_panel.return_net_label
+        self.return_fine_label = self.totals_panel.return_fine_label
+        self.bar_gross_label = self.totals_panel.bar_gross_label
+        self.bar_net_label = self.totals_panel.bar_net_label
+        self.bar_fine_label = self.totals_panel.bar_fine_label
+        self.net_fine_label = self.totals_panel.net_fine_label
+        self.net_wage_label = self.totals_panel.net_wage_label
+        self.grand_total_label = self.totals_panel.grand_total_label
+
+    def _normalize_totals_position(self, position: str) -> str:
+        value = (position or "").strip().lower()
+        if value in {"left", "right", "bottom"}:
+            return value
+        return "right"
+
+    def _normalize_totals_section_order(self, order) -> list[str]:
+        return TotalsPanel.normalize_section_order(order)
+
+    def _apply_totals_section_order(
+        self, order, *, persist: bool = True, source_panel: TotalsPanel | None = None
+    ) -> None:
+        normalized = self._normalize_totals_section_order(order)
+        for panel in (self._totals_panel_sidebar, self._totals_panel_bottom):
+            if panel is None or sip.isdeleted(panel):
+                continue
+            if panel is source_panel and panel.section_order() == normalized:
+                continue
+            panel.set_section_order(normalized)
+        self._totals_section_order = list(normalized)
+        self._bind_totals_panel_labels()
+
+        if persist:
+            try:
+                self._settings().setValue(
+                    "ui/estimate_totals_section_order", ",".join(normalized)
+                )
+            except Exception as exc:
+                self.logger.debug(
+                    "Failed to save totals section order setting: %s", exc
+                )
+
+    def _load_totals_section_order_setting(self) -> None:
+        default_order = ",".join(TotalsPanel.default_section_order())
+        try:
+            saved = self._settings().value(
+                "ui/estimate_totals_section_order",
+                defaultValue=default_order,
+                type=str,
+            )
+        except Exception:
+            saved = default_order
+        self._apply_totals_section_order(saved, persist=False)
+
+    def _on_totals_section_order_changed(self, order) -> None:
+        sender = self.sender()
+        source_panel = sender if isinstance(sender, TotalsPanel) else None
+        self._apply_totals_section_order(
+            order, persist=True, source_panel=source_panel
+        )
+
+    def _apply_totals_position(self, position: str, *, persist: bool = True) -> None:
+        normalized = self._normalize_totals_position(position)
+        splitter = getattr(self, "_content_splitter", None)
+        if splitter is None or sip.isdeleted(splitter):
+            return
+
+        sidebar_panel = self._totals_panel_sidebar
+        bottom_panel = self._totals_panel_bottom
+
+        if normalized == "bottom":
+            if sidebar_panel.parent() is splitter:
+                sidebar_panel.setParent(None)
+            if bottom_panel.parent() is not splitter:
+                splitter.addWidget(bottom_panel)
+
+            splitter.setOrientation(Qt.Vertical)
+            splitter.insertWidget(0, self.item_table)
+            splitter.insertWidget(1, bottom_panel)
+            splitter.setStretchFactor(0, 1)
+            splitter.setStretchFactor(1, 0)
+            splitter.setSizes([860, 200])
+            self.totals_panel = bottom_panel
+        else:
+            if bottom_panel.parent() is splitter:
+                bottom_panel.setParent(None)
+            if sidebar_panel.parent() is not splitter:
+                splitter.addWidget(sidebar_panel)
+
+            splitter.setOrientation(Qt.Horizontal)
+            if normalized == "left":
+                splitter.insertWidget(0, sidebar_panel)
+                splitter.insertWidget(1, self.item_table)
+                splitter.setSizes([320, 1060])
+            else:
+                splitter.insertWidget(0, self.item_table)
+                splitter.insertWidget(1, sidebar_panel)
+                splitter.setSizes([1060, 320])
+            splitter.setStretchFactor(0, 1)
+            splitter.setStretchFactor(1, 0)
+            self.totals_panel = sidebar_panel
+
+        self._bind_totals_panel_labels()
+        self.calculate_totals()
+        self._totals_position = normalized
+
+        if persist:
+            try:
+                self._settings().setValue("ui/estimate_totals_position", normalized)
+            except Exception as exc:
+                self.logger.debug("Failed to save totals position setting: %s", exc)
+
+    def _load_totals_position_setting(self) -> None:
+        default_position = "right"
+        try:
+            saved = self._settings().value(
+                "ui/estimate_totals_position",
+                defaultValue=default_position,
+                type=str,
+            )
+        except Exception:
+            saved = default_position
+        self._apply_totals_position(saved, persist=False)
+
+    def _on_totals_position_requested(self, position: str) -> None:
+        self._apply_totals_position(position, persist=True)
+
+    def apply_totals_position(self, position: str) -> bool:
+        """Apply totals panel position preference at runtime."""
+        try:
+            self._apply_totals_position(position, persist=True)
+            return True
+        except Exception as exc:
+            self.logger.warning("Failed to apply totals position: %s", exc)
+            return False
 
     def connect_signals(self, skip_load_estimate: bool = False):
         """Connect other signals."""
@@ -462,6 +639,7 @@ class EstimateEntryWidget(QWidget):
 
     def add_empty_row(self):
         self._get_table_adapter().add_empty_row()
+        self._schedule_columns_autofit()
 
     def clear_all_rows(self):
         self.item_table.blockSignals(True)
@@ -470,8 +648,10 @@ class EstimateEntryWidget(QWidget):
         self.item_table.blockSignals(False)
         self.current_row = -1
         self.current_column = -1
+        self._schedule_columns_autofit()
 
     def _on_table_cell_edited(self, row: int, column: int):
+        self._schedule_columns_autofit(columns=[column])
         self.handle_cell_changed(row, column)
 
     def _on_table_row_delete_requested(self, row: int):
@@ -1343,6 +1523,7 @@ class EstimateEntryWidget(QWidget):
 
     def populate_row(self, row_index: int, item_data: Dict) -> None:
         self._get_table_adapter().populate_row(row_index, item_data)
+        self._schedule_columns_autofit()
 
     def prompt_item_selection(self, code: str) -> Optional[Dict]:
         dialog = ItemSelectionDialog(self.db_manager, code, self)
@@ -1445,6 +1626,7 @@ class EstimateEntryWidget(QWidget):
 
             self.add_empty_row()
             self.calculate_totals()
+            self._schedule_columns_autofit()
             self._estimate_loaded = True
 
             if hasattr(self, "delete_estimate_button"):
@@ -1606,7 +1788,93 @@ class EstimateEntryWidget(QWidget):
     def _settings(self):
         return get_app_settings()
 
+    def _column_width_limits(self) -> Dict[int, tuple[int, int]]:
+        """Minimum/maximum widths used by content-driven column sizing."""
+        return {
+            COL_CODE: (72, 260),
+            COL_ITEM_NAME: (120, 900),
+            COL_GROSS: (72, 220),
+            COL_POLY: (72, 220),
+            COL_NET_WT: (78, 220),
+            COL_PURITY: (72, 220),
+            COL_WAGE_RATE: (78, 220),
+            COL_PIECES: (56, 150),
+            COL_WAGE_AMT: (78, 220),
+            COL_FINE_WT: (78, 220),
+            COL_TYPE: (74, 220),
+        }
+
+    def _schedule_columns_autofit(
+        self, columns: Optional[list[int]] = None, *, delay_ms: int = 70
+    ) -> None:
+        """Debounce content-based column auto-fit requests."""
+        if not getattr(self, "_auto_fit_columns_by_content", False):
+            return
+        table = getattr(self, "item_table", None)
+        if table is None or sip.isdeleted(table):
+            return
+
+        if columns is None:
+            self._pending_autofit_columns.update(range(table.columnCount()))
+        else:
+            for col in columns:
+                if isinstance(col, int) and 0 <= col < table.columnCount():
+                    self._pending_autofit_columns.add(col)
+
+        if not self._pending_autofit_columns:
+            return
+
+        try:
+            self._column_autofit_timer.setInterval(max(0, int(delay_ms)))
+            self._column_autofit_timer.start()
+        except Exception as exc:
+            self.logger.debug("Failed to schedule column auto-fit: %s", exc)
+
+    def _apply_pending_column_autofit(self) -> None:
+        """Resize pending columns to fit current text and header content."""
+        if not getattr(self, "_auto_fit_columns_by_content", False):
+            return
+        if not self._is_table_valid():
+            return
+
+        table = self.item_table
+        columns = sorted(self._pending_autofit_columns)
+        self._pending_autofit_columns.clear()
+        if not columns:
+            columns = list(range(table.columnCount()))
+
+        model = table.model()
+        if model is None or sip.isdeleted(model):
+            return
+
+        metrics = table.fontMetrics()
+        limits = self._column_width_limits()
+
+        self._programmatic_resizing = True
+        try:
+            for col in columns:
+                if col < 0 or col >= table.columnCount():
+                    continue
+
+                header_text = model.headerData(col, Qt.Horizontal, Qt.DisplayRole) or ""
+                header_width = metrics.horizontalAdvance(str(header_text)) + 28
+                hint_width = table.sizeHintForColumn(col) + 16
+                target_width = max(header_width, hint_width)
+
+                min_width, max_width = limits.get(col, (60, 700))
+                target_width = max(min_width, min(max_width, int(target_width)))
+
+                current_width = table.columnWidth(col)
+                if abs(current_width - target_width) >= 2:
+                    table.setColumnWidth(col, target_width)
+        except Exception as exc:
+            self.logger.debug("Failed to auto-fit columns by content: %s", exc)
+        finally:
+            self._programmatic_resizing = False
+
     def _save_column_widths_setting(self):
+        if self._auto_fit_columns_by_content:
+            return
         try:
             widths = [
                 str(self.item_table.columnWidth(i))
@@ -1619,6 +1887,11 @@ class EstimateEntryWidget(QWidget):
             self.logger.debug("Failed to save column widths setting: %s", exc)
 
     def _load_column_widths_setting(self):
+        if self._auto_fit_columns_by_content:
+            self._use_stretch_for_item_name = False
+            self._schedule_columns_autofit(delay_ms=0)
+            return
+
         val = self._settings().value("ui/estimate_table_column_widths", type=str)
         if val:
             try:
@@ -1639,6 +1912,8 @@ class EstimateEntryWidget(QWidget):
             self._column_save_timer.start()
 
     def _auto_stretch_item_name(self):
+        if self._auto_fit_columns_by_content:
+            return
         if not self._use_stretch_for_item_name:
             return
         total = self.item_table.viewport().width()
@@ -1648,7 +1923,7 @@ class EstimateEntryWidget(QWidget):
             if i != COL_ITEM_NAME
         )
         self._programmatic_resizing = True
-        self.item_table.setColumnWidth(COL_ITEM_NAME, max(150, total - used - 20))
+        self.item_table.setColumnWidth(COL_ITEM_NAME, max(120, total - used - 20))
         self._programmatic_resizing = False
 
     def resizeEvent(self, event):
@@ -1663,6 +1938,9 @@ class EstimateEntryWidget(QWidget):
         super().closeEvent(event)
 
     def _reset_columns_layout(self):
+        if self._auto_fit_columns_by_content:
+            self._schedule_columns_autofit(delay_ms=0)
+            return
         self._settings().remove("ui/estimate_table_column_widths")
         self._use_stretch_for_item_name = True
         self._auto_stretch_item_name()
@@ -1697,6 +1975,9 @@ class EstimateEntryWidget(QWidget):
             font = self.item_table.font()
             font.setPointSize(size_i)
             self.item_table.setFont(font)
+            row_height = max(20, min(34, size_i + 14))
+            self.item_table.verticalHeader().setDefaultSectionSize(row_height)
+            self._schedule_columns_autofit(delay_ms=0)
             self.item_table.viewport().update()
             return True
         except Exception as exc:
@@ -1712,7 +1993,12 @@ class EstimateEntryWidget(QWidget):
             return False
         size_i = max(7, min(16, size_i))
         try:
-            self.totals_panel.set_breakdown_font_size(size_i)
+            for panel in (
+                getattr(self, "_totals_panel_sidebar", None),
+                getattr(self, "_totals_panel_bottom", None),
+            ):
+                if panel is not None:
+                    panel.set_breakdown_font_size(size_i)
             return True
         except Exception as exc:
             self.logger.warning("Failed to apply breakdown font size: %s", exc)
@@ -1727,7 +2013,12 @@ class EstimateEntryWidget(QWidget):
             return False
         size_i = max(8, min(20, size_i))
         try:
-            self.totals_panel.set_final_calc_font_size(size_i)
+            for panel in (
+                getattr(self, "_totals_panel_sidebar", None),
+                getattr(self, "_totals_panel_bottom", None),
+            ):
+                if panel is not None:
+                    panel.set_final_calc_font_size(size_i)
             return True
         except Exception as exc:
             self.logger.warning("Failed to apply final calculation font size: %s", exc)

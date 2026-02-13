@@ -1,6 +1,7 @@
 """Tests for TotalsPanel component."""
 
 import pytest
+from PyQt5.QtCore import Qt
 
 from silverestimate.domain.estimate_models import CategoryTotals, TotalsResult
 from silverestimate.ui.estimate_entry_components.totals_panel import TotalsPanel
@@ -167,3 +168,102 @@ def test_decimal_formatting(panel):
     assert panel.overall_gross_label.text() == "123.46"
     assert panel.total_fine_label.text() == "1000.00"
     assert panel.net_wage_label.text() == "1235"
+
+
+def test_sidebar_section_order_can_be_reordered(qt_app):
+    panel = TotalsPanel(layout_mode="sidebar")
+    panel.set_section_order(["silver_bar", "return", "totals", "regular"])
+
+    assert panel.section_order() == [
+        "final_calc",
+        "silver_bar",
+        "return",
+        "totals",
+        "regular",
+    ]
+    ui_order = [
+        panel._summary_sections_list.item(i).data(Qt.UserRole)
+        for i in range(panel._summary_sections_list.count())
+    ]
+    assert ui_order == ["final_calc", "silver_bar", "return", "totals", "regular"]
+
+
+def test_sidebar_rows_moved_emits_section_order_signal(qt_app):
+    panel = TotalsPanel(layout_mode="sidebar")
+    emissions = []
+    panel.section_order_changed.connect(lambda order: emissions.append(order))
+
+    moving_item = panel._summary_sections_list.takeItem(4)
+    panel._summary_sections_list.insertItem(0, moving_item)
+    panel._on_sidebar_section_rows_moved()
+
+    assert emissions
+    assert emissions[-1][0] == "silver_bar"
+    assert panel.section_order()[0] == "silver_bar"
+
+
+def test_sidebar_swap_requested_swaps_card_positions(qt_app):
+    panel = TotalsPanel(layout_mode="sidebar")
+    emissions = []
+    panel.section_order_changed.connect(lambda order: emissions.append(order))
+
+    panel._on_sidebar_section_swap_requested(0, 2)
+
+    assert panel.section_order() == [
+        "regular",
+        "totals",
+        "final_calc",
+        "return",
+        "silver_bar",
+    ]
+    ui_order = [
+        panel._summary_sections_list.item(i).data(Qt.UserRole)
+        for i in range(panel._summary_sections_list.count())
+    ]
+    assert ui_order == ["regular", "totals", "final_calc", "return", "silver_bar"]
+    assert emissions[-1] == [
+        "regular",
+        "totals",
+        "final_calc",
+        "return",
+        "silver_bar",
+    ]
+
+
+def test_sidebar_rows_moved_keeps_all_cards_visible(qt_app):
+    panel = TotalsPanel(layout_mode="sidebar")
+    panel.show()
+    qt_app.processEvents()
+
+    moving_item = panel._summary_sections_list.takeItem(2)
+    panel._summary_sections_list.insertItem(0, moving_item)
+    panel._on_sidebar_section_rows_moved()
+    qt_app.processEvents()
+
+    for idx in range(panel._summary_sections_list.count()):
+        item = panel._summary_sections_list.item(idx)
+        assert item is not None
+        assert panel._summary_sections_list.itemWidget(item) is not None
+
+
+def test_sidebar_items_are_not_drop_targets(qt_app):
+    panel = TotalsPanel(layout_mode="sidebar")
+    for idx in range(panel._summary_sections_list.count()):
+        item = panel._summary_sections_list.item(idx)
+        assert item is not None
+        assert not bool(item.flags() & Qt.ItemIsDropEnabled)
+
+
+def test_sidebar_cards_resize_with_available_width(qt_app):
+    panel = TotalsPanel(layout_mode="sidebar")
+    panel.resize(520, 760)
+    panel.show()
+    qt_app.processEvents()
+    panel._sync_sidebar_item_sizes()
+
+    viewport_width = panel._summary_sections_list.viewport().width()
+    for idx in range(panel._summary_sections_list.count()):
+        item = panel._summary_sections_list.item(idx)
+        assert item is not None
+        # Item width tracks the current viewport width (dynamic section sizing).
+        assert item.sizeHint().width() >= max(0, viewport_width - 4)

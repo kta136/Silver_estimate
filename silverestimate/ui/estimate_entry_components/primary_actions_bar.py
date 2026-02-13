@@ -43,12 +43,26 @@ class PrimaryActionsBar(QWidget):
                 min-height: 24px;
                 max-height: 24px;
                 font-size: 8.5pt;
+                border: 1px solid palette(mid);
+                border-radius: 4px;
+                background-color: palette(button);
+                color: palette(buttonText);
             }
             QWidget#PrimaryActionStrip QPushButton:hover {
                 background-color: palette(light);
             }
+            QWidget#PrimaryActionStrip QPushButton#SavePrimaryButton {
+                background-color: #0f766e;
+                border: 1px solid #0f766e;
+                color: #ffffff;
+            }
+            QWidget#PrimaryActionStrip QPushButton#SavePrimaryButton:hover {
+                background-color: #0d9488;
+                border: 1px solid #0d9488;
+            }
             QWidget#PrimaryActionStrip QPushButton:disabled {
                 color: palette(mid);
+                background-color: palette(window);
             }
         """)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -59,6 +73,7 @@ class PrimaryActionsBar(QWidget):
 
         # Save button (primary action - will get emphasis later)
         self.save_button = QPushButton("Save")
+        self.save_button.setObjectName("SavePrimaryButton")
         self.save_button.setToolTip(
             "Save the current estimate details (Ctrl+S)\n\n"
             "Saves all items and totals to database\n"

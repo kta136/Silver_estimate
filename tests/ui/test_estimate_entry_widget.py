@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import QTableWidgetItem
 
 from silverestimate.persistence.database_manager import DatabaseManager
 from silverestimate.ui.estimate_entry import EstimateEntryWidget
+from silverestimate.ui.estimate_entry_components.totals_panel import TotalsPanel
 from silverestimate.ui.estimate_entry_logic import (
     COL_CODE,
     COL_FINE_WT,
@@ -339,5 +340,84 @@ def test_populate_row_updates_code_cell(qt_app, fake_db):
         assert table.item(0, COL_CODE).text() == "NEW123"
         assert table.item(0, COL_ITEM_NAME).text() == "New Item"
         assert table.item(0, COL_CODE).data(Qt.UserRole) == "new123"
+    finally:
+        widget.deleteLater()
+
+
+def test_totals_position_switching_and_persistence(qt_app, fake_db, settings_stub):
+    widget = _make_widget(fake_db)
+    try:
+        splitter = widget._content_splitter
+        assert splitter.orientation() == Qt.Horizontal
+
+        widget._apply_totals_position("left")
+        assert splitter.orientation() == Qt.Horizontal
+        assert splitter.widget(0) is widget.totals_panel
+        assert widget._settings().value("ui/estimate_totals_position", type=str) == "left"
+
+        widget._on_totals_position_requested("bottom")
+        assert splitter.orientation() == Qt.Vertical
+        assert splitter.widget(1) is widget.totals_panel
+        assert widget._settings().value("ui/estimate_totals_position", type=str) == "bottom"
+
+        widget._on_totals_position_requested("right")
+        assert splitter.orientation() == Qt.Horizontal
+        assert splitter.widget(1) is widget.totals_panel
+        assert widget._settings().value("ui/estimate_totals_position", type=str) == "right"
+    finally:
+        widget.deleteLater()
+
+
+def test_totals_section_order_sync_and_persistence(qt_app, fake_db, settings_stub):
+    widget = _make_widget(fake_db)
+    try:
+        new_order = ["silver_bar", "return", "regular", "totals"]
+        expected_order = TotalsPanel.normalize_section_order(new_order)
+        widget._apply_totals_section_order(new_order, persist=True)
+
+        assert widget._totals_panel_sidebar.section_order() == expected_order
+        assert widget._totals_panel_bottom.section_order() == expected_order
+        assert (
+            widget._settings().value("ui/estimate_totals_section_order", type=str)
+            == ",".join(expected_order)
+        )
+
+        widget_loaded = _make_widget(fake_db)
+        try:
+            assert widget_loaded._totals_panel_sidebar.section_order() == expected_order
+            assert widget_loaded._totals_panel_bottom.section_order() == expected_order
+        finally:
+            widget_loaded.deleteLater()
+    finally:
+        widget.deleteLater()
+
+
+def test_column_width_auto_fits_content_expand_and_shrink(qt_app, fake_db):
+    widget = _make_widget(fake_db)
+    try:
+        table = widget.item_table
+        col = COL_ITEM_NAME
+
+        table.setItem(0, col, QTableWidgetItem("A"))
+        widget._schedule_columns_autofit([col], delay_ms=0)
+        widget._apply_pending_column_autofit()
+        base_width = table.columnWidth(col)
+
+        table.setItem(
+            0,
+            col,
+            QTableWidgetItem("Very Long Item Name For Dynamic Width Testing 12345"),
+        )
+        widget._schedule_columns_autofit([col], delay_ms=0)
+        widget._apply_pending_column_autofit()
+        expanded_width = table.columnWidth(col)
+
+        table.setItem(0, col, QTableWidgetItem("AB"))
+        widget._schedule_columns_autofit([col], delay_ms=0)
+        widget._apply_pending_column_autofit()
+        shrink_width = table.columnWidth(col)
+
+        assert expanded_width > base_width
+        assert shrink_width < expanded_width
     finally:
         widget.deleteLater()

@@ -88,6 +88,22 @@ class SecondaryActionsBar(QWidget):
                 background-color: palette(midlight);
                 border: 2px solid palette(highlight);
             }
+            QWidget#SecondaryActionStrip QToolButton#DeleteEstimateButton {
+                color: #b91c1c;
+                border: 1px solid #fca5a5;
+                border-radius: 4px;
+                background-color: #fef2f2;
+                padding: 2px 8px;
+            }
+            QWidget#SecondaryActionStrip QToolButton#DeleteEstimateButton:hover {
+                background-color: #fee2e2;
+                border-color: #ef4444;
+            }
+            QWidget#SecondaryActionStrip QToolButton#DeleteEstimateButton:disabled {
+                color: #9ca3af;
+                border-color: #cbd5e1;
+                background-color: #f8fafc;
+            }
         """)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
@@ -190,21 +206,6 @@ class SecondaryActionsBar(QWidget):
         self.silver_bars_button.setAutoRaise(True)
         layout.addWidget(self.silver_bars_button)
 
-        layout.addWidget(self._create_divider())
-
-        # Delete estimate button
-        self.delete_estimate_button = QToolButton()
-        self.delete_estimate_button.setText("Delete Est.")
-        self.delete_estimate_button.setToolTip(
-            "Delete the currently loaded estimate\n"
-            "Permanently removes estimate from database\n"
-            "Only enabled when estimate is loaded\n"
-            "Cannot be undone - use with caution"
-        )
-        self.delete_estimate_button.setEnabled(False)
-        self.delete_estimate_button.setAutoRaise(True)
-        layout.addWidget(self.delete_estimate_button)
-
         layout.addStretch()
 
         # Compatibility label (not shown) so legacy controllers can still target it
@@ -274,6 +275,21 @@ class SecondaryActionsBar(QWidget):
         rate_layout.addLayout(left_stack)
 
         layout.addWidget(rate_container)
+        layout.addWidget(self._create_divider())
+
+        # Delete estimate button (isolated on the far right as destructive action)
+        self.delete_estimate_button = QToolButton()
+        self.delete_estimate_button.setObjectName("DeleteEstimateButton")
+        self.delete_estimate_button.setText("Delete Est.")
+        self.delete_estimate_button.setToolTip(
+            "Delete the currently loaded estimate\n"
+            "Permanently removes estimate from database\n"
+            "Only enabled when estimate is loaded\n"
+            "Cannot be undone - use with caution"
+        )
+        self.delete_estimate_button.setEnabled(False)
+        self.delete_estimate_button.setAutoRaise(False)
+        layout.addWidget(self.delete_estimate_button)
 
     def _create_divider(self) -> QFrame:
         """Create a vertical divider line.

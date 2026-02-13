@@ -122,8 +122,20 @@ class EstimateTableModel(QAbstractTableModel):
             # Regular rows use default palette (white)
             return QBrush(QColor(255, 255, 255))
 
-        if role == Qt.TextAlignmentRole and col == COL_TYPE:
-            return Qt.AlignCenter
+        if role == Qt.TextAlignmentRole:
+            if col in (
+                COL_GROSS,
+                COL_POLY,
+                COL_NET_WT,
+                COL_PURITY,
+                COL_WAGE_RATE,
+                COL_PIECES,
+                COL_WAGE_AMT,
+                COL_FINE_WT,
+            ):
+                return Qt.AlignRight | Qt.AlignVCenter
+            if col == COL_TYPE:
+                return Qt.AlignCenter | Qt.AlignVCenter
 
         return None
 

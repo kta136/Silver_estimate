@@ -5,6 +5,17 @@ All notable changes to the Silver Estimation App will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.54] - 2026-02-13
+
+### Changed
+- Added draggable summary cards with persisted custom ordering in estimate totals
+- Enabled reordering of the `Final Calculation` card alongside other summary sections
+- Improved summary-card sizing to better adapt to panel width/content changes
+
+### Fixed
+- Resolved drag/drop cases that could hide a summary card when dropped over another card
+- Normalized drop behavior so dropping on a card swaps positions consistently
+
 ## [2.53] - 2026-02-13
 
 ### Changed

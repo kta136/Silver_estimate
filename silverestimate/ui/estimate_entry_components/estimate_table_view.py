@@ -180,7 +180,8 @@ class EstimateTableView(QTableView):
         # Vertical header
         vertical_header = self.verticalHeader()
         vertical_header.setVisible(True)
-        vertical_header.setDefaultSectionSize(30)
+        vertical_header.setDefaultSectionSize(24)
+        vertical_header.setMinimumSectionSize(20)
 
         # Context menu
         self.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -201,7 +202,7 @@ class EstimateTableView(QTableView):
                 selection-color: #111827;
             }
             QTableView::item {
-                padding: 2px 4px;
+                padding: 1px 4px;
             }
             QTableView::item:hover {
                 background-color: #f3f4f6;

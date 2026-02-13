@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PyQt5 import sip
-from PyQt5.QtCore import QLocale, QTimer, Qt
+from PyQt5.QtCore import QLocale, Qt, QTimer
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QApplication, QMessageBox, QTableWidgetItem
 
@@ -10,13 +10,13 @@ from silverestimate.services.estimate_calculator import (
     compute_net_weight,
     compute_wage_amount,
 )
-from ..adapters import EstimateTableAdapter
 
+from ..adapters import EstimateTableAdapter
 from .constants import (
     COL_CODE,
-    COL_ITEM_NAME,
     COL_FINE_WT,
     COL_GROSS,
+    COL_ITEM_NAME,
     COL_NET_WT,
     COL_PIECES,
     COL_POLY,
@@ -37,7 +37,6 @@ class _EstimateTableMixin:
             self._table_adapter = adapter
         return adapter
 
-
     def populate_row(self, row_index: int, item_data):
         self._get_table_adapter().populate_row(row_index, item_data)
 
@@ -45,7 +44,6 @@ class _EstimateTableMixin:
         if getattr(self, "current_row", -1) < 0:
             return
         self.populate_row(self.current_row, item_data)
-
 
     def focus_after_item_lookup(self, row_index: int) -> None:
         if row_index < 0 or row_index >= self.item_table.rowCount():
@@ -55,35 +53,34 @@ class _EstimateTableMixin:
             QTimer.singleShot(
                 0, lambda: self.item_table.setCurrentCell(row_index, COL_GROSS)
             )
-            QTimer.singleShot(
-                10, lambda: self._safe_edit_item(row_index, COL_GROSS)
-            )
+            QTimer.singleShot(10, lambda: self._safe_edit_item(row_index, COL_GROSS))
         except Exception:
             pass
 
     def _schedule_cell_edit(self, row: int, column: int) -> None:
         """Guarded helper to focus/edit a cell after the event loop cycles."""
+
         def _do_edit():
             table = getattr(self, "item_table", None)
             if not table:
                 return
             if not (0 <= row < table.rowCount() and 0 <= column < table.columnCount()):
                 return
-            
+
             # Get model directly instead of creating an item
             model = table.model()
             if not model or sip.isdeleted(model):
                 return
-            
+
             # Create index directly
             index = model.index(row, column)
             if not index.isValid():
                 return
-            
+
             # Check if editable
             if not (model.flags(index) & Qt.ItemIsEditable):
                 return
-            
+
             try:
                 # Edit directly using the view
                 table.setCurrentIndex(index)
@@ -122,9 +119,7 @@ class _EstimateTableMixin:
 
             self.logger.debug(f"After setText: type_item.text() = '{type_item.text()}'")
         except Exception as exc:
-            self.logger.error(
-                "Error updating row type visuals: %s", exc, exc_info=True
-            )
+            self.logger.error("Error updating row type visuals: %s", exc, exc_info=True)
 
     def _is_code_empty(self, row):
         try:
@@ -140,7 +135,12 @@ class _EstimateTableMixin:
             if not self._is_table_valid():
                 return True
             # Allow focus changes that move outside the table (e.g., toolbar buttons)
-            if target_row is None or target_col is None or target_row < 0 or target_col < 0:
+            if (
+                target_row is None
+                or target_col is None
+                or target_row < 0
+                or target_col < 0
+            ):
                 return True
 
             if 0 <= getattr(self, "current_row", -1) < self.item_table.rowCount():
@@ -157,7 +157,6 @@ class _EstimateTableMixin:
         except Exception:
             return True
         return True
-
 
     def cell_clicked(self, row, column):
         prev_row = getattr(self, "current_row", -1)
@@ -176,12 +175,12 @@ class _EstimateTableMixin:
             model = self.item_table.model()
             if not model or sip.isdeleted(model):
                 return
-            
+
             # Create index directly
             index = model.index(row, column)
             if not index.isValid():
                 return
-            
+
             # Check if editable
             if model.flags(index) & Qt.ItemIsEditable:
                 try:
@@ -263,9 +262,7 @@ class _EstimateTableMixin:
                     if code_item and code_item.text().strip():
                         QTimer.singleShot(10, self.add_empty_row)
                 else:
-                    QTimer.singleShot(
-                        10, lambda: self.focus_on_code_column(row + 1)
-                    )
+                    QTimer.singleShot(10, lambda: self.focus_on_code_column(row + 1))
             else:
                 if hasattr(self, "request_totals_recalc"):
                     self.request_totals_recalc()
@@ -285,7 +282,6 @@ class _EstimateTableMixin:
         finally:
             self.item_table.blockSignals(False)
         self._mark_unsaved()
-
 
     def move_to_next_cell(self):
         if self.processing_cell:
@@ -345,9 +341,7 @@ class _EstimateTableMixin:
             finally:
                 self.item_table.blockSignals(False)
             if next_col in editable_cols:
-                QTimer.singleShot(
-                    10, lambda: self._safe_edit_item(next_row, next_col)
-                )
+                QTimer.singleShot(10, lambda: self._safe_edit_item(next_row, next_col))
 
     def focus_on_code_column(self, row):
         def _apply_focus(target_row):
@@ -383,7 +377,9 @@ class _EstimateTableMixin:
         if timer is None:
             timer = QTimer(self)
             timer.setSingleShot(True)
-            timer.timeout.connect(lambda: _apply_focus(getattr(self, "_pending_focus_row", 0)))
+            timer.timeout.connect(
+                lambda: _apply_focus(getattr(self, "_pending_focus_row", 0))
+            )
             self._code_focus_timer = timer
         timer.stop()
         self._pending_focus_row = row
@@ -502,7 +498,9 @@ class _EstimateTableMixin:
         if not code:
             self._status("Enter item code first", 1500)
             if self._should_force_code_focus():
-                QTimer.singleShot(0, lambda: self.focus_on_code_column(self.current_row))
+                QTimer.singleShot(
+                    0, lambda: self.focus_on_code_column(self.current_row)
+                )
             return
 
         presenter = getattr(self, "presenter", None)
@@ -519,7 +517,6 @@ class _EstimateTableMixin:
                 "Presenter handle_item_code failed for %s: %s", code, exc, exc_info=True
             )
             self._status("Warning: Item lookup failed via presenter.", 4000)
-
 
     def _get_cell_float(self, row, col, default=0.0):
         item = self.item_table.item(row, col)
@@ -572,7 +569,9 @@ class _EstimateTableMixin:
                 if not editable:
                     item.setFlags(item.flags() & ~Qt.ItemIsEditable)
                 else:
-                    item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
+                    item.setFlags(
+                        Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable
+                    )
             return item
         except Exception as exc:
             self.logger.error(
@@ -661,7 +660,6 @@ class _EstimateTableMixin:
             self._status(err_msg, 5000)
             QMessageBox.critical(self, "Calculation Error", err_msg)
 
-
     def _update_row_type_visuals(self, row):
         if 0 <= row < self.item_table.rowCount():
             type_item = self._ensure_cell_exists(row, COL_TYPE, editable=False)
@@ -679,17 +677,20 @@ class _EstimateTableMixin:
         self.logger.info("=== toggle_return_mode() called ===")
         current_return = getattr(self, "return_mode", False)
         current_silver = getattr(self, "silver_bar_mode", False)
-        self.logger.info(f"Current state: return_mode={current_return}, silver_bar_mode={current_silver}")
+        self.logger.info(
+            f"Current state: return_mode={current_return}, silver_bar_mode={current_silver}"
+        )
 
-        if not getattr(self, "return_mode", False) and getattr(self, "silver_bar_mode", False):
+        if not getattr(self, "return_mode", False) and getattr(
+            self, "silver_bar_mode", False
+        ):
             self.logger.info("Disabling silver bar mode (mutual exclusion)")
             self.silver_bar_mode = False
             blocker = QSignalBlocker(self.silver_bar_toggle_button)
             self.silver_bar_toggle_button.setChecked(False)
             blocker.unblock()
             self.silver_bar_toggle_button.setText("🥈 Silver Bars")
-            self.silver_bar_toggle_button.setStyleSheet(
-                """
+            self.silver_bar_toggle_button.setStyleSheet("""
                 QPushButton {
                     background-color: palette(button);
                     border: 1px solid palette(mid);
@@ -701,8 +702,7 @@ class _EstimateTableMixin:
                 QPushButton:hover {
                     background-color: palette(light);
                 }
-            """
-            )
+            """)
 
         self.return_mode = not getattr(self, "return_mode", False)
         blocker = QSignalBlocker(self.return_toggle_button)
@@ -711,8 +711,7 @@ class _EstimateTableMixin:
 
         if self.return_mode:
             self.return_toggle_button.setText("↩ RETURN ON")
-            self.return_toggle_button.setStyleSheet(
-                """
+            self.return_toggle_button.setStyleSheet("""
                 QPushButton {
                     background-color: #e8f4fd;
                     border: 2px solid #0066cc;
@@ -724,15 +723,15 @@ class _EstimateTableMixin:
                 QPushButton:hover {
                     background-color: #d6eafc;
                 }
-            """
-            )
+            """)
             self.mode_indicator_label.setText("Mode: Return Items")
-            self.mode_indicator_label.setStyleSheet("font-weight: bold; color: #0066cc;")
+            self.mode_indicator_label.setStyleSheet(
+                "font-weight: bold; color: #0066cc;"
+            )
             self._status("Return Items mode activated", 2000)
         else:
             self.return_toggle_button.setText("↩ Return Items")
-            self.return_toggle_button.setStyleSheet(
-                """
+            self.return_toggle_button.setStyleSheet("""
                 QPushButton {
                     background-color: palette(button);
                     border: 1px solid palette(mid);
@@ -744,20 +743,17 @@ class _EstimateTableMixin:
                 QPushButton:hover {
                     background-color: palette(light);
                 }
-            """
-            )
+            """)
             if not getattr(self, "silver_bar_mode", False):
                 self.mode_indicator_label.setText("Mode: Regular")
-                self.mode_indicator_label.setStyleSheet(
-                    """
+                self.mode_indicator_label.setStyleSheet("""
                     font-weight: bold;
                     color: palette(windowText);
                     background-color: palette(window);
                     border: 1px solid palette(mid);
                     border-radius: 3px;
                     padding: 2px 6px;
-                """
-                )
+                """)
             self._status("Return Items mode deactivated", 2000)
 
         self.logger.info(f"After toggle: return_mode={self.return_mode}")
@@ -773,14 +769,15 @@ class _EstimateTableMixin:
         # Block signals to prevent recursion when button state changes
         from PyQt5.QtCore import QSignalBlocker
 
-        if not getattr(self, "silver_bar_mode", False) and getattr(self, "return_mode", False):
+        if not getattr(self, "silver_bar_mode", False) and getattr(
+            self, "return_mode", False
+        ):
             self.return_mode = False
             blocker = QSignalBlocker(self.return_toggle_button)
             self.return_toggle_button.setChecked(False)
             blocker.unblock()
             self.return_toggle_button.setText("↩ Return Items")
-            self.return_toggle_button.setStyleSheet(
-                """
+            self.return_toggle_button.setStyleSheet("""
                 QPushButton {
                     background-color: palette(button);
                     border: 1px solid palette(mid);
@@ -792,8 +789,7 @@ class _EstimateTableMixin:
                 QPushButton:hover {
                     background-color: palette(light);
                 }
-            """
-            )
+            """)
 
         self.silver_bar_mode = not getattr(self, "silver_bar_mode", False)
         blocker = QSignalBlocker(self.silver_bar_toggle_button)
@@ -802,8 +798,7 @@ class _EstimateTableMixin:
 
         if self.silver_bar_mode:
             self.silver_bar_toggle_button.setText("🥈 BAR ON")
-            self.silver_bar_toggle_button.setStyleSheet(
-                """
+            self.silver_bar_toggle_button.setStyleSheet("""
                 QPushButton {
                     background-color: #fff4e6;
                     border: 2px solid #cc6600;
@@ -815,15 +810,15 @@ class _EstimateTableMixin:
                 QPushButton:hover {
                     background-color: #ffe6cc;
                 }
-            """
-            )
+            """)
             self.mode_indicator_label.setText("Mode: Silver Bars")
-            self.mode_indicator_label.setStyleSheet("font-weight: bold; color: #cc6600;")
+            self.mode_indicator_label.setStyleSheet(
+                "font-weight: bold; color: #cc6600;"
+            )
             self._status("Silver Bars mode activated", 2000)
         else:
             self.silver_bar_toggle_button.setText("🥈 Silver Bars")
-            self.silver_bar_toggle_button.setStyleSheet(
-                """
+            self.silver_bar_toggle_button.setStyleSheet("""
                 QPushButton {
                     background-color: palette(button);
                     border: 1px solid palette(mid);
@@ -835,20 +830,17 @@ class _EstimateTableMixin:
                 QPushButton:hover {
                     background-color: palette(light);
                 }
-            """
-            )
+            """)
             if not getattr(self, "return_mode", False):
                 self.mode_indicator_label.setText("Mode: Regular")
-                self.mode_indicator_label.setStyleSheet(
-                    """
+                self.mode_indicator_label.setStyleSheet("""
                     font-weight: bold;
                     color: palette(windowText);
                     background-color: palette(window);
                     border: 1px solid palette(mid);
                     border-radius: 3px;
                     padding: 2px 6px;
-                """
-                )
+                """)
             self._status("Silver Bars mode deactivated", 2000)
 
         self._refresh_empty_row_type()
@@ -907,13 +899,16 @@ class _EstimateTableMixin:
                 # Focus on the row that took the place of the deleted row
                 # or the last row if we deleted the last row
                 focus_row = min(current_row, new_row_count - 1)
+
                 # Use a safer approach to set focus without editing
                 def safe_focus():
                     try:
                         if 0 <= focus_row < self.item_table.rowCount():
                             self.item_table.setCurrentCell(focus_row, COL_CODE)
                     except Exception as exc:
-                        self.logger.error(f"Error focusing after row deletion: {exc}", exc_info=True)
+                        self.logger.error(
+                            f"Error focusing after row deletion: {exc}", exc_info=True
+                        )
 
                 QTimer.singleShot(0, safe_focus)
 
@@ -973,7 +968,4 @@ class _EstimateTableMixin:
         ):
             self.item_table.setCurrentCell(prev_row, prev_col)
             if prev_col in editable_cols:
-                QTimer.singleShot(
-                    10, lambda: self._safe_edit_item(prev_row, prev_col)
-                )
-
+                QTimer.singleShot(10, lambda: self._safe_edit_item(prev_row, prev_col))

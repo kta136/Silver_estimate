@@ -1,14 +1,14 @@
 """Controller coordinating live-rate service with the main window UI."""
+
 from __future__ import annotations
 
 import logging
 from typing import Callable, Optional, Tuple
 
-from PyQt5.QtCore import QObject, QLocale, QTimer, QDateTime
+from PyQt5.QtCore import QDateTime, QLocale, QObject, QTimer
 
 from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.services.live_rate_service import LiveRateService
-
 
 LiveRateWidgetGetter = Callable[[], Optional[object]]
 StatusCallback = Callable[[str, int, str], None]
@@ -115,9 +115,15 @@ class LiveRateController(QObject):
             try:
                 service.start()
             except Exception as exc:
-                self._logger.warning("Unable to start live-rate timer: %s", exc, exc_info=True)
+                self._logger.warning(
+                    "Unable to start live-rate timer: %s", exc, exc_info=True
+                )
         else:
-            self._logger.info("Live rate auto-refresh disabled (ui=%s, auto=%s)", show_ui, auto_refresh)
+            self._logger.info(
+                "Live rate auto-refresh disabled (ui=%s, auto=%s)",
+                show_ui,
+                auto_refresh,
+            )
 
     def refresh_now(self) -> None:
         """Trigger an immediate live-rate fetch."""
@@ -131,7 +137,9 @@ class LiveRateController(QObject):
                 self._status_callback("Refreshing live rate.", 1500, "info")
                 return
             except Exception as exc:
-                self._logger.warning("Live rate service refresh failed: %s", exc, exc_info=True)
+                self._logger.warning(
+                    "Live rate service refresh failed: %s", exc, exc_info=True
+                )
         self._fallback_refresh()
 
     # --- Internal helpers ---------------------------------------------
@@ -145,7 +153,9 @@ class LiveRateController(QObject):
             self._service = service
             return service
         except Exception as exc:
-            self._logger.warning("Live rate service unavailable: %s", exc, exc_info=True)
+            self._logger.warning(
+                "Live rate service unavailable: %s", exc, exc_info=True
+            )
             self._service = None
             return None
 
@@ -167,7 +177,9 @@ class LiveRateController(QObject):
             try:
                 widget.refresh_silver_rate()
             except Exception as exc:
-                self._logger.warning("Manual live rate refresh failed: %s", exc, exc_info=True)
+                self._logger.warning(
+                    "Manual live rate refresh failed: %s", exc, exc_info=True
+                )
                 self._status_callback("Live rate refresh failed", 3000, "warning")
             finally:
                 self._manual_refresh = False
@@ -177,9 +189,16 @@ class LiveRateController(QObject):
 
     def _handle_rate_updated(self, broadcast_rate, api_rate, market_open) -> None:
         best_rate = broadcast_rate if broadcast_rate not in (None, "") else api_rate
-        QTimer.singleShot(0, lambda: self._update_display(best_rate, broadcast_rate, api_rate, market_open))
+        QTimer.singleShot(
+            0,
+            lambda: self._update_display(
+                best_rate, broadcast_rate, api_rate, market_open
+            ),
+        )
 
-    def _update_display(self, effective_rate, broadcast_rate, api_rate, market_open) -> None:
+    def _update_display(
+        self, effective_rate, broadcast_rate, api_rate, market_open
+    ) -> None:
         widget = self._widget_getter()
         label = getattr(widget, "live_rate_value_label", None) if widget else None
         if label is None:
@@ -230,9 +249,13 @@ class LiveRateController(QObject):
         try:
             display_value = QLocale.system().toCurrencyString(gram_rate)
         except Exception:
-            display_value = f"₹ {gram_rate:.2f}" if isinstance(gram_rate, float) else str(gram_rate)
+            display_value = (
+                f"₹ {gram_rate:.2f}" if isinstance(gram_rate, float) else str(gram_rate)
+            )
         label.setText(f"{display_value} /g")
-        if broadcast_rate not in (None, "") and str(broadcast_rate) == str(effective_rate):
+        if broadcast_rate not in (None, "") and str(broadcast_rate) == str(
+            effective_rate
+        ):
             source = "Broadcast"
         elif api_rate not in (None, "") and str(api_rate) == str(effective_rate):
             source = "API"
@@ -249,19 +272,22 @@ class LiveRateController(QObject):
             self._status_callback("Live rate updated", 2000, "info")
         self._manual_refresh = False
 
-
     def _read_settings(self) -> Tuple[bool, bool, int]:
         try:
             settings = self._settings_provider()
         except Exception as exc:
-            self._logger.debug("Falling back to default live-rate settings: %s", exc, exc_info=True)
+            self._logger.debug(
+                "Falling back to default live-rate settings: %s", exc, exc_info=True
+            )
             return True, True, 60
         try:
             ui_raw = settings.value("rates/live_enabled", True)
             auto_raw = settings.value("rates/auto_refresh_enabled", True)
             interval_raw = settings.value("rates/refresh_interval_sec", 60)
         except Exception as exc:
-            self._logger.debug("Could not read live-rate settings: %s", exc, exc_info=True)
+            self._logger.debug(
+                "Could not read live-rate settings: %s", exc, exc_info=True
+            )
             return True, True, 60
         show_ui = self._coerce_bool(ui_raw, True)
         auto_refresh = self._coerce_bool(auto_raw, True)
@@ -293,4 +319,3 @@ class LiveRateController(QObject):
     def service(self) -> Optional[LiveRateService]:
         """Expose the underlying service for compatibility with legacy code."""
         return self._service
-

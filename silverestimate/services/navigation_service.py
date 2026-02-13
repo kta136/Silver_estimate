@@ -1,4 +1,5 @@
 """Navigation service to manage view switching and history dialogs."""
+
 from __future__ import annotations
 
 import logging
@@ -10,10 +11,12 @@ from PyQt5.QtWidgets import QMessageBox
 class NavigationService:
     """Handle main-window navigation, lazy view creation, and dialogs."""
 
-    def __init__(self, main_window, stack_widget, logger: Optional[logging.Logger] = None) -> None:
+    def __init__(
+        self, main_window, stack_widget, logger: Optional[logging.Logger] = None
+    ) -> None:
         self.main_window = main_window
         self.stack = stack_widget
-        self.db = getattr(main_window, 'db', None)
+        self.db = getattr(main_window, "db", None)
         self._logger = logger or logging.getLogger(__name__)
 
     def update_db(self, db_manager) -> None:
@@ -21,7 +24,7 @@ class NavigationService:
 
     # --- Entry Points --------------------------------------------------
     def show_estimate(self) -> None:
-        widget = getattr(self.main_window, 'estimate_widget', None)
+        widget = getattr(self.main_window, "estimate_widget", None)
         if widget is None:
             self._logger.error("Cannot show estimate: estimate_widget is not available")
             QMessageBox.critical(
@@ -32,24 +35,26 @@ class NavigationService:
             return
         self._switch_widget(widget)
         self._sync_actions(
-            nav=getattr(self.main_window, 'nav_estimate_action', None),
-            menu=getattr(self.main_window, '_menu_estimate_action', None),
-            view=getattr(self.main_window, '_view_estimate_action', None),
+            nav=getattr(self.main_window, "nav_estimate_action", None),
+            menu=getattr(self.main_window, "_menu_estimate_action", None),
+            view=getattr(self.main_window, "_view_estimate_action", None),
         )
 
     def show_item_master(self) -> None:
-        widget = getattr(self.main_window, 'item_master_widget', None)
+        widget = getattr(self.main_window, "item_master_widget", None)
         if widget is None:
             try:
                 from silverestimate.ui.item_master import ItemMasterWidget
 
                 self._logger.info("Creating ItemMasterWidget on demand...")
                 widget = ItemMasterWidget(self.db, self.main_window)
-                setattr(self.main_window, 'item_master_widget', widget)
+                setattr(self.main_window, "item_master_widget", widget)
                 if self.stack:
                     self.stack.addWidget(widget)
             except Exception as exc:
-                self._logger.error("Failed to create ItemMasterWidget: %s", exc, exc_info=True)
+                self._logger.error(
+                    "Failed to create ItemMasterWidget: %s", exc, exc_info=True
+                )
                 QMessageBox.critical(
                     self.main_window,
                     "Error",
@@ -58,9 +63,9 @@ class NavigationService:
                 return
         self._switch_widget(widget)
         self._sync_actions(
-            nav=getattr(self.main_window, 'nav_item_master_action', None),
-            menu=getattr(self.main_window, '_menu_item_master_action', None),
-            view=getattr(self.main_window, '_view_item_master_action', None),
+            nav=getattr(self.main_window, "nav_item_master_action", None),
+            menu=getattr(self.main_window, "_menu_item_master_action", None),
+            view=getattr(self.main_window, "_view_item_master_action", None),
         )
 
     def show_silver_bars(self) -> None:
@@ -73,7 +78,9 @@ class NavigationService:
             dialog = SilverBarDialog(self.db, self.main_window)
             dialog.exec_()
         except Exception as exc:
-            self._logger.error("Failed to open Silver Bar Management: %s", exc, exc_info=True)
+            self._logger.error(
+                "Failed to open Silver Bar Management: %s", exc, exc_info=True
+            )
             QMessageBox.critical(
                 self.main_window,
                 "Error",
@@ -90,7 +97,9 @@ class NavigationService:
             dialog = SilverBarHistoryDialog(self.db, self.main_window)
             dialog.exec_()
         except Exception as exc:
-            self._logger.error("Error opening Silver Bar History: %s", exc, exc_info=True)
+            self._logger.error(
+                "Error opening Silver Bar History: %s", exc, exc_info=True
+            )
             QMessageBox.critical(
                 self.main_window,
                 "Error",
@@ -98,9 +107,11 @@ class NavigationService:
             )
 
     def show_estimate_history(self) -> None:
-        widget = getattr(self.main_window, 'estimate_widget', None)
+        widget = getattr(self.main_window, "estimate_widget", None)
         if widget is None:
-            self._logger.error("Cannot show estimate history: estimate_widget is not available")
+            self._logger.error(
+                "Cannot show estimate history: estimate_widget is not available"
+            )
             QMessageBox.critical(
                 self.main_window,
                 "Error",
@@ -108,7 +119,7 @@ class NavigationService:
             )
             return
         try:
-            show_history = getattr(widget, 'show_history', None)
+            show_history = getattr(widget, "show_history", None)
             if not callable(show_history):
                 QMessageBox.critical(
                     self.main_window,

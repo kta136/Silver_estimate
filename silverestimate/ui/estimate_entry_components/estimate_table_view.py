@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt5.QtCore import Qt, pyqtSignal, QModelIndex, QItemSelection, QTimer
+from PyQt5 import sip
+from PyQt5.QtCore import QItemSelection, QModelIndex, Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QColor, QPalette
 from PyQt5.QtWidgets import (
     QAction,
@@ -20,8 +21,6 @@ from silverestimate.ui.view_models.estimate_entry_view_model import (
     EstimateEntryRowState,
 )
 
-
-from PyQt5 import sip
 
 class ModelBackedTableItem(QTableWidgetItem):
     """QTableWidgetItem that's backed by a Model/View model.
@@ -90,7 +89,7 @@ class ModelBackedTableItem(QTableWidgetItem):
                     return str(data) if data is not None else ""
         except (RuntimeError, AttributeError):
             pass
-        
+
         # Fallback to cached text if model is unavailable
         return super().text()
 
@@ -141,7 +140,9 @@ class EstimateTableView(QTableView):
     cellChanged = pyqtSignal(int, int)  # row, column
     cellClicked = pyqtSignal(int, int)  # row, column
     itemSelectionChanged = pyqtSignal()  # no args
-    currentCellChanged = pyqtSignal(int, int, int, int)  # currentRow, currentCol, prevRow, prevCol
+    currentCellChanged = pyqtSignal(
+        int, int, int, int
+    )  # currentRow, currentCol, prevRow, prevCol
 
     def __init__(self, parent=None):
         """Initialize the estimate table view.
@@ -193,8 +194,7 @@ class EstimateTableView(QTableView):
         palette.setColor(QPalette.HighlightedText, QColor("#111827"))
         self.setPalette(palette)
 
-        self.setStyleSheet(
-            """
+        self.setStyleSheet("""
             QTableView {
                 gridline-color: #e0e0e0;
                 selection-background-color: #e2e8f0;
@@ -218,8 +218,7 @@ class EstimateTableView(QTableView):
                 background-color: #f9fafb;
                 border: none;
             }
-            """
-        )
+            """)
 
     def _connect_signals(self) -> None:
         """Connect internal signals."""
@@ -239,7 +238,9 @@ class EstimateTableView(QTableView):
             selection_model.selectionChanged.connect(self._on_selection_changed)
             selection_model.currentChanged.connect(self._on_current_changed)
 
-    def _on_data_changed_detailed(self, row: int, col: int, old_value, new_value) -> None:
+    def _on_data_changed_detailed(
+        self, row: int, col: int, old_value, new_value
+    ) -> None:
         """Handle detailed data changed from model.
 
         Emits both modern cell_edited and QTableWidget-compatible cellChanged signals.
@@ -255,7 +256,9 @@ class EstimateTableView(QTableView):
         if index.isValid():
             self.cellClicked.emit(index.row(), index.column())
 
-    def _on_selection_changed(self, selected: QItemSelection, deselected: QItemSelection) -> None:
+    def _on_selection_changed(
+        self, selected: QItemSelection, deselected: QItemSelection
+    ) -> None:
         """Handle selection changed.
 
         Emits QTableWidget-compatible itemSelectionChanged signal.
@@ -496,14 +499,14 @@ class EstimateTableView(QTableView):
         default_widths = {
             0: 100,  # Code
             1: 200,  # Item Name
-            2: 80,   # Gross
-            3: 80,   # Poly
-            4: 80,   # Net Wt
-            5: 80,   # Purity
-            6: 80,   # Wage Rate
-            7: 80,   # Pieces
-            8: 80,   # Wage Amt
-            9: 80,   # Fine Wt
+            2: 80,  # Gross
+            3: 80,  # Poly
+            4: 80,  # Net Wt
+            5: 80,  # Purity
+            6: 80,  # Wage Rate
+            7: 80,  # Pieces
+            8: 80,  # Wage Amt
+            9: 80,  # Fine Wt
             10: 80,  # Type
         }
         self.restore_column_widths(default_widths)
@@ -558,7 +561,7 @@ class EstimateTableView(QTableView):
         """
         if not isinstance(item, ModelBackedTableItem):
             return
-            
+
         host = getattr(self, "host_widget", None)
         if host is not None and getattr(host, "_loading_estimate", False):
             return
@@ -626,15 +629,20 @@ class EstimateTableView(QTableView):
         # Safety check: verify model is valid
         if not self._table_model or sip.isdeleted(self._table_model):
             return None
-            
-        if not (0 <= row < self._table_model.rowCount() and 0 <= column < self._table_model.columnCount()):
+
+        if not (
+            0 <= row < self._table_model.rowCount()
+            and 0 <= column < self._table_model.columnCount()
+        ):
             return None
 
         # Use cached item if available, otherwise create new one
         cache_key = (row, column)
         if cache_key not in self._item_cache:
             try:
-                self._item_cache[cache_key] = ModelBackedTableItem(self._table_model, row, column)
+                self._item_cache[cache_key] = ModelBackedTableItem(
+                    self._table_model, row, column
+                )
             except (RuntimeError, AttributeError):
                 # Model might have been deleted during item creation
                 return None

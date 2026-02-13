@@ -145,7 +145,9 @@ def test_decimal_formatting(panel):
     totals = TotalsResult(
         overall_gross=123.456,  # Should round to 2 decimals
         overall_poly=0.0,
-        regular=CategoryTotals(gross=0.0, net=0.0, fine=999.999, wage=0.0),  # Should round to 2 decimals
+        regular=CategoryTotals(
+            gross=0.0, net=0.0, fine=999.999, wage=0.0
+        ),  # Should round to 2 decimals
         returns=CategoryTotals(),
         silver_bars=CategoryTotals(),
         net_fine_core=0.0,

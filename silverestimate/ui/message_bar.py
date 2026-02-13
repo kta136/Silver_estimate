@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QFrame
 from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QWidget
 
 
 class MessageBar(QFrame):
@@ -42,15 +42,15 @@ class MessageBar(QFrame):
 
         # Basic stylesheet; can be overridden by app theme
         self._styles = {
-            'info':    "background:#e6f4ff; color:#084b83; border:1px solid #b6e0fe; border-radius:4px;",
-            'warning': "background:#fff7e6; color:#8a6d3b; border:1px solid #ffe0a3; border-radius:4px;",
-            'error':   "background:#fdecea; color:#a61b1b; border:1px solid #f5c2c0; border-radius:4px;",
+            "info": "background:#e6f4ff; color:#084b83; border:1px solid #b6e0fe; border-radius:4px;",
+            "warning": "background:#fff7e6; color:#8a6d3b; border:1px solid #ffe0a3; border-radius:4px;",
+            "error": "background:#fdecea; color:#a61b1b; border:1px solid #f5c2c0; border-radius:4px;",
         }
 
-    def show_message(self, text: str, timeout_ms: int = 3000, level: str = 'info'):
-        level = (level or 'info').lower()
+    def show_message(self, text: str, timeout_ms: int = 3000, level: str = "info"):
+        level = (level or "info").lower()
         if level not in self._styles:
-            level = 'info'
+            level = "info"
         self.setStyleSheet(self._styles[level])
         self._label.setText(text or "")
         self.show()
@@ -58,4 +58,3 @@ class MessageBar(QFrame):
         self._timer.stop()
         if isinstance(timeout_ms, int) and timeout_ms > 0:
             self._timer.start(timeout_ms)
-

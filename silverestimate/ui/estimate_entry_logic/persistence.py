@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
-from PyQt5.QtCore import QDate, QTimer, Qt
+from PyQt5.QtCore import QDate, Qt, QTimer
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem
 
@@ -16,12 +16,13 @@ from silverestimate.services.estimate_calculator import compute_totals
 from silverestimate.services.estimate_entry_persistence import (
     EstimateEntryPersistenceService,
 )
+from silverestimate.ui.view_models import EstimateEntryRowState
 
 from .constants import (
     COL_CODE,
-    COL_ITEM_NAME,
     COL_FINE_WT,
     COL_GROSS,
+    COL_ITEM_NAME,
     COL_NET_WT,
     COL_PIECES,
     COL_POLY,
@@ -30,7 +31,6 @@ from .constants import (
     COL_WAGE_AMT,
     COL_WAGE_RATE,
 )
-from silverestimate.ui.view_models import EstimateEntryRowState
 
 if TYPE_CHECKING:  # pragma: no cover - for type checking only
     from silverestimate.presenter import EstimateEntryPresenter
@@ -94,7 +94,6 @@ class _EstimatePersistenceMixin:
             return_mode=getattr(self, "return_mode", False),
             silver_bar_mode=getattr(self, "silver_bar_mode", False),
         )
-
 
     def apply_loaded_estimate(self, loaded: LoadedEstimate) -> bool:
         success = False
@@ -217,7 +216,6 @@ class _EstimatePersistenceMixin:
             self._set_unsaved(False, force=True)
         return success
 
-
     def capture_state(self) -> EstimateEntryViewState:
         view_model = getattr(self, "view_model", None)
         if view_model is not None:
@@ -308,7 +306,9 @@ class _EstimatePersistenceMixin:
                 if totals.last_balance_amount > 0:
                     lb_wage = self._format_currency(totals.last_balance_amount)
                     total_wage = self._format_currency(totals.net_wage)
-                    self.net_wage_label.setText(f"{base_wage} + {lb_wage} = {total_wage}")
+                    self.net_wage_label.setText(
+                        f"{base_wage} + {lb_wage} = {total_wage}"
+                    )
                 else:
                     self.net_wage_label.setText(base_wage)
 
@@ -353,12 +353,13 @@ class _EstimatePersistenceMixin:
         )
         self.apply_totals(totals)
 
-
     def generate_voucher(self):
         try:
             try:
                 if hasattr(self, "safe_load_estimate"):
-                    self.voucher_edit.editingFinished.disconnect(self.safe_load_estimate)
+                    self.voucher_edit.editingFinished.disconnect(
+                        self.safe_load_estimate
+                    )
                 else:
                     self.voucher_edit.editingFinished.disconnect(self.load_estimate)
             except TypeError:
@@ -394,7 +395,6 @@ class _EstimatePersistenceMixin:
                     self.voucher_edit.editingFinished.connect(self.load_estimate)
             except Exception as exc:
                 self.logger.error("Error reconnecting signal: %s", exc, exc_info=True)
-
 
     def load_estimate(self):
         if hasattr(self, "initializing") and self.initializing:
@@ -440,7 +440,8 @@ class _EstimatePersistenceMixin:
 
         if loaded_estimate is None:
             self.logger.info(
-                "Estimate voucher '%s' not found; starting new estimate entry", voucher_no
+                "Estimate voucher '%s' not found; starting new estimate entry",
+                voucher_no,
             )
             self._status(f"Estimate {voucher_no} not found. Starting new entry.", 4000)
             self._estimate_loaded = False
@@ -465,12 +466,13 @@ class _EstimatePersistenceMixin:
         else:
             self._status(f"Estimate {voucher_no} could not be loaded.", 4000)
 
-
     def save_estimate(self):
         voucher_no = self.voucher_edit.text().strip()
         if not voucher_no:
             self.logger.warning("Save Error: Voucher number missing")
-            QMessageBox.warning(self, "Input Error", "Voucher number is required to save.")
+            QMessageBox.warning(
+                self, "Input Error", "Voucher number is required to save."
+            )
             self._status("Save Error: Voucher number missing", 4000)
             return
 
@@ -519,7 +521,10 @@ class _EstimatePersistenceMixin:
             return
         except Exception as exc:
             self.logger.error(
-                "Unexpected error saving estimate %s: %s", voucher_no, exc, exc_info=True
+                "Unexpected error saving estimate %s: %s",
+                voucher_no,
+                exc,
+                exc_info=True,
             )
             QMessageBox.critical(
                 self,
@@ -565,7 +570,7 @@ class _EstimatePersistenceMixin:
                 error_detail or outcome.message,
             )
             QMessageBox.critical(self, "Save Error", dialog_message)
-            self._status(status_message.replace('\n', ' ').strip(), 5000)
+            self._status(status_message.replace("\n", " ").strip(), 5000)
 
     def _get_row_code(self, row: int) -> str:
         code_item = self.item_table.item(row, COL_CODE)
@@ -576,7 +581,6 @@ class _EstimatePersistenceMixin:
             return data.strip()
         text = code_item.text()
         return text.strip() if text else ""
-
 
     def print_estimate(self):
         from ..print_manager import PrintManager
@@ -610,7 +614,6 @@ class _EstimatePersistenceMixin:
                 self.print_button.setEnabled(True)
         except Exception:
             pass
-
 
     def delete_current_estimate(self):
         voucher_no = self.voucher_edit.text().strip()
@@ -662,4 +665,3 @@ class _EstimatePersistenceMixin:
                     f"An unexpected error occurred during deletion: {exc}",
                 )
                 self._status(f"Delete Error: Unexpected error for {voucher_no}", 5000)
-

@@ -1,8 +1,12 @@
-import pytest
 from types import SimpleNamespace
 
+import pytest
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem
 
+from silverestimate.services.estimate_calculator import (
+    compute_fine_weight,
+    compute_net_weight,
+)
 from silverestimate.ui.estimate_entry_logic import (
     COL_CODE,
     COL_FINE_WT,
@@ -16,7 +20,6 @@ from silverestimate.ui.estimate_entry_logic import (
     COL_WAGE_RATE,
     EstimateLogic,
 )
-from silverestimate.services.estimate_calculator import compute_fine_weight, compute_net_weight
 
 
 class _LabelStub:
@@ -105,7 +108,9 @@ def test_calculate_totals_groups_by_type(qt_app):
 
 
 def test_calculate_wage_uses_item_wage_type(qt_app):
-    lookup = lambda code: {"wage_type": "PC"} if code == "PC001" else {"wage_type": "WT"}
+    lookup = lambda code: (
+        {"wage_type": "PC"} if code == "PC001" else {"wage_type": "WT"}
+    )
     logic, table = _prepare_logic_with_table(rows=2, item_lookup=lookup)
 
     table.setItem(0, COL_CODE, QTableWidgetItem("PC001"))
@@ -195,6 +200,7 @@ def test_calculate_totals_applies_last_balance_and_currency(qt_app):
     assert logic.net_value_label.text == "?512750"
     assert logic.grand_total_label.text == "?513340"
 
+
 def test_calculate_totals_handles_return_only(qt_app):
     logic, table = _prepare_logic_with_table(rows=2)
     logic.silver_rate_spin = SimpleNamespace(value=lambda: 65000.0)
@@ -247,6 +253,7 @@ def test_calculate_fine_full_purity(qt_app):
 
 try:
     from hypothesis import given
+
     _HYPOTHESIS_AVAILABLE = True
 except ModuleNotFoundError:
     _HYPOTHESIS_AVAILABLE = False
@@ -258,25 +265,27 @@ if _HYPOTHESIS_AVAILABLE:
     def test_calculate_fine_property(qt_app, case):
         logic, table = _prepare_logic_with_table()
         logic.current_row = 0
-        table.setItem(0, COL_CODE, QTableWidgetItem('HYP001'))
+        table.setItem(0, COL_CODE, QTableWidgetItem("HYP001"))
         table.setItem(0, COL_GROSS, QTableWidgetItem(f"{case.gross}"))
         table.setItem(0, COL_POLY, QTableWidgetItem(f"{case.poly}"))
         table.setItem(0, COL_PURITY, QTableWidgetItem(f"{case.purity}"))
-        table.setItem(0, COL_WAGE_RATE, QTableWidgetItem('0'))
-        table.setItem(0, COL_PIECES, QTableWidgetItem('1'))
+        table.setItem(0, COL_WAGE_RATE, QTableWidgetItem("0"))
+        table.setItem(0, COL_PIECES, QTableWidgetItem("1"))
 
         logic.calculate_net_weight()
 
         actual_net = float(table.item(0, COL_NET_WT).text())
         actual_fine = float(table.item(0, COL_FINE_WT).text())
         expected_net = float(format(compute_net_weight(case.gross, case.poly), ".2f"))
-        expected_fine = float(format(compute_fine_weight(expected_net, case.purity), ".2f"))
+        expected_fine = float(
+            format(compute_fine_weight(expected_net, case.purity), ".2f")
+        )
         assert actual_net == pytest.approx(expected_net, abs=1e-6)
         assert actual_fine == pytest.approx(expected_fine, abs=1e-6)
 
     @given(case=wage_calculation_cases())
     def test_calculate_wage_property(qt_app, case):
-        lookup = lambda code: {'wage_type': case.wage_type}
+        lookup = lambda code: {"wage_type": case.wage_type}
         logic, table = _prepare_logic_with_table(item_lookup=lookup)
         table.setItem(0, COL_CODE, QTableWidgetItem(case.code))
         table.setItem(0, COL_NET_WT, QTableWidgetItem(f"{case.net_weight}"))
@@ -291,10 +300,10 @@ if _HYPOTHESIS_AVAILABLE:
 
 else:
 
-    @pytest.mark.skip(reason='hypothesis not installed')
+    @pytest.mark.skip(reason="hypothesis not installed")
     def test_calculate_fine_property(qt_app):  # pragma: no cover - dependency optional
-        pytest.skip('hypothesis not installed')
+        pytest.skip("hypothesis not installed")
 
-    @pytest.mark.skip(reason='hypothesis not installed')
+    @pytest.mark.skip(reason="hypothesis not installed")
     def test_calculate_wage_property(qt_app):  # pragma: no cover - dependency optional
-        pytest.skip('hypothesis not installed')
+        pytest.skip("hypothesis not installed")

@@ -1,18 +1,31 @@
 #!/usr/bin/env python
-from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-                             QTableWidget, QTableWidgetItem, QHeaderView,
-                             QAbstractItemView, QLineEdit, QDateEdit, QMessageBox)
-from PyQt5.QtCore import Qt, QDate, QThread, QObject, pyqtSignal
-from .print_manager import PrintManager # Added import
+from PyQt5.QtCore import QDate, QObject, Qt, QThread, pyqtSignal
+from PyQt5.QtWidgets import (
+    QAbstractItemView,
+    QDateEdit,
+    QDialog,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+)
+
+from .print_manager import PrintManager  # Added import
+
 
 class EstimateHistoryDialog(QDialog):
     """Dialog for browsing and selecting past estimates."""
 
     # Accept db_manager, an explicit main_window_ref, and the standard parent
     def __init__(self, db_manager, main_window_ref, parent=None):
-        super().__init__(parent) # Use standard parent for QDialog
+        super().__init__(parent)  # Use standard parent for QDialog
         self.db_manager = db_manager
-        self.main_window = main_window_ref # Store the explicit reference to MainWindow
+        self.main_window = main_window_ref  # Store the explicit reference to MainWindow
         self.selected_voucher = None
         self.init_ui()
         self.load_estimates()
@@ -64,21 +77,30 @@ class EstimateHistoryDialog(QDialog):
 
         # Estimates table
         self.estimates_table = QTableWidget()
-        self.estimates_table.setColumnCount(9) # Increased column count to include Note
-        self.estimates_table.setHorizontalHeaderLabels([
-            "Voucher No", "Date", "Note", "Silver Rate", "Total Gross",
-            "Total Net", "Net Fine", "Net Wage", "Grand Total" # Moved Note column after Date
-        ])
+        self.estimates_table.setColumnCount(9)  # Increased column count to include Note
+        self.estimates_table.setHorizontalHeaderLabels(
+            [
+                "Voucher No",
+                "Date",
+                "Note",
+                "Silver Rate",
+                "Total Gross",
+                "Total Net",
+                "Net Fine",
+                "Net Wage",
+                "Grand Total",  # Moved Note column after Date
+            ]
+        )
 
         # Set column widths (adjusting for new columns)
         self.estimates_table.setColumnWidth(0, 110)  # Voucher No
-        self.estimates_table.setColumnWidth(1, 90)   # Date
+        self.estimates_table.setColumnWidth(1, 90)  # Date
         self.estimates_table.setColumnWidth(2, 200)  # Note (Moved here)
-        self.estimates_table.setColumnWidth(3, 90)   # Silver Rate
-        self.estimates_table.setColumnWidth(4, 90)   # Total Gross
-        self.estimates_table.setColumnWidth(5, 90)   # Total Net
-        self.estimates_table.setColumnWidth(6, 90)   # Net Fine
-        self.estimates_table.setColumnWidth(7, 90)   # Net Wage
+        self.estimates_table.setColumnWidth(3, 90)  # Silver Rate
+        self.estimates_table.setColumnWidth(4, 90)  # Total Gross
+        self.estimates_table.setColumnWidth(5, 90)  # Total Net
+        self.estimates_table.setColumnWidth(6, 90)  # Net Fine
+        self.estimates_table.setColumnWidth(7, 90)  # Net Wage
         self.estimates_table.setColumnWidth(8, 110)  # Grand Total
 
         # Table properties
@@ -100,12 +122,14 @@ class EstimateHistoryDialog(QDialog):
         self.print_button.clicked.connect(self.print_estimate)
         button_layout.addWidget(self.print_button)
 
-        self.delete_button = QPushButton("Delete Selected") # New button
+        self.delete_button = QPushButton("Delete Selected")  # New button
         self.delete_button.setToolTip("Permanently delete the selected estimate")
-        self.delete_button.clicked.connect(self.delete_selected_estimate) # Connect to new handler
+        self.delete_button.clicked.connect(
+            self.delete_selected_estimate
+        )  # Connect to new handler
         button_layout.addWidget(self.delete_button)
 
-        button_layout.addStretch(1) # Add stretch before close
+        button_layout.addStretch(1)  # Add stretch before close
 
         self.close_button = QPushButton("Close")
         self.close_button.clicked.connect(self.reject)
@@ -133,20 +157,27 @@ class EstimateHistoryDialog(QDialog):
         # Start threaded load and return early to keep UI responsive
         try:
             self.search_button.setEnabled(False)
-            if hasattr(self, 'open_button'): self.open_button.setEnabled(False)
-            if hasattr(self, 'print_button'): self.print_button.setEnabled(False)
-            if hasattr(self, 'delete_button'): self.delete_button.setEnabled(False)
+            if hasattr(self, "open_button"):
+                self.open_button.setEnabled(False)
+            if hasattr(self, "print_button"):
+                self.print_button.setEnabled(False)
+            if hasattr(self, "delete_button"):
+                self.delete_button.setEnabled(False)
         except Exception:
             pass
 
-        worker = _HistoryLoadWorker(self.db_manager.temp_db_path,
-                                    self.date_from.date().toString("yyyy-MM-dd"),
-                                    self.date_to.date().toString("yyyy-MM-dd"),
-                                    self.voucher_search.text().strip())
+        worker = _HistoryLoadWorker(
+            self.db_manager.temp_db_path,
+            self.date_from.date().toString("yyyy-MM-dd"),
+            self.date_to.date().toString("yyyy-MM-dd"),
+            self.voucher_search.text().strip(),
+        )
         thread = QThread(self)
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
-        worker.data_ready.connect(lambda headers, agg: self._populate_table(headers, agg))
+        worker.data_ready.connect(
+            lambda headers, agg: self._populate_table(headers, agg)
+        )
         worker.error.connect(lambda msg: QMessageBox.warning(self, "Load Error", msg))
         worker.finished.connect(lambda: self._loading_done(thread, worker))
         thread.start()
@@ -163,17 +194,23 @@ class EstimateHistoryDialog(QDialog):
             voucher_search = self.voucher_search.text().strip()
 
             # Fetch only estimate headers for performance (no item lists)
-            headers = self.db_manager.get_estimate_headers(date_from, date_to, voucher_search)
+            headers = self.db_manager.get_estimate_headers(
+                date_from, date_to, voucher_search
+            )
 
             # Clear and populate table
             table.setRowCount(0)
             table.setRowCount(len(headers))  # Set row count based on results
 
             # Pre-compute Regular-only aggregates for all vouchers in one query
-            voucher_nos = [str(h['voucher_no']) for h in headers]
+            voucher_nos = [str(h["voucher_no"]) for h in headers]
             agg_map = {}
             try:
-                if voucher_nos and hasattr(self.db_manager, 'cursor') and self.db_manager.cursor:
+                if (
+                    voucher_nos
+                    and hasattr(self.db_manager, "cursor")
+                    and self.db_manager.cursor
+                ):
                     placeholders = ",".join(["?"] * len(voucher_nos))
                     sql = (
                         f"SELECT voucher_no, "
@@ -184,7 +221,9 @@ class EstimateHistoryDialog(QDialog):
                     self.db_manager.cursor.execute(sql, voucher_nos)
                     for row in self.db_manager.cursor.fetchall():
                         # sqlite3.Row supports index or key; use keys for clarity
-                        vno = row["voucher_no"] if "voucher_no" in row.keys() else row[0]
+                        vno = (
+                            row["voucher_no"] if "voucher_no" in row.keys() else row[0]
+                        )
                         rg = row["rg"] if "rg" in row.keys() else row[1]
                         rn = row["rn"] if "rn" in row.keys() else row[2]
                         agg_map[str(vno)] = (float(rg or 0.0), float(rn or 0.0))
@@ -192,31 +231,35 @@ class EstimateHistoryDialog(QDialog):
                 agg_map = {}
 
             for row_idx, header in enumerate(headers):
-                vno = str(header['voucher_no'])
+                vno = str(header["voucher_no"])
                 regular_gross_sum, regular_net_sum = agg_map.get(vno, (0.0, 0.0))
 
                 # Populate table cells
-                table.setItem(row_idx, 0, QTableWidgetItem(header['voucher_no']))
-                table.setItem(row_idx, 1, QTableWidgetItem(header['date']))
+                table.setItem(row_idx, 0, QTableWidgetItem(header["voucher_no"]))
+                table.setItem(row_idx, 1, QTableWidgetItem(header["date"]))
                 # Column 2: Note (Moved here)
-                note = header.get('note', '')
+                note = header.get("note", "")
                 table.setItem(row_idx, 2, QTableWidgetItem(note))
-                table.setItem(row_idx, 3, QTableWidgetItem(f"{header.get('silver_rate', 0.0):.2f}"))
+                table.setItem(
+                    row_idx,
+                    3,
+                    QTableWidgetItem(f"{header.get('silver_rate', 0.0):.2f}"),
+                )
                 # Column 4: Regular Gross
                 table.setItem(row_idx, 4, QTableWidgetItem(f"{regular_gross_sum:.3f}"))
                 # Column 5: Regular Net
                 table.setItem(row_idx, 5, QTableWidgetItem(f"{regular_net_sum:.3f}"))
                 # Column 6: Net Fine (Directly from header as it's already calculated net)
-                net_fine = header.get('total_fine', 0.0)
+                net_fine = header.get("total_fine", 0.0)
                 table.setItem(row_idx, 6, QTableWidgetItem(f"{net_fine:.3f}"))
                 # Column 7: Net Wage (Directly from header)
-                net_wage = header.get('total_wage', 0.0)
+                net_wage = header.get("total_wage", 0.0)
                 table.setItem(row_idx, 7, QTableWidgetItem(f"{net_wage:.2f}"))
 
                 # Column 8: Grand Total (Net Value + Net Wage + Last Balance Amount)
-                silver_rate = header.get('silver_rate', 0.0)
+                silver_rate = header.get("silver_rate", 0.0)
                 net_value = net_fine * silver_rate
-                last_balance_amount = header.get('last_balance_amount', 0.0)
+                last_balance_amount = header.get("last_balance_amount", 0.0)
                 grand_total = net_value + net_wage + last_balance_amount
                 table.setItem(row_idx, 8, QTableWidgetItem(f"{grand_total:.2f}"))
         finally:
@@ -234,22 +277,26 @@ class EstimateHistoryDialog(QDialog):
             table.setRowCount(0)
             table.setRowCount(len(headers))
             for row_idx, header in enumerate(headers):
-                vno = str(header['voucher_no'])
+                vno = str(header["voucher_no"])
                 rg, rn = agg_map.get(vno, (0.0, 0.0))
-                table.setItem(row_idx, 0, QTableWidgetItem(header['voucher_no']))
-                table.setItem(row_idx, 1, QTableWidgetItem(header['date']))
-                note = header.get('note', '')
+                table.setItem(row_idx, 0, QTableWidgetItem(header["voucher_no"]))
+                table.setItem(row_idx, 1, QTableWidgetItem(header["date"]))
+                note = header.get("note", "")
                 table.setItem(row_idx, 2, QTableWidgetItem(note))
-                table.setItem(row_idx, 3, QTableWidgetItem(f"{header.get('silver_rate', 0.0):.2f}"))
+                table.setItem(
+                    row_idx,
+                    3,
+                    QTableWidgetItem(f"{header.get('silver_rate', 0.0):.2f}"),
+                )
                 table.setItem(row_idx, 4, QTableWidgetItem(f"{rg:.3f}"))
                 table.setItem(row_idx, 5, QTableWidgetItem(f"{rn:.3f}"))
-                net_fine = header.get('total_fine', 0.0)
+                net_fine = header.get("total_fine", 0.0)
                 table.setItem(row_idx, 6, QTableWidgetItem(f"{net_fine:.3f}"))
-                net_wage = header.get('total_wage', 0.0)
+                net_wage = header.get("total_wage", 0.0)
                 table.setItem(row_idx, 7, QTableWidgetItem(f"{net_wage:.2f}"))
-                silver_rate = header.get('silver_rate', 0.0)
+                silver_rate = header.get("silver_rate", 0.0)
                 net_value = net_fine * silver_rate
-                last_balance_amount = header.get('last_balance_amount', 0.0)
+                last_balance_amount = header.get("last_balance_amount", 0.0)
                 grand_total = net_value + net_wage + last_balance_amount
                 table.setItem(row_idx, 8, QTableWidgetItem(f"{grand_total:.2f}"))
         finally:
@@ -260,7 +307,8 @@ class EstimateHistoryDialog(QDialog):
 
     def _loading_done(self, thread, worker):
         try:
-            thread.quit(); thread.wait(1000)
+            thread.quit()
+            thread.wait(1000)
         except Exception:
             pass
         try:
@@ -269,12 +317,14 @@ class EstimateHistoryDialog(QDialog):
             pass
         try:
             self.search_button.setEnabled(True)
-            if hasattr(self, 'open_button'): self.open_button.setEnabled(True)
-            if hasattr(self, 'print_button'): self.print_button.setEnabled(True)
-            if hasattr(self, 'delete_button'): self.delete_button.setEnabled(True)
+            if hasattr(self, "open_button"):
+                self.open_button.setEnabled(True)
+            if hasattr(self, "print_button"):
+                self.print_button.setEnabled(True)
+            if hasattr(self, "delete_button"):
+                self.delete_button.setEnabled(True)
         except Exception:
             pass
-
 
     def get_selected_voucher(self):
         """Get the selected voucher number."""
@@ -289,7 +339,9 @@ class EstimateHistoryDialog(QDialog):
         """Handle dialog acceptance and return the selected voucher."""
         self.selected_voucher = self.get_selected_voucher()
         if not self.selected_voucher:
-            QMessageBox.warning(self, "Selection Error", "Please select an estimate first.")
+            QMessageBox.warning(
+                self, "Selection Error", "Please select an estimate first."
+            )
             return
 
         super().accept()
@@ -298,27 +350,35 @@ class EstimateHistoryDialog(QDialog):
         """Print the selected estimate."""
         voucher_no = self.get_selected_voucher()
         if not voucher_no:
-            QMessageBox.warning(self, "Selection Error", "Please select an estimate first.")
+            QMessageBox.warning(
+                self, "Selection Error", "Please select an estimate first."
+            )
             return
 
         # --- Get the print font from the explicitly stored main window reference ---
         print_font_setting = None
-        if self.main_window and hasattr(self.main_window, 'print_font'):
+        if self.main_window and hasattr(self.main_window, "print_font"):
             print_font_setting = self.main_window.print_font
         # ---------------------------------------------------------
 
         # Create print manager instance, passing the font, and print the selected estimate
         print_manager = PrintManager(self.db_manager, print_font=print_font_setting)
-        success = print_manager.print_estimate(voucher_no, self)  # 'self' used as parent for dialogs
+        success = print_manager.print_estimate(
+            voucher_no, self
+        )  # 'self' used as parent for dialogs
 
         if not success:
-            QMessageBox.warning(self, "Print Error", f"Failed to print estimate {voucher_no}.")
+            QMessageBox.warning(
+                self, "Print Error", f"Failed to print estimate {voucher_no}."
+            )
 
     def delete_selected_estimate(self):
         """Handle deletion of the selected estimate."""
         voucher_no = self.get_selected_voucher()
         if not voucher_no:
-            QMessageBox.warning(self, "Selection Error", "Please select an estimate to delete.")
+            QMessageBox.warning(
+                self, "Selection Error", "Please select an estimate to delete."
+            )
             return
 
         reply = QMessageBox.warning(
@@ -334,12 +394,24 @@ class EstimateHistoryDialog(QDialog):
             try:
                 success = self.db_manager.delete_single_estimate(voucher_no)
                 if success:
-                    QMessageBox.information(self, "Success", f"Estimate '{voucher_no}' deleted successfully.")
+                    QMessageBox.information(
+                        self,
+                        "Success",
+                        f"Estimate '{voucher_no}' deleted successfully.",
+                    )
                     self.load_estimates()  # Refresh the list
                 else:
-                    QMessageBox.warning(self, "Delete Error", f"Estimate '{voucher_no}' could not be deleted (might already be deleted).")
+                    QMessageBox.warning(
+                        self,
+                        "Delete Error",
+                        f"Estimate '{voucher_no}' could not be deleted (might already be deleted).",
+                    )
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"An unexpected error occurred during deletion: {str(e)}")
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"An unexpected error occurred during deletion: {str(e)}",
+                )
 
 
 class _HistoryLoadWorker(QObject):
@@ -356,22 +428,30 @@ class _HistoryLoadWorker(QObject):
 
     def run(self):
         import sqlite3
+
         try:
             conn = sqlite3.connect(self.db_path)
             conn.row_factory = sqlite3.Row
             cur = conn.cursor()
             # Headers only
-            query = "SELECT * FROM estimates WHERE 1=1"; params = []
-            if self.date_from: query += " AND date >= ?"; params.append(self.date_from)
-            if self.date_to: query += " AND date <= ?"; params.append(self.date_to)
-            if self.voucher_search: query += " AND voucher_no LIKE ?"; params.append(f"%{self.voucher_search}%")
+            query = "SELECT * FROM estimates WHERE 1=1"
+            params = []
+            if self.date_from:
+                query += " AND date >= ?"
+                params.append(self.date_from)
+            if self.date_to:
+                query += " AND date <= ?"
+                params.append(self.date_to)
+            if self.voucher_search:
+                query += " AND voucher_no LIKE ?"
+                params.append(f"%{self.voucher_search}%")
             query += " ORDER BY CAST(voucher_no AS INTEGER) DESC"
             cur.execute(query, params)
             headers = [dict(r) for r in cur.fetchall()]
 
             agg_map = {}
             if headers:
-                voucher_nos = [str(h['voucher_no']) for h in headers]
+                voucher_nos = [str(h["voucher_no"]) for h in headers]
                 placeholders = ",".join(["?"] * len(voucher_nos))
                 sql = (
                     f"SELECT voucher_no, "

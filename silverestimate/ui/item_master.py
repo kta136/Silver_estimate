@@ -1,18 +1,30 @@
 #!/usr/bin/env python
 # Removed QDoubleSpinBox, added QDoubleValidator, QLocale
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-                             QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
-                             QMessageBox, QComboBox, QAbstractItemView)
-from PyQt5.QtCore import Qt, pyqtSignal, QLocale # Added QLocale
-from PyQt5.QtGui import QKeyEvent, QDoubleValidator # Added QDoubleValidator
+from PyQt5.QtCore import QLocale, Qt, pyqtSignal  # Added QLocale
+from PyQt5.QtGui import QDoubleValidator, QKeyEvent  # Added QDoubleValidator
+from PyQt5.QtWidgets import (
+    QAbstractItemView,
+    QComboBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
 
 class ItemMasterWidget(QWidget):
     """Widget for managing silver item catalog."""
 
-    def __init__(self, db_manager, main_window=None): # Accept optional main_window
+    def __init__(self, db_manager, main_window=None):  # Accept optional main_window
         super().__init__()
         self.db_manager = db_manager
-        self.main_window = main_window # Store reference
+        self.main_window = main_window  # Store reference
         self.init_ui()
         self.load_items()
 
@@ -22,7 +34,9 @@ class ItemMasterWidget(QWidget):
             self.main_window.show_status_message(message, timeout)
         else:
             import logging
+
             logging.getLogger(__name__).info(f"Status: {message}")
+
     # ------------------------------------
 
     def init_ui(self):
@@ -38,7 +52,9 @@ class ItemMasterWidget(QWidget):
         form_layout.addWidget(QLabel("Code:"))
         self.code_edit = QLineEdit()
         self.code_edit.setMaximumWidth(100)
-        self.code_edit.setToolTip("Unique code for the item (e.g., CH001, SB999). Cannot be changed after adding.")
+        self.code_edit.setToolTip(
+            "Unique code for the item (e.g., CH001, SB999). Cannot be changed after adding."
+        )
         form_layout.addWidget(self.code_edit)
 
         form_layout.addWidget(QLabel("Name:"))
@@ -49,14 +65,18 @@ class ItemMasterWidget(QWidget):
 
         # --- Purity: Replaced QDoubleSpinBox with QLineEdit + Validator ---
         form_layout.addWidget(QLabel("Purity (%):"))
-        self.purity_edit = QLineEdit() # Changed from spin box
-        self.purity_edit.setMaximumWidth(80) # Set a reasonable width
-        self.purity_edit.setToolTip("Default silver purity percentage.") # Updated tooltip
+        self.purity_edit = QLineEdit()  # Changed from spin box
+        self.purity_edit.setMaximumWidth(80)  # Set a reasonable width
+        self.purity_edit.setToolTip(
+            "Default silver purity percentage."
+        )  # Updated tooltip
         # Apply Validator
         # Removed upper limit (set to a large number)
         purity_validator = QDoubleValidator(0.00, 999999.99, 2, self.purity_edit)
         purity_validator.setNotation(QDoubleValidator.StandardNotation)
-        purity_validator.setLocale(QLocale.system()) # Use system locale for decimal separator
+        purity_validator.setLocale(
+            QLocale.system()
+        )  # Use system locale for decimal separator
         self.purity_edit.setValidator(purity_validator)
         form_layout.addWidget(self.purity_edit)
         # --------------------------------------------------------------------
@@ -64,18 +84,24 @@ class ItemMasterWidget(QWidget):
         form_layout.addWidget(QLabel("Wage Type:"))
         self.wage_type_combo = QComboBox()
         self.wage_type_combo.addItems(["PC", "WT"])
-        self.wage_type_combo.setToolTip("Select wage calculation method: PC (Per Piece) or WT (Per Weight/Gram).")
+        self.wage_type_combo.setToolTip(
+            "Select wage calculation method: PC (Per Piece) or WT (Per Weight/Gram)."
+        )
         form_layout.addWidget(self.wage_type_combo)
 
         # --- Wage Rate: Replaced QDoubleSpinBox with QLineEdit + Validator ---
         form_layout.addWidget(QLabel("Wage Rate:"))
-        self.wage_rate_edit = QLineEdit() # Changed from spin box
-        self.wage_rate_edit.setMaximumWidth(100) # Set a reasonable width
-        self.wage_rate_edit.setToolTip("Wage rate corresponding to the selected Wage Type.")
-         # Apply Validator
-        rate_validator = QDoubleValidator(0.00, 100000.00, 2, self.wage_rate_edit) # Range 0+, 2 decimals
+        self.wage_rate_edit = QLineEdit()  # Changed from spin box
+        self.wage_rate_edit.setMaximumWidth(100)  # Set a reasonable width
+        self.wage_rate_edit.setToolTip(
+            "Wage rate corresponding to the selected Wage Type."
+        )
+        # Apply Validator
+        rate_validator = QDoubleValidator(
+            0.00, 100000.00, 2, self.wage_rate_edit
+        )  # Range 0+, 2 decimals
         rate_validator.setNotation(QDoubleValidator.StandardNotation)
-        rate_validator.setLocale(QLocale.system()) # Use system locale
+        rate_validator.setLocale(QLocale.system())  # Use system locale
         self.wage_rate_edit.setValidator(rate_validator)
         form_layout.addWidget(self.wage_rate_edit)
         # --------------------------------------------------------------------
@@ -90,19 +116,25 @@ class ItemMasterWidget(QWidget):
         button_layout.addWidget(self.add_button)
 
         self.update_button = QPushButton("Update Selected")
-        self.update_button.setToolTip("Update the currently selected item in the table with the details entered above.")
+        self.update_button.setToolTip(
+            "Update the currently selected item in the table with the details entered above."
+        )
         self.update_button.clicked.connect(self.update_item)
         self.update_button.setEnabled(False)
         button_layout.addWidget(self.update_button)
 
         self.delete_button = QPushButton("Delete Selected")
-        self.delete_button.setToolTip("Delete the currently selected item from the table (use with caution!).")
+        self.delete_button.setToolTip(
+            "Delete the currently selected item from the table (use with caution!)."
+        )
         self.delete_button.clicked.connect(self.delete_item)
         self.delete_button.setEnabled(False)
         button_layout.addWidget(self.delete_button)
 
         self.clear_button = QPushButton("Clear Form")
-        self.clear_button.setToolTip("Clear the input fields above and deselect the table.")
+        self.clear_button.setToolTip(
+            "Clear the input fields above and deselect the table."
+        )
         self.clear_button.clicked.connect(self.clear_form)
         button_layout.addWidget(self.clear_button)
 
@@ -121,14 +153,22 @@ class ItemMasterWidget(QWidget):
         self.items_table = QTableWidget()
         self.items_table.setColumnCount(5)
         headers = ["Code", "Name", "Purity (%)", "Wage Type", "Wage Rate"]
-        header_tooltips = ["Item Code", "Item Name", "Default Purity", "Default Wage Calc Type", "Default Wage Rate"]
+        header_tooltips = [
+            "Item Code",
+            "Item Name",
+            "Default Purity",
+            "Default Wage Calc Type",
+            "Default Wage Rate",
+        ]
         self.items_table.setHorizontalHeaderLabels(headers)
         # --- Set Header Tooltips ----
         for i, tooltip in enumerate(header_tooltips):
             self.items_table.horizontalHeaderItem(i).setToolTip(tooltip)
         # ---------------------------
 
-        self.items_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch) # Name column stretch
+        self.items_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.Stretch
+        )  # Name column stretch
         self.items_table.verticalHeader().setVisible(False)
         self.items_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.items_table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -147,7 +187,9 @@ class ItemMasterWidget(QWidget):
             table.setRowCount(0)  # Clear table first
 
             if search_term:
-                items = self.db_manager.search_items(search_term)  # Returns list of sqlite3.Row
+                items = self.db_manager.search_items(
+                    search_term
+                )  # Returns list of sqlite3.Row
             else:
                 items = self.db_manager.get_all_items()  # Returns list of sqlite3.Row
 
@@ -156,11 +198,15 @@ class ItemMasterWidget(QWidget):
             # --- Corrected Loop ---
             for row, item_row in enumerate(items):  # item_row is sqlite3.Row
                 # Access columns directly using ['key'], providing defaults for None
-                code = item_row['code'] if item_row['code'] is not None else ''
-                name = item_row['name'] if item_row['name'] is not None else ''
-                purity = item_row['purity'] if item_row['purity'] is not None else 0.0
-                wage_type = item_row['wage_type'] if item_row['wage_type'] is not None else 'WT'  # Default wage type
-                wage_rate = item_row['wage_rate'] if item_row['wage_rate'] is not None else 0.0
+                code = item_row["code"] if item_row["code"] is not None else ""
+                name = item_row["name"] if item_row["name"] is not None else ""
+                purity = item_row["purity"] if item_row["purity"] is not None else 0.0
+                wage_type = (
+                    item_row["wage_type"] if item_row["wage_type"] is not None else "WT"
+                )  # Default wage type
+                wage_rate = (
+                    item_row["wage_rate"] if item_row["wage_rate"] is not None else 0.0
+                )
 
                 # Set table cell values using the retrieved or default values
                 table.setItem(row, 0, QTableWidgetItem(code))
@@ -180,7 +226,7 @@ class ItemMasterWidget(QWidget):
     def search_items(self):
         """Search for items based on the search term."""
         search_term = self.search_edit.text().strip()
-        self.load_items(search_term) # Pass search term (can be empty)
+        self.load_items(search_term)  # Pass search term (can be empty)
 
     def on_item_selected(self):
         """Handle item selection in the table."""
@@ -196,8 +242,8 @@ class ItemMasterWidget(QWidget):
             # Populate form fields - use strings for QLineEdit
             self.code_edit.setText(code)
             self.name_edit.setText(name)
-            self.purity_edit.setText(purity_str) # Set text for QLineEdit
-            self.wage_rate_edit.setText(wage_rate_str) # Set text for QLineEdit
+            self.purity_edit.setText(purity_str)  # Set text for QLineEdit
+            self.wage_rate_edit.setText(wage_rate_str)  # Set text for QLineEdit
 
             index = self.wage_type_combo.findText(wage_type, Qt.MatchFixedString)
             self.wage_type_combo.setCurrentIndex(index if index >= 0 else 0)
@@ -209,16 +255,16 @@ class ItemMasterWidget(QWidget):
             self.code_edit.setReadOnly(True)
             self.show_status(f"Selected item: {code}", 2000)
         else:
-             self.clear_form()
+            self.clear_form()
 
     def clear_form(self):
         """Clear the form fields and reset button states."""
         self.code_edit.clear()
         self.code_edit.setReadOnly(False)
         self.name_edit.clear()
-        self.purity_edit.clear() # Clear QLineEdit
+        self.purity_edit.clear()  # Clear QLineEdit
         self.wage_type_combo.setCurrentIndex(0)
-        self.wage_rate_edit.clear() # Clear QLineEdit
+        self.wage_rate_edit.clear()  # Clear QLineEdit
 
         self.update_button.setEnabled(False)
         self.delete_button.setEnabled(False)
@@ -232,6 +278,7 @@ class ItemMasterWidget(QWidget):
         locale = QLocale.system()
         f_val, ok = locale.toDouble(text.strip())
         return f_val if ok else default
+
     # -----------------------------------------------------------
 
     def add_item(self):
@@ -255,8 +302,11 @@ class ItemMasterWidget(QWidget):
             return
 
         if self.db_manager.get_item_by_code(code):
-            QMessageBox.warning(self, "Duplicate Code",
-                                f"Item with code '{code}' already exists. Use Update or choose a different code.")
+            QMessageBox.warning(
+                self,
+                "Duplicate Code",
+                f"Item with code '{code}' already exists. Use Update or choose a different code.",
+            )
             self.show_status(f"Add Item Error: Code '{code}' already exists.", 3000)
             return
 
@@ -266,14 +316,16 @@ class ItemMasterWidget(QWidget):
             self.clear_form()
             self.load_items()
         else:
-            QMessageBox.critical(self, "Database Error", "Failed to add item. See console/logs.")
+            QMessageBox.critical(
+                self, "Database Error", "Failed to add item. See console/logs."
+            )
             self.show_status("Add Item Error: Database operation failed.", 4000)
 
     def update_item(self):
         """Update an existing item in the database."""
         code = self.code_edit.text().strip()
         name = self.name_edit.text().strip()
-         # Safely convert text from QLineEdit to float
+        # Safely convert text from QLineEdit to float
         purity = self._parse_float(self.purity_edit.text(), 0.0)
         wage_type = self.wage_type_combo.currentText()
         wage_rate = self._parse_float(self.wage_rate_edit.text(), 0.0)
@@ -300,22 +352,30 @@ class ItemMasterWidget(QWidget):
             self.clear_form()
             self.load_items()
         else:
-            QMessageBox.critical(self, "Database Error", "Failed to update item. See console/logs.")
-            self.show_status(f"Update Item Error: Database operation failed for '{code}'.", 4000)
+            QMessageBox.critical(
+                self, "Database Error", "Failed to update item. See console/logs."
+            )
+            self.show_status(
+                f"Update Item Error: Database operation failed for '{code}'.", 4000
+            )
 
     def delete_item(self):
         """Delete an item from the database."""
         code = self.code_edit.text().strip()
         if not code:
-             QMessageBox.warning(self, "Delete Error", "No item selected to delete.")
-             self.show_status("Delete Item Error: No item selected", 3000)
-             return
+            QMessageBox.warning(self, "Delete Error", "No item selected to delete.")
+            self.show_status("Delete Item Error: No item selected", 3000)
+            return
 
-        reply = QMessageBox.warning(self, "Confirm Deletion",
-                                     f"Are you sure you want to delete item '{code}'?\n"
-                                     f"WARNING: This may affect past estimates using this item code.\n"
-                                     f"This action cannot be undone.",
-                                     QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
+        reply = QMessageBox.warning(
+            self,
+            "Confirm Deletion",
+            f"Are you sure you want to delete item '{code}'?\n"
+            f"WARNING: This may affect past estimates using this item code.\n"
+            f"This action cannot be undone.",
+            QMessageBox.Yes | QMessageBox.Cancel,
+            QMessageBox.Cancel,
+        )
 
         if reply == QMessageBox.Yes:
             success = self.db_manager.delete_item(code)
@@ -324,15 +384,20 @@ class ItemMasterWidget(QWidget):
                 self.clear_form()
                 self.load_items()
             else:
-                QMessageBox.critical(self, "Database Error",
-                                     f"Failed to delete item '{code}'. It might be used in existing estimates. See console/logs.")
-                self.show_status(f"Delete Item Error: Database operation failed for '{code}'.", 4000)
+                QMessageBox.critical(
+                    self,
+                    "Database Error",
+                    f"Failed to delete item '{code}'. It might be used in existing estimates. See console/logs.",
+                )
+                self.show_status(
+                    f"Delete Item Error: Database operation failed for '{code}'.", 4000
+                )
 
     def keyPressEvent(self, event):
         """Handle key press events."""
         if event.key() == Qt.Key_Escape:
             if self.items_table.selectedItems():
-                 self.clear_form()
+                self.clear_form()
             event.accept()
         else:
-             super().keyPressEvent(event)
+            super().keyPressEvent(event)

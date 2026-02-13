@@ -1,4 +1,5 @@
 """Repository abstraction for estimate UI logic."""
+
 from __future__ import annotations
 
 from typing import Any, Iterable, Mapping, Optional, Protocol, Sequence
@@ -7,17 +8,13 @@ from typing import Any, Iterable, Mapping, Optional, Protocol, Sequence
 class EstimateRepository(Protocol):
     """Interface exposing persistence operations required by the estimate UI."""
 
-    def fetch_item(self, code: str) -> Optional[Mapping[str, Any]]:
-        ...
+    def fetch_item(self, code: str) -> Optional[Mapping[str, Any]]: ...
 
-    def generate_voucher_no(self) -> str:
-        ...
+    def generate_voucher_no(self) -> str: ...
 
-    def load_estimate(self, voucher_no: str) -> Optional[Mapping[str, Any]]:
-        ...
+    def load_estimate(self, voucher_no: str) -> Optional[Mapping[str, Any]]: ...
 
-    def estimate_exists(self, voucher_no: str) -> bool:
-        ...
+    def estimate_exists(self, voucher_no: str) -> bool: ...
 
     def save_estimate(
         self,
@@ -27,29 +24,25 @@ class EstimateRepository(Protocol):
         regular_items: Iterable[Mapping[str, Any]],
         return_items: Iterable[Mapping[str, Any]],
         totals: Mapping[str, Any],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
-    def notify_silver_bars_for_estimate(self, voucher_no: str) -> None:
-        ...
+    def notify_silver_bars_for_estimate(self, voucher_no: str) -> None: ...
 
-    def fetch_silver_bars_for_estimate(self, voucher_no: str) -> Sequence[Mapping[str, Any]]:
-        ...
+    def fetch_silver_bars_for_estimate(
+        self, voucher_no: str
+    ) -> Sequence[Mapping[str, Any]]: ...
 
-    def count_silver_bars_for_estimate(self, voucher_no: str) -> int:
-        ...
+    def count_silver_bars_for_estimate(self, voucher_no: str) -> int: ...
 
-    def update_silver_bar(self, bar_id: int, weight: float, purity: float) -> bool:
-        ...
+    def update_silver_bar(self, bar_id: int, weight: float, purity: float) -> bool: ...
 
-    def add_silver_bar(self, voucher_no: str, weight: float, purity: float) -> Optional[int]:
-        ...
+    def add_silver_bar(
+        self, voucher_no: str, weight: float, purity: float
+    ) -> Optional[int]: ...
 
-    def last_error(self) -> Optional[str]:
-        ...
+    def last_error(self) -> Optional[str]: ...
 
-    def delete_estimate(self, voucher_no: str) -> bool:
-        ...
+    def delete_estimate(self, voucher_no: str) -> bool: ...
 
 
 class DatabaseEstimateRepository:
@@ -118,7 +111,9 @@ class DatabaseEstimateRepository:
         except Exception:
             return False
 
-    def add_silver_bar(self, voucher_no: str, weight: float, purity: float) -> Optional[int]:
+    def add_silver_bar(
+        self, voucher_no: str, weight: float, purity: float
+    ) -> Optional[int]:
         try:
             return self._db.add_silver_bar(voucher_no, weight, purity)
         except Exception:

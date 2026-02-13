@@ -1,13 +1,17 @@
-import traceback
 import sqlite3
+import traceback
+
 from PyQt5.QtCore import QObject, pyqtSignal
+
 
 class ItemImportManager(QObject):
     """Handles the actual item import process."""
 
     progress_updated = pyqtSignal(int, int)  # current, total
     status_updated = pyqtSignal(str)  # message
-    import_finished = pyqtSignal(int, int, str)  # success_count, total_count, error_message (None if success)
+    import_finished = pyqtSignal(
+        int, int, str
+    )  # success_count, total_count, error_message (None if success)
 
     def __init__(self, db_manager):
         super().__init__()
@@ -17,6 +21,7 @@ class ItemImportManager(QObject):
     def cancel_import(self):
         """Flags the import process to stop."""
         import logging
+
         logging.getLogger(__name__).info("Import cancellation requested.")
         self.cancel_requested = True
 
@@ -31,34 +36,44 @@ class ItemImportManager(QObject):
 
         try:
             # Extract settings
-            delimiter = import_settings['delimiter']
-            code_column = import_settings['code_column']
-            name_column = import_settings['name_column']
-            type_column = import_settings['type_column']
-            rate_column = import_settings['rate_column']
-            purity_column = import_settings['purity_column']
-            skip_header = import_settings['skip_header']
-            use_filter = import_settings['use_filter']
-            wage_adjustment_factor_str = import_settings.get('wage_adjustment_factor', '') # Get adjustment factor
-            duplicate_mode = import_settings['duplicate_mode']
+            delimiter = import_settings["delimiter"]
+            code_column = import_settings["code_column"]
+            name_column = import_settings["name_column"]
+            type_column = import_settings["type_column"]
+            rate_column = import_settings["rate_column"]
+            purity_column = import_settings["purity_column"]
+            skip_header = import_settings["skip_header"]
+            use_filter = import_settings["use_filter"]
+            wage_adjustment_factor_str = import_settings.get(
+                "wage_adjustment_factor", ""
+            )  # Get adjustment factor
+            duplicate_mode = import_settings["duplicate_mode"]
 
             # Parse the adjustment factor once
             adjustment_op = None
             adjustment_val = None
-            if wage_adjustment_factor_str and (wage_adjustment_factor_str.startswith('*') or wage_adjustment_factor_str.startswith('/')):
+            if wage_adjustment_factor_str and (
+                wage_adjustment_factor_str.startswith("*")
+                or wage_adjustment_factor_str.startswith("/")
+            ):
                 try:
                     adjustment_op = wage_adjustment_factor_str[0]
                     adjustment_val = float(wage_adjustment_factor_str[1:])
-                    if adjustment_op == '/' and adjustment_val == 0:
-                         raise ValueError("Cannot divide by zero.")
+                    if adjustment_op == "/" and adjustment_val == 0:
+                        raise ValueError("Cannot divide by zero.")
                     import logging
-                    logging.getLogger(__name__).debug(f"Applying wage adjustment: {adjustment_op} {adjustment_val}")
+
+                    logging.getLogger(__name__).debug(
+                        f"Applying wage adjustment: {adjustment_op} {adjustment_val}"
+                    )
                 except (ValueError, IndexError):
-                    raise ValueError(f"Invalid wage adjustment factor format: '{wage_adjustment_factor_str}'. Use *value or /value.")
+                    raise ValueError(
+                        f"Invalid wage adjustment factor format: '{wage_adjustment_factor_str}'. Use *value or /value."
+                    )
 
             # Open a dedicated SQLite connection for this worker thread
             try:
-                temp_db_path = getattr(self.db_manager, 'temp_db_path', None)
+                temp_db_path = getattr(self.db_manager, "temp_db_path", None)
                 if not temp_db_path:
                     raise RuntimeError("Temporary database path not available.")
                 worker_conn = sqlite3.connect(temp_db_path)
@@ -76,41 +91,54 @@ class ItemImportManager(QObject):
             # Read the file
             # Try common encodings if utf-8 fails
             lines = []
-            encodings_to_try = ['utf-8', 'cp1252', 'latin-1']
+            encodings_to_try = ["utf-8", "cp1252", "latin-1"]
             for enc in encodings_to_try:
                 try:
-                    with open(file_path, 'r', encoding=enc) as f:
+                    with open(file_path, "r", encoding=enc) as f:
                         lines = f.readlines()
                     import logging
-                    logging.getLogger(__name__).debug(f"Successfully read file with encoding: {enc}")
-                    break # Stop trying encodings if one works
+
+                    logging.getLogger(__name__).debug(
+                        f"Successfully read file with encoding: {enc}"
+                    )
+                    break  # Stop trying encodings if one works
                 except UnicodeDecodeError:
                     import logging
-                    logging.getLogger(__name__).debug(f"Failed to decode file with {enc}, trying next...")
+
+                    logging.getLogger(__name__).debug(
+                        f"Failed to decode file with {enc}, trying next..."
+                    )
                     continue
-                except Exception as e_read: # Catch other file reading errors
-                     raise IOError(f"Could not read file '{file_path}': {e_read}") from e_read
-            else: # If loop completes without break
-                 raise UnicodeDecodeError(f"Could not decode file '{file_path}' with any attempted encoding.")
+                except Exception as e_read:  # Catch other file reading errors
+                    raise IOError(
+                        f"Could not read file '{file_path}': {e_read}"
+                    ) from e_read
+            else:  # If loop completes without break
+                raise UnicodeDecodeError(
+                    f"Could not decode file '{file_path}' with any attempted encoding."
+                )
 
             # Filter lines based on settings
             filtered_lines = []
-            
+
             # Skip first line if option is checked
             start_idx = 1 if skip_header and len(lines) > 0 else 0
-            
+
             # Process lines
             for line in lines[start_idx:]:
                 line = line.strip()
                 if not line:
                     continue
-                    
+
                 if use_filter:
                     # Apply filtering for items (numeric index + period)
                     parts = line.split(delimiter, 1)
                     if len(parts) > 0:
                         first_part = parts[0].strip()
-                        if first_part.endswith('.') and first_part[:-1].strip().isdigit():
+                        if (
+                            first_part.endswith(".")
+                            and first_part[:-1].strip().isdigit()
+                        ):
                             filtered_lines.append(line)
                 else:
                     # No filtering, just check if line contains the delimiter
@@ -119,14 +147,16 @@ class ItemImportManager(QObject):
 
             total_items = len(filtered_lines)
             if total_items == 0:
-                 raise ValueError("No valid item lines found in the file.")
+                raise ValueError("No valid item lines found in the file.")
 
             self.progress_updated.emit(0, total_items)
-            self.status_updated.emit(f"Found {total_items} potential items. Starting import...")
+            self.status_updated.emit(
+                f"Found {total_items} potential items. Starting import..."
+            )
 
             # Begin a transaction for faster bulk import
             try:
-                worker_conn.execute('BEGIN TRANSACTION')
+                worker_conn.execute("BEGIN TRANSACTION")
             except Exception:
                 pass
 
@@ -135,28 +165,34 @@ class ItemImportManager(QObject):
                 processed_count = i + 1
                 if self.cancel_requested:
                     self.status_updated.emit("Import cancelled by user.")
-                    break # Exit the loop
+                    break  # Exit the loop
 
                 # Parse the line using configured column indices
                 parts = [part.strip() for part in line.split(delimiter)]
-                
+
                 # Check if we have enough parts for all columns
-                max_column = max(code_column, name_column, type_column, rate_column, purity_column)
+                max_column = max(
+                    code_column, name_column, type_column, rate_column, purity_column
+                )
                 if len(parts) <= max_column:
-                    self.status_updated.emit(f"Skipping line {i+1}: Not enough columns (needs {max_column+1}, has {len(parts)})")
+                    self.status_updated.emit(
+                        f"Skipping line {i+1}: Not enough columns (needs {max_column+1}, has {len(parts)})"
+                    )
                     continue
 
                 try:
                     # Extract data using column indices from settings
-                    item_code = parts[code_column].upper() # Ensure code is uppercase
+                    item_code = parts[code_column].upper()  # Ensure code is uppercase
                     item_name = parts[name_column]
-                    wage_type = parts[type_column].upper() # Ensure type is uppercase
+                    wage_type = parts[type_column].upper()  # Ensure type is uppercase
                     wage_rate_str = parts[rate_column]
                     silver_purity_str = parts[purity_column]
 
-                    if not item_code: # Skip lines with no item code
-                         self.status_updated.emit(f"Skipping line {i+1}: Missing item code.")
-                         continue
+                    if not item_code:  # Skip lines with no item code
+                        self.status_updated.emit(
+                            f"Skipping line {i+1}: Missing item code."
+                        )
+                        continue
 
                     # Convert wage rate to float
                     wage_rate_float = float(wage_rate_str)
@@ -170,15 +206,17 @@ class ItemImportManager(QObject):
 
                     # Apply wage adjustment factor if provided
                     if adjustment_op and adjustment_val is not None:
-                        if adjustment_op == '*':
+                        if adjustment_op == "*":
                             wage_rate_float *= adjustment_val
-                        elif adjustment_op == '/':
-                            wage_rate_float /= adjustment_val # Already checked for zero division
+                        elif adjustment_op == "/":
+                            wage_rate_float /= (
+                                adjustment_val  # Already checked for zero division
+                            )
 
                     # Check if item exists (case-insensitive)
                     worker_cur.execute(
                         "SELECT 1 FROM items WHERE code = ? COLLATE NOCASE",
-                        (item_code,)
+                        (item_code,),
                     )
                     existing_item = worker_cur.fetchone()
 
@@ -194,8 +232,8 @@ class ItemImportManager(QObject):
                             should_import = True
                             action = "Updating existing"
                         else:  # Default to SKIP for any other mode
-                             should_import = False
-                             action = "Skipping duplicate (unknown mode)"
+                            should_import = False
+                            action = "Skipping duplicate (unknown mode)"
 
                     self.status_updated.emit(f"{action}: {item_code} - {item_name}")
 
@@ -204,14 +242,26 @@ class ItemImportManager(QObject):
                     if should_import:
                         if existing_item and duplicate_mode == 1:  # UPDATE
                             worker_cur.execute(
-                                'UPDATE items SET name = ?, purity = ?, wage_type = ?, wage_rate = ? WHERE code = ? COLLATE NOCASE',
-                                (item_name, purity_float, wage_type, wage_rate_float, item_code)
+                                "UPDATE items SET name = ?, purity = ?, wage_type = ?, wage_rate = ? WHERE code = ? COLLATE NOCASE",
+                                (
+                                    item_name,
+                                    purity_float,
+                                    wage_type,
+                                    wage_rate_float,
+                                    item_code,
+                                ),
                             )
                             success = worker_cur.rowcount > 0
                         elif not existing_item:
                             worker_cur.execute(
-                                'INSERT INTO items (code, name, purity, wage_type, wage_rate) VALUES (?, ?, ?, ?, ?)',
-                                (item_code, item_name, purity_float, wage_type, wage_rate_float)
+                                "INSERT INTO items (code, name, purity, wage_type, wage_rate) VALUES (?, ?, ?, ?, ?)",
+                                (
+                                    item_code,
+                                    item_name,
+                                    purity_float,
+                                    wage_type,
+                                    wage_rate_float,
+                                ),
                             )
                             success = True
                         else:  # Should be a skip
@@ -220,18 +270,24 @@ class ItemImportManager(QObject):
                         if success:
                             imported_count += 1
                         else:
-                             self.status_updated.emit(f"Failed to save item: {item_code}")
+                            self.status_updated.emit(
+                                f"Failed to save item: {item_code}"
+                            )
 
                 except ValueError as ve:
                     # Skip items with non-numeric values in rate/purity
-                    self.status_updated.emit(f"Skipping line {i+1} ({parts[code_column] if code_column < len(parts) else 'unknown'}): Invalid numeric data ({ve})")
+                    self.status_updated.emit(
+                        f"Skipping line {i+1} ({parts[code_column] if code_column < len(parts) else 'unknown'}): Invalid numeric data ({ve})"
+                    )
                     continue
                 except IndexError:
-                     self.status_updated.emit(f"Skipping line {i+1}: Index error accessing columns.")
-                     continue
+                    self.status_updated.emit(
+                        f"Skipping line {i+1}: Index error accessing columns."
+                    )
+                    continue
                 except Exception as e_item:
-                     self.status_updated.emit(f"Error processing line {i+1}: {e_item}")
-                     continue  # Skip to next item on error
+                    self.status_updated.emit(f"Error processing line {i+1}: {e_item}")
+                    continue  # Skip to next item on error
 
                 # Update progress
                 self.progress_updated.emit(processed_count, total_items)
@@ -244,7 +300,7 @@ class ItemImportManager(QObject):
                 pass
             try:
                 # Request background encryption flush (debounced)
-                if hasattr(self.db_manager, 'request_flush'):
+                if hasattr(self.db_manager, "request_flush"):
                     self.db_manager.request_flush()
             except Exception:
                 pass
@@ -252,12 +308,17 @@ class ItemImportManager(QObject):
             # Finish
             if self.cancel_requested:
                 # If cancelled, report counts up to the point of cancellation
-                self.import_finished.emit(imported_count, processed_count, "Import Cancelled")
+                self.import_finished.emit(
+                    imported_count, processed_count, "Import Cancelled"
+                )
             else:
-                self.import_finished.emit(imported_count, total_items, None)  # None indicates success
+                self.import_finished.emit(
+                    imported_count, total_items, None
+                )  # None indicates success
 
         except Exception as e:
             import logging
+
             logging.getLogger(__name__).error("Import failed:", exc_info=True)
             self.status_updated.emit(f"Error: {str(e)}")
             # Emit finished signal with error message

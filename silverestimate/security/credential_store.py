@@ -1,4 +1,5 @@
 """Secure storage utilities for hashed credentials."""
+
 from __future__ import annotations
 
 import logging
@@ -37,7 +38,9 @@ _ENTRIES = {
         kind="main", secure_id="main_password_hash", legacy_key="security/password_hash"
     ),
     "backup": _CredentialDescriptor(
-        kind="backup", secure_id="backup_password_hash", legacy_key="security/backup_hash"
+        kind="backup",
+        secure_id="backup_password_hash",
+        legacy_key="security/backup_hash",
     ),
 }
 
@@ -64,7 +67,10 @@ def _ensure_keyring() -> Any:
 
 
 def get_password_hash(
-    kind: str, *, settings: Optional[Any] = None, logger: Optional[logging.Logger] = None
+    kind: str,
+    *,
+    settings: Optional[Any] = None,
+    logger: Optional[logging.Logger] = None,
 ) -> Optional[str]:
     """
     Retrieve the hashed password for ``kind`` from the secure store.
@@ -76,7 +82,9 @@ def get_password_hash(
     try:
         value = kr.get_password(SERVICE_NAME, descriptor.secure_id)
     except KeyringError as exc:
-        raise CredentialStoreError(f"Failed to read credential '{kind}': {exc}") from exc
+        raise CredentialStoreError(
+            f"Failed to read credential '{kind}': {exc}"
+        ) from exc
 
     if value:
         return value
@@ -90,7 +98,12 @@ def get_password_hash(
             kr.set_password(SERVICE_NAME, descriptor.secure_id, legacy_value)
         except KeyringError as exc:
             if logger:
-                logger.warning("Failed to migrate legacy credential '%s': %s", kind, exc, exc_info=True)
+                logger.warning(
+                    "Failed to migrate legacy credential '%s': %s",
+                    kind,
+                    exc,
+                    exc_info=True,
+                )
         else:
             settings.remove(descriptor.legacy_key)
             settings.sync()
@@ -114,7 +127,9 @@ def set_password_hash(
     try:
         kr.set_password(SERVICE_NAME, descriptor.secure_id, value)
     except KeyringError as exc:
-        raise CredentialStoreError(f"Failed to store credential '{kind}': {exc}") from exc
+        raise CredentialStoreError(
+            f"Failed to store credential '{kind}': {exc}"
+        ) from exc
 
     if settings:
         settings.remove(descriptor.legacy_key)
@@ -124,7 +139,10 @@ def set_password_hash(
 
 
 def delete_password_hash(
-    kind: str, *, settings: Optional[Any] = None, logger: Optional[logging.Logger] = None
+    kind: str,
+    *,
+    settings: Optional[Any] = None,
+    logger: Optional[logging.Logger] = None,
 ) -> None:
     """Remove ``kind`` from both secure and legacy stores."""
     descriptor = _get_entry(kind)
@@ -133,15 +151,27 @@ def delete_password_hash(
         settings.sync()
     if keyring is None:
         if logger:
-            logger.debug("Keyring unavailable while deleting credential '%s'; legacy key removed only", kind)
+            logger.debug(
+                "Keyring unavailable while deleting credential '%s'; legacy key removed only",
+                kind,
+            )
         return
 
     try:
         keyring.delete_password(SERVICE_NAME, descriptor.secure_id)
     except PasswordDeleteError:
         if logger:
-            logger.debug("Credential '%s' not present in secure store during delete", kind)
+            logger.debug(
+                "Credential '%s' not present in secure store during delete", kind
+            )
     except KeyringError as exc:
         if logger:
-            logger.warning("Failed to delete credential '%s' from secure store: %s", kind, exc, exc_info=True)
-        raise CredentialStoreError(f"Failed to delete credential '{kind}': {exc}") from exc
+            logger.warning(
+                "Failed to delete credential '%s' from secure store: %s",
+                kind,
+                exc,
+                exc_info=True,
+            )
+        raise CredentialStoreError(
+            f"Failed to delete credential '{kind}': {exc}"
+        ) from exc

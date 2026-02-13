@@ -1,4 +1,5 @@
 """Helpers for tracking the thread that owns a SQLite connection."""
+
 from __future__ import annotations
 
 import logging

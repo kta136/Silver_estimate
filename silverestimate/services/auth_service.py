@@ -1,4 +1,5 @@
 """Authentication and data-wipe services for SilverEstimate."""
+
 from __future__ import annotations
 
 import logging
@@ -8,13 +9,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from PyQt5.QtWidgets import QMessageBox, QDialog, QWidget
-
-from silverestimate.infrastructure.settings import get_app_settings
+from PyQt5.QtWidgets import QDialog, QMessageBox, QWidget
 
 from silverestimate.infrastructure.app_constants import DB_PATH, LOG_DIR
+from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.security import credential_store
 from silverestimate.security.credential_store import CredentialStoreError
+
 try:
     from silverestimate.ui.login_dialog import LoginDialog  # type: ignore
 except Exception:  # pragma: no cover - lazy import fallback
@@ -42,7 +43,10 @@ def run_authentication(
     """Handle authentication flow using the LoginDialog."""
     global LoginDialog
     if LoginDialog is None:
-        from silverestimate.ui.login_dialog import LoginDialog as _LoginDialog  # lazy import
+        from silverestimate.ui.login_dialog import (
+            LoginDialog as _LoginDialog,  # lazy import
+        )
+
         LoginDialog = _LoginDialog
     logger = logger or logging.getLogger(__name__)
     logger.info("Starting authentication process")
@@ -115,7 +119,9 @@ def run_authentication(
                 "backup", hashed_backup, settings=settings, logger=logger
             )
         except CredentialStoreError as exc:
-            logger.critical("Failed to persist passwords in secure store: %s", exc, exc_info=True)
+            logger.critical(
+                "Failed to persist passwords in secure store: %s", exc, exc_info=True
+            )
             QMessageBox.critical(
                 parent,
                 "Setup Error",
@@ -124,7 +130,9 @@ def run_authentication(
             return None
         if logger:
             logger.info("Passwords created and stored successfully")
-        QMessageBox.information(parent, "Setup Complete", "Passwords created successfully.")
+        QMessageBox.information(
+            parent, "Setup Complete", "Passwords created successfully."
+        )
         return AuthenticationResult(password=password)
     if logger:
         logger.info("Setup cancelled by user")
@@ -151,7 +159,11 @@ def perform_data_wipe(
             os.remove(db_path)
             _log("info", "Successfully deleted encrypted database file: %s", db_path)
         else:
-            _log("warning", "Encrypted database file not found (already deleted?): %s", db_path)
+            _log(
+                "warning",
+                "Encrypted database file not found (already deleted?): %s",
+                db_path,
+            )
 
         settings = get_app_settings()
         temp_path = settings.value("security/last_temp_db_path")
@@ -178,7 +190,10 @@ def perform_data_wipe(
         settings.sync()
         if silent:
             _clear_log_artifacts()
-        _log("info", "Cleared password hashes and database salt from application settings.")
+        _log(
+            "info",
+            "Cleared password hashes and database salt from application settings.",
+        )
         return True
     except Exception as exc:
         error_message = f"A critical error occurred during data wipe: {exc}"
@@ -191,7 +206,9 @@ def perform_data_wipe(
 def _clear_log_artifacts() -> None:
     """Remove application log files and directories without emitting logs."""
     try:
-        from silverestimate.infrastructure.logger import get_log_config  # local import to avoid cycles
+        from silverestimate.infrastructure.logger import (  # local import to avoid cycles
+            get_log_config,
+        )
     except Exception:
         get_log_config = None  # type: ignore[assignment]
 

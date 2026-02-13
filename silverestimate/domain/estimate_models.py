@@ -1,4 +1,5 @@
 """Domain models supporting estimate calculations."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -110,4 +111,3 @@ def iter_returns(lines: Iterable[EstimateLine]) -> Iterator[EstimateLine]:
 def iter_silver_bars(lines: Iterable[EstimateLine]) -> Iterator[EstimateLine]:
     """Yield only the silver-bar line items."""
     return (line for line in lines if line.category.is_silver_bar())
-

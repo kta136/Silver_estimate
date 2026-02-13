@@ -30,7 +30,9 @@ class _SettingsStub:
         self._key = (org, app)
         self._store = _SettingsStub._data.setdefault(self._key, {})
 
-    def value(self, key, default=None, type=None, **kwargs):  # noqa: A002 - signature mirrors QSettings
+    def value(
+        self, key, default=None, type=None, **kwargs
+    ):  # noqa: A002 - signature mirrors QSettings
         if "defaultValue" in kwargs and default is None:
             default = kwargs["defaultValue"]
         if "type" in kwargs and type is None:
@@ -114,12 +116,28 @@ def qt_app():
 def settings_stub(monkeypatch):
     _SettingsStub.clear()
     _CredentialStoreStub.reset()
-    monkeypatch.setattr("silverestimate.persistence.database_manager.QSettings", _SettingsStub, raising=False)
-    monkeypatch.setattr("silverestimate.services.auth_service.QSettings", _SettingsStub, raising=False)
-    monkeypatch.setattr("silverestimate.services.live_rate_service.QSettings", _SettingsStub, raising=False)
-    monkeypatch.setattr("silverestimate.ui.estimate_entry.QSettings", _SettingsStub, raising=False)
-    monkeypatch.setattr("silverestimate.infrastructure.logger.QSettings", _SettingsStub, raising=False)
-    monkeypatch.setattr("silverestimate.infrastructure.settings.QSettings", _SettingsStub, raising=False)
+    monkeypatch.setattr(
+        "silverestimate.persistence.database_manager.QSettings",
+        _SettingsStub,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "silverestimate.services.auth_service.QSettings", _SettingsStub, raising=False
+    )
+    monkeypatch.setattr(
+        "silverestimate.services.live_rate_service.QSettings",
+        _SettingsStub,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "silverestimate.ui.estimate_entry.QSettings", _SettingsStub, raising=False
+    )
+    monkeypatch.setattr(
+        "silverestimate.infrastructure.logger.QSettings", _SettingsStub, raising=False
+    )
+    monkeypatch.setattr(
+        "silverestimate.infrastructure.settings.QSettings", _SettingsStub, raising=False
+    )
     monkeypatch.setattr(
         "silverestimate.security.credential_store.get_password_hash",
         _CredentialStoreStub.get_password_hash,

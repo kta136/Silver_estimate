@@ -1,4 +1,5 @@
 """Application bootstrap utilities for SilverEstimate."""
+
 from __future__ import annotations
 
 import logging
@@ -6,14 +7,17 @@ import sys
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Optional, TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple
 
-from PyQt5.QtCore import Qt
 import PyQt5.QtCore as QtCore
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QMessageBox, QWidget
 
-from silverestimate.controllers.startup_controller import StartupController, StartupStatus
+from silverestimate.controllers.startup_controller import (
+    StartupController,
+    StartupStatus,
+)
 from silverestimate.infrastructure.app_constants import APP_TITLE
 from silverestimate.infrastructure.logger import (
     LogCleanupScheduler,
@@ -26,6 +30,7 @@ from silverestimate.infrastructure.windows_integration import set_app_user_model
 
 if TYPE_CHECKING:
     from PyQt5.QtWidgets import QMainWindow
+
     from silverestimate.persistence.database_manager import DatabaseManager
 
     MainWindowFactory = Callable[..., QMainWindow]
@@ -77,7 +82,9 @@ class ApplicationBuilder:
         self,
         *,
         main_window_factory: MainWindowFactory,
-        startup_controller_factory: Callable[..., StartupController] = StartupController,
+        startup_controller_factory: Callable[
+            ..., StartupController
+        ] = StartupController,
         log_config_getter: Callable[[], dict[str, Any]] = get_log_config,
         logging_setup: Callable[..., logging.Logger] = setup_logging,
         asset_resolver: Callable[..., Path] = get_asset_path,
@@ -183,7 +190,9 @@ class ApplicationBuilder:
                 QApplication.setAttribute(attr)
             except Exception as exc:
                 if context.logger:
-                    context.logger.warning("Failed to set Qt attribute %s: %s", attr, exc)
+                    context.logger.warning(
+                        "Failed to set Qt attribute %s: %s", attr, exc
+                    )
 
         if sys.platform == "win32":
             set_app_user_model_id(self._user_model_id)
@@ -277,4 +286,3 @@ class ApplicationBuilder:
             f"Error: {exc}"
         )
         self._show_message_box("Fatal Error", message)
-

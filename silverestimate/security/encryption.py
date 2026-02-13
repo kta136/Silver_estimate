@@ -46,6 +46,7 @@ Security Recommendations for Future Versions
 Last Security Review: 2025-10-30
 Next Review Due: 2026-04-30 (6 months)
 """
+
 from __future__ import annotations
 
 import base64
@@ -54,12 +55,12 @@ import os
 import time
 from typing import Optional
 
-from PyQt5.QtCore import QSettings
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from PyQt5.QtCore import QSettings
 
 SALT_SETTINGS_KEY = "security/db_salt"
 DEFAULT_SALT_BYTES = 16  # 128 bits

@@ -61,7 +61,9 @@ def test_save_estimate_invokes_widget(monkeypatch):
             calls.append("save")
 
     main_window = types.SimpleNamespace(estimate_widget=_EstimateWidget())
-    commands = main_commands.MainCommands(main_window, db_manager=object(), logger=logging.getLogger("test"))
+    commands = main_commands.MainCommands(
+        main_window, db_manager=object(), logger=logging.getLogger("test")
+    )
 
     commands.save_estimate()
 
@@ -73,7 +75,9 @@ def test_save_estimate_shows_info_when_missing(monkeypatch):
     _install_stubs(monkeypatch)
 
     main_window = types.SimpleNamespace()
-    commands = main_commands.MainCommands(main_window, db_manager=object(), logger=logging.getLogger("test"))
+    commands = main_commands.MainCommands(
+        main_window, db_manager=object(), logger=logging.getLogger("test")
+    )
 
     commands.save_estimate()
 
@@ -90,7 +94,9 @@ def test_print_estimate_invokes_widget(monkeypatch):
             calls.append("print")
 
     main_window = types.SimpleNamespace(estimate_widget=_EstimateWidget())
-    commands = main_commands.MainCommands(main_window, db_manager=object(), logger=logging.getLogger("test"))
+    commands = main_commands.MainCommands(
+        main_window, db_manager=object(), logger=logging.getLogger("test")
+    )
 
     commands.print_estimate()
 
@@ -102,7 +108,9 @@ def test_print_estimate_shows_info_when_missing(monkeypatch):
     _install_stubs(monkeypatch)
 
     main_window = types.SimpleNamespace()
-    commands = main_commands.MainCommands(main_window, db_manager=object(), logger=logging.getLogger("test"))
+    commands = main_commands.MainCommands(
+        main_window, db_manager=object(), logger=logging.getLogger("test")
+    )
 
     commands.print_estimate()
 
@@ -117,7 +125,9 @@ def test_print_estimate_handles_errors(monkeypatch):
             raise RuntimeError("boom")
 
     main_window = types.SimpleNamespace(estimate_widget=_EstimateWidget())
-    commands = main_commands.MainCommands(main_window, db_manager=object(), logger=logging.getLogger("test"))
+    commands = main_commands.MainCommands(
+        main_window, db_manager=object(), logger=logging.getLogger("test")
+    )
 
     commands.print_estimate()
 
@@ -140,7 +150,9 @@ def test_delete_all_data_success(monkeypatch):
             actions.append("setup")
 
     main_window = types.SimpleNamespace()
-    commands = main_commands.MainCommands(main_window, db_manager=_DB(), logger=logging.getLogger("test"))
+    commands = main_commands.MainCommands(
+        main_window, db_manager=_DB(), logger=logging.getLogger("test")
+    )
 
     commands.delete_all_data()
 
@@ -158,7 +170,9 @@ def test_delete_all_data_cancel_on_confirmation(monkeypatch):
             raise AssertionError("should not be called")
 
     main_window = types.SimpleNamespace()
-    commands = main_commands.MainCommands(main_window, db_manager=_DB(), logger=logging.getLogger("test"))
+    commands = main_commands.MainCommands(
+        main_window, db_manager=_DB(), logger=logging.getLogger("test")
+    )
 
     commands.delete_all_data()
 
@@ -182,7 +196,9 @@ def test_delete_all_estimates_clears_form(monkeypatch):
     main_window = types.SimpleNamespace(
         estimate_widget=_EstimateWidget(),
     )
-    commands = main_commands.MainCommands(main_window, db_manager=_DB(), logger=logging.getLogger("test"))
+    commands = main_commands.MainCommands(
+        main_window, db_manager=_DB(), logger=logging.getLogger("test")
+    )
 
     commands.delete_all_estimates()
 

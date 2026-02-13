@@ -1,19 +1,19 @@
 #!/usr/bin/env python
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QBrush, QColor, QKeySequence
 from PyQt5.QtWidgets import (
+    QAbstractItemView,
     QDialog,
-    QVBoxLayout,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
+    QLineEdit,
     QPushButton,
+    QShortcut,
     QTableWidget,
     QTableWidgetItem,
-    QHeaderView,
-    QAbstractItemView,
-    QLineEdit,
-    QShortcut,
+    QVBoxLayout,
 )
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QKeySequence, QColor, QBrush
 
 
 class ItemSelectionDialog(QDialog):
@@ -43,24 +43,34 @@ class ItemSelectionDialog(QDialog):
 
         # Search box
         search_layout = QHBoxLayout()
-        search_layout.addWidget(QLabel("Search (Code or Name):")) # Clarify search scope
+        search_layout.addWidget(
+            QLabel("Search (Code or Name):")
+        )  # Clarify search scope
         self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText("Type to filter...") # Add placeholder
-        self.search_edit.setToolTip("Search by item code or name\nFilters the list as you type\nPartial matches supported\nClear to show all items")
-        self.search_edit.textChanged.connect(self._schedule_filter) # Connect to filter method
+        self.search_edit.setPlaceholderText("Type to filter...")  # Add placeholder
+        self.search_edit.setToolTip(
+            "Search by item code or name\nFilters the list as you type\nPartial matches supported\nClear to show all items"
+        )
+        self.search_edit.textChanged.connect(
+            self._schedule_filter
+        )  # Connect to filter method
         search_layout.addWidget(self.search_edit)
         layout.addLayout(search_layout)
 
         # Items table
         self.items_table = QTableWidget()
         self.items_table.setColumnCount(5)
-        self.items_table.setHorizontalHeaderLabels(["Code", "Name", "Purity", "Type", "Rate"])
+        self.items_table.setHorizontalHeaderLabels(
+            ["Code", "Name", "Purity", "Type", "Rate"]
+        )
         self.items_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.items_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.items_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.items_table.setSelectionMode(QTableWidget.SingleSelection)
         self.items_table.itemDoubleClicked.connect(self.accept)
-        self.items_table.setToolTip("Double-click to select an item\nOr single-click and press Select button\nShows code, name, purity, type, and rate")
+        self.items_table.setToolTip(
+            "Double-click to select an item\nOr single-click and press Select button\nShows code, name, purity, type, and rate"
+        )
         self.items_table.horizontalHeader().setSortIndicatorShown(True)
         self.items_table.setSortingEnabled(True)
         layout.addWidget(self.items_table)
@@ -80,12 +90,16 @@ class ItemSelectionDialog(QDialog):
 
         select_button = QPushButton("Select")
         select_button.clicked.connect(self.accept)
-        select_button.setToolTip("Select the highlighted item\nKeyboard: Enter\nDouble-click table row also selects")
+        select_button.setToolTip(
+            "Select the highlighted item\nKeyboard: Enter\nDouble-click table row also selects"
+        )
         button_layout.addWidget(select_button)
 
         cancel_button = QPushButton("Cancel")
         cancel_button.clicked.connect(self.reject)
-        cancel_button.setToolTip("Cancel item selection\nKeyboard: Escape\nReturns to estimate without selecting")
+        cancel_button.setToolTip(
+            "Cancel item selection\nKeyboard: Escape\nReturns to estimate without selecting"
+        )
         button_layout.addWidget(cancel_button)
 
         layout.addLayout(button_layout)
@@ -107,13 +121,13 @@ class ItemSelectionDialog(QDialog):
             items = self.db_manager.get_all_items()
             table.setRowCount(len(items))
             for row, item in enumerate(items):
-                table.setItem(row, 0, QTableWidgetItem(item['code']))
-                table.setItem(row, 1, QTableWidgetItem(item['name']))
-                purity_item = QTableWidgetItem(str(item['purity']))
+                table.setItem(row, 0, QTableWidgetItem(item["code"]))
+                table.setItem(row, 1, QTableWidgetItem(item["name"]))
+                purity_item = QTableWidgetItem(str(item["purity"]))
                 purity_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 table.setItem(row, 2, purity_item)
-                table.setItem(row, 3, QTableWidgetItem(item['wage_type']))
-                rate_item = QTableWidgetItem(str(item['wage_rate']))
+                table.setItem(row, 3, QTableWidgetItem(item["wage_type"]))
+                rate_item = QTableWidgetItem(str(item["wage_rate"]))
                 rate_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 table.setItem(row, 4, rate_item)
             # Select the first row if available
@@ -164,7 +178,10 @@ class ItemSelectionDialog(QDialog):
                 visible_rows += 1
                 if first_visible_row == -1:
                     first_visible_row = row
-                for item, matches in ((code_item, code_matches), (name_item, name_matches)):
+                for item, matches in (
+                    (code_item, code_matches),
+                    (name_item, name_matches),
+                ):
                     if item is None:
                         continue
                     if search_text and matches:
@@ -196,9 +213,9 @@ class ItemSelectionDialog(QDialog):
 
         row = selected_rows[0].row()
         return {
-            'code': self.items_table.item(row, 0).text(),
-            'name': self.items_table.item(row, 1).text(),
-            'purity': float(self.items_table.item(row, 2).text()),
-            'wage_type': self.items_table.item(row, 3).text(),
-            'wage_rate': float(self.items_table.item(row, 4).text())
+            "code": self.items_table.item(row, 0).text(),
+            "name": self.items_table.item(row, 1).text(),
+            "purity": float(self.items_table.item(row, 2).text()),
+            "wage_type": self.items_table.item(row, 3).text(),
+            "wage_rate": float(self.items_table.item(row, 4).text()),
         }

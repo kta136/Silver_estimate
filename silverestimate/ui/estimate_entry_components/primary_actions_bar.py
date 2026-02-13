@@ -6,7 +6,7 @@ from typing import Optional
 
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QKeySequence
-from PyQt5.QtWidgets import QHBoxLayout, QPushButton, QSizePolicy, QWidget, QShortcut
+from PyQt5.QtWidgets import QHBoxLayout, QPushButton, QShortcut, QSizePolicy, QWidget
 
 
 class PrimaryActionsBar(QWidget):
@@ -16,7 +16,11 @@ class PrimaryActionsBar(QWidget):
     print_clicked = pyqtSignal()
     new_clicked = pyqtSignal()
 
-    def __init__(self, parent: Optional[QWidget] = None, shortcut_parent: Optional[QWidget] = None):
+    def __init__(
+        self,
+        parent: Optional[QWidget] = None,
+        shortcut_parent: Optional[QWidget] = None,
+    ):
         super().__init__(parent)
         self._shortcut_parent = shortcut_parent
         self._setup_ui()
@@ -91,7 +95,11 @@ class PrimaryActionsBar(QWidget):
 
         Ctrl+N is registered here as it's specific to the estimate entry widget.
         """
-        target = self._shortcut_parent if isinstance(self._shortcut_parent, QWidget) else self
+        target = (
+            self._shortcut_parent
+            if isinstance(self._shortcut_parent, QWidget)
+            else self
+        )
         self._shortcuts: list[QShortcut] = []
 
         # Ctrl+S and Ctrl+P are handled by menu bar (ApplicationShortcut)

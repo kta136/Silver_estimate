@@ -1,4 +1,5 @@
 """Presenter for the estimate entry experience."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -31,7 +32,9 @@ class EstimateEntryView(Protocol):
     def set_voucher_number(self, voucher_no: str) -> None:
         """Display a voucher number in the UI."""
 
-    def show_status(self, message: str, timeout: int = 3000, level: str = "info") -> None:
+    def show_status(
+        self, message: str, timeout: int = 3000, level: str = "info"
+    ) -> None:
         """Display a status message to the user."""
 
     def populate_row(self, row_index: int, item_data: Mapping[str, object]) -> None:
@@ -268,7 +271,9 @@ class EstimateEntryPresenter:
                 self._repository.fetch_silver_bars_for_estimate(payload.voucher_no)
             )
             current_bar_items = [
-                item for item in payload.items if item.is_silver_bar and not item.is_return
+                item
+                for item in payload.items
+                if item.is_silver_bar and not item.is_return
             ]
 
             for existing, current in zip(existing_bars, current_bar_items):
@@ -278,7 +283,9 @@ class EstimateEntryPresenter:
                     abs(new_w - float(existing.get("weight", 0.0))) > 1e-6
                     or abs(new_p - float(existing.get("purity", 0.0))) > 1e-6
                 ):
-                    if not self._repository.update_silver_bar(existing["bar_id"], new_w, new_p):
+                    if not self._repository.update_silver_bar(
+                        existing["bar_id"], new_w, new_p
+                    ):
                         bars_failed += 1
 
             existing_count = len(existing_bars)

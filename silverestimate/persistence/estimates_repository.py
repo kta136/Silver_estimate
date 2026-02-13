@@ -1,4 +1,5 @@
 """Estimate repository handling header and item CRUD operations."""
+
 from __future__ import annotations
 
 import logging
@@ -35,35 +36,48 @@ class EstimatesRepository:
                 return str(int(result[0]) + 1)
             return "1"
         except (sqlite3.Error, ValueError, TypeError) as exc:
-            self._logger.error("DB error generating voucher number: %s", exc, exc_info=True)
+            self._logger.error(
+                "DB error generating voucher number: %s", exc, exc_info=True
+            )
             return f"ERR{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
     def get_estimate_by_voucher(self, voucher_no: str):
         conn, cursor = self._conn, self._cursor
         if not conn or not cursor:
-            self._logger.error("Cannot get estimate %s: No active database connection", voucher_no)
+            self._logger.error(
+                "Cannot get estimate %s: No active database connection", voucher_no
+            )
             return None
         try:
-            conn.execute('BEGIN TRANSACTION')
-            cursor.execute('SELECT * FROM estimates WHERE voucher_no = ?', (voucher_no,))
+            conn.execute("BEGIN TRANSACTION")
+            cursor.execute(
+                "SELECT * FROM estimates WHERE voucher_no = ?", (voucher_no,)
+            )
             estimate = cursor.fetchone()
             if not estimate:
                 conn.rollback()
                 return None
             cursor.execute(
-                'SELECT * FROM estimate_items WHERE voucher_no = ? ORDER BY is_return, is_silver_bar, id',
+                "SELECT * FROM estimate_items WHERE voucher_no = ? ORDER BY is_return, is_silver_bar, id",
                 (voucher_no,),
             )
             items = cursor.fetchall()
             conn.commit()
-            return {'header': dict(estimate), 'items': [dict(item) for item in items]}
+            return {"header": dict(estimate), "items": [dict(item) for item in items]}
         except sqlite3.Error as exc:
             conn.rollback()
-            self._logger.error("DB Error getting estimate %s: %s", voucher_no, exc, exc_info=True)
+            self._logger.error(
+                "DB Error getting estimate %s: %s", voucher_no, exc, exc_info=True
+            )
             return None
         except Exception as exc:  # noqa: BLE001
             conn.rollback()
-            self._logger.error("Unexpected error getting estimate %s: %s", voucher_no, exc, exc_info=True)
+            self._logger.error(
+                "Unexpected error getting estimate %s: %s",
+                voucher_no,
+                exc,
+                exc_info=True,
+            )
             return None
 
     def get_estimates(self, date_from=None, date_to=None, voucher_search=None):
@@ -87,10 +101,15 @@ class EstimatesRepository:
             headers = cursor.fetchall()
             results = []
             for header in headers:
-                voucher_no = header['voucher_no']
-                cursor.execute('SELECT * FROM estimate_items WHERE voucher_no = ? ORDER BY id', (voucher_no,))
+                voucher_no = header["voucher_no"]
+                cursor.execute(
+                    "SELECT * FROM estimate_items WHERE voucher_no = ? ORDER BY id",
+                    (voucher_no,),
+                )
                 items = cursor.fetchall()
-                results.append({'header': dict(header), 'items': [dict(item) for item in items]})
+                results.append(
+                    {"header": dict(header), "items": [dict(item) for item in items]}
+                )
             return results
         except sqlite3.Error as exc:
             self._logger.error("DB Error getting estimates: %s", exc, exc_info=True)
@@ -116,7 +135,9 @@ class EstimatesRepository:
             cursor.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
         except sqlite3.Error as exc:
-            self._logger.error("DB Error getting estimate headers: %s", exc, exc_info=True)
+            self._logger.error(
+                "DB Error getting estimate headers: %s", exc, exc_info=True
+            )
             return []
 
     def get_first_estimate_date(self):
@@ -132,10 +153,10 @@ class EstimatesRepository:
             first_date = row["first_date"] if isinstance(row, sqlite3.Row) else row[0]
             return str(first_date) if first_date else None
         except sqlite3.Error as exc:
-            self._logger.error("DB Error getting first estimate date: %s", exc, exc_info=True)
+            self._logger.error(
+                "DB Error getting first estimate date: %s", exc, exc_info=True
+            )
             return None
-
-
 
     def save_estimate_with_returns(
         self,
@@ -148,19 +169,23 @@ class EstimatesRepository:
     ) -> bool:
         conn, cursor = self._conn, self._cursor
         if not conn or not cursor:
-            self._set_last_error("Cannot save estimate: no active database connection is available.")
+            self._set_last_error(
+                "Cannot save estimate: no active database connection is available."
+            )
             return False
         try:
             self._set_last_error(None)
-            conn.execute('BEGIN TRANSACTION')
+            conn.execute("BEGIN TRANSACTION")
             regular_items = list(regular_items or [])
             return_items = list(return_items or [])
-            cursor.execute('SELECT 1 FROM estimates WHERE voucher_no = ?', (voucher_no,))
+            cursor.execute(
+                "SELECT 1 FROM estimates WHERE voucher_no = ?", (voucher_no,)
+            )
             estimate_exists = cursor.fetchone() is not None
 
-            note = totals.get('note', '')
-            last_balance_silver = totals.get('last_balance_silver', 0.0)
-            last_balance_amount = totals.get('last_balance_amount', 0.0)
+            note = totals.get("note", "")
+            last_balance_silver = totals.get("last_balance_silver", 0.0)
+            last_balance_amount = totals.get("last_balance_amount", 0.0)
 
             all_items = regular_items + return_items
             missing_codes = self._find_missing_item_codes(all_items)
@@ -177,20 +202,20 @@ class EstimatesRepository:
 
             if estimate_exists:
                 cursor.execute(
-                    '''
+                    """
                     UPDATE estimates
                     SET date = ?, silver_rate = ?, total_gross = ?, total_net = ?,
                         total_fine = ?, total_wage = ?, note = ?,
                         last_balance_silver = ?, last_balance_amount = ?
                     WHERE voucher_no = ?
-                    ''',
+                    """,
                     (
                         date,
                         silver_rate,
-                        totals.get('total_gross', 0.0),
-                        totals.get('total_net', 0.0),
-                        totals.get('net_fine', 0.0),
-                        totals.get('net_wage', 0.0),
+                        totals.get("total_gross", 0.0),
+                        totals.get("total_net", 0.0),
+                        totals.get("net_fine", 0.0),
+                        totals.get("net_wage", 0.0),
                         note,
                         last_balance_silver,
                         last_balance_amount,
@@ -199,42 +224,44 @@ class EstimatesRepository:
                 )
             else:
                 cursor.execute(
-                    '''
+                    """
                     INSERT INTO estimates
                     (voucher_no, date, silver_rate, total_gross, total_net, total_fine, total_wage, note,
                      last_balance_silver, last_balance_amount)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''',
+                    """,
                     (
                         voucher_no,
                         date,
                         silver_rate,
-                        totals.get('total_gross', 0.0),
-                        totals.get('total_net', 0.0),
-                        totals.get('net_fine', 0.0),
-                        totals.get('net_wage', 0.0),
+                        totals.get("total_gross", 0.0),
+                        totals.get("total_net", 0.0),
+                        totals.get("net_fine", 0.0),
+                        totals.get("net_wage", 0.0),
                         note,
                         last_balance_silver,
                         last_balance_amount,
                     ),
                 )
 
-            cursor.execute('DELETE FROM estimate_items WHERE voucher_no = ?', (voucher_no,))
+            cursor.execute(
+                "DELETE FROM estimate_items WHERE voucher_no = ?", (voucher_no,)
+            )
             params = []
             for item in regular_items:
                 params.append(
                     (
                         voucher_no,
-                        item.get('code', ''),
-                        item.get('name', ''),
-                        float(item.get('gross', 0.0)),
-                        float(item.get('poly', 0.0)),
-                        float(item.get('net_wt', 0.0)),
-                        float(item.get('purity', 0.0)),
-                        float(item.get('wage_rate', 0.0)),
-                        int(item.get('pieces', 1)),
-                        float(item.get('wage', 0.0)),
-                        float(item.get('fine', 0.0)),
+                        item.get("code", ""),
+                        item.get("name", ""),
+                        float(item.get("gross", 0.0)),
+                        float(item.get("poly", 0.0)),
+                        float(item.get("net_wt", 0.0)),
+                        float(item.get("purity", 0.0)),
+                        float(item.get("wage_rate", 0.0)),
+                        int(item.get("pieces", 1)),
+                        float(item.get("wage", 0.0)),
+                        float(item.get("fine", 0.0)),
                         0,
                         0,
                     )
@@ -243,18 +270,18 @@ class EstimatesRepository:
                 params.append(
                     (
                         voucher_no,
-                        item.get('code', ''),
-                        item.get('name', ''),
-                        float(item.get('gross', 0.0)),
-                        float(item.get('poly', 0.0)),
-                        float(item.get('net_wt', 0.0)),
-                        float(item.get('purity', 0.0)),
-                        float(item.get('wage_rate', 0.0)),
-                        int(item.get('pieces', 1)),
-                        float(item.get('wage', 0.0)),
-                        float(item.get('fine', 0.0)),
-                        1 if item.get('is_return', False) else 0,
-                        1 if item.get('is_silver_bar', False) else 0,
+                        item.get("code", ""),
+                        item.get("name", ""),
+                        float(item.get("gross", 0.0)),
+                        float(item.get("poly", 0.0)),
+                        float(item.get("net_wt", 0.0)),
+                        float(item.get("purity", 0.0)),
+                        float(item.get("wage_rate", 0.0)),
+                        int(item.get("pieces", 1)),
+                        float(item.get("wage", 0.0)),
+                        float(item.get("fine", 0.0)),
+                        1 if item.get("is_return", False) else 0,
+                        1 if item.get("is_silver_bar", False) else 0,
                     )
                 )
             if params:
@@ -265,12 +292,12 @@ class EstimatesRepository:
                         prepared.executemany(stmt, params)
                     else:
                         cursor.executemany(
-                            'INSERT INTO estimate_items (voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage, fine, is_return, is_silver_bar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                            "INSERT INTO estimate_items (voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage, fine, is_return, is_silver_bar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                             params,
                         )
                 except sqlite3.Error:
                     cursor.executemany(
-                        'INSERT INTO estimate_items (voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage, fine, is_return, is_silver_bar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                        "INSERT INTO estimate_items (voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage, fine, is_return, is_silver_bar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         params,
                     )
 
@@ -280,36 +307,59 @@ class EstimatesRepository:
             return True
         except sqlite3.IntegrityError as exc:
             conn.rollback()
-            detail_message = self._diagnose_integrity_error(exc, regular_items + return_items)
-            self._logger.error("DB integrity error saving estimate %s: %s", voucher_no, exc, exc_info=True)
+            detail_message = self._diagnose_integrity_error(
+                exc, regular_items + return_items
+            )
+            self._logger.error(
+                "DB integrity error saving estimate %s: %s",
+                voucher_no,
+                exc,
+                exc_info=True,
+            )
             if detail_message:
                 self._set_last_error(detail_message)
             else:
-                self._set_last_error(f"Database integrity error while saving estimate '{voucher_no}': {exc}")
+                self._set_last_error(
+                    f"Database integrity error while saving estimate '{voucher_no}': {exc}"
+                )
             return False
         except sqlite3.Error as exc:
             conn.rollback()
-            self._logger.error("DB Error saving estimate %s: %s", voucher_no, exc, exc_info=True)
-            self._set_last_error(f"Database error while saving estimate '{voucher_no}': {exc}")
+            self._logger.error(
+                "DB Error saving estimate %s: %s", voucher_no, exc, exc_info=True
+            )
+            self._set_last_error(
+                f"Database error while saving estimate '{voucher_no}': {exc}"
+            )
             return False
         except Exception as exc:
             conn.rollback()
-            self._logger.error("Unexpected error saving estimate %s: %s", voucher_no, exc, exc_info=True)
-            self._set_last_error(f"Unexpected error while saving estimate '{voucher_no}': {exc}")
+            self._logger.error(
+                "Unexpected error saving estimate %s: %s",
+                voucher_no,
+                exc,
+                exc_info=True,
+            )
+            self._set_last_error(
+                f"Unexpected error while saving estimate '{voucher_no}': {exc}"
+            )
             return False
+
     def delete_all_estimates(self) -> bool:
         conn, cursor = self._conn, self._cursor
         if not conn or not cursor:
             return False
         try:
-            cursor.execute('DELETE FROM estimate_items')
-            cursor.execute('DELETE FROM estimates')
+            cursor.execute("DELETE FROM estimate_items")
+            cursor.execute("DELETE FROM estimates")
             conn.commit()
             self._request_flush()
             return True
         except sqlite3.Error as exc:
             conn.rollback()
-            self._logger.error("DB Error deleting all estimates: %s", exc, exc_info=True)
+            self._logger.error(
+                "DB Error deleting all estimates: %s", exc, exc_info=True
+            )
             return False
 
     def delete_single_estimate(self, voucher_no: str) -> bool:
@@ -320,19 +370,26 @@ class EstimatesRepository:
             self._logger.error("No voucher number provided for deletion.")
             return False
         try:
-            conn.execute('BEGIN TRANSACTION')
+            conn.execute("BEGIN TRANSACTION")
             deleted_bars_count = 0
             affected_lists = set()
-            silver_repo = getattr(self._db, 'silver_bars_repo', None)
+            silver_repo = getattr(self._db, "silver_bars_repo", None)
             if silver_repo is not None:
-                deleted_bars_count, affected_lists = silver_repo.delete_bars_for_estimate(voucher_no)
+                deleted_bars_count, affected_lists = (
+                    silver_repo.delete_bars_for_estimate(voucher_no)
+                )
             else:
-                cursor.execute("DELETE FROM silver_bars WHERE estimate_voucher_no = ?", (voucher_no,))
+                cursor.execute(
+                    "DELETE FROM silver_bars WHERE estimate_voucher_no = ?",
+                    (voucher_no,),
+                )
                 deleted_bars_count = cursor.rowcount
 
-            cursor.execute('DELETE FROM estimate_items WHERE voucher_no = ?', (voucher_no,))
+            cursor.execute(
+                "DELETE FROM estimate_items WHERE voucher_no = ?", (voucher_no,)
+            )
             deleted_items_count = cursor.rowcount
-            cursor.execute('DELETE FROM estimates WHERE voucher_no = ?', (voucher_no,))
+            cursor.execute("DELETE FROM estimates WHERE voucher_no = ?", (voucher_no,))
             deleted_estimate_count = cursor.rowcount
 
             if silver_repo is not None and affected_lists:
@@ -352,15 +409,19 @@ class EstimatesRepository:
             return False
         except sqlite3.Error as exc:
             conn.rollback()
-            self._logger.error("DB Error deleting estimate %s: %s", voucher_no, exc, exc_info=True)
+            self._logger.error(
+                "DB Error deleting estimate %s: %s", voucher_no, exc, exc_info=True
+            )
             return False
         except Exception as exc:
             conn.rollback()
-            self._logger.error("Unexpected error deleting estimate %s: %s", voucher_no, exc, exc_info=True)
+            self._logger.error(
+                "Unexpected error deleting estimate %s: %s",
+                voucher_no,
+                exc,
+                exc_info=True,
+            )
             return False
-
-
-
 
     def _set_last_error(self, message: str | None) -> None:
         try:
@@ -374,7 +435,7 @@ class EstimatesRepository:
             return []
         codes = []
         for item in items:
-            code = (item.get('code') or '').strip()
+            code = (item.get("code") or "").strip()
             if code:
                 codes.append(code)
         if not codes:
@@ -404,10 +465,12 @@ class EstimatesRepository:
     def _collect_item_rows(self, items: Iterable[dict]) -> dict[str, int]:
         row_map: dict[str, int] = {}
         for item in items:
-            code = (item.get('code') or '').strip()
+            code = (item.get("code") or "").strip()
             if not code or code in row_map:
                 continue
-            row_number = item.get('row_number') or item.get('row_index') or item.get('row')
+            row_number = (
+                item.get("row_number") or item.get("row_index") or item.get("row")
+            )
             if row_number is None:
                 continue
             try:
@@ -419,7 +482,9 @@ class EstimatesRepository:
                     continue
         return row_map
 
-    def _format_missing_code_message(self, missing_codes: List[str], items: Iterable[dict]) -> str:
+    def _format_missing_code_message(
+        self, missing_codes: List[str], items: Iterable[dict]
+    ) -> str:
         code_to_row = self._collect_item_rows(items)
         details: List[str] = []
         for code in missing_codes:
@@ -439,7 +504,9 @@ class EstimatesRepository:
             "Please add or correct them before saving."
         )
 
-    def _diagnose_integrity_error(self, exc: sqlite3.IntegrityError, items: Iterable[dict]) -> str | None:
+    def _diagnose_integrity_error(
+        self, exc: sqlite3.IntegrityError, items: Iterable[dict]
+    ) -> str | None:
         message = str(exc)
         if "FOREIGN KEY constraint failed" in message:
             missing_codes = self._find_missing_item_codes(items)
@@ -459,5 +526,6 @@ class EstimatesRepository:
             if callable(requester):
                 requester()
         except Exception as exc:  # pragma: no cover - log only
-            self._logger.error("Exception during post-estimate flush: %s", exc, exc_info=True)
-
+            self._logger.error(
+                "Exception during post-estimate flush: %s", exc, exc_info=True
+            )

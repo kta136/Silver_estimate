@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from PyQt5.QtCore import QAbstractTableModel, QModelIndex, Qt, pyqtSignal
-from PyQt5.QtGui import QColor, QBrush
+from PyQt5.QtGui import QBrush, QColor
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.ui.estimate_entry_logic.constants import (
@@ -178,7 +178,11 @@ class EstimateTableModel(QAbstractTableModel):
                     new_row = replace(old_row, category=value)
                 else:
                     # Use from_label to convert display name or enum value to category
-                    category = EstimateLineCategory.from_label(str(value)) if value else EstimateLineCategory.REGULAR
+                    category = (
+                        EstimateLineCategory.from_label(str(value))
+                        if value
+                        else EstimateLineCategory.REGULAR
+                    )
                     new_row = replace(old_row, category=category)
             else:
                 return False
@@ -283,6 +287,7 @@ class EstimateTableModel(QAbstractTableModel):
         # Update row indices for remaining rows
         for i in range(row_idx, len(self._rows)):
             from dataclasses import replace
+
             self._rows[i] = replace(self._rows[i], row_index=i)
 
         return True

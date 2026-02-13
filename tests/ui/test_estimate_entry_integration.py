@@ -11,6 +11,7 @@ these tests simulate actual user interactions.
 """
 
 import types
+
 import pytest
 from PyQt5.QtCore import Qt
 from PyQt5.QtTest import QTest
@@ -35,6 +36,7 @@ from silverestimate.ui.estimate_entry_logic import (
 @pytest.fixture()
 def fake_db():
     """Create a fake database manager for testing."""
+
     class _DB:
         def __init__(self):
             self.item_cache_controller = None
@@ -85,7 +87,9 @@ class _RepositoryStub:
         if callable(deleter):
             deleter(voucher_no)
 
-    def save_estimate(self, voucher_no, date, silver_rate, regular_items, return_items, totals):
+    def save_estimate(
+        self, voucher_no, date, silver_rate, regular_items, return_items, totals
+    ):
         saver = getattr(self.db, "save_estimate_with_returns", None)
         if callable(saver):
             return bool(
@@ -120,6 +124,7 @@ def _make_widget(db_manager):
 # Program Startup Tests
 # ============================================================================
 
+
 def test_program_startup_creates_empty_row(qt_app, fake_db):
     """Test that starting the program creates an initial empty row via adapter.
 
@@ -129,7 +134,9 @@ def test_program_startup_creates_empty_row(qt_app, fake_db):
     widget = _make_widget(fake_db)
     try:
         # Verify initial state
-        assert widget.item_table.rowCount() >= 1, "Should have at least one row on startup"
+        assert (
+            widget.item_table.rowCount() >= 1
+        ), "Should have at least one row on startup"
 
         # Verify the row was created via the adapter (uses insertRow internally)
         last_row = widget.item_table.rowCount() - 1
@@ -163,9 +170,15 @@ def test_initial_empty_row_has_correct_structure(qt_app, fake_db):
         fine_wt_item = table.item(last_row, COL_FINE_WT)
 
         # These should be read-only (flags check)
-        assert not (net_wt_item.flags() & Qt.ItemIsEditable), "Net weight should be read-only"
-        assert not (wage_amt_item.flags() & Qt.ItemIsEditable), "Wage amount should be read-only"
-        assert not (fine_wt_item.flags() & Qt.ItemIsEditable), "Fine weight should be read-only"
+        assert not (
+            net_wt_item.flags() & Qt.ItemIsEditable
+        ), "Net weight should be read-only"
+        assert not (
+            wage_amt_item.flags() & Qt.ItemIsEditable
+        ), "Wage amount should be read-only"
+        assert not (
+            fine_wt_item.flags() & Qt.ItemIsEditable
+        ), "Fine weight should be read-only"
     finally:
         widget.deleteLater()
 
@@ -173,6 +186,7 @@ def test_initial_empty_row_has_correct_structure(qt_app, fake_db):
 # ============================================================================
 # Adapter Layer Tests - Add Row Functionality
 # ============================================================================
+
 
 def test_adapter_add_empty_row_via_button(qt_app, fake_db):
     """Test that clicking 'Add Row' button uses adapter.add_empty_row().
@@ -248,6 +262,7 @@ def test_adapter_adds_row_when_last_has_code(qt_app, fake_db):
 # Adapter Layer Tests - Populate Row
 # ============================================================================
 
+
 def test_adapter_populate_row_uses_model_backed_items(qt_app, fake_db):
     """Test that adapter.populate_row works with ModelBackedTableItem.
 
@@ -260,12 +275,15 @@ def test_adapter_populate_row_uses_model_backed_items(qt_app, fake_db):
         widget.table_adapter.add_empty_row()
 
         # Populate row via adapter (uses item(), setText(), etc.)
-        widget.table_adapter.populate_row(0, {
-            "code": "test001",
-            "name": "Test Item",
-            "purity": 92.5,
-            "wage_rate": 10.0,
-        })
+        widget.table_adapter.populate_row(
+            0,
+            {
+                "code": "test001",
+                "name": "Test Item",
+                "purity": 92.5,
+                "wage_rate": 10.0,
+            },
+        )
 
         table = widget.item_table
 
@@ -277,7 +295,9 @@ def test_adapter_populate_row_uses_model_backed_items(qt_app, fake_db):
 
         # Verify UserRole data is preserved
         code_item = table.item(0, COL_CODE)
-        assert code_item.data(Qt.UserRole) == "test001", "Canonical code should be stored"
+        assert (
+            code_item.data(Qt.UserRole) == "test001"
+        ), "Canonical code should be stored"
     finally:
         widget.deleteLater()
 
@@ -294,12 +314,15 @@ def test_adapter_populate_triggers_calculations(qt_app, fake_db):
         widget.table_adapter.add_empty_row()
 
         # Populate with data that should trigger calculations
-        widget.table_adapter.populate_row(0, {
-            "code": "calc001",
-            "name": "Calculation Test",
-            "purity": 92.5,
-            "wage_rate": 10.0,
-        })
+        widget.table_adapter.populate_row(
+            0,
+            {
+                "code": "calc001",
+                "name": "Calculation Test",
+                "purity": 92.5,
+                "wage_rate": 10.0,
+            },
+        )
 
         # Manually set gross and poly to trigger calculations
         table = widget.item_table
@@ -323,6 +346,7 @@ def test_adapter_populate_triggers_calculations(qt_app, fake_db):
 # ============================================================================
 # Model/View Architecture Tests
 # ============================================================================
+
 
 def test_model_backed_item_syncs_with_model(qt_app, fake_db):
     """Test that ModelBackedTableItem updates propagate to the model."""
@@ -398,6 +422,7 @@ def test_item_cache_invalidates_on_row_changes(qt_app, fake_db):
 # Mode Toggle Tests (Integration with Adapter)
 # ============================================================================
 
+
 def test_mode_toggle_updates_empty_row_type_via_adapter(qt_app, fake_db):
     """Test that toggling modes updates empty row type through adapter."""
     widget = _make_widget(fake_db)
@@ -431,6 +456,7 @@ def test_mode_toggle_updates_empty_row_type_via_adapter(qt_app, fake_db):
 # ============================================================================
 # QTableWidget Compatibility Layer Tests
 # ============================================================================
+
 
 def test_insertrow_compatibility_method(qt_app, fake_db):
     """Test that QTableWidget.insertRow() compatibility works."""
@@ -469,6 +495,7 @@ def test_item_setitem_compatibility_methods(qt_app, fake_db):
 # ============================================================================
 # Focus and Navigation Tests
 # ============================================================================
+
 
 def test_adapter_focus_on_empty_row(qt_app, fake_db):
     """Test adapter.focus_on_empty_row() finds or creates empty row."""
@@ -523,14 +550,15 @@ def test_adapter_refresh_empty_row_type(qt_app, fake_db):
 # Async/Timer Tests (Critical for catching delayed operations)
 # ============================================================================
 
+
 def test_widget_initialization_with_timers(qt_app, fake_db):
     """Test that widget initialization completes including timer-delayed operations.
 
     This test catches issues with QTimer.singleShot operations like
     force_focus_to_first_cell() which are missed by synchronous tests.
     """
-    from PyQt5.QtTest import QTest
     from PyQt5.QtCore import Qt
+    from PyQt5.QtTest import QTest
 
     widget = _make_widget(fake_db)
     try:
@@ -585,7 +613,10 @@ def test_add_empty_row_deferred_focus_is_safe_after_delete(qt_app, fake_db, caps
     qt_app.processEvents()
 
     captured = capsys.readouterr()
-    assert "wrapped C/C++ object of type EstimateEntryWidget has been deleted" not in captured.err
+    assert (
+        "wrapped C/C++ object of type EstimateEntryWidget has been deleted"
+        not in captured.err
+    )
 
 
 def test_manual_row_selection_not_overridden_by_queued_auto_advance(qt_app, fake_db):

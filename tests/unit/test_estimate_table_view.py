@@ -6,7 +6,9 @@ from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.ui.estimate_entry_components.estimate_table_view import (
     EstimateTableView,
 )
-from silverestimate.ui.view_models.estimate_entry_view_model import EstimateEntryRowState
+from silverestimate.ui.view_models.estimate_entry_view_model import (
+    EstimateEntryRowState,
+)
 
 
 @pytest.fixture
@@ -215,19 +217,21 @@ def test_cell_edited_signal(table_view):
 def test_column_layout_reset_signal(table_view):
     """Test that context menu reset emits signal."""
     reset_requested = []
-    table_view.column_layout_reset_requested.connect(lambda: reset_requested.append(True))
+    table_view.column_layout_reset_requested.connect(
+        lambda: reset_requested.append(True)
+    )
 
     # Simulate context menu action
     # Note: We can't easily test the actual context menu without GUI interaction
     # but we can verify the signal exists and is connectable
-    assert hasattr(table_view, 'column_layout_reset_requested')
+    assert hasattr(table_view, "column_layout_reset_requested")
 
 
 def test_history_requested_signal(table_view):
     """Test that history signal exists."""
-    assert hasattr(table_view, 'history_requested')
+    assert hasattr(table_view, "history_requested")
 
 
 def test_item_lookup_requested_signal(table_view):
     """Test that item lookup signal exists."""
-    assert hasattr(table_view, 'item_lookup_requested')
+    assert hasattr(table_view, "item_lookup_requested")

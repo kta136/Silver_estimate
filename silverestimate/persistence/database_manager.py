@@ -1,28 +1,28 @@
 #!/usr/bin/env python
+import logging
 import os
-import threading  # For async debounced flush
 import sqlite3
 import tempfile  # For temporary decrypted DB file
-import traceback
-import logging
+import threading  # For async debounced flush
 import time
+import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-from silverestimate.security import encryption as crypto_utils
-from silverestimate.persistence import migrations as persistence_migrations
-from silverestimate.persistence.items_repository import ItemsRepository
-from silverestimate.persistence.estimates_repository import EstimatesRepository
-from silverestimate.persistence.silver_bars_repository import SilverBarsRepository
-from silverestimate.persistence.flush_scheduler import FlushScheduler
-from silverestimate.infrastructure.db_session import ConnectionThreadGuard
-from silverestimate.infrastructure.item_cache import ItemCacheController
-
-from silverestimate.infrastructure import settings as settings_module
-from silverestimate.infrastructure.settings import get_app_settings
 
 # Cryptography imports
-from cryptography.exceptions import InvalidTag # To catch decryption errors
+from cryptography.exceptions import InvalidTag  # To catch decryption errors
+
+from silverestimate.infrastructure import settings as settings_module
+from silverestimate.infrastructure.db_session import ConnectionThreadGuard
+from silverestimate.infrastructure.item_cache import ItemCacheController
+from silverestimate.infrastructure.settings import get_app_settings
+from silverestimate.persistence import migrations as persistence_migrations
+from silverestimate.persistence.estimates_repository import EstimatesRepository
+from silverestimate.persistence.flush_scheduler import FlushScheduler
+from silverestimate.persistence.items_repository import ItemsRepository
+from silverestimate.persistence.silver_bars_repository import SilverBarsRepository
+from silverestimate.security import encryption as crypto_utils
 
 # Constants
 SALT_KEY = crypto_utils.SALT_SETTINGS_KEY  # Legacy alias for settings key
@@ -78,11 +78,7 @@ class _TempDatabaseStore:
             self._clear_settings_entry()
         else:
             # Ensure metadata is present for manual recovery.
-            if (
-                self._store_metadata
-                and self._path is not None
-                and not self._registered
-            ):
+            if self._store_metadata and self._path is not None and not self._registered:
                 self.register_for_recovery()
 
     def _secure_unlink(self) -> None:
@@ -105,9 +101,13 @@ class _TempDatabaseStore:
                 except Exception:
                     pass
             os.remove(self._path)
-            self._logger.debug("Temporary database file securely deleted: %s", self._path)
+            self._logger.debug(
+                "Temporary database file securely deleted: %s", self._path
+            )
         except Exception as exc:
-            self._logger.warning("Could not securely delete temporary DB '%s': %s", self._path, exc)
+            self._logger.warning(
+                "Could not securely delete temporary DB '%s': %s", self._path, exc
+            )
             try:
                 os.remove(self._path)
             except Exception:
@@ -126,6 +126,7 @@ class _TempDatabaseStore:
             self._logger.warning("Could not clear temp DB recovery metadata: %s", exc)
         self._registered = False
 
+
 class DatabaseManager:
     """
     Manages SQLite database operations for the Silver Estimation App,
@@ -140,10 +141,10 @@ class DatabaseManager:
         # Set up logging
         self.logger = logging.getLogger(__name__)
         self.logger.info(f"Initializing DatabaseManager for {db_path}")
-        
+
         self.encrypted_db_path = db_path
         self.password = password
-        self.salt = self._get_or_create_salt() # Get or create salt using QSettings
+        self.salt = self._get_or_create_salt()  # Get or create salt using QSettings
         self.key = self._derive_key(self.password, self.salt)
         self.temp_db_path = None  # Will hold the temporary file path
         self.conn = None
@@ -189,27 +190,35 @@ class DatabaseManager:
             # Attempt to decrypt the existing database
             decryption_result = self._decrypt_db()
 
-            if decryption_result == 'success':
+            if decryption_result == "success":
                 self.logger.info("Database decrypted successfully")
                 self._connect_temp_db()
                 # Schema setup/migration should still run even on existing DB
                 self.setup_database()
-            elif decryption_result == 'first_run':
-                self.logger.info("Encrypted database not found or empty. Initializing new database.")
+            elif decryption_result == "first_run":
+                self.logger.info(
+                    "Encrypted database not found or empty. Initializing new database."
+                )
                 # Salt was created by _get_or_create_salt
                 self._connect_temp_db()
-                self.setup_database() # Setup schema on the new temp DB
+                self.setup_database()  # Setup schema on the new temp DB
                 # No need to encrypt immediately, will happen on close()
-            else: # Decryption failed
-                self.logger.critical("Database decryption failed. Incorrect password or corrupted file.")
-                raise Exception("Database decryption failed. Incorrect password or corrupted file.")
+            else:  # Decryption failed
+                self.logger.critical(
+                    "Database decryption failed. Incorrect password or corrupted file."
+                )
+                raise Exception(
+                    "Database decryption failed. Incorrect password or corrupted file."
+                )
 
         except Exception as e:
-            self.logger.critical(f"Failed to initialize DatabaseManager: {str(e)}", exc_info=True)
+            self.logger.critical(
+                f"Failed to initialize DatabaseManager: {str(e)}", exc_info=True
+            )
             # Cleanup temp file if created
             self._cleanup_temp_db()
-            self.conn = None # Ensure connection is None on failure
-            raise # Re-raise the exception to halt application startup
+            self.conn = None  # Ensure connection is None on failure
+            raise  # Re-raise the exception to halt application startup
 
     @property
     def items_repo(self):
@@ -239,7 +248,7 @@ class DatabaseManager:
     def _connect_temp_db(self):
         """Connects sqlite3 to the temporary database file."""
         if not self.temp_db_path:
-             raise Exception("Temporary database path not set.")
+            raise Exception("Temporary database path not set.")
         try:
             self.logger.debug("Connecting to temporary database")
             self.conn = sqlite3.connect(self.temp_db_path)
@@ -263,7 +272,12 @@ class DatabaseManager:
                     pass
                 # Log critical PRAGMA values to confirm they are applied
                 try:
-                    for p in ("journal_mode", "synchronous", "temp_store", "cache_size"):
+                    for p in (
+                        "journal_mode",
+                        "synchronous",
+                        "temp_store",
+                        "cache_size",
+                    ):
                         cur = self.conn.execute(f"PRAGMA {p}")
                         row = cur.fetchone()
                         val = row[0] if row and len(row) > 0 else None
@@ -277,23 +291,27 @@ class DatabaseManager:
             # Initialize prepared cursors
             try:
                 self._c_get_item_by_code = self.conn.cursor()
-                self._sql_get_item_by_code = 'SELECT * FROM items WHERE code = ? COLLATE NOCASE'
+                self._sql_get_item_by_code = (
+                    "SELECT * FROM items WHERE code = ? COLLATE NOCASE"
+                )
             except Exception:
                 self._c_get_item_by_code = None
                 self._sql_get_item_by_code = None
             try:
                 self._c_insert_estimate_item = self.conn.cursor()
                 self._sql_insert_estimate_item = (
-                    'INSERT INTO estimate_items '
-                    '(voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage, fine, is_return, is_silver_bar) '
-                    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                    "INSERT INTO estimate_items "
+                    "(voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage, fine, is_return, is_silver_bar) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 )
             except Exception:
                 self._c_insert_estimate_item = None
                 self._sql_insert_estimate_item = None
             self.logger.debug("Connected to temporary database")
         except sqlite3.Error as e:
-            self.logger.error(f"Failed to connect to temporary database: {str(e)}", exc_info=True)
+            self.logger.error(
+                f"Failed to connect to temporary database: {str(e)}", exc_info=True
+            )
             self.conn = None
             self.cursor = None
             try:
@@ -309,18 +327,26 @@ class DatabaseManager:
 
     def _derive_key(self, password, salt):
         """Derives a 32-byte AES key from the password and salt using PBKDF2."""
-        return crypto_utils.derive_key(password, salt, iterations=KDF_ITERATIONS, logger=self.logger)
+        return crypto_utils.derive_key(
+            password, salt, iterations=KDF_ITERATIONS, logger=self.logger
+        )
 
     def _encrypt_db(self):
         """Encrypt the temporary DB file and atomically save it to the encrypted path."""
-        lock = getattr(self, '_encrypt_lock', None)
+        lock = getattr(self, "_encrypt_lock", None)
         if lock is None:
             self._encrypt_lock = threading.Lock()
             lock = self._encrypt_lock
         lock.acquire()
         try:
-            if not self.conn or not self.temp_db_path or not os.path.exists(self.temp_db_path):
-                self.logger.warning("Encryption skipped: No active connection or temporary DB file.")
+            if (
+                not self.conn
+                or not self.temp_db_path
+                or not os.path.exists(self.temp_db_path)
+            ):
+                self.logger.warning(
+                    "Encryption skipped: No active connection or temporary DB file."
+                )
                 return False
             if not self.key:
                 self.logger.warning("Encryption skipped: No encryption key available.")
@@ -347,13 +373,15 @@ class DatabaseManager:
                 snapshot_path = self._snapshot_temp_db_copy()
                 source_path = snapshot_path if snapshot_path else self.temp_db_path
 
-                with open(source_path, 'rb') as f_in:
+                with open(source_path, "rb") as f_in:
                     plaintext = f_in.read()
 
-                payload = crypto_utils.encrypt_payload(plaintext, self.key, logger=self.logger)
+                payload = crypto_utils.encrypt_payload(
+                    plaintext, self.key, logger=self.logger
+                )
 
                 # Write to a temp file first
-                with open(tmp_out_path, 'wb') as f_out:
+                with open(tmp_out_path, "wb") as f_out:
                     f_out.write(payload)
                     try:
                         f_out.flush()
@@ -366,16 +394,22 @@ class DatabaseManager:
                 os.replace(tmp_out_path, self.encrypted_db_path)
 
                 duration = time.time() - start_time
-                self.logger.info(f"Database encrypted successfully in {duration:.2f} seconds")
+                self.logger.info(
+                    f"Database encrypted successfully in {duration:.2f} seconds"
+                )
                 return True
             except Exception as e:
-                self.logger.error(f"Database encryption failed: {str(e)}", exc_info=True)
+                self.logger.error(
+                    f"Database encryption failed: {str(e)}", exc_info=True
+                )
                 # Clean up partial .new file but never delete the existing encrypted DB
                 try:
                     if os.path.exists(tmp_out_path):
                         os.remove(tmp_out_path)
                 except OSError as oe:
-                    self.logger.warning(f"Could not remove temporary encrypted file '{tmp_out_path}': {str(oe)}")
+                    self.logger.warning(
+                        f"Could not remove temporary encrypted file '{tmp_out_path}': {str(oe)}"
+                    )
                 return False
             finally:
                 # Remove snapshot file if created
@@ -438,63 +472,76 @@ class DatabaseManager:
         """Decrypts the database file to the temporary path. Returns status."""
         if not os.path.exists(self.encrypted_db_path):
             self.logger.info("Encrypted database file not found")
-            return 'first_run'
-        if os.path.getsize(self.encrypted_db_path) <= 12: # Nonce size is 12
-             self.logger.warning("Encrypted database file is empty or too small")
-             # Treat as first run, existing empty/corrupt file will be overwritten on close.
-             return 'first_run'
+            return "first_run"
+        if os.path.getsize(self.encrypted_db_path) <= 12:  # Nonce size is 12
+            self.logger.warning("Encrypted database file is empty or too small")
+            # Treat as first run, existing empty/corrupt file will be overwritten on close.
+            return "first_run"
         if not self.key:
-             self.logger.error("Decryption skipped: No encryption key available")
-             return 'error'
+            self.logger.error("Decryption skipped: No encryption key available")
+            return "error"
 
         self.logger.info("Decrypting database to temporary location")
         start_time = time.time()
         try:
-            with open(self.encrypted_db_path, 'rb') as f_in:
+            with open(self.encrypted_db_path, "rb") as f_in:
                 payload = f_in.read()
 
-            plaintext = crypto_utils.decrypt_payload(payload, self.key, logger=self.logger)
+            plaintext = crypto_utils.decrypt_payload(
+                payload, self.key, logger=self.logger
+            )
 
-            with open(self.temp_db_path, 'wb') as f_out:
+            with open(self.temp_db_path, "wb") as f_out:
                 f_out.write(plaintext)
 
             duration = time.time() - start_time
-            self.logger.info(f"Database decrypted successfully in {duration:.2f} seconds")
-            return 'success'
+            self.logger.info(
+                f"Database decrypted successfully in {duration:.2f} seconds"
+            )
+            return "success"
         except InvalidTag:
-            self.logger.error("Decryption failed: Invalid password or corrupted data (InvalidTag)")
+            self.logger.error(
+                "Decryption failed: Invalid password or corrupted data (InvalidTag)"
+            )
             self._cleanup_temp_db(keep_file=True)
-            return 'error'
+            return "error"
         except Exception as e:
             self.logger.error(f"Database decryption failed: {str(e)}", exc_info=True)
             self._cleanup_temp_db(keep_file=True)
-            return 'error'
+            return "error"
 
     def _cleanup_temp_db(self, keep_file=False):
-         """Safely deletes the temporary database file."""
-         if getattr(self, "_temp_store", None) is not None:
-              self._temp_store.cleanup(preserve=keep_file)
-         if not keep_file:
-              self.temp_db_path = None
-
+        """Safely deletes the temporary database file."""
+        if getattr(self, "_temp_store", None) is not None:
+            self._temp_store.cleanup(preserve=keep_file)
+        if not keep_file:
+            self.temp_db_path = None
 
     def _table_exists(self, table_name):
         """Check if a table exists in the database."""
-        if not self.cursor: return False # Handle case where connection failed
-        self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+        if not self.cursor:
+            return False  # Handle case where connection failed
+        self.cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+            (table_name,),
+        )
         return self.cursor.fetchone() is not None
 
     def _column_exists(self, table_name, column_name):
         """Check if a column exists in a table."""
-        if not self.cursor: return False
+        if not self.cursor:
+            return False
         if not self._table_exists(table_name):
             return False
         try:
             self.cursor.execute(f"PRAGMA table_info({table_name})")
-            return any(col['name'] == column_name for col in self.cursor.fetchall())
+            return any(col["name"] == column_name for col in self.cursor.fetchall())
         except sqlite3.Error as e:
-             self.logger.error(f"Error checking column {table_name}.{column_name}: {str(e)}", exc_info=True)
-             return False
+            self.logger.error(
+                f"Error checking column {table_name}.{column_name}: {str(e)}",
+                exc_info=True,
+            )
+            return False
 
     def _is_column_unique(self, table_name, column_name):
         """Check if a column has a UNIQUE constraint via PK or unique index."""
@@ -506,43 +553,50 @@ class DatabaseManager:
             # Primary key implies uniqueness
             self.cursor.execute(f"PRAGMA table_info({table_name})")
             for col in self.cursor.fetchall():
-                if col['name'] == column_name and int(col['pk']) == 1:
+                if col["name"] == column_name and int(col["pk"]) == 1:
                     return True
 
             # Check separate UNIQUE indexes
             self.cursor.execute(f"PRAGMA index_list({table_name})")
             indexes = self.cursor.fetchall()
             for index in indexes:
-                if int(index['unique']) == 1:
+                if int(index["unique"]) == 1:
                     self.cursor.execute(f"PRAGMA index_info({index['name']})")
                     idx_cols = self.cursor.fetchall()
-                    if len(idx_cols) == 1 and idx_cols[0]['name'] == column_name:
+                    if len(idx_cols) == 1 and idx_cols[0]["name"] == column_name:
                         return True
             return False
         except sqlite3.Error as e:
-            self.logger.error(f"Error checking unique constraint for {table_name}.{column_name}: {str(e)}", exc_info=True)
+            self.logger.error(
+                f"Error checking unique constraint for {table_name}.{column_name}: {str(e)}",
+                exc_info=True,
+            )
             return False
 
     def _check_schema_version(self):
         """Check if the database has the schema version table and current version."""
-        if not self.cursor: return 0 # Assume version 0 if no connection
+        if not self.cursor:
+            return 0  # Assume version 0 if no connection
         try:
             # Check if schema_version table exists
-            if not self._table_exists('schema_version'):
+            if not self._table_exists("schema_version"):
                 # Create schema_version table if it doesn't exist
                 self.logger.info("Creating schema_version table...")
-                self.cursor.execute('''
+                self.cursor.execute("""
                     CREATE TABLE schema_version (
                         id INTEGER PRIMARY KEY,
                         version INTEGER NOT NULL,
                         applied_date TEXT NOT NULL
                     )
-                ''')
+                """)
                 # Insert initial version 0
-                self.cursor.execute('''
+                self.cursor.execute(
+                    """
                     INSERT INTO schema_version (version, applied_date)
                     VALUES (0, ?)
-                ''', (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
+                """,
+                    (datetime.now().strftime("%Y-%m-%d %H:%M:%S"),),
+                )
                 self.conn.commit()
                 self.logger.info("Initialized schema version to 0.")
                 return 0
@@ -557,12 +611,16 @@ class DatabaseManager:
 
     def _update_schema_version(self, new_version):
         """Update the schema version in the database."""
-        if not self.cursor: return False
+        if not self.cursor:
+            return False
         try:
-            self.cursor.execute('''
+            self.cursor.execute(
+                """
                 INSERT INTO schema_version (version, applied_date)
                 VALUES (?, ?)
-            ''', (new_version, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+            """,
+                (new_version, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+            )
             self.conn.commit()
             self.logger.info(f"Schema updated to version {new_version}")
             return True
@@ -607,10 +665,14 @@ class DatabaseManager:
         return self.estimates_repo.get_estimate_by_voucher(voucher_no)
 
     def get_estimates(self, date_from=None, date_to=None, voucher_search=None):
-        return self.estimates_repo.get_estimates(date_from=date_from, date_to=date_to, voucher_search=voucher_search)
+        return self.estimates_repo.get_estimates(
+            date_from=date_from, date_to=date_to, voucher_search=voucher_search
+        )
 
     def get_estimate_headers(self, date_from=None, date_to=None, voucher_search=None):
-        return self.estimates_repo.get_estimate_headers(date_from=date_from, date_to=date_to, voucher_search=voucher_search)
+        return self.estimates_repo.get_estimate_headers(
+            date_from=date_from, date_to=date_to, voucher_search=voucher_search
+        )
 
     def get_first_estimate_date(self):
         return self.estimates_repo.get_first_estimate_date()
@@ -618,9 +680,13 @@ class DatabaseManager:
     def generate_voucher_no(self):
         return self.estimates_repo.generate_voucher_no()
 
-    def save_estimate_with_returns(self, voucher_no, date, silver_rate, regular_items, return_items, totals):
+    def save_estimate_with_returns(
+        self, voucher_no, date, silver_rate, regular_items, return_items, totals
+    ):
         self.last_error = None
-        return self.estimates_repo.save_estimate_with_returns(voucher_no, date, silver_rate, regular_items, return_items, totals)
+        return self.estimates_repo.save_estimate_with_returns(
+            voucher_no, date, silver_rate, regular_items, return_items, totals
+        )
 
     def delete_all_estimates(self):
         return self.estimates_repo.delete_all_estimates()
@@ -647,11 +713,19 @@ class DatabaseManager:
     def delete_silver_bar_list(self, list_id):
         return self.silver_bars_repo.delete_list(list_id)
 
-    def assign_bar_to_list(self, bar_id, list_id, note="Assigned to list", perform_commit=True):
-        return self.silver_bars_repo.assign_bar_to_list(bar_id, list_id, note=note, perform_commit=perform_commit)
+    def assign_bar_to_list(
+        self, bar_id, list_id, note="Assigned to list", perform_commit=True
+    ):
+        return self.silver_bars_repo.assign_bar_to_list(
+            bar_id, list_id, note=note, perform_commit=perform_commit
+        )
 
-    def remove_bar_from_list(self, bar_id, note="Removed from list", perform_commit=True):
-        return self.silver_bars_repo.remove_bar_from_list(bar_id, note=note, perform_commit=perform_commit)
+    def remove_bar_from_list(
+        self, bar_id, note="Removed from list", perform_commit=True
+    ):
+        return self.silver_bars_repo.remove_bar_from_list(
+            bar_id, note=note, perform_commit=perform_commit
+        )
 
     def get_bars_in_list(self, list_id):
         return self.silver_bars_repo.get_bars_in_list(list_id)
@@ -665,7 +739,16 @@ class DatabaseManager:
     def update_silver_bar_values(self, bar_id, weight, purity):
         return self.silver_bars_repo.update_silver_bar_values(bar_id, weight, purity)
 
-    def get_silver_bars(self, status=None, weight_query=None, estimate_voucher_no=None, weight_tolerance=0.001, min_purity=None, max_purity=None, date_range=None):
+    def get_silver_bars(
+        self,
+        status=None,
+        weight_query=None,
+        estimate_voucher_no=None,
+        weight_tolerance=0.001,
+        min_purity=None,
+        max_purity=None,
+        date_range=None,
+    ):
         return self.silver_bars_repo.get_silver_bars(
             status=status,
             weight_query=weight_query,
@@ -682,21 +765,32 @@ class DatabaseManager:
     # --- Utility Methods ---
     def drop_tables(self):
         """Drops all known application tables from the temporary database."""
-        if not self.conn or not self.cursor: return False
+        if not self.conn or not self.cursor:
+            return False
         # Added schema_version to the list
-        tables = ['estimate_items', 'estimates', 'items', 'bar_transfers', 'silver_bars', 'silver_bar_lists', 'schema_version']
+        tables = [
+            "estimate_items",
+            "estimates",
+            "items",
+            "bar_transfers",
+            "silver_bars",
+            "silver_bar_lists",
+            "schema_version",
+        ]
         try:
             self.logger.warning("Dropping all application tables from database")
-            self.conn.execute('BEGIN TRANSACTION')
+            self.conn.execute("BEGIN TRANSACTION")
             for table in tables:
                 self.logger.debug(f"Dropping table {table}")
-                self.cursor.execute(f'DROP TABLE IF EXISTS {table}')
+                self.cursor.execute(f"DROP TABLE IF EXISTS {table}")
             self.conn.commit()
             self.logger.info("All application tables dropped successfully")
             return True
         except sqlite3.Error as e:
             self.conn.rollback()
-            self.logger.error(f"Database error dropping tables: {str(e)}", exc_info=True)
+            self.logger.error(
+                f"Database error dropping tables: {str(e)}", exc_info=True
+            )
             return False
 
     def close(self):
@@ -725,7 +819,9 @@ class DatabaseManager:
                 # This is critical - data might be lost if encryption fails!
                 # Keep the temp file for potential manual recovery
                 self.logger.critical("Failed to encrypt database on close!")
-                self.logger.critical(f"The unencrypted data might still be in: {self.temp_db_path}")
+                self.logger.critical(
+                    f"The unencrypted data might still be in: {self.temp_db_path}"
+                )
 
             # Close the connection to the temporary DB
             try:
@@ -738,7 +834,9 @@ class DatabaseManager:
                     pass
                 self.logger.debug("Database connection closed")
             except sqlite3.Error as e:
-                self.logger.error(f"Error closing SQLite connection: {str(e)}", exc_info=True)
+                self.logger.error(
+                    f"Error closing SQLite connection: {str(e)}", exc_info=True
+                )
         else:
             self.logger.debug("No active database connection to close")
 
@@ -746,7 +844,9 @@ class DatabaseManager:
         if encrypt_success:
             self._cleanup_temp_db()
         elif encryption_attempted:
-            self.logger.critical("Preserving temporary database file due to encryption failure.")
+            self.logger.critical(
+                "Preserving temporary database file due to encryption failure."
+            )
             self._cleanup_temp_db(keep_file=True)
         else:
             # No encryption attempt (already closed earlier); ensure temp artifacts are cleared.
@@ -783,14 +883,18 @@ class DatabaseManager:
         if not self.temp_db_path:
             return None
         try:
-            import sqlite3 as _sqlite3, tempfile as _tempfile
+            import sqlite3 as _sqlite3
+            import tempfile as _tempfile
+
             # Prepare destination temporary file path
             tmp = _tempfile.NamedTemporaryFile(delete=False, suffix=".sqlite")
             snapshot_path = tmp.name
             tmp.close()
             # Open a read-only connection to source DB (separate from main connection)
             try:
-                src = _sqlite3.connect(f"file:{self.temp_db_path}?mode=ro", uri=True, timeout=5)
+                src = _sqlite3.connect(
+                    f"file:{self.temp_db_path}?mode=ro", uri=True, timeout=5
+                )
             except Exception:
                 # Fallback to a normal connection if URI not supported
                 src = _sqlite3.connect(self.temp_db_path, timeout=5)
@@ -814,6 +918,7 @@ class DatabaseManager:
                 pass
             # Best-effort: return None to fall back to direct file read
             return None
+
     def _checkpoint_wal(self):
         """Force a WAL checkpoint so the main DB file contains latest data.
 
@@ -823,6 +928,7 @@ class DatabaseManager:
             return False
         try:
             import sqlite3 as _sqlite3
+
             conn = _sqlite3.connect(self.temp_db_path, timeout=5)
             try:
                 conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
@@ -835,6 +941,7 @@ class DatabaseManager:
             except Exception:
                 pass
             return False
+
     @staticmethod
     def _get_or_create_salt_static(logger=None):
         settings = get_app_settings()
@@ -860,33 +967,42 @@ class DatabaseManager:
         return None
 
     @staticmethod
-    def recover_encrypt_plain_to_encrypted(plain_temp_path, encrypted_db_path, password, logger=None):
+    def recover_encrypt_plain_to_encrypted(
+        plain_temp_path, encrypted_db_path, password, logger=None
+    ):
         """Encrypt a plaintext SQLite DB file to the encrypted DB atomically using the app's KDF.
 
         Returns True on success, False otherwise.
         """
         try:
             if not os.path.exists(plain_temp_path):
-                if logger: logger.error(f"Recovery failed: temp file not found: {plain_temp_path}")
+                if logger:
+                    logger.error(
+                        f"Recovery failed: temp file not found: {plain_temp_path}"
+                    )
                 return False
             # Derive key with same KDF and salt
             salt = DatabaseManager._get_or_create_salt_static(logger=logger)
-            key = crypto_utils.derive_key(password, salt, iterations=KDF_ITERATIONS, logger=logger)
+            key = crypto_utils.derive_key(
+                password, salt, iterations=KDF_ITERATIONS, logger=logger
+            )
 
-            with open(plain_temp_path, 'rb') as f_in:
+            with open(plain_temp_path, "rb") as f_in:
                 plaintext = f_in.read()
 
             payload = crypto_utils.encrypt_payload(plaintext, key, logger=logger)
 
             tmp_out_path = f"{encrypted_db_path}.new"
-            with open(tmp_out_path, 'wb') as f_out:
+            with open(tmp_out_path, "wb") as f_out:
                 f_out.write(payload)
                 try:
-                    f_out.flush(); os.fsync(f_out.fileno())
+                    f_out.flush()
+                    os.fsync(f_out.fileno())
                 except Exception:
                     pass
             os.replace(tmp_out_path, encrypted_db_path)
-            if logger: logger.info("Recovered and encrypted temp DB into encrypted store.")
+            if logger:
+                logger.info("Recovered and encrypted temp DB into encrypted store.")
             # Best-effort: remove the plaintext temp file now that it's recovered
             try:
                 os.remove(plain_temp_path)
@@ -904,13 +1020,3 @@ class DatabaseManager:
             if logger:
                 logger.error(f"Recovery encryption failed: {str(e)}", exc_info=True)
             return False
-
-
-
-
-
-
-
-
-
-

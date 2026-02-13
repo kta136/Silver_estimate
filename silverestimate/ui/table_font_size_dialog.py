@@ -1,10 +1,17 @@
 #!/usr/bin/env python
 import sys
-from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-    QSpinBox, QDialogButtonBox, QApplication
-)
+
 from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import (
+    QApplication,
+    QDialog,
+    QDialogButtonBox,
+    QHBoxLayout,
+    QLabel,
+    QSpinBox,
+    QVBoxLayout,
+)
+
 
 class TableFontSizeDialog(QDialog):
     """Dialog to select font size for the estimate table."""
@@ -16,11 +23,13 @@ class TableFontSizeDialog(QDialog):
 
         # --- Widgets ---
         self.size_spinbox = QSpinBox(self)
-        self.size_spinbox.setRange(7, 16) # Same range as before
+        self.size_spinbox.setRange(7, 16)  # Same range as before
         self.size_spinbox.setValue(current_size)
         self.size_spinbox.setSuffix(" pt")
 
-        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+        self.button_box = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self
+        )
 
         # --- Layout ---
         layout = QVBoxLayout(self)
@@ -38,13 +47,15 @@ class TableFontSizeDialog(QDialog):
         """Return the selected font size."""
         return self.size_spinbox.value()
 
+
 # Example usage (for testing)
-if __name__ == '__main__':
+if __name__ == "__main__":
     app = QApplication(sys.argv)
     # Example: Assume current size is 10
     dialog = TableFontSizeDialog(current_size=10)
     if dialog.exec_() == QDialog.Accepted:
         size = dialog.get_selected_size()
         import logging
+
         logging.getLogger(__name__).debug(f"Selected table font size: {size}pt")
     sys.exit()

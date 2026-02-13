@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import threading
 import traceback
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from PyQt5.QtCore import QDate, QLocale, QTimer
 from PyQt5.QtWidgets import QMessageBox
@@ -306,7 +306,8 @@ class _EstimateBaseMixin:
                     updater()
                 except Exception:
                     self.logger.debug(
-                        "View-model snapshot update failed during clear_form", exc_info=True
+                        "View-model snapshot update failed during clear_form",
+                        exc_info=True,
                     )
 
     def confirm_exit(self) -> bool:

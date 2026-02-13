@@ -1,4 +1,5 @@
 import types
+
 import pytest
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QTableWidgetItem
@@ -18,7 +19,6 @@ from silverestimate.ui.estimate_entry_logic import (
     COL_WAGE_AMT,
     COL_WAGE_RATE,
 )
-
 from tests.factories import regular_item, return_item, silver_bar_item
 
 
@@ -66,7 +66,7 @@ def _set_row(widget, row, item):
     table.setItem(row, COL_NET_WT, QTableWidgetItem(f"{net:.2f}"))
     table.setItem(row, COL_FINE_WT, QTableWidgetItem(f"{fine:.2f}"))
     table.setItem(row, COL_WAGE_AMT, QTableWidgetItem(f"{wage:.0f}"))
-    
+
     # Manually set type for test
     type_item = table.item(row, COL_TYPE) or QTableWidgetItem()
     if item.get("is_silver_bar"):
@@ -106,7 +106,9 @@ class _RepositoryStub:
         if callable(deleter):
             deleter(voucher_no)
 
-    def save_estimate(self, voucher_no, date, silver_rate, regular_items, return_items, totals):
+    def save_estimate(
+        self, voucher_no, date, silver_rate, regular_items, return_items, totals
+    ):
         saver = getattr(self.db, "save_estimate_with_returns", None)
         if callable(saver):
             return bool(
@@ -164,6 +166,7 @@ def _make_widget(db_manager):
         pass
     return widget
 
+
 def test_widget_generates_voucher_on_init(qt_app, fake_db):
     widget = _make_widget(fake_db)
     try:
@@ -184,7 +187,9 @@ def test_widget_calculates_totals(qt_app, fake_db):
     assert float(table.item(0, COL_NET_WT).text()) == pytest.approx(9.00)
     expected_fine = (10 - 1) * (92.5 / 100.0)
     # Using larger tolerance due to rounding issues (8.325 -> 8.33)
-    assert float(table.item(0, COL_FINE_WT).text()) == pytest.approx(expected_fine, abs=0.01)
+    assert float(table.item(0, COL_FINE_WT).text()) == pytest.approx(
+        expected_fine, abs=0.01
+    )
     assert float(table.item(0, COL_WAGE_AMT).text()) == pytest.approx(90.0)
 
     assert float(widget.total_gross_label.text()) == pytest.approx(10.0)

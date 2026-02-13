@@ -45,7 +45,9 @@ def test_live_rate_service_emits_broadcast(qt_app, monkeypatch, settings_stub):
     assert service._rate_fetch_in_progress is False
 
 
-def test_live_rate_service_uses_fallback_when_broadcast_fails(qt_app, monkeypatch, settings_stub):
+def test_live_rate_service_uses_fallback_when_broadcast_fails(
+    qt_app, monkeypatch, settings_stub
+):
     _patch_thread_to_run_inline(monkeypatch)
     settings_stub().setValue("rates/live_enabled", True)
 

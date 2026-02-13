@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QDate, pyqtSignal, Qt
+from PyQt5.QtCore import QDate, Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QDateEdit,
     QDoubleSpinBox,
@@ -47,16 +47,14 @@ class VoucherToolbar(QWidget):
         container_layout = QVBoxLayout(self)
         container_layout.setSpacing(2)
         container_layout.setContentsMargins(6, 2, 6, 2)
-        self.setStyleSheet(
-            """
+        self.setStyleSheet("""
             QWidget#VoucherToolbar {
                 background-color: transparent;
             }
             QLabel#NotePreviewLabel {
                 min-height: 22px;
             }
-            """
-        )
+            """)
 
         # Main layout - single row, minimal padding
         main_layout = QHBoxLayout()

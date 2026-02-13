@@ -99,9 +99,7 @@ def _make_builder(startup_result, main_window_factory, tmp_path):
     }
 
     def startup_controller_factory(logger=None):
-        return types.SimpleNamespace(
-            authenticate_and_prepare=lambda: startup_result
-        )
+        return types.SimpleNamespace(authenticate_and_prepare=lambda: startup_result)
 
     return ApplicationBuilder(
         main_window_factory=main_window_factory,

@@ -1,4 +1,5 @@
 """Inline status message helper for UI widgets."""
+
 from __future__ import annotations
 
 import logging

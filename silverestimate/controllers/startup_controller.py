@@ -1,4 +1,5 @@
 """Application startup orchestration for authentication and database initialization."""
+
 from __future__ import annotations
 
 import logging
@@ -53,7 +54,9 @@ class StartupController:
         try:
             auth_result = run_authentication(self._logger, parent=self._parent)
         except Exception as exc:  # pragma: no cover - defensive UX handling
-            self._logger.critical("Authentication failed with error: %s", exc, exc_info=True)
+            self._logger.critical(
+                "Authentication failed with error: %s", exc, exc_info=True
+            )
             QMessageBox.critical(
                 self._parent,
                 "Authentication Error",
@@ -79,7 +82,9 @@ class StartupController:
                     self._logger.critical("Data wipe failed")
             except Exception as exc:  # pragma: no cover - UX fallback
                 if not silent:
-                    self._logger.critical("Data wipe raised exception: %s", exc, exc_info=True)
+                    self._logger.critical(
+                        "Data wipe raised exception: %s", exc, exc_info=True
+                    )
                 QMessageBox.critical(
                     self._parent,
                     "Data Wipe Error",
@@ -89,11 +94,15 @@ class StartupController:
             return StartupResult(status=StartupStatus.FAILED)
 
         if auth_result is None:
-            self._logger.info("Authentication cancelled or failed; exiting startup sequence")
+            self._logger.info(
+                "Authentication cancelled or failed; exiting startup sequence"
+            )
             return StartupResult(status=StartupStatus.CANCELLED)
 
         if not isinstance(auth_result, AuthenticationResult):
-            self._logger.critical("Unexpected authentication result type: %r", auth_result)
+            self._logger.critical(
+                "Unexpected authentication result type: %r", auth_result
+            )
             return StartupResult(status=StartupStatus.FAILED)
 
         db_manager = self._initialize_database(auth_result.password or "")
@@ -106,7 +115,9 @@ class StartupController:
         try:
             os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
         except OSError as exc:
-            self._logger.critical("Failed to prepare database directory: %s", exc, exc_info=True)
+            self._logger.critical(
+                "Failed to prepare database directory: %s", exc, exc_info=True
+            )
             QMessageBox.critical(
                 self._parent,
                 "Database Error",
@@ -117,7 +128,9 @@ class StartupController:
         try:
             candidate = DatabaseManager.check_recovery_candidate(DB_PATH)
         except Exception as exc:  # pragma: no cover - defensive logging
-            self._logger.error("Recovery candidate check failed: %s", exc, exc_info=True)
+            self._logger.error(
+                "Recovery candidate check failed: %s", exc, exc_info=True
+            )
             candidate = None
 
         if candidate:
@@ -143,16 +156,22 @@ class StartupController:
                     ):
                         self._logger.info("Recovery successful; continuing startup")
                     else:
-                        self._logger.error("Recovery failed; continuing with last encrypted state")
+                        self._logger.error(
+                            "Recovery failed; continuing with last encrypted state"
+                        )
                 except Exception as exc:  # pragma: no cover - best effort logging
-                    self._logger.error("Recovery operation raised error: %s", exc, exc_info=True)
+                    self._logger.error(
+                        "Recovery operation raised error: %s", exc, exc_info=True
+                    )
 
         try:
             db_manager = DatabaseManager(DB_PATH, password=password)
             self._logger.info("Database connection established")
             return db_manager
         except Exception as exc:
-            self._logger.critical("Failed to connect to encrypted database: %s", exc, exc_info=True)
+            self._logger.critical(
+                "Failed to connect to encrypted database: %s", exc, exc_info=True
+            )
             error_details = (
                 f"Failed to connect to encrypted database: {exc}\n\n"
                 "This could be due to:\n"

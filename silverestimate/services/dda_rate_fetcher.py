@@ -27,7 +27,9 @@ BROADCAST_URL = BROADCAST_URLS[0]
 BROADCAST_CLIENT = "ddasil"
 
 
-def fetch_silver_agra_local_mohar_rate(base_url: str = DEFAULT_BASE_URL, timeout: int = 10):
+def fetch_silver_agra_local_mohar_rate(
+    base_url: str = DEFAULT_BASE_URL, timeout: int = 10
+):
     """
     Fetch the live rate for 'Silver Agra Local Mohar' by scraping the DDASilver homepage.
 
@@ -133,6 +135,7 @@ def _parse_scraped_rate(html: str, target_name: str):
         metadata["raw_source"] = source
     return rate_val, metadata
 
+
 def _main():
     rate, meta = fetch_silver_agra_local_mohar_rate()
     if rate is None:
@@ -142,6 +145,7 @@ def _main():
     else:
         print(rate)
 
+
 def _lookup_com_id_for_target(base_url: str = DEFAULT_BASE_URL, timeout: int = 10):
     """Resolve com_id for TARGET_NAME via the scraped metadata."""
     rate, item = fetch_silver_agra_local_mohar_rate(base_url=base_url, timeout=timeout)
@@ -149,6 +153,7 @@ def _lookup_com_id_for_target(base_url: str = DEFAULT_BASE_URL, timeout: int = 1
         return int(item.get("com_id")) if item else None
     except Exception:
         return None
+
 
 def fetch_broadcast_rate_exact(
     timeout: int = 10,
@@ -165,11 +170,16 @@ def fetch_broadcast_rate_exact(
     - market_open_bool: False when the broadcast signals market closed/message mode
     - info: auxiliary data (e.g., matched com_id)
     """
-    import urllib.request, json
+    import json
+    import urllib.request
 
     # Prefer the known com_id (47) to avoid blocking on the website during lookup.
     # Only attempt dynamic lookup if explicitly requested and broadcast parsing fails.
-    com_id = 47 if prefer_static_id else (_lookup_com_id_for_target(base_url=base_url, timeout=timeout) or 47)
+    com_id = (
+        47
+        if prefer_static_id
+        else (_lookup_com_id_for_target(base_url=base_url, timeout=timeout) or 47)
+    )
 
     payload = json.dumps({"client": client}).encode("utf-8")
     endpoint_used = None
@@ -223,7 +233,10 @@ def _fetch_broadcast_payload(endpoint: str, payload: bytes, timeout: int) -> str
     req = urllib.request.Request(
         endpoint,
         data=payload,
-        headers={"Content-Type": "application/json", "User-Agent": "SilverEstimate/1.0"},
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": "SilverEstimate/1.0",
+        },
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=timeout) as resp:

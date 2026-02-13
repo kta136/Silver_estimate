@@ -140,7 +140,11 @@ class WageCalculationCase:
 
     @property
     def expected_wage(self) -> float:
-        base = self.pieces * self.wage_rate if self.wage_type == "PC" else self.net_weight * self.wage_rate
+        base = (
+            self.pieces * self.wage_rate
+            if self.wage_type == "PC"
+            else self.net_weight * self.wage_rate
+        )
         return round(base)
 
 
@@ -149,12 +153,20 @@ def fine_calculation_cases():
     if not _HYPOTHESIS_AVAILABLE:  # pragma: no cover - optional dependency
         raise RuntimeError("Hypothesis is not installed")
 
-    weight = st.floats(min_value=0.0, max_value=250.0, allow_nan=False, allow_infinity=False)
-    ratio = st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False)
-    purity = st.floats(min_value=0.0, max_value=100.0, allow_nan=False, allow_infinity=False)
+    weight = st.floats(
+        min_value=0.0, max_value=250.0, allow_nan=False, allow_infinity=False
+    )
+    ratio = st.floats(
+        min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False
+    )
+    purity = st.floats(
+        min_value=0.0, max_value=100.0, allow_nan=False, allow_infinity=False
+    )
 
     return st.builds(
-        lambda gross, r, pur: FineCalculationCase(gross=gross, poly=gross * r, purity=pur),
+        lambda gross, r, pur: FineCalculationCase(
+            gross=gross, poly=gross * r, purity=pur
+        ),
         gross=weight,
         r=ratio,
         pur=purity,
@@ -167,8 +179,12 @@ def wage_calculation_cases():
         raise RuntimeError("Hypothesis is not installed")
 
     wage_type = st.sampled_from(["WT", "PC"])
-    net = st.floats(min_value=0.0, max_value=250.0, allow_nan=False, allow_infinity=False)
-    rate = st.floats(min_value=0.0, max_value=500.0, allow_nan=False, allow_infinity=False)
+    net = st.floats(
+        min_value=0.0, max_value=250.0, allow_nan=False, allow_infinity=False
+    )
+    rate = st.floats(
+        min_value=0.0, max_value=500.0, allow_nan=False, allow_infinity=False
+    )
     pieces = st.integers(min_value=0, max_value=25)
 
     return st.builds(

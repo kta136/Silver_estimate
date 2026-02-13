@@ -4,6 +4,7 @@ Windows-specific helpers for taskbar behaviour and AppUserModelID management.
 These functions are safe to import on any platform; they simply no-op when
 executed outside of Windows.
 """
+
 from __future__ import annotations
 
 import sys
@@ -32,7 +33,9 @@ def set_app_user_model_id(app_id: str, logger=None) -> None:
             logger.debug("Failed to set AppUserModelID: %s", exc)
 
 
-def apply_taskbar_icon(hwnd: Optional[int], icon_path: Path, logger=None) -> Optional[int]:
+def apply_taskbar_icon(
+    hwnd: Optional[int], icon_path: Path, logger=None
+) -> Optional[int]:
     """
     Force the Windows taskbar to use a specific icon for the given window.
 

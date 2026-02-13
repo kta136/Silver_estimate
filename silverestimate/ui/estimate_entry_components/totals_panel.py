@@ -64,35 +64,35 @@ class TotalsPanel(QWidget):
 
         # Overall Totals (leftmost): Total Gross and Total Poly
         overall_labels = [
-            ("Total Gross Wt:", 'overall_gross_label', "0.0"),
-            ("Total Poly Wt:", 'overall_poly_label', "0.0"),
+            ("Total Gross Wt:", "overall_gross_label", "0.0"),
+            ("Total Poly Wt:", "overall_poly_label", "0.0"),
         ]
         main_layout.addLayout(create_breakdown_form("Totals", overall_labels))
         main_layout.addWidget(create_separator())
 
         # Regular Items
         regular_labels = [
-            ("Gross Wt:", 'total_gross_label', "0.0"),
-            ("Net Wt:", 'total_net_label', "0.0"),
-            ("Fine Wt:", 'total_fine_label', "0.0"),
+            ("Gross Wt:", "total_gross_label", "0.0"),
+            ("Net Wt:", "total_net_label", "0.0"),
+            ("Fine Wt:", "total_fine_label", "0.0"),
         ]
         main_layout.addLayout(create_breakdown_form("Regular", regular_labels))
         main_layout.addWidget(create_separator())
 
         # Return Items
         return_labels = [
-            ("Gross Wt:", 'return_gross_label', "0.0"),
-            ("Net Wt:", 'return_net_label', "0.0"),
-            ("Fine Wt:", 'return_fine_label', "0.0"),
+            ("Gross Wt:", "return_gross_label", "0.0"),
+            ("Net Wt:", "return_net_label", "0.0"),
+            ("Fine Wt:", "return_fine_label", "0.0"),
         ]
         main_layout.addLayout(create_breakdown_form("Return", return_labels))
         main_layout.addWidget(create_separator())
 
         # Silver Bars
         bar_labels = [
-            ("Gross Wt:", 'bar_gross_label', "0.0"),
-            ("Net Wt:", 'bar_net_label', "0.0"),
-            ("Fine Wt:", 'bar_fine_label', "0.0"),
+            ("Gross Wt:", "bar_gross_label", "0.0"),
+            ("Net Wt:", "bar_net_label", "0.0"),
+            ("Fine Wt:", "bar_fine_label", "0.0"),
         ]
         main_layout.addLayout(create_breakdown_form("Silver Bar", bar_labels))
 
@@ -118,7 +118,9 @@ class TotalsPanel(QWidget):
         self.net_fine_label = QLabel("0.0")
         self.net_fine_label.setStyleSheet("font-weight: bold;")
         self.net_fine_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.net_fine_label.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
+        self.net_fine_label.setSizePolicy(
+            QSizePolicy.MinimumExpanding, QSizePolicy.Preferred
+        )
         self.net_fine_label.setMinimumWidth(100)
         net_fine_header = QLabel("Net Fine Wt:")
         net_fine_font = self.net_fine_label.font()
@@ -134,7 +136,9 @@ class TotalsPanel(QWidget):
         self.net_wage_label = QLabel("0")
         self.net_wage_label.setStyleSheet("font-weight: bold;")
         self.net_wage_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.net_wage_label.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
+        self.net_wage_label.setSizePolicy(
+            QSizePolicy.MinimumExpanding, QSizePolicy.Preferred
+        )
         self.net_wage_label.setMinimumWidth(100)
         net_wage_header = QLabel("Net Wage:")
         net_wage_font = self.net_wage_label.font()
@@ -156,7 +160,9 @@ class TotalsPanel(QWidget):
         self.grand_total_label = QLabel("0")
         self.grand_total_label.setStyleSheet("font-weight: bold; color: #059669;")
         self.grand_total_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.grand_total_label.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
+        self.grand_total_label.setSizePolicy(
+            QSizePolicy.MinimumExpanding, QSizePolicy.Preferred
+        )
         self.grand_total_label.setMinimumWidth(100)
         grand_total_header = QLabel("Grand Total:")
         grand_total_font = self.grand_total_label.font()
@@ -237,10 +243,17 @@ class TotalsPanel(QWidget):
             size: Font point size
         """
         labels = [
-            self.overall_gross_label, self.overall_poly_label,
-            self.total_gross_label, self.total_net_label, self.total_fine_label,
-            self.return_gross_label, self.return_net_label, self.return_fine_label,
-            self.bar_gross_label, self.bar_net_label, self.bar_fine_label
+            self.overall_gross_label,
+            self.overall_poly_label,
+            self.total_gross_label,
+            self.total_net_label,
+            self.total_fine_label,
+            self.return_gross_label,
+            self.return_net_label,
+            self.return_fine_label,
+            self.bar_gross_label,
+            self.bar_net_label,
+            self.bar_fine_label,
         ]
         for label in labels:
             font = label.font()

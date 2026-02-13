@@ -1,8 +1,8 @@
 """Utility helpers for application QSettings access."""
+
 from PyQt5.QtCore import QSettings
 
-from .app_constants import SETTINGS_ORG, SETTINGS_APP
-
+from .app_constants import SETTINGS_APP, SETTINGS_ORG
 
 ENABLE_TEMP_DB_RECOVERY = True
 

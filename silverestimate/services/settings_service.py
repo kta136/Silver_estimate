@@ -1,4 +1,5 @@
 """Application settings service built on QSettings."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -6,7 +7,6 @@ from dataclasses import dataclass
 from PyQt5.QtGui import QFont
 
 from silverestimate.infrastructure.settings import QSettings, get_app_settings
-
 
 
 @dataclass
@@ -34,7 +34,9 @@ class SettingsService:
     # --- Fonts ---------------------------------------------------------
     def load_print_font(self, default_font: QFont) -> QFont:
         family = self._settings.value("font/family", default_font.family(), type=str)
-        size = self._settings.value("font/size_float", default_font.pointSizeF(), type=float)
+        size = self._settings.value(
+            "font/size_float", default_font.pointSizeF(), type=float
+        )
         bold = self._settings.value("font/bold", default_font.bold(), type=bool)
         size = max(5.0, float(size))
         return FontSettings(family, size, bold).to_qfont()
@@ -47,7 +49,9 @@ class SettingsService:
         self._settings.sync()
 
     def load_table_font_size(self, default_size: int = 9) -> int:
-        size = self._settings.value("ui/table_font_size", defaultValue=int(default_size), type=int)
+        size = self._settings.value(
+            "ui/table_font_size", defaultValue=int(default_size), type=int
+        )
         try:
             return int(size)
         except (TypeError, ValueError):

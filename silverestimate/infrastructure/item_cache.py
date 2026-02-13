@@ -1,4 +1,5 @@
 """Item cache utilities shared across database/persistence layers."""
+
 from __future__ import annotations
 
 import logging
@@ -102,10 +103,3 @@ class ItemCacheController:
             thread.start()
         except Exception:
             self._thread = None
-
-
-
-
-
-
-

@@ -7,6 +7,7 @@ This test module verifies:
 """
 
 import types
+
 import pytest
 from PyQt5.QtCore import Qt
 from PyQt5.QtTest import QTest
@@ -18,6 +19,7 @@ from silverestimate.ui.estimate_entry_logic import COL_TYPE
 @pytest.fixture
 def fake_db():
     """Create a minimal fake database for testing."""
+
     class _DB:
         def __init__(self):
             self.item_cache_controller = None
@@ -35,6 +37,7 @@ def fake_db():
 
 class _RepositoryStub:
     """Minimal repository stub for testing."""
+
     def __init__(self, db):
         self.db = db
 
@@ -85,7 +88,9 @@ def test_return_mode_button_updates_row_type(qt_app, fake_db):
         type_item = widget.item_table.item(last_row, COL_TYPE)
         assert type_item.text() == "No", "Should start in regular mode"
         assert not widget.return_mode, "Return mode should be off"
-        assert not widget.return_toggle_button.isChecked(), "Button should not be checked"
+        assert (
+            not widget.return_toggle_button.isChecked()
+        ), "Button should not be checked"
 
         # Click return button
         widget.return_toggle_button.click()
@@ -107,7 +112,9 @@ def test_return_mode_button_updates_row_type(qt_app, fake_db):
         type_item = widget.item_table.item(last_row, COL_TYPE)
         assert type_item.text() == "No", "Row type should be back to 'regular'"
         assert not widget.return_mode, "Return mode should be off"
-        assert not widget.return_toggle_button.isChecked(), "Button should not be checked"
+        assert (
+            not widget.return_toggle_button.isChecked()
+        ), "Button should not be checked"
 
     finally:
         widget.deleteLater()
@@ -125,7 +132,9 @@ def test_silver_bar_mode_button_updates_row_type(qt_app, fake_db):
         type_item = widget.item_table.item(last_row, COL_TYPE)
         assert type_item.text() == "No", "Should start in regular mode"
         assert not widget.silver_bar_mode, "Silver bar mode should be off"
-        assert not widget.silver_bar_toggle_button.isChecked(), "Button should not be checked"
+        assert (
+            not widget.silver_bar_toggle_button.isChecked()
+        ), "Button should not be checked"
 
         # Click silver bar button
         widget.silver_bar_toggle_button.click()
@@ -134,7 +143,9 @@ def test_silver_bar_mode_button_updates_row_type(qt_app, fake_db):
         # Verify silver bar mode activated
         last_row = widget.item_table.rowCount() - 1
         type_item = widget.item_table.item(last_row, COL_TYPE)
-        assert type_item.text() == "Silver Bar", "Row type should change to 'silver_bar'"
+        assert (
+            type_item.text() == "Silver Bar"
+        ), "Row type should change to 'silver_bar'"
         assert widget.silver_bar_mode, "Silver bar mode should be on"
         assert widget.silver_bar_toggle_button.isChecked(), "Button should be checked"
 
@@ -147,7 +158,9 @@ def test_silver_bar_mode_button_updates_row_type(qt_app, fake_db):
         type_item = widget.item_table.item(last_row, COL_TYPE)
         assert type_item.text() == "No", "Row type should be back to 'regular'"
         assert not widget.silver_bar_mode, "Silver bar mode should be off"
-        assert not widget.silver_bar_toggle_button.isChecked(), "Button should not be checked"
+        assert (
+            not widget.silver_bar_toggle_button.isChecked()
+        ), "Button should not be checked"
 
     finally:
         widget.deleteLater()
@@ -174,9 +187,13 @@ def test_mode_toggles_are_mutually_exclusive(qt_app, fake_db):
         QTest.qWait(50)
 
         assert not widget.return_mode, "Return mode should be OFF (mutual exclusion)"
-        assert not widget.return_toggle_button.isChecked(), "Return button should be unchecked"
+        assert (
+            not widget.return_toggle_button.isChecked()
+        ), "Return button should be unchecked"
         assert widget.silver_bar_mode, "Silver bar mode should be on"
-        assert widget.silver_bar_toggle_button.isChecked(), "Silver bar button should be checked"
+        assert (
+            widget.silver_bar_toggle_button.isChecked()
+        ), "Silver bar button should be checked"
 
         # Verify row type is silver_bar
         last_row = widget.item_table.rowCount() - 1
@@ -188,9 +205,15 @@ def test_mode_toggles_are_mutually_exclusive(qt_app, fake_db):
         QTest.qWait(50)
 
         assert widget.return_mode, "Return mode should be on"
-        assert widget.return_toggle_button.isChecked(), "Return button should be checked"
-        assert not widget.silver_bar_mode, "Silver bar mode should be OFF (mutual exclusion)"
-        assert not widget.silver_bar_toggle_button.isChecked(), "Silver bar button should be unchecked"
+        assert (
+            widget.return_toggle_button.isChecked()
+        ), "Return button should be checked"
+        assert (
+            not widget.silver_bar_mode
+        ), "Silver bar mode should be OFF (mutual exclusion)"
+        assert (
+            not widget.silver_bar_toggle_button.isChecked()
+        ), "Silver bar button should be unchecked"
 
         # Verify row type is return
         last_row = widget.item_table.rowCount() - 1
@@ -229,7 +252,9 @@ def test_ctrl_r_keyboard_shortcut_toggles_return_mode(qt_app, fake_db):
 
         # Verify back to regular mode
         assert not widget.return_mode, "Ctrl+R should toggle off return mode"
-        assert not widget.return_toggle_button.isChecked(), "Button should reflect state"
+        assert (
+            not widget.return_toggle_button.isChecked()
+        ), "Button should reflect state"
 
         last_row = widget.item_table.rowCount() - 1
         type_item = widget.item_table.item(last_row, COL_TYPE)
@@ -255,7 +280,9 @@ def test_ctrl_b_keyboard_shortcut_toggles_silver_bar_mode(qt_app, fake_db):
 
         # Verify silver bar mode activated
         assert widget.silver_bar_mode, "Ctrl+B should activate silver bar mode"
-        assert widget.silver_bar_toggle_button.isChecked(), "Button should reflect state"
+        assert (
+            widget.silver_bar_toggle_button.isChecked()
+        ), "Button should reflect state"
 
         last_row = widget.item_table.rowCount() - 1
         type_item = widget.item_table.item(last_row, COL_TYPE)
@@ -267,7 +294,9 @@ def test_ctrl_b_keyboard_shortcut_toggles_silver_bar_mode(qt_app, fake_db):
 
         # Verify back to regular mode
         assert not widget.silver_bar_mode, "Ctrl+B should toggle off silver bar mode"
-        assert not widget.silver_bar_toggle_button.isChecked(), "Button should reflect state"
+        assert (
+            not widget.silver_bar_toggle_button.isChecked()
+        ), "Button should reflect state"
 
         last_row = widget.item_table.rowCount() - 1
         type_item = widget.item_table.item(last_row, COL_TYPE)

@@ -1,4 +1,5 @@
 """Async flush scheduling for database encryption writes."""
+
 from __future__ import annotations
 
 import logging
@@ -54,11 +55,15 @@ class FlushScheduler:
                     try:
                         self._commit()
                     except Exception as exc:  # pragma: no cover - defensive logging
-                        self._logger.debug("Commit before flush failed: %s", exc, exc_info=True)
+                        self._logger.debug(
+                            "Commit before flush failed: %s", exc, exc_info=True
+                        )
                     try:
                         self._checkpoint()
                     except Exception as exc:  # pragma: no cover - best effort only
-                        self._logger.debug("Checkpoint before flush failed: %s", exc, exc_info=True)
+                        self._logger.debug(
+                            "Checkpoint before flush failed: %s", exc, exc_info=True
+                        )
                     self._encrypt()
                 except Exception as exc:  # pragma: no cover - error bubbled to logs
                     self._logger.error("Async flush failed: %s", exc, exc_info=True)
@@ -67,7 +72,9 @@ class FlushScheduler:
                         self._in_progress = False
                     self._invoke_callback(self._on_done_getter())
 
-            thread = threading.Thread(target=_worker, name="DBEncryptFlush", daemon=True)
+            thread = threading.Thread(
+                target=_worker, name="DBEncryptFlush", daemon=True
+            )
             thread.start()
             with self._lock:
                 self._thread = thread
@@ -87,7 +94,9 @@ class FlushScheduler:
 
         self._invoke_callback(self._on_queued_getter())
 
-    def shutdown(self, *, wait: bool = True, join_timeout: float = 8.0, poll_timeout: float = 2.0) -> None:
+    def shutdown(
+        self, *, wait: bool = True, join_timeout: float = 8.0, poll_timeout: float = 2.0
+    ) -> None:
         """Cancel pending timers and optionally wait for active work."""
         with self._lock:
             timer = self._timer
@@ -109,7 +118,9 @@ class FlushScheduler:
         if callable(callback):
             try:
                 callback()
-            except Exception as exc:  # pragma: no cover - UI callback must not break flush
+            except (
+                Exception
+            ) as exc:  # pragma: no cover - UI callback must not break flush
                 self._logger.debug("Flush callback raised: %s", exc, exc_info=True)
 
     def _debug(self, message: str) -> None:

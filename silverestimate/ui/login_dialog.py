@@ -1,12 +1,24 @@
 import sys
-# import bcrypt # No longer needed
-from passlib.context import CryptContext # Import CryptContext
-from passlib.exc import UnknownHashError, PasslibSecurityWarning # Import specific exceptions
-import warnings # To potentially filter passlib warnings if needed
+import warnings  # To potentially filter passlib warnings if needed
 
-from PyQt5.QtWidgets import (QDialog, QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout,
-                             QMessageBox, QApplication, QFormLayout)
+# import bcrypt # No longer needed
+from passlib.context import CryptContext  # Import CryptContext
+from passlib.exc import (  # Import specific exceptions
+    PasslibSecurityWarning,
+    UnknownHashError,
+)
 from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import (
+    QApplication,
+    QDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+)
 
 # Configure passlib context for Argon2 (recommended)
 # Schemes='default' will use the first scheme listed (argon2) for hashing.
@@ -16,19 +28,23 @@ pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
 # Optional: Filter specific passlib warnings if they become noisy during development/packaging
 # warnings.filterwarnings("ignore", category=PasslibSecurityWarning)
 
+
 class LoginDialog(QDialog):
     """
     Dialog for user authentication (login) and initial password setup.
     """
+
     def __init__(self, is_setup=False, parent=None):
         super().__init__(parent)
         self.is_setup = is_setup
-        self.setWindowTitle("Authentication Required" if not is_setup else "Create Passwords")
-        self.setModal(True) # Ensure user interacts with this dialog first
+        self.setWindowTitle(
+            "Authentication Required" if not is_setup else "Create Passwords"
+        )
+        self.setModal(True)  # Ensure user interacts with this dialog first
 
         self._password = ""
-        self._backup_password = "" # Only used in setup mode
-        self.reset_requested = False # Add flag to track reset request
+        self._backup_password = ""  # Only used in setup mode
+        self.reset_requested = False  # Add flag to track reset request
 
         self._setup_ui()
         self._connect_signals()
@@ -45,9 +61,13 @@ class LoginDialog(QDialog):
         self.password_input = QLineEdit()
         self.password_input.setEchoMode(QLineEdit.Password)
         if self.is_setup:
-            self.password_input.setToolTip("Enter your main password for database access\nThis password encrypts your data\nChoose a strong, memorable password")
+            self.password_input.setToolTip(
+                "Enter your main password for database access\nThis password encrypts your data\nChoose a strong, memorable password"
+            )
         else:
-            self.password_input.setToolTip("Enter your password to access the application\nPress Enter to login\nUse Reset button if password is forgotten")
+            self.password_input.setToolTip(
+                "Enter your password to access the application\nPress Enter to login\nUse Reset button if password is forgotten"
+            )
         form_layout.addRow(self.password_label, self.password_input)
 
         if self.is_setup:
@@ -55,14 +75,18 @@ class LoginDialog(QDialog):
             self.backup_password_label = QLabel("Secondary Password:")
             self.backup_password_input = QLineEdit()
             self.backup_password_input.setEchoMode(QLineEdit.Password)
-            self.backup_password_input.setToolTip("Enter a different secondary password\nMust be different from main password\nUsed for emergency access and data management")
+            self.backup_password_input.setToolTip(
+                "Enter a different secondary password\nMust be different from main password\nUsed for emergency access and data management"
+            )
             form_layout.addRow(self.backup_password_label, self.backup_password_input)
 
             # Renamed label
             self.confirm_password_label = QLabel("Confirm Secondary Password:")
             self.confirm_password_input = QLineEdit()
             self.confirm_password_input.setEchoMode(QLineEdit.Password)
-            self.confirm_password_input.setToolTip("Re-enter the secondary password to confirm\nMust match exactly\nEnsures password was typed correctly")
+            self.confirm_password_input.setToolTip(
+                "Re-enter the secondary password to confirm\nMust match exactly\nEnsures password was typed correctly"
+            )
             form_layout.addRow(self.confirm_password_label, self.confirm_password_input)
 
             # Removed the informational label explaining the wipe function
@@ -73,36 +97,48 @@ class LoginDialog(QDialog):
 
         # Buttons
         button_layout = QHBoxLayout()
-        self.ok_button = QPushButton("Login" if not self.is_setup else "Create Passwords")
+        self.ok_button = QPushButton(
+            "Login" if not self.is_setup else "Create Passwords"
+        )
         if self.is_setup:
-            self.ok_button.setToolTip("Create passwords and initialize the application\nBoth passwords will be saved securely\nApplication will start after setup")
+            self.ok_button.setToolTip(
+                "Create passwords and initialize the application\nBoth passwords will be saved securely\nApplication will start after setup"
+            )
         else:
-            self.ok_button.setToolTip("Login to the application\nKeyboard: Enter\nVerifies password and opens main window")
-        
+            self.ok_button.setToolTip(
+                "Login to the application\nKeyboard: Enter\nVerifies password and opens main window"
+            )
+
         self.cancel_button = QPushButton("Cancel")
-        self.cancel_button.setToolTip("Exit without logging in\nApplication will close\nNo data will be accessed or modified")
+        self.cancel_button.setToolTip(
+            "Exit without logging in\nApplication will close\nNo data will be accessed or modified"
+        )
 
         button_layout.addStretch()
         # Add Reset button only in login mode
         if not self.is_setup:
             self.reset_button = QPushButton("Reset / Wipe All Data")
-            self.reset_button.setStyleSheet("color: red;") # Make it stand out
-            self.reset_button.setToolTip("Reset application settings\nUse if you need to start fresh\nWill require password setup again")
+            self.reset_button.setStyleSheet("color: red;")  # Make it stand out
+            self.reset_button.setToolTip(
+                "Reset application settings\nUse if you need to start fresh\nWill require password setup again"
+            )
             button_layout.addWidget(self.reset_button)
-            button_layout.addSpacing(20) # Add some space
+            button_layout.addSpacing(20)  # Add some space
 
         button_layout.addWidget(self.cancel_button)
         button_layout.addWidget(self.ok_button)
         layout.addLayout(button_layout)
 
-        self.setMinimumWidth(400 if not self.is_setup else 350) # Wider if reset button is present
+        self.setMinimumWidth(
+            400 if not self.is_setup else 350
+        )  # Wider if reset button is present
 
     def _connect_signals(self):
         """Connect UI signals to slots."""
         self.ok_button.clicked.connect(self._handle_ok)
         self.cancel_button.clicked.connect(self.reject)
         # Connect reset button if it exists
-        if hasattr(self, 'reset_button'):
+        if hasattr(self, "reset_button"):
             self.reset_button.clicked.connect(self._handle_reset_request)
 
         # Optionally connect returnPressed for convenience
@@ -110,7 +146,6 @@ class LoginDialog(QDialog):
         if self.is_setup:
             self.backup_password_input.returnPressed.connect(self._handle_ok)
             self.confirm_password_input.returnPressed.connect(self._handle_ok)
-
 
     def _handle_ok(self):
         """Handle the OK/Login/Create button click."""
@@ -127,23 +162,31 @@ class LoginDialog(QDialog):
             confirm_backup = self.confirm_password_input.text()
 
             if not backup_password:
-                QMessageBox.warning(self, "Input Error", "Backup password cannot be empty.")
+                QMessageBox.warning(
+                    self, "Input Error", "Backup password cannot be empty."
+                )
                 return
             if password == backup_password:
-                 # Updated error message
-                 QMessageBox.warning(self, "Input Error", "Main and Secondary Passwords must be different.")
-                 return
+                # Updated error message
+                QMessageBox.warning(
+                    self,
+                    "Input Error",
+                    "Main and Secondary Passwords must be different.",
+                )
+                return
             if backup_password != confirm_backup:
-                 # Updated error message
-                QMessageBox.warning(self, "Input Error", "Secondary passwords do not match.")
+                # Updated error message
+                QMessageBox.warning(
+                    self, "Input Error", "Secondary passwords do not match."
+                )
                 return
 
             # Store passwords internally for retrieval after accept()
             self._password = password
             self._backup_password = backup_password
-            self.accept() # Close dialog successfully
+            self.accept()  # Close dialog successfully
 
-        else: # Login mode
+        else:  # Login mode
             # Store password for retrieval
             self._password = password
             # Verification happens outside the dialog in main.py's run_authentication
@@ -173,13 +216,12 @@ class LoginDialog(QDialog):
             "and password settings.\n\n"
             "THIS ACTION CANNOT BE UNDONE.",
             QMessageBox.Yes | QMessageBox.Cancel,
-            QMessageBox.Cancel
+            QMessageBox.Cancel,
         )
 
         if reply == QMessageBox.Yes:
             self.reset_requested = True
-            self.accept() # Close the dialog, main logic will check the flag
-
+            self.accept()  # Close the dialog, main logic will check the flag
 
     # --- Static methods for hashing and verification ---
 
@@ -194,6 +236,7 @@ class LoginDialog(QDialog):
             return hashed
         except Exception as e:
             import logging
+
             logging.getLogger(__name__).error("Error hashing password:", exc_info=True)
             return None
 
@@ -208,13 +251,22 @@ class LoginDialog(QDialog):
             return pwd_context.verify(provided_password, stored_hash)
         except UnknownHashError:
             import logging
-            logging.getLogger(__name__).warning(f"Unknown hash format encountered: {stored_hash[:10]}...")
+
+            logging.getLogger(__name__).warning(
+                f"Unknown hash format encountered: {stored_hash[:10]}..."
+            )
             return False
-        except ValueError as ve: # Catches potential issues like malformed hash string
-             import logging
-             logging.getLogger(__name__).warning("Error comparing password hash (invalid format?)", exc_info=True)
-             return False
+        except ValueError as ve:  # Catches potential issues like malformed hash string
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "Error comparing password hash (invalid format?)", exc_info=True
+            )
+            return False
         except Exception as e:
             import logging
-            logging.getLogger(__name__).error("Error verifying password:", exc_info=True)
+
+            logging.getLogger(__name__).error(
+                "Error verifying password:", exc_info=True
+            )
             return False

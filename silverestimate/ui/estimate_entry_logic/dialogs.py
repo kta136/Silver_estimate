@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from PyQt5.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
+    QFormLayout,
     QLabel,
     QMessageBox,
-    QFormLayout,
     QVBoxLayout,
 )
 
@@ -20,7 +20,6 @@ if TYPE_CHECKING:  # pragma: no cover - for type checking only
 
 class _EstimateDialogsMixin:
     """Dialog helpers for the estimate entry workflow."""
-
 
     def prompt_item_selection(self, code: str):
         try:
@@ -37,7 +36,6 @@ class _EstimateDialogsMixin:
                 self, "Selection Error", f"Could not open selection dialog: {exc}"
             )
         return None
-
 
     def open_history_dialog(self) -> Optional[str]:
         try:
@@ -62,7 +60,9 @@ class _EstimateDialogsMixin:
 
     def show_silver_bar_management(self) -> None:
         try:
-            if hasattr(self, "main_window") and hasattr(self.main_window, "show_silver_bars"):
+            if hasattr(self, "main_window") and hasattr(
+                self.main_window, "show_silver_bars"
+            ):
                 self.main_window.show_silver_bars()
                 self._status("Opened Silver Bar Management.", 1500)
                 return
@@ -73,7 +73,6 @@ class _EstimateDialogsMixin:
         silver_dialog = SilverBarDialog(self.db_manager, self)
         silver_dialog.exec_()
         self._status("Closed Silver Bar Management.", 2000)
-
 
     def show_last_balance_dialog(self):
         dialog = QDialog(self)
@@ -122,7 +121,6 @@ class _EstimateDialogsMixin:
         else:
             self._status("Last balance not changed", 2000)
 
-
     def show_history(self):
         presenter = getattr(self, "presenter", None)
         if presenter is None:
@@ -155,11 +153,12 @@ class _EstimateDialogsMixin:
         try:
             presenter.open_silver_bar_management()
         except Exception as exc:
-            self.logger.error("Error opening Silver Bar Management: %s", exc, exc_info=True)
+            self.logger.error(
+                "Error opening Silver Bar Management: %s", exc, exc_info=True
+            )
             QMessageBox.critical(
                 self,
                 "Error",
                 f"Failed to open Silver Bar Management: {exc}",
             )
             self._status("Error: Unable to open Silver Bar Management.", 5000)
-

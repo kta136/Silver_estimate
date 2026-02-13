@@ -92,7 +92,9 @@ class FakeDbManager:
     def get_silver_bars(self, estimate_voucher_no: str) -> List[Dict[str, Any]]:
         return []
 
-    def update_silver_bar_values(self, bar_id: int, weight: float, purity: float) -> bool:
+    def update_silver_bar_values(
+        self, bar_id: int, weight: float, purity: float
+    ) -> bool:
         return True
 
     def add_silver_bar(self, voucher_no: str, weight: float, purity: float) -> int:

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from .base import _EstimateBaseMixin
+from .constants import *  # noqa: F401,F403
 from .dialogs import _EstimateDialogsMixin
 from .persistence import _EstimatePersistenceMixin
 from .table import _EstimateTableMixin
-from .constants import *  # noqa: F401,F403
 
 
 class EstimateLogic(

@@ -7,10 +7,7 @@ from silverestimate.presenter import SaveItem, SaveOutcome
 from silverestimate.services.estimate_entry_persistence import (
     EstimateEntryPersistenceService,
 )
-from silverestimate.ui.view_models import (
-    EstimateEntryRowState,
-    EstimateEntryViewModel,
-)
+from silverestimate.ui.view_models import EstimateEntryRowState, EstimateEntryViewModel
 
 
 def _row(

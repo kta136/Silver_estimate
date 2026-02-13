@@ -1,4 +1,5 @@
 """Item repository handling CRUD operations for the items table."""
+
 from __future__ import annotations
 
 import logging
@@ -53,7 +54,9 @@ class ItemsRepository:
                 row = None
 
             if row is None:
-                cursor.execute('SELECT * FROM items WHERE code = ? COLLATE NOCASE', (code,))
+                cursor.execute(
+                    "SELECT * FROM items WHERE code = ? COLLATE NOCASE", (code,)
+                )
                 row = cursor.fetchone()
             if row is None:
                 return None
@@ -75,7 +78,7 @@ class ItemsRepository:
         try:
             pattern = f"%{search_term}%"
             cursor.execute(
-                'SELECT * FROM items WHERE LOWER(code) LIKE LOWER(?) OR LOWER(name) LIKE LOWER(?) ORDER BY code',
+                "SELECT * FROM items WHERE LOWER(code) LIKE LOWER(?) OR LOWER(name) LIKE LOWER(?) ORDER BY code",
                 (pattern, pattern),
             )
             return cursor.fetchall()
@@ -88,19 +91,21 @@ class ItemsRepository:
         if not cursor:
             return []
         try:
-            cursor.execute('SELECT * FROM items ORDER BY code')
+            cursor.execute("SELECT * FROM items ORDER BY code")
             return cursor.fetchall()
         except sqlite3.Error as exc:
             self._logger.error("DB Error get_all_items: %s", exc, exc_info=True)
             return []
 
-    def add_item(self, code: str, name: str, purity: float, wage_type: str, wage_rate: float) -> bool:
+    def add_item(
+        self, code: str, name: str, purity: float, wage_type: str, wage_rate: float
+    ) -> bool:
         conn, cursor = self._conn, self._cursor
         if not conn or not cursor:
             return False
         try:
             cursor.execute(
-                'INSERT INTO items (code, name, purity, wage_type, wage_rate) VALUES (?, ?, ?, ?, ?)',
+                "INSERT INTO items (code, name, purity, wage_type, wage_rate) VALUES (?, ?, ?, ?, ?)",
                 (code, name, purity, wage_type, wage_rate),
             )
             conn.commit()
@@ -112,13 +117,15 @@ class ItemsRepository:
             conn.rollback()
             return False
 
-    def update_item(self, code: str, name: str, purity: float, wage_type: str, wage_rate: float) -> bool:
+    def update_item(
+        self, code: str, name: str, purity: float, wage_type: str, wage_rate: float
+    ) -> bool:
         conn, cursor = self._conn, self._cursor
         if not conn or not cursor:
             return False
         try:
             cursor.execute(
-                'UPDATE items SET name = ?, purity = ?, wage_type = ?, wage_rate = ? WHERE code = ?',
+                "UPDATE items SET name = ?, purity = ?, wage_type = ?, wage_rate = ? WHERE code = ?",
                 (name, purity, wage_type, wage_rate, code),
             )
             conn.commit()
@@ -137,7 +144,7 @@ class ItemsRepository:
         if not conn or not cursor:
             return False
         try:
-            cursor.execute('DELETE FROM items WHERE code = ?', (code,))
+            cursor.execute("DELETE FROM items WHERE code = ?", (code,))
             conn.commit()
             if cursor.rowcount > 0:
                 self._request_flush()
@@ -157,7 +164,9 @@ class ItemsRepository:
             if callable(requester):
                 requester()
         except Exception as exc:  # pragma: no cover - log only
-            self._logger.error("Exception during post-item flush: %s", exc, exc_info=True)
+            self._logger.error(
+                "Exception during post-item flush: %s", exc, exc_info=True
+            )
 
     def _invalidate_cache(self, code: str) -> None:
         try:
@@ -179,4 +188,3 @@ class ItemsRepository:
             return dict(row)
         except Exception:
             return row
-

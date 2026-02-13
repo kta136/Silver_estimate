@@ -1,10 +1,7 @@
 import pytest
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
-from silverestimate.ui.view_models import (
-    EstimateEntryRowState,
-    EstimateEntryViewModel,
-)
+from silverestimate.ui.view_models import EstimateEntryRowState, EstimateEntryViewModel
 
 
 def _make_row(

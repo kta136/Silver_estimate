@@ -1,25 +1,24 @@
-import sqlite3
 import logging
+import sqlite3
 from datetime import datetime
 from typing import Any, Optional
 
 import pytest
 
-from tests.factories import estimate_totals, regular_item, return_item, silver_bar_item
-
-from silverestimate.persistence import migrations
-from silverestimate.persistence.items_repository import ItemsRepository
 from silverestimate.infrastructure.item_cache import ItemCacheController
+from silverestimate.persistence import migrations
 from silverestimate.persistence.estimates_repository import EstimatesRepository
+from silverestimate.persistence.items_repository import ItemsRepository
 from silverestimate.persistence.silver_bars_repository import SilverBarsRepository
+from tests.factories import estimate_totals, regular_item, return_item, silver_bar_item
 
 
 class FakeDB:
     def __init__(self) -> None:
-        self.conn = sqlite3.connect(':memory:')
+        self.conn = sqlite3.connect(":memory:")
         self.conn.row_factory = sqlite3.Row
         self.cursor = self.conn.cursor()
-        self.logger = logging.getLogger('test')
+        self.logger = logging.getLogger("test")
         self.item_cache_controller = ItemCacheController()
         self._c_get_item_by_code = None
         self._sql_get_item_by_code = None
@@ -29,38 +28,41 @@ class FakeDB:
         self.last_error = None
 
     def _table_exists(self, table_name: str) -> bool:
-        self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+        self.cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+            (table_name,),
+        )
         return self.cursor.fetchone() is not None
 
     def _column_exists(self, table_name: str, column_name: str) -> bool:
         if not self._table_exists(table_name):
             return False
         self.cursor.execute(f"PRAGMA table_info({table_name})")
-        return any(row['name'] == column_name for row in self.cursor.fetchall())
+        return any(row["name"] == column_name for row in self.cursor.fetchall())
 
     def _check_schema_version(self) -> int:
-        if not self._table_exists('schema_version'):
-            self.cursor.execute('''
+        if not self._table_exists("schema_version"):
+            self.cursor.execute("""
                 CREATE TABLE schema_version (
                     id INTEGER PRIMARY KEY,
                     version INTEGER NOT NULL,
                     applied_date TEXT NOT NULL
                 )
-            ''')
+            """)
             self.cursor.execute(
-                'INSERT INTO schema_version (version, applied_date) VALUES (?, ?)',
-                (0, datetime.now().strftime('%Y-%m-%d %H:%M:%S')),
+                "INSERT INTO schema_version (version, applied_date) VALUES (?, ?)",
+                (0, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
             )
             self.conn.commit()
             return 0
-        self.cursor.execute('SELECT MAX(version) FROM schema_version')
+        self.cursor.execute("SELECT MAX(version) FROM schema_version")
         row = self.cursor.fetchone()
         return row[0] if row and row[0] is not None else 0
 
     def _update_schema_version(self, new_version: int) -> bool:
         self.cursor.execute(
-            'INSERT INTO schema_version (version, applied_date) VALUES (?, ?)',
-            (new_version, datetime.now().strftime('%Y-%m-%d %H:%M:%S')),
+            "INSERT INTO schema_version (version, applied_date) VALUES (?, ?)",
+            (new_version, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
         )
         self.conn.commit()
         return True
@@ -79,46 +81,65 @@ def fake_db():
 
 def test_items_repository_roundtrip(fake_db):
     repo = ItemsRepository(fake_db)
-    added = repo.add_item('ITM001', 'Sample Item', 92.5, 'P', 10.0)
+    added = repo.add_item("ITM001", "Sample Item", 92.5, "P", 10.0)
     assert added
-    fetched = repo.get_item_by_code('ITM001')
-    assert fetched['name'] == 'Sample Item'
+    fetched = repo.get_item_by_code("ITM001")
+    assert fetched["name"] == "Sample Item"
     assert fake_db._flush_requested
 
 
 def test_items_repository_returns_plain_dicts(fake_db):
     repo = ItemsRepository(fake_db)
-    repo.add_item('NEW123', 'New Item', 91.0, 'WT', 12.0)
+    repo.add_item("NEW123", "New Item", 91.0, "WT", 12.0)
 
     # simulate prior cache miss
-    fake_db.item_cache_controller.invalidate('NEW123')
+    fake_db.item_cache_controller.invalidate("NEW123")
 
-    fetched = repo.get_item_by_code('NEW123')
+    fetched = repo.get_item_by_code("NEW123")
     assert isinstance(fetched, dict)
-    assert fetched['name'] == 'New Item'
+    assert fetched["name"] == "New Item"
 
-    cached = fake_db.item_cache_controller.get('NEW123')
+    cached = fake_db.item_cache_controller.get("NEW123")
     assert isinstance(cached, dict)
 
-    refetched = repo.get_item_by_code('NEW123')
+    refetched = repo.get_item_by_code("NEW123")
     assert isinstance(refetched, dict)
 
 
 def test_estimates_repository_save_and_fetch(fake_db):
     repo = EstimatesRepository(fake_db)
-    ItemsRepository(fake_db).add_item('ITM001', 'Sample Item', 92.5, 'WT', 10.0)
+    ItemsRepository(fake_db).add_item("ITM001", "Sample Item", 92.5, "WT", 10.0)
     saved = repo.save_estimate_with_returns(
-        voucher_no='100',
-        date='2025-01-01',
+        voucher_no="100",
+        date="2025-01-01",
         silver_rate=75000.0,
-        regular_items=[regular_item(code='ITM001', name='Sample Item', gross=10.0, poly=0.0, net_wt=10.0, purity=92.5, wage_rate=10.0, pieces=1, wage=100.0, fine=9.25)],
+        regular_items=[
+            regular_item(
+                code="ITM001",
+                name="Sample Item",
+                gross=10.0,
+                poly=0.0,
+                net_wt=10.0,
+                purity=92.5,
+                wage_rate=10.0,
+                pieces=1,
+                wage=100.0,
+                fine=9.25,
+            )
+        ],
         return_items=[],
-        totals=estimate_totals(total_gross=10.0, total_net=10.0, net_fine=9.25, net_wage=100.0, note='Test estimate'),
+        totals=estimate_totals(
+            total_gross=10.0,
+            total_net=10.0,
+            net_fine=9.25,
+            net_wage=100.0,
+            note="Test estimate",
+        ),
     )
     assert saved
-    data = repo.get_estimate_by_voucher('100')
-    assert data['header']['voucher_no'] == '100'
-    assert len(data['items']) == 1
+    data = repo.get_estimate_by_voucher("100")
+    assert data["header"]["voucher_no"] == "100"
+    assert len(data["items"]) == 1
 
 
 def test_estimates_repository_returns_first_estimate_date(fake_db):
@@ -126,38 +147,44 @@ def test_estimates_repository_returns_first_estimate_date(fake_db):
     assert repo.get_first_estimate_date() is None
 
     repo.save_estimate_with_returns(
-        voucher_no='901',
-        date='2025-03-10',
+        voucher_no="901",
+        date="2025-03-10",
         silver_rate=71000.0,
         regular_items=[],
         return_items=[],
-        totals=estimate_totals(total_gross=0.0, total_net=0.0, net_fine=0.0, net_wage=0.0),
+        totals=estimate_totals(
+            total_gross=0.0, total_net=0.0, net_fine=0.0, net_wage=0.0
+        ),
     )
     repo.save_estimate_with_returns(
-        voucher_no='902',
-        date='2025-01-12',
+        voucher_no="902",
+        date="2025-01-12",
         silver_rate=71000.0,
         regular_items=[],
         return_items=[],
-        totals=estimate_totals(total_gross=0.0, total_net=0.0, net_fine=0.0, net_wage=0.0),
+        totals=estimate_totals(
+            total_gross=0.0, total_net=0.0, net_fine=0.0, net_wage=0.0
+        ),
     )
     repo.save_estimate_with_returns(
-        voucher_no='903',
-        date='2025-02-05',
+        voucher_no="903",
+        date="2025-02-05",
         silver_rate=71000.0,
         regular_items=[],
         return_items=[],
-        totals=estimate_totals(total_gross=0.0, total_net=0.0, net_fine=0.0, net_wage=0.0),
+        totals=estimate_totals(
+            total_gross=0.0, total_net=0.0, net_fine=0.0, net_wage=0.0
+        ),
     )
 
-    assert repo.get_first_estimate_date() == '2025-01-12'
+    assert repo.get_first_estimate_date() == "2025-01-12"
 
 
 def test_save_estimate_reports_missing_item_code(fake_db):
     repo = EstimatesRepository(fake_db)
     missing_item = regular_item(
-        code='MISSING001',
-        name='Missing Item',
+        code="MISSING001",
+        name="Missing Item",
         gross=1.0,
         poly=0.0,
         net_wt=1.0,
@@ -169,8 +196,8 @@ def test_save_estimate_reports_missing_item_code(fake_db):
     )
     totals = estimate_totals(total_gross=1.0, total_net=1.0, net_fine=0.9, net_wage=0.0)
     saved = repo.save_estimate_with_returns(
-        voucher_no='404',
-        date='2025-01-05',
+        voucher_no="404",
+        date="2025-01-05",
         silver_rate=71000.0,
         regular_items=[missing_item],
         return_items=[],
@@ -178,37 +205,38 @@ def test_save_estimate_reports_missing_item_code(fake_db):
     )
     assert not saved
     assert fake_db.last_error is not None
-    assert 'MISSING001' in fake_db.last_error
-
+    assert "MISSING001" in fake_db.last_error
 
 
 def test_estimate_delete_cleans_silver_bars(fake_db):
     est_repo = EstimatesRepository(fake_db)
     silver_repo = SilverBarsRepository(fake_db)
     est_repo.save_estimate_with_returns(
-        voucher_no='200',
-        date='2025-01-02',
+        voucher_no="200",
+        date="2025-01-02",
         silver_rate=76000.0,
         regular_items=[],
         return_items=[],
-        totals=estimate_totals(total_gross=0.0, total_net=0.0, net_fine=0.0, net_wage=0.0),
+        totals=estimate_totals(
+            total_gross=0.0, total_net=0.0, net_fine=0.0, net_wage=0.0
+        ),
     )
-    bar_id = silver_repo.add_silver_bar('200', 5.0, 99.9)
+    bar_id = silver_repo.add_silver_bar("200", 5.0, 99.9)
     assert bar_id is not None
-    list_id = silver_repo.create_list('Auto List')
+    list_id = silver_repo.create_list("Auto List")
     assert list_id is not None
     assert silver_repo.assign_bar_to_list(bar_id, list_id, perform_commit=True)
-    deleted = est_repo.delete_single_estimate('200')
+    deleted = est_repo.delete_single_estimate("200")
     assert deleted
-    remaining_bars = silver_repo.get_silver_bars(estimate_voucher_no='200')
+    remaining_bars = silver_repo.get_silver_bars(estimate_voucher_no="200")
     assert remaining_bars == []
 
 
 def test_silver_bar_assignment_cycle(fake_db):
     repo = SilverBarsRepository(fake_db)
-    list_id = repo.create_list('Test List')
+    list_id = repo.create_list("Test List")
     assert list_id is not None
-    bar_id = repo.add_silver_bar('300', 7.5, 99.0)
+    bar_id = repo.add_silver_bar("300", 7.5, 99.0)
     assert bar_id is not None
     assert repo.assign_bar_to_list(bar_id, list_id)
     bars_in_list = repo.get_bars_in_list(list_id)
@@ -217,16 +245,17 @@ def test_silver_bar_assignment_cycle(fake_db):
     bars_in_list = repo.get_bars_in_list(list_id)
     assert bars_in_list == []
 
+
 def test_estimate_repository_load_preserves_item_types(fake_db):
     repo = EstimatesRepository(fake_db)
     items_repo = ItemsRepository(fake_db)
-    items_repo.add_item('REG001', 'Regular Item', 91.6, 'WT', 15.0)
-    items_repo.add_item('RET001', 'Return Item', 80.0, 'WT', 0.0)
-    items_repo.add_item('BAR001', 'Silver Bar', 99.9, 'WT', 0.0)
-    voucher = '500'
+    items_repo.add_item("REG001", "Regular Item", 91.6, "WT", 15.0)
+    items_repo.add_item("RET001", "Return Item", 80.0, "WT", 0.0)
+    items_repo.add_item("BAR001", "Silver Bar", 99.9, "WT", 0.0)
+    voucher = "500"
     regular_payload = regular_item(
-        code='REG001',
-        name='Regular Item',
+        code="REG001",
+        name="Regular Item",
         gross=12.0,
         poly=1.0,
         net_wt=11.0,
@@ -237,8 +266,8 @@ def test_estimate_repository_load_preserves_item_types(fake_db):
         fine=10.076,
     )
     return_payload = return_item(
-        code='RET001',
-        name='Return Item',
+        code="RET001",
+        name="Return Item",
         gross=2.0,
         poly=0.2,
         net_wt=1.8,
@@ -249,8 +278,8 @@ def test_estimate_repository_load_preserves_item_types(fake_db):
         fine=1.44,
     )
     bar_payload = silver_bar_item(
-        code='BAR001',
-        name='Silver Bar',
+        code="BAR001",
+        name="Silver Bar",
         gross=5.0,
         poly=0.0,
         net_wt=5.0,
@@ -265,12 +294,12 @@ def test_estimate_repository_load_preserves_item_types(fake_db):
         total_net=11.0,
         net_fine=10.076,
         net_wage=165.0,
-        note='Test persistence',
+        note="Test persistence",
     )
 
     saved = repo.save_estimate_with_returns(
         voucher_no=voucher,
-        date='2025-03-01',
+        date="2025-03-01",
         silver_rate=68000.0,
         regular_items=[regular_payload],
         return_items=[return_payload, bar_payload],
@@ -280,31 +309,32 @@ def test_estimate_repository_load_preserves_item_types(fake_db):
 
     loaded = repo.get_estimate_by_voucher(voucher)
     assert loaded is not None
-    items = {item['item_code']: item for item in loaded['items']}
+    items = {item["item_code"]: item for item in loaded["items"]}
 
-    assert items['REG001']['is_return'] == 0
-    assert items['REG001']['is_silver_bar'] == 0
-    assert items['REG001']['gross'] == pytest.approx(12.0)
-    assert items['REG001']['fine'] == pytest.approx(10.076)
+    assert items["REG001"]["is_return"] == 0
+    assert items["REG001"]["is_silver_bar"] == 0
+    assert items["REG001"]["gross"] == pytest.approx(12.0)
+    assert items["REG001"]["fine"] == pytest.approx(10.076)
 
-    assert items['RET001']['is_return'] == 1
-    assert items['RET001']['is_silver_bar'] == 0
-    assert items['RET001']['net_wt'] == pytest.approx(1.8)
-    assert items['RET001']['fine'] == pytest.approx(1.44)
+    assert items["RET001"]["is_return"] == 1
+    assert items["RET001"]["is_silver_bar"] == 0
+    assert items["RET001"]["net_wt"] == pytest.approx(1.8)
+    assert items["RET001"]["fine"] == pytest.approx(1.44)
 
-    assert items['BAR001']['is_return'] == 0
-    assert items['BAR001']['is_silver_bar'] == 1
-    assert items['BAR001']['net_wt'] == pytest.approx(5.0)
-    assert items['BAR001']['fine'] == pytest.approx(4.995)
+    assert items["BAR001"]["is_return"] == 0
+    assert items["BAR001"]["is_silver_bar"] == 1
+    assert items["BAR001"]["net_wt"] == pytest.approx(5.0)
+    assert items["BAR001"]["fine"] == pytest.approx(4.995)
+
 
 def test_save_estimate_accepts_mixed_case_item_codes(fake_db):
     repo = EstimatesRepository(fake_db)
     items_repo = ItemsRepository(fake_db)
-    items_repo.add_item('mix001', 'Mixed Item', 92.5, 'WT', 10.0)
+    items_repo.add_item("mix001", "Mixed Item", 92.5, "WT", 10.0)
 
     payload = regular_item(
-        code='MIX001',
-        name='Mixed Item',
+        code="MIX001",
+        name="Mixed Item",
         gross=10.0,
         poly=0.0,
         net_wt=10.0,
@@ -314,11 +344,13 @@ def test_save_estimate_accepts_mixed_case_item_codes(fake_db):
         wage=100.0,
         fine=9.25,
     )
-    totals = estimate_totals(total_gross=10.0, total_net=10.0, net_fine=9.25, net_wage=100.0)
+    totals = estimate_totals(
+        total_gross=10.0, total_net=10.0, net_fine=9.25, net_wage=100.0
+    )
 
     saved = repo.save_estimate_with_returns(
-        voucher_no='405',
-        date='2025-01-06',
+        voucher_no="405",
+        date="2025-01-06",
         silver_rate=72000.0,
         regular_items=[payload],
         return_items=[],

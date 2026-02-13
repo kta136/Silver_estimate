@@ -1,56 +1,86 @@
 #!/usr/bin/env python
 """Estimate entry widget - refactored to use component architecture."""
+
 from __future__ import annotations
 
 import logging
 import threading
-import traceback
 import time
-from typing import Optional, Dict, TYPE_CHECKING
+import traceback
+from typing import TYPE_CHECKING, Dict, Optional
 
 from PyQt5 import sip
+from PyQt5.QtCore import QDate, QLocale, QSignalBlocker, Qt, QTimer, pyqtSignal
+from PyQt5.QtGui import QColor, QFont, QKeySequence
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
-    QHeaderView, QShortcut, QMessageBox, QSizePolicy, QApplication,
-    QDialog, QDialogButtonBox, QDoubleSpinBox, QLabel, QFormLayout,
     QAbstractItemView,
+    QApplication,
+    QDialog,
+    QDialogButtonBox,
+    QDoubleSpinBox,
+    QFormLayout,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QMessageBox,
+    QShortcut,
+    QSizePolicy,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt5.QtCore import Qt, QTimer, QSignalBlocker, QDate, QLocale, pyqtSignal
-from PyQt5.QtGui import QKeySequence, QColor, QFont
 
-from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.domain.estimate_models import (
     EstimateLine,
     EstimateLineCategory,
     TotalsResult,
 )
-from silverestimate.presenter import EstimateEntryPresenter, EstimateEntryViewState, LoadedEstimate
+from silverestimate.infrastructure.settings import get_app_settings
+from silverestimate.presenter import (
+    EstimateEntryPresenter,
+    EstimateEntryViewState,
+    LoadedEstimate,
+)
 from silverestimate.services.estimate_calculator import (
     compute_fine_weight,
     compute_net_weight,
-    compute_wage_amount,
     compute_totals,
+    compute_wage_amount,
 )
 from silverestimate.services.estimate_entry_persistence import (
     EstimateEntryPersistenceService,
 )
 
+from .adapters import EstimateTableAdapter
 from .estimate_entry_components import (
-    VoucherToolbar, PrimaryActionsBar, SecondaryActionsBar,
-    TotalsPanel, EstimateTableView
+    EstimateTableView,
+    PrimaryActionsBar,
+    SecondaryActionsBar,
+    TotalsPanel,
+    VoucherToolbar,
 )
 from .estimate_entry_ui import (
-    NumericDelegate, COL_CODE, COL_ITEM_NAME, COL_GROSS, COL_POLY,
-    COL_PURITY, COL_WAGE_RATE, COL_PIECES, COL_NET_WT, COL_FINE_WT,
-    COL_TYPE, COL_WAGE_AMT
+    COL_CODE,
+    COL_FINE_WT,
+    COL_GROSS,
+    COL_ITEM_NAME,
+    COL_NET_WT,
+    COL_PIECES,
+    COL_POLY,
+    COL_PURITY,
+    COL_TYPE,
+    COL_WAGE_AMT,
+    COL_WAGE_RATE,
+    NumericDelegate,
 )
 from .inline_status import InlineStatusController
-from .view_models import EstimateEntryViewModel, EstimateEntryRowState
-from .adapters import EstimateTableAdapter
 from .item_selection_dialog import ItemSelectionDialog
+from .view_models import EstimateEntryRowState, EstimateEntryViewModel
 
 if TYPE_CHECKING:
     from silverestimate.ui.print_manager import PrintManager
+
 
 class EstimateEntryWidget(QWidget):
     """Widget for silver estimate entry and management.
@@ -58,6 +88,7 @@ class EstimateEntryWidget(QWidget):
     Refactored to eliminate EstimateLogic mixins. Now implements the full
     EstimateEntryView protocol directly or via components.
     """
+
     live_rate_fetched = pyqtSignal(object)
     EDITABLE_ENTRY_COLS = (
         COL_CODE,
@@ -70,9 +101,9 @@ class EstimateEntryWidget(QWidget):
 
     def __init__(self, db_manager, main_window, repository):
         super().__init__()
-        
+
         self.logger = logging.getLogger(__name__)
-        
+
         # Core dependencies
         self.db_manager = db_manager
         self.main_window = main_window
@@ -91,7 +122,7 @@ class EstimateEntryWidget(QWidget):
         self.current_column = COL_CODE
         self.last_balance_silver = 0.0
         self.last_balance_amount = 0.0
-        
+
         self._table_adapter = None
         self._last_manual_row_nav_ts = 0.0
         self._edit_request_token = 0
@@ -187,15 +218,13 @@ class EstimateEntryWidget(QWidget):
         # Header ribbon
         header_container = QWidget()
         header_container.setObjectName("EstimateHeaderContainer")
-        header_container.setStyleSheet(
-            """
+        header_container.setStyleSheet("""
             QWidget#EstimateHeaderContainer {
                 background-color: palette(base);
                 border: 1px solid palette(midlight);
                 border-radius: 6px;
             }
-            """
-        )
+            """)
         header_layout = QHBoxLayout(header_container)
         header_layout.setContentsMargins(6, 4, 6, 4)
         header_layout.setSpacing(8)
@@ -306,14 +335,20 @@ class EstimateEntryWidget(QWidget):
         self.primary_actions.new_clicked.connect(self.clear_form)
 
         self.secondary_actions.delete_row_clicked.connect(self.delete_current_row)
-        self.secondary_actions.last_balance_clicked.connect(self.show_last_balance_dialog)
+        self.secondary_actions.last_balance_clicked.connect(
+            self.show_last_balance_dialog
+        )
         self.secondary_actions.history_clicked.connect(self.show_history)
         self.secondary_actions.silver_bars_clicked.connect(self.show_silver_bars)
         self.secondary_actions.refresh_rate_clicked.connect(self.refresh_silver_rate)
-        self.secondary_actions.delete_estimate_clicked.connect(self.delete_current_estimate)
+        self.secondary_actions.delete_estimate_clicked.connect(
+            self.delete_current_estimate
+        )
 
         self.item_table.cell_edited.connect(self._on_table_cell_edited)
-        self.item_table.column_layout_reset_requested.connect(self._reset_columns_layout)
+        self.item_table.column_layout_reset_requested.connect(
+            self._reset_columns_layout
+        )
         self.item_table.row_deleted.connect(self._on_table_row_delete_requested)
         self.item_table.history_requested.connect(self.show_history)
 
@@ -344,10 +379,10 @@ class EstimateEntryWidget(QWidget):
 
     # --- Status & Helper Methods --------------------------------------------
 
-    def show_status(self, message, timeout=3000, level='info'):
+    def show_status(self, message, timeout=3000, level="info"):
         self._status_helper.show(message, timeout=timeout, level=level)
 
-    def show_inline_status(self, message, timeout=3000, level='info'):
+    def show_inline_status(self, message, timeout=3000, level="info"):
         self._status_helper.show(message, timeout=timeout, level=level)
 
     def _status(self, message, timeout=3000):
@@ -389,11 +424,7 @@ class EstimateEntryWidget(QWidget):
             mode = "Silver Bars"
         else:
             mode = "Regular Items"
-        tip = (
-            f"Current mode: {mode}\n"
-            "Ctrl+R: Return Items\n"
-            "Ctrl+B: Silver Bars"
-        )
+        tip = f"Current mode: {mode}\n" "Ctrl+R: Return Items\n" "Ctrl+B: Silver Bars"
         try:
             self.mode_indicator_label.setToolTip(tip)
         except Exception:
@@ -412,7 +443,10 @@ class EstimateEntryWidget(QWidget):
     # --- Table Methods (formerly _EstimateTableMixin) -----------------------
 
     def _get_table_adapter(self) -> EstimateTableAdapter:
-        if self._table_adapter is None or getattr(self._table_adapter, "_table", None) is not self.item_table:
+        if (
+            self._table_adapter is None
+            or getattr(self._table_adapter, "_table", None) is not self.item_table
+        ):
             self._table_adapter = EstimateTableAdapter(self, self.item_table)
         return self._table_adapter
 
@@ -444,7 +478,11 @@ class EstimateEntryWidget(QWidget):
         if row < 0 or row >= self.item_table.rowCount():
             return
         target_col = self.current_column
-        if target_col is None or target_col < 0 or target_col >= self.item_table.columnCount():
+        if (
+            target_col is None
+            or target_col < 0
+            or target_col >= self.item_table.columnCount()
+        ):
             target_col = COL_CODE
         try:
             self.item_table.setCurrentCell(row, target_col)
@@ -492,7 +530,10 @@ class EstimateEntryWidget(QWidget):
                 return
         self.current_row = currentRow
         self.current_column = currentCol
-        if currentCol in self.EDITABLE_ENTRY_COLS and 0 <= currentRow < self.item_table.rowCount():
+        if (
+            currentCol in self.EDITABLE_ENTRY_COLS
+            and 0 <= currentRow < self.item_table.rowCount()
+        ):
             if row_changed and self._manual_row_nav_recent():
                 self._request_edit_cell(
                     currentRow,
@@ -557,7 +598,9 @@ class EstimateEntryWidget(QWidget):
         """Focus next row code only if cursor is still on the originating cell."""
         QTimer.singleShot(
             delay_ms,
-            lambda: self._focus_code_if_origin_unchanged(origin_row, origin_col, target_row),
+            lambda: self._focus_code_if_origin_unchanged(
+                origin_row, origin_col, target_row
+            ),
         )
 
     def _focus_code_if_origin_unchanged(
@@ -577,7 +620,8 @@ class EstimateEntryWidget(QWidget):
         return (time.monotonic() - self._last_manual_row_nav_ts) <= threshold_seconds
 
     def process_item_code(self):
-        if self.processing_cell: return
+        if self.processing_cell:
+            return
         if self.current_row < 0 or not self.item_table.item(self.current_row, COL_CODE):
             return
 
@@ -589,7 +633,9 @@ class EstimateEntryWidget(QWidget):
         if not code:
             self._status("Enter item code first", 1500)
             if self._should_force_code_focus():
-                QTimer.singleShot(0, lambda: self.focus_on_code_column(self.current_row))
+                QTimer.singleShot(
+                    0, lambda: self.focus_on_code_column(self.current_row)
+                )
             return
 
         if self.presenter is None:
@@ -600,7 +646,9 @@ class EstimateEntryWidget(QWidget):
             if self.presenter.handle_item_code(self.current_row, code):
                 self._mark_unsaved()
         except Exception as exc:
-            self.logger.error("Presenter handle_item_code failed: %s", exc, exc_info=True)
+            self.logger.error(
+                "Presenter handle_item_code failed: %s", exc, exc_info=True
+            )
 
     def _is_code_empty(self, row):
         try:
@@ -610,10 +658,17 @@ class EstimateEntryWidget(QWidget):
             return True
 
     def _enforce_code_required(self, target_row, target_col, show_hint=True):
-        if self._enforcing_code_nav: return True
+        if self._enforcing_code_nav:
+            return True
         try:
-            if not self._is_table_valid(): return True
-            if target_row is None or target_col is None or target_row < 0 or target_col < 0:
+            if not self._is_table_valid():
+                return True
+            if (
+                target_row is None
+                or target_col is None
+                or target_row < 0
+                or target_col < 0
+            ):
                 return True
 
             if 0 <= self.current_row < self.item_table.rowCount():
@@ -632,7 +687,8 @@ class EstimateEntryWidget(QWidget):
         return True
 
     def move_to_next_cell(self):
-        if self.processing_cell: return
+        if self.processing_cell:
+            return
 
         current_col = self.current_column
         current_row = self.current_row
@@ -666,10 +722,11 @@ class EstimateEntryWidget(QWidget):
                 QTimer.singleShot(10, lambda: self._safe_edit_item(next_row, next_col))
 
     def move_to_previous_cell(self):
-        if self.processing_cell: return
+        if self.processing_cell:
+            return
         current_col = self.current_column
         current_row = self.current_row
-        
+
         if current_row is None or current_row < 0:
             self.focus_on_code_column(0)
             return
@@ -723,7 +780,8 @@ class EstimateEntryWidget(QWidget):
 
         def _apply_focus(target_row):
             try:
-                if not self._is_table_valid(): return
+                if not self._is_table_valid():
+                    return
                 if 0 <= target_row < self.item_table.rowCount():
                     self._ensure_cell_exists(target_row, COL_CODE)
                     self.item_table.blockSignals(True)
@@ -731,14 +789,19 @@ class EstimateEntryWidget(QWidget):
                         self.item_table.setCurrentCell(target_row, COL_CODE)
                     finally:
                         self.item_table.blockSignals(False)
-                    QTimer.singleShot(10, lambda: self._safe_edit_item(target_row, COL_CODE))
-            except Exception: pass
+                    QTimer.singleShot(
+                        10, lambda: self._safe_edit_item(target_row, COL_CODE)
+                    )
+            except Exception:
+                pass
 
         timer = getattr(self, "_code_focus_timer", None)
         if timer is None or sip.isdeleted(timer):
             timer = QTimer(self)
             timer.setSingleShot(True)
-            timer.timeout.connect(lambda: _apply_focus(getattr(self, "_pending_focus_row", 0)))
+            timer.timeout.connect(
+                lambda: _apply_focus(getattr(self, "_pending_focus_row", 0))
+            )
             self._code_focus_timer = timer
         try:
             timer.stop()
@@ -750,13 +813,19 @@ class EstimateEntryWidget(QWidget):
     def _safe_edit_item(self, row, col):
         try:
             table = self.item_table
-            if not table or sip.isdeleted(table) or not table.isVisible(): return
-            if self._loading_estimate: return
+            if not table or sip.isdeleted(table) or not table.isVisible():
+                return
+            if self._loading_estimate:
+                return
             if table.state() == QAbstractItemView.EditingState:
                 current = table.currentIndex()
-                if current.isValid() and current.row() == row and current.column() == col:
+                if (
+                    current.isValid()
+                    and current.row() == row
+                    and current.column() == col
+                ):
                     return
-            
+
             # Use Model/View edit
             model = table.model()
             if model and not sip.isdeleted(model):
@@ -764,7 +833,8 @@ class EstimateEntryWidget(QWidget):
                 if index.isValid() and (model.flags(index) & Qt.ItemIsEditable):
                     table.setCurrentIndex(index)
                     table.edit(index)
-        except Exception: pass
+        except Exception:
+            pass
 
     def _is_table_valid(self) -> bool:
         try:
@@ -775,13 +845,18 @@ class EstimateEntryWidget(QWidget):
     def _should_force_code_focus(self) -> bool:
         try:
             table = self.item_table
-            if not self._is_table_valid(): return False
+            if not self._is_table_valid():
+                return False
             app = QApplication.instance()
-            if not app: return True
+            if not app:
+                return True
             focus_widget = app.focusWidget()
-            if not focus_widget: return True
-            if focus_widget is table: return True
-            if hasattr(table, "isAncestorOf") and table.isAncestorOf(focus_widget): return True
+            if not focus_widget:
+                return True
+            if focus_widget is table:
+                return True
+            if hasattr(table, "isAncestorOf") and table.isAncestorOf(focus_widget):
+                return True
             return False
         except Exception:
             return False
@@ -792,9 +867,10 @@ class EstimateEntryWidget(QWidget):
             if not item:
                 item = QTableWidgetItem("")
                 self.item_table.setItem(row, col, item)
-            
+
             flags = Qt.ItemIsSelectable | Qt.ItemIsEnabled
-            if editable: flags |= Qt.ItemIsEditable
+            if editable:
+                flags |= Qt.ItemIsEditable
             item.setFlags(flags)
             return item
         except Exception:
@@ -843,35 +919,44 @@ class EstimateEntryWidget(QWidget):
     # --- Calculations -------------------------------------------------------
 
     def calculate_net_weight(self):
-        if self.current_row < 0: return
+        if self.current_row < 0:
+            return
         try:
             gross = self._get_cell_float(self.current_row, COL_GROSS)
             poly = self._get_cell_float(self.current_row, COL_POLY)
             net = compute_net_weight(gross, poly)
-            net_item = self._ensure_cell_exists(self.current_row, COL_NET_WT, editable=False)
+            net_item = self._ensure_cell_exists(
+                self.current_row, COL_NET_WT, editable=False
+            )
             net_item.setText(f"{net:.2f}")
             self.calculate_fine()
             self.calculate_wage()
-        except Exception: pass
+        except Exception:
+            pass
 
     def calculate_fine(self):
-        if self.current_row < 0: return
+        if self.current_row < 0:
+            return
         try:
             net = self._get_cell_float(self.current_row, COL_NET_WT)
             purity = self._get_cell_float(self.current_row, COL_PURITY)
             fine = compute_fine_weight(net, purity)
-            fine_item = self._ensure_cell_exists(self.current_row, COL_FINE_WT, editable=False)
+            fine_item = self._ensure_cell_exists(
+                self.current_row, COL_FINE_WT, editable=False
+            )
             fine_item.setText(f"{fine:.2f}")
             self.calculate_totals()
-        except Exception: pass
+        except Exception:
+            pass
 
     def calculate_wage(self):
-        if self.current_row < 0: return
+        if self.current_row < 0:
+            return
         try:
             net = self._get_cell_float(self.current_row, COL_NET_WT)
             wage_rate = self._get_cell_float(self.current_row, COL_WAGE_RATE)
             pieces = self._get_cell_int(self.current_row, COL_PIECES)
-            
+
             wage_basis = "WT"
             repo = getattr(self.presenter, "repository", None)
             if repo:
@@ -879,7 +964,8 @@ class EstimateEntryWidget(QWidget):
                 code = code_item.text().strip() if code_item else ""
                 if code:
                     item_data = repo.fetch_item(code)
-                    if item_data: wage_basis = item_data.get("wage_type", "WT")
+                    if item_data:
+                        wage_basis = item_data.get("wage_type", "WT")
 
             wage = compute_wage_amount(
                 wage_basis,
@@ -887,16 +973,20 @@ class EstimateEntryWidget(QWidget):
                 wage_rate=wage_rate,
                 pieces=pieces,
             )
-            wage_item = self._ensure_cell_exists(self.current_row, COL_WAGE_AMT, editable=False)
+            wage_item = self._ensure_cell_exists(
+                self.current_row, COL_WAGE_AMT, editable=False
+            )
             wage_item.setText(f"{wage:.0f}")
             self.calculate_totals()
-        except Exception: pass
+        except Exception:
+            pass
 
     def calculate_totals(self):
         if self.presenter:
             try:
                 self.presenter.refresh_totals()
-            except Exception: pass
+            except Exception:
+                pass
 
         state = self.capture_state()
         totals = compute_totals(
@@ -912,24 +1002,30 @@ class EstimateEntryWidget(QWidget):
     def generate_voucher(self):
         try:
             self.voucher_edit.editingFinished.disconnect(self.safe_load_estimate)
-        except TypeError: pass
-        
-        if self.presenter: self.presenter.generate_voucher()
+        except TypeError:
+            pass
+
+        if self.presenter:
+            self.presenter.generate_voucher()
         if hasattr(self, "delete_estimate_button"):
-             self.delete_estimate_button.setEnabled(False)
+            self.delete_estimate_button.setEnabled(False)
         self._estimate_loaded = False
-        
+
         try:
             self.voucher_edit.editingFinished.connect(self.safe_load_estimate)
-        except Exception: pass
+        except Exception:
+            pass
 
     def load_estimate(self):
-        if self.initializing: return
-        if not self.presenter: return
-        
+        if self.initializing:
+            return
+        if not self.presenter:
+            return
+
         voucher_no = self.voucher_edit.text().strip()
-        if not voucher_no: return
-        
+        if not voucher_no:
+            return
+
         self._status(f"Loading estimate {voucher_no}...", 2000)
         try:
             loaded = self.presenter.load_estimate(voucher_no)
@@ -937,7 +1033,9 @@ class EstimateEntryWidget(QWidget):
                 if self.apply_loaded_estimate(loaded):
                     self._status(f"Estimate {voucher_no} loaded successfully.", 3000)
             else:
-                self._status(f"Estimate {voucher_no} not found. Starting new entry.", 4000)
+                self._status(
+                    f"Estimate {voucher_no} not found. Starting new entry.", 4000
+                )
                 self._estimate_loaded = False
                 if hasattr(self, "delete_estimate_button"):
                     self.delete_estimate_button.setEnabled(False)
@@ -946,25 +1044,32 @@ class EstimateEntryWidget(QWidget):
             self._status(f"Error loading estimate: {exc}", 4000)
 
     def safe_load_estimate(self):
-        if self._loading_estimate: return
-        if self.initializing: return
-        
+        if self._loading_estimate:
+            return
+        if self.initializing:
+            return
+
         voucher_text = self.voucher_edit.text().strip()
-        if not voucher_text: return
-        
+        if not voucher_text:
+            return
+
         if self.has_unsaved_changes():
             reply = QMessageBox.question(
-                self, "Discard Unsaved Changes?",
+                self,
+                "Discard Unsaved Changes?",
                 "You have unsaved changes. Loading another estimate will discard them.\n\nContinue?",
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
             )
-            if reply != QMessageBox.Yes: return
-            
+            if reply != QMessageBox.Yes:
+                return
+
         self._loading_estimate = True
         blocker = QSignalBlocker(self.voucher_edit)
         try:
             self.load_estimate()
-        except Exception: pass
+        except Exception:
+            pass
         finally:
             del blocker
             self._loading_estimate = False
@@ -975,7 +1080,8 @@ class EstimateEntryWidget(QWidget):
             QMessageBox.warning(self, "Input Error", "Voucher number is required.")
             return
 
-        if not self.presenter: return
+        if not self.presenter:
+            return
 
         self._status(f"Saving estimate {voucher_no}...", 2000)
         self._update_view_model_snapshot()
@@ -985,10 +1091,12 @@ class EstimateEntryWidget(QWidget):
             outcome, preparation = service.execute_save(
                 voucher_no=voucher_no,
                 date=self.date_edit.date().toString("yyyy-MM-dd"),
-                note=self.note_edit.text().strip() if hasattr(self, "note_edit") else "",
+                note=(
+                    self.note_edit.text().strip() if hasattr(self, "note_edit") else ""
+                ),
                 presenter=self.presenter,
             )
-            
+
             if outcome.success:
                 self._status(outcome.message, 5000)
                 QMessageBox.information(self, "Success", outcome.message)
@@ -998,29 +1106,34 @@ class EstimateEntryWidget(QWidget):
                 QMessageBox.critical(self, "Save Error", outcome.message)
                 self._status(outcome.message, 5000)
         except Exception as exc:
-             QMessageBox.critical(self, "Save Error", str(exc))
+            QMessageBox.critical(self, "Save Error", str(exc))
 
     def delete_current_estimate(self):
         voucher_no = self.voucher_edit.text().strip()
-        if not voucher_no: return
-        
+        if not voucher_no:
+            return
+
         reply = QMessageBox.warning(
-            self, "Confirm Delete",
+            self,
+            "Confirm Delete",
             f"Are you sure you want to delete estimate '{voucher_no}'?",
-            QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel
+            QMessageBox.Yes | QMessageBox.Cancel,
+            QMessageBox.Cancel,
         )
         if reply == QMessageBox.Yes and self.presenter:
-             if self.presenter.delete_estimate(voucher_no):
-                 self._status(f"Estimate {voucher_no} deleted.", 3000)
-                 self.clear_form(confirm=False)
-             else:
-                 QMessageBox.warning(self, "Error", "Could not delete estimate.")
+            if self.presenter.delete_estimate(voucher_no):
+                self._status(f"Estimate {voucher_no} deleted.", 3000)
+                self.clear_form(confirm=False)
+            else:
+                QMessageBox.warning(self, "Error", "Could not delete estimate.")
 
     def print_estimate(self):
         from silverestimate.ui.print_manager import PrintManager
+
         voucher_no = self.voucher_edit.text().strip()
-        if not voucher_no: return
-        
+        if not voucher_no:
+            return
+
         current_font = getattr(self.main_window, "print_font", None)
         pm = PrintManager(self.db_manager, print_font=current_font)
         pm.print_estimate(voucher_no, self)
@@ -1028,32 +1141,39 @@ class EstimateEntryWidget(QWidget):
     def clear_form(self, confirm: bool = True):
         if confirm:
             reply = QMessageBox.question(
-                self, "Confirm New Estimate",
+                self,
+                "Confirm New Estimate",
                 "Start a new estimate? Unsaved changes will be lost.",
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
             )
-            if reply != QMessageBox.Yes: return
+            if reply != QMessageBox.Yes:
+                return
 
         self._push_unsaved_block()
         self.item_table.blockSignals(True)
         self.processing_cell = True
         try:
             self.voucher_edit.clear()
-            if self.presenter: self.presenter.generate_voucher()
+            if self.presenter:
+                self.presenter.generate_voucher()
             self.date_edit.setDate(QDate.currentDate())
             self.silver_rate_spin.setValue(0)
-            if hasattr(self, "note_edit"): self.note_edit.clear()
-            
+            if hasattr(self, "note_edit"):
+                self.note_edit.clear()
+
             self.last_balance_silver = 0.0
             self.last_balance_amount = 0.0
-            
-            if self.return_mode: self.toggle_return_mode()
-            if self.silver_bar_mode: self.toggle_silver_bar_mode()
-            
+
+            if self.return_mode:
+                self.toggle_return_mode()
+            if self.silver_bar_mode:
+                self.toggle_silver_bar_mode()
+
             self.clear_all_rows()
             self.add_empty_row()
             self.calculate_totals()
-            
+
             self._estimate_loaded = False
             if hasattr(self, "delete_estimate_button"):
                 self.delete_estimate_button.setEnabled(False)
@@ -1065,11 +1185,14 @@ class EstimateEntryWidget(QWidget):
         self._set_unsaved(False, force=True)
 
     def confirm_exit(self) -> bool:
-        if not self.has_unsaved_changes(): return True
+        if not self.has_unsaved_changes():
+            return True
         reply = QMessageBox.question(
-            self, "Discard Changes?",
+            self,
+            "Discard Changes?",
             "You have unsaved changes. Exit anyway?",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
         )
         return reply == QMessageBox.Yes
 
@@ -1081,8 +1204,9 @@ class EstimateEntryWidget(QWidget):
 
     def _update_row_type_visuals_direct(self, type_item):
         try:
-            if not type_item: return
-            
+            if not type_item:
+                return
+
             if self.return_mode:
                 type_item.setText("return")
                 type_item.setBackground(QColor(255, 200, 200))
@@ -1092,7 +1216,8 @@ class EstimateEntryWidget(QWidget):
             else:
                 type_item.setText("regular")
                 type_item.setBackground(QColor(255, 255, 255))
-        except Exception: pass
+        except Exception:
+            pass
 
     def _set_row_type_visuals_from_category(self, row, category):
         try:
@@ -1100,7 +1225,7 @@ class EstimateEntryWidget(QWidget):
             if not type_item:
                 type_item = QTableWidgetItem("")
                 self.item_table.setItem(row, COL_TYPE, type_item)
-                
+
             if category.is_return():
                 type_item.setText("return")
                 type_item.setBackground(QColor(255, 200, 200))
@@ -1111,20 +1236,25 @@ class EstimateEntryWidget(QWidget):
                 type_item.setText("regular")
                 type_item.setBackground(QColor(255, 255, 255))
             type_item.setTextAlignment(Qt.AlignCenter)
-        except Exception: pass
+        except Exception:
+            pass
 
     def toggle_return_mode(self):
         if not self.return_mode and self.silver_bar_mode:
-            self.toggle_silver_bar_mode() # Mutual exclusion
+            self.toggle_silver_bar_mode()  # Mutual exclusion
 
         self.return_mode = not self.return_mode
         self.return_toggle_button.setChecked(self.return_mode)
-        
+
         if self.return_mode:
             self.return_toggle_button.setText("↩ RETURN ON")
-            self.return_toggle_button.setStyleSheet("background-color: #e8f4fd; border: 2px solid #0066cc; font-weight: bold; color: #003d7a;")
+            self.return_toggle_button.setStyleSheet(
+                "background-color: #e8f4fd; border: 2px solid #0066cc; font-weight: bold; color: #003d7a;"
+            )
             self.mode_indicator_label.setText("Mode: Return Items")
-            self.mode_indicator_label.setStyleSheet("font-weight: bold; color: #0066cc;")
+            self.mode_indicator_label.setStyleSheet(
+                "font-weight: bold; color: #0066cc;"
+            )
         else:
             self.return_toggle_button.setText("↩ Return Items")
             self.return_toggle_button.setStyleSheet("")
@@ -1133,7 +1263,9 @@ class EstimateEntryWidget(QWidget):
 
         self._get_table_adapter().refresh_empty_row_type()
         self.focus_on_empty_row(update_visuals=True)
-        self.view_model.set_modes(return_mode=self.return_mode, silver_bar_mode=self.silver_bar_mode)
+        self.view_model.set_modes(
+            return_mode=self.return_mode, silver_bar_mode=self.silver_bar_mode
+        )
         self._update_mode_tooltip()
 
     def toggle_silver_bar_mode(self):
@@ -1142,39 +1274,55 @@ class EstimateEntryWidget(QWidget):
 
         self.silver_bar_mode = not self.silver_bar_mode
         self.silver_bar_toggle_button.setChecked(self.silver_bar_mode)
-        
+
         if self.silver_bar_mode:
             self.silver_bar_toggle_button.setText("🥈 BAR ON")
-            self.silver_bar_toggle_button.setStyleSheet("background-color: #fff4e6; border: 2px solid #cc6600; font-weight: bold; color: #994d00;")
+            self.silver_bar_toggle_button.setStyleSheet(
+                "background-color: #fff4e6; border: 2px solid #cc6600; font-weight: bold; color: #994d00;"
+            )
             self.mode_indicator_label.setText("Mode: Silver Bars")
-            self.mode_indicator_label.setStyleSheet("font-weight: bold; color: #cc6600;")
+            self.mode_indicator_label.setStyleSheet(
+                "font-weight: bold; color: #cc6600;"
+            )
         else:
             self.silver_bar_toggle_button.setText("🥈 Silver Bars")
             self.silver_bar_toggle_button.setStyleSheet("")
             self.mode_indicator_label.setText("Mode: Regular")
             self.mode_indicator_label.setStyleSheet("")
-            
+
         self._get_table_adapter().refresh_empty_row_type()
         self.focus_on_empty_row(update_visuals=True)
-        self.view_model.set_modes(return_mode=self.return_mode, silver_bar_mode=self.silver_bar_mode)
+        self.view_model.set_modes(
+            return_mode=self.return_mode, silver_bar_mode=self.silver_bar_mode
+        )
         self._update_mode_tooltip()
 
     def delete_current_row(self):
         row = self.item_table.currentRow()
-        if row < 0: return
+        if row < 0:
+            return
         if self.item_table.rowCount() <= 1:
             QMessageBox.warning(self, "Error", "Cannot delete the only row.")
             return
 
-        reply = QMessageBox.question(self, "Delete Row", f"Delete row {row+1}?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        reply = QMessageBox.question(
+            self,
+            "Delete Row",
+            f"Delete row {row+1}?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
         if reply == QMessageBox.Yes:
             self.item_table.removeRow(row)
             self.calculate_totals()
             self._mark_unsaved()
-            if self.item_table.rowCount() == 0: self.add_empty_row()
-            
+            if self.item_table.rowCount() == 0:
+                self.add_empty_row()
+
             new_row = min(row, self.item_table.rowCount() - 1)
-            QTimer.singleShot(0, lambda: self.item_table.setCurrentCell(new_row, COL_CODE))
+            QTimer.singleShot(
+                0, lambda: self.item_table.setCurrentCell(new_row, COL_CODE)
+            )
 
     def focus_on_empty_row(self, update_visuals=False):
         self._get_table_adapter().focus_on_empty_row(update_visuals=update_visuals)
@@ -1199,7 +1347,7 @@ class EstimateEntryWidget(QWidget):
     def prompt_item_selection(self, code: str) -> Optional[Dict]:
         dialog = ItemSelectionDialog(self.db_manager, code, self)
         if dialog.exec_() == QDialog.Accepted:
-             return dialog.get_selected_item()
+            return dialog.get_selected_item()
         return None
 
     def focus_after_item_lookup(self, row_index: int) -> None:
@@ -1207,7 +1355,10 @@ class EstimateEntryWidget(QWidget):
 
     def open_history_dialog(self) -> Optional[str]:
         from silverestimate.ui.estimate_history import EstimateHistoryDialog
-        dialog = EstimateHistoryDialog(self.db_manager, main_window_ref=self.main_window, parent=self)
+
+        dialog = EstimateHistoryDialog(
+            self.db_manager, main_window_ref=self.main_window, parent=self
+        )
         if dialog.exec_() == QDialog.Accepted:
             return dialog.selected_voucher
         return None
@@ -1225,52 +1376,75 @@ class EstimateEntryWidget(QWidget):
         self.processing_cell = True
         try:
             self.clear_all_rows()
-            
+
             try:
                 date = QDate.fromString(loaded.date, "yyyy-MM-dd")
                 self.date_edit.setDate(date if date.isValid() else QDate.currentDate())
-            except: self.date_edit.setDate(QDate.currentDate())
+            except:
+                self.date_edit.setDate(QDate.currentDate())
 
             self.silver_rate_spin.setValue(loaded.silver_rate)
-            if hasattr(self, "note_edit"): self.note_edit.setText(loaded.note or "")
-            
+            if hasattr(self, "note_edit"):
+                self.note_edit.setText(loaded.note or "")
+
             self.last_balance_silver = loaded.last_balance_silver
             self.last_balance_amount = loaded.last_balance_amount
-            
-            row_states = EstimateEntryPersistenceService.build_row_states_from_items(loaded.items)
-            
+
+            row_states = EstimateEntryPersistenceService.build_row_states_from_items(
+                loaded.items
+            )
+
             for row_state in row_states:
                 row = self.item_table.rowCount()
                 self.item_table.insertRow(row)
-                
+
                 code_item = QTableWidgetItem(row_state.code.upper())
                 code_item.setData(Qt.UserRole, row_state.code)
                 self.item_table.setItem(row, COL_CODE, code_item)
-                
-                self.item_table.setItem(row, COL_ITEM_NAME, QTableWidgetItem(row_state.name))
-                self.item_table.setItem(row, COL_GROSS, QTableWidgetItem(f"{row_state.gross:.2f}"))
-                self.item_table.setItem(row, COL_POLY, QTableWidgetItem(f"{row_state.poly:.2f}"))
-                self.item_table.setItem(row, COL_NET_WT, QTableWidgetItem(f"{row_state.net_weight:.2f}"))
-                self.item_table.setItem(row, COL_PURITY, QTableWidgetItem(f"{row_state.purity:.2f}"))
-                self.item_table.setItem(row, COL_WAGE_RATE, QTableWidgetItem(f"{row_state.wage_rate:.2f}"))
-                self.item_table.setItem(row, COL_PIECES, QTableWidgetItem(str(row_state.pieces)))
-                self.item_table.setItem(row, COL_WAGE_AMT, QTableWidgetItem(f"{row_state.wage_amount:.0f}"))
-                self.item_table.setItem(row, COL_FINE_WT, QTableWidgetItem(f"{row_state.fine_weight:.2f}"))
-                
+
+                self.item_table.setItem(
+                    row, COL_ITEM_NAME, QTableWidgetItem(row_state.name)
+                )
+                self.item_table.setItem(
+                    row, COL_GROSS, QTableWidgetItem(f"{row_state.gross:.2f}")
+                )
+                self.item_table.setItem(
+                    row, COL_POLY, QTableWidgetItem(f"{row_state.poly:.2f}")
+                )
+                self.item_table.setItem(
+                    row, COL_NET_WT, QTableWidgetItem(f"{row_state.net_weight:.2f}")
+                )
+                self.item_table.setItem(
+                    row, COL_PURITY, QTableWidgetItem(f"{row_state.purity:.2f}")
+                )
+                self.item_table.setItem(
+                    row, COL_WAGE_RATE, QTableWidgetItem(f"{row_state.wage_rate:.2f}")
+                )
+                self.item_table.setItem(
+                    row, COL_PIECES, QTableWidgetItem(str(row_state.pieces))
+                )
+                self.item_table.setItem(
+                    row, COL_WAGE_AMT, QTableWidgetItem(f"{row_state.wage_amount:.0f}")
+                )
+                self.item_table.setItem(
+                    row, COL_FINE_WT, QTableWidgetItem(f"{row_state.fine_weight:.2f}")
+                )
+
                 self._set_row_type_visuals_from_category(row, row_state.category)
 
                 # Lock calculated cells
                 for col in [COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT, COL_TYPE]:
                     item = self.item_table.item(row, col)
-                    if item: item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                    if item:
+                        item.setFlags(item.flags() & ~Qt.ItemIsEditable)
 
             self.add_empty_row()
             self.calculate_totals()
             self._estimate_loaded = True
-            
+
             if hasattr(self, "delete_estimate_button"):
                 self.delete_estimate_button.setEnabled(True)
-                
+
             self.set_voucher_number(loaded.voucher_no)
             return True
         except Exception as exc:
@@ -1283,7 +1457,7 @@ class EstimateEntryWidget(QWidget):
             self._set_unsaved(False, force=True)
 
     # --- Live Rate ----------------------------------------------------------
-    
+
     def refresh_silver_rate(self):
         button = getattr(self, "refresh_rate_button", None)
         if button is not None:
@@ -1340,35 +1514,43 @@ class EstimateEntryWidget(QWidget):
         for row in range(table.rowCount()):
             try:
                 type_item = table.item(row, COL_TYPE)
-                category = EstimateLineCategory.from_label(type_item.text() if type_item else None)
-                
-                rows.append(EstimateEntryRowState(
-                    code=self._get_row_code(row),
-                    name=self._get_cell_str(row, COL_ITEM_NAME),
-                    gross=self._get_cell_float(row, COL_GROSS),
-                    poly=self._get_cell_float(row, COL_POLY),
-                    net_weight=self._get_cell_float(row, COL_NET_WT),
-                    purity=self._get_cell_float(row, COL_PURITY),
-                    wage_rate=self._get_cell_float(row, COL_WAGE_RATE),
-                    pieces=self._get_cell_int(row, COL_PIECES),
-                    wage_amount=self._get_cell_float(row, COL_WAGE_AMT),
-                    fine_weight=self._get_cell_float(row, COL_FINE_WT),
-                    category=category,
-                    row_index=row + 1
-                ))
-            except: continue
-            
+                category = EstimateLineCategory.from_label(
+                    type_item.text() if type_item else None
+                )
+
+                rows.append(
+                    EstimateEntryRowState(
+                        code=self._get_row_code(row),
+                        name=self._get_cell_str(row, COL_ITEM_NAME),
+                        gross=self._get_cell_float(row, COL_GROSS),
+                        poly=self._get_cell_float(row, COL_POLY),
+                        net_weight=self._get_cell_float(row, COL_NET_WT),
+                        purity=self._get_cell_float(row, COL_PURITY),
+                        wage_rate=self._get_cell_float(row, COL_WAGE_RATE),
+                        pieces=self._get_cell_int(row, COL_PIECES),
+                        wage_amount=self._get_cell_float(row, COL_WAGE_AMT),
+                        fine_weight=self._get_cell_float(row, COL_FINE_WT),
+                        category=category,
+                        row_index=row + 1,
+                    )
+                )
+            except:
+                continue
+
         self.view_model.set_rows(rows)
         self.view_model.set_totals_inputs(
             silver_rate=self.silver_rate_spin.value(),
             last_balance_silver=self.last_balance_silver,
-            last_balance_amount=self.last_balance_amount
+            last_balance_amount=self.last_balance_amount,
         )
-        self.view_model.set_modes(return_mode=self.return_mode, silver_bar_mode=self.silver_bar_mode)
+        self.view_model.set_modes(
+            return_mode=self.return_mode, silver_bar_mode=self.silver_bar_mode
+        )
 
     def _get_row_code(self, row):
         item = self.item_table.item(row, COL_CODE)
-        if not item: return ""
+        if not item:
+            return ""
         data = item.data(Qt.UserRole)
         return str(data).strip() if data else item.text().strip()
 
@@ -1383,23 +1565,23 @@ class EstimateEntryWidget(QWidget):
         dialog.setWindowTitle("Enter Last Balance")
         layout = QVBoxLayout(dialog)
         form = QFormLayout()
-        
+
         lb_silver = QDoubleSpinBox()
         lb_silver.setRange(0, 1000000)
         lb_silver.setValue(self.last_balance_silver)
         form.addRow("Silver Weight (g):", lb_silver)
-        
+
         lb_amount = QDoubleSpinBox()
         lb_amount.setRange(0, 10000000)
         lb_amount.setValue(self.last_balance_amount)
         form.addRow("Amount:", lb_amount)
-        
+
         layout.addLayout(form)
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btns.accepted.connect(dialog.accept)
         btns.rejected.connect(dialog.reject)
         layout.addWidget(btns)
-        
+
         if dialog.exec_():
             self.last_balance_silver = lb_silver.value()
             self.last_balance_amount = lb_amount.value()
@@ -1413,15 +1595,21 @@ class EstimateEntryWidget(QWidget):
 
     def _save_column_widths_setting(self):
         try:
-             widths = [str(self.item_table.columnWidth(i)) for i in range(self.item_table.columnCount())]
-             self._settings().setValue("ui/estimate_table_column_widths", ",".join(widths))
-        except: pass
+            widths = [
+                str(self.item_table.columnWidth(i))
+                for i in range(self.item_table.columnCount())
+            ]
+            self._settings().setValue(
+                "ui/estimate_table_column_widths", ",".join(widths)
+            )
+        except:
+            pass
 
     def _load_column_widths_setting(self):
         val = self._settings().value("ui/estimate_table_column_widths", type=str)
         if val:
             try:
-                widths = [int(w) for w in val.split(',')]
+                widths = [int(w) for w in val.split(",")]
                 for i, w in enumerate(widths):
                     if i < self.item_table.columnCount():
                         self.item_table.setColumnWidth(i, w)
@@ -1437,9 +1625,14 @@ class EstimateEntryWidget(QWidget):
             self._column_save_timer.start()
 
     def _auto_stretch_item_name(self):
-        if not self._use_stretch_for_item_name: return
+        if not self._use_stretch_for_item_name:
+            return
         total = self.item_table.viewport().width()
-        used = sum(self.item_table.columnWidth(i) for i in range(self.item_table.columnCount()) if i != COL_ITEM_NAME)
+        used = sum(
+            self.item_table.columnWidth(i)
+            for i in range(self.item_table.columnCount())
+            if i != COL_ITEM_NAME
+        )
         self._programmatic_resizing = True
         self.item_table.setColumnWidth(COL_ITEM_NAME, max(150, total - used - 20))
         self._programmatic_resizing = False
@@ -1461,7 +1654,7 @@ class EstimateEntryWidget(QWidget):
         self._auto_stretch_item_name()
 
     # --- Font Sizes ---------------------------------------------------------
-    
+
     def _load_table_font_size_setting(self):
         size = self._settings().value("ui/table_font_size", defaultValue=9, type=int)
         font = self.item_table.font()
@@ -1469,11 +1662,15 @@ class EstimateEntryWidget(QWidget):
         self.item_table.setFont(font)
 
     def _load_breakdown_font_size_setting(self):
-        size = self._settings().value("ui/breakdown_font_size", defaultValue=9, type=int)
+        size = self._settings().value(
+            "ui/breakdown_font_size", defaultValue=9, type=int
+        )
         self.totals_panel.set_breakdown_font_size(size)
 
     def _load_final_calc_font_size_setting(self):
-        size = self._settings().value("ui/final_calc_font_size", defaultValue=10, type=int)
+        size = self._settings().value(
+            "ui/final_calc_font_size", defaultValue=10, type=int
+        )
         self.totals_panel.set_final_calc_font_size(size)
 
     # --- Keyboard -----------------------------------------------------------
@@ -1493,9 +1690,8 @@ class EstimateEntryWidget(QWidget):
                 return
 
         focus_widget = QApplication.focusWidget()
-        table_has_focus = (
-            focus_widget is self.item_table
-            or (focus_widget is not None and self.item_table.isAncestorOf(focus_widget))
+        table_has_focus = focus_widget is self.item_table or (
+            focus_widget is not None and self.item_table.isAncestorOf(focus_widget)
         )
 
         if table_has_focus and key in [Qt.Key_Return, Qt.Key_Enter, Qt.Key_Tab]:
@@ -1521,5 +1717,6 @@ class EstimateEntryWidget(QWidget):
     def reconnect_load_estimate(self):
         try:
             self.voucher_edit.editingFinished.disconnect(self.safe_load_estimate)
-        except: pass
+        except:
+            pass
         self.voucher_edit.editingFinished.connect(self.safe_load_estimate)

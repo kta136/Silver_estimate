@@ -6,10 +6,7 @@ from typing import Dict, Iterable, List
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.presenter import SaveItem, SaveOutcome, SavePayload
 from silverestimate.services.estimate_calculator import compute_totals
-from silverestimate.ui.view_models import (
-    EstimateEntryRowState,
-    EstimateEntryViewModel,
-)
+from silverestimate.ui.view_models import EstimateEntryRowState, EstimateEntryViewModel
 
 
 @dataclass(frozen=True)
@@ -131,9 +128,11 @@ class EstimateEntryPersistenceService:
             category = (
                 EstimateLineCategory.RETURN
                 if item.is_return
-                else EstimateLineCategory.SILVER_BAR
-                if item.is_silver_bar
-                else EstimateLineCategory.REGULAR
+                else (
+                    EstimateLineCategory.SILVER_BAR
+                    if item.is_silver_bar
+                    else EstimateLineCategory.REGULAR
+                )
             )
             rows.append(
                 EstimateEntryRowState(

@@ -97,7 +97,9 @@ def test_flush_scheduler_shutdown_cancels_timer(scheduler_events):
 
     time.sleep(0.1)
 
-    assert not scheduler_events["done"].is_set(), "Flush should not have run after shutdown"
+    assert not scheduler_events[
+        "done"
+    ].is_set(), "Flush should not have run after shutdown"
     assert counts == {"commit": 0, "checkpoint": 0, "encrypt": 0}
 
     scheduler.shutdown()

@@ -1,4 +1,5 @@
 """Pure calculation helpers for estimate entry."""
+
 from __future__ import annotations
 
 from typing import Iterable
@@ -92,4 +93,3 @@ def compute_totals(
         last_balance_silver=last_balance_silver,
         last_balance_amount=last_balance_amount,
     )
-

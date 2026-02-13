@@ -11,12 +11,12 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QShortcut,
     QSizePolicy,
     QStyle,
     QToolButton,
     QVBoxLayout,
     QWidget,
-    QShortcut,
 )
 
 
@@ -43,7 +43,12 @@ class SecondaryActionsBar(QWidget):
     refresh_rate_clicked = pyqtSignal()
     delete_estimate_clicked = pyqtSignal()
 
-    def __init__(self, parent: Optional[QWidget] = None, *, shortcut_parent: Optional[QWidget] = None):
+    def __init__(
+        self,
+        parent: Optional[QWidget] = None,
+        *,
+        shortcut_parent: Optional[QWidget] = None,
+    ):
         """Initialize the secondary actions bar.
 
         Args:
@@ -249,7 +254,9 @@ class SecondaryActionsBar(QWidget):
 
         self.refresh_rate_button = QToolButton()
         self.refresh_rate_button.setToolTip("Refresh live silver rate and set it here")
-        self.refresh_rate_button.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
+        self.refresh_rate_button.setIcon(
+            self.style().standardIcon(QStyle.SP_BrowserReload)
+        )
         self.refresh_rate_button.setAutoRaise(True)
         self.refresh_rate_button.setCursor(Qt.PointingHandCursor)
         self.refresh_rate_button.setAccessibleName("Refresh Silver Rate")
@@ -287,7 +294,11 @@ class SecondaryActionsBar(QWidget):
         are being edited (cell editors are not considered children in Qt's
         shortcut propagation).
         """
-        target = self._shortcut_parent if isinstance(self._shortcut_parent, QWidget) else self
+        target = (
+            self._shortcut_parent
+            if isinstance(self._shortcut_parent, QWidget)
+            else self
+        )
         self._shortcuts: list[QShortcut] = []
 
         delete_row_shortcut = QShortcut(QKeySequence("Ctrl+D"), target)

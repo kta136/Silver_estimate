@@ -1,4 +1,5 @@
 """Controller responsible for building menus and navigation actions."""
+
 from __future__ import annotations
 
 import logging
@@ -110,12 +111,16 @@ class NavigationController:
         tools_menu = menu_bar.addMenu("&Tools")
 
         silver_bars_action = QAction("&Silver Bar Management", self._main_window)
-        silver_bars_action.setStatusTip("Add, view, transfer, or assign silver bars to lists")
+        silver_bars_action.setStatusTip(
+            "Add, view, transfer, or assign silver bars to lists"
+        )
         silver_bars_action.triggered.connect(self.show_silver_bars)
         tools_menu.addAction(silver_bars_action)
 
         silver_history_action = QAction("Silver Bar &History", self._main_window)
-        silver_history_action.setStatusTip("View history of all silver bars and issued lists")
+        silver_history_action.setStatusTip(
+            "View history of all silver bars and issued lists"
+        )
         silver_history_action.triggered.connect(self.show_silver_bar_history)
         tools_menu.addAction(silver_history_action)
 
@@ -127,7 +132,9 @@ class NavigationController:
         tools_menu.addAction(settings_action)
 
         refresh_rate_action = QAction("Refresh Live Rate Now", self._main_window)
-        refresh_rate_action.setStatusTip("Fetch the latest live silver rate immediately")
+        refresh_rate_action.setStatusTip(
+            "Fetch the latest live silver rate immediately"
+        )
         refresh_rate_action.triggered.connect(self.refresh_live_rate)
         tools_menu.addAction(refresh_rate_action)
         self._main_window.refresh_rate_action = refresh_rate_action
@@ -136,9 +143,15 @@ class NavigationController:
         view_group = QActionGroup(self._main_window)
         view_group.setExclusive(True)
 
-        view_estimate_action = QAction("&Estimate Entry", self._main_window, checkable=True)
-        view_item_master_action = QAction("&Item Master", self._main_window, checkable=True)
-        view_silver_bars_action = QAction("&Silver Bars", self._main_window, checkable=True)
+        view_estimate_action = QAction(
+            "&Estimate Entry", self._main_window, checkable=True
+        )
+        view_item_master_action = QAction(
+            "&Item Master", self._main_window, checkable=True
+        )
+        view_silver_bars_action = QAction(
+            "&Silver Bars", self._main_window, checkable=True
+        )
 
         view_group.addAction(view_estimate_action)
         view_group.addAction(view_item_master_action)

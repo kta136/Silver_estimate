@@ -36,6 +36,7 @@ class _MessageBoxStub:
 
 def test_run_authentication_first_time(monkeypatch, settings_stub):
     _MessageBoxStub.reset()
+
     class _SetupDialog:
         def __init__(self, is_setup=False, parent=None):
             assert is_setup is True
@@ -106,7 +107,9 @@ def test_run_authentication_existing_password(monkeypatch, settings_stub):
     assert settings.value("security/backup_hash") is None
 
 
-def test_run_authentication_secondary_password_triggers_silent_wipe(monkeypatch, settings_stub):
+def test_run_authentication_secondary_password_triggers_silent_wipe(
+    monkeypatch, settings_stub
+):
     _MessageBoxStub.reset()
     settings = settings_stub()
     settings.setValue("security/password_hash", "stored-hash")
@@ -160,14 +163,21 @@ def test_perform_data_wipe_removes_files(tmp_path, monkeypatch, settings_stub):
 
     monkeypatch.setattr(auth_service, "QMessageBox", _MessageBoxStub)
 
-    result = auth_service.perform_data_wipe(db_path=str(db_file), logger=logging.getLogger("test-wipe"))
+    result = auth_service.perform_data_wipe(
+        db_path=str(db_file), logger=logging.getLogger("test-wipe")
+    )
 
     assert result is True
     assert not db_file.exists()
     assert not temp_file.exists()
     assert credential_store.get_password_hash("main") is None
     assert credential_store.get_password_hash("backup") is None
-    for key in ("security/password_hash", "security/backup_hash", "security/db_salt", "security/last_temp_db_path"):
+    for key in (
+        "security/password_hash",
+        "security/backup_hash",
+        "security/db_salt",
+        "security/last_temp_db_path",
+    ):
         assert settings.value(key) is None
 
 
@@ -197,7 +207,11 @@ def test_perform_data_wipe_silent_removes_logs(tmp_path, monkeypatch, settings_s
         }
 
     monkeypatch.setattr(auth_service, "QMessageBox", _MessageBoxStub)
-    monkeypatch.setattr("silverestimate.infrastructure.logger.get_log_config", _get_log_config, raising=False)
+    monkeypatch.setattr(
+        "silverestimate.infrastructure.logger.get_log_config",
+        _get_log_config,
+        raising=False,
+    )
 
     result = auth_service.perform_data_wipe(
         db_path=str(db_file),
@@ -221,10 +235,16 @@ def test_perform_data_wipe_failure_notifies_user(tmp_path, monkeypatch, settings
     def _boom(path):  # noqa: ARG001
         raise OSError("boom")
 
-    monkeypatch.setattr(auth_service, "os", types.SimpleNamespace(remove=_boom, path=auth_service.os.path))
+    monkeypatch.setattr(
+        auth_service,
+        "os",
+        types.SimpleNamespace(remove=_boom, path=auth_service.os.path),
+    )
     monkeypatch.setattr(auth_service, "QMessageBox", _MessageBoxStub)
 
-    result = auth_service.perform_data_wipe(db_path=str(db_file), logger=logging.getLogger("test-wipe-fail"))
+    result = auth_service.perform_data_wipe(
+        db_path=str(db_file), logger=logging.getLogger("test-wipe-fail")
+    )
 
     assert result is False
     assert db_file.exists()

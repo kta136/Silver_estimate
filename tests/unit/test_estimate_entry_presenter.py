@@ -60,8 +60,15 @@ class FakeRepository:
     def notify_silver_bars_for_estimate(self, voucher_no: str) -> None:
         self.notify_calls.append(voucher_no)
 
-    def save_estimate(self, voucher_no: str, date: str, silver_rate: float,
-                      regular_items: Iterable[Dict], return_items: Iterable[Dict], totals: Dict) -> bool:
+    def save_estimate(
+        self,
+        voucher_no: str,
+        date: str,
+        silver_rate: float,
+        regular_items: Iterable[Dict],
+        return_items: Iterable[Dict],
+        totals: Dict,
+    ) -> bool:
         self.save_calls.append(
             {
                 "voucher": voucher_no,
@@ -82,7 +89,9 @@ class FakeRepository:
             return self.update_bar_results.pop(0)
         return True
 
-    def add_silver_bar(self, voucher_no: str, weight: float, purity: float) -> Optional[int]:
+    def add_silver_bar(
+        self, voucher_no: str, weight: float, purity: float
+    ) -> Optional[int]:
         if self.add_bar_results:
             return self.add_bar_results.pop(0)
         return 1
@@ -118,7 +127,9 @@ class FakeView:
     def set_voucher_number(self, voucher_no: str) -> None:
         self.voucher_number = voucher_no
 
-    def show_status(self, message: str, timeout: int = 3000, level: str = "info") -> None:
+    def show_status(
+        self, message: str, timeout: int = 3000, level: str = "info"
+    ) -> None:
         self.status_messages.append(message)
 
     def populate_row(self, row_index: int, item_data: Dict) -> None:

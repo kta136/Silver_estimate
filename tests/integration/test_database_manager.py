@@ -1,7 +1,8 @@
 import pytest
 
-from tests.factories import estimate_totals, regular_item, return_item, silver_bar_item
 from silverestimate.persistence.database_manager import DatabaseManager
+from tests.factories import estimate_totals, regular_item, return_item, silver_bar_item
+
 
 def test_database_manager_roundtrip(tmp_path, settings_stub):
     db_path = tmp_path / "storage" / "estimation.db"
@@ -27,15 +28,16 @@ def test_database_manager_roundtrip(tmp_path, settings_stub):
     for store in settings_stub._data.values():
         assert "security/last_temp_db_path" not in store
 
+
 def test_database_manager_persists_estimates(tmp_path, settings_stub):
     db_path = tmp_path / "storage" / "persist_estimates.db"
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     manager = DatabaseManager(str(db_path), "test-password")
     voucher = "910"
-    manager.items_repo.add_item('REG001', 'Regular', 92.0, 'WT', 12.0)
-    manager.items_repo.add_item('RET001', 'Return', 80.0, 'WT', 0.0)
-    manager.items_repo.add_item('BAR001', 'Bar', 99.9, 'WT', 0.0)
+    manager.items_repo.add_item("REG001", "Regular", 92.0, "WT", 12.0)
+    manager.items_repo.add_item("RET001", "Return", 80.0, "WT", 0.0)
+    manager.items_repo.add_item("BAR001", "Bar", 99.9, "WT", 0.0)
     regular_payload = regular_item(
         code="REG001",
         name="Regular",

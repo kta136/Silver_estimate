@@ -30,6 +30,7 @@ class EstimateHistoryDialog(QDialog):
         self.main_window = main_window_ref  # Store the explicit reference to MainWindow
         self.selected_voucher = None
         self._load_request_id = 0
+        self._active_load_workers: dict[QThread, QObject] = {}
         self.init_ui()
         self.load_estimates()
 
@@ -190,6 +191,7 @@ class EstimateHistoryDialog(QDialog):
         worker.finished.connect(
             partial(self._loading_done, thread, worker, request_id)
         )
+        self._active_load_workers[thread] = worker
         thread.start()
         return
 
@@ -238,6 +240,7 @@ class EstimateHistoryDialog(QDialog):
             table.viewport().update()
 
     def _loading_done(self, thread, worker, request_id=None, *_) -> None:
+        self._active_load_workers.pop(thread, None)
         try:
             thread.quit()
             thread.wait(1000)
@@ -247,6 +250,34 @@ class EstimateHistoryDialog(QDialog):
             worker.deleteLater()
         except Exception:
             pass
+
+    def _cancel_active_loads(self, timeout_ms: int = 4000) -> None:
+        # Invalidate any pending UI updates from old workers.
+        self._load_request_id += 1
+        active = list(self._active_load_workers.items())
+        self._active_load_workers.clear()
+
+        for thread, worker in active:
+            try:
+                worker.deleteLater()
+            except Exception:
+                pass
+            try:
+                if thread.isRunning():
+                    thread.quit()
+                    if not thread.wait(timeout_ms):
+                        thread.terminate()
+                        thread.wait(1000)
+            except Exception:
+                pass
+
+    def reject(self):
+        self._cancel_active_loads()
+        super().reject()
+
+    def closeEvent(self, event):
+        self._cancel_active_loads()
+        super().closeEvent(event)
         if request_id is not None and request_id != self._load_request_id:
             return
         try:

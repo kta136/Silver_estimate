@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 import json
 import re
+import ssl
 import urllib.error
 import urllib.request
 from html import unescape
 from typing import Optional
+from urllib.parse import urlparse
 
 DEFAULT_BASE_URL = "http://www.ddasilver.com/"
 TARGET_NAME = "Silver Agra Local Mohar"
@@ -25,6 +27,9 @@ BROADCAST_URLS = (
 )
 BROADCAST_URL = BROADCAST_URLS[0]
 BROADCAST_CLIENT = "ddasil"
+_TLS_RETRY_ALLOWED_HOSTS = frozenset(
+    filter(None, (urlparse(url).hostname for url in BROADCAST_URLS))
+)
 
 
 def fetch_silver_agra_local_mohar_rate(
@@ -234,8 +239,48 @@ def fetch_broadcast_rate_exact(
     return rate_val, market_open, info
 
 
-def _fetch_broadcast_payload(endpoint: str, payload: bytes, timeout: int) -> str:
+def _is_tls_cert_error(exc: urllib.error.URLError) -> bool:
+    reason = getattr(exc, "reason", None)
+    if isinstance(reason, ssl.SSLCertVerificationError):
+        return True
+    message = str(reason or exc).lower()
+    return "certificate verify failed" in message
+
+
+def _fetch_url_text(
+    url: str,
+    timeout: int = 10,
+    *,
+    data: bytes | None = None,
+    headers: dict[str, str] | None = None,
+    method: str | None = None,
+) -> str:
     req = urllib.request.Request(
+        url,
+        data=data,
+        headers=headers or {},
+        method=method,
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.read().decode("utf-8", errors="replace")
+    except urllib.error.URLError as exc:
+        if not _is_tls_cert_error(exc):
+            raise
+
+        host = (urlparse(url).hostname or "").strip().lower()
+        if host not in _TLS_RETRY_ALLOWED_HOSTS:
+            raise ValueError("Blocked request to untrusted endpoint") from exc
+
+        insecure_context = ssl._create_unverified_context()
+        with urllib.request.urlopen(
+            req, timeout=timeout, context=insecure_context
+        ) as resp:
+            return resp.read().decode("utf-8", errors="replace")
+
+
+def _fetch_broadcast_payload(endpoint: str, payload: bytes, timeout: int) -> str:
+    return _fetch_url_text(
         endpoint,
         data=payload,
         headers={
@@ -243,9 +288,8 @@ def _fetch_broadcast_payload(endpoint: str, payload: bytes, timeout: int) -> str
             "User-Agent": "SilverEstimate/1.0",
         },
         method="POST",
+        timeout=timeout,
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read().decode("utf-8", errors="replace")
 
 
 def _parse_broadcast_payload(text: str, target_com_id: int):

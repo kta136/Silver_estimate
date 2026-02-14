@@ -714,17 +714,17 @@ class TotalsPanel(QWidget):
 
     @staticmethod
     def _format_weight(value: float) -> str:
-        """Format weight values with separators and gram suffix."""
+        """Format weight values with two decimals."""
         try:
-            return f"{float(value):,.2f} gm"
+            return f"{float(value):.2f}"
         except Exception:
-            return "0.00 gm"
+            return "0.00"
 
     @staticmethod
     def _format_whole(value: float) -> str:
-        """Format whole-number values with separators."""
+        """Format whole-number values."""
         try:
-            return f"{float(value):,.0f}"
+            return f"{float(value):.0f}"
         except Exception:
             return "0"
 
@@ -767,26 +767,26 @@ class TotalsPanel(QWidget):
     def clear_totals(self) -> None:
         """Reset all totals to zero."""
         # Overall totals
-        self.overall_gross_label.setText(self._format_weight(0))
-        self.overall_poly_label.setText(self._format_weight(0))
+        self.overall_gross_label.setText("0.0")
+        self.overall_poly_label.setText("0.0")
 
         # Regular items
-        self.total_gross_label.setText(self._format_weight(0))
-        self.total_net_label.setText(self._format_weight(0))
-        self.total_fine_label.setText(self._format_weight(0))
+        self.total_gross_label.setText("0.0")
+        self.total_net_label.setText("0.0")
+        self.total_fine_label.setText("0.0")
 
         # Return items
-        self.return_gross_label.setText(self._format_weight(0))
-        self.return_net_label.setText(self._format_weight(0))
-        self.return_fine_label.setText(self._format_weight(0))
+        self.return_gross_label.setText("0.0")
+        self.return_net_label.setText("0.0")
+        self.return_fine_label.setText("0.0")
 
         # Silver bars
-        self.bar_gross_label.setText(self._format_weight(0))
-        self.bar_net_label.setText(self._format_weight(0))
-        self.bar_fine_label.setText(self._format_weight(0))
+        self.bar_gross_label.setText("0.0")
+        self.bar_net_label.setText("0.0")
+        self.bar_fine_label.setText("0.0")
 
         # Final calculations
-        self.net_fine_label.setText(self._format_weight(0))
+        self.net_fine_label.setText("0.0")
         self.net_wage_label.setText(self._format_whole(0))
         self.grand_total_label.setText(self._format_currency(0))
         self._schedule_sidebar_item_size_sync()

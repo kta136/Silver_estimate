@@ -572,7 +572,7 @@ class EstimateEntryWidget(QWidget):
     def connect_signals(self, skip_load_estimate: bool = False):
         """Connect other signals."""
         if not skip_load_estimate:
-            self.voucher_edit.editingFinished.connect(self.safe_load_estimate)
+            self.voucher_edit.returnPressed.connect(self.safe_load_estimate)
 
         self.silver_rate_spin.valueChanged.connect(self._handle_silver_rate_changed)
 
@@ -1241,7 +1241,7 @@ class EstimateEntryWidget(QWidget):
 
     def generate_voucher(self):
         try:
-            self.voucher_edit.editingFinished.disconnect(self.safe_load_estimate)
+            self.voucher_edit.returnPressed.disconnect(self.safe_load_estimate)
         except TypeError:
             pass
 
@@ -1252,7 +1252,7 @@ class EstimateEntryWidget(QWidget):
         self._estimate_loaded = False
 
         try:
-            self.voucher_edit.editingFinished.connect(self.safe_load_estimate)
+            self.voucher_edit.returnPressed.connect(self.safe_load_estimate)
         except Exception:
             pass
 
@@ -2158,9 +2158,9 @@ class EstimateEntryWidget(QWidget):
 
     def reconnect_load_estimate(self):
         try:
-            self.voucher_edit.editingFinished.disconnect(self.safe_load_estimate)
+            self.voucher_edit.returnPressed.disconnect(self.safe_load_estimate)
         except (TypeError, RuntimeError) as exc:
             self.logger.debug(
-                "Could not disconnect voucher editingFinished handler: %s", exc
+                "Could not disconnect voucher returnPressed handler: %s", exc
             )
-        self.voucher_edit.editingFinished.connect(self.safe_load_estimate)
+        self.voucher_edit.returnPressed.connect(self.safe_load_estimate)

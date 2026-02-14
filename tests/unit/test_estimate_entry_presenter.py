@@ -289,6 +289,38 @@ def test_open_silver_bar_management_delegates_to_view(presenter_fixtures):
     assert view.silver_bar_called
 
 
+def test_handle_item_code_prompts_selection_when_code_missing(presenter_fixtures):
+    presenter, view, repo = presenter_fixtures
+    repo.fetch_item_map = {}
+    view.prompt_return = {
+        "code": "ALT1",
+        "name": "Alt Item",
+        "purity": 92.0,
+        "wage_type": "WT",
+        "wage_rate": 11.0,
+    }
+
+    ok = presenter.handle_item_code(2, "bad")
+
+    assert ok is True
+    assert view.populate_row_calls[-1]["row"] == 2
+    assert view.populate_row_calls[-1]["item"]["code"] == "ALT1"
+    assert view.focus_calls[-1] == 2
+    assert view.status_messages[-1] == "Item 'ALT1' selected."
+
+
+def test_handle_item_code_cancel_selection_reports_not_found(presenter_fixtures):
+    presenter, view, repo = presenter_fixtures
+    repo.fetch_item_map = {}
+    view.prompt_return = None
+
+    ok = presenter.handle_item_code(1, "missing")
+
+    assert ok is False
+    assert view.populate_row_calls == []
+    assert view.status_messages[-1] == "Item 'MISSING' not found."
+
+
 def test_save_estimate_success_adds_new_bar(presenter_fixtures):
     presenter, view, repo = presenter_fixtures
     payload = _Make_sample_payload()

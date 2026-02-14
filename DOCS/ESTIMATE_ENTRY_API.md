@@ -486,24 +486,10 @@ widget.save_button.click()
 
 ---
 
-## Future Refactoring Plans
-
-See [ESTIMATE_ENTRY_REFACTORING_PLAN.md](../ESTIMATE_ENTRY_REFACTORING_PLAN.md) for detailed decomposition plans:
-
-- Extract `VoucherToolbar` component
-- Extract `EstimateTableView` component
-- Extract `TotalsPanel` component
-- Extract `ModeSwitcher` component
-- Create `QAbstractTableModel` for table data
-- Reduce main widget to ~250 lines (coordination only)
-
----
-
 ## References
 
 - [EstimateEntryPresenter](../silverestimate/presenter/estimate_entry_presenter.py)
 - [EstimateEntryViewModel](../silverestimate/ui/view_models/estimate_entry_view_model.py)
-- [Refactoring Plan](../ESTIMATE_ENTRY_REFACTORING_PLAN.md)
 
 ---
 

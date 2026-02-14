@@ -21,7 +21,6 @@ from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
-    QMessageBox,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -55,7 +54,6 @@ from silverestimate.services.main_commands import MainCommands
 from silverestimate.services.navigation_service import NavigationService
 from silverestimate.services.settings_service import SettingsService
 from silverestimate.ui.estimate_entry import EstimateEntryWidget
-from silverestimate.ui.font_dialogs import adjust_table_font_size, choose_print_font
 
 
 class MainWindow(QMainWindow):
@@ -233,13 +231,6 @@ class MainWindow(QMainWindow):
                 f"Failed to initialize application widgets: {exc}"
             ) from exc
 
-    # --- File menu action handlers ---
-    def file_save_estimate(self, *args, **kwargs):
-        return self.commands.save_estimate()
-
-    def file_print_estimate(self, *args, **kwargs):
-        return self.commands.print_estimate()
-
     def show_status_message(
         self, message: str, timeout: int = 3000, level: str = "info"
     ) -> None:
@@ -301,18 +292,6 @@ class MainWindow(QMainWindow):
     def show_about(self):
         return self.navigation_controller.show_about()
 
-    # --- Methods called by Advanced Tools Dialog ---
-    def show_font_dialog(self):
-        """Show the font selection dialog and store the chosen print font."""
-        self.print_font = choose_print_font(
-            parent=self,
-            settings=self.settings_service,
-            current_font=self.print_font,
-            logger=self.logger,
-        )
-
-    # Removed apply_font_settings as we no longer apply to UI directly from here
-
     def closeEvent(self, event):
         """Handle window close event."""
         estimate_widget = getattr(self, "estimate_widget", None)
@@ -357,28 +336,6 @@ class MainWindow(QMainWindow):
             pass
         # Optional: Add confirmation dialog if needed
         super().closeEvent(event)
-
-    def show_table_font_size_dialog(self):
-        """Show dialog to change estimate table font size."""
-        apply_callback = None
-        if hasattr(self, "estimate_widget") and hasattr(
-            self.estimate_widget, "apply_table_font_size"
-        ):
-            apply_callback = self.estimate_widget.apply_table_font_size
-        elif hasattr(self, "estimate_widget") and hasattr(
-            self.estimate_widget, "_apply_table_font_size"
-        ):
-            apply_callback = self.estimate_widget._apply_table_font_size
-
-        new_size = adjust_table_font_size(
-            parent=self,
-            settings=self.settings_service,
-            apply_callback=apply_callback,
-            logger=self.logger,
-        )
-
-        if new_size is not None and apply_callback is None:
-            self.logger.warning("Estimate widget or apply method not found.")
 
     # --- Method to show the new Settings dialog ---
     def show_settings_dialog(self):

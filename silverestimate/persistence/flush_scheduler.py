@@ -23,6 +23,10 @@ class FlushScheduler:
         logger: Optional[logging.Logger] = None,
         on_queued_getter: Optional[Callable[[], Callback]] = None,
         on_done_getter: Optional[Callable[[], Callback]] = None,
+        timer_factory: Optional[Callable[[float, Callable[[], None]], object]] = None,
+        thread_factory: Optional[Callable[..., object]] = None,
+        time_func: Optional[Callable[[], float]] = None,
+        sleep_func: Optional[Callable[[float], None]] = None,
     ) -> None:
         self._has_connection = has_connection
         self._commit = commit
@@ -33,9 +37,17 @@ class FlushScheduler:
         self._on_done_getter = on_done_getter or (lambda: None)
 
         self._lock = threading.Lock()
-        self._timer: Optional[threading.Timer] = None
-        self._thread: Optional[threading.Thread] = None
+        self._timer: Optional[object] = None
+        self._thread: Optional[object] = None
         self._in_progress = False
+        self._timer_factory = timer_factory or (
+            lambda delay, callback: threading.Timer(delay, callback)
+        )
+        self._thread_factory = thread_factory or (
+            lambda **kwargs: threading.Thread(**kwargs)
+        )
+        self._time_func = time_func or time.time
+        self._sleep_func = sleep_func or time.sleep
 
     def schedule(self, delay_seconds: float = 2.0) -> None:
         """Request a flush after ``delay_seconds`` unless one is already pending."""
@@ -72,8 +84,10 @@ class FlushScheduler:
                         self._in_progress = False
                     self._invoke_callback(self._on_done_getter())
 
-            thread = threading.Thread(
-                target=_worker, name="DBEncryptFlush", daemon=True
+            thread = self._thread_factory(
+                target=_worker,
+                name="DBEncryptFlush",
+                daemon=True,
             )
             thread.start()
             with self._lock:
@@ -85,7 +99,7 @@ class FlushScheduler:
                     self._timer.cancel()
                 except Exception:
                     pass
-            self._timer = threading.Timer(delay_seconds, _start_worker)
+            self._timer = self._timer_factory(delay_seconds, _start_worker)
             try:
                 self._timer.daemon = True
             except Exception:
@@ -107,12 +121,12 @@ class FlushScheduler:
                 timer.cancel()
             except Exception:
                 pass
-        if wait and thread and thread.is_alive():
+        if wait and thread and hasattr(thread, "is_alive") and thread.is_alive():
             thread.join(timeout=join_timeout)
             if thread.is_alive():
-                deadline = time.time() + poll_timeout
-                while self._in_progress and time.time() < deadline:
-                    time.sleep(0.1)
+                deadline = self._time_func() + poll_timeout
+                while self._in_progress and self._time_func() < deadline:
+                    self._sleep_func(0.1)
 
     def _invoke_callback(self, callback: Callback) -> None:
         if callable(callback):

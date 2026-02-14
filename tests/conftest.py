@@ -8,6 +8,13 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+_SLOW_PATH_SUFFIXES = {
+    "tests/ui/test_estimate_entry_integration.py",
+    "tests/ui/test_main_window_interactions.py",
+    "tests/ui/test_mode_toggle_buttons.py",
+}
 
 
 def _coerce_bool(value, default):
@@ -164,3 +171,14 @@ def settings_stub(monkeypatch):
     yield _SettingsStub
     _SettingsStub.clear()
     _CredentialStoreStub.reset()
+
+
+def pytest_collection_modifyitems(items):
+    for item in items:
+        path = item.path.as_posix()
+        if "/tests/integration/" in path:
+            item.add_marker(pytest.mark.integration)
+        else:
+            item.add_marker(pytest.mark.unit)
+        if any(path.endswith(suffix) for suffix in _SLOW_PATH_SUFFIXES):
+            item.add_marker(pytest.mark.slow)

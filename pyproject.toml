@@ -138,11 +138,17 @@ python_functions = ["test_*"]
 addopts = [
     "--verbose",
     "--capture=no",
+    "--strict-markers",
+    "--strict-config",
 ]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
+]
+filterwarnings = [
+    "error",
+    "ignore:'crypt' is deprecated and slated for removal in Python 3.13:DeprecationWarning",
 ]
 
 [tool.coverage.run]

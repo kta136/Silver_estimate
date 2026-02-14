@@ -1,10 +1,4 @@
-"""Tests for mode toggle button functionality (Ctrl+R and Ctrl+B).
-
-This test module verifies:
-1. Mode toggle buttons update row types correctly
-2. Modes are mutually exclusive (only one active at a time)
-3. Keyboard shortcuts work correctly
-"""
+"""Tests for mode toggle button functionality (Ctrl+R and Ctrl+B)."""
 
 import types
 
@@ -18,8 +12,6 @@ from silverestimate.ui.estimate_entry_logic import COL_TYPE
 
 @pytest.fixture
 def fake_db():
-    """Create a minimal fake database for testing."""
-
     class _DB:
         def __init__(self):
             self.item_cache_controller = None
@@ -36,8 +28,6 @@ def fake_db():
 
 
 class _RepositoryStub:
-    """Minimal repository stub for testing."""
-
     def __init__(self, db):
         self.db = db
 
@@ -61,7 +51,6 @@ class _RepositoryStub:
 
 
 def _make_widget(db_manager):
-    """Create a widget for testing."""
     main_window_stub = types.SimpleNamespace(
         show_inline_status=lambda *a, **k: None,
         show_silver_bars=lambda: None,
@@ -76,272 +65,206 @@ def _make_widget(db_manager):
     return widget
 
 
-def test_return_mode_button_updates_row_type(qt_app, fake_db):
-    """Test that clicking Return button (Ctrl+R) updates empty row type."""
+def _wait_for_initialized(qtbot, widget):
+    qtbot.waitUntil(lambda: widget.item_table.rowCount() > 0, timeout=2000)
+
+
+def test_return_mode_button_updates_row_type(qtbot, fake_db):
     widget = _make_widget(fake_db)
     try:
-        # Wait for initialization timers
-        QTest.qWait(200)
+        _wait_for_initialized(qtbot, widget)
 
-        # Verify initial state (regular mode)
         last_row = widget.item_table.rowCount() - 1
-        assert (
-            widget.item_table.get_cell_text(last_row, COL_TYPE) == "No"
-        ), "Should start in regular mode"
-        assert not widget.return_mode, "Return mode should be off"
-        assert (
-            not widget.return_toggle_button.isChecked()
-        ), "Button should not be checked"
+        assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "No"
+        assert not widget.return_mode
+        assert not widget.return_toggle_button.isChecked()
 
-        # Click return button
         widget.return_toggle_button.click()
-        QTest.qWait(50)  # Allow signals to process
+        qtbot.waitUntil(
+            lambda: widget.return_mode
+            and widget.return_toggle_button.isChecked()
+            and widget.item_table.get_cell_text(
+                widget.item_table.rowCount() - 1, COL_TYPE
+            )
+            == "Return",
+            timeout=1000,
+        )
 
-        # Verify return mode activated
-        last_row = widget.item_table.rowCount() - 1
-        assert (
-            widget.item_table.get_cell_text(last_row, COL_TYPE) == "Return"
-        ), "Row type should change to 'return'"
-        assert widget.return_mode, "Return mode should be on"
-        assert widget.return_toggle_button.isChecked(), "Button should be checked"
-
-        # Click again to toggle off
         widget.return_toggle_button.click()
-        QTest.qWait(50)
-
-        # Verify back to regular mode
-        last_row = widget.item_table.rowCount() - 1
-        assert (
-            widget.item_table.get_cell_text(last_row, COL_TYPE) == "No"
-        ), "Row type should be back to 'regular'"
-        assert not widget.return_mode, "Return mode should be off"
-        assert (
-            not widget.return_toggle_button.isChecked()
-        ), "Button should not be checked"
-
+        qtbot.waitUntil(
+            lambda: (not widget.return_mode)
+            and (not widget.return_toggle_button.isChecked())
+            and widget.item_table.get_cell_text(
+                widget.item_table.rowCount() - 1, COL_TYPE
+            )
+            == "No",
+            timeout=1000,
+        )
     finally:
         widget.deleteLater()
 
 
-def test_silver_bar_mode_button_updates_row_type(qt_app, fake_db):
-    """Test that clicking Silver Bar button (Ctrl+B) updates empty row type."""
+def test_silver_bar_mode_button_updates_row_type(qtbot, fake_db):
     widget = _make_widget(fake_db)
     try:
-        # Wait for initialization timers
-        QTest.qWait(200)
+        _wait_for_initialized(qtbot, widget)
 
-        # Verify initial state (regular mode)
         last_row = widget.item_table.rowCount() - 1
-        assert (
-            widget.item_table.get_cell_text(last_row, COL_TYPE) == "No"
-        ), "Should start in regular mode"
-        assert not widget.silver_bar_mode, "Silver bar mode should be off"
-        assert (
-            not widget.silver_bar_toggle_button.isChecked()
-        ), "Button should not be checked"
-
-        # Click silver bar button
-        widget.silver_bar_toggle_button.click()
-        QTest.qWait(50)
-
-        # Verify silver bar mode activated
-        last_row = widget.item_table.rowCount() - 1
-        assert (
-            widget.item_table.get_cell_text(last_row, COL_TYPE) == "Silver Bar"
-        ), "Row type should change to 'silver_bar'"
-        assert widget.silver_bar_mode, "Silver bar mode should be on"
-        assert widget.silver_bar_toggle_button.isChecked(), "Button should be checked"
-
-        # Click again to toggle off
-        widget.silver_bar_toggle_button.click()
-        QTest.qWait(50)
-
-        # Verify back to regular mode
-        last_row = widget.item_table.rowCount() - 1
-        assert (
-            widget.item_table.get_cell_text(last_row, COL_TYPE) == "No"
-        ), "Row type should be back to 'regular'"
-        assert not widget.silver_bar_mode, "Silver bar mode should be off"
-        assert (
-            not widget.silver_bar_toggle_button.isChecked()
-        ), "Button should not be checked"
-
-    finally:
-        widget.deleteLater()
-
-
-def test_mode_toggles_are_mutually_exclusive(qt_app, fake_db):
-    """Test that enabling one mode disables the other (mutual exclusion)."""
-    widget = _make_widget(fake_db)
-    try:
-        # Wait for initialization timers
-        QTest.qWait(200)
-
-        # Activate return mode
-        widget.return_toggle_button.click()
-        QTest.qWait(50)
-
-        assert widget.return_mode, "Return mode should be on"
-        assert widget.return_toggle_button.isChecked()
-        assert not widget.silver_bar_mode, "Silver bar mode should be off"
+        assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "No"
+        assert not widget.silver_bar_mode
         assert not widget.silver_bar_toggle_button.isChecked()
 
-        # Now activate silver bar mode - should deactivate return mode
         widget.silver_bar_toggle_button.click()
-        QTest.qWait(50)
+        qtbot.waitUntil(
+            lambda: widget.silver_bar_mode
+            and widget.silver_bar_toggle_button.isChecked()
+            and widget.item_table.get_cell_text(
+                widget.item_table.rowCount() - 1, COL_TYPE
+            )
+            == "Silver Bar",
+            timeout=1000,
+        )
 
-        assert not widget.return_mode, "Return mode should be OFF (mutual exclusion)"
-        assert (
-            not widget.return_toggle_button.isChecked()
-        ), "Return button should be unchecked"
-        assert widget.silver_bar_mode, "Silver bar mode should be on"
-        assert (
-            widget.silver_bar_toggle_button.isChecked()
-        ), "Silver bar button should be checked"
+        widget.silver_bar_toggle_button.click()
+        qtbot.waitUntil(
+            lambda: (not widget.silver_bar_mode)
+            and (not widget.silver_bar_toggle_button.isChecked())
+            and widget.item_table.get_cell_text(
+                widget.item_table.rowCount() - 1, COL_TYPE
+            )
+            == "No",
+            timeout=1000,
+        )
+    finally:
+        widget.deleteLater()
 
-        # Verify row type is silver_bar
-        last_row = widget.item_table.rowCount() - 1
-        assert (
-            widget.item_table.get_cell_text(last_row, COL_TYPE) == "Silver Bar"
-        ), "Row should be silver_bar type"
 
-        # Now activate return mode - should deactivate silver bar mode
+def test_mode_toggles_are_mutually_exclusive(qtbot, fake_db):
+    widget = _make_widget(fake_db)
+    try:
+        _wait_for_initialized(qtbot, widget)
+
         widget.return_toggle_button.click()
-        QTest.qWait(50)
+        qtbot.waitUntil(
+            lambda: widget.return_mode
+            and widget.return_toggle_button.isChecked()
+            and (not widget.silver_bar_mode)
+            and (not widget.silver_bar_toggle_button.isChecked()),
+            timeout=1000,
+        )
 
-        assert widget.return_mode, "Return mode should be on"
-        assert (
-            widget.return_toggle_button.isChecked()
-        ), "Return button should be checked"
-        assert (
-            not widget.silver_bar_mode
-        ), "Silver bar mode should be OFF (mutual exclusion)"
-        assert (
-            not widget.silver_bar_toggle_button.isChecked()
-        ), "Silver bar button should be unchecked"
+        widget.silver_bar_toggle_button.click()
+        qtbot.waitUntil(
+            lambda: (not widget.return_mode)
+            and (not widget.return_toggle_button.isChecked())
+            and widget.silver_bar_mode
+            and widget.silver_bar_toggle_button.isChecked()
+            and widget.item_table.get_cell_text(
+                widget.item_table.rowCount() - 1, COL_TYPE
+            )
+            == "Silver Bar",
+            timeout=1000,
+        )
 
-        # Verify row type is return
-        last_row = widget.item_table.rowCount() - 1
-        assert (
-            widget.item_table.get_cell_text(last_row, COL_TYPE) == "Return"
-        ), "Row should be return type"
-
+        widget.return_toggle_button.click()
+        qtbot.waitUntil(
+            lambda: widget.return_mode
+            and widget.return_toggle_button.isChecked()
+            and (not widget.silver_bar_mode)
+            and (not widget.silver_bar_toggle_button.isChecked())
+            and widget.item_table.get_cell_text(
+                widget.item_table.rowCount() - 1, COL_TYPE
+            )
+            == "Return",
+            timeout=1000,
+        )
     finally:
         widget.deleteLater()
 
 
-def test_ctrl_r_keyboard_shortcut_toggles_return_mode(qt_app, fake_db):
-    """Test that Ctrl+R keyboard shortcut toggles return mode."""
+def test_ctrl_r_keyboard_shortcut_toggles_return_mode(qtbot, fake_db):
     widget = _make_widget(fake_db)
     try:
-        # Wait for initialization timers
-        QTest.qWait(200)
+        _wait_for_initialized(qtbot, widget)
+        assert not widget.return_mode
 
-        # Verify initial state
-        assert not widget.return_mode, "Should start in regular mode"
-
-        # Press Ctrl+R
         QTest.keyClick(widget, Qt.Key_R, Qt.ControlModifier)
-        QTest.qWait(50)
+        qtbot.waitUntil(
+            lambda: widget.return_mode
+            and widget.return_toggle_button.isChecked()
+            and widget.item_table.get_cell_text(
+                widget.item_table.rowCount() - 1, COL_TYPE
+            )
+            == "Return",
+            timeout=1000,
+        )
 
-        # Verify return mode activated
-        assert widget.return_mode, "Ctrl+R should activate return mode"
-        assert widget.return_toggle_button.isChecked(), "Button should reflect state"
-
-        last_row = widget.item_table.rowCount() - 1
-        assert (
-            widget.item_table.get_cell_text(last_row, COL_TYPE) == "Return"
-        ), "Row type should be 'return'"
-
-        # Press Ctrl+R again
         QTest.keyClick(widget, Qt.Key_R, Qt.ControlModifier)
-        QTest.qWait(50)
-
-        # Verify back to regular mode
-        assert not widget.return_mode, "Ctrl+R should toggle off return mode"
-        assert (
-            not widget.return_toggle_button.isChecked()
-        ), "Button should reflect state"
-
-        last_row = widget.item_table.rowCount() - 1
-        assert (
-            widget.item_table.get_cell_text(last_row, COL_TYPE) == "No"
-        ), "Row type should be 'regular'"
-
+        qtbot.waitUntil(
+            lambda: (not widget.return_mode)
+            and (not widget.return_toggle_button.isChecked())
+            and widget.item_table.get_cell_text(
+                widget.item_table.rowCount() - 1, COL_TYPE
+            )
+            == "No",
+            timeout=1000,
+        )
     finally:
         widget.deleteLater()
 
 
-def test_ctrl_b_keyboard_shortcut_toggles_silver_bar_mode(qt_app, fake_db):
-    """Test that Ctrl+B keyboard shortcut toggles silver bar mode."""
+def test_ctrl_b_keyboard_shortcut_toggles_silver_bar_mode(qtbot, fake_db):
     widget = _make_widget(fake_db)
     try:
-        # Wait for initialization timers
-        QTest.qWait(200)
+        _wait_for_initialized(qtbot, widget)
+        assert not widget.silver_bar_mode
 
-        # Verify initial state
-        assert not widget.silver_bar_mode, "Should start in regular mode"
-
-        # Press Ctrl+B
         QTest.keyClick(widget, Qt.Key_B, Qt.ControlModifier)
-        QTest.qWait(50)
+        qtbot.waitUntil(
+            lambda: widget.silver_bar_mode
+            and widget.silver_bar_toggle_button.isChecked()
+            and widget.item_table.get_cell_text(
+                widget.item_table.rowCount() - 1, COL_TYPE
+            )
+            == "Silver Bar",
+            timeout=1000,
+        )
 
-        # Verify silver bar mode activated
-        assert widget.silver_bar_mode, "Ctrl+B should activate silver bar mode"
-        assert (
-            widget.silver_bar_toggle_button.isChecked()
-        ), "Button should reflect state"
-
-        last_row = widget.item_table.rowCount() - 1
-        assert (
-            widget.item_table.get_cell_text(last_row, COL_TYPE) == "Silver Bar"
-        ), "Row type should be 'silver_bar'"
-
-        # Press Ctrl+B again
         QTest.keyClick(widget, Qt.Key_B, Qt.ControlModifier)
-        QTest.qWait(50)
-
-        # Verify back to regular mode
-        assert not widget.silver_bar_mode, "Ctrl+B should toggle off silver bar mode"
-        assert (
-            not widget.silver_bar_toggle_button.isChecked()
-        ), "Button should reflect state"
-
-        last_row = widget.item_table.rowCount() - 1
-        assert (
-            widget.item_table.get_cell_text(last_row, COL_TYPE) == "No"
-        ), "Row type should be 'regular'"
-
+        qtbot.waitUntil(
+            lambda: (not widget.silver_bar_mode)
+            and (not widget.silver_bar_toggle_button.isChecked())
+            and widget.item_table.get_cell_text(
+                widget.item_table.rowCount() - 1, COL_TYPE
+            )
+            == "No",
+            timeout=1000,
+        )
     finally:
         widget.deleteLater()
 
 
-def test_keyboard_shortcuts_respect_mutual_exclusion(qt_app, fake_db):
-    """Test that keyboard shortcuts also enforce mutual exclusion."""
+def test_keyboard_shortcuts_respect_mutual_exclusion(qtbot, fake_db):
     widget = _make_widget(fake_db)
     try:
-        # Wait for initialization timers
-        QTest.qWait(200)
+        _wait_for_initialized(qtbot, widget)
 
-        # Activate return mode with Ctrl+R
         QTest.keyClick(widget, Qt.Key_R, Qt.ControlModifier)
-        QTest.qWait(50)
+        qtbot.waitUntil(
+            lambda: widget.return_mode and (not widget.silver_bar_mode), timeout=1000
+        )
 
-        assert widget.return_mode, "Return mode should be on"
-        assert not widget.silver_bar_mode, "Silver bar mode should be off"
-
-        # Activate silver bar mode with Ctrl+B - should deactivate return mode
         QTest.keyClick(widget, Qt.Key_B, Qt.ControlModifier)
-        QTest.qWait(50)
-
-        assert not widget.return_mode, "Return mode should be OFF (mutual exclusion)"
-        assert not widget.return_toggle_button.isChecked()
-        assert widget.silver_bar_mode, "Silver bar mode should be on"
-        assert widget.silver_bar_toggle_button.isChecked()
-
-        # Verify row type
-        last_row = widget.item_table.rowCount() - 1
-        assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "Silver Bar"
-
+        qtbot.waitUntil(
+            lambda: (not widget.return_mode)
+            and (not widget.return_toggle_button.isChecked())
+            and widget.silver_bar_mode
+            and widget.silver_bar_toggle_button.isChecked()
+            and widget.item_table.get_cell_text(
+                widget.item_table.rowCount() - 1, COL_TYPE
+            )
+            == "Silver Bar",
+            timeout=1000,
+        )
     finally:
         widget.deleteLater()

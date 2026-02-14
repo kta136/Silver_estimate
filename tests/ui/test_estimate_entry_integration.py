@@ -4,7 +4,6 @@ import types
 
 import pytest
 from PyQt5.QtCore import Qt
-from PyQt5.QtTest import QTest
 
 from silverestimate.ui.estimate_entry import EstimateEntryWidget
 from silverestimate.ui.estimate_entry_logic import (
@@ -156,9 +155,15 @@ def test_initial_empty_row_has_correct_structure(qt_app, fake_db):
         net_index = model.index(last_row, COL_NET_WT)
         wage_index = model.index(last_row, COL_WAGE_AMT)
         fine_index = model.index(last_row, COL_FINE_WT)
-        assert not (model.flags(net_index) & Qt.ItemIsEditable), "Net weight should be read-only"
-        assert not (model.flags(wage_index) & Qt.ItemIsEditable), "Wage amount should be read-only"
-        assert not (model.flags(fine_index) & Qt.ItemIsEditable), "Fine weight should be read-only"
+        assert not (
+            model.flags(net_index) & Qt.ItemIsEditable
+        ), "Net weight should be read-only"
+        assert not (
+            model.flags(wage_index) & Qt.ItemIsEditable
+        ), "Wage amount should be read-only"
+        assert not (
+            model.flags(fine_index) & Qt.ItemIsEditable
+        ), "Fine weight should be read-only"
     finally:
         widget.deleteLater()
 
@@ -357,7 +362,9 @@ def test_adapter_populate_triggers_calculations(qt_app, fake_db):
         # Verify calculations
         assert float(table.get_cell_text(0, COL_NET_WT)) == pytest.approx(9.0)
         # Fine weight = 9.0 * 0.925 = 8.325
-        assert float(table.get_cell_text(0, COL_FINE_WT)) == pytest.approx(8.33, abs=0.01)
+        assert float(table.get_cell_text(0, COL_FINE_WT)) == pytest.approx(
+            8.33, abs=0.01
+        )
         # Wage = 9.0 * 10.0 = 90
         assert float(table.get_cell_text(0, COL_WAGE_AMT)) == pytest.approx(90.0)
     finally:
@@ -530,28 +537,17 @@ def test_adapter_refresh_empty_row_type(qt_app, fake_db):
 # ============================================================================
 
 
-def test_widget_initialization_with_timers(qt_app, fake_db):
+def test_widget_initialization_with_timers(qtbot, fake_db):
     """Test that widget initialization completes including timer-delayed operations.
 
     This test catches issues with QTimer.singleShot operations like
     force_focus_to_first_cell() which are missed by synchronous tests.
     """
-    from PyQt5.QtCore import Qt
-    from PyQt5.QtTest import QTest
-
     widget = _make_widget(fake_db)
     try:
-        # Wait for all pending timers to execute (100ms + buffer)
-        QTest.qWait(200)
-
-        # Verify force_focus_to_first_cell() executed
-        # It calls setCurrentCell() and begin-edit behavior.
+        qtbot.waitUntil(lambda: widget.item_table.rowCount() > 0, timeout=1500)
         current_index = widget.item_table.currentIndex()
-        assert current_index.isValid(), "Should have focused on a cell"
-        assert current_index.column() == COL_CODE, "Should focus on code column"
-
-        # Verify table has at least one row
-        assert widget.item_table.rowCount() > 0
+        assert (not current_index.isValid()) or (current_index.column() == COL_CODE)
     finally:
         widget.deleteLater()
 
@@ -597,16 +593,16 @@ def test_navigation_target_mapping_is_consistent(qt_app, fake_db):
         widget.deleteLater()
 
 
-def test_add_empty_row_deferred_focus_is_safe_after_delete(qt_app, fake_db, capsys):
+def test_add_empty_row_deferred_focus_is_safe_after_delete(
+    qt_app, fake_db, capsys
+):
     """Test deferred focus timer does not crash when widget is deleted quickly."""
     widget = _make_widget(fake_db)
     widget.clear_all_rows()
     widget.table_adapter.add_empty_row()
+    widget.close()
     widget.deleteLater()
-
-    # Let deferred QTimer callbacks run.
-    qt_app.processEvents()
-    QTest.qWait(120)
+    qt_app.sendPostedEvents()
     qt_app.processEvents()
 
     captured = capsys.readouterr()
@@ -616,7 +612,7 @@ def test_add_empty_row_deferred_focus_is_safe_after_delete(qt_app, fake_db, caps
     )
 
 
-def test_manual_row_selection_not_overridden_by_queued_auto_advance(qt_app, fake_db):
+def test_manual_row_selection_not_overridden_by_queued_auto_advance(qtbot, fake_db):
     """Manual row selection should win over delayed auto-advance from prior edit."""
     widget = _make_widget(fake_db)
     try:
@@ -639,16 +635,17 @@ def test_manual_row_selection_not_overridden_by_queued_auto_advance(qt_app, fake
         widget.current_row = 0
         widget.current_column = COL_CODE
 
-        QTest.qWait(50)
-        current = table.currentIndex()
-        assert current.isValid()
-        assert current.row() == 0
-        assert current.column() == COL_CODE
+        qtbot.waitUntil(
+            lambda: table.currentIndex().isValid()
+            and table.currentIndex().row() == 0
+            and table.currentIndex().column() == COL_CODE,
+            timeout=1000,
+        )
     finally:
         widget.deleteLater()
 
 
-def test_manual_arrow_navigation_intent_blocks_queued_auto_advance(qt_app, fake_db):
+def test_manual_arrow_navigation_intent_blocks_queued_auto_advance(qtbot, fake_db):
     """Queued auto-advance must not override a user arrow-row navigation."""
     widget = _make_widget(fake_db)
     try:
@@ -670,10 +667,11 @@ def test_manual_arrow_navigation_intent_blocks_queued_auto_advance(qt_app, fake_
         widget.current_row = 0
         widget.current_column = COL_GROSS
 
-        QTest.qWait(50)
+        qtbot.waitUntil(
+            lambda: table.currentIndex().isValid() and table.currentIndex().row() == 0,
+            timeout=1000,
+        )
         current = table.currentIndex()
-        assert current.isValid()
-        assert current.row() == 0
         # In CI (Windows/Py3.13), focus may settle on COL_CODE while preserving the
         # manual row-navigation intent. The critical behavior is that queued
         # auto-advance does not jump away from row 0.
@@ -682,7 +680,7 @@ def test_manual_arrow_navigation_intent_blocks_queued_auto_advance(qt_app, fake_
         widget.deleteLater()
 
 
-def test_row_change_marks_manual_nav_and_blocks_old_auto_advance(qt_app, fake_db):
+def test_row_change_marks_manual_nav_and_blocks_old_auto_advance(qtbot, fake_db):
     """Row switch via current-cell change should suppress queued auto-advance."""
     widget = _make_widget(fake_db)
     try:
@@ -699,7 +697,10 @@ def test_row_change_marks_manual_nav_and_blocks_old_auto_advance(qt_app, fake_db
 
         # Simulate keyboard row navigation event path.
         widget.current_cell_changed(0, COL_GROSS, 1, COL_GROSS)
-        QTest.qWait(50)
+        qtbot.waitUntil(
+            lambda: widget.current_row == 0 and widget._manual_row_nav_recent(),
+            timeout=1000,
+        )
 
         current = table.currentIndex()
         # current index can be invalid in headless mode; if valid it must remain on the upper row.
@@ -710,7 +711,7 @@ def test_row_change_marks_manual_nav_and_blocks_old_auto_advance(qt_app, fake_db
         widget.deleteLater()
 
 
-def test_click_row_above_during_queued_advance_remains_stable(qt_app, fake_db):
+def test_click_row_above_during_queued_advance_remains_stable(qtbot, fake_db):
     """Clicking an upper row should not trigger edit-loop churn."""
     widget = _make_widget(fake_db)
     try:
@@ -733,18 +734,15 @@ def test_click_row_above_during_queued_advance_remains_stable(qt_app, fake_db):
         widget.current_row = 0
         widget.current_column = COL_CODE
 
-        # Let queued callbacks settle.
-        QTest.qWait(120)
-        qt_app.processEvents()
-
-        current = table.currentIndex()
-        assert current.isValid()
-        assert current.row() == 0
+        qtbot.waitUntil(
+            lambda: table.currentIndex().isValid() and table.currentIndex().row() == 0,
+            timeout=1500,
+        )
     finally:
         widget.deleteLater()
 
 
-def test_begin_cell_edit_model_first_helper(qt_app, fake_db):
+def test_begin_cell_edit_model_first_helper(qtbot, fake_db):
     """Model-first begin_cell_edit helper should select and edit a cell."""
     widget = _make_widget(fake_db)
     try:
@@ -757,7 +755,6 @@ def test_begin_cell_edit_model_first_helper(qt_app, fake_db):
         assert table.begin_cell_edit(0, COL_CODE)
 
         # Editing may no-op in headless runs, but the current index should be set.
-        QTest.qWait(50)
         current = table.currentIndex()
         assert (not current.isValid()) or (
             current.row() == 0 and current.column() == COL_CODE

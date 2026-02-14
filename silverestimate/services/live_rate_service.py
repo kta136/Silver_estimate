@@ -19,15 +19,29 @@ class LiveRateService(QObject):
     rate_updated = pyqtSignal(object, object, object)
 
     def __init__(
-        self, parent: Optional[QObject] = None, logger: Optional[logging.Logger] = None
+        self,
+        parent: Optional[QObject] = None,
+        logger: Optional[logging.Logger] = None,
+        settings_provider: Callable[[], object] = get_app_settings,
+        thread_factory: Callable[..., object] = threading.Thread,
+        broadcast_fetcher: Callable[..., Tuple[object, object, object]] = (
+            fetch_broadcast_rate_exact
+        ),
+        api_fetcher: Callable[..., Tuple[object, object]] = (
+            fetch_silver_agra_local_mohar_rate
+        ),
     ) -> None:
         super().__init__(parent)
         self._logger = logger or logging.getLogger(__name__)
         self._rate_fetch_in_progress = False
         self._timer: Optional[QTimer] = None
+        self._settings_provider = settings_provider
+        self._thread_factory = thread_factory
+        self._broadcast_fetcher = broadcast_fetcher
+        self._api_fetcher = api_fetcher
 
     def start(self) -> None:
-        settings = get_app_settings()
+        settings = self._settings_provider()
         if not self._timer:
             self._timer = QTimer(self)
             self._timer.setSingleShot(False)
@@ -55,7 +69,7 @@ class LiveRateService(QObject):
             self._logger.info("Live-rate timer disabled via settings")
 
     def refresh_now(self) -> None:
-        settings = get_app_settings()
+        settings = self._settings_provider()
         if not settings.value("rates/live_enabled", True, type=bool):
             return
         if self._rate_fetch_in_progress:
@@ -65,10 +79,10 @@ class LiveRateService(QObject):
 
         def _worker():
             try:
-                brate, is_open, _ = fetch_broadcast_rate_exact(timeout=5)
+                brate, is_open, _ = self._broadcast_fetcher(timeout=5)
                 api_rate = None
                 if brate is None:
-                    api_rate, _ = fetch_silver_agra_local_mohar_rate(timeout=5)
+                    api_rate, _ = self._api_fetcher(timeout=5)
                 self._logger.info(
                     "LiveRate fetch: broadcast=%s, open=%s, api=%s",
                     brate,
@@ -79,7 +93,7 @@ class LiveRateService(QObject):
                 self._logger.warning("Rate fetch error (broadcast): %s", exc)
                 brate, is_open = None, True
                 try:
-                    api_rate, _ = fetch_silver_agra_local_mohar_rate(timeout=5)
+                    api_rate, _ = self._api_fetcher(timeout=5)
                 except Exception as fallback_exc:
                     self._logger.warning(
                         "Rate fetch error (API fallback): %s", fallback_exc
@@ -88,4 +102,4 @@ class LiveRateService(QObject):
             self.rate_updated.emit(brate, api_rate, is_open)
             self._rate_fetch_in_progress = False
 
-        threading.Thread(target=_worker, daemon=True).start()
+        self._thread_factory(target=_worker, daemon=True).start()

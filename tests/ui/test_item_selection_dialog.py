@@ -48,125 +48,97 @@ def sample_items():
     ]
 
 
-def _make_dialog(qt_app, items, term="AD"):
+def _make_dialog(qtbot, items, term="AD"):
     dialog = ItemSelectionDialog(_FakeDb(items), term)
+    qtbot.addWidget(dialog)
     dialog.show()
-    QTest.qWait(30)
-    qt_app.processEvents()
+    qtbot.waitUntil(lambda: dialog.isVisible(), timeout=1000)
     return dialog
 
 
-def test_opens_prefilled_and_focuses_search(qt_app, sample_items):
-    dialog = _make_dialog(qt_app, sample_items, term="ad")
-    try:
-        assert dialog.search_edit.text() == "ad"
-        assert dialog.search_edit.hasFocus()
-    finally:
-        dialog.close()
-        dialog.deleteLater()
+def test_opens_prefilled_and_focuses_search(qtbot, sample_items):
+    dialog = _make_dialog(qtbot, sample_items, term="ad")
+    assert dialog.search_edit.text() == "ad"
+    qtbot.waitUntil(lambda: dialog.search_edit.hasFocus(), timeout=1000)
 
 
-def test_ranking_prefers_prefix_then_contains(qt_app, sample_items):
-    dialog = _make_dialog(qt_app, sample_items, term="AD")
-    try:
-        codes = [dialog.items_table.item(row, 0).text() for row in range(dialog.items_table.rowCount())]
-        assert codes == ["AD01", "ZZ10", "AXAD", "BAD2"]
-    finally:
-        dialog.close()
-        dialog.deleteLater()
+def test_ranking_prefers_prefix_then_contains(qtbot, sample_items):
+    dialog = _make_dialog(qtbot, sample_items, term="AD")
+    codes = [
+        dialog.items_table.item(row, 0).text()
+        for row in range(dialog.items_table.rowCount())
+    ]
+    assert codes == ["AD01", "ZZ10", "AXAD", "BAD2"]
 
 
-def test_empty_search_shows_all_sorted_by_code(qt_app, sample_items):
-    dialog = _make_dialog(qt_app, sample_items, term="")
-    try:
-        codes = [dialog.items_table.item(row, 0).text() for row in range(dialog.items_table.rowCount())]
-        assert codes == sorted(codes)
-        assert dialog.result_count_label.text() == "4 matches"
-    finally:
-        dialog.close()
-        dialog.deleteLater()
+def test_empty_search_shows_all_sorted_by_code(qtbot, sample_items):
+    dialog = _make_dialog(qtbot, sample_items, term="")
+    codes = [
+        dialog.items_table.item(row, 0).text()
+        for row in range(dialog.items_table.rowCount())
+    ]
+    assert codes == sorted(codes)
+    assert dialog.result_count_label.text() == "4 matches"
 
 
-def test_no_match_state_is_visible_and_select_disabled(qt_app, sample_items):
-    dialog = _make_dialog(qt_app, sample_items, term="NOTHING")
-    try:
-        assert dialog.items_table.rowCount() == 0
-        assert dialog.empty_label.isVisible()
-        assert dialog.select_button.isEnabled() is False
-    finally:
-        dialog.close()
-        dialog.deleteLater()
+def test_no_match_state_is_visible_and_select_disabled(qtbot, sample_items):
+    dialog = _make_dialog(qtbot, sample_items, term="NOTHING")
+    assert dialog.items_table.rowCount() == 0
+    assert dialog.empty_label.isVisible()
+    assert dialog.select_button.isEnabled() is False
 
 
-def test_enter_in_search_accepts_first_visible_match(qt_app, sample_items):
-    dialog = _make_dialog(qt_app, sample_items, term="AD")
-    try:
-        dialog.search_edit.setFocus()
-        QTest.qWait(10)
-        QTest.keyClick(dialog.search_edit, Qt.Key_Return)
-        QTest.qWait(10)
+def test_enter_in_search_accepts_first_visible_match(qtbot, sample_items):
+    dialog = _make_dialog(qtbot, sample_items, term="AD")
+    dialog.search_edit.setFocus()
+    qtbot.waitUntil(lambda: dialog.search_edit.hasFocus(), timeout=1000)
+    QTest.keyClick(dialog.search_edit, Qt.Key_Return)
 
-        assert dialog.result() == QDialog.Accepted
-        picked = dialog.get_selected_item()
-        assert picked is not None
-        assert picked["code"] == "AD01"
-    finally:
-        dialog.close()
-        dialog.deleteLater()
+    qtbot.waitUntil(lambda: dialog.result() == QDialog.Accepted, timeout=1000)
+    picked = dialog.get_selected_item()
+    assert picked is not None
+    assert picked["code"] == "AD01"
 
 
-def test_double_click_accepts_and_returns_payload(qt_app, sample_items):
-    dialog = _make_dialog(qt_app, sample_items, term="AD")
-    try:
-        dialog.items_table.selectRow(1)
-        dialog.items_table.itemDoubleClicked.emit(dialog.items_table.item(1, 0))
-        QTest.qWait(10)
+def test_double_click_accepts_and_returns_payload(qtbot, sample_items):
+    dialog = _make_dialog(qtbot, sample_items, term="AD")
+    dialog.items_table.selectRow(1)
+    dialog.items_table.itemDoubleClicked.emit(dialog.items_table.item(1, 0))
 
-        assert dialog.result() == QDialog.Accepted
-        picked = dialog.get_selected_item()
-        assert picked is not None
-        assert set(picked.keys()) == {
-            "code",
-            "name",
-            "purity",
-            "wage_type",
-            "wage_rate",
-        }
-        assert picked["code"] == "ZZ10"
-        assert picked["wage_type"] == "PC"
-        assert isinstance(picked["purity"], float)
-        assert isinstance(picked["wage_rate"], float)
-    finally:
-        dialog.close()
-        dialog.deleteLater()
+    qtbot.waitUntil(lambda: dialog.result() == QDialog.Accepted, timeout=1000)
+    picked = dialog.get_selected_item()
+    assert picked is not None
+    assert set(picked.keys()) == {
+        "code",
+        "name",
+        "purity",
+        "wage_type",
+        "wage_rate",
+    }
+    assert picked["code"] == "ZZ10"
+    assert picked["wage_type"] == "PC"
+    assert isinstance(picked["purity"], float)
+    assert isinstance(picked["wage_rate"], float)
 
 
-def test_selection_updates_detail_panel(qt_app, sample_items):
-    dialog = _make_dialog(qt_app, sample_items, term="AD")
-    try:
-        dialog.items_table.selectRow(2)
-        QTest.qWait(10)
+def test_selection_updates_detail_panel(qtbot, sample_items):
+    dialog = _make_dialog(qtbot, sample_items, term="AD")
+    dialog.items_table.selectRow(2)
 
-        assert dialog.detail_code.text() == "AXAD"
-        assert dialog.detail_name.text() == "Roadline Anklet"
-        assert dialog.detail_purity.text() == "80.00"
-        assert dialog.detail_wage_type.text() == "WT"
-        assert dialog.detail_wage_rate.text() == "9.75"
-    finally:
-        dialog.close()
-        dialog.deleteLater()
+    qtbot.waitUntil(lambda: dialog.detail_code.text() == "AXAD", timeout=1000)
+    assert dialog.detail_name.text() == "Roadline Anklet"
+    assert dialog.detail_purity.text() == "80.00"
+    assert dialog.detail_wage_type.text() == "WT"
+    assert dialog.detail_wage_rate.text() == "9.75"
 
 
-def test_down_arrow_in_search_moves_focus_to_results(qt_app, sample_items):
-    dialog = _make_dialog(qt_app, sample_items, term="AD")
-    try:
-        dialog.search_edit.setFocus()
-        QTest.qWait(10)
-        QTest.keyClick(dialog.search_edit, Qt.Key_Down)
-        QTest.qWait(10)
+def test_down_arrow_in_search_moves_focus_to_results(qtbot, sample_items):
+    dialog = _make_dialog(qtbot, sample_items, term="AD")
+    dialog.search_edit.setFocus()
+    qtbot.waitUntil(lambda: dialog.search_edit.hasFocus(), timeout=1000)
+    QTest.keyClick(dialog.search_edit, Qt.Key_Down)
 
-        assert dialog.items_table.hasFocus()
-        assert dialog.items_table.currentRow() >= 0
-    finally:
-        dialog.close()
-        dialog.deleteLater()
+    qtbot.waitUntil(
+        lambda: dialog.items_table.hasFocus() and dialog.items_table.currentRow() >= 0,
+        timeout=1000,
+    )

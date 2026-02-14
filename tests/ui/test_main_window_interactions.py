@@ -3,7 +3,6 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 import pytest
-from PyQt5.QtTest import QTest
 
 import main
 from silverestimate.infrastructure.app_constants import APP_TITLE
@@ -185,7 +184,7 @@ def main_window_fixture(qt_app, settings_stub, monkeypatch):
         StubLiveRateController.instances.clear()
 
 
-def test_main_window_startup_sets_up_estimate_view(main_window_fixture, qt_app):
+def test_main_window_startup_sets_up_estimate_view(main_window_fixture, qt_app, qtbot):
     context = main_window_fixture
     window = context["window"]
     db = context["db"]
@@ -218,12 +217,11 @@ def test_main_window_startup_sets_up_estimate_view(main_window_fixture, qt_app):
 
     # Closing should invoke live-rate shutdown and database close.
     window.close()
-    qt_app.processEvents()
-    assert live_rate.shutdown_called is True
-    assert db.closed is True
+    qtbot.waitUntil(lambda: live_rate.shutdown_called is True, timeout=1000)
+    qtbot.waitUntil(lambda: db.closed is True, timeout=1000)
 
 
-def test_user_entry_updates_totals_and_view_model(main_window_fixture):
+def test_user_entry_updates_totals_and_view_model(main_window_fixture, qtbot):
     context = main_window_fixture
     window = context["window"]
     db = context["db"]
@@ -231,12 +229,14 @@ def test_user_entry_updates_totals_and_view_model(main_window_fixture):
     widget = window.estimate_widget
     table = widget.item_table
 
-    # Allow delayed focus timers to run.
-    QTest.qWait(150)
+    qtbot.waitUntil(lambda: table.rowCount() > 0, timeout=1500)
 
     # Simulate entering an item code the way the presenter expects.
     assert widget.presenter.handle_item_code(0, "RING001") is True
-    QTest.qWait(50)
+    qtbot.waitUntil(
+        lambda: table.get_cell_text(0, COL_CODE).strip().upper() == "RING001",
+        timeout=1500,
+    )
 
     # Populate user-editable values.
     widget.current_row = 0
@@ -247,9 +247,11 @@ def test_user_entry_updates_totals_and_view_model(main_window_fixture):
 
     # Trigger chained calculations (net, fine, wage, totals).
     widget.calculate_net_weight()
-    QTest.qWait(50)
     widget.calculate_totals()
-    QTest.qWait(20)
+    qtbot.waitUntil(
+        lambda: table.get_cell_text(0, COL_WAGE_AMT).strip() not in {"", "0", "0.0"},
+        timeout=1500,
+    )
 
     # Row cells reflect calculated values.
     assert float(table.get_cell_text(0, COL_NET_WT)) == pytest.approx(9.5, rel=1e-3)

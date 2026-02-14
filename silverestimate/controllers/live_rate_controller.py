@@ -26,6 +26,7 @@ class LiveRateController(QObject):
         logger: Optional[logging.Logger] = None,
         service_factory: Callable[..., LiveRateService] = LiveRateService,
         settings_provider: Callable[[], object] = get_app_settings,
+        single_shot: Callable[[int, Callable[[], None]], None] = QTimer.singleShot,
     ) -> None:
         super().__init__(parent)
         self._parent = parent
@@ -40,6 +41,7 @@ class LiveRateController(QObject):
         self._service: Optional[LiveRateService] = None
         self._manual_refresh = False
         self._ui_enabled = True
+        self._single_shot = single_shot
 
     # --- Lifecycle -----------------------------------------------------
 
@@ -48,7 +50,7 @@ class LiveRateController(QObject):
         show_ui = self.apply_visibility_settings()
         self.apply_timer_settings(force_show_ui=show_ui)
         if show_ui:
-            QTimer.singleShot(initial_refresh_delay_ms, self.refresh_now)
+            self._single_shot(initial_refresh_delay_ms, self.refresh_now)
 
     def shutdown(self) -> None:
         """Stop timers before the main window closes."""
@@ -189,7 +191,7 @@ class LiveRateController(QObject):
 
     def _handle_rate_updated(self, broadcast_rate, api_rate, market_open) -> None:
         best_rate = broadcast_rate if broadcast_rate not in (None, "") else api_rate
-        QTimer.singleShot(
+        self._single_shot(
             0,
             lambda: self._update_display(
                 best_rate, broadcast_rate, api_rate, market_open

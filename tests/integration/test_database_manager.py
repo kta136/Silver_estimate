@@ -114,3 +114,24 @@ def test_database_manager_persists_estimates(tmp_path, settings_stub):
         assert items["BAR001"]["fine"] == pytest.approx(5.994)
     finally:
         reopened.close()
+
+
+def test_database_manager_does_not_retain_plaintext_password(tmp_path, settings_stub):
+    db_path = tmp_path / "storage" / "secure_session.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    manager = DatabaseManager(str(db_path), "initial-password")
+    try:
+        assert not hasattr(manager, "password")
+        old_key = manager.key
+        assert manager.reencrypt_with_new_password("rotated-password") is True
+        assert manager.key != old_key
+        assert not hasattr(manager, "password")
+    finally:
+        manager.close()
+
+    reopened = DatabaseManager(str(db_path), "rotated-password")
+    try:
+        assert reopened is not None
+    finally:
+        reopened.close()

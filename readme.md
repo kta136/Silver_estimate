@@ -11,7 +11,7 @@ A desktop application built with PyQt5 and an encrypted SQLite database for mana
 [![Type checking: mypy](https://img.shields.io/badge/type%20checking-mypy-blue.svg)](http://mypy-lang.org/)
 [![Security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
 [![Pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/yourusername/SilverEstimate)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/kta136/Silver_estimate)
 
 ## Table of Contents
 - [Overview](#overview)
@@ -147,7 +147,10 @@ Key areas of the codebase:
 
 ## Testing
 
-- Tests live under `tests/` and use pytest (with `pytest-qt` for UI hooks). Run `pytest` from the repo root to execute the full suite, which now includes bootstrap coverage.
+- Tests live under `tests/` and use pytest (with `pytest-qt` for UI hooks).
+- Local smoke command: `pytest -v tests/test_security.py tests/services/test_auth_service.py`
+- Full local run: `pytest -v`
+- CI enforces coverage thresholds using explicit pytest coverage flags in workflow commands.
 - To iterate quickly on the application builder branch, run `pytest tests/unit/test_application_builder.py`.
 
 ## Deployment

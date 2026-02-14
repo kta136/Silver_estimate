@@ -1,9 +1,11 @@
 APP_NAME = "Silver Estimation App"
-APP_VERSION = "2.6.2"
+APP_VERSION = "2.6.3"
 APP_TITLE = f"{APP_NAME} v{APP_VERSION}"
 
-# Keep QSettings identifiers consistent to avoid breaking existing settings.
-SETTINGS_ORG = "YourCompany"
+# Keep a stable organization identifier for all new installs.
+SETTINGS_ORG = "SilverEstimate"
+# Legacy org used by older releases. Access remains supported via settings helper.
+LEGACY_SETTINGS_ORG = "YourCompany"
 SETTINGS_APP = "SilverEstimateApp"
 
 # Default paths

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "silverestimate"
-version = "2.6.3"
+dynamic = ["version"]
 description = "A desktop application for managing silver sales estimates with encrypted data storage"
 readme = "readme.md"
 requires-python = ">=3.13"
@@ -62,10 +62,13 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/SilverEstimate"
-Documentation = "https://github.com/yourusername/SilverEstimate/tree/master/DOCS"
-Repository = "https://github.com/yourusername/SilverEstimate"
-"Bug Tracker" = "https://github.com/yourusername/SilverEstimate/issues"
+Homepage = "https://github.com/kta136/Silver_estimate"
+Documentation = "https://github.com/kta136/Silver_estimate/tree/master/DOCS"
+Repository = "https://github.com/kta136/Silver_estimate"
+"Bug Tracker" = "https://github.com/kta136/Silver_estimate/issues"
+
+[tool.setuptools.dynamic]
+version = {attr = "silverestimate.infrastructure.app_constants.APP_VERSION"}
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -134,11 +137,7 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
     "--verbose",
-    "--cov=silverestimate",
-    "--cov-report=html",
-    "--cov-report=term-missing",
-    "--cov-report=xml",
-    "--cov-fail-under=30",  # Baseline threshold; raise as coverage improves
+    "--capture=no",
 ]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",

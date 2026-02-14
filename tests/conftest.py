@@ -1,6 +1,7 @@
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -151,6 +152,13 @@ def settings_stub(monkeypatch):
     monkeypatch.setattr(
         "silverestimate.security.credential_store.delete_password_hash",
         _CredentialStoreStub.delete_password_hash,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "silverestimate.security.credential_store.get_backend_status",
+        lambda: SimpleNamespace(
+            available=True, backend_name="tests.stub.keyring", reason=""
+        ),
         raising=False,
     )
     yield _SettingsStub

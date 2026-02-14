@@ -27,6 +27,15 @@ class CredentialStoreError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class CredentialBackendStatus:
+    """Runtime status of the configured keyring backend."""
+
+    available: bool
+    backend_name: str
+    reason: str = ""
+
+
+@dataclass(frozen=True)
 class _CredentialDescriptor:
     kind: str
     secure_id: str
@@ -47,7 +56,41 @@ _ENTRIES = {
 
 def is_available() -> bool:
     """Return True when the runtime has access to a keyring backend."""
-    return keyring is not None
+    return get_backend_status().available
+
+
+def get_backend_status() -> CredentialBackendStatus:
+    """Report whether a secure keyring backend is usable."""
+    if keyring is None:
+        return CredentialBackendStatus(
+            available=False,
+            backend_name="missing",
+            reason="Python keyring package is not installed.",
+        )
+    try:
+        backend = keyring.get_keyring()
+    except Exception as exc:  # pragma: no cover - backend init differs by platform
+        return CredentialBackendStatus(
+            available=False,
+            backend_name="unknown",
+            reason=f"Could not initialize keyring backend: {exc}",
+        )
+    backend_type = type(backend)
+    backend_name = f"{backend_type.__module__}.{backend_type.__name__}"
+    normalized = backend_name.lower()
+    if "null" in normalized or "fail" in normalized:
+        return CredentialBackendStatus(
+            available=False,
+            backend_name=backend_name,
+            reason=(
+                "Keyring backend is not secure (null/fail backend active). "
+                "Install and configure an OS-backed credential vault."
+            ),
+        )
+    return CredentialBackendStatus(
+        available=True,
+        backend_name=backend_name,
+    )
 
 
 def _get_entry(kind: str) -> _CredentialDescriptor:
@@ -58,10 +101,10 @@ def _get_entry(kind: str) -> _CredentialDescriptor:
 
 
 def _ensure_keyring() -> Any:
-    if keyring is None:
+    status = get_backend_status()
+    if not status.available:
         raise CredentialStoreError(
-            "Python keyring backend is not available. Install the 'keyring' package and ensure a "
-            "supported backend is configured."
+            f"Secure keyring backend unavailable ({status.backend_name}). {status.reason}"
         )
     return keyring
 

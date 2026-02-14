@@ -85,7 +85,7 @@ def run_authentication():
     logger = logging.getLogger(__name__)
     logger.info("Starting authentication process")
 
-    settings = QSettings("YourCompany", "SilverEstimateApp")
+    settings = QSettings("SilverEstimate", "SilverEstimateApp")
     password_hash = settings.value("security/password_hash")
     backup_hash = settings.value("security/backup_hash")
 
@@ -141,7 +141,7 @@ def setup_logging(app_name="silver_app", log_dir="logs", debug_mode=False):
 ```python
 def get_log_config():
     """Get logging configuration from environment variables or settings."""
-    settings = QSettings("YourCompany", "SilverEstimateApp")
+    settings = QSettings("SilverEstimate", "SilverEstimateApp")
 
     # Environment variables take precedence
     debug_mode = os.environ.get('SILVER_APP_DEBUG', '').lower() in ('true', '1', 'yes')

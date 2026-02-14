@@ -143,9 +143,8 @@ class DatabaseManager:
         self.logger.info(f"Initializing DatabaseManager for {db_path}")
 
         self.encrypted_db_path = db_path
-        self.password = password
         self.salt = self._get_or_create_salt()  # Get or create salt using QSettings
-        self.key = self._derive_key(self.password, self.salt)
+        self.key = self._derive_key(password, self.salt)
         self.temp_db_path = None  # Will hold the temporary file path
         self.conn = None
         self.cursor = None
@@ -446,15 +445,15 @@ class DatabaseManager:
             except Exception:
                 pass
             # Swap key temporarily for encryption
-            old_key, old_password = self.key, self.password
-            self.key, self.password = new_key, new_password
+            old_key = self.key
+            self.key = new_key
             success = False
             try:
                 success = self._encrypt_db()
             finally:
                 if not success:
                     # Restore old credentials on failure
-                    self.key, self.password = old_key, old_password
+                    self.key = old_key
             if success:
                 try:
                     self.logger.info("Database re-encrypted with new password.")

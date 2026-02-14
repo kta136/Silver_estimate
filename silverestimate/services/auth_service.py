@@ -52,6 +52,23 @@ def run_authentication(
     logger.info("Starting authentication process")
 
     settings = get_app_settings()
+    backend_status = credential_store.get_backend_status()
+    if not backend_status.available:
+        logger.critical(
+            "Secure credential storage unavailable: %s (%s)",
+            backend_status.backend_name,
+            backend_status.reason,
+        )
+        QMessageBox.critical(
+            parent,
+            "Authentication Error",
+            "Secure credential storage is unavailable.\n\n"
+            f"Backend: {backend_status.backend_name}\n"
+            f"Details: {backend_status.reason}\n\n"
+            "Configure an OS keyring backend (Windows Credential Manager, macOS Keychain, "
+            "or SecretService/libsecret on Linux), then restart the application.",
+        )
+        return None
     try:
         password_hash = credential_store.get_password_hash(
             "main", settings=settings, logger=logger
@@ -64,8 +81,9 @@ def run_authentication(
         QMessageBox.critical(
             parent,
             "Authentication Error",
-            "Secure credential storage is not available on this system. "
-            "Install and configure the Python 'keyring' backend, then restart the application.",
+            "Secure credential storage is not available on this system.\n\n"
+            f"Details: {exc}\n\n"
+            "Install/configure an OS keyring backend and restart the application.",
         )
         return None
 

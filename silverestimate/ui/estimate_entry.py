@@ -100,6 +100,10 @@ class EstimateEntryWidget(QWidget):
         COL_PIECES,
     )
 
+    @staticmethod
+    def _normalize_wage_type(value: object) -> str:
+        return "PC" if str(value or "").strip().upper() == "PC" else "WT"
+
     def __init__(self, db_manager, main_window, repository):
         super().__init__()
 
@@ -324,10 +328,45 @@ class EstimateEntryWidget(QWidget):
         self.live_rate_meta_label = self.secondary_actions.live_rate_meta_label
         self.refresh_rate_button = self.secondary_actions.refresh_rate_button
 
+        self._sync_live_rate_card_placement("right")
+
         self._bind_totals_panel_labels()
 
         self.unsaved_badge = self.toolbar.unsaved_badge
         self.status_message_label = self.toolbar.status_message_label
+
+    def _move_live_rate_card_to_summary_top(self) -> None:
+        """Place the live-rate card above summary cards in sidebar totals."""
+        sidebar_panel = getattr(self, "_totals_panel_sidebar", None)
+        live_rate_card = getattr(self.secondary_actions, "live_rate_container", None)
+        if sidebar_panel is None or live_rate_card is None:
+            return
+        try:
+            sidebar_panel.set_sidebar_top_widget(live_rate_card)
+        except Exception:
+            return
+
+        live_rate_divider = getattr(self.secondary_actions, "live_rate_divider", None)
+        if live_rate_divider is not None:
+            live_rate_divider.setVisible(False)
+
+    def _sync_live_rate_card_placement(self, totals_position: str) -> None:
+        """Place live-rate card in sidebar (left/right) or header (bottom)."""
+        normalized = self._normalize_totals_position(totals_position)
+        sidebar_panel = getattr(self, "_totals_panel_sidebar", None)
+        if sidebar_panel is None:
+            return
+
+        if normalized == "bottom":
+            try:
+                sidebar_panel.set_sidebar_top_widget(None)
+            except Exception:
+                pass
+            if hasattr(self.secondary_actions, "show_live_rate_in_header"):
+                self.secondary_actions.show_live_rate_in_header(show_divider=True)
+            return
+
+        self._move_live_rate_card_to_summary_top()
 
     def _setup_table_delegates(self):
         """Set up input delegates for table validation."""
@@ -495,6 +534,7 @@ class EstimateEntryWidget(QWidget):
             splitter.setStretchFactor(1, 0)
             self.totals_panel = sidebar_panel
 
+        self._sync_live_rate_card_placement(normalized)
         self._bind_totals_panel_labels()
         self.calculate_totals()
         self._totals_position = normalized
@@ -928,7 +968,9 @@ class EstimateEntryWidget(QWidget):
         if col == COL_PURITY:
             return row, COL_WAGE_RATE
         if col == COL_WAGE_RATE:
-            return row, COL_PIECES
+            if self._is_pieces_editable_for_row(row):
+                return row, COL_PIECES
+            return row + 1, COL_CODE
         if col == COL_PIECES:
             return row + 1, COL_CODE
         return row, COL_CODE
@@ -947,7 +989,10 @@ class EstimateEntryWidget(QWidget):
             return row, COL_CODE
         if col == COL_CODE:
             if row > 0:
-                return row - 1, COL_PIECES
+                prev_row = row - 1
+                if self._is_pieces_editable_for_row(prev_row):
+                    return prev_row, COL_PIECES
+                return prev_row, COL_WAGE_RATE
             return 0, COL_CODE
         return row, COL_CODE
 
@@ -1021,6 +1066,21 @@ class EstimateEntryWidget(QWidget):
             return self.item_table is not None and not sip.isdeleted(self.item_table)
         except Exception:
             return False
+
+    def _is_pieces_editable_for_row(self, row: int) -> bool:
+        if not self._is_table_valid():
+            return False
+        table = self.item_table
+        model = table.model() if table is not None else None
+        if model is None:
+            return True
+        try:
+            index = model.index(row, COL_PIECES)
+            if not index.isValid():
+                return True
+            return bool(model.flags(index) & Qt.ItemIsEditable)
+        except Exception:
+            return True
 
     def _should_force_code_focus(self) -> bool:
         try:
@@ -1617,6 +1677,27 @@ class EstimateEntryWidget(QWidget):
                 )
 
                 self._set_row_type_visuals_from_category(row, row_state.category)
+
+                wage_type = "WT"
+                repo = getattr(self.presenter, "repository", None)
+                if repo:
+                    try:
+                        item_data = repo.fetch_item(row_state.code)
+                    except Exception:
+                        item_data = None
+                    if item_data and item_data.get("wage_type") is not None:
+                        wage_type = self._normalize_wage_type(
+                            item_data.get("wage_type")
+                        )
+                model = self.item_table.get_model()
+                model.set_row_wage_type(row, wage_type)
+                pieces_item = self.item_table.item(row, COL_PIECES)
+                if pieces_item is not None:
+                    current_text = pieces_item.text().strip()
+                    if wage_type == "WT":
+                        pieces_item.setText("0")
+                    elif not current_text or current_text == "0":
+                        pieces_item.setText("1")
 
                 # Lock calculated cells
                 for col in [COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT, COL_TYPE]:

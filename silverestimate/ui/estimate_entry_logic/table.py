@@ -30,6 +30,20 @@ from .constants import (
 class _EstimateTableMixin:
     """Row and table editing helpers."""
 
+    def _is_pieces_editable_for_row(self, row: int) -> bool:
+        if not self._is_table_valid():
+            return False
+        model = self.item_table.model()
+        if model is None:
+            return True
+        try:
+            index = model.index(row, COL_PIECES)
+            if not index.isValid():
+                return True
+            return bool(model.flags(index) & Qt.ItemIsEditable)
+        except Exception:
+            return True
+
     def _get_table_adapter(self) -> EstimateTableAdapter:
         adapter = getattr(self, "_table_adapter", None)
         if adapter is None or getattr(adapter, "_table", None) is not self.item_table:
@@ -306,7 +320,11 @@ class _EstimateTableMixin:
         elif current_col == COL_PURITY:
             next_col = COL_WAGE_RATE
         elif current_col == COL_WAGE_RATE:
-            next_col = COL_PIECES
+            if self._is_pieces_editable_for_row(current_row):
+                next_col = COL_PIECES
+            else:
+                next_row = current_row + 1
+                next_col = COL_CODE
         elif current_col == COL_PIECES:
             next_row = current_row + 1
             next_col = COL_CODE
@@ -943,7 +961,10 @@ class _EstimateTableMixin:
         elif current_col == COL_CODE:
             if current_row > 0:
                 prev_row = current_row - 1
-                prev_col = COL_PIECES
+                if self._is_pieces_editable_for_row(prev_row):
+                    prev_col = COL_PIECES
+                else:
+                    prev_col = COL_WAGE_RATE
             else:
                 prev_col = COL_CODE
                 prev_row = 0
@@ -957,7 +978,10 @@ class _EstimateTableMixin:
             if prev_col == -1:
                 if current_row > 0:
                     prev_row = current_row - 1
-                    prev_col = COL_PIECES
+                    if self._is_pieces_editable_for_row(prev_row):
+                        prev_col = COL_PIECES
+                    else:
+                        prev_col = COL_WAGE_RATE
                 else:
                     prev_col = COL_CODE
                     prev_row = 0

@@ -302,6 +302,61 @@ def test_adapter_populate_row_uses_model_backed_items(qt_app, fake_db):
         widget.deleteLater()
 
 
+def test_adapter_populate_row_wt_forces_zero_and_disables_pieces(qt_app, fake_db):
+    widget = _make_widget(fake_db)
+    try:
+        widget.clear_all_rows()
+        widget.table_adapter.add_empty_row()
+        widget.table_adapter.populate_row(
+            0,
+            {
+                "code": "wt001",
+                "name": "WT Item",
+                "purity": 92.5,
+                "wage_rate": 10.0,
+                "wage_type": "WT",
+            },
+        )
+        pieces_item = widget.item_table.item(0, COL_PIECES)
+        assert pieces_item.text() == "0"
+        index = widget.item_table.model().index(0, COL_PIECES)
+        assert not bool(widget.item_table.model().flags(index) & Qt.ItemIsEditable)
+    finally:
+        widget.deleteLater()
+
+
+def test_adapter_populate_row_pc_restores_one_after_wt_zero(qt_app, fake_db):
+    widget = _make_widget(fake_db)
+    try:
+        widget.clear_all_rows()
+        widget.table_adapter.add_empty_row()
+        widget.table_adapter.populate_row(
+            0,
+            {
+                "code": "wt001",
+                "name": "WT Item",
+                "purity": 92.5,
+                "wage_rate": 10.0,
+                "wage_type": "WT",
+            },
+        )
+        widget.table_adapter.populate_row(
+            0,
+            {
+                "code": "pc001",
+                "name": "PC Item",
+                "purity": 92.5,
+                "wage_rate": 10.0,
+                "wage_type": "PC",
+            },
+        )
+        pieces_item = widget.item_table.item(0, COL_PIECES)
+        assert pieces_item.text() == "1"
+        assert bool(pieces_item.flags() & Qt.ItemIsEditable)
+    finally:
+        widget.deleteLater()
+
+
 def test_adapter_populate_triggers_calculations(qt_app, fake_db):
     """Test that populating a row via adapter triggers calculations.
 
@@ -581,7 +636,25 @@ def test_navigation_target_mapping_is_consistent(qt_app, fake_db):
     """Test cursor navigation mapping helpers for deterministic movement."""
     widget = _make_widget(fake_db)
     try:
-        row = 2
+        widget.clear_all_rows()
+        widget.table_adapter.add_empty_row()
+        widget.item_table.item(0, COL_CODE).setText("WT001")
+        widget.table_adapter.add_empty_row()
+        widget.item_table.item(1, COL_CODE).setText("PC001")
+        model = widget.item_table.get_model()
+        assert model.set_row_wage_type(0, "WT")
+        assert model.set_row_wage_type(1, "PC")
+
+        wt_row = 0
+        pc_row = 1
+
+        assert widget._next_edit_target(wt_row, COL_WAGE_RATE) == (wt_row + 1, COL_CODE)
+        assert widget._previous_edit_target(wt_row + 1, COL_CODE) == (
+            wt_row,
+            COL_WAGE_RATE,
+        )
+
+        row = pc_row
         assert widget._next_edit_target(row, COL_CODE) == (row, COL_GROSS)
         assert widget._next_edit_target(row, COL_GROSS) == (row, COL_POLY)
         assert widget._next_edit_target(row, COL_POLY) == (row, COL_PURITY)
@@ -594,7 +667,7 @@ def test_navigation_target_mapping_is_consistent(qt_app, fake_db):
         assert widget._previous_edit_target(row, COL_PURITY) == (row, COL_POLY)
         assert widget._previous_edit_target(row, COL_POLY) == (row, COL_GROSS)
         assert widget._previous_edit_target(row, COL_GROSS) == (row, COL_CODE)
-        assert widget._previous_edit_target(row, COL_CODE) == (row - 1, COL_PIECES)
+        assert widget._previous_edit_target(row, COL_CODE) == (row - 1, COL_WAGE_RATE)
         assert widget._previous_edit_target(0, COL_CODE) == (0, COL_CODE)
     finally:
         widget.deleteLater()

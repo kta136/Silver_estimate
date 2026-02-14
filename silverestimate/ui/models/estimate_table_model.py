@@ -60,6 +60,11 @@ class EstimateTableModel(QAbstractTableModel):
         super().__init__(parent)
         self._rows: list[EstimateEntryRowState] = []
 
+    @staticmethod
+    def _normalize_wage_type(value: Any) -> str:
+        normalized = str(value or "").strip().upper()
+        return "PC" if normalized == "PC" else "WT"
+
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
         """Return the number of rows in the model."""
         if parent.isValid():
@@ -179,7 +184,11 @@ class EstimateTableModel(QAbstractTableModel):
             elif col == COL_WAGE_RATE:
                 new_row = replace(old_row, wage_rate=float(value) if value else 0.0)
             elif col == COL_PIECES:
-                new_row = replace(old_row, pieces=int(value) if value else 1)
+                if value is None or str(value).strip() == "":
+                    pieces = 1 if old_row.wage_type == "PC" else 0
+                else:
+                    pieces = int(value)
+                new_row = replace(old_row, pieces=pieces)
             elif col == COL_WAGE_AMT:
                 new_row = replace(old_row, wage_amount=float(value) if value else 0.0)
             elif col == COL_FINE_WT:
@@ -255,9 +264,32 @@ class EstimateTableModel(QAbstractTableModel):
         col = index.column()
         if col in (COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT, COL_TYPE):
             return Qt.ItemIsEnabled | Qt.ItemIsSelectable
+        if col == COL_PIECES:
+            row_data = self.get_row(index.row())
+            if row_data and row_data.wage_type != "PC":
+                return Qt.ItemIsEnabled | Qt.ItemIsSelectable
 
         # All other columns are editable
         return Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable
+
+    def set_row_wage_type(self, row_idx: int, wage_type: str) -> bool:
+        """Update a row's wage type and refresh pieces editability."""
+        if not (0 <= row_idx < len(self._rows)):
+            return False
+
+        from dataclasses import replace
+
+        normalized = self._normalize_wage_type(wage_type)
+        row_data = self._rows[row_idx]
+        if row_data.wage_type == normalized:
+            return True
+
+        self._rows[row_idx] = replace(row_data, wage_type=normalized)
+        pieces_index = self.index(row_idx, COL_PIECES)
+        self.dataChanged.emit(
+            pieces_index, pieces_index, [Qt.DisplayRole, Qt.EditRole]
+        )
+        return True
 
     # Custom methods for managing rows
 

@@ -202,3 +202,42 @@ def test_set_row(model):
     assert retrieved.code == "UPDATED"
     assert retrieved.name == "Updated Item"
     assert retrieved.gross == 500.0
+
+
+def test_pieces_flags_depend_on_wage_type(model):
+    """Pieces column should be editable only for PC rows."""
+    wt_row = EstimateEntryRowState(code="WT001", wage_type="WT", pieces=0)
+    pc_row = EstimateEntryRowState(code="PC001", wage_type="PC", pieces=1)
+    model.add_row(wt_row)
+    model.add_row(pc_row)
+
+    wt_flags = model.flags(model.index(0, COL_PIECES))
+    pc_flags = model.flags(model.index(1, COL_PIECES))
+
+    assert not bool(wt_flags & Qt.ItemIsEditable)
+    assert bool(pc_flags & Qt.ItemIsEditable)
+
+
+def test_set_row_wage_type_updates_flags_and_normalizes(model):
+    """set_row_wage_type should normalize values and change editability."""
+    model.add_row(EstimateEntryRowState(code="TEST", wage_type="PC", pieces=1))
+
+    assert bool(model.flags(model.index(0, COL_PIECES)) & Qt.ItemIsEditable)
+    assert model.set_row_wage_type(0, "wt")
+    assert not bool(model.flags(model.index(0, COL_PIECES)) & Qt.ItemIsEditable)
+
+    row = model.get_row(0)
+    assert row is not None
+    assert row.wage_type == "WT"
+
+
+def test_set_data_pieces_defaults_for_wage_type(model):
+    """Pieces empty input should map to WT=0 and PC=1."""
+    model.add_row(EstimateEntryRowState(code="WT001", wage_type="WT", pieces=7))
+    model.add_row(EstimateEntryRowState(code="PC001", wage_type="PC", pieces=5))
+
+    assert model.setData(model.index(0, COL_PIECES), "", Qt.EditRole)
+    assert model.setData(model.index(1, COL_PIECES), "", Qt.EditRole)
+
+    assert model.data(model.index(0, COL_PIECES), Qt.DisplayRole) == 0
+    assert model.data(model.index(1, COL_PIECES), Qt.DisplayRole) == 1

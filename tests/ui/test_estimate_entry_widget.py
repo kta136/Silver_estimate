@@ -5,6 +5,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QTableWidgetItem
 
 from silverestimate.persistence.database_manager import DatabaseManager
+from silverestimate.presenter.estimate_entry_presenter import LoadedEstimate, SaveItem
 from silverestimate.ui.estimate_entry import EstimateEntryWidget
 from silverestimate.ui.estimate_entry_components.totals_panel import TotalsPanel
 from silverestimate.ui.estimate_entry_logic import (
@@ -340,6 +341,44 @@ def test_populate_row_updates_code_cell(qt_app, fake_db):
         assert table.item(0, COL_CODE).text() == "NEW123"
         assert table.item(0, COL_ITEM_NAME).text() == "New Item"
         assert table.item(0, COL_CODE).data(Qt.UserRole) == "new123"
+    finally:
+        widget.deleteLater()
+
+
+def test_apply_loaded_estimate_normalizes_wt_pieces_to_zero(qt_app, fake_db):
+    widget = _make_widget(fake_db)
+    try:
+        loaded = LoadedEstimate(
+            voucher_no="V001",
+            date="2026-02-14",
+            silver_rate=100.0,
+            note="",
+            last_balance_silver=0.0,
+            last_balance_amount=0.0,
+            items=(
+                SaveItem(
+                    code="WT001",
+                    row_number=1,
+                    name="WT Item",
+                    gross=10.0,
+                    poly=1.0,
+                    net_wt=9.0,
+                    purity=92.5,
+                    wage_rate=10.0,
+                    pieces=7,
+                    wage=90.0,
+                    fine=8.33,
+                    is_return=False,
+                    is_silver_bar=False,
+                ),
+            ),
+        )
+
+        assert widget.apply_loaded_estimate(loaded)
+        pieces_item = widget.item_table.item(0, COL_PIECES)
+        assert pieces_item is not None
+        assert pieces_item.text() == "0"
+        assert not bool(pieces_item.flags() & Qt.ItemIsEditable)
     finally:
         widget.deleteLater()
 

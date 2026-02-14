@@ -24,10 +24,15 @@ class EstimateEntryRowState:
     purity: float = 0.0
     wage_rate: float = 0.0
     pieces: int = 1
+    wage_type: str = "WT"
     wage_amount: float = 0.0
     fine_weight: float = 0.0
     category: EstimateLineCategory = EstimateLineCategory.REGULAR
     row_index: int = 0
+
+    def __post_init__(self) -> None:
+        normalized = (self.wage_type or "").strip().upper()
+        object.__setattr__(self, "wage_type", "PC" if normalized == "PC" else "WT")
 
     def is_empty(self) -> bool:
         """Return True when the row does not contain a code."""

@@ -644,6 +644,13 @@ class TotalsPanel(QWidget):
         main_layout.setContentsMargins(8, 8, 8, 8)
         main_layout.setSpacing(8)
 
+        self._sidebar_top_host = QWidget()
+        self._sidebar_top_layout = QVBoxLayout(self._sidebar_top_host)
+        self._sidebar_top_layout.setContentsMargins(0, 0, 0, 0)
+        self._sidebar_top_layout.setSpacing(6)
+        self._sidebar_top_host.setVisible(False)
+        main_layout.addWidget(self._sidebar_top_host)
+
         header_row = QHBoxLayout()
         header_row.setContentsMargins(0, 0, 0, 0)
         header_row.setSpacing(6)
@@ -677,11 +684,54 @@ class TotalsPanel(QWidget):
         main_layout.addWidget(self._summary_sections_list, 1)
         self._rebuild_sidebar_section_cards()
 
+    def set_sidebar_top_widget(self, widget: QWidget | None) -> None:
+        """Attach a widget above the sidebar summary cards."""
+        if self._layout_mode != "sidebar":
+            return
+        if not hasattr(self, "_sidebar_top_layout") or not hasattr(
+            self, "_sidebar_top_host"
+        ):
+            return
+
+        while self._sidebar_top_layout.count():
+            item = self._sidebar_top_layout.takeAt(0)
+            child_widget = item.widget()
+            if child_widget is not None:
+                child_widget.setParent(None)
+
+        if widget is None:
+            self._sidebar_top_host.setVisible(False)
+            return
+
+        self._sidebar_top_layout.addWidget(widget)
+        self._sidebar_top_host.setVisible(True)
+
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._schedule_sidebar_item_size_sync()
 
     # Public methods for updating totals
+
+    @staticmethod
+    def _format_weight(value: float) -> str:
+        """Format weight values with separators and gram suffix."""
+        try:
+            return f"{float(value):,.2f} gm"
+        except Exception:
+            return "0.00 gm"
+
+    @staticmethod
+    def _format_whole(value: float) -> str:
+        """Format whole-number values with separators."""
+        try:
+            return f"{float(value):,.0f}"
+        except Exception:
+            return "0"
+
+    @staticmethod
+    def _format_currency(value: float) -> str:
+        """Format currency with separators."""
+        return f"₹ {TotalsPanel._format_whole(value)}"
 
     def set_totals(self, totals: TotalsResult) -> None:
         """Update all totals from a TotalsResult.
@@ -690,55 +740,55 @@ class TotalsPanel(QWidget):
             totals: The totals result containing all calculations
         """
         # Overall totals
-        self.overall_gross_label.setText(f"{totals.overall_gross:.2f}")
-        self.overall_poly_label.setText(f"{totals.overall_poly:.2f}")
+        self.overall_gross_label.setText(self._format_weight(totals.overall_gross))
+        self.overall_poly_label.setText(self._format_weight(totals.overall_poly))
 
         # Regular items
-        self.total_gross_label.setText(f"{totals.regular.gross:.2f}")
-        self.total_net_label.setText(f"{totals.regular.net:.2f}")
-        self.total_fine_label.setText(f"{totals.regular.fine:.2f}")
+        self.total_gross_label.setText(self._format_weight(totals.regular.gross))
+        self.total_net_label.setText(self._format_weight(totals.regular.net))
+        self.total_fine_label.setText(self._format_weight(totals.regular.fine))
 
         # Return items
-        self.return_gross_label.setText(f"{totals.returns.gross:.2f}")
-        self.return_net_label.setText(f"{totals.returns.net:.2f}")
-        self.return_fine_label.setText(f"{totals.returns.fine:.2f}")
+        self.return_gross_label.setText(self._format_weight(totals.returns.gross))
+        self.return_net_label.setText(self._format_weight(totals.returns.net))
+        self.return_fine_label.setText(self._format_weight(totals.returns.fine))
 
         # Silver bars
-        self.bar_gross_label.setText(f"{totals.silver_bars.gross:.2f}")
-        self.bar_net_label.setText(f"{totals.silver_bars.net:.2f}")
-        self.bar_fine_label.setText(f"{totals.silver_bars.fine:.2f}")
+        self.bar_gross_label.setText(self._format_weight(totals.silver_bars.gross))
+        self.bar_net_label.setText(self._format_weight(totals.silver_bars.net))
+        self.bar_fine_label.setText(self._format_weight(totals.silver_bars.fine))
 
         # Final calculations
-        self.net_fine_label.setText(f"{totals.net_fine:.2f}")
-        self.net_wage_label.setText(f"{totals.net_wage:.0f}")
-        self.grand_total_label.setText(f"₹ {totals.grand_total:.0f}")
+        self.net_fine_label.setText(self._format_weight(totals.net_fine))
+        self.net_wage_label.setText(self._format_whole(totals.net_wage))
+        self.grand_total_label.setText(self._format_currency(totals.grand_total))
         self._schedule_sidebar_item_size_sync()
 
     def clear_totals(self) -> None:
         """Reset all totals to zero."""
         # Overall totals
-        self.overall_gross_label.setText("0.0")
-        self.overall_poly_label.setText("0.0")
+        self.overall_gross_label.setText(self._format_weight(0))
+        self.overall_poly_label.setText(self._format_weight(0))
 
         # Regular items
-        self.total_gross_label.setText("0.0")
-        self.total_net_label.setText("0.0")
-        self.total_fine_label.setText("0.0")
+        self.total_gross_label.setText(self._format_weight(0))
+        self.total_net_label.setText(self._format_weight(0))
+        self.total_fine_label.setText(self._format_weight(0))
 
         # Return items
-        self.return_gross_label.setText("0.0")
-        self.return_net_label.setText("0.0")
-        self.return_fine_label.setText("0.0")
+        self.return_gross_label.setText(self._format_weight(0))
+        self.return_net_label.setText(self._format_weight(0))
+        self.return_fine_label.setText(self._format_weight(0))
 
         # Silver bars
-        self.bar_gross_label.setText("0.0")
-        self.bar_net_label.setText("0.0")
-        self.bar_fine_label.setText("0.0")
+        self.bar_gross_label.setText(self._format_weight(0))
+        self.bar_net_label.setText(self._format_weight(0))
+        self.bar_fine_label.setText(self._format_weight(0))
 
         # Final calculations
-        self.net_fine_label.setText("0.0")
-        self.net_wage_label.setText("0")
-        self.grand_total_label.setText("₹ 0")
+        self.net_fine_label.setText(self._format_weight(0))
+        self.net_wage_label.setText(self._format_whole(0))
+        self.grand_total_label.setText(self._format_currency(0))
         self._schedule_sidebar_item_size_sync()
 
     # Font size methods for EstimateLogic compatibility

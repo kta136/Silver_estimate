@@ -110,6 +110,7 @@ class SecondaryActionsBar(QWidget):
         layout = QHBoxLayout(self)
         layout.setSpacing(6)
         layout.setContentsMargins(6, 4, 6, 4)
+        self._main_layout = layout
 
         # Delete Row button
         self.delete_row_button = QPushButton("Delete")
@@ -213,18 +214,18 @@ class SecondaryActionsBar(QWidget):
         self.live_rate_label.setVisible(False)
 
         # Live rate value and meta info in vertical layout
-        rate_container = QWidget()
-        rate_container.setObjectName("LiveRateCard")
-        rate_container.setStyleSheet("""
+        self.live_rate_container = QWidget()
+        self.live_rate_container.setObjectName("LiveRateCard")
+        self.live_rate_container.setStyleSheet("""
             QWidget#LiveRateCard {
                 background-color: #e6f0ff;
                 border: 1px solid #93c5fd;
                 border-radius: 12px;
             }
         """)
-        rate_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.live_rate_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
-        rate_layout = QHBoxLayout(rate_container)
+        rate_layout = QHBoxLayout(self.live_rate_container)
         rate_layout.setContentsMargins(8, 4, 6, 4)
         rate_layout.setSpacing(6)
 
@@ -274,8 +275,9 @@ class SecondaryActionsBar(QWidget):
 
         rate_layout.addLayout(left_stack)
 
-        layout.addWidget(rate_container)
-        layout.addWidget(self._create_divider())
+        layout.addWidget(self.live_rate_container)
+        self.live_rate_divider = self._create_divider()
+        layout.addWidget(self.live_rate_divider)
 
         # Delete estimate button (isolated on the far right as destructive action)
         self.delete_estimate_button = QToolButton()
@@ -290,6 +292,30 @@ class SecondaryActionsBar(QWidget):
         self.delete_estimate_button.setEnabled(False)
         self.delete_estimate_button.setAutoRaise(False)
         layout.addWidget(self.delete_estimate_button)
+
+    def show_live_rate_in_header(self, show_divider: bool = True) -> None:
+        """Ensure live-rate card is attached in the header action strip."""
+        layout = getattr(self, "_main_layout", None)
+        if not isinstance(layout, QHBoxLayout):
+            return
+        if getattr(self, "live_rate_container", None) is None:
+            return
+        if getattr(self, "live_rate_divider", None) is None:
+            return
+        if getattr(self, "delete_estimate_button", None) is None:
+            return
+
+        insert_index = layout.indexOf(self.delete_estimate_button)
+        if insert_index < 0:
+            insert_index = layout.count()
+
+        if layout.indexOf(self.live_rate_container) == -1:
+            layout.insertWidget(insert_index, self.live_rate_container)
+            insert_index += 1
+        if layout.indexOf(self.live_rate_divider) == -1:
+            layout.insertWidget(insert_index, self.live_rate_divider)
+
+        self.live_rate_divider.setVisible(bool(show_divider))
 
     def _create_divider(self) -> QFrame:
         """Create a vertical divider line.

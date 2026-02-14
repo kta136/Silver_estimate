@@ -34,6 +34,10 @@ class EstimateTableAdapter:
         self._table = table
 
     @staticmethod
+    def _normalize_wage_type(value: object) -> str:
+        return "PC" if str(value or "").strip().upper() == "PC" else "WT"
+
+    @staticmethod
     def _safe_focus_owner_code(owner_ref: "weakref.ReferenceType", row: int) -> None:
         """Best-effort focus helper for deferred timers.
 
@@ -87,9 +91,18 @@ class EstimateTableAdapter:
                 str(item_data.get("wage_rate", 0.0))  # type: ignore[arg-type]
             )
 
+            wage_type = self._normalize_wage_type(item_data.get("wage_type"))
+            model = table.get_model() if hasattr(table, "get_model") else table.model()
+            if model is not None and hasattr(model, "set_row_wage_type"):
+                model.set_row_wage_type(row_index, wage_type)
+
             pcs_item = table.item(row_index, COL_PIECES)
-            if pcs_item is not None and not pcs_item.text().strip():
-                pcs_item.setText("1")
+            if pcs_item is not None:
+                current_text = pcs_item.text().strip()
+                if wage_type == "WT":
+                    pcs_item.setText("0")
+                elif not current_text or current_text == "0":
+                    pcs_item.setText("1")
 
             type_item = table.item(row_index, COL_TYPE)
             owner._update_row_type_visuals_direct(type_item)

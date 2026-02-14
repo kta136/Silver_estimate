@@ -647,6 +647,13 @@ class EstimateTableView(QTableView):
             except (RuntimeError, AttributeError):
                 # Model might have been deleted during item creation
                 return None
+        else:
+            try:
+                index = self._table_model.index(row, column)
+                if index.isValid():
+                    self._item_cache[cache_key].setFlags(self._table_model.flags(index))
+            except (RuntimeError, AttributeError):
+                return None
 
         return self._item_cache.get(cache_key)
 

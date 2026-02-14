@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# Removed QDoubleSpinBox, added QDoubleValidator, QLocale
 import logging
 import time
 

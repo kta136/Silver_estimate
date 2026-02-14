@@ -264,7 +264,6 @@ class SettingsDialog(QDialog):
         widget.setLayout(layout)
         return widget
 
-    # def _create_business_tab(self): ...
 
     def _create_live_rates_tab(self):
         """Create the Live Rates settings tab (DDASilver auto-refresh)."""

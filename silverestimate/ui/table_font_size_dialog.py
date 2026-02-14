@@ -51,7 +51,6 @@ class TableFontSizeDialog(QDialog):
 # Example usage (for testing)
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    # Example: Assume current size is 10
     dialog = TableFontSizeDialog(current_size=10)
     if dialog.exec_() == QDialog.Accepted:
         size = dialog.get_selected_size()

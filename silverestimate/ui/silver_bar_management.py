@@ -2289,8 +2289,6 @@ class SilverBarDialog(QDialog):
             except Exception:
                 pass
             table.blockSignals(False)
-            # Optional: Resize columns after populating if not using fixed modes
-            # table.resizeColumnsToContents()
             # Refresh selection summaries when data changes
             try:
                 self._update_selection_summaries()
@@ -2466,9 +2464,6 @@ class SilverBarDialog(QDialog):
             # Restore filters (won't trigger load until after init)
             # Weight search should always start empty - don't restore previous value
             # try:
-            #     wq = s.value("ui/silver_bars/weight_query", "")
-            #     if isinstance(wq, str):
-            #         self.weight_search_edit.setText(wq)
             # except Exception:
             #     pass
             try:

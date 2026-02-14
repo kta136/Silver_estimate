@@ -441,7 +441,6 @@ class PrintManager:
             pad = (TOTAL_WIDTH - len(title)) // 2
             output.append(" " * pad + title)
 
-        # output.append(" ")  # REMOVED Empty line after title
 
         # Add voucher and rate line (unchanged)
         voucher_str = str(voucher_no).ljust(15)
@@ -495,7 +494,6 @@ class PrintManager:
             output.append(sep_eq)  # Use equals after totals
 
         if silver_bar_items:
-            # output.append(" "); # REMOVED Blank line
             sb_title = "* * Silver Bars * *"
             pad = (TOTAL_WIDTH - len(sb_title)) // 2
             output.append(" " * pad + sb_title)
@@ -527,7 +525,6 @@ class PrintManager:
             output.append(sep_eq)  # Use equals after totals
 
         if return_goods:
-            # output.append(" "); # REMOVED Blank line
             rg_title = "* * Return Goods * *"
             pad = (TOTAL_WIDTH - len(rg_title)) // 2
             output.append(" " * pad + rg_title)
@@ -559,7 +556,6 @@ class PrintManager:
             output.append(sep_eq)  # Use equals after totals
 
         if return_silver_bars:
-            # output.append(" "); # REMOVED Blank line
             rsb_title = "* * Return Silver Bar * *"
             pad = (TOTAL_WIDTH - len(rsb_title)) // 2
             output.append(" " * pad + rsb_title)
@@ -596,7 +592,6 @@ class PrintManager:
 
         # Add last balance section if it exists (before final section)
         if last_balance_silver > 0 or last_balance_amount > 0:
-            # output.append(" ") # REMOVED Blank line
             lb_title = "* * Last Balance * *"
             lb_pad = (TOTAL_WIDTH - len(lb_title)) // 2
             output.append(" " * lb_pad + lb_title)
@@ -608,7 +603,6 @@ class PrintManager:
             output.append(" " * lb_pad + lb_str)
             output.append(sep_dash)
 
-        # output.append(" "); # REMOVED Blank line
         final_title = "Final Silver & Amount"
         pad = (TOTAL_WIDTH - len(final_title)) // 2
         output.append(" " * pad + final_title)
@@ -675,7 +669,6 @@ class PrintManager:
 
         output.append(final_line[:TOTAL_WIDTH])
         output.append(sep_eq)
-        # output.append(" ") # REMOVED Blank line
         note = "Note :-  G O O D S   N O T   R E T U R N"
         pad = (TOTAL_WIDTH - len(note)) // 2
         output.append(" " * pad + note)

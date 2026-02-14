@@ -1,7 +1,6 @@
 import sys
 import warnings  # To potentially filter passlib warnings if needed
 
-# import bcrypt # No longer needed
 from passlib.context import CryptContext  # Import CryptContext
 from passlib.exc import (  # Import specific exceptions
     PasslibSecurityWarning,
@@ -27,7 +26,6 @@ from PyQt5.QtWidgets import (
 pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
 
 # Optional: Filter specific passlib warnings if they become noisy during development/packaging
-# warnings.filterwarnings("ignore", category=PasslibSecurityWarning)
 
 
 class LoginDialog(QDialog):
@@ -51,7 +49,6 @@ class LoginDialog(QDialog):
         self._connect_signals()
 
         # Prevent closing via the 'X' button if desired, force use of buttons
-        # self.setWindowFlags(self.windowFlags() & ~Qt.WindowCloseButtonHint)
 
     def _setup_ui(self):
         """Create the UI elements for the dialog."""
@@ -90,9 +87,6 @@ class LoginDialog(QDialog):
             )
             form_layout.addRow(self.confirm_password_label, self.confirm_password_input)
 
-            # Removed the informational label explaining the wipe function
-            # self.info_label = QLabel(...)
-            # layout.addWidget(self.info_label)
 
         layout.addLayout(form_layout)
 

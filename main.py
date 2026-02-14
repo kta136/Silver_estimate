@@ -96,12 +96,6 @@ class MainWindow(QMainWindow):
                 self.logger.debug("Failed to apply window icon: %s", exc)
 
         self.setWindowTitle(f"{APP_TITLE}[*]")
-        # self.setGeometry(100, 100, 1000, 700) # Remove fixed geometry
-        # self.showFullScreen() # Start in true full screen
-        # We need to show the window first before maximizing it
-        # self.show() # This is implicitly called later by app.exec_() usually
-        # Let's try setting the window state directly (Moved to end of __init__)
-        # self.setWindowState(Qt.WindowMaximized)
 
         self._pending_status_message = None
 
@@ -334,7 +328,6 @@ class MainWindow(QMainWindow):
                 app.quit()
         except Exception:
             pass
-        # Optional: Add confirmation dialog if needed
         super().closeEvent(event)
 
     # --- Method to show the new Settings dialog ---
@@ -344,10 +337,8 @@ class MainWindow(QMainWindow):
 
         dialog = SettingsDialog(main_window_ref=self, parent=self)
         # Connect the signal if needed for immediate UI updates beyond fonts
-        # dialog.settings_applied.connect(self.handle_settings_applied)
         dialog.exec_()
 
-    # Removed show_advanced_tools_dialog method
 
     def show_import_dialog(self):
         return self.commands.import_items()

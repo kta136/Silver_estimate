@@ -11,16 +11,15 @@
 
 `EstimateEntryWidget` is the main widget for creating and managing silver item estimates. It provides a table-based interface for entering item details, calculating values, and managing vouchers.
 
-### Inheritance Hierarchy
+### Class Hierarchy
 ```
 EstimateEntryWidget
 ├── QWidget (PyQt5)
-├── EstimateUI (layout mixin)
-└── EstimateLogic (business logic composite mixin)
-    ├── _EstimateBaseMixin (logging, settings)
-    ├── _EstimateDialogsMixin (dialog interactions)
-    ├── _EstimatePersistenceMixin (save/load/delete)
-    └── _EstimateTableMixin (table operations, calculations)
+└── Composition-based collaborators
+    ├── EstimateEntryPresenter
+    ├── EstimateEntryViewModel
+    ├── EstimateTableAdapter / EstimateTableView / EstimateTableModel
+    └── TotalsPanel / VoucherToolbar / Action bars
 ```
 
 ---
@@ -230,11 +229,9 @@ Handle widget close event.
 
 ---
 
-## Public Properties (via Mixins)
+## Public Workflow Methods
 
-The following methods are available through the mixin inheritance but are considered part of the public API:
-
-### From _EstimatePersistenceMixin
+The following methods are part of the widget's public runtime workflow API:
 
 - `capture_state() -> EstimateEntryViewState`: Capture current form state
 - `apply_totals(totals: TotalsResult) -> None`: Update totals display
@@ -244,8 +241,6 @@ The following methods are available through the mixin inheritance but are consid
 - `save_estimate() -> None`: Save current estimate
 - `delete_current_estimate() -> None`: Delete the loaded estimate
 - `print_estimate() -> None`: Print current estimate
-
-### From _EstimateTableMixin
 
 - `populate_row(row_index: int, item_data: Mapping) -> None`: Fill row with item data
 - `populate_item_row(row: int, item: Mapping) -> None`: Populate row from item lookup
@@ -257,9 +252,6 @@ The following methods are available through the mixin inheritance but are consid
 - `calculate_net_weight(row: int) -> None`: Calculate net weight for row
 - `calculate_fine(row: int) -> None`: Calculate fine weight for row
 - `calculate_wage(row: int) -> None`: Calculate wage amount for row
-
-### From _EstimateDialogsMixin
-
 - `show_history() -> None`: Open estimate history dialog
 - `clear_form() -> None`: Clear form and start new estimate
 - `prompt_item_selection(code: str) -> Optional[Mapping]`: Open item selection dialog
@@ -511,7 +503,6 @@ See [ESTIMATE_ENTRY_REFACTORING_PLAN.md](../ESTIMATE_ENTRY_REFACTORING_PLAN.md) 
 
 - [EstimateEntryPresenter](../silverestimate/presenter/estimate_entry_presenter.py)
 - [EstimateEntryViewModel](../silverestimate/ui/view_models/estimate_entry_view_model.py)
-- [Estimate Entry Logic Mixins](../silverestimate/ui/estimate_entry_logic/)
 - [Refactoring Plan](../ESTIMATE_ENTRY_REFACTORING_PLAN.md)
 
 ---

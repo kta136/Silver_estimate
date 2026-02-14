@@ -12,7 +12,7 @@
 | Test File | Test Count | Focus Area |
 |-----------|------------|------------|
 | `tests/unit/test_estimate_entry_presenter.py` | 9 tests | Presenter business logic |
-| `tests/unit/test_estimate_logic.py` | 11 tests | Logic mixin methods |
+| `tests/unit/test_estimate_logic.py` | 7 tests | Pure calculator functions |
 | `tests/unit/test_estimate_entry_view_model.py` | 3 tests | View model state |
 | `tests/ui/test_estimate_entry_widget.py` | 6 tests | Widget integration |
 | **Total** | **29 tests** | |
@@ -34,13 +34,13 @@
 
 **Files**: `tests/unit/test_estimate_entry_presenter.py`
 
-#### 2. EstimateLogic Mixins (11 tests)
+#### 2. Estimate Calculator Functions (7 tests)
 - ✅ Net weight calculation
 - ✅ Fine weight calculation
 - ✅ Wage amount calculation
-- ✅ Row type visuals
-- ✅ Empty row handling
-- ✅ Cell processing
+- ✅ Totals aggregation by category
+- ✅ Last-balance adjusted totals inputs
+- ✅ Property-based fine/wage correctness checks
 
 **Files**: `tests/unit/test_estimate_logic.py`
 
@@ -356,13 +356,12 @@ Based on analysis of the codebase:
 | Component | Lines | Covered | Coverage % |
 |-----------|-------|---------|------------|
 | EstimateEntryWidget (main) | ~300 | ~100 | ~33% |
-| _EstimateTableMixin | ~802 | ~350 | ~44% |
-| _EstimatePersistenceMixin | ~662 | ~200 | ~30% |
-| _EstimateDialogsMixin | ~165 | ~50 | ~30% |
-| _EstimateBaseMixin | ~330 | ~100 | ~30% |
+| EstimateTableAdapter + EstimateTableView + EstimateTableModel | ~600 | ~260 | ~43% |
+| EstimateEntryPersistenceService | ~170 | ~80 | ~47% |
+| Estimate calculator helpers | ~40 | ~30 | ~75% |
 | EstimateEntryPresenter | ~250 | ~200 | ~80% |
 | EstimateEntryViewModel | ~150 | ~120 | ~80% |
-| **Overall Estimate** | **~2659** | **~1120** | **~42%** |
+| **Overall Estimate** | **~1510** | **~790** | **~52%** |
 
 **Note**: These are rough estimates based on code review, not actual coverage metrics.
 

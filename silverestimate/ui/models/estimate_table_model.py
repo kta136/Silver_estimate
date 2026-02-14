@@ -302,10 +302,13 @@ class EstimateTableModel(QAbstractTableModel):
         Returns:
             The index of the newly added row
         """
-        if row_data is None:
-            row_data = EstimateEntryRowState(row_index=len(self._rows))
-
         row_idx = len(self._rows)
+        if row_data is None:
+            row_data = EstimateEntryRowState(
+                row_index=row_idx + 1,
+                pieces=0,
+                wage_type="WT",
+            )
         self.beginInsertRows(QModelIndex(), row_idx, row_idx)
         self._rows.append(row_data)
         self.endInsertRows()

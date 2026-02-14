@@ -240,10 +240,10 @@ def test_user_entry_updates_totals_and_view_model(main_window_fixture):
 
     # Populate user-editable values.
     widget.current_row = 0
-    table.item(0, COL_GROSS).setText("10")
-    table.item(0, COL_POLY).setText("0.5")
-    table.item(0, COL_PURITY).setText("92.5")
-    table.item(0, COL_WAGE_RATE).setText("12")
+    table.set_cell_text(0, COL_GROSS, "10")
+    table.set_cell_text(0, COL_POLY, "0.5")
+    table.set_cell_text(0, COL_PURITY, "92.5")
+    table.set_cell_text(0, COL_WAGE_RATE, "12")
 
     # Trigger chained calculations (net, fine, wage, totals).
     widget.calculate_net_weight()
@@ -252,9 +252,9 @@ def test_user_entry_updates_totals_and_view_model(main_window_fixture):
     QTest.qWait(20)
 
     # Row cells reflect calculated values.
-    assert float(table.item(0, COL_NET_WT).text()) == pytest.approx(9.5, rel=1e-3)
-    assert float(table.item(0, COL_FINE_WT).text()) == pytest.approx(8.79, rel=1e-3)
-    assert float(table.item(0, COL_WAGE_AMT).text()) == pytest.approx(114.0)
+    assert float(table.get_cell_text(0, COL_NET_WT)) == pytest.approx(9.5, rel=1e-3)
+    assert float(table.get_cell_text(0, COL_FINE_WT)) == pytest.approx(8.79, rel=1e-3)
+    assert float(table.get_cell_text(0, COL_WAGE_AMT)) == pytest.approx(114.0)
 
     # Totals panel displays computed aggregates.
     assert float(widget.overall_gross_label.text()) == pytest.approx(10.0)

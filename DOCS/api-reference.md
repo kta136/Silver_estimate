@@ -35,7 +35,7 @@ This guide documents the primary controller, service, and persistence APIs expos
     EstimateEntryPresenter(view: EstimateEntryView, repository: EstimateRepository)
 
 - **generate_voucher(silent: bool = False) -> str** - request the next voucher number from the repository and push it to the view.
-- **refresh_totals() -> TotalsResult** - capture current view state and recompute totals via `services.estimate_calculator`.
+- **refresh_totals() -> TotalsResult** - capture current view state and recompute totals via `services.estimate_calculator` (available for explicit presenter-driven refresh flows).
 - **load_estimate(voucher_no: str) -> Optional[LoadedEstimate]** - retrieve persisted estimate payloads and normalise them for the view.
 - **open_history() -> None** - open the history dialog, load the chosen voucher, and apply it to the view.
 - **handle_item_code(row_index: int, code: str) -> bool** - resolve item code from repository or selection dialog, then populate/focus the row.
@@ -46,6 +46,7 @@ This guide documents the primary controller, service, and persistence APIs expos
 ### Presenter Contracts (silverestimate/presenter/__init__.py)
 - **EstimateEntryView** protocol for Qt widgets (`capture_state`, `apply_totals`, `populate_row`, etc.).
 - Dataclasses: `EstimateEntryViewState`, `SaveItem`, `SavePayload`, `SaveOutcome`, `LoadedEstimate` encapsulate presenter inputs/outputs.
+- Totals ownership note: `EstimateEntryWidget` owns hot-path totals scheduling/recompute for cell edits; presenter totals refresh remains callable for explicit non-edit flows.
 
 ## Service Layer
 
@@ -124,6 +125,7 @@ Note: Legacy item/estimate helper methods remain for backwards compatibility but
 - **assign_bar_to_list(bar_id: int, list_id: int, note: str = ...) -> bool** – move bars into lists with transfer logging.
 - **remove_bar_from_list(bar_id: int, note: str = ...) -> bool** – reverse assignments, recording transfer history.
 - **get_available_bars(...) / get_bars_in_list(list_id: int)** – query stock by status.
+- **get_silver_bars(..., unassigned_only: bool = False)** – query inventory with optional `list_id IS NULL` filtering for available-only screens.
 - **delete_list(list_id: int) -> Tuple[bool, str]** – drop lists and safely unassign bars.
 - **add_silver_bar(...) / update_silver_bar_values(...)** – maintain silver bar records linked to estimates.
 
@@ -137,7 +139,7 @@ Note: Legacy item/estimate helper methods remain for backwards compatibility but
 ## UI Facades
 
 While the focus of this reference is the controller/service stack, the following UI entry points expose the application logic:
-- **EstimateEntryWidget (silverestimate/ui/estimate_entry.py)** - integrates `EstimateEntryPresenter` with UI helpers and logic mixins; exposes `save_estimate()`, `print_estimate()`, `safe_load_estimate()`.
+- **EstimateEntryWidget (silverestimate/ui/estimate_entry.py)** - integrates `EstimateEntryPresenter` with a model-first `EstimateTableView` data path; exposes `save_estimate()`, `print_estimate()`, `safe_load_estimate()`.
 - **ItemMasterWidget (silverestimate/ui/item_master.py)** - allows CRUD via load_items(), add_item(), update_item(), delete_item() (internally using ItemsRepository).
 - **SilverBarDialog (silverestimate/ui/silver_bar_management.py)** - provides load_available_bars(), load_bars_in_selected_list(), and list assignment interactions on top of SilverBarsRepository.
 

@@ -78,9 +78,28 @@ class ItemsRepository:
         if not cursor:
             return []
         try:
-            pattern = f"%{search_term}%"
+            term = (search_term or "").strip()
+            if not term:
+                cursor.execute("SELECT * FROM items ORDER BY code")
+                return cursor.fetchall()
+
+            # Fast path: prefix search can leverage the existing code index.
+            prefix_pattern = f"{term}%"
             cursor.execute(
-                "SELECT * FROM items WHERE LOWER(code) LIKE LOWER(?) OR LOWER(name) LIKE LOWER(?) ORDER BY code",
+                "SELECT * FROM items WHERE code LIKE ? COLLATE NOCASE OR name LIKE ? COLLATE NOCASE ORDER BY code",
+                (prefix_pattern, prefix_pattern),
+            )
+            prefix_rows = cursor.fetchall()
+            if prefix_rows:
+                return prefix_rows
+
+            # Fallback: substring search for broader matching on longer queries.
+            if len(term) < 2:
+                return []
+
+            pattern = f"%{term}%"
+            cursor.execute(
+                "SELECT * FROM items WHERE code LIKE ? COLLATE NOCASE OR name LIKE ? COLLATE NOCASE ORDER BY code",
                 (pattern, pattern),
             )
             return cursor.fetchall()

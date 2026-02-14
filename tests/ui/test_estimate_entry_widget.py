@@ -1,9 +1,9 @@
 import types
 
 import pytest
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QTableWidgetItem
+from PyQt5.QtCore import QEventLoop, Qt, QTimer
 
+from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.persistence.database_manager import DatabaseManager
 from silverestimate.presenter.estimate_entry_presenter import LoadedEstimate, SaveItem
 from silverestimate.ui.estimate_entry import EstimateEntryWidget
@@ -54,30 +54,28 @@ def _set_row(widget, row, item):
     table = widget.item_table
     while table.rowCount() <= row:
         widget.add_empty_row()
-    table.setItem(row, COL_CODE, QTableWidgetItem(str(item["code"])))
-    table.setItem(row, COL_GROSS, QTableWidgetItem(str(item["gross"])))
-    table.setItem(row, COL_POLY, QTableWidgetItem(str(item["poly"])))
-    table.setItem(row, COL_PURITY, QTableWidgetItem(str(item["purity"])))
-    table.setItem(row, COL_WAGE_RATE, QTableWidgetItem(str(item["wage_rate"])))
-    table.setItem(row, COL_PIECES, QTableWidgetItem(str(item["pieces"])))
+    table.set_cell_text(row, COL_CODE, str(item["code"]))
+    table.set_cell_text(row, COL_GROSS, str(item["gross"]))
+    table.set_cell_text(row, COL_POLY, str(item["poly"]))
+    table.set_cell_text(row, COL_PURITY, str(item["purity"]))
+    table.set_cell_text(row, COL_WAGE_RATE, str(item["wage_rate"]))
+    table.set_cell_text(row, COL_PIECES, str(item["pieces"]))
     widget.current_row = row
     net = max(0.0, float(item["gross"]) - float(item["poly"]))
     fine = net * (float(item["purity"]) / 100.0)
     wage = net * float(item["wage_rate"])
 
-    table.setItem(row, COL_NET_WT, QTableWidgetItem(f"{net:.2f}"))
-    table.setItem(row, COL_FINE_WT, QTableWidgetItem(f"{fine:.2f}"))
-    table.setItem(row, COL_WAGE_AMT, QTableWidgetItem(f"{wage:.0f}"))
+    table.set_cell_text(row, COL_NET_WT, f"{net:.2f}")
+    table.set_cell_text(row, COL_FINE_WT, f"{fine:.2f}")
+    table.set_cell_text(row, COL_WAGE_AMT, f"{wage:.0f}")
 
     # Manually set type for test
-    type_item = table.item(row, COL_TYPE) or QTableWidgetItem()
     if item.get("is_silver_bar"):
-        type_item.setText("silver_bar")
+        table.set_row_category(row, EstimateLineCategory.SILVER_BAR)
     elif item.get("is_return"):
-        type_item.setText("return")
+        table.set_row_category(row, EstimateLineCategory.RETURN)
     else:
-        type_item.setText("regular")
-    table.setItem(row, COL_TYPE, type_item)
+        table.set_row_category(row, EstimateLineCategory.REGULAR)
 
     widget.calculate_totals()
 
@@ -169,6 +167,12 @@ def _make_widget(db_manager):
     return widget
 
 
+def _pump_events(wait_ms: int = 20) -> None:
+    loop = QEventLoop()
+    QTimer.singleShot(wait_ms, loop.quit)
+    loop.exec_()
+
+
 def test_widget_generates_voucher_on_init(qt_app, fake_db):
     widget = _make_widget(fake_db)
     try:
@@ -186,13 +190,13 @@ def test_widget_calculates_totals(qt_app, fake_db):
         regular_item(gross=10, poly=1, purity=92.5, wage_rate=10),
     )
 
-    assert float(table.item(0, COL_NET_WT).text()) == pytest.approx(9.00)
+    assert float(table.get_cell_text(0, COL_NET_WT)) == pytest.approx(9.00)
     expected_fine = (10 - 1) * (92.5 / 100.0)
     # Using larger tolerance due to rounding issues (8.325 -> 8.33)
-    assert float(table.item(0, COL_FINE_WT).text()) == pytest.approx(
+    assert float(table.get_cell_text(0, COL_FINE_WT)) == pytest.approx(
         expected_fine, abs=0.01
     )
-    assert float(table.item(0, COL_WAGE_AMT).text()) == pytest.approx(90.0)
+    assert float(table.get_cell_text(0, COL_WAGE_AMT)) == pytest.approx(90.0)
 
     assert float(widget.total_gross_label.text()) == pytest.approx(10.0)
     assert float(widget.total_net_label.text()) == pytest.approx(9.0)
@@ -218,9 +222,9 @@ def test_widget_multi_row_totals(qt_app, fake_db):
     widget.calculate_totals()
 
     # Note: EstimateTableView displays "No", "Return", "Silver Bar" even if we set "regular" internally
-    assert table.item(0, COL_TYPE).text() == "No"
-    assert table.item(1, COL_TYPE).text() == "Return"
-    assert table.item(2, COL_TYPE).text() == "Silver Bar"
+    assert table.get_cell_text(0, COL_TYPE) == "No"
+    assert table.get_cell_text(1, COL_TYPE) == "Return"
+    assert table.get_cell_text(2, COL_TYPE) == "Silver Bar"
 
     assert float(widget.total_gross_label.text()) == pytest.approx(10.0)
     assert float(widget.return_gross_label.text()) == pytest.approx(2.5)
@@ -291,9 +295,9 @@ def test_widget_save_and_reload(qt_app, tmp_path, settings_stub, monkeypatch):
     table = widget_loaded.item_table
     rows = []
     for row in range(table.rowCount()):
-        code_item = table.item(row, COL_CODE)
-        if code_item and code_item.text().strip():
-            rows.append((code_item.text(), table.item(row, COL_TYPE).text()))
+        code_text = table.get_cell_text(row, COL_CODE).strip()
+        if code_text:
+            rows.append((code_text, table.get_cell_text(row, COL_TYPE)))
 
     assert rows == [
         ("REG001", "No"),
@@ -301,9 +305,9 @@ def test_widget_save_and_reload(qt_app, tmp_path, settings_stub, monkeypatch):
         ("RET001", "Return"),
     ]
 
-    assert float(table.item(0, COL_NET_WT).text()) == pytest.approx(9.0)
-    assert float(table.item(1, COL_NET_WT).text()) == pytest.approx(2.0)
-    assert float(table.item(2, COL_NET_WT).text()) == pytest.approx(1.2)
+    assert float(table.get_cell_text(0, COL_NET_WT)) == pytest.approx(9.0)
+    assert float(table.get_cell_text(1, COL_NET_WT)) == pytest.approx(2.0)
+    assert float(table.get_cell_text(2, COL_NET_WT)) == pytest.approx(1.2)
 
     widget.deleteLater()
     widget_loaded.deleteLater()
@@ -313,16 +317,16 @@ def test_widget_save_and_reload(qt_app, tmp_path, settings_stub, monkeypatch):
 def test_toggle_modes_updates_empty_row(qt_app, fake_db):
     widget = _make_widget(fake_db)
     last_row = widget.item_table.rowCount() - 1
-    assert widget.item_table.item(last_row, COL_TYPE).text() == "No"
+    assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "No"
     widget.toggle_return_mode()
     last_row = widget.item_table.rowCount() - 1
-    assert widget.item_table.item(last_row, COL_TYPE).text() == "Return"
+    assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "Return"
     widget.toggle_silver_bar_mode()
     last_row = widget.item_table.rowCount() - 1
-    assert widget.item_table.item(last_row, COL_TYPE).text() == "Silver Bar"
+    assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "Silver Bar"
     widget.toggle_silver_bar_mode()
     last_row = widget.item_table.rowCount() - 1
-    assert widget.item_table.item(last_row, COL_TYPE).text() == "No"
+    assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "No"
 
 
 def test_populate_row_updates_code_cell(qt_app, fake_db):
@@ -332,15 +336,15 @@ def test_populate_row_updates_code_cell(qt_app, fake_db):
         if table.rowCount() == 0:
             widget.add_empty_row()
 
-        table.setItem(0, COL_CODE, QTableWidgetItem("old-code"))
+        table.set_cell_text(0, COL_CODE, "old-code")
         widget.populate_row(
             0,
             {"code": "new123", "name": "New Item", "purity": 91.6, "wage_rate": 10.0},
         )
 
-        assert table.item(0, COL_CODE).text() == "NEW123"
-        assert table.item(0, COL_ITEM_NAME).text() == "New Item"
-        assert table.item(0, COL_CODE).data(Qt.UserRole) == "new123"
+        assert table.get_cell_text(0, COL_CODE) == "NEW123"
+        assert table.get_cell_text(0, COL_ITEM_NAME) == "New Item"
+        assert table.get_row_state(0).code == "NEW123"
     finally:
         widget.deleteLater()
 
@@ -375,10 +379,10 @@ def test_apply_loaded_estimate_normalizes_wt_pieces_to_zero(qt_app, fake_db):
         )
 
         assert widget.apply_loaded_estimate(loaded)
-        pieces_item = widget.item_table.item(0, COL_PIECES)
-        assert pieces_item is not None
-        assert pieces_item.text() == "0"
-        assert not bool(pieces_item.flags() & Qt.ItemIsEditable)
+        table = widget.item_table
+        assert table.get_cell_text(0, COL_PIECES) == "0"
+        pieces_index = table.get_model().index(0, COL_PIECES)
+        assert not bool(table.get_model().flags(pieces_index) & Qt.ItemIsEditable)
     finally:
         widget.deleteLater()
 
@@ -443,26 +447,78 @@ def test_column_width_auto_fits_content_expand_and_shrink(qt_app, fake_db):
         table = widget.item_table
         col = COL_ITEM_NAME
 
-        table.setItem(0, col, QTableWidgetItem("A"))
+        table.set_cell_text(0, col, "A")
         widget._schedule_columns_autofit([col], delay_ms=0)
         widget._apply_pending_column_autofit()
         base_width = table.columnWidth(col)
 
-        table.setItem(
-            0,
-            col,
-            QTableWidgetItem("Very Long Item Name For Dynamic Width Testing 12345"),
-        )
+        table.set_cell_text(0, col, "Very Long Item Name For Dynamic Width Testing 12345")
         widget._schedule_columns_autofit([col], delay_ms=0)
         widget._apply_pending_column_autofit()
         expanded_width = table.columnWidth(col)
 
-        table.setItem(0, col, QTableWidgetItem("AB"))
+        table.set_cell_text(0, col, "AB")
         widget._schedule_columns_autofit([col], delay_ms=0)
         widget._apply_pending_column_autofit()
         shrink_width = table.columnWidth(col)
 
         assert expanded_width > base_width
         assert shrink_width < expanded_width
+    finally:
+        widget.deleteLater()
+
+
+def test_calculate_wage_uses_row_wage_type_without_repository_lookup(qt_app, fake_db):
+    widget = _make_widget(fake_db)
+    try:
+        table = widget.item_table
+        if table.rowCount() == 0:
+            widget.add_empty_row()
+
+        repo_calls = []
+        fake_db.get_item_by_code = lambda code: repo_calls.append(code) or {
+            "wage_type": "WT",
+            "wage_rate": 1.0,
+        }
+
+        model = table.get_model()
+        model.set_row_wage_type(0, "PC")
+
+        table.set_cell_text(0, COL_CODE, "PC001")
+        table.set_cell_text(0, COL_GROSS, "10")
+        table.set_cell_text(0, COL_POLY, "2")
+        table.set_cell_text(0, COL_PURITY, "90")
+        table.set_cell_text(0, COL_WAGE_RATE, "5")
+        table.set_cell_text(0, COL_PIECES, "3")
+
+        widget.current_row = 0
+        widget.calculate_wage()
+
+        assert float(table.get_cell_text(0, COL_WAGE_AMT)) == pytest.approx(15.0)
+        assert repo_calls == []
+    finally:
+        widget.deleteLater()
+
+
+def test_totals_recalc_is_debounced(qt_app, fake_db):
+    widget = _make_widget(fake_db)
+    try:
+        calls = []
+        original_apply = widget.apply_totals
+
+        def _capture_apply(totals):
+            calls.append(totals)
+            original_apply(totals)
+
+        widget.apply_totals = _capture_apply  # type: ignore[method-assign]
+        _pump_events(40)
+        calls.clear()
+
+        widget._schedule_totals_recalc(delay_ms=10)
+        widget._schedule_totals_recalc(delay_ms=10)
+        widget._schedule_totals_recalc(delay_ms=10)
+        _pump_events(60)
+
+        assert len(calls) == 1
     finally:
         widget.deleteLater()

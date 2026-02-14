@@ -67,11 +67,15 @@ class SettingsService:
         state = self._settings.value("ui/main_state")
         restored = False
         if geometry is not None:
-            window.restoreGeometry(geometry)
-            restored = True
+            try:
+                restored = bool(window.restoreGeometry(geometry)) or restored
+            except Exception:
+                pass
         if state is not None:
-            window.restoreState(state)
-            restored = True
+            try:
+                restored = bool(window.restoreState(state)) or restored
+            except Exception:
+                pass
         return restored
 
     def save_geometry(self, window) -> None:

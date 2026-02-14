@@ -106,6 +106,20 @@ def test_items_repository_returns_plain_dicts(fake_db):
     assert isinstance(refetched, dict)
 
 
+def test_items_repository_search_uses_prefix_then_contains_fallback(fake_db):
+    repo = ItemsRepository(fake_db)
+    repo.add_item("ABC001", "Alpha Brace", 91.0, "WT", 5.0)
+    repo.add_item("XABC99", "X-Ray", 91.0, "WT", 5.0)
+
+    prefix_rows = repo.search_items("AB")
+    assert [row["code"] for row in prefix_rows] == ["ABC001"]
+
+    fallback_rows = repo.search_items("BC99")
+    assert [row["code"] for row in fallback_rows] == ["XABC99"]
+
+    assert repo.search_items("Q") == []
+
+
 def test_estimates_repository_save_and_fetch(fake_db):
     repo = EstimatesRepository(fake_db)
     ItemsRepository(fake_db).add_item("ITM001", "Sample Item", 92.5, "WT", 10.0)
@@ -264,6 +278,24 @@ def test_silver_bar_query_limit_and_offset(fake_db):
     offset_rows = repo.get_silver_bars(limit=1, offset=1)
     assert len(offset_rows) == 1
     assert offset_rows[0]["bar_id"] == limited[1]["bar_id"]
+
+
+def test_silver_bar_query_unassigned_only_filter(fake_db):
+    repo = SilverBarsRepository(fake_db)
+    list_id = repo.create_list("Filter List")
+    assert list_id is not None
+
+    free_bar = repo.add_silver_bar("U1", 11.0, 99.0)
+    assigned_bar = repo.add_silver_bar("U2", 12.0, 99.0)
+    assert free_bar is not None
+    assert assigned_bar is not None
+    assert repo.assign_bar_to_list(assigned_bar, list_id)
+
+    all_rows = repo.get_silver_bars()
+    assert {row["bar_id"] for row in all_rows} == {free_bar, assigned_bar}
+
+    unassigned_rows = repo.get_silver_bars(unassigned_only=True)
+    assert {row["bar_id"] for row in unassigned_rows} == {free_bar}
 
 
 def test_silver_bar_list_query_limit_and_offset(fake_db):

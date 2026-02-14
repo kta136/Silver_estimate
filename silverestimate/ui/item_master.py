@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # Removed QDoubleSpinBox, added QDoubleValidator, QLocale
-from PyQt5.QtCore import QLocale, Qt, pyqtSignal  # Added QLocale
+import logging
+import time
+
+from PyQt5.QtCore import QLocale, QTimer, Qt  # Added QLocale
 from PyQt5.QtGui import QDoubleValidator, QKeyEvent  # Added QDoubleValidator
 from PyQt5.QtWidgets import (
     QAbstractItemView,
@@ -27,6 +30,11 @@ class ItemMasterWidget(QWidget):
         super().__init__()
         self.db_manager = db_manager
         self.main_window = main_window  # Store reference
+        self.logger = logging.getLogger(__name__)
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.setInterval(180)
+        self._search_timer.timeout.connect(self.search_items)
         self.init_ui()
         self.load_items()
 
@@ -147,7 +155,7 @@ class ItemMasterWidget(QWidget):
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText("Search by code or name...")
         self.search_edit.setToolTip("Type here to filter the item list below.")
-        self.search_edit.textChanged.connect(self.search_items)
+        self.search_edit.textChanged.connect(self._schedule_search)
         search_layout.addWidget(self.search_edit)
         layout.addLayout(search_layout)
 
@@ -180,6 +188,7 @@ class ItemMasterWidget(QWidget):
 
     def load_items(self, search_term=None):
         """Load items from the database into the table."""
+        start = time.perf_counter()
         table = self.items_table
         table.setUpdatesEnabled(False)
         table.blockSignals(True)
@@ -223,6 +232,20 @@ class ItemMasterWidget(QWidget):
             table.viewport().update()
 
         self.show_status(f"Loaded {len(items)} items.", 2000)
+        elapsed_ms = (time.perf_counter() - start) * 1000.0
+        if elapsed_ms >= 20.0:
+            self.logger.debug(
+                "[perf] item_master.load_items=%.2fms search_term=%r rows=%s",
+                elapsed_ms,
+                search_term,
+                len(items),
+            )
+
+    def _schedule_search(self, *_args) -> None:
+        try:
+            self._search_timer.start()
+        except Exception:
+            self.search_items()
 
     def search_items(self):
         """Search for items based on the search term."""

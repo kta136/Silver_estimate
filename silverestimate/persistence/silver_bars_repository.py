@@ -426,6 +426,7 @@ class SilverBarsRepository:
         status: Optional[str] = None,
         weight_query: Optional[float] = None,
         estimate_voucher_no: Optional[str] = None,
+        unassigned_only: bool = False,
         weight_tolerance: float = 0.001,
         min_purity: Optional[float] = None,
         max_purity: Optional[float] = None,
@@ -459,6 +460,8 @@ class SilverBarsRepository:
         if estimate_voucher_no:
             query += " AND sb.estimate_voucher_no LIKE ?"
             params.append(f"%{estimate_voucher_no}%")
+        if unassigned_only:
+            query += " AND sb.list_id IS NULL"
         if min_purity is not None:
             try:
                 query += " AND sb.purity >= ?"

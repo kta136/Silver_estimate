@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 import logging
+import sqlite3
+import time
 import traceback  # Added for error handling in actions
 from datetime import datetime, timedelta
 
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import QObject, QThread, Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QColor, QKeySequence
 from PyQt5.QtWidgets import (
     QAbstractItemView,
@@ -41,6 +43,162 @@ from PyQt5.QtWidgets import (
 from silverestimate.infrastructure.settings import get_app_settings
 
 
+class _BarsLoadWorker(QObject):
+    """Background loader for available/list bars to keep UI responsive."""
+
+    data_ready = pyqtSignal(str, int, list, int)
+    error = pyqtSignal(str, int, str)
+    finished = pyqtSignal(str, int)
+
+    def __init__(self, target: str, request_id: int, db_path: str, payload: dict):
+        super().__init__()
+        self.target = target
+        self.request_id = request_id
+        self.db_path = db_path
+        self.payload = payload
+
+    def run(self):
+        conn = None
+        try:
+            if not self.db_path:
+                raise RuntimeError("Temporary database path is unavailable.")
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            if self.target == "available":
+                rows, total_count = self._load_available_rows(cursor)
+            elif self.target == "list":
+                rows, total_count = self._load_list_rows(cursor)
+            else:
+                raise ValueError(f"Unknown load target: {self.target}")
+
+            self.data_ready.emit(
+                self.target,
+                self.request_id,
+                [dict(row) for row in rows],
+                int(total_count),
+            )
+        except Exception as exc:
+            self.error.emit(self.target, self.request_id, str(exc))
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            self.finished.emit(self.target, self.request_id)
+
+    def _load_available_rows(self, cursor):
+        payload = self.payload or {}
+        query = (
+            "SELECT sb.*, e.note AS estimate_note "
+            "FROM silver_bars sb "
+            "LEFT JOIN estimates e ON sb.estimate_voucher_no = e.voucher_no "
+            "WHERE sb.status = 'In Stock' AND sb.list_id IS NULL"
+        )
+        count_query = "SELECT COUNT(*) FROM silver_bars sb WHERE sb.status = 'In Stock' AND sb.list_id IS NULL"
+        params = []
+        count_params = []
+
+        weight_query = payload.get("weight_query")
+        if weight_query not in (None, ""):
+            try:
+                target = float(weight_query)
+                tolerance = float(payload.get("weight_tolerance", 0.001) or 0.001)
+                query += " AND sb.weight BETWEEN ? AND ?"
+                count_query += " AND sb.weight BETWEEN ? AND ?"
+                bounds = [target - tolerance, target + tolerance]
+                params.extend(bounds)
+                count_params.extend(bounds)
+            except (TypeError, ValueError):
+                pass
+
+        min_purity = payload.get("min_purity")
+        if min_purity is not None:
+            try:
+                val = float(min_purity)
+                query += " AND sb.purity >= ?"
+                count_query += " AND sb.purity >= ?"
+                params.append(val)
+                count_params.append(val)
+            except (TypeError, ValueError):
+                pass
+
+        max_purity = payload.get("max_purity")
+        if max_purity is not None:
+            try:
+                val = float(max_purity)
+                query += " AND sb.purity <= ?"
+                count_query += " AND sb.purity <= ?"
+                params.append(val)
+                count_params.append(val)
+            except (TypeError, ValueError):
+                pass
+
+        date_range = payload.get("date_range")
+        if (
+            date_range
+            and isinstance(date_range, (tuple, list))
+            and len(date_range) == 2
+        ):
+            start_iso, end_iso = date_range
+            if start_iso:
+                query += " AND sb.date_added >= ?"
+                count_query += " AND sb.date_added >= ?"
+                params.append(start_iso)
+                count_params.append(start_iso)
+            if end_iso:
+                query += " AND sb.date_added <= ?"
+                count_query += " AND sb.date_added <= ?"
+                params.append(end_iso)
+                count_params.append(end_iso)
+
+        cursor.execute(count_query, count_params)
+        count_row = cursor.fetchone()
+        total_count = int(count_row[0]) if count_row else 0
+
+        query += " ORDER BY sb.date_added DESC, sb.bar_id DESC"
+        limit = payload.get("limit")
+        if isinstance(limit, int) and limit > 0:
+            query += " LIMIT ?"
+            params.append(int(limit))
+
+        cursor.execute(query, params)
+        return cursor.fetchall(), total_count
+
+    def _load_list_rows(self, cursor):
+        payload = self.payload or {}
+        list_id = payload.get("list_id")
+        if list_id is None:
+            return [], 0
+
+        count_query = "SELECT COUNT(*) FROM silver_bars WHERE list_id = ?"
+        cursor.execute(count_query, (list_id,))
+        count_row = cursor.fetchone()
+        total_count = int(count_row[0]) if count_row else 0
+
+        query = (
+            "SELECT sb.*, e.note AS estimate_note "
+            "FROM silver_bars sb "
+            "LEFT JOIN estimates e ON sb.estimate_voucher_no = e.voucher_no "
+            "WHERE sb.list_id = ? "
+            "ORDER BY sb.bar_id"
+        )
+        params = [list_id]
+        limit = payload.get("limit")
+        if isinstance(limit, int) and limit > 0:
+            query += " LIMIT ?"
+            params.append(int(limit))
+            offset = payload.get("offset")
+            if isinstance(offset, int) and offset > 0:
+                query += " OFFSET ?"
+                params.append(int(offset))
+
+        cursor.execute(query, params)
+        return cursor.fetchall(), total_count
+
+
 class SilverBarDialog(QDialog):
     """Dialog for managing silver bars and grouping them into lists (v2.0)."""
 
@@ -49,6 +207,10 @@ class SilverBarDialog(QDialog):
         self.db_manager = db_manager
         self.logger = logging.getLogger(__name__)
         self.current_list_id = None  # Track the currently selected list
+        self._active_load_workers: dict[QThread, QObject] = {}
+        self._available_load_request_id = 0
+        self._list_load_request_id = 0
+        self._load_started_at: dict[tuple[str, int], float] = {}
         self.init_ui()
         self.load_lists()
         self.load_available_bars()
@@ -1083,12 +1245,157 @@ class SilverBarDialog(QDialog):
             self.logger.debug("Invalid available table row limit value: %s", exc)
             return 1500
 
+    def _next_load_request_id(self, target: str) -> int:
+        if target == "available":
+            self._available_load_request_id += 1
+            return self._available_load_request_id
+        if target == "list":
+            self._list_load_request_id += 1
+            return self._list_load_request_id
+        raise ValueError(f"Unknown load target: {target}")
+
+    def _is_latest_load(self, target: str, request_id: int) -> bool:
+        if target == "available":
+            return request_id == self._available_load_request_id
+        if target == "list":
+            return request_id == self._list_load_request_id
+        return False
+
+    def _start_bars_load(self, target: str, payload: dict) -> int:
+        request_id = self._next_load_request_id(target)
+        self._load_started_at[(target, request_id)] = time.perf_counter()
+        db_path = getattr(self.db_manager, "temp_db_path", None)
+        if not db_path:
+            try:
+                if target == "available":
+                    rows = self.db_manager.get_silver_bars(
+                        status="In Stock",
+                        weight_query=payload.get("weight_query"),
+                        weight_tolerance=payload.get("weight_tolerance", 0.001),
+                        min_purity=payload.get("min_purity"),
+                        max_purity=payload.get("max_purity"),
+                        date_range=payload.get("date_range"),
+                        limit=payload.get("limit"),
+                        unassigned_only=True,
+                    )
+                    total_count = len(rows or [])
+                else:
+                    rows = self.db_manager.get_bars_in_list(
+                        payload.get("list_id"),
+                        limit=payload.get("limit"),
+                        offset=payload.get("offset", 0),
+                    )
+                    total_count = len(rows or [])
+                normalized_rows = [
+                    dict(row) if not isinstance(row, dict) else row for row in rows or []
+                ]
+                self._on_bars_load_ready(target, request_id, normalized_rows, total_count)
+            except Exception as exc:
+                self._on_bars_load_error(target, request_id, str(exc))
+            return request_id
+
+        worker = _BarsLoadWorker(target, request_id, db_path, payload)
+        thread = QThread(self)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.data_ready.connect(self._on_bars_load_ready)
+        worker.error.connect(self._on_bars_load_error)
+        worker.finished.connect(
+            lambda t=target, r=request_id, th=thread, w=worker: self._on_bars_load_finished(
+                t, r, th, w
+            )
+        )
+        self._active_load_workers[thread] = worker
+        thread.start()
+        return request_id
+
+    def _on_bars_load_ready(
+        self, target: str, request_id: int, rows: list, total_count: int
+    ) -> None:
+        if not self._is_latest_load(target, request_id):
+            return
+        if target == "available":
+            self._populate_table(
+                self.available_bars_table,
+                rows,
+                total_rows=total_count,
+            )
+            self._restore_table_column_widths()
+        elif target == "list":
+            self._populate_table(
+                self.list_bars_table,
+                rows,
+                total_rows=total_count,
+            )
+        else:
+            return
+        self._update_transfer_buttons_state()
+        self._update_selection_summaries()
+
+        started_at = self._load_started_at.pop((target, request_id), None)
+        if started_at is not None:
+            elapsed_ms = (time.perf_counter() - started_at) * 1000.0
+            self.logger.debug(
+                "[perf] silver_bars.load_%s=%.2fms rows=%s total=%s",
+                target,
+                elapsed_ms,
+                len(rows),
+                total_count,
+            )
+
+    def _on_bars_load_error(self, target: str, request_id: int, message: str) -> None:
+        if not self._is_latest_load(target, request_id):
+            return
+        self._load_started_at.pop((target, request_id), None)
+        if target == "available":
+            self.available_bars_table.setRowCount(0)
+            QMessageBox.critical(self, "Error", f"Failed to load available bars: {message}")
+        elif target == "list":
+            self.list_bars_table.setRowCount(0)
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Failed to load bars for list {self.current_list_id}: {message}",
+            )
+
+    def _on_bars_load_finished(
+        self, target: str, request_id: int, thread: QThread, worker: QObject
+    ) -> None:
+        self._active_load_workers.pop(thread, None)
+        try:
+            thread.quit()
+            thread.wait(1000)
+        except Exception:
+            pass
+        try:
+            worker.deleteLater()
+        except Exception:
+            pass
+
+    def _cancel_active_loads(self, timeout_ms: int = 3000) -> None:
+        self._available_load_request_id += 1
+        self._list_load_request_id += 1
+        active = list(self._active_load_workers.items())
+        self._active_load_workers.clear()
+        self._load_started_at.clear()
+
+        for thread, worker in active:
+            try:
+                worker.deleteLater()
+            except Exception:
+                pass
+            try:
+                if thread.isRunning():
+                    thread.quit()
+                    if not thread.wait(timeout_ms):
+                        thread.terminate()
+                        thread.wait(1000)
+            except Exception:
+                pass
+
     def load_available_bars(self):
         """Loads bars with status 'In Stock' and no list_id, applying weight filter."""
-        # print("Loading available bars...") # Optional: Keep for debugging
         weight_query = self.weight_search_edit.text().strip()
-        voucher_query = ""  # Voucher search removed
-        # Read other filters
         try:
             tol = float(self.weight_tol_spin.value())
         except Exception:
@@ -1101,41 +1408,17 @@ class SilverBarDialog(QDialog):
             max_purity = float(self.purity_max_spin.value())
         except Exception:
             max_purity = None
-        # Busy cursor during load
-        try:
-            QApplication.setOverrideCursor(Qt.WaitCursor)
-        except Exception:
-            pass
-        try:
-            # Use get_silver_bars with specific filters
-            available_bars = self.db_manager.get_silver_bars(
-                status="In Stock",
-                weight_query=weight_query if weight_query else None,
-                estimate_voucher_no=voucher_query if voucher_query else None,
-                weight_tolerance=tol,
-                min_purity=min_purity,
-                max_purity=max_purity,
-                date_range=self._current_date_range(),
-                limit=self._table_result_limit(),
-            )
-            # Filter further to ensure list_id is NULL (get_silver_bars doesn't have this filter yet)
-            available_bars = [bar for bar in available_bars if bar["list_id"] is None]
-            self._populate_table(self.available_bars_table, available_bars)
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to load available bars: {e}")
-            self.available_bars_table.setRowCount(0)
-        finally:
-            # After loading, try to restore column widths
-            self._restore_table_column_widths()
-            # Update buttons state
-            self._update_transfer_buttons_state()
-            self._update_selection_summaries()
-            try:
-                QApplication.restoreOverrideCursor()
-            except Exception as exc:
-                self.logger.debug(
-                    "Failed to restore cursor after load_available_bars: %s", exc
-                )
+        self._start_bars_load(
+            "available",
+            {
+                "weight_query": weight_query if weight_query else None,
+                "weight_tolerance": tol,
+                "min_purity": min_purity,
+                "max_purity": max_purity,
+                "date_range": self._current_date_range(),
+                "limit": self._table_result_limit(),
+            },
+        )
 
     def load_lists(self):
         """Populates the list selection combo box."""
@@ -1221,30 +1504,14 @@ class SilverBarDialog(QDialog):
             self.list_bars_table.setRowCount(0)
             return
 
-        # print(f"Loading bars for list ID: {self.current_list_id}") # Optional: Keep for debugging
-        try:
-            QApplication.setOverrideCursor(Qt.WaitCursor)
-            bars_in_list = self.db_manager.get_bars_in_list(
-                self.current_list_id, limit=self._table_result_limit()
-            )
-            self._populate_table(self.list_bars_table, bars_in_list)
-        except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Error",
-                f"Failed to load bars for list {self.current_list_id}: {e}",
-            )
-            self.list_bars_table.setRowCount(0)
-        finally:
-            self._update_transfer_buttons_state()
-            self._update_selection_summaries()
-            try:
-                QApplication.restoreOverrideCursor()
-            except Exception as exc:
-                self.logger.debug(
-                    "Failed to restore cursor after load_bars_in_selected_list: %s",
-                    exc,
-                )
+        self._start_bars_load(
+            "list",
+            {
+                "list_id": self.current_list_id,
+                "limit": self._table_result_limit(),
+                "offset": 0,
+            },
+        )
 
     # --- Action Methods ---
 
@@ -1671,11 +1938,10 @@ class SilverBarDialog(QDialog):
 
             try:
                 # Get all available bars
-                available_bars = self.db_manager.get_silver_bars(status="In Stock")
-                # Filter to only bars not in any list
-                available_bars = [
-                    bar for bar in available_bars if bar["list_id"] is None
-                ]
+                available_bars = self.db_manager.get_silver_bars(
+                    status="In Stock",
+                    unassigned_only=True,
+                )
 
                 if not available_bars:
                     QMessageBox.information(
@@ -1839,8 +2105,9 @@ class SilverBarDialog(QDialog):
         return []
 
     # --- Helper Methods ---
-    def _populate_table(self, table, bars_data):
+    def _populate_table(self, table, bars_data, *, total_rows=None):
         """Helper function to populate a table widget with bar data and update totals."""
+        start = time.perf_counter()
         # Prevent signal storms and row shuffling while inserting
         table.blockSignals(True)
         sorting_was_enabled = False
@@ -1969,8 +2236,13 @@ class SilverBarDialog(QDialog):
                     total_fine_weight += fine_weight
                     bar_count += 1
 
-                # Update the appropriate totals label
-                totals_text = f"Bars: {bar_count} | Total Weight: {total_weight:.3f} g | Total Fine Wt: {total_fine_weight:.3f} g"
+                loaded_text = f"{bar_count}"
+                if isinstance(total_rows, int) and total_rows >= 0:
+                    loaded_text = f"{bar_count}/{total_rows}"
+                totals_text = (
+                    f"Bars: {bar_count} | Total Weight: {total_weight:.3f} g | "
+                    f"Total Fine Wt: {total_fine_weight:.3f} g | Loaded: {loaded_text}"
+                )
                 if table == self.available_bars_table:
                     self.available_totals_label.setText(f"Available {totals_text}")
                     try:
@@ -1981,6 +2253,26 @@ class SilverBarDialog(QDialog):
                     self.list_totals_label.setText(f"List {totals_text}")
                     try:
                         self.list_header_badge.setText(f"List: {bar_count}")
+                    except Exception:
+                        pass
+            else:
+                loaded_text = "0"
+                if isinstance(total_rows, int) and total_rows >= 0:
+                    loaded_text = f"0/{total_rows}"
+                totals_text = (
+                    f"Bars: 0 | Total Weight: 0.000 g | Total Fine Wt: 0.000 g | "
+                    f"Loaded: {loaded_text}"
+                )
+                if table == self.available_bars_table:
+                    self.available_totals_label.setText(f"Available {totals_text}")
+                    try:
+                        self.available_header_badge.setText("Available: 0")
+                    except Exception:
+                        pass
+                elif table == self.list_bars_table:
+                    self.list_totals_label.setText(f"List {totals_text}")
+                    try:
+                        self.list_header_badge.setText("List: 0")
                     except Exception:
                         pass
         except Exception as e:
@@ -2004,6 +2296,13 @@ class SilverBarDialog(QDialog):
                 self._update_selection_summaries()
             except Exception:
                 pass
+            elapsed_ms = (time.perf_counter() - start) * 1000.0
+            if elapsed_ms >= 20.0:
+                self.logger.debug(
+                    "[perf] silver_bars.populate_table=%.2fms rows=%s",
+                    elapsed_ms,
+                    len(bars_data or []),
+                )
 
     # --- UI Helpers: Context Menus and State Persistence ---
     def _show_available_context_menu(self, pos):
@@ -2559,6 +2858,7 @@ class SilverBarDialog(QDialog):
 
     # Persist UI state on close/accept and navigate back when embedded
     def closeEvent(self, event):
+        self._cancel_active_loads()
         try:
             self._save_ui_state()
             if self._is_embedded():
@@ -2578,6 +2878,7 @@ class SilverBarDialog(QDialog):
             pass
 
     def accept(self):
+        self._cancel_active_loads()
         self._save_ui_state()
         if self._is_embedded():
             # When embedded inside the main stack, navigate back without closing
@@ -2590,6 +2891,7 @@ class SilverBarDialog(QDialog):
             pass
 
     def reject(self):
+        self._cancel_active_loads()
         self._save_ui_state()
         if self._is_embedded():
             self._navigate_back_to_estimate()
@@ -2942,6 +3244,7 @@ if __name__ == "__main__":
             status=None,
             weight_query=None,
             estimate_voucher_no=None,
+            unassigned_only=False,
             weight_tolerance=0.001,
             min_purity=None,
             max_purity=None,
@@ -2978,6 +3281,8 @@ if __name__ == "__main__":
             filtered_bars = bars
             if status:
                 filtered_bars = [b for b in filtered_bars if b["status"] == status]
+            if unassigned_only:
+                filtered_bars = [b for b in filtered_bars if b.get("list_id") is None]
             if weight_query:
                 try:
                     target = float(weight_query)

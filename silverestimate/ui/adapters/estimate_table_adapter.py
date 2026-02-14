@@ -4,32 +4,25 @@ import weakref
 from typing import Mapping
 
 from PyQt5 import sip
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtWidgets import QMessageBox, QTableWidget, QTableWidgetItem
+from PyQt5.QtCore import QTimer
+from PyQt5.QtWidgets import QMessageBox
 
+from silverestimate.domain.estimate_models import EstimateLineCategory
+
+from ..estimate_entry_components import EstimateTableView
 from ..estimate_entry_logic.constants import (
     COL_CODE,
-    COL_FINE_WT,
-    COL_GROSS,
     COL_ITEM_NAME,
-    COL_NET_WT,
     COL_PIECES,
-    COL_POLY,
     COL_PURITY,
-    COL_TYPE,
-    COL_WAGE_AMT,
     COL_WAGE_RATE,
 )
 
 
 class EstimateTableAdapter:
-    """Encapsulate table manipulation for EstimateEntryWidget.
+    """Encapsulate table manipulation for EstimateEntryWidget."""
 
-    The adapter operates on the `QTableWidget` while delegating callbacks back
-    to the owning widget/mixin for calculations and status updates.
-    """
-
-    def __init__(self, owner, table: QTableWidget) -> None:
+    def __init__(self, owner, table: EstimateTableView) -> None:
         self._owner = owner
         self._table = table
 
@@ -39,10 +32,6 @@ class EstimateTableAdapter:
 
     @staticmethod
     def _safe_focus_owner_code(owner_ref: "weakref.ReferenceType", row: int) -> None:
-        """Best-effort focus helper for deferred timers.
-
-        Timers can fire after the widget is closed; ignore those safely.
-        """
         owner = owner_ref()
         if owner is None:
             return
@@ -51,12 +40,19 @@ class EstimateTableAdapter:
                 return
             owner.focus_on_code_column(row)
         except RuntimeError:
-            # Wrapped Qt object was deleted between checks.
             return
 
-    # ------------------------------------------------------------------ #
-    # Row population helpers
-    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _category_for_mode(owner) -> EstimateLineCategory:
+        if getattr(owner, "return_mode", False):
+            return EstimateLineCategory.RETURN
+        if getattr(owner, "silver_bar_mode", False):
+            return EstimateLineCategory.SILVER_BAR
+        return EstimateLineCategory.REGULAR
+
+    def _apply_mode_category(self, row: int) -> None:
+        self._table.set_row_category(row, self._category_for_mode(self._owner))
+
     def populate_row(self, row_index: int, item_data: Mapping[str, object]) -> None:
         if row_index < 0 or row_index >= self._table.rowCount():
             return
@@ -66,48 +62,36 @@ class EstimateTableAdapter:
         table.blockSignals(True)
         previous_row = getattr(owner, "current_row", -1)
         try:
-            non_editable_calc_cols = [COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT, COL_TYPE]
-            for col in range(table.columnCount()):
-                owner._ensure_cell_exists(
-                    row_index,
-                    col,
-                    editable=(col not in non_editable_calc_cols),
-                )
-
             canonical_code = (item_data.get("code", "") or "").strip()  # type: ignore[arg-type]
             display_code = canonical_code.upper() if canonical_code else ""
-            code_item = table.item(row_index, COL_CODE)
-            if code_item is not None:
-                code_item.setText(display_code)
-                code_item.setData(Qt.UserRole, canonical_code or None)
 
-            table.item(row_index, COL_ITEM_NAME).setText(
-                str(item_data.get("name", ""))  # type: ignore[arg-type]
+            table.set_cell_text(row_index, COL_CODE, display_code)
+            table.set_cell_text(
+                row_index,
+                COL_ITEM_NAME,
+                str(item_data.get("name", "")),  # type: ignore[arg-type]
             )
-            table.item(row_index, COL_PURITY).setText(
-                str(item_data.get("purity", 0.0))  # type: ignore[arg-type]
+            table.set_cell_text(
+                row_index,
+                COL_PURITY,
+                str(item_data.get("purity", 0.0)),  # type: ignore[arg-type]
             )
-            table.item(row_index, COL_WAGE_RATE).setText(
-                str(item_data.get("wage_rate", 0.0))  # type: ignore[arg-type]
+            table.set_cell_text(
+                row_index,
+                COL_WAGE_RATE,
+                str(item_data.get("wage_rate", 0.0)),  # type: ignore[arg-type]
             )
 
             wage_type = self._normalize_wage_type(item_data.get("wage_type"))
-            model = table.get_model() if hasattr(table, "get_model") else table.model()
-            if model is not None and hasattr(model, "set_row_wage_type"):
-                model.set_row_wage_type(row_index, wage_type)
+            table.set_row_wage_type(row_index, wage_type)
 
-            pcs_item = table.item(row_index, COL_PIECES)
-            if pcs_item is not None:
-                current_text = pcs_item.text().strip()
-                if wage_type == "WT":
-                    pcs_item.setText("0")
-                elif not current_text or current_text == "0":
-                    pcs_item.setText("1")
+            current_pieces = table.get_cell_text(row_index, COL_PIECES).strip()
+            if wage_type == "WT":
+                table.set_cell_text(row_index, COL_PIECES, "0")
+            elif not current_pieces or current_pieces == "0":
+                table.set_cell_text(row_index, COL_PIECES, "1")
 
-            type_item = table.item(row_index, COL_TYPE)
-            owner._update_row_type_visuals_direct(type_item)
-            if type_item is not None:
-                type_item.setTextAlignment(Qt.AlignCenter)
+            self._apply_mode_category(row_index)
 
             owner.current_row = row_index
             owner.calculate_net_weight()
@@ -128,8 +112,8 @@ class EstimateTableAdapter:
         try:
             if table.rowCount() > 0:
                 last_row = table.rowCount() - 1
-                last_code_item = table.item(last_row, COL_CODE)
-                if not last_code_item or not last_code_item.text().strip():
+                last_code = table.get_cell_text(last_row, COL_CODE).strip()
+                if not last_code:
                     owner_ref = weakref.ref(owner)
                     QTimer.singleShot(
                         0,
@@ -138,22 +122,8 @@ class EstimateTableAdapter:
                     return
 
             owner.processing_cell = True
-            row = table.rowCount()
-            table.insertRow(row)
-
-            for col in range(table.columnCount()):
-                item = QTableWidgetItem("")
-                if col in [COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT]:
-                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-                elif col == COL_TYPE:
-                    owner._update_row_type_visuals_direct(item)
-                    item.setTextAlignment(Qt.AlignCenter)
-                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-                else:
-                    item.setFlags(
-                        Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable
-                    )
-                table.setItem(row, col, item)
+            row = table.append_empty_row()
+            self._apply_mode_category(row)
 
             owner_ref = weakref.ref(owner)
             QTimer.singleShot(
@@ -166,61 +136,26 @@ class EstimateTableAdapter:
         finally:
             owner.processing_cell = False
 
-    # ------------------------------------------------------------------ #
-    # Mode / visuals helpers
-    # ------------------------------------------------------------------ #
     def refresh_empty_row_type(self) -> None:
-        """Refresh the type column for empty rows.
-
-        Note: This now checks if code is ACTUALLY empty, not just if the cell
-        exists. This is important because when the user is editing the code
-        column, the item exists but may be empty.
-        """
         table = self._table
         owner = self._owner
-        owner.logger.info(
-            f"EstimateTableAdapter.refresh_empty_row_type() called, rowCount={table.rowCount()}"
+        owner.logger.debug(
+            "EstimateTableAdapter.refresh_empty_row_type rowCount=%s",
+            table.rowCount(),
         )
         try:
-            for row in range(table.rowCount()):
-                code_item = table.item(row, COL_CODE)
-                # Get the actual text, handling both None and empty string
-                code_text = code_item.text().strip() if code_item else ""
-                owner.logger.info(
-                    f"Row {row}: code='{code_text}' (len={len(code_text)})"
-                )
-
-                # Only skip rows that have ACTUAL content (not just a focused empty cell)
-                if code_text:  # Non-empty string
-                    owner.logger.info(f"Row {row} has code '{code_text}', skipping")
-                    continue
-
-                owner.logger.info(
-                    f"Row {row} is empty (code='{code_text}'), updating type"
-                )
-                type_item = table.item(row, COL_TYPE)
-                owner.logger.info(
-                    f"Got type_item: {type_item}, type={type(type_item).__name__ if type_item else 'None'}"
-                )
-                if type_item is None:
-                    owner.logger.info(
-                        "type_item is None, creating new QTableWidgetItem"
-                    )
-                    type_item = QTableWidgetItem("")
-                    type_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-                    table.setItem(row, COL_TYPE, type_item)
-                table.blockSignals(True)
-                try:
-                    owner.logger.info(
-                        f"Calling owner._update_row_type_visuals_direct()"
-                    )
-                    owner._update_row_type_visuals_direct(type_item)
-                    type_item.setTextAlignment(Qt.AlignCenter)
-                finally:
-                    table.blockSignals(False)
+            category = self._category_for_mode(owner)
+            table.blockSignals(True)
+            try:
+                for row in range(table.rowCount()):
+                    if table.get_cell_text(row, COL_CODE).strip():
+                        continue
+                    table.set_row_category(row, category)
+            finally:
+                table.blockSignals(False)
         except Exception as exc:  # pragma: no cover
             owner.logger.error(
-                f"Failed to refresh empty row type: {exc}", exc_info=True
+                "Failed to refresh empty row type: %s", exc, exc_info=True
             )
 
     def focus_on_empty_row(self, *, update_visuals: bool = False) -> None:
@@ -228,8 +163,7 @@ class EstimateTableAdapter:
         owner = self._owner
         empty_row_index = -1
         for row in range(table.rowCount()):
-            code_item = table.item(row, COL_CODE)
-            if not code_item or not code_item.text().strip():
+            if not table.get_cell_text(row, COL_CODE).strip():
                 empty_row_index = row
                 break
 

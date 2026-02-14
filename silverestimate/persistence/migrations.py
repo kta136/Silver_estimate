@@ -231,6 +231,10 @@ def _ensure_indexes(db: "DatabaseManager") -> None:
             "CREATE INDEX IF NOT EXISTS idx_sbars_status ON silver_bars(status)"
         )
         cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sbars_status_list_date_id "
+            "ON silver_bars(status, list_id, date_added DESC, bar_id DESC)"
+        )
+        cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_sbars_date_added ON silver_bars(date_added)"
         )
 

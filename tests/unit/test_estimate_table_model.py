@@ -185,6 +185,40 @@ def test_data_changed_signal(model):
     assert len(signal_emitted) > 0, "dataChanged signal should have been emitted"
 
 
+def test_set_data_unchanged_code_is_noop_without_signals(model):
+    """Unchanged code edits should not emit change signals."""
+    model.add_row(EstimateEntryRowState(code="KEEP1", purity=91.6, wage_rate=10.0))
+
+    detailed_events = []
+    changed_events = []
+    model.data_changed_detailed.connect(lambda *args: detailed_events.append(args))
+    model.dataChanged.connect(lambda *args: changed_events.append(args))
+
+    index = model.index(0, COL_CODE)
+    assert model.setData(index, "KEEP1", Qt.EditRole)
+
+    assert model.data(index, Qt.DisplayRole) == "KEEP1"
+    assert detailed_events == []
+    assert changed_events == []
+
+
+def test_set_data_unchanged_non_code_still_emits_signals(model):
+    """Unchanged non-code edits should still emit signals for navigation flows."""
+    model.add_row(EstimateEntryRowState(code="KEEP1", purity=91.6, wage_rate=10.0))
+
+    detailed_events = []
+    changed_events = []
+    model.data_changed_detailed.connect(lambda *args: detailed_events.append(args))
+    model.dataChanged.connect(lambda *args: changed_events.append(args))
+
+    index = model.index(0, COL_PURITY)
+    assert model.setData(index, 91.6, Qt.EditRole)
+
+    assert model.data(index, Qt.DisplayRole) == 91.6
+    assert len(detailed_events) == 1
+    assert len(changed_events) == 1
+
+
 def test_set_row(model):
     """Test setting an entire row."""
     model.add_row()

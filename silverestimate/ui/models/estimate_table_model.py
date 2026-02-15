@@ -208,6 +208,13 @@ class EstimateTableModel(QAbstractTableModel):
             else:
                 return False
 
+            # For unchanged Code cells, skip emitting change signals to avoid
+            # retriggering item lookup and overwriting manual row overrides.
+            # Other unchanged editable cells still emit signals so Enter/Tab
+            # navigation keeps moving forward through the row.
+            if col == COL_CODE and new_row == old_row:
+                return True
+
             # Store old value for detailed signal
             old_value = self.data(index, Qt.DisplayRole)
 

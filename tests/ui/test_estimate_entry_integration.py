@@ -742,6 +742,81 @@ def test_click_row_above_during_queued_advance_remains_stable(qtbot, fake_db):
         widget.deleteLater()
 
 
+def test_revisiting_row_with_same_code_preserves_manual_overrides(qtbot, fake_db):
+    """Unchanged code commit must not reapply item-master defaults."""
+    widget = _make_widget(fake_db)
+    try:
+        widget.clear_all_rows()
+        widget.table_adapter.add_empty_row()
+        table = widget.item_table
+
+        lookup_calls = []
+        master_item = {
+            "code": "ITM1",
+            "name": "Item Master Name",
+            "purity": 91.6,
+            "wage_rate": 10.0,
+            "wage_type": "WT",
+        }
+
+        def _handle_item_code(row, code):
+            lookup_calls.append((row, code))
+            widget.populate_row(row, master_item)
+            return True
+
+        widget.presenter.handle_item_code = _handle_item_code
+
+        # Initial lookup/populate from item master.
+        table.set_cell_text(0, COL_CODE, "ITM1")
+        qtbot.waitUntil(lambda: len(lookup_calls) >= 1, timeout=1000)
+        initial_lookup_count = len(lookup_calls)
+
+        # User manually overrides row values.
+        table.set_cell_text(0, COL_PURITY, "95.5")
+        table.set_cell_text(0, COL_WAGE_RATE, "22.0")
+        assert table.get_cell_text(0, COL_PURITY) == "95.5"
+        assert table.get_cell_text(0, COL_WAGE_RATE) == "22.0"
+
+        # Revisit/commit same code value. Should be treated as no-op.
+        code_index = table.get_model().index(0, COL_CODE)
+        assert table.get_model().setData(code_index, "ITM1", Qt.EditRole)
+        qtbot.wait(40)
+
+        assert len(lookup_calls) == initial_lookup_count
+        assert table.get_cell_text(0, COL_PURITY) == "95.5"
+        assert table.get_cell_text(0, COL_WAGE_RATE) == "22.0"
+    finally:
+        widget.deleteLater()
+
+
+def test_unchanged_purity_commit_still_advances_cursor(qtbot, fake_db):
+    """Committing unchanged purity should still advance to wage-rate column."""
+    widget = _make_widget(fake_db)
+    try:
+        widget.clear_all_rows()
+        widget.table_adapter.add_empty_row()
+        table = widget.item_table
+
+        table.set_cell_text(0, COL_CODE, "ROW1")
+        table.set_cell_text(0, COL_PURITY, "91.6")
+
+        table.setCurrentCell(0, COL_PURITY)
+        widget.current_row = 0
+        widget.current_column = COL_PURITY
+
+        purity_index = table.get_model().index(0, COL_PURITY)
+        assert table.get_model().setData(purity_index, 91.6, Qt.EditRole)
+
+        qtbot.waitUntil(
+            lambda: table.currentIndex().isValid()
+            and table.currentIndex().row() == 0
+            and table.currentIndex().column() == COL_WAGE_RATE,
+            timeout=1000,
+        )
+    finally:
+        widget.deleteLater()
+
+
 def test_begin_cell_edit_model_first_helper(qtbot, fake_db):
     """Model-first begin_cell_edit helper should select and edit a cell."""
     widget = _make_widget(fake_db)

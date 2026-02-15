@@ -7,8 +7,6 @@ from typing import Optional
 
 from PyQt5.QtWidgets import QInputDialog, QMessageBox
 
-from silverestimate.services.auth_service import perform_data_wipe
-
 
 class MainCommands:
     """Encapsulate high-level commands triggered from the main window."""

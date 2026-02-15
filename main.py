@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 import faulthandler
+import time
 
 # Proactively hide the console as early as possible on Windows when not explicitly requested.
 if os.name == "nt" and os.environ.get("SILVER_SHOW_CONSOLE") != "1":
@@ -38,23 +39,6 @@ try:
 except Exception:
     pass  # Silently ignore if faulthandler fails to enable
 
-# Import the custom dialogs and modules
-from silverestimate.controllers.live_rate_controller import LiveRateController
-from silverestimate.controllers.navigation_controller import NavigationController
-from silverestimate.infrastructure.app_constants import APP_TITLE
-from silverestimate.infrastructure.application import ApplicationBuilder, StartupError
-from silverestimate.infrastructure.paths import get_asset_path
-from silverestimate.infrastructure.windows_integration import (
-    apply_taskbar_icon,
-    destroy_icon_handle,
-    hide_console_window,
-)
-from silverestimate.services.estimate_repository import DatabaseEstimateRepository
-from silverestimate.services.main_commands import MainCommands
-from silverestimate.services.navigation_service import NavigationService
-from silverestimate.services.settings_service import SettingsService
-from silverestimate.ui.estimate_entry import EstimateEntryWidget
-
 
 class MainWindow(QMainWindow):
     # Thread-safe signal to apply fetched rates on the UI thread
@@ -66,6 +50,24 @@ class MainWindow(QMainWindow):
 
         self.logger = logger or logging.getLogger(__name__)
         self.logger.info("Initializing MainWindow")
+        self._startup_started_at = time.perf_counter()
+        self._startup_started_unix = time.time()
+        self.logger.debug(
+            "[perf] startup.main_window_init_start t_unix=%.6f",
+            self._startup_started_unix,
+        )
+
+        from silverestimate.controllers.live_rate_controller import LiveRateController
+        from silverestimate.controllers.navigation_controller import NavigationController
+        from silverestimate.infrastructure.app_constants import APP_TITLE
+        from silverestimate.infrastructure.application import StartupError
+        from silverestimate.infrastructure.paths import get_asset_path
+        from silverestimate.infrastructure.windows_integration import apply_taskbar_icon
+        from silverestimate.services.estimate_repository import DatabaseEstimateRepository
+        from silverestimate.services.main_commands import MainCommands
+        from silverestimate.services.navigation_service import NavigationService
+        from silverestimate.services.settings_service import SettingsService
+        from silverestimate.ui.estimate_entry import EstimateEntryWidget
 
         if db_manager is None:
             raise StartupError(
@@ -176,13 +178,14 @@ class MainWindow(QMainWindow):
             except Exception as callback_error:
                 self.logger.debug("Could not hook flush callbacks: %s", callback_error)
 
-            try:
-                if hasattr(self.db, "start_preload_item_cache"):
-                    self.db.start_preload_item_cache()
-            except Exception as preload_error:
-                self.logger.debug("Item cache preload failed: %s", preload_error)
+            QTimer.singleShot(250, self._start_item_cache_preload)
 
             self.logger.info("Widgets initialized successfully")
+            self.logger.debug(
+                "[perf] startup.main_window_widgets_ready_ms=%.2f t_unix=%.6f",
+                (time.perf_counter() - self._startup_started_at) * 1000.0,
+                time.time(),
+            )
             try:
                 self.show_status_message("Ready", 2000, level="info")
             except Exception:
@@ -219,11 +222,34 @@ class MainWindow(QMainWindow):
                             exc,
                             exc_info=True,
                         )
+            self.logger.debug(
+                "[perf] startup.main_window_ready_ms=%.2f t_unix=%.6f",
+                (time.perf_counter() - self._startup_started_at) * 1000.0,
+                time.time(),
+            )
+            QTimer.singleShot(0, self._log_first_idle_tick)
         except Exception as exc:
             self.logger.critical("Failed to initialize widgets: %s", exc, exc_info=True)
             raise StartupError(
                 f"Failed to initialize application widgets: {exc}"
             ) from exc
+
+    def _log_first_idle_tick(self) -> None:
+        try:
+            self.logger.debug(
+                "[perf] startup.main_window_first_idle_ms=%.2f t_unix=%.6f",
+                (time.perf_counter() - self._startup_started_at) * 1000.0,
+                time.time(),
+            )
+        except Exception:
+            pass
+
+    def _start_item_cache_preload(self) -> None:
+        try:
+            if hasattr(self.db, "start_preload_item_cache"):
+                self.db.start_preload_item_cache()
+        except Exception as preload_error:
+            self.logger.debug("Item cache preload failed: %s", preload_error)
 
     def show_status_message(
         self, message: str, timeout: int = 3000, level: str = "info"
@@ -314,11 +340,19 @@ class MainWindow(QMainWindow):
             self.logger.debug("Closing database connection")
             self.db.close()
         if sys.platform == "win32" and self._taskbar_icon_handle:
+            from silverestimate.infrastructure.windows_integration import (
+                destroy_icon_handle,
+            )
+
             destroy_icon_handle(self._taskbar_icon_handle, logger=self.logger)
             self._taskbar_icon_handle = None
         try:
             # Best-effort hide any lingering console window before quitting
             if sys.platform == "win32" and os.environ.get("SILVER_SHOW_CONSOLE") != "1":
+                from silverestimate.infrastructure.windows_integration import (
+                    hide_console_window,
+                )
+
                 hide_console_window()
         except Exception:
             pass
@@ -350,7 +384,11 @@ class MainWindow(QMainWindow):
 def main() -> int:
     """Start the SilverEstimate application and return the exit code."""
     if os.name == "nt" and os.environ.get("SILVER_SHOW_CONSOLE") != "1":
+        from silverestimate.infrastructure.windows_integration import hide_console_window
+
         hide_console_window()
+    from silverestimate.infrastructure.application import ApplicationBuilder
+
     builder = ApplicationBuilder(main_window_factory=MainWindow)
     return builder.run()
 

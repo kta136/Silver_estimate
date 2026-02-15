@@ -107,6 +107,45 @@ def test_run_authentication_existing_password(monkeypatch, settings_stub):
     assert settings.value("security/backup_hash") is None
 
 
+def test_run_authentication_uses_lazy_login_dialog_resolver(monkeypatch, settings_stub):
+    _MessageBoxStub.reset()
+    settings = settings_stub()
+    settings.setValue("security/password_hash", "stored-hash")
+    settings.setValue("security/backup_hash", "backup-hash")
+
+    calls = {"resolver": 0}
+
+    class _LoginDialog:
+        def __init__(self, is_setup=False, parent=None):
+            assert is_setup is False
+
+        def exec_(self):
+            return QDialog.Accepted
+
+        def was_reset_requested(self):
+            return False
+
+        def get_password(self):
+            return "secret"
+
+        @staticmethod
+        def verify_password(stored, provided):
+            return stored == "stored-hash" and provided == "secret"
+
+    def _resolver():
+        calls["resolver"] += 1
+        return _LoginDialog
+
+    monkeypatch.setattr(auth_service, "_resolve_login_dialog", _resolver)
+    monkeypatch.setattr(auth_service, "QMessageBox", _MessageBoxStub)
+
+    result = auth_service.run_authentication(logging.getLogger("test-auth-lazy"))
+
+    assert isinstance(result, auth_service.AuthenticationResult)
+    assert result.password == "secret"
+    assert calls["resolver"] == 1
+
+
 def test_run_authentication_secondary_password_triggers_silent_wipe(
     monkeypatch, settings_stub
 ):

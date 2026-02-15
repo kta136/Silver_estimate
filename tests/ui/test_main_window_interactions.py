@@ -158,9 +158,18 @@ class StubLiveRateController:
 def main_window_fixture(qt_app, settings_stub, monkeypatch):
     """Create a MainWindow instance with test doubles injected."""
     StubLiveRateController.instances.clear()
-    monkeypatch.setattr(main, "LiveRateController", StubLiveRateController)
-    monkeypatch.setattr(main, "apply_taskbar_icon", lambda *args, **kwargs: 12345)
-    monkeypatch.setattr(main, "destroy_icon_handle", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "silverestimate.controllers.live_rate_controller.LiveRateController",
+        StubLiveRateController,
+    )
+    monkeypatch.setattr(
+        "silverestimate.infrastructure.windows_integration.apply_taskbar_icon",
+        lambda *args, **kwargs: 12345,
+    )
+    monkeypatch.setattr(
+        "silverestimate.infrastructure.windows_integration.destroy_icon_handle",
+        lambda *args, **kwargs: None,
+    )
     monkeypatch.setattr(
         "silverestimate.ui.estimate_entry.EstimateEntryWidget.confirm_exit",
         lambda self: True,
@@ -197,7 +206,7 @@ def test_main_window_startup_sets_up_estimate_view(main_window_fixture, qt_app, 
 
     # Startup side effects.
     assert db.generate_calls == 1  # Voucher generated for initial form.
-    assert db.preload_started is True
+    qtbot.waitUntil(lambda: db.preload_started is True, timeout=1500)
     assert live_rate.initialize_called is True
 
     # Main navigation wired (menu action created by controller).
@@ -266,6 +275,7 @@ def test_user_entry_updates_totals_and_view_model(main_window_fixture, qtbot):
     assert float(widget.net_fine_label.text()) == pytest.approx(8.79, rel=1e-3)
 
     # View-model captures the active row for downstream workflows.
+    widget._update_view_model_snapshot()
     active_rows = widget.view_model.active_rows()
     assert len(active_rows) == 1
     row_state = active_rows[0]

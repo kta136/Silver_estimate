@@ -18,7 +18,7 @@ This file captures the unfinished work from the original performance/migration c
     - `silverestimate/ui/estimate_entry.py:1721`
     - `silverestimate/ui/view_models/estimate_entry_view_model.py:215`
 
-- [ ] Voucher sort/indexability fix (`Not Done`)
+- [x] Voucher sort/indexability fix (`Done`)
   - Remove hot-query `CAST(voucher_no AS INTEGER)` usage.
   - Introduce numeric voucher column and supporting migration/indexes.
   - References:
@@ -26,6 +26,13 @@ This file captures the unfinished work from the original performance/migration c
     - `silverestimate/persistence/estimates_repository.py:98`
     - `silverestimate/persistence/estimates_repository.py:133`
     - `silverestimate/persistence/migrations.py:57`
+
+- [ ] Packaging startup optimization follow-up (`Deferred`)
+  - Keep this out of the current low-risk code pass.
+  - Evaluate producing onedir/non-onefile release artifacts by default for faster launch.
+  - References:
+    - `.github/workflows/release-windows.yml:29`
+    - `DOCS/deployment-guide.md:21`
 
 - [ ] Disable content auto-fit while typing (`Partially Done`)
   - Currently reduced via debounce/per-column updates.

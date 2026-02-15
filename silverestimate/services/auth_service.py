@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -16,10 +17,16 @@ from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.security import credential_store
 from silverestimate.security.credential_store import CredentialStoreError
 
-try:
-    from silverestimate.ui.login_dialog import LoginDialog  # type: ignore
-except Exception:  # pragma: no cover - lazy import fallback
-    LoginDialog = None
+LoginDialog = None
+
+
+def _resolve_login_dialog():
+    global LoginDialog
+    if LoginDialog is None:
+        from silverestimate.ui.login_dialog import LoginDialog as _LoginDialog
+
+        LoginDialog = _LoginDialog
+    return LoginDialog
 
 
 @dataclass(frozen=True)
@@ -41,15 +48,11 @@ def run_authentication(
     parent: Optional[QWidget] = None,
 ) -> Optional[AuthenticationResult]:
     """Handle authentication flow using the LoginDialog."""
-    global LoginDialog
-    if LoginDialog is None:
-        from silverestimate.ui.login_dialog import (
-            LoginDialog as _LoginDialog,  # lazy import
-        )
-
-        LoginDialog = _LoginDialog
     logger = logger or logging.getLogger(__name__)
+    flow_started_at = time.perf_counter()
     logger.info("Starting authentication process")
+    logger.debug("[perf] startup.auth_dialog_prepare_start t_unix=%.6f", time.time())
+    login_dialog_cls = _resolve_login_dialog()
 
     settings = get_app_settings()
     backend_status = credential_store.get_backend_status()
@@ -92,7 +95,13 @@ def run_authentication(
         attempt = 0
         while True:
             attempt += 1
-            login_dialog = LoginDialog(is_setup=False, parent=parent)
+            logger.debug(
+                "[perf] startup.auth_dialog_shown_ms=%.2f t_unix=%.6f attempt=%s",
+                (time.perf_counter() - flow_started_at) * 1000.0,
+                time.time(),
+                attempt,
+            )
+            login_dialog = login_dialog_cls(is_setup=False, parent=parent)
             result = login_dialog.exec_()
 
             if result != QDialog.Accepted:
@@ -106,11 +115,23 @@ def run_authentication(
                 return AuthenticationResult(wipe_requested=True, silent=False)
 
             entered_password = login_dialog.get_password()
-            if LoginDialog.verify_password(password_hash, entered_password):
+            if login_dialog_cls.verify_password(password_hash, entered_password):
                 if logger:
                     logger.info("Authentication successful on attempt %s", attempt)
+                    logger.debug(
+                        "[perf] startup.auth_dialog_accepted_ms=%.2f t_unix=%.6f attempt=%s",
+                        (time.perf_counter() - flow_started_at) * 1000.0,
+                        time.time(),
+                        attempt,
+                    )
                 return AuthenticationResult(password=entered_password)
-            if LoginDialog.verify_password(backup_hash, entered_password):
+            if login_dialog_cls.verify_password(backup_hash, entered_password):
+                logger.debug(
+                    "[perf] startup.auth_dialog_accepted_ms=%.2f t_unix=%.6f attempt=%s mode=backup",
+                    (time.perf_counter() - flow_started_at) * 1000.0,
+                    time.time(),
+                    attempt,
+                )
                 return AuthenticationResult(wipe_requested=True, silent=True)
 
             if logger:
@@ -125,15 +146,20 @@ def run_authentication(
 
     if logger:
         logger.info("Password hashes not found in settings. Starting first-time setup.")
-    setup_dialog = LoginDialog(is_setup=True, parent=parent)
+    logger.debug(
+        "[perf] startup.auth_dialog_shown_ms=%.2f t_unix=%.6f mode=setup",
+        (time.perf_counter() - flow_started_at) * 1000.0,
+        time.time(),
+    )
+    setup_dialog = login_dialog_cls(is_setup=True, parent=parent)
     result = setup_dialog.exec_()
     if result == QDialog.Accepted:
         if logger:
             logger.info("First-time setup completed")
         password = setup_dialog.get_password()
         backup_password = setup_dialog.get_backup_password()
-        hashed_password = LoginDialog.hash_password(password)
-        hashed_backup = LoginDialog.hash_password(backup_password)
+        hashed_password = login_dialog_cls.hash_password(password)
+        hashed_backup = login_dialog_cls.hash_password(backup_password)
         if not hashed_password or not hashed_backup:
             if logger:
                 logger.error("Failed to hash passwords during setup")
@@ -160,6 +186,11 @@ def run_authentication(
             logger.info("Passwords created and stored successfully")
         QMessageBox.information(
             parent, "Setup Complete", "Passwords created successfully."
+        )
+        logger.debug(
+            "[perf] startup.auth_dialog_accepted_ms=%.2f t_unix=%.6f mode=setup",
+            (time.perf_counter() - flow_started_at) * 1000.0,
+            time.time(),
         )
         return AuthenticationResult(password=password)
     if logger:

@@ -20,6 +20,8 @@ except Exception:  # pragma: no cover - keyring missing at runtime
 
 
 SERVICE_NAME = "SilverEstimateApp"
+_backend_status_cache: Optional["CredentialBackendStatus"] = None
+_backend_status_cache_keyring_id: Optional[int] = None
 
 
 class CredentialStoreError(RuntimeError):
@@ -61,25 +63,39 @@ def is_available() -> bool:
 
 def get_backend_status() -> CredentialBackendStatus:
     """Report whether a secure keyring backend is usable."""
+    global _backend_status_cache, _backend_status_cache_keyring_id
+    current_keyring_id = id(keyring)
+    if (
+        _backend_status_cache is not None
+        and _backend_status_cache_keyring_id == current_keyring_id
+    ):
+        return _backend_status_cache
+
     if keyring is None:
-        return CredentialBackendStatus(
+        status = CredentialBackendStatus(
             available=False,
             backend_name="missing",
             reason="Python keyring package is not installed.",
         )
+        _backend_status_cache = status
+        _backend_status_cache_keyring_id = current_keyring_id
+        return status
     try:
         backend = keyring.get_keyring()
     except Exception as exc:  # pragma: no cover - backend init differs by platform
-        return CredentialBackendStatus(
+        status = CredentialBackendStatus(
             available=False,
             backend_name="unknown",
             reason=f"Could not initialize keyring backend: {exc}",
         )
+        _backend_status_cache = status
+        _backend_status_cache_keyring_id = current_keyring_id
+        return status
     backend_type = type(backend)
     backend_name = f"{backend_type.__module__}.{backend_type.__name__}"
     normalized = backend_name.lower()
     if "null" in normalized or "fail" in normalized:
-        return CredentialBackendStatus(
+        status = CredentialBackendStatus(
             available=False,
             backend_name=backend_name,
             reason=(
@@ -87,10 +103,16 @@ def get_backend_status() -> CredentialBackendStatus:
                 "Install and configure an OS-backed credential vault."
             ),
         )
-    return CredentialBackendStatus(
+        _backend_status_cache = status
+        _backend_status_cache_keyring_id = current_keyring_id
+        return status
+    status = CredentialBackendStatus(
         available=True,
         backend_name=backend_name,
     )
+    _backend_status_cache = status
+    _backend_status_cache_keyring_id = current_keyring_id
+    return status
 
 
 def _get_entry(kind: str) -> _CredentialDescriptor:

@@ -88,6 +88,67 @@ def test_items_repository_roundtrip(fake_db):
     assert fake_db._flush_requested
 
 
+def test_schema_setup_upgrades_to_v3_and_adds_numeric_voucher_column(fake_db):
+    fake_db.cursor.execute("SELECT MAX(version) AS v FROM schema_version")
+    row = fake_db.cursor.fetchone()
+    assert row["v"] == 3
+    assert fake_db._column_exists("estimates", "voucher_no_int")
+
+
+def test_migration_v3_backfills_numeric_vouchers_from_legacy_schema():
+    db = FakeDB()
+    try:
+        db.cursor.execute("""
+            CREATE TABLE schema_version (
+                id INTEGER PRIMARY KEY,
+                version INTEGER NOT NULL,
+                applied_date TEXT NOT NULL
+            )
+        """)
+        db.cursor.execute(
+            "INSERT INTO schema_version (version, applied_date) VALUES (?, ?)",
+            (2, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+        )
+        db.cursor.execute("""
+            CREATE TABLE estimates (
+                voucher_no TEXT PRIMARY KEY,
+                date TEXT NOT NULL,
+                silver_rate REAL DEFAULT 0,
+                total_gross REAL DEFAULT 0,
+                total_net REAL DEFAULT 0,
+                total_fine REAL DEFAULT 0,
+                total_wage REAL DEFAULT 0,
+                note TEXT,
+                last_balance_silver REAL DEFAULT 0,
+                last_balance_amount REAL DEFAULT 0
+            )
+        """)
+        db.cursor.execute(
+            "INSERT INTO estimates (voucher_no, date) VALUES (?, ?)",
+            ("100", "2025-01-01"),
+        )
+        db.cursor.execute(
+            "INSERT INTO estimates (voucher_no, date) VALUES (?, ?)",
+            ("AB-1", "2025-01-02"),
+        )
+        db.conn.commit()
+
+        migrations.run_schema_setup(db)
+
+        assert db._column_exists("estimates", "voucher_no_int")
+        db.cursor.execute(
+            "SELECT voucher_no, voucher_no_int FROM estimates ORDER BY voucher_no"
+        )
+        rows = {row["voucher_no"]: row["voucher_no_int"] for row in db.cursor.fetchall()}
+        assert rows["100"] == 100
+        assert rows["AB-1"] is None
+
+        db.cursor.execute("SELECT MAX(version) AS v FROM schema_version")
+        assert db.cursor.fetchone()["v"] == 3
+    finally:
+        db.conn.close()
+
+
 def test_items_repository_returns_plain_dicts(fake_db):
     repo = ItemsRepository(fake_db)
     repo.add_item("NEW123", "New Item", 91.0, "WT", 12.0)
@@ -192,6 +253,43 @@ def test_estimates_repository_returns_first_estimate_date(fake_db):
     )
 
     assert repo.get_first_estimate_date() == "2025-01-12"
+
+
+def test_estimates_repository_numeric_voucher_order_and_next_value(fake_db):
+    repo = EstimatesRepository(fake_db)
+    for voucher in ("2", "10", "A1"):
+        assert repo.save_estimate_with_returns(
+            voucher_no=voucher,
+            date="2025-03-10",
+            silver_rate=71000.0,
+            regular_items=[],
+            return_items=[],
+            totals=estimate_totals(
+                total_gross=0.0, total_net=0.0, net_fine=0.0, net_wage=0.0
+            ),
+        )
+
+    headers = repo.get_estimate_headers()
+    ordered = [row["voucher_no"] for row in headers]
+    assert ordered[:2] == ["10", "2"]
+    assert ordered[-1] == "A1"
+    assert repo.generate_voucher_no() == "11"
+
+
+def test_estimates_repository_generate_voucher_falls_back_when_only_non_numeric(fake_db):
+    repo = EstimatesRepository(fake_db)
+    for voucher in ("A-10", "B-20"):
+        assert repo.save_estimate_with_returns(
+            voucher_no=voucher,
+            date="2025-03-10",
+            silver_rate=71000.0,
+            regular_items=[],
+            return_items=[],
+            totals=estimate_totals(
+                total_gross=0.0, total_net=0.0, net_fine=0.0, net_wage=0.0
+            ),
+        )
+    assert repo.generate_voucher_no() == "1"
 
 
 def test_save_estimate_reports_missing_item_code(fake_db):

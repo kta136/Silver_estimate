@@ -38,3 +38,29 @@ def test_get_password_hash_fails_fast_with_untrusted_backend(monkeypatch):
     monkeypatch.setattr(credential_store, "keyring", FakeKeyring)
     with pytest.raises(CredentialStoreError):
         credential_store.get_password_hash("main")
+
+
+def test_backend_status_cache_invalidates_when_keyring_object_changes(monkeypatch):
+    class GoodBackend:
+        __module__ = "keyring.backends.Windows"
+
+    class NullBackend:
+        __module__ = "keyring.backends.null"
+
+    class GoodKeyring:
+        @staticmethod
+        def get_keyring():
+            return GoodBackend()
+
+    class BadKeyring:
+        @staticmethod
+        def get_keyring():
+            return NullBackend()
+
+    monkeypatch.setattr(credential_store, "keyring", GoodKeyring)
+    good_status = credential_store.get_backend_status()
+    assert good_status.available is True
+
+    monkeypatch.setattr(credential_store, "keyring", BadKeyring)
+    bad_status = credential_store.get_backend_status()
+    assert bad_status.available is False

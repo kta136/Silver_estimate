@@ -17,11 +17,7 @@ from silverestimate.infrastructure import settings as settings_module
 from silverestimate.infrastructure.db_session import ConnectionThreadGuard
 from silverestimate.infrastructure.item_cache import ItemCacheController
 from silverestimate.infrastructure.settings import get_app_settings
-from silverestimate.persistence import migrations as persistence_migrations
-from silverestimate.persistence.estimates_repository import EstimatesRepository
 from silverestimate.persistence.flush_scheduler import FlushScheduler
-from silverestimate.persistence.items_repository import ItemsRepository
-from silverestimate.persistence.silver_bars_repository import SilverBarsRepository
 from silverestimate.security import encryption as crypto_utils
 
 # Constants
@@ -223,6 +219,8 @@ class DatabaseManager:
     def items_repo(self):
         """Lazy-load the ItemsRepository instance."""
         if self._items_repo is None:
+            from silverestimate.persistence.items_repository import ItemsRepository
+
             self._items_repo = ItemsRepository(self)
         return self._items_repo
 
@@ -230,6 +228,10 @@ class DatabaseManager:
     def estimates_repo(self):
         """Lazy-load the EstimatesRepository instance."""
         if self._estimates_repo is None:
+            from silverestimate.persistence.estimates_repository import (
+                EstimatesRepository,
+            )
+
             self._estimates_repo = EstimatesRepository(self)
         return self._estimates_repo
 
@@ -237,6 +239,10 @@ class DatabaseManager:
     def silver_bars_repo(self):
         """Lazy-load the SilverBarsRepository instance."""
         if self._silver_bars_repo is None:
+            from silverestimate.persistence.silver_bars_repository import (
+                SilverBarsRepository,
+            )
+
             self._silver_bars_repo = SilverBarsRepository(self)
         return self._silver_bars_repo
 
@@ -630,6 +636,8 @@ class DatabaseManager:
 
     def setup_database(self):
         """Create/update the necessary tables in the temporary database."""
+        from silverestimate.persistence import migrations as persistence_migrations
+
         persistence_migrations.run_schema_setup(self)
 
     # --- Item Methods ---

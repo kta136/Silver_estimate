@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import time
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,10 +15,6 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QMessageBox, QWidget
 
-from silverestimate.controllers.startup_controller import (
-    StartupController,
-    StartupStatus,
-)
 from silverestimate.infrastructure.app_constants import APP_TITLE
 from silverestimate.infrastructure.logger import (
     LogCleanupScheduler,
@@ -52,6 +49,8 @@ class ApplicationContext:
     db_manager: Optional["DatabaseManager"] = None
     main_window: Optional["QMainWindow"] = None
     dialog_parent: Optional[QWidget] = None
+    startup_t0_perf: float = 0.0
+    startup_t0_unix: float = 0.0
 
     def shutdown(self) -> None:
         """Release resources created during startup."""
@@ -82,9 +81,7 @@ class ApplicationBuilder:
         self,
         *,
         main_window_factory: MainWindowFactory,
-        startup_controller_factory: Callable[
-            ..., StartupController
-        ] = StartupController,
+        startup_controller_factory: Optional[Callable[..., Any]] = None,
         log_config_getter: Callable[[], dict[str, Any]] = get_log_config,
         logging_setup: Callable[..., logging.Logger] = setup_logging,
         asset_resolver: Callable[..., Path] = get_asset_path,
@@ -133,8 +130,21 @@ class ApplicationBuilder:
 
     def _run(self, context: ApplicationContext) -> int:
         """Internal orchestration for startup."""
+        context.startup_t0_perf = time.perf_counter()
+        context.startup_t0_unix = time.time()
         self._configure_logging(context)
+        if context.logger:
+            context.logger.debug(
+                "[perf] startup.app_bootstrap_start t_unix=%.6f",
+                context.startup_t0_unix,
+            )
         self._configure_qt(context)
+        if context.logger:
+            context.logger.debug(
+                "[perf] startup.qt_ready_ms=%.2f t_unix=%.6f",
+                (time.perf_counter() - context.startup_t0_perf) * 1000.0,
+                time.time(),
+            )
         db_manager, early_exit = self._authenticate(context)
         if early_exit is not None:
             return early_exit
@@ -200,9 +210,14 @@ class ApplicationBuilder:
         app = QApplication.instance() or QApplication(sys.argv)
         context.app = app
         # Hidden parent widget for dialogs shown before the main window exists.
-        dialog_parent = QWidget()
-        dialog_parent.setAttribute(Qt.WA_DontShowOnScreen, True)
-        context.dialog_parent = dialog_parent
+        # Some tests monkeypatch QApplication with a lightweight stub; skip
+        # QWidget creation there to avoid requiring a real Qt app instance.
+        if type(app).__module__.startswith("PyQt5."):
+            dialog_parent = QWidget()
+            dialog_parent.setAttribute(Qt.WA_DontShowOnScreen, True)
+            context.dialog_parent = dialog_parent
+        else:
+            context.dialog_parent = None
 
         try:
             icon_path = self._asset_resolver("assets", "icons", "silverestimate.ico")
@@ -217,26 +232,63 @@ class ApplicationBuilder:
     def _authenticate(
         self, context: ApplicationContext
     ) -> Tuple[Optional["DatabaseManager"], Optional[int]]:
+        startup_module = None
+        status_enum = None
+        factory = self._startup_controller_factory
+        if factory is None:
+            from silverestimate.controllers import startup_controller as startup_module
+
+            factory = startup_module.StartupController
+            status_enum = startup_module.StartupStatus
+        else:
+            try:
+                from silverestimate.controllers import startup_controller as startup_module
+
+                status_enum = startup_module.StartupStatus
+            except Exception:
+                status_enum = None
+
         try:
-            controller = self._startup_controller_factory(
+            controller = factory(
                 logger=context.logger,
                 parent=context.dialog_parent,
             )
         except TypeError:
-            controller = self._startup_controller_factory(logger=context.logger)
+            controller = factory(logger=context.logger)
         result = controller.authenticate_and_prepare()
 
-        if result.status == StartupStatus.CANCELLED:
+        raw_status = getattr(result, "status", None)
+        if hasattr(raw_status, "name"):
+            status_name = getattr(raw_status, "name", "")
+        elif raw_status is None:
+            status_name = ""
+        else:
+            status_name = str(raw_status)
+        cancelled_name = (
+            getattr(status_enum.CANCELLED, "name", "CANCELLED")
+            if status_enum is not None
+            else "CANCELLED"
+        )
+        wiped_name = (
+            getattr(status_enum.WIPED, "name", "WIPED")
+            if status_enum is not None
+            else "WIPED"
+        )
+        ok_name = (
+            getattr(status_enum.OK, "name", "OK") if status_enum is not None else "OK"
+        )
+
+        if status_name == cancelled_name:
             if context.logger:
                 context.logger.info("Authentication cancelled by user. Exiting.")
             return None, 0
 
-        if result.status == StartupStatus.WIPED:
+        if status_name == wiped_name:
             if context.logger and not result.silent_wipe:
                 context.logger.info("Data wipe completed. Exiting.")
             return None, 0
 
-        if result.status != StartupStatus.OK or not result.db:
+        if status_name != ok_name or not result.db:
             if context.logger:
                 context.logger.critical(
                     "Startup failed during authentication or database initialization."
@@ -253,6 +305,11 @@ class ApplicationBuilder:
             return 1
         if context.logger:
             context.logger.info("Showing main application window")
+            context.logger.debug(
+                "[perf] startup.main_window_show_ms=%.2f t_unix=%.6f",
+                (time.perf_counter() - context.startup_t0_perf) * 1000.0,
+                time.time(),
+            )
         context.main_window.show()
         if context.logger:
             context.logger.debug("Entering Qt main event loop")

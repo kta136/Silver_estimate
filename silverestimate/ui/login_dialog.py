@@ -1,11 +1,4 @@
 import sys
-import warnings  # To potentially filter passlib warnings if needed
-
-from passlib.context import CryptContext  # Import CryptContext
-from passlib.exc import (  # Import specific exceptions
-    PasslibSecurityWarning,
-    UnknownHashError,
-)
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QApplication,
@@ -20,10 +13,16 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-# Configure passlib context for Argon2 (recommended)
-# Schemes='default' will use the first scheme listed (argon2) for hashing.
-# Deprecated='auto' will allow verification of older hashes if needed in the future.
-pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
+_pwd_context = None
+
+
+def _get_pwd_context():
+    global _pwd_context
+    if _pwd_context is None:
+        from passlib.context import CryptContext
+
+        _pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
+    return _pwd_context
 
 # Optional: Filter specific passlib warnings if they become noisy during development/packaging
 
@@ -241,7 +240,7 @@ class LoginDialog(QDialog):
             return None
         try:
             # Passlib handles encoding and salt generation automatically
-            hashed = pwd_context.hash(password)
+            hashed = _get_pwd_context().hash(password)
             return hashed
         except Exception as e:
             import logging
@@ -257,24 +256,28 @@ class LoginDialog(QDialog):
         try:
             # pwd_context.verify handles identifying the hash type (e.g., argon2, bcrypt)
             # and performs the comparison.
-            return pwd_context.verify(provided_password, stored_hash)
-        except UnknownHashError:
-            import logging
-
-            logging.getLogger(__name__).warning(
-                f"Unknown hash format encountered: {stored_hash[:10]}..."
-            )
-            return False
-        except ValueError as ve:  # Catches potential issues like malformed hash string
+            return _get_pwd_context().verify(provided_password, stored_hash)
+        except ValueError:  # Catches potential issues like malformed hash string
             import logging
 
             logging.getLogger(__name__).warning(
                 "Error comparing password hash (invalid format?)", exc_info=True
             )
             return False
-        except Exception as e:
+        except Exception as exc:
             import logging
 
+            try:
+                from passlib.exc import UnknownHashError
+
+                is_unknown = isinstance(exc, UnknownHashError)
+            except Exception:
+                is_unknown = False
+            if is_unknown:
+                logging.getLogger(__name__).warning(
+                    f"Unknown hash format encountered: {stored_hash[:10]}..."
+                )
+                return False
             logging.getLogger(__name__).error(
                 "Error verifying password:", exc_info=True
             )

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 from datetime import datetime
-from typing import Any, Iterable, List
+from typing import Any, Iterable, List, Optional
 
 
 class EstimatesRepository:
@@ -29,17 +29,26 @@ class EstimatesRepository:
             return f"ERR{datetime.now().strftime('%Y%m%d%H%M%S')}"
         try:
             cursor.execute(
-                "SELECT MAX(CAST(voucher_no AS INTEGER)) FROM estimates WHERE voucher_no GLOB '[0-9]*'"
+                "SELECT MAX(voucher_no_int) FROM estimates WHERE voucher_no_int IS NOT NULL"
             )
             result = cursor.fetchone()
             if result and result[0] is not None:
                 return str(int(result[0]) + 1)
             return "1"
         except (sqlite3.Error, ValueError, TypeError) as exc:
-            self._logger.error(
-                "DB error generating voucher number: %s", exc, exc_info=True
-            )
-            return f"ERR{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            try:
+                cursor.execute(
+                    "SELECT MAX(CAST(voucher_no AS INTEGER)) FROM estimates WHERE voucher_no GLOB '[0-9]*'"
+                )
+                result = cursor.fetchone()
+                if result and result[0] is not None:
+                    return str(int(result[0]) + 1)
+                return "1"
+            except (sqlite3.Error, ValueError, TypeError):
+                self._logger.error(
+                    "DB error generating voucher number: %s", exc, exc_info=True
+                )
+                return f"ERR{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
     def get_estimate_by_voucher(self, voucher_no: str):
         conn, cursor = self._conn, self._cursor
@@ -95,7 +104,7 @@ class EstimatesRepository:
         if voucher_search:
             query += " AND voucher_no LIKE ?"
             params.append(f"%{voucher_search}%")
-        query += " ORDER BY CAST(voucher_no AS INTEGER) DESC"
+        query += " ORDER BY voucher_no_int DESC, voucher_no DESC"
         try:
             cursor.execute(query, params)
             headers = cursor.fetchall()
@@ -112,8 +121,28 @@ class EstimatesRepository:
                 )
             return results
         except sqlite3.Error as exc:
-            self._logger.error("DB Error getting estimates: %s", exc, exc_info=True)
-            return []
+            try:
+                query = query.replace(
+                    "ORDER BY voucher_no_int DESC, voucher_no DESC",
+                    "ORDER BY CAST(voucher_no AS INTEGER) DESC",
+                )
+                cursor.execute(query, params)
+                headers = cursor.fetchall()
+                results = []
+                for header in headers:
+                    voucher_no = header["voucher_no"]
+                    cursor.execute(
+                        "SELECT * FROM estimate_items WHERE voucher_no = ? ORDER BY id",
+                        (voucher_no,),
+                    )
+                    items = cursor.fetchall()
+                    results.append(
+                        {"header": dict(header), "items": [dict(item) for item in items]}
+                    )
+                return results
+            except sqlite3.Error:
+                self._logger.error("DB Error getting estimates: %s", exc, exc_info=True)
+                return []
 
     def get_estimate_headers(self, date_from=None, date_to=None, voucher_search=None):
         cursor = self._cursor
@@ -130,15 +159,23 @@ class EstimatesRepository:
         if voucher_search:
             query += " AND voucher_no LIKE ?"
             params.append(f"%{voucher_search}%")
-        query += " ORDER BY CAST(voucher_no AS INTEGER) DESC"
+        query += " ORDER BY voucher_no_int DESC, voucher_no DESC"
         try:
             cursor.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
         except sqlite3.Error as exc:
-            self._logger.error(
-                "DB Error getting estimate headers: %s", exc, exc_info=True
-            )
-            return []
+            try:
+                query = query.replace(
+                    "ORDER BY voucher_no_int DESC, voucher_no DESC",
+                    "ORDER BY CAST(voucher_no AS INTEGER) DESC",
+                )
+                cursor.execute(query, params)
+                return [dict(row) for row in cursor.fetchall()]
+            except sqlite3.Error:
+                self._logger.error(
+                    "DB Error getting estimate headers: %s", exc, exc_info=True
+                )
+                return []
 
     def get_first_estimate_date(self):
         """Return the earliest estimate date (yyyy-MM-dd) or None when unavailable."""
@@ -186,6 +223,7 @@ class EstimatesRepository:
             note = totals.get("note", "")
             last_balance_silver = totals.get("last_balance_silver", 0.0)
             last_balance_amount = totals.get("last_balance_amount", 0.0)
+            voucher_no_int = self._voucher_to_int(voucher_no)
 
             all_items = regular_items + return_items
             missing_codes = self._find_missing_item_codes(all_items)
@@ -206,7 +244,8 @@ class EstimatesRepository:
                     UPDATE estimates
                     SET date = ?, silver_rate = ?, total_gross = ?, total_net = ?,
                         total_fine = ?, total_wage = ?, note = ?,
-                        last_balance_silver = ?, last_balance_amount = ?
+                        last_balance_silver = ?, last_balance_amount = ?,
+                        voucher_no_int = ?
                     WHERE voucher_no = ?
                     """,
                     (
@@ -219,6 +258,7 @@ class EstimatesRepository:
                         note,
                         last_balance_silver,
                         last_balance_amount,
+                        voucher_no_int,
                         voucher_no,
                     ),
                 )
@@ -226,12 +266,13 @@ class EstimatesRepository:
                 cursor.execute(
                     """
                     INSERT INTO estimates
-                    (voucher_no, date, silver_rate, total_gross, total_net, total_fine, total_wage, note,
+                    (voucher_no, voucher_no_int, date, silver_rate, total_gross, total_net, total_fine, total_wage, note,
                      last_balance_silver, last_balance_amount)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         voucher_no,
+                        voucher_no_int,
                         date,
                         silver_rate,
                         totals.get("total_gross", 0.0),
@@ -323,6 +364,16 @@ class EstimatesRepository:
                     f"Database integrity error while saving estimate '{voucher_no}': {exc}"
                 )
             return False
+
+    @staticmethod
+    def _voucher_to_int(voucher_no: str) -> Optional[int]:
+        raw = str(voucher_no or "").strip()
+        if not raw.isdigit():
+            return None
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return None
         except sqlite3.Error as exc:
             conn.rollback()
             self._logger.error(

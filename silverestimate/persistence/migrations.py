@@ -55,6 +55,7 @@ def _ensure_core_tables(db: "DatabaseManager", current_version: int) -> None:
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS estimates (
             voucher_no TEXT PRIMARY KEY,
+            voucher_no_int INTEGER,
             date TEXT NOT NULL,
             silver_rate REAL DEFAULT 0,
             total_gross REAL DEFAULT 0,
@@ -88,16 +89,17 @@ def _ensure_core_tables(db: "DatabaseManager", current_version: int) -> None:
         """)
 
     # Ensure note/last balance columns exist for legacy installs
-    if not db._column_exists("estimates", "note"):
-        cursor.execute("ALTER TABLE estimates ADD COLUMN note TEXT")
-    if not db._column_exists("estimates", "last_balance_silver"):
-        cursor.execute(
-            "ALTER TABLE estimates ADD COLUMN last_balance_silver REAL DEFAULT 0"
-        )
-    if not db._column_exists("estimates", "last_balance_amount"):
-        cursor.execute(
-            "ALTER TABLE estimates ADD COLUMN last_balance_amount REAL DEFAULT 0"
-        )
+    if current_version < 3:
+        if not db._column_exists("estimates", "note"):
+            cursor.execute("ALTER TABLE estimates ADD COLUMN note TEXT")
+        if not db._column_exists("estimates", "last_balance_silver"):
+            cursor.execute(
+                "ALTER TABLE estimates ADD COLUMN last_balance_silver REAL DEFAULT 0"
+            )
+        if not db._column_exists("estimates", "last_balance_amount"):
+            cursor.execute(
+                "ALTER TABLE estimates ADD COLUMN last_balance_amount REAL DEFAULT 0"
+            )
 
     # Silver bar tables (baseline creation ensures availability even on latest version)
     cursor.execute("""
@@ -142,6 +144,10 @@ def _ensure_core_tables(db: "DatabaseManager", current_version: int) -> None:
 def _apply_versioned_migrations(db: "DatabaseManager", current_version: int) -> None:
     cursor = db.cursor
     logger = db.logger
+
+    if current_version >= 3:
+        logger.debug("Schema version >= 3 detected; skipping legacy migration checks.")
+        return
 
     if current_version < 1:
         logger.info(
@@ -191,6 +197,22 @@ def _apply_versioned_migrations(db: "DatabaseManager", current_version: int) -> 
             "Silver bar schema is already at version 2 or higher. No migration needed."
         )
 
+    if current_version < 3:
+        logger.info(
+            "Performing schema migration to version 3: Adding numeric voucher column..."
+        )
+        if not db._column_exists("estimates", "voucher_no_int"):
+            cursor.execute("ALTER TABLE estimates ADD COLUMN voucher_no_int INTEGER")
+        cursor.execute(
+            """
+            UPDATE estimates
+            SET voucher_no_int = CAST(voucher_no AS INTEGER)
+            WHERE voucher_no GLOB '[0-9]*'
+              AND voucher_no_int IS NULL
+            """
+        )
+        db._update_schema_version(3)
+
 
 def _ensure_indexes(db: "DatabaseManager") -> None:
     cursor = db.cursor
@@ -213,6 +235,10 @@ def _ensure_indexes(db: "DatabaseManager") -> None:
         )
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_estimates_date ON estimates(date)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_estimates_voucher_no_int "
+            "ON estimates(voucher_no_int DESC)"
         )
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_estimate_items_voucher ON estimate_items(voucher_no)"

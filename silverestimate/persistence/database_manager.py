@@ -655,6 +655,9 @@ class DatabaseManager:
     def search_items(self, search_term):
         return self.items_repo.search_items(search_term)
 
+    def search_items_for_selection(self, search_term, limit=500):
+        return self.items_repo.search_items_for_selection(search_term, limit=limit)
+
     def get_all_items(self):
         return self.items_repo.get_all_items()
 
@@ -670,6 +673,9 @@ class DatabaseManager:
     # --- Estimate Methods ---
     def get_estimate_by_voucher(self, voucher_no):
         return self.estimates_repo.get_estimate_by_voucher(voucher_no)
+
+    def estimate_exists(self, voucher_no):
+        return self.estimates_repo.estimate_exists(voucher_no)
 
     def get_estimates(self, date_from=None, date_to=None, voucher_search=None):
         return self.estimates_repo.get_estimates(
@@ -741,6 +747,12 @@ class DatabaseManager:
 
     def get_available_bars(self):
         return self.silver_bars_repo.get_available_bars()
+
+    def get_silver_bars_for_estimate(self, voucher_no):
+        return self.silver_bars_repo.get_silver_bars_for_estimate(voucher_no)
+
+    def sync_silver_bars_for_estimate(self, voucher_no, bars):
+        return self.silver_bars_repo.sync_silver_bars_for_estimate(voucher_no, bars)
 
     def add_silver_bar(self, estimate_voucher_no, weight, purity):
         return self.silver_bars_repo.add_silver_bar(estimate_voucher_no, weight, purity)

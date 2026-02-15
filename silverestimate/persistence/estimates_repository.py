@@ -89,6 +89,25 @@ class EstimatesRepository:
             )
             return None
 
+    def estimate_exists(self, voucher_no: str) -> bool:
+        cursor = self._cursor
+        if not cursor or not voucher_no:
+            return False
+        try:
+            cursor.execute(
+                "SELECT 1 FROM estimates WHERE voucher_no = ? LIMIT 1",
+                (voucher_no,),
+            )
+            return cursor.fetchone() is not None
+        except sqlite3.Error as exc:
+            self._logger.error(
+                "DB Error checking estimate existence %s: %s",
+                voucher_no,
+                exc,
+                exc_info=True,
+            )
+            return False
+
     def get_estimates(self, date_from=None, date_to=None, voucher_search=None):
         cursor = self._cursor
         if not cursor:
@@ -104,45 +123,75 @@ class EstimatesRepository:
         if voucher_search:
             query += " AND voucher_no LIKE ?"
             params.append(f"%{voucher_search}%")
-        query += " ORDER BY voucher_no_int DESC, voucher_no DESC"
         try:
-            cursor.execute(query, params)
-            headers = cursor.fetchall()
-            results = []
-            for header in headers:
-                voucher_no = header["voucher_no"]
-                cursor.execute(
-                    "SELECT * FROM estimate_items WHERE voucher_no = ? ORDER BY id",
-                    (voucher_no,),
-                )
-                items = cursor.fetchall()
-                results.append(
-                    {"header": dict(header), "items": [dict(item) for item in items]}
-                )
-            return results
+            cursor.execute(
+                f"{query} ORDER BY voucher_no_int DESC, voucher_no DESC",
+                params,
+            )
+            headers = [dict(row) for row in cursor.fetchall()]
         except sqlite3.Error as exc:
+            self._logger.error(
+                "DB Error getting estimates: %s",
+                exc,
+                exc_info=True,
+            )
+            return []
+
+        if not headers:
+            return []
+
+        voucher_nos = [
+            str(row.get("voucher_no", ""))
+            for row in headers
+            if row.get("voucher_no") is not None
+        ]
+        items_by_voucher = self._load_estimate_items_by_voucher(voucher_nos)
+
+        return [
+            {
+                "header": header,
+                "items": items_by_voucher.get(str(header.get("voucher_no", "")), []),
+            }
+            for header in headers
+        ]
+
+    def _load_estimate_items_by_voucher(
+        self, voucher_nos: Iterable[str]
+    ) -> dict[str, list[dict[str, Any]]]:
+        cursor = self._cursor
+        if not cursor:
+            return {}
+
+        normalized = [str(voucher) for voucher in voucher_nos if str(voucher)]
+        if not normalized:
+            return {}
+
+        items_by_voucher: dict[str, list[dict[str, Any]]] = {
+            voucher_no: [] for voucher_no in normalized
+        }
+        chunk_size = 900  # Keep comfortably below SQLite variable limits.
+
+        for start in range(0, len(normalized), chunk_size):
+            chunk = normalized[start : start + chunk_size]
+            placeholders = ",".join("?" for _ in chunk)
             try:
-                query = query.replace(
-                    "ORDER BY voucher_no_int DESC, voucher_no DESC",
-                    "ORDER BY CAST(voucher_no AS INTEGER) DESC",
+                cursor.execute(
+                    f"SELECT * FROM estimate_items WHERE voucher_no IN ({placeholders}) ORDER BY voucher_no, id",
+                    chunk,
                 )
-                cursor.execute(query, params)
-                headers = cursor.fetchall()
-                results = []
-                for header in headers:
-                    voucher_no = header["voucher_no"]
-                    cursor.execute(
-                        "SELECT * FROM estimate_items WHERE voucher_no = ? ORDER BY id",
-                        (voucher_no,),
-                    )
-                    items = cursor.fetchall()
-                    results.append(
-                        {"header": dict(header), "items": [dict(item) for item in items]}
-                    )
-                return results
-            except sqlite3.Error:
-                self._logger.error("DB Error getting estimates: %s", exc, exc_info=True)
-                return []
+                for row in cursor.fetchall():
+                    item = dict(row)
+                    key = str(item.get("voucher_no", ""))
+                    items_by_voucher.setdefault(key, []).append(item)
+            except sqlite3.Error as exc:
+                self._logger.error(
+                    "DB Error loading estimate items for vouchers: %s",
+                    exc,
+                    exc_info=True,
+                )
+                return {}
+
+        return items_by_voucher
 
     def get_estimate_headers(self, date_from=None, date_to=None, voucher_search=None):
         cursor = self._cursor
@@ -164,18 +213,10 @@ class EstimatesRepository:
             cursor.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
         except sqlite3.Error as exc:
-            try:
-                query = query.replace(
-                    "ORDER BY voucher_no_int DESC, voucher_no DESC",
-                    "ORDER BY CAST(voucher_no AS INTEGER) DESC",
-                )
-                cursor.execute(query, params)
-                return [dict(row) for row in cursor.fetchall()]
-            except sqlite3.Error:
-                self._logger.error(
-                    "DB Error getting estimate headers: %s", exc, exc_info=True
-                )
-                return []
+            self._logger.error(
+                "DB Error getting estimate headers: %s", exc, exc_info=True
+            )
+            return []
 
     def get_first_estimate_date(self):
         """Return the earliest estimate date (yyyy-MM-dd) or None when unavailable."""

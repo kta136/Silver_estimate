@@ -267,38 +267,15 @@ class EstimateEntryPresenter:
             bars_added = 0
             bars_failed = 0
 
-            existing_bars = list(
-                self._repository.fetch_silver_bars_for_estimate(payload.voucher_no)
-            )
             current_bar_items = [
                 item
                 for item in payload.items
                 if item.is_silver_bar and not item.is_return
             ]
-
-            for existing, current in zip(existing_bars, current_bar_items):
-                new_w = current.net_wt or 0.0
-                new_p = current.purity or 0.0
-                if (
-                    abs(new_w - float(existing.get("weight", 0.0))) > 1e-6
-                    or abs(new_p - float(existing.get("purity", 0.0))) > 1e-6
-                ):
-                    if not self._repository.update_silver_bar(
-                        existing["bar_id"], new_w, new_p
-                    ):
-                        bars_failed += 1
-
-            existing_count = len(existing_bars)
-            desired_count = len(current_bar_items)
-            if existing_count < desired_count:
-                for item in current_bar_items[existing_count:]:
-                    bar_id = self._repository.add_silver_bar(
-                        payload.voucher_no, item.net_wt, item.purity
-                    )
-                    if bar_id is not None:
-                        bars_added += 1
-                    else:
-                        bars_failed += 1
+            bars_added, bars_failed = self._sync_silver_bars_for_estimate(
+                payload.voucher_no,
+                current_bar_items,
+            )
 
             message_parts = [f"Estimate '{payload.voucher_no}' saved successfully."]
             if bars_added:
@@ -319,6 +296,19 @@ class EstimateEntryPresenter:
                 message=f"Unexpected error saving estimate '{payload.voucher_no}'.",
                 error_detail=str(exc),
             )
+
+    def _sync_silver_bars_for_estimate(
+        self, voucher_no: str, items: Sequence[SaveItem]
+    ) -> tuple[int, int]:
+        bars_payload = [
+            {"weight": float(item.net_wt or 0.0), "purity": float(item.purity or 0.0)}
+            for item in items
+        ]
+        added, failed = self._repository.sync_silver_bars_for_estimate(
+            voucher_no,
+            bars_payload,
+        )
+        return int(added or 0), int(failed or 0)
 
     @staticmethod
     def _item_to_dict(item: SaveItem) -> Dict[str, object]:

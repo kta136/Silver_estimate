@@ -107,6 +107,79 @@ class ItemsRepository:
             self._logger.error("DB Error search_items: %s", exc, exc_info=True)
             return []
 
+    def search_items_for_selection(
+        self, search_term: str, *, limit: int = 500
+    ) -> tuple[list[dict[str, Any]], bool]:
+        """Return ranked item matches for item-selection dialogs.
+
+        Results are capped to ``limit`` rows and ordered to prioritize:
+        1) code prefix matches, 2) name prefix matches,
+        3) code contains matches, 4) name contains matches.
+        """
+        cursor = self._cursor
+        if not cursor:
+            return [], False
+
+        try:
+            limit_i = int(limit)
+        except (TypeError, ValueError):
+            limit_i = 500
+        if limit_i < 1:
+            limit_i = 1
+        if limit_i > 5000:
+            limit_i = 5000
+        fetch_size = limit_i + 1
+
+        term = (search_term or "").strip()
+        try:
+            if not term:
+                cursor.execute(
+                    "SELECT code, name, purity, wage_type, wage_rate "
+                    "FROM items ORDER BY code COLLATE NOCASE LIMIT ?",
+                    (fetch_size,),
+                )
+                rows = cursor.fetchall()
+            else:
+                prefix = f"{term}%"
+                contains = f"%{term}%"
+                cursor.execute(
+                    """
+                    SELECT code, name, purity, wage_type, wage_rate
+                    FROM items
+                    WHERE code LIKE ? COLLATE NOCASE OR name LIKE ? COLLATE NOCASE
+                    ORDER BY
+                        CASE
+                            WHEN code LIKE ? COLLATE NOCASE THEN 0
+                            WHEN name LIKE ? COLLATE NOCASE THEN 1
+                            WHEN code LIKE ? COLLATE NOCASE THEN 2
+                            WHEN name LIKE ? COLLATE NOCASE THEN 3
+                            ELSE 4
+                        END,
+                        code COLLATE NOCASE
+                    LIMIT ?
+                    """,
+                    (
+                        contains,
+                        contains,
+                        prefix,
+                        prefix,
+                        contains,
+                        contains,
+                        fetch_size,
+                    ),
+                )
+                rows = cursor.fetchall()
+        except sqlite3.Error as exc:
+            self._logger.error(
+                "DB Error search_items_for_selection: %s", exc, exc_info=True
+            )
+            return [], False
+
+        truncated = len(rows) > limit_i
+        if truncated:
+            rows = rows[:limit_i]
+        return list(rows), truncated
+
     def get_all_items(self) -> list[tuple[Any, ...]]:
         cursor = self._cursor
         if not cursor:

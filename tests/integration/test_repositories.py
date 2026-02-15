@@ -181,6 +181,24 @@ def test_items_repository_search_uses_prefix_then_contains_fallback(fake_db):
     assert repo.search_items("Q") == []
 
 
+def test_items_repository_selection_search_ranking_and_limit(fake_db):
+    repo = ItemsRepository(fake_db)
+    repo.add_item("BAD2", "Metal Ring", 75.0, "WT", 20.0)
+    repo.add_item("AD01", "Classic Chain", 91.5, "WT", 12.5)
+    repo.add_item("ZZ10", "Adorn Pendant", 88.0, "PC", 3.0)
+    repo.add_item("AXAD", "Roadline Anklet", 80.0, "WT", 9.75)
+
+    rows, truncated = repo.search_items_for_selection("AD", limit=3)
+    codes = [row["code"] for row in rows]
+    assert codes == ["AD01", "ZZ10", "AXAD"]
+    assert truncated is True
+
+    rows_full, truncated_full = repo.search_items_for_selection("AD", limit=10)
+    codes_full = [row["code"] for row in rows_full]
+    assert codes_full == ["AD01", "ZZ10", "AXAD", "BAD2"]
+    assert truncated_full is False
+
+
 def test_estimates_repository_save_and_fetch(fake_db):
     repo = EstimatesRepository(fake_db)
     ItemsRepository(fake_db).add_item("ITM001", "Sample Item", 92.5, "WT", 10.0)
@@ -274,6 +292,61 @@ def test_estimates_repository_numeric_voucher_order_and_next_value(fake_db):
     assert ordered[:2] == ["10", "2"]
     assert ordered[-1] == "A1"
     assert repo.generate_voucher_no() == "11"
+
+
+def test_get_estimates_uses_bulk_item_query(fake_db):
+    repo = EstimatesRepository(fake_db)
+    items_repo = ItemsRepository(fake_db)
+    assert items_repo.add_item("ITM001", "Sample Item", 92.5, "WT", 10.0)
+
+    for voucher_no, gross in (("100", 10.0), ("101", 12.0)):
+        assert repo.save_estimate_with_returns(
+            voucher_no=voucher_no,
+            date="2025-01-01",
+            silver_rate=75000.0,
+            regular_items=[
+                regular_item(
+                    code="ITM001",
+                    name="Sample Item",
+                    gross=gross,
+                    poly=0.0,
+                    net_wt=gross,
+                    purity=92.5,
+                    wage_rate=10.0,
+                    pieces=1,
+                    wage=gross * 10.0,
+                    fine=gross * 0.925,
+                )
+            ],
+            return_items=[],
+            totals=estimate_totals(
+                total_gross=gross,
+                total_net=gross,
+                net_fine=gross * 0.925,
+                net_wage=gross * 10.0,
+            ),
+        )
+
+    statements: list[str] = []
+    fake_db.conn.set_trace_callback(statements.append)
+    try:
+        estimates = repo.get_estimates()
+    finally:
+        fake_db.conn.set_trace_callback(None)
+
+    assert len(estimates) == 2
+    item_queries_bulk = [
+        stmt
+        for stmt in statements
+        if "from estimate_items where voucher_no in" in stmt.lower()
+    ]
+    item_queries_per_voucher = [
+        stmt
+        for stmt in statements
+        if "from estimate_items where voucher_no =" in stmt.lower()
+    ]
+    assert len(item_queries_bulk) == 1
+    assert item_queries_per_voucher == []
 
 
 def test_estimates_repository_generate_voucher_falls_back_when_only_non_numeric(fake_db):
@@ -394,6 +467,32 @@ def test_silver_bar_query_unassigned_only_filter(fake_db):
 
     unassigned_rows = repo.get_silver_bars(unassigned_only=True)
     assert {row["bar_id"] for row in unassigned_rows} == {free_bar}
+
+
+def test_silver_bar_sync_for_estimate_updates_and_inserts_in_one_call(fake_db):
+    repo = SilverBarsRepository(fake_db)
+    first = repo.add_silver_bar("SYNC1", 5.0, 99.0)
+    second = repo.add_silver_bar("SYNC1", 6.0, 99.0)
+    assert first is not None
+    assert second is not None
+
+    added, failed = repo.sync_silver_bars_for_estimate(
+        "SYNC1",
+        [
+            {"weight": 5.5, "purity": 99.5},
+            {"weight": 6.0, "purity": 99.0},
+            {"weight": 7.0, "purity": 98.0},
+        ],
+    )
+
+    assert added == 1
+    assert failed == 0
+    rows = repo.get_silver_bars_for_estimate("SYNC1")
+    assert len(rows) == 3
+    assert float(rows[0]["weight"]) == pytest.approx(5.5)
+    assert float(rows[0]["purity"]) == pytest.approx(99.5)
+    assert float(rows[2]["weight"]) == pytest.approx(7.0)
+    assert float(rows[2]["purity"]) == pytest.approx(98.0)
 
 
 def test_silver_bar_list_query_limit_and_offset(fake_db):

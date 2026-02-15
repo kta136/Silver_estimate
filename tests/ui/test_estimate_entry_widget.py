@@ -144,6 +144,13 @@ class _RepositoryStub:
             return adder(voucher_no, weight, purity)
         return None
 
+    def sync_silver_bars_for_estimate(self, voucher_no, bars):
+        syncer = getattr(self.db, "sync_silver_bars_for_estimate", None)
+        if callable(syncer):
+            added, failed = syncer(voucher_no, list(bars or []))
+            return int(added or 0), int(failed or 0)
+        return 0, len(list(bars or []))
+
     def last_error(self):
         return getattr(self.db, "last_error", None)
 

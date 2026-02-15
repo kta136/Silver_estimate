@@ -42,6 +42,10 @@ class FakeRepository:
         self.fetched_silver_bars: List[Dict] = []
         self.update_bar_results: List[bool] = []
         self.add_bar_results: List[Optional[int]] = []
+        self.update_calls: List[Dict] = []
+        self.add_calls: List[Dict] = []
+        self.sync_calls: List[Dict] = []
+        self.sync_result: tuple[int, int] = (0, 0)
         self.deleted_vouchers: List[str] = []
         self.notify_calls: List[str] = []
 
@@ -85,6 +89,7 @@ class FakeRepository:
         return list(self.fetched_silver_bars)
 
     def update_silver_bar(self, bar_id: int, weight: float, purity: float) -> bool:
+        self.update_calls.append({"bar_id": bar_id, "weight": weight, "purity": purity})
         if self.update_bar_results:
             return self.update_bar_results.pop(0)
         return True
@@ -92,9 +97,16 @@ class FakeRepository:
     def add_silver_bar(
         self, voucher_no: str, weight: float, purity: float
     ) -> Optional[int]:
+        self.add_calls.append({"voucher": voucher_no, "weight": weight, "purity": purity})
         if self.add_bar_results:
             return self.add_bar_results.pop(0)
         return 1
+
+    def sync_silver_bars_for_estimate(
+        self, voucher_no: str, bars: Iterable[Dict]
+    ) -> tuple[int, int]:
+        self.sync_calls.append({"voucher": voucher_no, "bars": list(bars)})
+        return self.sync_result
 
     def last_error(self) -> Optional[str]:
         return self.last_error_value
@@ -324,8 +336,7 @@ def test_handle_item_code_cancel_selection_reports_not_found(presenter_fixtures)
 def test_save_estimate_success_adds_new_bar(presenter_fixtures):
     presenter, view, repo = presenter_fixtures
     payload = _Make_sample_payload()
-    repo.add_bar_results = [10]
-    repo.fetched_silver_bars = []
+    repo.sync_result = (1, 0)
 
     outcome = presenter.save_estimate(payload)
 
@@ -333,6 +344,20 @@ def test_save_estimate_success_adds_new_bar(presenter_fixtures):
     assert outcome.bars_added == 1
     assert "saved successfully" in outcome.message
     assert repo.save_calls
+
+
+def test_save_estimate_prefers_bulk_bar_sync_when_available(presenter_fixtures):
+    presenter, view, repo = presenter_fixtures
+    payload = _Make_sample_payload()
+    repo.sync_result = (1, 0)
+
+    outcome = presenter.save_estimate(payload)
+
+    assert outcome.success
+    assert outcome.bars_added == 1
+    assert len(repo.sync_calls) == 1
+    assert repo.update_calls == []
+    assert repo.add_calls == []
 
 
 def test_save_estimate_failure_returns_error(presenter_fixtures):

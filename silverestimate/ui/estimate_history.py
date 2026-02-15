@@ -410,8 +410,10 @@ class _HistoryLoadWorker(QObject):
             if self.voucher_search:
                 query += " AND voucher_no LIKE ?"
                 params.append(f"%{self.voucher_search}%")
-            query += " ORDER BY CAST(voucher_no AS INTEGER) DESC"
-            cur.execute(query, params)
+            cur.execute(
+                query + " ORDER BY voucher_no_int DESC, voucher_no DESC",
+                params,
+            )
             headers = [dict(r) for r in cur.fetchall()]
 
             agg_map = {}

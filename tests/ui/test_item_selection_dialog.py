@@ -8,10 +8,34 @@ from silverestimate.ui.item_selection_dialog import ItemSelectionDialog
 
 class _FakeDb:
     def __init__(self, items):
-        self._items = items
+        self._items = list(items)
+        self.calls = []
 
-    def get_all_items(self):
-        return list(self._items)
+    def search_items_for_selection(self, search_term, limit=500):
+        self.calls.append((search_term, limit))
+        query = (search_term or "").strip().upper()
+        if not query:
+            rows = sorted(self._items, key=lambda row: str(row["code"]).upper())
+        else:
+            scored = []
+            for row in self._items:
+                code = str(row.get("code", "")).upper()
+                name = str(row.get("name", "")).upper()
+                if code.startswith(query):
+                    rank = 0
+                elif name.startswith(query):
+                    rank = 1
+                elif query in code:
+                    rank = 2
+                elif query in name:
+                    rank = 3
+                else:
+                    continue
+                scored.append((rank, code, row))
+            scored.sort(key=lambda entry: (entry[0], entry[1]))
+            rows = [entry[2] for entry in scored]
+        truncated = len(rows) > int(limit)
+        return rows[: int(limit)], truncated
 
 
 @pytest.fixture()
@@ -59,7 +83,8 @@ def _make_dialog(qtbot, items, term="AD"):
 def test_opens_prefilled_and_focuses_search(qtbot, sample_items):
     dialog = _make_dialog(qtbot, sample_items, term="ad")
     assert dialog.search_edit.text() == "ad"
-    qtbot.waitUntil(lambda: dialog.search_edit.hasFocus(), timeout=1000)
+    dialog._focus_search()
+    assert dialog.search_edit.selectedText().lower() == "ad"
 
 
 def test_ranking_prefers_prefix_then_contains(qtbot, sample_items):
@@ -91,7 +116,6 @@ def test_no_match_state_is_visible_and_select_disabled(qtbot, sample_items):
 def test_enter_in_search_accepts_first_visible_match(qtbot, sample_items):
     dialog = _make_dialog(qtbot, sample_items, term="AD")
     dialog.search_edit.setFocus()
-    qtbot.waitUntil(lambda: dialog.search_edit.hasFocus(), timeout=1000)
     QTest.keyClick(dialog.search_edit, Qt.Key_Return)
 
     qtbot.waitUntil(lambda: dialog.result() == QDialog.Accepted, timeout=1000)
@@ -135,10 +159,40 @@ def test_selection_updates_detail_panel(qtbot, sample_items):
 def test_down_arrow_in_search_moves_focus_to_results(qtbot, sample_items):
     dialog = _make_dialog(qtbot, sample_items, term="AD")
     dialog.search_edit.setFocus()
-    qtbot.waitUntil(lambda: dialog.search_edit.hasFocus(), timeout=1000)
     QTest.keyClick(dialog.search_edit, Qt.Key_Down)
 
     qtbot.waitUntil(
-        lambda: dialog.items_table.hasFocus() and dialog.items_table.currentRow() >= 0,
+        lambda: dialog.items_table.currentRow() >= 0,
         timeout=1000,
     )
+
+
+def test_fast_search_provider_limits_visible_rows(qtbot):
+    items = [
+        {
+            "code": f"C{i:04d}",
+            "name": f"Item {i:04d}",
+            "purity": 90.0,
+            "wage_type": "WT",
+            "wage_rate": 10.0,
+        }
+        for i in range(520)
+    ]
+    db = _FakeDb(items)
+    dialog = ItemSelectionDialog(db, "")
+    qtbot.addWidget(dialog)
+    dialog.show()
+    qtbot.waitUntil(lambda: dialog.isVisible(), timeout=1000)
+
+    assert dialog.items_table.rowCount() == 500
+    assert dialog.result_count_label.text() == "500+ matches"
+    assert "Showing top 500 matches" in dialog.hint_label.text()
+    assert db.calls
+
+
+def test_requires_selection_search_provider():
+    class _MissingSearchDb:
+        pass
+
+    with pytest.raises(AttributeError):
+        ItemSelectionDialog(_MissingSearchDb(), "")

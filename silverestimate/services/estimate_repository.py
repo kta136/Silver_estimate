@@ -40,6 +40,10 @@ class EstimateRepository(Protocol):
         self, voucher_no: str, weight: float, purity: float
     ) -> Optional[int]: ...
 
+    def sync_silver_bars_for_estimate(
+        self, voucher_no: str, bars: Iterable[Mapping[str, Any]]
+    ) -> tuple[int, int]: ...
+
     def last_error(self) -> Optional[str]: ...
 
     def delete_estimate(self, voucher_no: str) -> bool: ...
@@ -64,7 +68,10 @@ class DatabaseEstimateRepository:
         return self._db.get_estimate_by_voucher(voucher_no)
 
     def estimate_exists(self, voucher_no: str) -> bool:
-        return bool(self.load_estimate(voucher_no))
+        try:
+            return bool(self._db.estimate_exists(voucher_no))
+        except Exception:
+            return False
 
     def save_estimate(
         self,
@@ -87,19 +94,25 @@ class DatabaseEstimateRepository:
         )
 
     def notify_silver_bars_for_estimate(self, voucher_no: str) -> None:
-        try:
-            self._db.delete_silver_bars_for_estimate(voucher_no)
-        except AttributeError:
-            # Legacy builds may not expose the helper; ignore quietly.
-            pass
+        self._db.delete_silver_bars_for_estimate(voucher_no)
 
     def fetch_silver_bars_for_estimate(self, voucher_no: str):
         try:
-            rows = self._db.get_silver_bars(estimate_voucher_no=voucher_no) or []
+            rows = self._db.get_silver_bars_for_estimate(voucher_no) or []
         except Exception:
             rows = []
-        sorted_rows = sorted(rows, key=lambda row: row["bar_id"]) if rows else []
-        return [dict(row) for row in sorted_rows]
+        normalized_rows = [
+            dict(row) if not isinstance(row, dict) else dict(row) for row in rows
+        ]
+        sorted_rows = (
+            sorted(
+                normalized_rows,
+                key=lambda row: int(row.get("bar_id", 0) or 0),
+            )
+            if normalized_rows
+            else []
+        )
+        return sorted_rows
 
     def count_silver_bars_for_estimate(self, voucher_no: str) -> int:
         bars = self.fetch_silver_bars_for_estimate(voucher_no)
@@ -118,6 +131,19 @@ class DatabaseEstimateRepository:
             return self._db.add_silver_bar(voucher_no, weight, purity)
         except Exception:
             return None
+
+    def sync_silver_bars_for_estimate(
+        self, voucher_no: str, bars: Iterable[Mapping[str, Any]]
+    ) -> tuple[int, int]:
+        bars_list = list(bars or [])
+        try:
+            added, failed = self._db.sync_silver_bars_for_estimate(
+                voucher_no,
+                bars_list,
+            )
+            return int(added or 0), int(failed or 0)
+        except Exception:
+            return 0, len(bars_list)
 
     def last_error(self) -> Optional[str]:
         return getattr(self._db, "last_error", None)

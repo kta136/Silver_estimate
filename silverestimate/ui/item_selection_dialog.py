@@ -36,19 +36,22 @@ class _ItemRecord:
 class ItemSelectionDialog(QDialog):
     """Dialog for selecting an item when code is invalid or ambiguous."""
 
+    MAX_VISIBLE_RESULTS = 500
+
     def __init__(self, db_manager, search_term, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
         self.search_term = (search_term or "").strip()
-        self._all_items: list[_ItemRecord] = []
         self._filtered_items: list[_ItemRecord] = []
+        self._results_truncated = False
+        self._search_provider = self._selection_search_provider()
 
         self._filter_timer = QTimer(self)
         self._filter_timer.setSingleShot(True)
         self._filter_timer.timeout.connect(self._apply_filter_now)
 
         self.init_ui()
-        self._load_all_items()
+        self._apply_filter_now()
 
     def init_ui(self):
         self.setWindowTitle("Select Item")
@@ -226,78 +229,67 @@ class ItemSelectionDialog(QDialog):
         self.search_edit.clear()
         self._focus_search()
 
-    def _load_all_items(self) -> None:
-        rows = self.db_manager.get_all_items() or []
-        loaded: list[_ItemRecord] = []
+    def _selection_search_provider(self):
+        provider = getattr(self.db_manager, "search_items_for_selection", None)
+        if callable(provider):
+            return provider
+        raise AttributeError(
+            "db_manager must implement search_items_for_selection(search_term, limit=...)"
+        )
 
-        for row in rows:
-            payload = dict(row) if not isinstance(row, dict) else row
-            code = str(payload.get("code", "") or "").strip()
-            name = str(payload.get("name", "") or "").strip()
-            if not code and not name:
-                continue
+    @staticmethod
+    def _coerce_item_record(payload) -> _ItemRecord | None:
+        data = dict(payload) if not isinstance(payload, dict) else dict(payload)
+        code = str(data.get("code", "") or "").strip()
+        name = str(data.get("name", "") or "").strip()
+        if not code and not name:
+            return None
+        try:
+            purity = float(data.get("purity", 0.0) or 0.0)
+        except Exception:
+            purity = 0.0
+        try:
+            wage_rate = float(data.get("wage_rate", 0.0) or 0.0)
+        except Exception:
+            wage_rate = 0.0
 
-            try:
-                purity = float(payload.get("purity", 0.0) or 0.0)
-            except Exception:
-                purity = 0.0
-            try:
-                wage_rate = float(payload.get("wage_rate", 0.0) or 0.0)
-            except Exception:
-                wage_rate = 0.0
+        wage_type = str(data.get("wage_type", "WT") or "WT").strip().upper()
+        if wage_type not in {"WT", "PC"}:
+            wage_type = "WT"
 
-            wage_type = str(payload.get("wage_type", "WT") or "WT").strip().upper()
-            if wage_type not in {"WT", "PC"}:
-                wage_type = "WT"
-
-            loaded.append(
-                _ItemRecord(
-                    code=code,
-                    name=name,
-                    purity=purity,
-                    wage_type=wage_type,
-                    wage_rate=wage_rate,
-                    code_upper=code.upper(),
-                    name_upper=name.upper(),
-                )
-            )
-
-        self._all_items = sorted(loaded, key=lambda item: item.code_upper)
-        self._apply_filter_now()
+        return _ItemRecord(
+            code=code,
+            name=name,
+            purity=purity,
+            wage_type=wage_type,
+            wage_rate=wage_rate,
+            code_upper=code.upper(),
+            name_upper=name.upper(),
+        )
 
     def _schedule_filter(self, _text) -> None:
         self._filter_timer.start(150)
 
     def _apply_filter_now(self) -> None:
-        self._filtered_items = self._ranked_items(self.search_edit.text())
+        self._filtered_items, self._results_truncated = self._ranked_items_from_db(
+            self.search_edit.text(),
+            self._search_provider,
+        )
         self._render_results()
 
-    def _ranked_items(self, text: str) -> list[_ItemRecord]:
-        query = (text or "").strip().upper()
-        if not query:
-            return list(self._all_items)
+    def _ranked_items_from_db(self, text: str, provider) -> tuple[list[_ItemRecord], bool]:
+        rows, truncated = provider(
+            text,
+            limit=self.MAX_VISIBLE_RESULTS,
+        )
 
-        scored: list[tuple[int, str, _ItemRecord]] = []
-        for item in self._all_items:
-            rank = self._rank_for_item(item, query)
-            if rank is None:
+        records: list[_ItemRecord] = []
+        for row in rows or []:
+            record = self._coerce_item_record(row)
+            if record is None:
                 continue
-            scored.append((rank, item.code_upper, item))
-
-        scored.sort(key=lambda row: (row[0], row[1]))
-        return [entry[2] for entry in scored]
-
-    @staticmethod
-    def _rank_for_item(item: _ItemRecord, query: str) -> int | None:
-        if item.code_upper.startswith(query):
-            return 0
-        if item.name_upper.startswith(query):
-            return 1
-        if query in item.code_upper:
-            return 2
-        if query in item.name_upper:
-            return 3
-        return None
+            records.append(record)
+        return records, bool(truncated)
 
     def _render_results(self) -> None:
         table = self.items_table
@@ -335,7 +327,12 @@ class ItemSelectionDialog(QDialog):
             table.viewport().update()
 
         count = len(self._filtered_items)
-        self.result_count_label.setText("1 match" if count == 1 else f"{count} matches")
+        if self._results_truncated and count > 0:
+            self.result_count_label.setText(f"{count}+ matches")
+        else:
+            self.result_count_label.setText(
+                "1 match" if count == 1 else f"{count} matches"
+            )
         no_results = count == 0
         self.empty_label.setVisible(no_results)
         self.select_button.setEnabled(not no_results)
@@ -344,7 +341,12 @@ class ItemSelectionDialog(QDialog):
             self.hint_label.setText("No matches. Try fewer letters or check spelling.")
             self._clear_detail_panel()
         else:
-            self.hint_label.setText("Enter: Select  Esc: Cancel  Ctrl+F: Search")
+            if self._results_truncated:
+                self.hint_label.setText(
+                    f"Showing top {count} matches. Refine search for more precise results."
+                )
+            else:
+                self.hint_label.setText("Enter: Select  Esc: Cancel  Ctrl+F: Search")
             self._update_detail_panel()
 
     def _clear_detail_panel(self) -> None:

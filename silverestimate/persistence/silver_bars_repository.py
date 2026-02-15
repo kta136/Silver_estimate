@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 from datetime import datetime
-from typing import Any, Iterable, List, Optional, Tuple
+from typing import Any, Iterable, List, Mapping, Optional, Tuple
 
 
 class SilverBarsRepository:
@@ -356,6 +356,142 @@ class SilverBarsRepository:
                 "DB error fetching available bars: %s", exc, exc_info=True
             )
             return []
+
+    def get_silver_bars_for_estimate(self, voucher_no: str):
+        cursor = self._cursor
+        if not cursor or not voucher_no:
+            return []
+        try:
+            cursor.execute(
+                "SELECT sb.*, e.note AS estimate_note "
+                "FROM silver_bars sb "
+                "LEFT JOIN estimates e ON sb.estimate_voucher_no = e.voucher_no "
+                "WHERE sb.estimate_voucher_no = ? "
+                "ORDER BY sb.bar_id",
+                (voucher_no,),
+            )
+            return cursor.fetchall()
+        except sqlite3.Error as exc:
+            self._logger.error(
+                "DB error fetching bars for estimate %s: %s",
+                voucher_no,
+                exc,
+                exc_info=True,
+            )
+            return []
+
+    def sync_silver_bars_for_estimate(
+        self,
+        voucher_no: str,
+        bars: Iterable[Mapping[str, Any]],
+    ) -> Tuple[int, int]:
+        conn, cursor = self._conn, self._cursor
+        if not conn or not cursor or not voucher_no:
+            return 0, 0
+
+        desired: List[Tuple[float, float]] = []
+        parse_failures = 0
+        for bar in list(bars or []):
+            try:
+                weight = float(bar.get("weight", bar.get("net_wt", 0.0)) or 0.0)
+                purity = float(bar.get("purity", 0.0) or 0.0)
+            except Exception:
+                parse_failures += 1
+                continue
+            desired.append((weight, purity))
+
+        added = 0
+        failed = parse_failures
+
+        try:
+            conn.execute("BEGIN TRANSACTION")
+            cursor.execute(
+                "SELECT bar_id, weight, purity FROM silver_bars "
+                "WHERE estimate_voucher_no = ? ORDER BY bar_id",
+                (voucher_no,),
+            )
+            existing_rows = cursor.fetchall()
+
+            overlap = min(len(existing_rows), len(desired))
+            for idx in range(overlap):
+                existing = existing_rows[idx]
+                new_weight, new_purity = desired[idx]
+                old_weight = float(existing["weight"] or 0.0)
+                old_purity = float(existing["purity"] or 0.0)
+                if (
+                    abs(new_weight - old_weight) <= 1e-6
+                    and abs(new_purity - old_purity) <= 1e-6
+                ):
+                    continue
+                fine_weight = new_weight * (new_purity / 100.0)
+                try:
+                    cursor.execute(
+                        "UPDATE silver_bars SET weight = ?, purity = ?, fine_weight = ? "
+                        "WHERE bar_id = ?",
+                        (new_weight, new_purity, fine_weight, existing["bar_id"]),
+                    )
+                    if cursor.rowcount <= 0:
+                        failed += 1
+                except sqlite3.Error as exc:
+                    self._logger.error(
+                        "DB error updating synced silver bar %s: %s",
+                        existing["bar_id"],
+                        exc,
+                        exc_info=True,
+                    )
+                    failed += 1
+
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            for new_weight, new_purity in desired[overlap:]:
+                fine_weight = new_weight * (new_purity / 100.0)
+                try:
+                    cursor.execute(
+                        "INSERT INTO silver_bars "
+                        "(estimate_voucher_no, weight, purity, fine_weight, date_added, status, list_id) "
+                        "VALUES (?, ?, ?, ?, ?, ?, NULL)",
+                        (
+                            voucher_no,
+                            new_weight,
+                            new_purity,
+                            fine_weight,
+                            now,
+                            "In Stock",
+                        ),
+                    )
+                    added += 1
+                except sqlite3.Error as exc:
+                    self._logger.error(
+                        "DB error inserting synced silver bar for estimate %s: %s",
+                        voucher_no,
+                        exc,
+                        exc_info=True,
+                    )
+                    failed += 1
+
+            conn.commit()
+            self._request_flush()
+            return added, failed
+        except sqlite3.Error as exc:
+            conn.rollback()
+            self._logger.error(
+                "DB error syncing silver bars for estimate %s: %s",
+                voucher_no,
+                exc,
+                exc_info=True,
+            )
+            return 0, failed + len(desired)
+        except Exception as exc:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            self._logger.error(
+                "Unexpected error syncing silver bars for estimate %s: %s",
+                voucher_no,
+                exc,
+                exc_info=True,
+            )
+            return 0, failed + len(desired)
 
     def add_silver_bar(
         self, estimate_voucher_no: str, weight: float, purity: float

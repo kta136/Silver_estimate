@@ -82,6 +82,7 @@ This guide documents the primary controller, service, and persistence APIs expos
 ### LiveRateService (silverestimate/services/live_rate_service.py)
     LiveRateService(parent: Optional[QObject] = None, logger: Optional[logging.Logger] = None)
 
+- Source policy: live-rate fetches are pinned to DDASilver item `Silver Agra Local Mohar` (via `services/dda_rate_fetcher.py::TARGET_NAME`) and should remain fixed until a new explicit requirement changes it.
 - **rate_updated** – Qt signal emitting (broadcast_rate, api_rate, market_open) tuples.
 - **start() / stop()** – manage the auto-refresh timer using settings for cadence and enablement.
 - **refresh_now()** – fetch the latest rates (broadcast first, API fallback) in a background thread and emit results.

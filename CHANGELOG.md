@@ -5,6 +5,16 @@ All notable changes to the Silver Estimation App will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.7] - 2026-02-18
+
+### Changed
+- Bumped application/package version to `2.6.7`
+- Updated project README version header and badge to `v2.6.7`
+- Documented live-rate source policy to keep DDASilver target item fixed to `Silver Agra Local Mohar` until requirements explicitly change
+
+### Fixed
+- Corrected live-rate parsing for DDASilver `Silver Agra Local Mohar` to use the target row commodity value directly (no purity adjustment)
+
 ## [2.6.3] - 2026-02-14
 
 ### Changed

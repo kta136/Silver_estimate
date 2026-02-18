@@ -9,6 +9,8 @@ from typing import Optional
 from urllib.parse import urlparse
 
 DEFAULT_BASE_URL = "http://www.ddasilver.com/"
+# Policy note: keep this exact DDASilver commodity target fixed for live-rate
+# fetches until product requirements explicitly specify a different item.
 TARGET_NAME = "Silver Agra Local Mohar"
 
 SCRAPE_HEADERS = {
@@ -110,15 +112,9 @@ def _parse_scraped_rate(html: str, target_name: str):
     source = None
     sell_rate_val = _convert_to_float(metadata.get("sell_rate"))
     if sell_rate_val is not None:
+        # Use the raw commodity rate for the exact target row.
         rate_float = sell_rate_val
         source = "sell_rate"
-        # DDASilver commodity rows expose purity separately. Use the displayed
-        # purity adjustment so the app matches on-screen values exactly.
-        purity_val = _convert_to_float(metadata.get("com_display_purity"))
-        if purity_val is not None and 0 < purity_val < 100:
-            rate_float = sell_rate_val * (purity_val / 100.0)
-            metadata["applied_adjustment"] = "sell_rate * display_purity_percent"
-            metadata["applied_purity_percent"] = purity_val
     if rate_float is None:
         display_val = _convert_to_float(metadata.get("display_rate"))
         if display_val is not None:
@@ -132,10 +128,7 @@ def _parse_scraped_rate(html: str, target_name: str):
     rate_str = f"{rate_float}"
     if "." in rate_str:
         decimals = len(rate_str.split(".", 1)[1].rstrip("0"))
-    if metadata.get("applied_adjustment") == "sell_rate * display_purity_percent":
-        rate_val = int(round(rate_float))
-        decimals = 0
-    elif decimals <= 0:
+    if decimals <= 0:
         rate_val = int(round(rate_float))
     else:
         decimals = min(decimals, 4)

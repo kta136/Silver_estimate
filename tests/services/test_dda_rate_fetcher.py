@@ -20,7 +20,7 @@ class _FakeResponse:
         return False
 
 
-def test_fetch_silver_agra_local_mohar_rate_parses_adjusted_sell_rate(monkeypatch):
+def test_fetch_silver_agra_local_mohar_rate_parses_sell_rate(monkeypatch):
     html = f"""
     <html><body>
       <table>
@@ -46,10 +46,8 @@ def test_fetch_silver_agra_local_mohar_rate_parses_adjusted_sell_rate(monkeypatc
         base_url="http://example.test", timeout=5
     )
 
-    assert rate == 87875
+    assert rate == 95000
     assert metadata["source"] == "scraped"
-    assert metadata["applied_adjustment"] == "sell_rate * display_purity_percent"
-    assert metadata["applied_purity_percent"] == 92.5
     assert metadata["raw_source"] == "sell_rate"
 
 

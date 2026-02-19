@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import logging
 
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import QObject, QThread, Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (
     QAbstractItemView,
@@ -40,6 +40,8 @@ class SilverBarHistoryDialog(QDialog):
         self._search_timer.setSingleShot(True)
         self._search_timer.setInterval(180)
         self._search_timer.timeout.connect(self.search_bars)
+        self._bars_load_request_id = 0
+        self._active_load_workers: dict[QThread, QObject] = {}
 
         self.init_ui()
         self.load_all_bars()
@@ -320,9 +322,16 @@ class SilverBarHistoryDialog(QDialog):
             }
         """)
 
-        self.bars_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeToContents
-        )
+        self.bars_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.bars_table.setColumnWidth(0, 80)
+        self.bars_table.setColumnWidth(1, 260)
+        self.bars_table.setColumnWidth(2, 100)
+        self.bars_table.setColumnWidth(3, 100)
+        self.bars_table.setColumnWidth(4, 110)
+        self.bars_table.setColumnWidth(5, 110)
+        self.bars_table.setColumnWidth(6, 160)
+        self.bars_table.setColumnWidth(7, 160)
+        self.bars_table.setColumnWidth(8, 110)
         self.bars_table.horizontalHeader().setStretchLastSection(True)
 
         # Context menu for bars table
@@ -408,8 +417,14 @@ class SilverBarHistoryDialog(QDialog):
         """)
 
         self.lists_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeToContents
+            QHeaderView.Interactive
         )
+        self.lists_table.setColumnWidth(0, 80)
+        self.lists_table.setColumnWidth(1, 160)
+        self.lists_table.setColumnWidth(2, 260)
+        self.lists_table.setColumnWidth(3, 150)
+        self.lists_table.setColumnWidth(4, 150)
+        self.lists_table.setColumnWidth(5, 90)
         self.lists_table.horizontalHeader().setStretchLastSection(True)
 
         # Context menu for lists table
@@ -458,8 +473,15 @@ class SilverBarHistoryDialog(QDialog):
         self.list_bars_table.setStyleSheet(self.bars_table.styleSheet())
 
         self.list_bars_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeToContents
+            QHeaderView.Interactive
         )
+        self.list_bars_table.setColumnWidth(0, 80)
+        self.list_bars_table.setColumnWidth(1, 260)
+        self.list_bars_table.setColumnWidth(2, 100)
+        self.list_bars_table.setColumnWidth(3, 100)
+        self.list_bars_table.setColumnWidth(4, 110)
+        self.list_bars_table.setColumnWidth(5, 110)
+        self.list_bars_table.setColumnWidth(6, 150)
         self.list_bars_table.horizontalHeader().setStretchLastSection(True)
 
         layout.addWidget(self.list_bars_table)
@@ -501,36 +523,74 @@ class SilverBarHistoryDialog(QDialog):
 
     def load_all_bars(self):
         """Load all silver bars with their current status and list information."""
+        self._start_bars_load(
+            {
+                "voucher_term": "",
+                "weight_text": "",
+                "status_text": "All Statuses",
+                "limit": self._table_result_limit(),
+            }
+        )
+
+    def _start_bars_load(self, payload: dict) -> None:
+        self._bars_load_request_id += 1
+        request_id = self._bars_load_request_id
+        db_path = getattr(self.db_manager, "temp_db_path", None)
+        if not db_path:
+            self._load_bars_fallback(payload, request_id)
+            return
+
+        worker = _BarsHistoryLoadWorker(db_path, payload)
+        thread = QThread(self)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.data_ready.connect(
+            lambda rows, req=request_id: self._on_bars_load_ready(req, rows)
+        )
+        worker.error.connect(
+            lambda message, req=request_id: self._on_bars_load_error(req, message)
+        )
+        worker.finished.connect(
+            lambda req=request_id, th=thread, w=worker: self._on_bars_load_finished(
+                req, th, w
+            )
+        )
+        self._active_load_workers[thread] = worker
+        thread.start()
+
+    def _load_bars_fallback(self, payload: dict, request_id: int) -> None:
+        query, params = _BarsHistoryLoadWorker.build_query(payload)
         try:
-            QApplication.setOverrideCursor(Qt.WaitCursor)
+            self.db_manager.cursor.execute(query, params)
+            rows = [dict(row) for row in self.db_manager.cursor.fetchall()]
+            self._on_bars_load_ready(request_id, rows)
+        except Exception as exc:
+            self._on_bars_load_error(request_id, str(exc))
 
-            # Get all bars with list information
-            query = """
-            SELECT 
-                sb.bar_id, sb.estimate_voucher_no, sb.weight, sb.purity, sb.fine_weight,
-                sb.status, sb.date_added, sb.list_id,
-                sbl.list_identifier, sbl.issued_date,
-                e.note as estimate_note
-            FROM silver_bars sb
-            LEFT JOIN silver_bar_lists sbl ON sb.list_id = sbl.list_id
-            LEFT JOIN estimates e ON sb.estimate_voucher_no = e.voucher_no
-            ORDER BY sb.date_added DESC
-            LIMIT ?
-            """
-            self.db_manager.cursor.execute(query, (self._table_result_limit(),))
-            results = self.db_manager.cursor.fetchall()
+    def _on_bars_load_ready(self, request_id: int, rows: list[dict]) -> None:
+        if request_id != self._bars_load_request_id:
+            return
+        self.populate_bars_table(rows)
 
-            self.populate_bars_table(results)
+    def _on_bars_load_error(self, request_id: int, message: str) -> None:
+        if request_id != self._bars_load_request_id:
+            return
+        QMessageBox.critical(
+            self, "Search Error", f"Failed to load silver bars: {message}"
+        )
 
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to load silver bars: {e}")
-        finally:
-            try:
-                QApplication.restoreOverrideCursor()
-            except Exception as exc:
-                self.logger.debug(
-                    "Failed to restore cursor after load_all_bars: %s", exc
-                )
+    def _on_bars_load_finished(self, request_id: int, thread: QThread, worker: QObject):
+        del request_id
+        self._active_load_workers.pop(thread, None)
+        try:
+            thread.quit()
+            thread.wait(1000)
+        except Exception:
+            pass
+        try:
+            worker.deleteLater()
+        except Exception:
+            pass
 
     def _schedule_search(self, *args, **kwargs):
         if self._suppress_search:
@@ -560,72 +620,84 @@ class SilverBarHistoryDialog(QDialog):
 
     def populate_bars_table(self, bars_data):
         """Populate the bars table with data."""
-        self.bars_table.setRowCount(0)
+        table = self.bars_table
+        table.setUpdatesEnabled(False)
+        table.blockSignals(True)
+        sorting_enabled = table.isSortingEnabled()
+        try:
+            if sorting_enabled:
+                table.setSortingEnabled(False)
+            table.setRowCount(0)
 
-        if not bars_data:
-            self.bars_summary.setText("Total Bars: 0")
-            return
+            if not bars_data:
+                self.bars_summary.setText("Total Bars: 0")
+                return
 
-        self.bars_table.setRowCount(len(bars_data))
+            table.setRowCount(len(bars_data))
 
-        for row_idx, bar in enumerate(bars_data):
-            # Get estimate note for display
-            voucher_display = bar["estimate_voucher_no"] or "N/A"
-            if bar["estimate_note"]:
-                voucher_display += f" ({bar['estimate_note']})"
+            for row_idx, bar in enumerate(bars_data):
+                voucher_display = bar["estimate_voucher_no"] or "N/A"
+                if bar["estimate_note"]:
+                    voucher_display += f" ({bar['estimate_note']})"
 
-            # Determine list status
-            list_display = ""
-            list_status = ""
-            if bar["list_id"]:
-                list_display = bar["list_identifier"] or f"List {bar['list_id']}"
-                list_status = "Issued" if bar["issued_date"] else "Active"
-            else:
-                list_display = "None"
-                list_status = "N/A"
+                if bar["list_id"]:
+                    list_display = bar["list_identifier"] or f"List {bar['list_id']}"
+                    list_status = "Issued" if bar["issued_date"] else "Active"
+                else:
+                    list_display = "None"
+                    list_status = "N/A"
 
-            # Create table items
-            items = [
-                QTableWidgetItem(str(bar["bar_id"])),
-                QTableWidgetItem(voucher_display),
-                QTableWidgetItem(f"{bar['weight']:.1f}" if bar["weight"] else "0.0"),
-                QTableWidgetItem(f"{bar['purity']:.1f}" if bar["purity"] else "0.0"),
-                QTableWidgetItem(
-                    f"{bar['fine_weight']:.1f}" if bar["fine_weight"] else "0.0"
-                ),
-                QTableWidgetItem(bar["status"] or "Unknown"),
-                QTableWidgetItem(list_display),
-                QTableWidgetItem(bar["date_added"] or ""),
-                QTableWidgetItem(list_status),
-            ]
+                items = [
+                    QTableWidgetItem(str(bar["bar_id"])),
+                    QTableWidgetItem(voucher_display),
+                    QTableWidgetItem(
+                        f"{bar['weight']:.1f}" if bar["weight"] else "0.0"
+                    ),
+                    QTableWidgetItem(
+                        f"{bar['purity']:.1f}" if bar["purity"] else "0.0"
+                    ),
+                    QTableWidgetItem(
+                        f"{bar['fine_weight']:.1f}" if bar["fine_weight"] else "0.0"
+                    ),
+                    QTableWidgetItem(bar["status"] or "Unknown"),
+                    QTableWidgetItem(list_display),
+                    QTableWidgetItem(bar["date_added"] or ""),
+                    QTableWidgetItem(list_status),
+                ]
 
-            # Set alignment for numeric columns
-            for i in [2, 3, 4]:  # weight, purity, fine_weight
-                items[i].setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                for i in [2, 3, 4]:
+                    items[i].setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
-            # Color code by status - set background instead of foreground for better selection visibility
-            status_color = None
-            status_text = bar["status"] or "Unknown"
-            if status_text == "In Stock":
-                status_color = QColor("#f0f9f0")  # Very light green background
-            elif status_text == "Assigned":
-                status_color = QColor("#f0f4f8")  # Very light blue background
-            elif status_text == "Issued":
-                status_color = QColor("#fdf2f2")  # Very light red background
-            elif status_text == "Sold":
-                status_color = QColor("#f7f0ff")  # Very light purple background
+                status_color = None
+                status_text = bar["status"] or "Unknown"
+                if status_text == "In Stock":
+                    status_color = QColor("#f0f9f0")
+                elif status_text == "Assigned":
+                    status_color = QColor("#f0f4f8")
+                elif status_text == "Issued":
+                    status_color = QColor("#fdf2f2")
+                elif status_text == "Sold":
+                    status_color = QColor("#f7f0ff")
 
-            if status_color:
-                for item in items:
-                    item.setBackground(status_color)
+                if status_color:
+                    for item in items:
+                        item.setBackground(status_color)
 
-            # Set items in table
-            for col_idx, item in enumerate(items):
-                self.bars_table.setItem(row_idx, col_idx, item)
+                for col_idx, item in enumerate(items):
+                    table.setItem(row_idx, col_idx, item)
 
-        self.bars_summary.setText(
-            f"Loaded Bars: {len(bars_data)} (max {self._table_result_limit()})"
-        )
+            self.bars_summary.setText(
+                f"Loaded Bars: {len(bars_data)} (max {self._table_result_limit()})"
+            )
+        finally:
+            if sorting_enabled:
+                try:
+                    table.setSortingEnabled(True)
+                except Exception:
+                    pass
+            table.blockSignals(False)
+            table.setUpdatesEnabled(True)
+            table.viewport().update()
 
     def load_issued_lists(self):
         """Load all issued lists."""
@@ -647,91 +719,55 @@ class SilverBarHistoryDialog(QDialog):
                     for row in self.db_manager.cursor.fetchall()
                 }
 
-            self.lists_table.setRowCount(len(issued_lists))
+            table = self.lists_table
+            table.setUpdatesEnabled(False)
+            table.blockSignals(True)
+            sorting_enabled = table.isSortingEnabled()
+            try:
+                if sorting_enabled:
+                    table.setSortingEnabled(False)
+                table.setRowCount(len(issued_lists))
 
-            for row_idx, lst in enumerate(issued_lists):
-                bar_count = counts_by_list.get(int(lst["list_id"]), 0)
+                for row_idx, lst in enumerate(issued_lists):
+                    bar_count = counts_by_list.get(int(lst["list_id"]), 0)
 
-                items = [
-                    QTableWidgetItem(str(lst["list_id"])),
-                    QTableWidgetItem(lst["list_identifier"] or ""),
-                    QTableWidgetItem(lst["list_note"] or ""),
-                    QTableWidgetItem(lst["creation_date"] or ""),
-                    QTableWidgetItem(lst["issued_date"] or ""),
-                    QTableWidgetItem(str(bar_count)),
-                ]
+                    items = [
+                        QTableWidgetItem(str(lst["list_id"])),
+                        QTableWidgetItem(lst["list_identifier"] or ""),
+                        QTableWidgetItem(lst["list_note"] or ""),
+                        QTableWidgetItem(lst["creation_date"] or ""),
+                        QTableWidgetItem(lst["issued_date"] or ""),
+                        QTableWidgetItem(str(bar_count)),
+                    ]
 
-                # Set alignment for numeric columns
-                items[0].setTextAlignment(Qt.AlignCenter)
-                items[5].setTextAlignment(Qt.AlignCenter)
+                    items[0].setTextAlignment(Qt.AlignCenter)
+                    items[5].setTextAlignment(Qt.AlignCenter)
 
-                for col_idx, item in enumerate(items):
-                    self.lists_table.setItem(row_idx, col_idx, item)
+                    for col_idx, item in enumerate(items):
+                        table.setItem(row_idx, col_idx, item)
+            finally:
+                if sorting_enabled:
+                    try:
+                        table.setSortingEnabled(True)
+                    except Exception:
+                        pass
+                table.blockSignals(False)
+                table.setUpdatesEnabled(True)
+                table.viewport().update()
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load issued lists: {e}")
 
     def search_bars(self):
         """Search bars based on current filter criteria."""
-        try:
-            QApplication.setOverrideCursor(Qt.WaitCursor)
-
-            conditions = []
-            params = []
-
-            # Voucher/Note filter
-            if self.voucher_edit.text().strip():
-                conditions.append("(sb.estimate_voucher_no LIKE ? OR e.note LIKE ?)")
-                search_term = f"%{self.voucher_edit.text().strip()}%"
-                params.extend([search_term, search_term])
-
-            # Weight filter
-            if self.weight_edit.text().strip():
-                try:
-                    weight_value = float(self.weight_edit.text().strip())
-                    conditions.append("sb.weight = ?")
-                    params.append(weight_value)
-                except ValueError:
-                    # If invalid number, ignore the filter
-                    pass
-
-            # Status filter
-            if self.status_combo.currentText() != "All Statuses":
-                conditions.append("sb.status = ?")
-                params.append(self.status_combo.currentText())
-
-            # Build query
-            base_query = """
-            SELECT 
-                sb.bar_id, sb.estimate_voucher_no, sb.weight, sb.purity, sb.fine_weight,
-                sb.status, sb.date_added, sb.list_id,
-                sbl.list_identifier, sbl.issued_date,
-                e.note as estimate_note
-            FROM silver_bars sb
-            LEFT JOIN silver_bar_lists sbl ON sb.list_id = sbl.list_id
-            LEFT JOIN estimates e ON sb.estimate_voucher_no = e.voucher_no
-            """
-
-            if conditions:
-                query = base_query + " WHERE " + " AND ".join(conditions)
-            else:
-                query = base_query
-
-            query += " ORDER BY sb.date_added DESC LIMIT ?"
-            params.append(self._table_result_limit())
-
-            self.db_manager.cursor.execute(query, params)
-            results = self.db_manager.cursor.fetchall()
-
-            self.populate_bars_table(results)
-
-        except Exception as e:
-            QMessageBox.critical(self, "Search Error", f"Failed to search bars: {e}")
-        finally:
-            try:
-                QApplication.restoreOverrideCursor()
-            except Exception as exc:
-                self.logger.debug("Failed to restore cursor after search_bars: %s", exc)
+        self._start_bars_load(
+            {
+                "voucher_term": self.voucher_edit.text().strip(),
+                "weight_text": self.weight_edit.text().strip(),
+                "status_text": self.status_combo.currentText(),
+                "limit": self._table_result_limit(),
+            }
+        )
 
     def clear_filters(self):
         """Clear all search filters."""
@@ -769,36 +805,53 @@ class SilverBarHistoryDialog(QDialog):
             bars = self.db_manager.get_bars_in_list(
                 list_id, limit=self._table_result_limit()
             )
-            self.list_bars_table.setRowCount(len(bars))
+            table = self.list_bars_table
+            table.setUpdatesEnabled(False)
+            table.blockSignals(True)
+            sorting_enabled = table.isSortingEnabled()
+            try:
+                if sorting_enabled:
+                    table.setSortingEnabled(False)
+                table.setRowCount(len(bars))
 
-            for row_idx, bar in enumerate(bars):
-                voucher_display = bar["estimate_voucher_no"] or "N/A"
-                note = bar["estimate_note"] if "estimate_note" in bar.keys() else None
-                if note:
-                    voucher_display += f" ({note})"
+                for row_idx, bar in enumerate(bars):
+                    voucher_display = bar["estimate_voucher_no"] or "N/A"
+                    note = (
+                        bar["estimate_note"] if "estimate_note" in bar.keys() else None
+                    )
+                    if note:
+                        voucher_display += f" ({note})"
 
-                items = [
-                    QTableWidgetItem(str(bar["bar_id"])),
-                    QTableWidgetItem(voucher_display),
-                    QTableWidgetItem(
-                        f"{bar['weight']:.1f}" if bar["weight"] else "0.0"
-                    ),
-                    QTableWidgetItem(
-                        f"{bar['purity']:.1f}" if bar["purity"] else "0.0"
-                    ),
-                    QTableWidgetItem(
-                        f"{bar['fine_weight']:.1f}" if bar["fine_weight"] else "0.0"
-                    ),
-                    QTableWidgetItem(bar["status"] or "Unknown"),
-                    QTableWidgetItem(bar["date_added"] or ""),
-                ]
+                    items = [
+                        QTableWidgetItem(str(bar["bar_id"])),
+                        QTableWidgetItem(voucher_display),
+                        QTableWidgetItem(
+                            f"{bar['weight']:.1f}" if bar["weight"] else "0.0"
+                        ),
+                        QTableWidgetItem(
+                            f"{bar['purity']:.1f}" if bar["purity"] else "0.0"
+                        ),
+                        QTableWidgetItem(
+                            f"{bar['fine_weight']:.1f}" if bar["fine_weight"] else "0.0"
+                        ),
+                        QTableWidgetItem(bar["status"] or "Unknown"),
+                        QTableWidgetItem(bar["date_added"] or ""),
+                    ]
 
-                # Set alignment for numeric columns
-                for i in [2, 3, 4]:  # weight, purity, fine_weight
-                    items[i].setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    for i in [2, 3, 4]:
+                        items[i].setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
-                for col_idx, item in enumerate(items):
-                    self.list_bars_table.setItem(row_idx, col_idx, item)
+                    for col_idx, item in enumerate(items):
+                        table.setItem(row_idx, col_idx, item)
+            finally:
+                if sorting_enabled:
+                    try:
+                        table.setSortingEnabled(True)
+                    except Exception:
+                        pass
+                table.blockSignals(False)
+                table.setUpdatesEnabled(True)
+                table.viewport().update()
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load list bars: {e}")
@@ -919,6 +972,114 @@ class SilverBarHistoryDialog(QDialog):
 
         except Exception as exc:
             self.logger.warning("Failed to copy selected rows: %s", exc, exc_info=True)
+
+    def _cancel_active_loads(self, timeout_ms: int = 3000) -> None:
+        self._bars_load_request_id += 1
+        active = list(self._active_load_workers.items())
+        self._active_load_workers.clear()
+        for thread, worker in active:
+            try:
+                worker.deleteLater()
+            except Exception:
+                pass
+            try:
+                if thread.isRunning():
+                    thread.quit()
+                    if not thread.wait(timeout_ms):
+                        thread.terminate()
+                        thread.wait(1000)
+            except Exception:
+                pass
+
+    def reject(self):
+        self._cancel_active_loads()
+        super().reject()
+
+    def closeEvent(self, event):
+        self._cancel_active_loads()
+        super().closeEvent(event)
+
+
+class _BarsHistoryLoadWorker(QObject):
+    data_ready = pyqtSignal(list)
+    error = pyqtSignal(str)
+    finished = pyqtSignal()
+
+    def __init__(self, db_path: str, payload: dict):
+        super().__init__()
+        self.db_path = db_path
+        self.payload = payload or {}
+
+    @staticmethod
+    def build_query(payload: dict) -> tuple[str, list]:
+        conditions = []
+        params = []
+
+        voucher_term = str(payload.get("voucher_term") or "").strip()
+        if voucher_term:
+            conditions.append("(sb.estimate_voucher_no LIKE ? OR e.note LIKE ?)")
+            pattern = f"%{voucher_term}%"
+            params.extend([pattern, pattern])
+
+        weight_text = str(payload.get("weight_text") or "").strip()
+        if weight_text:
+            try:
+                weight_value = float(weight_text)
+                conditions.append("sb.weight = ?")
+                params.append(weight_value)
+            except ValueError:
+                pass
+
+        status_text = str(payload.get("status_text") or "").strip()
+        if status_text and status_text != "All Statuses":
+            conditions.append("sb.status = ?")
+            params.append(status_text)
+
+        limit = payload.get("limit", 2000)
+        try:
+            limit_value = max(100, int(limit))
+        except (TypeError, ValueError):
+            limit_value = 2000
+
+        base_query = """
+        SELECT
+            sb.bar_id, sb.estimate_voucher_no, sb.weight, sb.purity, sb.fine_weight,
+            sb.status, sb.date_added, sb.list_id,
+            sbl.list_identifier, sbl.issued_date,
+            e.note as estimate_note
+        FROM silver_bars sb
+        LEFT JOIN silver_bar_lists sbl ON sb.list_id = sbl.list_id
+        LEFT JOIN estimates e ON sb.estimate_voucher_no = e.voucher_no
+        """
+        if conditions:
+            query = base_query + " WHERE " + " AND ".join(conditions)
+        else:
+            query = base_query
+        query += " ORDER BY sb.date_added DESC LIMIT ?"
+        params.append(limit_value)
+        return query, params
+
+    def run(self):
+        import sqlite3
+
+        conn = None
+        try:
+            query, params = self.build_query(self.payload)
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            cur.execute(query, params)
+            rows = [dict(row) for row in cur.fetchall()]
+            self.data_ready.emit(rows)
+        except Exception as exc:
+            self.error.emit(str(exc))
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            self.finished.emit()
 
 
 # Example usage (if run directly)

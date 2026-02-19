@@ -139,7 +139,9 @@ def test_migration_v3_backfills_numeric_vouchers_from_legacy_schema():
         db.cursor.execute(
             "SELECT voucher_no, voucher_no_int FROM estimates ORDER BY voucher_no"
         )
-        rows = {row["voucher_no"]: row["voucher_no_int"] for row in db.cursor.fetchall()}
+        rows = {
+            row["voucher_no"]: row["voucher_no_int"] for row in db.cursor.fetchall()
+        }
         assert rows["100"] == 100
         assert rows["AB-1"] is None
 
@@ -349,7 +351,9 @@ def test_get_estimates_uses_bulk_item_query(fake_db):
     assert item_queries_per_voucher == []
 
 
-def test_estimates_repository_generate_voucher_falls_back_when_only_non_numeric(fake_db):
+def test_estimates_repository_generate_voucher_falls_back_when_only_non_numeric(
+    fake_db,
+):
     repo = EstimatesRepository(fake_db)
     for voucher in ("A-10", "B-20"):
         assert repo.save_estimate_with_returns(
@@ -429,6 +433,46 @@ def test_silver_bar_assignment_cycle(fake_db):
     assert repo.remove_bar_from_list(bar_id)
     bars_in_list = repo.get_bars_in_list(list_id)
     assert bars_in_list == []
+
+
+def test_silver_bar_bulk_assignment_and_removal(fake_db):
+    repo = SilverBarsRepository(fake_db)
+    list_id = repo.create_list("Bulk List")
+    assert list_id is not None
+
+    bar_ids = []
+    for idx in range(3):
+        bar_id = repo.add_silver_bar(f"BULK{idx}", float(idx + 1), 99.0)
+        assert bar_id is not None
+        bar_ids.append(bar_id)
+
+    assigned, failed_assign = repo.assign_bars_to_list_bulk(bar_ids, list_id)
+    assert assigned == 3
+    assert failed_assign == []
+
+    bars_in_list = repo.get_bars_in_list(list_id)
+    assert {row["bar_id"] for row in bars_in_list} == set(bar_ids)
+
+    removed, failed_remove = repo.remove_bars_from_list_bulk(bar_ids)
+    assert removed == 3
+    assert failed_remove == []
+
+    bars_in_list_after = repo.get_bars_in_list(list_id)
+    assert bars_in_list_after == []
+
+
+def test_silver_bar_bulk_assignment_reports_failures(fake_db):
+    repo = SilverBarsRepository(fake_db)
+    list_id = repo.create_list("Bulk Fail List")
+    assert list_id is not None
+
+    bar_id = repo.add_silver_bar("BULKFAIL", 5.0, 99.0)
+    assert bar_id is not None
+    assert repo.assign_bar_to_list(bar_id, list_id)
+
+    assigned, failed = repo.assign_bars_to_list_bulk([bar_id, 999999], list_id)
+    assert assigned == 0
+    assert set(failed) == {bar_id, 999999}
 
 
 def test_silver_bar_query_limit_and_offset(fake_db):

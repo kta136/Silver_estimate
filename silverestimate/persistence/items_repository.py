@@ -83,11 +83,18 @@ class ItemsRepository:
                 cursor.execute("SELECT * FROM items ORDER BY code")
                 return cursor.fetchall()
 
-            # Fast path: prefix search can leverage the existing code index.
+            # Prefix paths can leverage dedicated NOCASE indexes.
             prefix_pattern = f"{term}%"
             cursor.execute(
-                "SELECT * FROM items WHERE code LIKE ? COLLATE NOCASE OR name LIKE ? COLLATE NOCASE ORDER BY code",
-                (prefix_pattern, prefix_pattern),
+                """
+                SELECT * FROM items WHERE code LIKE ? COLLATE NOCASE
+                UNION ALL
+                SELECT * FROM items
+                WHERE name LIKE ? COLLATE NOCASE
+                  AND code NOT LIKE ? COLLATE NOCASE
+                ORDER BY code COLLATE NOCASE
+                """,
+                (prefix_pattern, prefix_pattern, prefix_pattern),
             )
             prefix_rows = cursor.fetchall()
             if prefix_rows:
@@ -99,8 +106,15 @@ class ItemsRepository:
 
             pattern = f"%{term}%"
             cursor.execute(
-                "SELECT * FROM items WHERE code LIKE ? COLLATE NOCASE OR name LIKE ? COLLATE NOCASE ORDER BY code",
-                (pattern, pattern),
+                """
+                SELECT * FROM items WHERE code LIKE ? COLLATE NOCASE
+                UNION ALL
+                SELECT * FROM items
+                WHERE name LIKE ? COLLATE NOCASE
+                  AND code NOT LIKE ? COLLATE NOCASE
+                ORDER BY code COLLATE NOCASE
+                """,
+                (pattern, pattern, pattern),
             )
             return cursor.fetchall()
         except sqlite3.Error as exc:

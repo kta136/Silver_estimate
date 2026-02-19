@@ -172,7 +172,11 @@ class EstimateEntryWidget(QWidget):
         # Column sizing state
         self._use_stretch_for_item_name = False
         self._programmatic_resizing = False
-        self._auto_fit_columns_by_content = True
+        self._column_autofit_mode = self._read_column_autofit_mode_setting()
+        self._auto_fit_columns_by_content = self._column_autofit_mode in (
+            "explicit",
+            "continuous",
+        )
         self._pending_autofit_columns: set[int] = set()
         self._column_autofit_timer = QTimer(self)
         self._column_autofit_timer.setSingleShot(True)
@@ -612,7 +616,6 @@ class EstimateEntryWidget(QWidget):
         self.item_table.cellClicked.connect(self.cell_clicked)
         self.item_table.itemSelectionChanged.connect(self.selection_changed)
         self.item_table.currentCellChanged.connect(self.current_cell_changed)
-        self.item_table.cellChanged.connect(self.handle_cell_changed)
 
         # Mode toggles
         self.return_toggle_button.clicked.connect(self.toggle_return_mode)
@@ -708,7 +711,11 @@ class EstimateEntryWidget(QWidget):
         self._get_table_adapter().add_empty_row()
         if self._totals_incremental_is_active():
             try:
-                self._rebuild_incremental_totals_from_table()
+                row_index = self.item_table.rowCount() - 1
+                if row_index >= 0:
+                    self._row_contrib_cache[row_index] = (
+                        self._inactive_row_contribution()
+                    )
             except Exception as exc:
                 self._disable_incremental_totals_and_fallback(exc)
         self._schedule_columns_autofit()
@@ -721,7 +728,7 @@ class EstimateEntryWidget(QWidget):
             self.item_table.blockSignals(False)
         if self._totals_incremental_is_active():
             try:
-                self._rebuild_incremental_totals_from_table()
+                self._reset_incremental_aggregates()
             except Exception as exc:
                 self._disable_incremental_totals_and_fallback(exc)
         self.current_row = -1
@@ -730,7 +737,8 @@ class EstimateEntryWidget(QWidget):
 
     def _on_table_cell_edited(self, row: int, column: int):
         start = time.perf_counter()
-        self._schedule_columns_autofit(columns=[column])
+        if self._is_continuous_column_autofit_enabled():
+            self._schedule_columns_autofit(columns=[column])
         self.handle_cell_changed(row, column)
         self._log_perf_metric(
             "estimate_entry.cell_edit",
@@ -970,7 +978,9 @@ class EstimateEntryWidget(QWidget):
         next_row, next_col = self._next_edit_target(current_row, current_col)
 
         if next_row >= self.item_table.rowCount():
-            last_code_text = self.item_table.get_cell_text(current_row, COL_CODE).strip()
+            last_code_text = self.item_table.get_cell_text(
+                current_row, COL_CODE
+            ).strip()
             if last_code_text:
                 self.add_empty_row()
                 return
@@ -1205,7 +1215,9 @@ class EstimateEntryWidget(QWidget):
             if callable(get_row):
                 row_state = get_row(row)
                 if row_state is not None:
-                    return self._normalize_wage_type(getattr(row_state, "wage_type", "WT"))
+                    return self._normalize_wage_type(
+                        getattr(row_state, "wage_type", "WT")
+                    )
         except Exception:
             pass
         return "WT"
@@ -1276,7 +1288,9 @@ class EstimateEntryWidget(QWidget):
         return _RowContribution()
 
     def _totals_incremental_is_active(self) -> bool:
-        return bool(self._incremental_totals_enabled and not self._incremental_totals_failed)
+        return bool(
+            self._incremental_totals_enabled and not self._incremental_totals_failed
+        )
 
     @staticmethod
     def _category_bucket_for(
@@ -1389,6 +1403,25 @@ class EstimateEntryWidget(QWidget):
             self._row_contrib_cache[row] = new_contrib
         except Exception as exc:
             self._disable_incremental_totals_and_fallback(exc)
+
+    def _remove_incremental_row(self, row: int) -> None:
+        if not self._totals_incremental_is_active():
+            return
+        if row is None or row < 0:
+            return
+
+        old_contrib = self._row_contrib_cache.pop(
+            row, self._inactive_row_contribution()
+        )
+        self._apply_contribution_delta(old_contrib, self._inactive_row_contribution())
+        if not self._row_contrib_cache:
+            return
+
+        shifted: dict[int, _RowContribution] = {}
+        for index in sorted(self._row_contrib_cache):
+            contrib = self._row_contrib_cache[index]
+            shifted[index - 1 if index > row else index] = contrib
+        self._row_contrib_cache = shifted
 
     @staticmethod
     def _frozen_category_totals(bucket: _RunningCategoryTotals) -> CategoryTotals:
@@ -1757,7 +1790,7 @@ class EstimateEntryWidget(QWidget):
             self.item_table.delete_row(row)
             if self._totals_incremental_is_active():
                 try:
-                    self._rebuild_incremental_totals_from_table()
+                    self._remove_incremental_row(row)
                 except Exception as exc:
                     self._disable_incremental_totals_and_fallback(exc)
             self.calculate_totals()
@@ -1888,7 +1921,7 @@ class EstimateEntryWidget(QWidget):
 
             self.add_empty_row()
             self.calculate_totals()
-            self._schedule_columns_autofit()
+            self._schedule_columns_autofit(force=True)
             self._estimate_loaded = True
 
             if hasattr(self, "delete_estimate_button"):
@@ -2027,6 +2060,26 @@ class EstimateEntryWidget(QWidget):
     def _settings(self):
         return get_app_settings()
 
+    def _read_column_autofit_mode_setting(self) -> str:
+        try:
+            raw = self._settings().value(
+                "ui/estimate_table_autofit_mode",
+                defaultValue="explicit",
+                type=str,
+            )
+        except Exception:
+            raw = "explicit"
+        mode = str(raw or "").strip().lower()
+        if mode not in {"explicit", "continuous"}:
+            mode = "explicit"
+        return mode
+
+    def _is_continuous_column_autofit_enabled(self) -> bool:
+        return bool(
+            self._auto_fit_columns_by_content
+            and self._column_autofit_mode == "continuous"
+        )
+
     def _column_width_limits(self) -> Dict[int, tuple[int, int]]:
         """Minimum/maximum widths used by content-driven column sizing."""
         return {
@@ -2044,10 +2097,16 @@ class EstimateEntryWidget(QWidget):
         }
 
     def _schedule_columns_autofit(
-        self, columns: Optional[list[int]] = None, *, delay_ms: int = 70
+        self,
+        columns: Optional[list[int]] = None,
+        *,
+        delay_ms: int = 70,
+        force: bool = False,
     ) -> None:
         """Debounce content-based column auto-fit requests."""
         if not getattr(self, "_auto_fit_columns_by_content", False):
+            return
+        if not force and not self._is_continuous_column_autofit_enabled():
             return
         table = getattr(self, "item_table", None)
         if table is None or sip.isdeleted(table):
@@ -2128,7 +2187,7 @@ class EstimateEntryWidget(QWidget):
     def _load_column_widths_setting(self):
         if self._auto_fit_columns_by_content:
             self._use_stretch_for_item_name = False
-            self._schedule_columns_autofit(delay_ms=0)
+            self._schedule_columns_autofit(delay_ms=0, force=True)
             return
 
         val = self._settings().value("ui/estimate_table_column_widths", type=str)
@@ -2178,7 +2237,7 @@ class EstimateEntryWidget(QWidget):
 
     def _reset_columns_layout(self):
         if self._auto_fit_columns_by_content:
-            self._schedule_columns_autofit(delay_ms=0)
+            self._schedule_columns_autofit(delay_ms=0, force=True)
             return
         self._settings().remove("ui/estimate_table_column_widths")
         self._use_stretch_for_item_name = True
@@ -2216,7 +2275,7 @@ class EstimateEntryWidget(QWidget):
             self.item_table.setFont(font)
             row_height = max(20, min(34, size_i + 14))
             self.item_table.verticalHeader().setDefaultSectionSize(row_height)
-            self._schedule_columns_autofit(delay_ms=0)
+            self._schedule_columns_autofit(delay_ms=0, force=True)
             self.item_table.viewport().update()
             return True
         except Exception as exc:

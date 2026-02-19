@@ -34,8 +34,8 @@ This file captures the unfinished work from the original performance/migration c
     - `.github/workflows/release-windows.yml:29`
     - `DOCS/deployment-guide.md:21`
 
-- [ ] Disable content auto-fit while typing (`Partially Done`)
-  - Currently reduced via debounce/per-column updates.
+- [x] Disable content auto-fit while typing (`Done`)
+  - Default mode is now explicit (`ui/estimate_table_autofit_mode=explicit`), so edit-time auto-fit is disabled unless users opt into `continuous`.
   - References:
     - `silverestimate/ui/estimate_entry.py:142`
     - `silverestimate/ui/estimate_entry.py:690`
@@ -56,8 +56,8 @@ This file captures the unfinished work from the original performance/migration c
     - `silverestimate/ui/estimate_entry_components/estimate_table_view.py:217`
     - `silverestimate/ui/estimate_entry.py:579`
 
-- [ ] CI performance regression gates (`Not Done`)
-  - Add automated p50/p95 budget checks from perf logs in CI.
+- [x] CI performance regression gates (`Done`)
+  - Added `scripts/check_perf_budgets.py` and wired p95 checks into `.github/workflows/pr-validation.yml`.
   - References:
     - `DOCS/performance-baseline-thresholds.md:1`
     - `.github/workflows/pr-validation.yml:16`
@@ -112,9 +112,8 @@ These are newly identified opportunities from a focused runtime/data-path review
     - `silverestimate/persistence/database_manager.py:751`
     - `silverestimate/persistence/migrations.py:251`
 
-- [ ] Estimate entry still auto-fits columns during typing (`Partially Done`)
-  - Current debounce helps, but `sizeHintForColumn()` remains on edit path and scales with row count.
-  - Move auto-fit to explicit actions (font/layout reset/load) instead of per-keystroke updates.
+- [x] Estimate entry still auto-fits columns during typing (`Done`)
+  - Auto-fit now runs on explicit paths (load/reset/font-change) by default; per-keystroke behavior is opt-in via `ui/estimate_table_autofit_mode=continuous`.
   - References:
     - `silverestimate/ui/estimate_entry.py:741`
     - `silverestimate/ui/estimate_entry.py:2080`
@@ -131,9 +130,8 @@ These are newly identified opportunities from a focused runtime/data-path review
     - `tests/ui/test_item_selection_dialog.py:170`
     - `tests/integration/test_repositories.py:184`
 
-- [ ] Item search on `name` lacks dedicated index strategy (`Not Done`)
-  - Current query pattern combines `code` and `name` with `OR`; add targeted indexing/search strategy for larger tables.
-  - Consider a `name COLLATE NOCASE` index and query-shape review (prefix path + bounded results).
+- [x] Item search on `name` lacks dedicated index strategy (`Done`)
+  - Added `idx_items_name_nocase` and split item search into prefix-first + contains fallback query shapes.
   - References:
     - `silverestimate/persistence/items_repository.py:89`
     - `silverestimate/persistence/items_repository.py:102`

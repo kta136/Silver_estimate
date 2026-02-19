@@ -739,6 +739,19 @@ class DatabaseManager:
             bar_id, note=note, perform_commit=perform_commit
         )
 
+    def assign_bars_to_list_bulk(self, bar_ids, list_id, note="Assigned to list"):
+        return self.silver_bars_repo.assign_bars_to_list_bulk(
+            bar_ids,
+            list_id,
+            note=note,
+        )
+
+    def remove_bars_from_list_bulk(self, bar_ids, note="Removed from list"):
+        return self.silver_bars_repo.remove_bars_from_list_bulk(
+            bar_ids,
+            note=note,
+        )
+
     def get_bars_in_list(self, list_id, limit=None, offset=0):
         return self.silver_bars_repo.get_bars_in_list(
             list_id, limit=limit, offset=offset

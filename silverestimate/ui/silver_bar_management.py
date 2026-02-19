@@ -537,8 +537,14 @@ class SilverBarDialog(QDialog):
         except Exception:
             pass
         self.available_bars_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeToContents
+            QHeaderView.Interactive
         )
+        self.available_bars_table.setColumnWidth(1, 280)
+        self.available_bars_table.setColumnWidth(2, 110)
+        self.available_bars_table.setColumnWidth(3, 110)
+        self.available_bars_table.setColumnWidth(4, 120)
+        self.available_bars_table.setColumnWidth(5, 150)
+        self.available_bars_table.setColumnWidth(6, 100)
         self.available_bars_table.horizontalHeader().setStretchLastSection(True)
         # Context menu for quick actions
         self.available_bars_table.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -1001,8 +1007,14 @@ class SilverBarDialog(QDialog):
         except Exception:
             pass
         self.list_bars_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeToContents
+            QHeaderView.Interactive
         )
+        self.list_bars_table.setColumnWidth(1, 280)
+        self.list_bars_table.setColumnWidth(2, 110)
+        self.list_bars_table.setColumnWidth(3, 110)
+        self.list_bars_table.setColumnWidth(4, 120)
+        self.list_bars_table.setColumnWidth(5, 150)
+        self.list_bars_table.setColumnWidth(6, 100)
         self.list_bars_table.horizontalHeader().setStretchLastSection(True)
         self.list_bars_table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.list_bars_table.customContextMenuRequested.connect(
@@ -1282,9 +1294,12 @@ class SilverBarDialog(QDialog):
                     )
                     total_count = len(rows or [])
                 normalized_rows = [
-                    dict(row) if not isinstance(row, dict) else row for row in rows or []
+                    dict(row) if not isinstance(row, dict) else row
+                    for row in rows or []
                 ]
-                self._on_bars_load_ready(target, request_id, normalized_rows, total_count)
+                self._on_bars_load_ready(
+                    target, request_id, normalized_rows, total_count
+                )
             except Exception as exc:
                 self._on_bars_load_error(target, request_id, str(exc))
             return request_id
@@ -1344,7 +1359,9 @@ class SilverBarDialog(QDialog):
         self._load_started_at.pop((target, request_id), None)
         if target == "available":
             self.available_bars_table.setRowCount(0)
-            QMessageBox.critical(self, "Error", f"Failed to load available bars: {message}")
+            QMessageBox.critical(
+                self, "Error", f"Failed to load available bars: {message}"
+            )
         elif target == "list":
             self.list_bars_table.setRowCount(0)
             QMessageBox.critical(
@@ -1508,6 +1525,36 @@ class SilverBarDialog(QDialog):
             },
         )
 
+    def _bulk_assign_to_list(self, bar_ids, list_id):
+        assign_bulk = getattr(self.db_manager, "assign_bars_to_list_bulk", None)
+        if callable(assign_bulk):
+            added, failed_ids = assign_bulk(bar_ids, list_id)
+            return int(added or 0), [str(bar_id) for bar_id in (failed_ids or [])]
+
+        added = 0
+        failed = []
+        for bar_id in list(bar_ids or []):
+            if self.db_manager.assign_bar_to_list(bar_id, list_id):
+                added += 1
+            else:
+                failed.append(str(bar_id))
+        return added, failed
+
+    def _bulk_remove_from_list(self, bar_ids):
+        remove_bulk = getattr(self.db_manager, "remove_bars_from_list_bulk", None)
+        if callable(remove_bulk):
+            removed, failed_ids = remove_bulk(bar_ids)
+            return int(removed or 0), [str(bar_id) for bar_id in (failed_ids or [])]
+
+        removed = 0
+        failed = []
+        for bar_id in list(bar_ids or []):
+            if self.db_manager.remove_bar_from_list(bar_id):
+                removed += 1
+            else:
+                failed.append(str(bar_id))
+        return removed, failed
+
     # --- Action Methods ---
 
     def create_new_list(self):
@@ -1571,11 +1618,7 @@ class SilverBarDialog(QDialog):
             QApplication.setOverrideCursor(Qt.WaitCursor)
         except Exception:
             pass
-        for bar_id in bar_ids:
-            if self.db_manager.assign_bar_to_list(bar_id, new_list_id):
-                added_count += 1
-            else:
-                failed.append(str(bar_id))
+        added_count, failed = self._bulk_assign_to_list(bar_ids, new_list_id)
         try:
             QApplication.restoreOverrideCursor()
         except Exception:
@@ -1633,13 +1676,10 @@ class SilverBarDialog(QDialog):
                 QApplication.setOverrideCursor(Qt.WaitCursor)
             except Exception:
                 pass
-            added_count = 0
-            failed_ids = []
-            for bar_id in bar_ids_to_add:
-                if self.db_manager.assign_bar_to_list(bar_id, self.current_list_id):
-                    added_count += 1
-                else:
-                    failed_ids.append(str(bar_id))
+            added_count, failed_ids = self._bulk_assign_to_list(
+                bar_ids_to_add,
+                self.current_list_id,
+            )
 
             if added_count > 0:
                 QMessageBox.information(
@@ -1698,13 +1738,7 @@ class SilverBarDialog(QDialog):
                 QApplication.setOverrideCursor(Qt.WaitCursor)
             except Exception:
                 pass
-            removed_count = 0
-            failed_ids = []
-            for bar_id in bar_ids_to_remove:
-                if self.db_manager.remove_bar_from_list(bar_id):
-                    removed_count += 1
-                else:
-                    failed_ids.append(str(bar_id))
+            removed_count, failed_ids = self._bulk_remove_from_list(bar_ids_to_remove)
 
             if removed_count > 0:
                 QMessageBox.information(
@@ -1965,13 +1999,11 @@ class SilverBarDialog(QDialog):
                     return
 
                 # Add selected bars to the list
-                added_count = 0
-                failed_bars = []
-                for bar in selected_bars:
-                    if self.db_manager.assign_bar_to_list(bar["bar_id"], new_list_id):
-                        added_count += 1
-                    else:
-                        failed_bars.append(str(bar["bar_id"]))
+                selected_ids = [bar["bar_id"] for bar in selected_bars]
+                added_count, failed_bars = self._bulk_assign_to_list(
+                    selected_ids,
+                    new_list_id,
+                )
 
                 # Calculate actual fine weight
                 actual_fine_weight = sum(bar["fine_weight"] for bar in selected_bars)
@@ -2694,11 +2726,7 @@ class SilverBarDialog(QDialog):
             QApplication.setOverrideCursor(Qt.WaitCursor)
         except Exception:
             pass
-        for bar_id in bar_ids:
-            if self.db_manager.assign_bar_to_list(bar_id, self.current_list_id):
-                added += 1
-            else:
-                failed.append(str(bar_id))
+        added, failed = self._bulk_assign_to_list(bar_ids, self.current_list_id)
         try:
             QApplication.restoreOverrideCursor()
         except Exception:
@@ -2744,11 +2772,7 @@ class SilverBarDialog(QDialog):
             QApplication.setOverrideCursor(Qt.WaitCursor)
         except Exception:
             pass
-        for bar_id in bar_ids:
-            if self.db_manager.remove_bar_from_list(bar_id):
-                removed += 1
-            else:
-                failed.append(str(bar_id))
+        removed, failed = self._bulk_remove_from_list(bar_ids)
         try:
             QApplication.restoreOverrideCursor()
         except Exception:

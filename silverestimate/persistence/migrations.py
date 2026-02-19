@@ -203,14 +203,12 @@ def _apply_versioned_migrations(db: "DatabaseManager", current_version: int) -> 
         )
         if not db._column_exists("estimates", "voucher_no_int"):
             cursor.execute("ALTER TABLE estimates ADD COLUMN voucher_no_int INTEGER")
-        cursor.execute(
-            """
+        cursor.execute("""
             UPDATE estimates
             SET voucher_no_int = CAST(voucher_no AS INTEGER)
             WHERE voucher_no GLOB '[0-9]*'
               AND voucher_no_int IS NULL
-            """
-        )
+            """)
         db._update_schema_version(3)
 
 
@@ -222,6 +220,9 @@ def _ensure_indexes(db: "DatabaseManager") -> None:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_items_code ON items(code)")
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_items_code_nocase ON items(code COLLATE NOCASE)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_items_name_nocase ON items(name COLLATE NOCASE)"
         )
         try:
             cursor.execute(

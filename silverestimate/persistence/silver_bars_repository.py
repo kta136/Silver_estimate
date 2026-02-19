@@ -249,6 +249,92 @@ class SilverBarsRepository:
             )
             return False
 
+    def assign_bars_to_list_bulk(
+        self,
+        bar_ids: Iterable[int],
+        list_id: int,
+        note: str = "Assigned to list",
+    ) -> Tuple[int, List[int]]:
+        conn, cursor = self._conn, self._cursor
+        if not conn or not cursor:
+            return 0, []
+
+        normalized = self._normalize_bar_ids(bar_ids)
+        if not normalized:
+            return 0, []
+
+        failed: List[int] = []
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            cursor.execute(
+                "SELECT list_id FROM silver_bar_lists WHERE list_id = ?",
+                (list_id,),
+            )
+            if not cursor.fetchone():
+                return 0, normalized
+
+            placeholders = ",".join("?" for _ in normalized)
+            cursor.execute(
+                f"SELECT bar_id, status, list_id FROM silver_bars "
+                f"WHERE bar_id IN ({placeholders})",
+                normalized,
+            )
+            rows = {int(row["bar_id"]): row for row in cursor.fetchall()}
+
+            valid_ids: List[int] = []
+            for bar_id in normalized:
+                row = rows.get(bar_id)
+                if not row or row["status"] != "In Stock" or row["list_id"] is not None:
+                    failed.append(bar_id)
+                    continue
+                valid_ids.append(bar_id)
+
+            if not valid_ids:
+                return 0, failed
+
+            conn.execute("BEGIN TRANSACTION")
+            update_payload = [("Assigned", list_id, bar_id) for bar_id in valid_ids]
+            cursor.executemany(
+                "UPDATE silver_bars SET status = ?, list_id = ? WHERE bar_id = ?",
+                update_payload,
+            )
+
+            transfer_rows = [
+                (
+                    f"ASSIGN-{bar_id}-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+                    now,
+                    bar_id,
+                    list_id,
+                    "In Stock",
+                    "Assigned",
+                    note,
+                )
+                for bar_id in valid_ids
+            ]
+            cursor.executemany(
+                """
+                INSERT INTO bar_transfers
+                (transfer_no, date, silver_bar_id, list_id, from_status, to_status, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                transfer_rows,
+            )
+            conn.commit()
+            self._request_flush()
+            return len(valid_ids), failed
+        except sqlite3.Error as exc:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            self._logger.error(
+                "DB error assigning bars to list %s in bulk: %s",
+                list_id,
+                exc,
+                exc_info=True,
+            )
+            return 0, normalized
+
     def remove_bar_from_list(
         self,
         bar_id: int,
@@ -305,6 +391,81 @@ class SilverBarsRepository:
                 "DB error removing bar %s from list: %s", bar_id, exc, exc_info=True
             )
             return False
+
+    def remove_bars_from_list_bulk(
+        self,
+        bar_ids: Iterable[int],
+        note: str = "Removed from list",
+    ) -> Tuple[int, List[int]]:
+        conn, cursor = self._conn, self._cursor
+        if not conn or not cursor:
+            return 0, []
+
+        normalized = self._normalize_bar_ids(bar_ids)
+        if not normalized:
+            return 0, []
+
+        failed: List[int] = []
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            placeholders = ",".join("?" for _ in normalized)
+            cursor.execute(
+                f"SELECT bar_id, status, list_id FROM silver_bars "
+                f"WHERE bar_id IN ({placeholders})",
+                normalized,
+            )
+            rows = {int(row["bar_id"]): row for row in cursor.fetchall()}
+
+            valid_rows: List[Tuple[int, int]] = []
+            for bar_id in normalized:
+                row = rows.get(bar_id)
+                if not row or row["status"] != "Assigned" or row["list_id"] is None:
+                    failed.append(bar_id)
+                    continue
+                valid_rows.append((bar_id, int(row["list_id"])))
+
+            if not valid_rows:
+                return 0, failed
+
+            conn.execute("BEGIN TRANSACTION")
+            cursor.executemany(
+                "UPDATE silver_bars SET status = ?, list_id = NULL WHERE bar_id = ?",
+                [("In Stock", bar_id) for bar_id, _ in valid_rows],
+            )
+            transfer_rows = [
+                (
+                    f"REMOVE-{bar_id}-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+                    now,
+                    bar_id,
+                    list_id,
+                    "Assigned",
+                    "In Stock",
+                    note,
+                )
+                for bar_id, list_id in valid_rows
+            ]
+            cursor.executemany(
+                """
+                INSERT INTO bar_transfers
+                (transfer_no, date, silver_bar_id, list_id, from_status, to_status, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                transfer_rows,
+            )
+            conn.commit()
+            self._request_flush()
+            return len(valid_rows), failed
+        except sqlite3.Error as exc:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            self._logger.error(
+                "DB error removing bars from list in bulk: %s",
+                exc,
+                exc_info=True,
+            )
+            return 0, normalized
 
     # --- Queries ------------------------------------------------------------
 
@@ -729,3 +890,18 @@ class SilverBarsRepository:
             self._logger.error(
                 "Exception during silver-bar flush: %s", exc, exc_info=True
             )
+
+    @staticmethod
+    def _normalize_bar_ids(bar_ids: Iterable[int]) -> List[int]:
+        normalized: List[int] = []
+        seen: set[int] = set()
+        for raw_bar_id in list(bar_ids or []):
+            try:
+                bar_id = int(raw_bar_id)
+            except (TypeError, ValueError):
+                continue
+            if bar_id <= 0 or bar_id in seen:
+                continue
+            seen.add(bar_id)
+            normalized.append(bar_id)
+        return normalized

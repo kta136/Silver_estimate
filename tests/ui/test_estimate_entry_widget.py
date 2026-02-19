@@ -279,7 +279,9 @@ def test_incremental_totals_match_full_multi_row_mixed_categories(qt_app, fake_d
         _set_row(widget, 0, regular_item(gross=10, poly=1, purity=90.0, wage_rate=10.0))
 
         widget.toggle_return_mode()
-        _set_row(widget, 1, return_item(gross=2.0, poly=0.5, purity=80.0, wage_rate=5.0))
+        _set_row(
+            widget, 1, return_item(gross=2.0, poly=0.5, purity=80.0, wage_rate=5.0)
+        )
         widget.toggle_return_mode()
 
         widget.toggle_silver_bar_mode()
@@ -321,9 +323,15 @@ def test_incremental_totals_match_full_multi_row_mixed_categories(qt_app, fake_d
 def test_incremental_rebuild_after_row_delete(qt_app, fake_db, monkeypatch):
     widget = _make_widget(fake_db)
     try:
-        _set_row(widget, 0, regular_item(gross=5.0, poly=1.0, purity=90.0, wage_rate=10.0))
-        _set_row(widget, 1, regular_item(gross=4.0, poly=1.0, purity=90.0, wage_rate=10.0))
-        _set_row(widget, 2, regular_item(gross=3.0, poly=1.0, purity=90.0, wage_rate=10.0))
+        _set_row(
+            widget, 0, regular_item(gross=5.0, poly=1.0, purity=90.0, wage_rate=10.0)
+        )
+        _set_row(
+            widget, 1, regular_item(gross=4.0, poly=1.0, purity=90.0, wage_rate=10.0)
+        )
+        _set_row(
+            widget, 2, regular_item(gross=3.0, poly=1.0, purity=90.0, wage_rate=10.0)
+        )
 
         monkeypatch.setattr(
             "silverestimate.ui.estimate_entry.QMessageBox.question",
@@ -681,22 +689,48 @@ def test_column_width_auto_fits_content_expand_and_shrink(qt_app, fake_db):
         col = COL_ITEM_NAME
 
         table.set_cell_text(0, col, "A")
-        widget._schedule_columns_autofit([col], delay_ms=0)
+        widget._schedule_columns_autofit([col], delay_ms=0, force=True)
         widget._apply_pending_column_autofit()
         base_width = table.columnWidth(col)
 
-        table.set_cell_text(0, col, "Very Long Item Name For Dynamic Width Testing 12345")
-        widget._schedule_columns_autofit([col], delay_ms=0)
+        table.set_cell_text(
+            0, col, "Very Long Item Name For Dynamic Width Testing 12345"
+        )
+        widget._schedule_columns_autofit([col], delay_ms=0, force=True)
         widget._apply_pending_column_autofit()
         expanded_width = table.columnWidth(col)
 
         table.set_cell_text(0, col, "AB")
-        widget._schedule_columns_autofit([col], delay_ms=0)
+        widget._schedule_columns_autofit([col], delay_ms=0, force=True)
         widget._apply_pending_column_autofit()
         shrink_width = table.columnWidth(col)
 
         assert expanded_width > base_width
         assert shrink_width < expanded_width
+    finally:
+        widget.deleteLater()
+
+
+def test_column_autofit_defaults_to_explicit_mode(qt_app, fake_db):
+    widget = _make_widget(fake_db)
+    try:
+        col = COL_ITEM_NAME
+        widget._pending_autofit_columns.clear()
+        widget._schedule_columns_autofit([col], delay_ms=0)
+        assert col not in widget._pending_autofit_columns
+    finally:
+        widget.deleteLater()
+
+
+def test_table_edit_pipeline_invokes_handle_cell_changed_once(qt_app, fake_db):
+    widget = _make_widget(fake_db)
+    try:
+        calls = []
+        widget.handle_cell_changed = lambda row, col: calls.append((row, col))
+        model = widget.item_table.get_model()
+        index = model.index(0, COL_GROSS)
+        assert model.setData(index, "12.5", Qt.EditRole)
+        assert calls == [(0, COL_GROSS)]
     finally:
         widget.deleteLater()
 

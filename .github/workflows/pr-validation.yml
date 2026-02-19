@@ -102,6 +102,12 @@ jobs:
       - name: Run warning-strict core tests
         run: pytest -W error -W "ignore:'crypt' is deprecated and slated for removal in Python 3.13:DeprecationWarning" -m "unit or integration" -v
 
+      - name: Collect perf telemetry smoke
+        run: pytest tests/ui/test_estimate_entry_widget.py tests/integration/test_repositories.py -q --log-file perf-metrics.log --log-file-level DEBUG
+
+      - name: Enforce perf budgets (p95)
+        run: python scripts/check_perf_budgets.py --log-file perf-metrics.log
+
       - name: Run coverage gate
         run: pytest --cov=silverestimate --cov-report=xml --cov-report=term-missing --cov-fail-under=50 -v
 

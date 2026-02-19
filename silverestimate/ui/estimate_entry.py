@@ -6,13 +6,11 @@ from __future__ import annotations
 import logging
 import threading
 import time
-import traceback
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import Dict, Optional
 
 from PyQt5 import sip
 from PyQt5.QtCore import QDate, QLocale, QSignalBlocker, Qt, QTimer, pyqtSignal
-from PyQt5.QtGui import QFont, QKeySequence
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -21,10 +19,7 @@ from PyQt5.QtWidgets import (
     QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
-    QHeaderView,
-    QLabel,
     QMessageBox,
-    QShortcut,
     QSizePolicy,
     QSplitter,
     QVBoxLayout,
@@ -76,9 +71,6 @@ from .estimate_entry_ui import (
 from .inline_status import InlineStatusController
 from .item_selection_dialog import ItemSelectionDialog
 from .view_models import EstimateEntryRowState, EstimateEntryViewModel
-
-if TYPE_CHECKING:
-    from silverestimate.ui.print_manager import PrintManager
 
 
 @dataclass(frozen=True)

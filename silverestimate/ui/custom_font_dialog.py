@@ -12,9 +12,7 @@ from PyQt5.QtWidgets import (
     QFontComboBox,
     QHBoxLayout,
     QLabel,
-    QPushButton,
     QVBoxLayout,
-    QWidget,
 )
 
 

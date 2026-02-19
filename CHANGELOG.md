@@ -5,6 +5,20 @@ All notable changes to the Silver Estimation App will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+- Deleted two dormant UI modules (unused mode-toggle component and legacy table-font dialog)
+- Removed obsolete mode-toggle export from `silverestimate/ui/estimate_entry_components/__init__.py`
+- Removed legacy-only unit test surface for the deleted mode-toggle component
+
+### Fixed
+- Removed unreachable legacy exception block in `EstimatesRepository._voucher_to_int`
+- Moved estimate-history button re-enable logic into reachable `_loading_done` completion path
+
+### Changed
+- Performed a full dead-code cleanup sweep across `main.py` and `silverestimate/**` (unused imports/locals, stale compatibility scaffolding, wildcard constant exports)
+
 ## [2.6.7] - 2026-02-18
 
 ### Changed

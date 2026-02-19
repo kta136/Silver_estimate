@@ -1,43 +1,28 @@
 #!/usr/bin/env python
 import logging
-import traceback
-from datetime import datetime, timedelta
 
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QColor, QKeySequence
+from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QApplication,
-    QCheckBox,
     QComboBox,
     QDialog,
-    QDoubleSpinBox,
-    QFileDialog,
-    QFrame,
-    QGridLayout,
     QHBoxLayout,
     QHeaderView,
-    QInputDialog,
     QLabel,
     QLineEdit,
     QMenu,
     QMessageBox,
     QPushButton,
-    QShortcut,
-    QSizePolicy,
     QSpinBox,
-    QSplitter,
-    QStyle,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
-    QTextEdit,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
-from silverestimate.infrastructure.app_constants import SETTINGS_APP, SETTINGS_ORG
 from silverestimate.infrastructure.settings import get_app_settings
 
 
@@ -939,8 +924,6 @@ class SilverBarHistoryDialog(QDialog):
 # Example usage (if run directly)
 if __name__ == "__main__":
     import sys
-
-    from PyQt5.QtWidgets import QApplication
 
     # Mock DB Manager for testing
     class MockDBManager:

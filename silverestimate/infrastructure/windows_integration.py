@@ -13,7 +13,6 @@ from typing import Optional
 
 if sys.platform == "win32":  # pragma: no cover - platform specific
     import ctypes
-    from ctypes import wintypes
 
 
 def set_app_user_model_id(app_id: str, logger=None) -> None:

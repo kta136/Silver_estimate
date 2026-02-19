@@ -3,7 +3,7 @@ import logging
 import time
 
 from PyQt5.QtCore import QLocale, QTimer, Qt  # Added QLocale
-from PyQt5.QtGui import QDoubleValidator, QKeyEvent  # Added QDoubleValidator
+from PyQt5.QtGui import QDoubleValidator  # Added QDoubleValidator
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QComboBox,

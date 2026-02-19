@@ -173,9 +173,6 @@ def fetch_broadcast_rate_exact(
     - market_open_bool: False when the broadcast signals market closed/message mode
     - info: auxiliary data (e.g., matched com_id)
     """
-    import json
-    import urllib.request
-
     # Prefer the known com_id (47) to avoid blocking on the website during lookup.
     # Only attempt dynamic lookup if explicitly requested and broadcast parsing fails.
     com_id = (

@@ -1,13 +1,12 @@
 #!/usr/bin/env python
 from functools import partial
 
-from PyQt5.QtCore import QDate, QObject, Qt, QThread, pyqtSignal
+from PyQt5.QtCore import QDate, QObject, QThread, pyqtSignal
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QDateEdit,
     QDialog,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -250,6 +249,18 @@ class EstimateHistoryDialog(QDialog):
             worker.deleteLater()
         except Exception:
             pass
+        if request_id is not None and request_id != self._load_request_id:
+            return
+        try:
+            self.search_button.setEnabled(True)
+            if hasattr(self, "open_button"):
+                self.open_button.setEnabled(True)
+            if hasattr(self, "print_button"):
+                self.print_button.setEnabled(True)
+            if hasattr(self, "delete_button"):
+                self.delete_button.setEnabled(True)
+        except Exception:
+            pass
 
     def _cancel_active_loads(self, timeout_ms: int = 4000) -> None:
         # Invalidate any pending UI updates from old workers.
@@ -278,18 +289,6 @@ class EstimateHistoryDialog(QDialog):
     def closeEvent(self, event):
         self._cancel_active_loads()
         super().closeEvent(event)
-        if request_id is not None and request_id != self._load_request_id:
-            return
-        try:
-            self.search_button.setEnabled(True)
-            if hasattr(self, "open_button"):
-                self.open_button.setEnabled(True)
-            if hasattr(self, "print_button"):
-                self.print_button.setEnabled(True)
-            if hasattr(self, "delete_button"):
-                self.delete_button.setEnabled(True)
-        except Exception:
-            pass
 
     def get_selected_voucher(self):
         """Get the selected voucher number."""

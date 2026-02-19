@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import logging  # Ensure logging is available for getLogger calls
-import traceback  # Import traceback for error logging
 
 from PyQt5.QtCore import QSize, Qt, QUrl, pyqtSignal
 from PyQt5.QtGui import QDesktopServices, QFont
@@ -12,7 +11,6 @@ from PyQt5.QtWidgets import (
     QDialogButtonBox,
     QDoubleSpinBox,
     QFileDialog,
-    QFontDialog,
     QFormLayout,
     QFrame,
     QGridLayout,
@@ -28,7 +26,6 @@ from PyQt5.QtWidgets import (
     QSpinBox,
     QStackedWidget,
     QStyle,
-    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -41,7 +38,6 @@ from silverestimate.security.credential_store import CredentialStoreError
 from .custom_font_dialog import CustomFontDialog
 from .item_export_manager import ItemExportManager  # Import the new export manager
 from .login_dialog import LoginDialog  # Needed for password verification/hashing
-from .table_font_size_dialog import TableFontSizeDialog
 
 
 class SettingsDialog(QDialog):

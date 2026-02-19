@@ -5,7 +5,6 @@ import sqlite3
 import tempfile  # For temporary decrypted DB file
 import threading  # For async debounced flush
 import time
-import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Optional

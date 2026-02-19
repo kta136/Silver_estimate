@@ -1,7 +1,4 @@
-import sys
-from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QApplication,
     QDialog,
     QFormLayout,
     QHBoxLayout,
@@ -242,7 +239,7 @@ class LoginDialog(QDialog):
             # Passlib handles encoding and salt generation automatically
             hashed = _get_pwd_context().hash(password)
             return hashed
-        except Exception as e:
+        except Exception:
             import logging
 
             logging.getLogger(__name__).error("Error hashing password:", exc_info=True)

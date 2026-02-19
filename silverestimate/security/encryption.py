@@ -164,7 +164,7 @@ def decrypt_payload(
     aesgcm = AESGCM(key)
     try:
         return aesgcm.decrypt(nonce, ciphertext, None)
-    except InvalidTag as exc:
+    except InvalidTag:
         if logger:
             logger.error("Decryption failed: InvalidTag")
         raise

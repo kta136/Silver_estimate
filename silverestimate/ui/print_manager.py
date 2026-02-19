@@ -1,31 +1,25 @@
 #!/usr/bin/env python
 import html as html_lib
-import math  # For rounding
 import traceback  # Keep for debugging
 
-from PyQt5.QtCore import QDate, QLocale, QSizeF, Qt
-from PyQt5.QtGui import QFont, QFontDatabase, QPageSize, QTextCursor, QTextDocument
+from PyQt5.QtCore import QDate, QLocale, QSizeF
+from PyQt5.QtGui import QFont, QPageSize, QTextDocument
 
 # Import QPrintPreviewWidget
 from PyQt5.QtPrintSupport import (
     QPageSetupDialog,
     QPrintDialog,
     QPrinter,
-    QPrinterInfo,
     QPrintPreviewDialog,
     QPrintPreviewWidget,
 )
 from PyQt5.QtWidgets import (
     QAction,
-    QApplication,
     QDialog,
     QFileDialog,
     QLabel,
     QMessageBox,
-    QPushButton,
-    QTextEdit,
     QToolBar,
-    QVBoxLayout,
     QWidgetAction,
 )
 

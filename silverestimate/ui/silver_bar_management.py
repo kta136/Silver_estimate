@@ -16,8 +16,6 @@ from PyQt5.QtWidgets import (
     QDialog,
     QDoubleSpinBox,
     QFileDialog,
-    QFrame,
-    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QInputDialog,
@@ -31,11 +29,8 @@ from PyQt5.QtWidgets import (
     QSizePolicy,
     QSpinBox,
     QSplitter,
-    QStackedWidget,
-    QStyle,
     QTableWidget,
     QTableWidgetItem,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -1932,7 +1927,6 @@ class SilverBarDialog(QDialog):
         if dialog.exec_() == QDialog.Accepted:
             min_target = dialog.min_target
             max_target = dialog.max_target
-            target_fine_weight = dialog.target_fine_weight
             list_name = dialog.list_name
             optimization_type = dialog.optimization_type
 
@@ -1983,7 +1977,7 @@ class SilverBarDialog(QDialog):
                 actual_fine_weight = sum(bar["fine_weight"] for bar in selected_bars)
 
                 # Show results
-                message = f"Optimal list created successfully!\n\n"
+                message = "Optimal list created successfully!\n\n"
                 message += f"List Name: {list_name}\n"
                 message += f"Target Range: {min_target:.1f}g - {max_target:.1f}g\n"
                 message += f"Actual Fine Weight: {actual_fine_weight:.1f}g\n"
@@ -2466,11 +2460,6 @@ class SilverBarDialog(QDialog):
             # try:
             # except Exception:
             #     pass
-            try:
-                vq = s.value("ui/silver_bars/voucher_query", "")
-                # Voucher search removed
-            except Exception:
-                pass
             try:
                 tol = s.value("ui/silver_bars/weight_tol")
                 if tol is not None:
@@ -3213,8 +3202,6 @@ class OptimalListDialog(QDialog):
 # Example usage (if run directly)
 if __name__ == "__main__":
     import sys
-
-    from PyQt5.QtWidgets import QApplication
 
     # Mock DB Manager for testing
     class MockDBManager:

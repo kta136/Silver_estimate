@@ -415,27 +415,6 @@ class EstimatesRepository:
             return int(raw)
         except (TypeError, ValueError):
             return None
-        except sqlite3.Error as exc:
-            conn.rollback()
-            self._logger.error(
-                "DB Error saving estimate %s: %s", voucher_no, exc, exc_info=True
-            )
-            self._set_last_error(
-                f"Database error while saving estimate '{voucher_no}': {exc}"
-            )
-            return False
-        except Exception as exc:
-            conn.rollback()
-            self._logger.error(
-                "Unexpected error saving estimate %s: %s",
-                voucher_no,
-                exc,
-                exc_info=True,
-            )
-            self._set_last_error(
-                f"Unexpected error while saving estimate '{voucher_no}': {exc}"
-            )
-            return False
 
     def delete_all_estimates(self) -> bool:
         conn, cursor = self._conn, self._cursor

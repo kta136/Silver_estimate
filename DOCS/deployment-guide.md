@@ -2,22 +2,27 @@
 
 ## Overview
 - Primary target: Windows 10/11 desktops.
-- Build system: PyInstaller 6.x driven from a PowerShell helper script.
+- Build system: PyInstaller 6.x driven from `SilverEstimate.spec` (or explicit one-file command).
 - Runtime Python: 3.13.
 - Artifacts: unpacked directory build plus optional one-file executable zip.
 
 ## Local Windows Packaging
 1. Open PowerShell in the repo root.
-2. Run `pwsh scripts/build_windows.ps1`.
-3. The script creates `.venv/`, installs `requirements.txt`, and runs PyInstaller with `SilverEstimate.spec` when present (the spec includes keyring/Argon2 hidden imports).
+2. Create/activate a virtual environment and install dependencies:
+   - `python -m venv .venv`
+   - `.\.venv\Scripts\Activate.ps1`
+   - `python -m pip install --upgrade pip`
+   - `pip install . pyinstaller`
+3. Build with the canonical spec:
+   - `python -m PyInstaller --clean --noconfirm SilverEstimate.spec`
 4. Output directories:
    - `dist/SilverEstimate/` contains the default windowed build with all dependencies.
-   - `dist/SilverEstimate-v<version>-win64.zip` is created automatically from the folder above. Version is read from `silverestimate/infrastructure/app_constants.py`.
+   - Optionally zip this folder manually for distribution.
 
 ### One-File Executable
-`pwsh scripts/build_windows.ps1 -OneFile`
-- Invokes PyInstaller directly with `--onefile --windowed`.
-- Produces `dist/SilverEstimate.exe`; the helper script still zips the file as `SilverEstimate-v<version>-win64.zip`.
+- Run:
+  `python -m PyInstaller --noconfirm --onefile --windowed --name SilverEstimate --hidden-import passlib.handlers.argon2 --hidden-import passlib.handlers.bcrypt --hidden-import keyring.backends --hidden-import keyring.backends.Windows --hidden-import keyring.backends.win32 --hidden-import keyring.backends.fail --hidden-import keyring.backends.null main.py`
+- Produces `dist/SilverEstimate.exe`.
 - Expect slightly longer startup time while PyInstaller unpacks the bundle.
 
 ### Manual PyInstaller Invocation
@@ -44,9 +49,9 @@ Workflow: `.github/workflows/release-windows.yml`.
 5. Confirm the GitHub Actions build attaches the new zip to the release entry.
 
 ## Dependency Management
-- Runtime dependencies are tracked in `requirements.txt` (PyQt5, cryptography, passlib/argon2, argon2_cffi, keyring).
-- For local builds the helper script upgrades pip before installing requirements.
-- Development dependencies are tracked in `requirements-dev.txt` and in `pyproject.toml` (`[project.optional-dependencies].dev`).
+- Runtime dependencies are defined in `pyproject.toml` (`[project.dependencies]`).
+- Development dependencies are defined in `pyproject.toml` (`[project.optional-dependencies].dev`).
+- For local builds, install via `pip install .` (plus `pyinstaller` for packaging).
 
 ## Testing Before Packaging
 - Run `pytest` from the repo root (requires developer dependencies such as `pytest`, `pytest-qt`, `pytest-mock`).
@@ -56,7 +61,7 @@ Workflow: `.github/workflows/release-windows.yml`.
 ## Common Troubleshooting
 - **Missing DLLs:** Ensure the host machine has the Microsoft Visual C++ redistributables. PyInstaller bundles the interpreter but relies on system runtimes.
 - **Antivirus false positives:** Sign the executable when distributing to customers; CI output is unsigned. Consider submitting the binary to Microsoft Defender for pre-approval.
-- **Stale virtual environment:** Delete `.venv/` if the build script reports inconsistent package versions.
+- **Stale virtual environment:** Delete `.venv/` if dependency versions are inconsistent, then reinstall with `pip install . pyinstaller`.
 - **Spec updates ignored:** Remove `build/` and `dist/` folders to force PyInstaller to regenerate caches after editing the spec.
 
 ## Future Enhancements

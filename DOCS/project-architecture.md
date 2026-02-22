@@ -102,5 +102,5 @@ MainWindow
 ## Extension Points
 - Additional presenters (e.g., for future dialogs) can follow the `EstimateEntryPresenter` pattern with protocol-defined views.
 - New services (reporting, remote sync) should follow the existing service pattern with explicit wiring from `main.py`.
-- Packaging changes belong in `SilverEstimate.spec` and `scripts/build_windows.ps1` so CI and local builds stay aligned.
+- Packaging changes belong in `SilverEstimate.spec` and `.github/workflows/release-windows.yml` so CI and local builds stay aligned.
 - Domain models can expand under `silverestimate/domain/` to keep persistence and presenter layers strongly typed.

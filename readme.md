@@ -6,6 +6,9 @@ A desktop application built with PyQt5 and an encrypted SQLite database for mana
 [![PyQt5](https://img.shields.io/badge/PyQt5-5.15+-green.svg)](https://www.riverbankcomputing.com/software/pyqt/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-v2.6.7-orange.svg)](CHANGELOG.md)
+[![PR Validation](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml)
+[![Main Validation](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml)
+[![Release Windows](https://github.com/kta136/Silver_estimate/actions/workflows/release-windows.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/release-windows.yml)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Imports: isort](https://img.shields.io/badge/%20imports-isort-%231674b1?style=flat&labelColor=ef8336)](https://pycqa.github.io/isort/)
 [![Type checking: mypy](https://img.shields.io/badge/type%20checking-mypy-blue.svg)](http://mypy-lang.org/)
@@ -13,7 +16,14 @@ A desktop application built with PyQt5 and an encrypted SQLite database for mana
 [![Pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/kta136/Silver_estimate)
 
+## Quick Links
+
+- [Download latest release](https://github.com/kta136/Silver_estimate/releases/latest)
+- [Changelog](CHANGELOG.md)
+- [Deployment guide](DOCS/deployment-guide.md)
+
 ## Table of Contents
+- [Quick Links](#quick-links)
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [Features](#features)
@@ -24,6 +34,7 @@ A desktop application built with PyQt5 and an encrypted SQLite database for mana
 - [Development](#development)
 - [Testing](#testing)
 - [Deployment](#deployment)
+- [Release Cadence & Support](#release-cadence--support)
 - [Contributing](#contributing)
 - [Support](#support)
 - [License](#license)
@@ -168,10 +179,16 @@ Key areas of the codebase:
 - Create and push a tag (workflow triggers on tags):
   - `git commit -am "chore: bump version to vX.YY"`
   - `git tag vX.YY`
-  - `git push origin master --tags`
+  - `git push origin main --tags`
 - CI builds the exe and attaches `SilverEstimate-vX.YY-win64.zip` to the GitHub Release
 
 For more details, see `DOCS/deployment-guide.md`.
+
+## Release Cadence & Support
+
+- Stable releases are published from version tags (`v*`) and retained as the primary supported download path.
+- The `latest-ci` prerelease is for validation/testing only and may change without backward-compatibility guarantees.
+- Use the latest stable release unless you are explicitly validating a CI candidate build.
 
 ## Contributing
 

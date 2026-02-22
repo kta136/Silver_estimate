@@ -3,7 +3,6 @@ name: Main Validation
 on:
   push:
     branches:
-      - master
       - main
 
 permissions:

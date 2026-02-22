@@ -146,4 +146,3 @@ class NumericDelegate(QStyledItemDelegate):
                             estimate_widget._mark_manual_row_navigation()
 
         return super().eventFilter(editor, event)
-

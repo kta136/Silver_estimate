@@ -97,7 +97,9 @@ class FakeRepository:
     def add_silver_bar(
         self, voucher_no: str, weight: float, purity: float
     ) -> Optional[int]:
-        self.add_calls.append({"voucher": voucher_no, "weight": weight, "purity": purity})
+        self.add_calls.append(
+            {"voucher": voucher_no, "weight": weight, "purity": purity}
+        )
         if self.add_bar_results:
             return self.add_bar_results.pop(0)
         return 1

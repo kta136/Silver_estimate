@@ -181,15 +181,9 @@ class EstimateHistoryDialog(QDialog):
         thread = QThread(self)
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
-        worker.data_ready.connect(
-            partial(self._populate_table, request_id=request_id)
-        )
-        worker.error.connect(
-            partial(self._handle_load_error, request_id=request_id)
-        )
-        worker.finished.connect(
-            partial(self._loading_done, thread, worker, request_id)
-        )
+        worker.data_ready.connect(partial(self._populate_table, request_id=request_id))
+        worker.error.connect(partial(self._handle_load_error, request_id=request_id))
+        worker.finished.connect(partial(self._loading_done, thread, worker, request_id))
         self._active_load_workers[thread] = worker
         thread.start()
         return

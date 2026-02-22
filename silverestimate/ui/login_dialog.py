@@ -21,6 +21,7 @@ def _get_pwd_context():
         _pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
     return _pwd_context
 
+
 # Optional: Filter specific passlib warnings if they become noisy during development/packaging
 
 
@@ -82,7 +83,6 @@ class LoginDialog(QDialog):
                 "Re-enter the secondary password to confirm\nMust match exactly\nEnsures password was typed correctly"
             )
             form_layout.addRow(self.confirm_password_label, self.confirm_password_input)
-
 
         layout.addLayout(form_layout)
 

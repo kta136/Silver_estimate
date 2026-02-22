@@ -293,9 +293,7 @@ class EstimateTableModel(QAbstractTableModel):
 
         self._rows[row_idx] = replace(row_data, wage_type=normalized)
         pieces_index = self.index(row_idx, COL_PIECES)
-        self.dataChanged.emit(
-            pieces_index, pieces_index, [Qt.DisplayRole, Qt.EditRole]
-        )
+        self.dataChanged.emit(pieces_index, pieces_index, [Qt.DisplayRole, Qt.EditRole])
         return True
 
     # Custom methods for managing rows

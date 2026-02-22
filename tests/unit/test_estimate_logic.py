@@ -95,7 +95,9 @@ if _HYPOTHESIS_AVAILABLE:
     @given(case=fine_calculation_cases())
     def test_compute_fine_property(case):
         expected_net = max(case.gross - case.poly, 0.0)
-        expected_fine = 0.0 if case.purity <= 0.0 else expected_net * (case.purity / 100)
+        expected_fine = (
+            0.0 if case.purity <= 0.0 else expected_net * (case.purity / 100)
+        )
         assert compute_net_weight(case.gross, case.poly) == pytest.approx(expected_net)
         assert compute_fine_weight(expected_net, case.purity) == pytest.approx(
             expected_fine
@@ -114,6 +116,7 @@ if _HYPOTHESIS_AVAILABLE:
             wage_rate=case.wage_rate,
             pieces=case.pieces,
         ) == pytest.approx(expected)
+
 else:
 
     @pytest.mark.skip(reason="hypothesis not installed")
@@ -123,4 +126,3 @@ else:
     @pytest.mark.skip(reason="hypothesis not installed")
     def test_compute_wage_property():  # pragma: no cover - optional dependency
         pytest.skip("hypothesis not installed")
-

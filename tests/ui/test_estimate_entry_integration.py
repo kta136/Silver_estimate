@@ -600,9 +600,7 @@ def test_navigation_target_mapping_is_consistent(qt_app, fake_db):
         widget.deleteLater()
 
 
-def test_add_empty_row_deferred_focus_is_safe_after_delete(
-    qt_app, fake_db, capsys
-):
+def test_add_empty_row_deferred_focus_is_safe_after_delete(qt_app, fake_db, capsys):
     """Test deferred focus timer does not crash when widget is deleted quickly."""
     widget = _make_widget(fake_db)
     widget.clear_all_rows()

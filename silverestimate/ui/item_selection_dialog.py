@@ -115,8 +115,12 @@ class ItemSelectionDialog(QDialog):
         self.items_table.setColumnCount(3)
         self.items_table.setHorizontalHeaderLabels(["Code", "Name", "Purity"])
         self.items_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self.items_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        self.items_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.items_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeToContents
+        )
+        self.items_table.horizontalHeader().setSectionResizeMode(
+            2, QHeaderView.ResizeToContents
+        )
         self.items_table.setAlternatingRowColors(True)
         self.items_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.items_table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -277,7 +281,9 @@ class ItemSelectionDialog(QDialog):
         )
         self._render_results()
 
-    def _ranked_items_from_db(self, text: str, provider) -> tuple[list[_ItemRecord], bool]:
+    def _ranked_items_from_db(
+        self, text: str, provider
+    ) -> tuple[list[_ItemRecord], bool]:
         rows, truncated = provider(
             text,
             limit=self.MAX_VISIBLE_RESULTS,

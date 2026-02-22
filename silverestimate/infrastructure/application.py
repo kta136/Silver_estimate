@@ -242,7 +242,9 @@ class ApplicationBuilder:
             status_enum = startup_module.StartupStatus
         else:
             try:
-                from silverestimate.controllers import startup_controller as startup_module
+                from silverestimate.controllers import (
+                    startup_controller as startup_module,
+                )
 
                 status_enum = startup_module.StartupStatus
             except Exception:

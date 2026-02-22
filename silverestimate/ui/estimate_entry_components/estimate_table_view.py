@@ -75,8 +75,7 @@ class EstimateTableView(QTableView):
         palette.setColor(QPalette.HighlightedText, QColor("#111827"))
         self.setPalette(palette)
 
-        self.setStyleSheet(
-            """
+        self.setStyleSheet("""
             QTableView {
                 gridline-color: #e0e0e0;
                 selection-background-color: #e2e8f0;
@@ -100,8 +99,7 @@ class EstimateTableView(QTableView):
                 background-color: #f9fafb;
                 border: none;
             }
-            """
-        )
+            """)
 
     def _connect_signals(self) -> None:
         self._table_model.data_changed_detailed.connect(self._on_data_changed_detailed)

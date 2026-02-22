@@ -435,7 +435,6 @@ class PrintManager:
             pad = (TOTAL_WIDTH - len(title)) // 2
             output.append(" " * pad + title)
 
-
         # Add voucher and rate line (unchanged)
         voucher_str = str(voucher_no).ljust(15)
         rate_str = f"S.Rate :{silver_rate:10.2f}"

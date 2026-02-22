@@ -9,8 +9,7 @@ from silverestimate.ui.silver_bar_management import _BarsLoadWorker
 def _seed_worker_db(path: Path) -> None:
     conn = sqlite3.connect(path)
     try:
-        conn.executescript(
-            """
+        conn.executescript("""
             CREATE TABLE estimates (
                 voucher_no TEXT PRIMARY KEY,
                 note TEXT
@@ -25,8 +24,7 @@ def _seed_worker_db(path: Path) -> None:
                 status TEXT,
                 list_id INTEGER
             );
-            """
-        )
+            """)
         conn.execute(
             "INSERT INTO estimates (voucher_no, note) VALUES (?, ?)",
             ("V001", "Note 1"),

@@ -194,8 +194,8 @@ For support and troubleshooting:
   - [API reference](DOCS/api-reference.md)
   - [Security architecture](DOCS/security-architecture.md)
   - [Logging guide](DOCS/logging-guide.md)
-  - [Performance optimization](DOCS/performance-optimization.md)
-  - [Project audit suggestions (2026-02-13)](DOCS/project-audit-suggestions-2026-02-13.md)
+  - [Performance baseline thresholds](DOCS/performance-baseline-thresholds.md)
+  - [Remaining performance tasks](DOCS/performance-remaining-tasks.md)
 
 ## License
 

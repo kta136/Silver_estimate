@@ -44,9 +44,9 @@ Workflow: `.github/workflows/release-windows.yml`.
 5. Confirm the GitHub Actions build attaches the new zip to the release entry.
 
 ## Dependency Management
-- Runtime dependencies are tracked in `requirements.txt` (PyQt5, cryptography, passlib/argon2, argon2_cffi, pyinstaller, hypothesis, keyring).
+- Runtime dependencies are tracked in `requirements.txt` (PyQt5, cryptography, passlib/argon2, argon2_cffi, keyring).
 - For local builds the helper script upgrades pip before installing requirements.
-- Add dev/test-only libraries to a `requirements-dev.txt` (not currently present) or install manually in the virtual environment.
+- Development dependencies are tracked in `requirements-dev.txt` and in `pyproject.toml` (`[project.optional-dependencies].dev`).
 
 ## Testing Before Packaging
 - Run `pytest` from the repo root (requires developer dependencies such as `pytest`, `pytest-qt`, `pytest-mock`).

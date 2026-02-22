@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Performed a full dead-code cleanup sweep across `main.py` and `silverestimate/**` (unused imports/locals, stale compatibility scaffolding, wildcard constant exports)
 
+## [2.6.8] - 2026-02-22
+
+### Changed
+- Bumped application/package version to `2.6.8`
+- Updated project README version header and badge to `v2.6.8`
+- Performed repository hygiene updates (main-only branch model, release-page cleanup, and stale-reference documentation alignment)
+
 ## [2.6.7] - 2026-02-18
 
 ### Changed

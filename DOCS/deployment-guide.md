@@ -21,7 +21,7 @@
 - Expect slightly longer startup time while PyInstaller unpacks the bundle.
 
 ### Manual PyInstaller Invocation
-- Spec file: `SilverEstimate.spec` (the build script uses `silverestimate.spec`, case-insensitive on Windows).
+- Spec file: `SilverEstimate.spec` (canonical and required for spec-based builds).
 - Hidden imports are already listed for Argon2/bcrypt handlers and the supported `keyring` backends (Windows Credential Manager, fallback no-op).
 - Add datas or icons by editing the spec file if new resources are introduced.
 - Temporary workaround: run `python -m PyInstaller --noconfirm SilverEstimate.spec` to reuse cached venv dependencies.

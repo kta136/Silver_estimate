@@ -56,7 +56,7 @@ Invoke-Step "keyring import check" {
 $iconPath = Join-Path $PSScriptRoot "..\assets\icons\silverestimate.ico"
 
 Write-Host "[Build] Running PyInstaller..."
-$spec = Join-Path $PSScriptRoot "..\silverestimate.spec"
+$spec = Join-Path $PSScriptRoot "..\SilverEstimate.spec"
 if ($OneFile) {
   Invoke-Step "PyInstaller onefile build" {
     & $py -m PyInstaller `

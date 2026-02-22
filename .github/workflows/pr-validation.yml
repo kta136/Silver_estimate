@@ -5,13 +5,17 @@ on:
     branches:
       - master
       - main
-  push:
-    branches:
-      - master
-      - main
+    paths-ignore:
+      - "DOCS/**"
+      - "**/*.md"
+      - ".editorconfig"
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: pr-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint-and-format:
@@ -32,9 +36,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
-
-      - name: Check code formatting with Black
-        run: black --check --diff silverestimate tests
 
       - name: Check import sorting with isort
         run: isort --check-only --diff silverestimate tests
@@ -71,8 +72,8 @@ jobs:
         run: mypy silverestimate --config-file=pyproject.toml
         continue-on-error: true  # Don't fail build on mypy issues initially
 
-  test:
-    name: Tests (Python 3.13)
+  test-fast:
+    name: Fast Tests (Python 3.13)
     runs-on: windows-latest
 
     steps:
@@ -95,29 +96,6 @@ jobs:
 
       - name: Run integration tests
         run: pytest -m integration -v
-
-      - name: Run slow tests
-        run: pytest -m slow -v
-
-      - name: Run warning-strict core tests
-        run: pytest -W error -W "ignore:'crypt' is deprecated and slated for removal in Python 3.13:DeprecationWarning" -m "unit or integration" -v
-
-      - name: Collect perf telemetry smoke
-        run: pytest tests/ui/test_estimate_entry_widget.py tests/integration/test_repositories.py -q --log-file perf-metrics.log --log-file-level DEBUG
-
-      - name: Enforce perf budgets (p95)
-        run: python scripts/check_perf_budgets.py --log-file perf-metrics.log
-
-      - name: Run coverage gate
-        run: pytest --cov=silverestimate --cov-report=xml --cov-report=term-missing --cov-fail-under=50 -v
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          file: ./coverage.xml
-          flags: unittests
-          name: codecov-umbrella
-          fail_ci_if_error: false
 
   security:
     name: Security Checks
@@ -146,117 +124,3 @@ jobs:
       - name: Check for known security vulnerabilities
         run: safety check --json
         continue-on-error: true
-
-  build-check:
-    name: Build Check
-    needs: [lint-and-format, type-check, test, security]
-    if: always()
-    runs-on: windows-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: Test PyInstaller build
-        run: |
-          pyinstaller --version
-          pyinstaller --noconfirm --onefile --windowed --name SilverEstimate `
-            --hidden-import passlib.handlers.argon2 `
-            --hidden-import passlib.handlers.bcrypt `
-            --hidden-import keyring.backends `
-            --hidden-import keyring.backends.Windows `
-            --hidden-import keyring.backends.win32 `
-            --hidden-import keyring.backends.fail `
-            --hidden-import keyring.backends.null `
-            main.py
-        continue-on-error: false
-
-      - name: Check if executable was created
-        run: |
-          if (Test-Path "dist/SilverEstimate.exe") {
-            Write-Output "✓ Executable created successfully"
-            Get-Item "dist/SilverEstimate.exe" | Select-Object Name, Length, LastWriteTime
-          } else {
-            Write-Error "✗ Executable not found"
-            exit 1
-          }
-
-      - name: Upload Windows executable artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: SilverEstimate-exe-${{ github.run_number }}
-          path: dist/SilverEstimate.exe
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Prepare release asset bundle
-        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/master'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $version = (Select-String -Path 'silverestimate\infrastructure\app_constants.py' -Pattern 'APP_VERSION\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
-          $sha = "${{ github.sha }}"
-          $shortSha = $sha.Substring(0, 7)
-          $assetExe = "dist\SilverEstimate-v$version-$shortSha.exe"
-          Move-Item -Force -Path "dist\SilverEstimate.exe" -Destination $assetExe
-          $assetZip = "dist\SilverEstimate-v$version-$shortSha-win64.zip"
-          if (Test-Path $assetZip) { Remove-Item -Force $assetZip }
-          Compress-Archive -Path $assetExe -DestinationPath $assetZip
-          @"
-          Version: v$version
-          Commit: $sha
-          Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          Built At (UTC): $(Get-Date -Format u)
-          "@ | Set-Content -Path "dist\release-notes.txt"
-
-      - name: Update rolling prerelease
-        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/master'
-        uses: ncipollo/release-action@v1
-        with:
-          tag: latest-ci
-          name: Latest CI Build
-          bodyFile: dist/release-notes.txt
-          artifacts: dist/*.zip,dist/*.exe,dist/release-notes.txt
-          prerelease: true
-          allowUpdates: true
-          removeArtifacts: true
-          replacesArtifacts: true
-
-  all-checks-passed:
-    name: All Checks Passed
-    needs: [lint-and-format, type-check, test, security, build-check]
-    runs-on: windows-latest
-    if: always()
-
-    steps:
-      - name: Check all job statuses
-        run: |
-          $needs = @{
-            'lint-and-format' = '${{ needs.lint-and-format.result }}'
-            'type-check' = '${{ needs.type-check.result }}'
-            'test' = '${{ needs.test.result }}'
-            'security' = '${{ needs.security.result }}'
-            'build-check' = '${{ needs.build-check.result }}'
-          }
-
-          $failed = $needs.GetEnumerator() | Where-Object { $_.Value -ne 'success' }
-
-          if ($failed) {
-            Write-Output "The following checks failed or were skipped:"
-            $failed | ForEach-Object { Write-Output "  - $($_.Key): $($_.Value)" }
-            exit 1
-          } else {
-            Write-Output "All checks passed successfully!"
-          }

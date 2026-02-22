@@ -5,12 +5,17 @@ on:
     tags:
       - 'v*'
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
 jobs:
   build-windows:
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,6 +24,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
@@ -51,6 +57,16 @@ jobs:
           if (Test-Path $zipName) { Remove-Item -Force $zipName }
           Compress-Archive -Path $exeDst -DestinationPath $zipName
 
+      - name: Generate release checksum
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = "${{ github.ref_name }}"
+          $zipName = "SilverEstimate-$tag-win64.zip"
+          if (!(Test-Path $zipName)) { throw "Missing release archive: $zipName" }
+          $hash = (Get-FileHash -Path $zipName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $zipName" | Set-Content -Path "$zipName.sha256" -NoNewline
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -58,5 +74,6 @@ jobs:
           prerelease: false
           files: |
             SilverEstimate-${{ github.ref_name }}-win64.zip
+            SilverEstimate-${{ github.ref_name }}-win64.zip.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

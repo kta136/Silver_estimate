@@ -2,6 +2,7 @@
 # Install: pre-commit install
 # Run manually: pre-commit run --all-files
 # Update: pre-commit autoupdate
+# Formatting policy: Black runs via pre-commit locally (not in CI checks).
 
 repos:
   # Code formatting with Black

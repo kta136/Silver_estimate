@@ -151,6 +151,8 @@ Key areas of the codebase:
 - Full local run: `pytest -v`
 - CI enforces coverage thresholds using explicit pytest coverage flags in workflow commands.
 - To iterate quickly on the application builder branch, run `pytest tests/unit/test_application_builder.py`.
+- Formatting is enforced locally via pre-commit (CI does not run Black checks).
+- Run formatting and hooks before pushing: `pre-commit run --all-files`
 
 ## Deployment
 

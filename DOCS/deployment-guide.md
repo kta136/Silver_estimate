@@ -36,7 +36,7 @@ Workflow: `.github/workflows/release-windows.yml`.
 - Trigger: pushing a tag matching `v*` (e.g., `v1.72.7`).
 - Jobs:
   - Checkout repository.
-  - Install Python 3.13 and pip requirements.
+  - Install Python 3.13 and project dependencies from `pyproject.toml` (plus `pyinstaller` for packaging).
   - Build one-file executable with PyInstaller (same flags as `-OneFile`).
   - Rename artifact to `SilverEstimate-<tag>.exe` and zip as `SilverEstimate-<tag>-win64.zip`.
   - Publish the zip to the GitHub Release using `softprops/action-gh-release`.

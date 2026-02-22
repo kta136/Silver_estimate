@@ -63,7 +63,7 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/kta136/Silver_estimate"
-Documentation = "https://github.com/kta136/Silver_estimate/tree/master/DOCS"
+Documentation = "https://github.com/kta136/Silver_estimate/tree/main/DOCS"
 Repository = "https://github.com/kta136/Silver_estimate"
 "Bug Tracker" = "https://github.com/kta136/Silver_estimate/issues"
 

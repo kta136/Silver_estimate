@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import logging
 
-from PyQt5.QtCore import QObject, QThread, Qt, QTimer, pyqtSignal
+from PyQt5.QtCore import QObject, Qt, QThread, QTimer, pyqtSignal
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (
     QAbstractItemView,

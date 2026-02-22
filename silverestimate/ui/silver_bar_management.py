@@ -5,7 +5,7 @@ import time
 import traceback  # Added for error handling in actions
 from datetime import datetime, timedelta
 
-from PyQt5.QtCore import QObject, QThread, Qt, QTimer, pyqtSignal
+from PyQt5.QtCore import QObject, Qt, QThread, QTimer, pyqtSignal
 from PyQt5.QtGui import QColor, QKeySequence
 from PyQt5.QtWidgets import (
     QAbstractItemView,

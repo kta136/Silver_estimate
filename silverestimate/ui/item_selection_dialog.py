@@ -7,6 +7,7 @@ from PyQt5.QtCore import QEvent, Qt, QTimer
 from PyQt5.QtGui import QColor, QKeySequence
 from PyQt5.QtWidgets import (
     QAbstractItemView,
+    QDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -18,7 +19,6 @@ from PyQt5.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
-    QDialog,
 )
 
 

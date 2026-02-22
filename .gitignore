@@ -163,6 +163,21 @@ logs/
 database/*
 !database/.gitkeep
 
+# Local env overrides
+.env.local
+.env.*.local
+
+# Tool caches
+.pylint.d/
+.pre-commit-cache/
+
+# Sphinx docs build output (repo uses DOCS/)
+DOCS/_build/
+
+# Patch/merge leftovers
+*.orig
+*.rej
+
 # OS-specific cruft
 .DS_Store
 Thumbs.db

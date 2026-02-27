@@ -2,7 +2,6 @@
 import logging
 
 from PyQt5.QtCore import QObject, Qt, QThread, QTimer, pyqtSignal
-from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -16,14 +15,21 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSpinBox,
-    QTableWidget,
-    QTableWidgetItem,
+    QTableView,
     QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from silverestimate.infrastructure.settings import get_app_settings
+from silverestimate.persistence.silver_bars_snapshot_repository import (
+    SilverBarsSnapshotRepository,
+)
+from silverestimate.ui.models import (
+    HistoryListBarsTableModel,
+    HistorySilverBarsTableModel,
+    IssuedSilverBarListsTableModel,
+)
 
 
 class SilverBarHistoryDialog(QDialog):
@@ -266,21 +272,9 @@ class SilverBarHistoryDialog(QDialog):
         layout.addWidget(filters_group)
 
         # Results table
-        self.bars_table = QTableWidget()
-        self.bars_table.setColumnCount(9)
-        self.bars_table.setHorizontalHeaderLabels(
-            [
-                "Bar ID",
-                "Voucher/Note",
-                "Weight (g)",
-                "Purity (%)",
-                "Fine Wt (g)",
-                "Status",
-                "List",
-                "Date Added",
-                "List Status",
-            ]
-        )
+        self.bars_model = HistorySilverBarsTableModel(self)
+        self.bars_table = QTableView()
+        self.bars_table.setModel(self.bars_model)
         self.bars_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.bars_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.bars_table.setAlternatingRowColors(True)
@@ -289,7 +283,7 @@ class SilverBarHistoryDialog(QDialog):
 
         # Apply styling
         self.bars_table.setStyleSheet("""
-            QTableWidget {
+            QTableView {
                 font-size: 13px;
                 gridline-color: #ddd;
                 background-color: white;
@@ -297,20 +291,20 @@ class SilverBarHistoryDialog(QDialog):
                 selection-background-color: #3daee9;
                 selection-color: white;
             }
-            QTableWidget::item {
+            QTableView::item {
                 padding: 6px 4px;
                 border-bottom: 1px solid #eee;
                 color: #333;
             }
-            QTableWidget::item:selected {
+            QTableView::item:selected {
                 background-color: #3daee9 !important;
                 color: white !important;
             }
-            QTableWidget::item:selected:active {
+            QTableView::item:selected:active {
                 background-color: #2980b9 !important;
                 color: white !important;
             }
-            QTableWidget::item:hover {
+            QTableView::item:hover {
                 background-color: #e8f4fd;
             }
             QHeaderView::section {
@@ -370,11 +364,9 @@ class SilverBarHistoryDialog(QDialog):
         """)
         layout.addWidget(lists_header)
 
-        self.lists_table = QTableWidget()
-        self.lists_table.setColumnCount(6)
-        self.lists_table.setHorizontalHeaderLabels(
-            ["List ID", "Identifier", "Note", "Created", "Issued", "Bar Count"]
-        )
+        self.lists_model = IssuedSilverBarListsTableModel(self)
+        self.lists_table = QTableView()
+        self.lists_table.setModel(self.lists_model)
         self.lists_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.lists_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.lists_table.setAlternatingRowColors(True)
@@ -383,7 +375,7 @@ class SilverBarHistoryDialog(QDialog):
 
         # Apply styling
         self.lists_table.setStyleSheet("""
-            QTableWidget {
+            QTableView {
                 font-size: 13px;
                 gridline-color: #ddd;
                 background-color: white;
@@ -391,20 +383,20 @@ class SilverBarHistoryDialog(QDialog):
                 selection-background-color: #3daee9;
                 selection-color: white;
             }
-            QTableWidget::item {
+            QTableView::item {
                 padding: 8px 4px;
                 border-bottom: 1px solid #eee;
                 color: #333;
             }
-            QTableWidget::item:selected {
+            QTableView::item:selected {
                 background-color: #3daee9 !important;
                 color: white !important;
             }
-            QTableWidget::item:selected:active {
+            QTableView::item:selected:active {
                 background-color: #2980b9 !important;
                 color: white !important;
             }
-            QTableWidget::item:hover {
+            QTableView::item:hover {
                 background-color: #e8f4fd;
             }
             QHeaderView::section {
@@ -452,19 +444,9 @@ class SilverBarHistoryDialog(QDialog):
         layout.addWidget(details_header)
 
         # Bars in selected list
-        self.list_bars_table = QTableWidget()
-        self.list_bars_table.setColumnCount(7)
-        self.list_bars_table.setHorizontalHeaderLabels(
-            [
-                "Bar ID",
-                "Voucher/Note",
-                "Weight (g)",
-                "Purity (%)",
-                "Fine Wt (g)",
-                "Status",
-                "Date Added",
-            ]
-        )
+        self.list_bars_model = HistoryListBarsTableModel(self)
+        self.list_bars_table = QTableView()
+        self.list_bars_table.setModel(self.list_bars_model)
         self.list_bars_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.list_bars_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.list_bars_table.setAlternatingRowColors(True)
@@ -558,11 +540,43 @@ class SilverBarHistoryDialog(QDialog):
         self._active_load_workers[thread] = worker
         thread.start()
 
-    def _load_bars_fallback(self, payload: dict, request_id: int) -> None:
-        query, params = _BarsHistoryLoadWorker.build_query(payload)
+    @staticmethod
+    def _table_cell_value(table, row: int, column: int, role: int = Qt.DisplayRole):
         try:
-            self.db_manager.cursor.execute(query, params)
-            rows = [dict(row) for row in self.db_manager.cursor.fetchall()]
+            model = table.model()
+            if model is None:
+                return None
+            index = model.index(row, column)
+            if not index.isValid():
+                return None
+            return model.data(index, role)
+        except Exception:
+            return None
+
+    @classmethod
+    def _table_cell_text(cls, table, row: int, column: int) -> str:
+        value = cls._table_cell_value(table, row, column, Qt.DisplayRole)
+        return "" if value is None else str(value)
+
+    @staticmethod
+    def _clear_history_table(table) -> None:
+        try:
+            model = table.model()
+            setter = getattr(model, "set_rows", None)
+            if callable(setter):
+                setter([])
+        except Exception:
+            pass
+
+    def _load_bars_fallback(self, payload: dict, request_id: int) -> None:
+        try:
+            rows = self.db_manager.search_silver_bar_history(
+                voucher_term=str(payload.get("voucher_term") or "").strip(),
+                weight_text=str(payload.get("weight_text") or "").strip(),
+                status_text=str(payload.get("status_text") or "").strip(),
+                limit=int(payload.get("limit", 2000) or 2000),
+            )
+            rows = [dict(row) if not isinstance(row, dict) else dict(row) for row in rows]
             self._on_bars_load_ready(request_id, rows)
         except Exception as exc:
             self._on_bars_load_error(request_id, str(exc))
@@ -620,84 +634,18 @@ class SilverBarHistoryDialog(QDialog):
 
     def populate_bars_table(self, bars_data):
         """Populate the bars table with data."""
-        table = self.bars_table
-        table.setUpdatesEnabled(False)
-        table.blockSignals(True)
-        sorting_enabled = table.isSortingEnabled()
+        normalized_rows = [
+            dict(bar) if not isinstance(bar, dict) else dict(bar)
+            for bar in list(bars_data or [])
+        ]
+        self.bars_model.set_rows(normalized_rows)
+        self.bars_summary.setText(
+            f"Loaded Bars: {len(normalized_rows)} (max {self._table_result_limit()})"
+        )
         try:
-            if sorting_enabled:
-                table.setSortingEnabled(False)
-            table.setRowCount(0)
-
-            if not bars_data:
-                self.bars_summary.setText("Total Bars: 0")
-                return
-
-            table.setRowCount(len(bars_data))
-
-            for row_idx, bar in enumerate(bars_data):
-                voucher_display = bar["estimate_voucher_no"] or "N/A"
-                if bar["estimate_note"]:
-                    voucher_display += f" ({bar['estimate_note']})"
-
-                if bar["list_id"]:
-                    list_display = bar["list_identifier"] or f"List {bar['list_id']}"
-                    list_status = "Issued" if bar["issued_date"] else "Active"
-                else:
-                    list_display = "None"
-                    list_status = "N/A"
-
-                items = [
-                    QTableWidgetItem(str(bar["bar_id"])),
-                    QTableWidgetItem(voucher_display),
-                    QTableWidgetItem(
-                        f"{bar['weight']:.1f}" if bar["weight"] else "0.0"
-                    ),
-                    QTableWidgetItem(
-                        f"{bar['purity']:.1f}" if bar["purity"] else "0.0"
-                    ),
-                    QTableWidgetItem(
-                        f"{bar['fine_weight']:.1f}" if bar["fine_weight"] else "0.0"
-                    ),
-                    QTableWidgetItem(bar["status"] or "Unknown"),
-                    QTableWidgetItem(list_display),
-                    QTableWidgetItem(bar["date_added"] or ""),
-                    QTableWidgetItem(list_status),
-                ]
-
-                for i in [2, 3, 4]:
-                    items[i].setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-
-                status_color = None
-                status_text = bar["status"] or "Unknown"
-                if status_text == "In Stock":
-                    status_color = QColor("#f0f9f0")
-                elif status_text == "Assigned":
-                    status_color = QColor("#f0f4f8")
-                elif status_text == "Issued":
-                    status_color = QColor("#fdf2f2")
-                elif status_text == "Sold":
-                    status_color = QColor("#f7f0ff")
-
-                if status_color:
-                    for item in items:
-                        item.setBackground(status_color)
-
-                for col_idx, item in enumerate(items):
-                    table.setItem(row_idx, col_idx, item)
-
-            self.bars_summary.setText(
-                f"Loaded Bars: {len(bars_data)} (max {self._table_result_limit()})"
-            )
-        finally:
-            if sorting_enabled:
-                try:
-                    table.setSortingEnabled(True)
-                except Exception:
-                    pass
-            table.blockSignals(False)
-            table.setUpdatesEnabled(True)
-            table.viewport().update()
+            self.bars_table.viewport().update()
+        except Exception:
+            pass
 
     def load_issued_lists(self):
         """Load all issued lists."""
@@ -706,54 +654,20 @@ class SilverBarHistoryDialog(QDialog):
             lists = self.db_manager.get_silver_bar_lists(include_issued=True)
             issued_lists = [lst for lst in lists if lst["issued_date"] is not None]
             list_ids = [int(lst["list_id"]) for lst in issued_lists if lst["list_id"]]
-            counts_by_list = {}
-            if list_ids:
-                placeholders = ",".join(["?"] * len(list_ids))
-                self.db_manager.cursor.execute(
-                    f"SELECT list_id, COUNT(*) as count FROM silver_bars "
-                    f"WHERE list_id IN ({placeholders}) GROUP BY list_id",
-                    list_ids,
-                )
-                counts_by_list = {
-                    int(row["list_id"]): int(row["count"])
-                    for row in self.db_manager.cursor.fetchall()
-                }
-
-            table = self.lists_table
-            table.setUpdatesEnabled(False)
-            table.blockSignals(True)
-            sorting_enabled = table.isSortingEnabled()
+            counts_by_list = self.db_manager.count_silver_bars_by_list_ids(list_ids)
+            rows = []
+            for lst in issued_lists:
+                row = dict(lst) if not isinstance(lst, dict) else dict(lst)
+                try:
+                    row["bar_count"] = counts_by_list.get(int(row["list_id"]), 0)
+                except (TypeError, ValueError, KeyError):
+                    row["bar_count"] = 0
+                rows.append(row)
+            self.lists_model.set_rows(rows)
             try:
-                if sorting_enabled:
-                    table.setSortingEnabled(False)
-                table.setRowCount(len(issued_lists))
-
-                for row_idx, lst in enumerate(issued_lists):
-                    bar_count = counts_by_list.get(int(lst["list_id"]), 0)
-
-                    items = [
-                        QTableWidgetItem(str(lst["list_id"])),
-                        QTableWidgetItem(lst["list_identifier"] or ""),
-                        QTableWidgetItem(lst["list_note"] or ""),
-                        QTableWidgetItem(lst["creation_date"] or ""),
-                        QTableWidgetItem(lst["issued_date"] or ""),
-                        QTableWidgetItem(str(bar_count)),
-                    ]
-
-                    items[0].setTextAlignment(Qt.AlignCenter)
-                    items[5].setTextAlignment(Qt.AlignCenter)
-
-                    for col_idx, item in enumerate(items):
-                        table.setItem(row_idx, col_idx, item)
-            finally:
-                if sorting_enabled:
-                    try:
-                        table.setSortingEnabled(True)
-                    except Exception:
-                        pass
-                table.blockSignals(False)
-                table.setUpdatesEnabled(True)
-                table.viewport().update()
+                self.lists_table.viewport().update()
+            except Exception:
+                pass
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load issued lists: {e}")
@@ -793,11 +707,11 @@ class SilverBarHistoryDialog(QDialog):
         if selected_rows:
             self.reactivate_button.setEnabled(True)
             row = selected_rows[0].row()
-            list_id = int(self.lists_table.item(row, 0).text())
+            list_id = int(self._table_cell_text(self.lists_table, row, 0))
             self.load_list_bars(list_id)
         else:
             self.reactivate_button.setEnabled(False)
-            self.list_bars_table.setRowCount(0)
+            self._clear_history_table(self.list_bars_table)
 
     def load_list_bars(self, list_id):
         """Load bars for the selected list."""
@@ -805,53 +719,15 @@ class SilverBarHistoryDialog(QDialog):
             bars = self.db_manager.get_bars_in_list(
                 list_id, limit=self._table_result_limit()
             )
-            table = self.list_bars_table
-            table.setUpdatesEnabled(False)
-            table.blockSignals(True)
-            sorting_enabled = table.isSortingEnabled()
+            normalized_rows = [
+                dict(bar) if not isinstance(bar, dict) else dict(bar)
+                for bar in list(bars or [])
+            ]
+            self.list_bars_model.set_rows(normalized_rows)
             try:
-                if sorting_enabled:
-                    table.setSortingEnabled(False)
-                table.setRowCount(len(bars))
-
-                for row_idx, bar in enumerate(bars):
-                    voucher_display = bar["estimate_voucher_no"] or "N/A"
-                    note = (
-                        bar["estimate_note"] if "estimate_note" in bar.keys() else None
-                    )
-                    if note:
-                        voucher_display += f" ({note})"
-
-                    items = [
-                        QTableWidgetItem(str(bar["bar_id"])),
-                        QTableWidgetItem(voucher_display),
-                        QTableWidgetItem(
-                            f"{bar['weight']:.1f}" if bar["weight"] else "0.0"
-                        ),
-                        QTableWidgetItem(
-                            f"{bar['purity']:.1f}" if bar["purity"] else "0.0"
-                        ),
-                        QTableWidgetItem(
-                            f"{bar['fine_weight']:.1f}" if bar["fine_weight"] else "0.0"
-                        ),
-                        QTableWidgetItem(bar["status"] or "Unknown"),
-                        QTableWidgetItem(bar["date_added"] or ""),
-                    ]
-
-                    for i in [2, 3, 4]:
-                        items[i].setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-
-                    for col_idx, item in enumerate(items):
-                        table.setItem(row_idx, col_idx, item)
-            finally:
-                if sorting_enabled:
-                    try:
-                        table.setSortingEnabled(True)
-                    except Exception:
-                        pass
-                table.blockSignals(False)
-                table.setUpdatesEnabled(True)
-                table.viewport().update()
+                self.list_bars_table.viewport().update()
+            except Exception:
+                pass
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load list bars: {e}")
@@ -863,8 +739,8 @@ class SilverBarHistoryDialog(QDialog):
             return
 
         row = selected_rows[0].row()
-        list_id = int(self.lists_table.item(row, 0).text())
-        list_identifier = self.lists_table.item(row, 1).text()
+        list_id = int(self._table_cell_text(self.lists_table, row, 0))
+        list_identifier = self._table_cell_text(self.lists_table, row, 1)
 
         reply = QMessageBox.question(
             self,
@@ -880,19 +756,9 @@ class SilverBarHistoryDialog(QDialog):
 
         if reply == QMessageBox.Yes:
             try:
-                # Remove issued date
-                self.db_manager.cursor.execute(
-                    "UPDATE silver_bar_lists SET issued_date = NULL WHERE list_id = ?",
-                    (list_id,),
-                )
-
-                # Set all bars back to 'Assigned' status
-                self.db_manager.cursor.execute(
-                    "UPDATE silver_bars SET status = 'Assigned' WHERE list_id = ?",
-                    (list_id,),
-                )
-
-                self.db_manager.conn.commit()
+                success = self.db_manager.reactivate_silver_bar_list(list_id)
+                if not success:
+                    raise RuntimeError("Failed to reactivate the selected list.")
 
                 QMessageBox.information(
                     self, "Success", f"List '{list_identifier}' has been reactivated."
@@ -962,9 +828,8 @@ class SilverBarHistoryDialog(QDialog):
             for idx in selected:
                 r = idx.row()
                 values = []
-                for c in range(table.columnCount()):
-                    item = table.item(r, c)
-                    values.append(item.text() if item else "")
+                for c in range(table.model().columnCount()):
+                    values.append(self._table_cell_text(table, r, c))
                 rows.append("\t".join(values))
 
             text = "\n".join(rows)
@@ -1010,75 +875,19 @@ class _BarsHistoryLoadWorker(QObject):
         self.db_path = db_path
         self.payload = payload or {}
 
-    @staticmethod
-    def build_query(payload: dict) -> tuple[str, list]:
-        conditions = []
-        params = []
-
-        voucher_term = str(payload.get("voucher_term") or "").strip()
-        if voucher_term:
-            conditions.append("(sb.estimate_voucher_no LIKE ? OR e.note LIKE ?)")
-            pattern = f"%{voucher_term}%"
-            params.extend([pattern, pattern])
-
-        weight_text = str(payload.get("weight_text") or "").strip()
-        if weight_text:
-            try:
-                weight_value = float(weight_text)
-                conditions.append("sb.weight = ?")
-                params.append(weight_value)
-            except ValueError:
-                pass
-
-        status_text = str(payload.get("status_text") or "").strip()
-        if status_text and status_text != "All Statuses":
-            conditions.append("sb.status = ?")
-            params.append(status_text)
-
-        limit = payload.get("limit", 2000)
-        try:
-            limit_value = max(100, int(limit))
-        except (TypeError, ValueError):
-            limit_value = 2000
-
-        base_query = """
-        SELECT
-            sb.bar_id, sb.estimate_voucher_no, sb.weight, sb.purity, sb.fine_weight,
-            sb.status, sb.date_added, sb.list_id,
-            sbl.list_identifier, sbl.issued_date,
-            e.note as estimate_note
-        FROM silver_bars sb
-        LEFT JOIN silver_bar_lists sbl ON sb.list_id = sbl.list_id
-        LEFT JOIN estimates e ON sb.estimate_voucher_no = e.voucher_no
-        """
-        if conditions:
-            query = base_query + " WHERE " + " AND ".join(conditions)
-        else:
-            query = base_query
-        query += " ORDER BY sb.date_added DESC LIMIT ?"
-        params.append(limit_value)
-        return query, params
-
     def run(self):
-        import sqlite3
-
-        conn = None
         try:
-            query, params = self.build_query(self.payload)
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
-            cur.execute(query, params)
-            rows = [dict(row) for row in cur.fetchall()]
+            snapshot = SilverBarsSnapshotRepository(self.db_path)
+            rows = snapshot.search_history_bars(
+                voucher_term=str(self.payload.get("voucher_term") or "").strip(),
+                weight_text=str(self.payload.get("weight_text") or "").strip(),
+                status_text=str(self.payload.get("status_text") or "").strip(),
+                limit=int(self.payload.get("limit", 2000) or 2000),
+            )
             self.data_ready.emit(rows)
         except Exception as exc:
             self.error.emit(str(exc))
         finally:
-            if conn is not None:
-                try:
-                    conn.close()
-                except Exception:
-                    pass
             self.finished.emit()
 
 

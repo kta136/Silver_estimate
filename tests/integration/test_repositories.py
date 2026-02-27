@@ -563,6 +563,56 @@ def test_silver_bar_list_query_limit_and_offset(fake_db):
     assert offset_rows[0]["bar_id"] == limited[1]["bar_id"]
 
 
+def test_silver_bar_repository_available_page_and_history_search(fake_db):
+    repo = SilverBarsRepository(fake_db)
+    list_id = repo.create_list("Page List")
+    assert list_id is not None
+
+    free_bar = repo.add_silver_bar("PAGE1", 10.0, 99.0)
+    assigned_bar = repo.add_silver_bar("PAGE2", 11.0, 98.0)
+    assert free_bar is not None
+    assert assigned_bar is not None
+    assert repo.assign_bar_to_list(assigned_bar, list_id)
+
+    available_rows, total_count = repo.get_available_bars_page(limit=10)
+    assert total_count == 1
+    assert [row["bar_id"] for row in available_rows] == [free_bar]
+
+    history_rows = repo.search_history_bars(
+        voucher_term="PAGE2",
+        weight_text="11.0",
+        status_text="Assigned",
+        limit=2000,
+    )
+    assert [row["bar_id"] for row in history_rows] == [assigned_bar]
+
+
+def test_silver_bar_repository_counts_rows_by_list_and_cycles_issue_state(fake_db):
+    repo = SilverBarsRepository(fake_db)
+    list_id = repo.create_list("Issued List")
+    assert list_id is not None
+
+    first_bar = repo.add_silver_bar("ISSUE1", 7.5, 99.0)
+    second_bar = repo.add_silver_bar("ISSUE2", 8.5, 98.0)
+    assert first_bar is not None
+    assert second_bar is not None
+    assert repo.assign_bar_to_list(first_bar, list_id)
+    assert repo.assign_bar_to_list(second_bar, list_id)
+
+    assert repo.count_bars_by_list_ids([list_id, 999999]) == {list_id: 2}
+
+    issued_at = "2026-02-27 09:30:00"
+    assert repo.mark_list_as_issued(list_id, issued_at)
+    details = repo.get_list_details(list_id)
+    assert details["issued_date"] == issued_at
+    assert {row["status"] for row in repo.get_bars_in_list(list_id)} == {"Issued"}
+
+    assert repo.reactivate_list(list_id)
+    details = repo.get_list_details(list_id)
+    assert details["issued_date"] is None
+    assert {row["status"] for row in repo.get_bars_in_list(list_id)} == {"Assigned"}
+
+
 def test_estimate_repository_load_preserves_item_types(fake_db):
     repo = EstimatesRepository(fake_db)
     items_repo = ItemsRepository(fake_db)

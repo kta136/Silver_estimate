@@ -7,6 +7,12 @@ import sqlite3
 from datetime import datetime
 from typing import Any, Iterable, List, Mapping, Optional, Tuple
 
+from silverestimate.persistence.silver_bars_queries import (
+    build_available_bars_queries,
+    build_bars_in_list_queries,
+    build_history_bars_query,
+)
+
 
 class SilverBarsRepository:
     """Encapsulate silver bar list and inventory persistence logic."""
@@ -130,6 +136,75 @@ class SilverBarsRepository:
                 "DB error updating list note for ID %s: %s", list_id, exc, exc_info=True
             )
             conn.rollback()
+            return False
+
+    def mark_list_as_issued(
+        self, list_id: int, issued_date: Optional[str] = None
+    ) -> bool:
+        conn, cursor = self._conn, self._cursor
+        if not conn or not cursor:
+            return False
+        issued_at = issued_date or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            conn.execute("BEGIN TRANSACTION")
+            cursor.execute(
+                "UPDATE silver_bar_lists SET issued_date = ? WHERE list_id = ?",
+                (issued_at, list_id),
+            )
+            if cursor.rowcount <= 0:
+                conn.rollback()
+                return False
+            cursor.execute(
+                "UPDATE silver_bars SET status = 'Issued' WHERE list_id = ?",
+                (list_id,),
+            )
+            conn.commit()
+            self._request_flush()
+            return True
+        except sqlite3.Error as exc:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            self._logger.error(
+                "DB error marking list %s as issued: %s",
+                list_id,
+                exc,
+                exc_info=True,
+            )
+            return False
+
+    def reactivate_list(self, list_id: int) -> bool:
+        conn, cursor = self._conn, self._cursor
+        if not conn or not cursor:
+            return False
+        try:
+            conn.execute("BEGIN TRANSACTION")
+            cursor.execute(
+                "UPDATE silver_bar_lists SET issued_date = NULL WHERE list_id = ?",
+                (list_id,),
+            )
+            if cursor.rowcount <= 0:
+                conn.rollback()
+                return False
+            cursor.execute(
+                "UPDATE silver_bars SET status = 'Assigned' WHERE list_id = ?",
+                (list_id,),
+            )
+            conn.commit()
+            self._request_flush()
+            return True
+        except sqlite3.Error as exc:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            self._logger.error(
+                "DB error reactivating list %s: %s",
+                list_id,
+                exc,
+                exc_info=True,
+            )
             return False
 
     def delete_list(self, list_id: int) -> Tuple[bool, str]:
@@ -469,6 +544,73 @@ class SilverBarsRepository:
 
     # --- Queries ------------------------------------------------------------
 
+    def get_available_bars_page(
+        self,
+        *,
+        weight_query: Optional[float] = None,
+        weight_tolerance: float = 0.001,
+        min_purity: Optional[float] = None,
+        max_purity: Optional[float] = None,
+        date_range: Optional[Tuple[Optional[str], Optional[str]]] = None,
+        limit: Optional[int] = None,
+    ) -> tuple[list[Any], int]:
+        cursor = self._cursor
+        if not cursor:
+            return [], 0
+        statements = build_available_bars_queries(
+            weight_query=weight_query,
+            weight_tolerance=weight_tolerance,
+            min_purity=min_purity,
+            max_purity=max_purity,
+            date_range=date_range,
+            limit=limit,
+        )
+        try:
+            cursor.execute(
+                statements.count_query.query,
+                tuple(statements.count_query.params),
+            )
+            count_row = cursor.fetchone()
+            total_count = int(count_row[0]) if count_row else 0
+            cursor.execute(statements.query.query, tuple(statements.query.params))
+            return cursor.fetchall(), total_count
+        except sqlite3.Error as exc:
+            self._logger.error(
+                "DB error fetching available silver bars page: %s",
+                exc,
+                exc_info=True,
+            )
+            return [], 0
+
+    def get_bars_in_list_page(
+        self,
+        list_id: int,
+        *,
+        limit: Optional[int] = None,
+        offset: int = 0,
+    ) -> tuple[list[Any], int]:
+        cursor = self._cursor
+        if not cursor:
+            return [], 0
+        statements = build_bars_in_list_queries(list_id, limit=limit, offset=offset)
+        try:
+            cursor.execute(
+                statements.count_query.query,
+                tuple(statements.count_query.params),
+            )
+            count_row = cursor.fetchone()
+            total_count = int(count_row[0]) if count_row else 0
+            cursor.execute(statements.query.query, tuple(statements.query.params))
+            return cursor.fetchall(), total_count
+        except sqlite3.Error as exc:
+            self._logger.error(
+                "DB error fetching bars page for list %s: %s",
+                list_id,
+                exc,
+                exc_info=True,
+            )
+            return [], 0
+
     def get_bars_in_list(
         self,
         list_id: int,
@@ -476,31 +618,12 @@ class SilverBarsRepository:
         limit: Optional[int] = None,
         offset: int = 0,
     ):
-        cursor = self._cursor
-        if not cursor:
-            return []
-        try:
-            query = (
-                "SELECT sb.*, e.note AS estimate_note "
-                "FROM silver_bars sb "
-                "LEFT JOIN estimates e ON sb.estimate_voucher_no = e.voucher_no "
-                "WHERE sb.list_id = ? "
-                "ORDER BY sb.bar_id"
-            )
-            params: List[Any] = [list_id]
-            if isinstance(limit, int) and limit > 0:
-                query += " LIMIT ?"
-                params.append(int(limit))
-                if isinstance(offset, int) and offset > 0:
-                    query += " OFFSET ?"
-                    params.append(int(offset))
-            cursor.execute(query, params)
-            return cursor.fetchall()
-        except sqlite3.Error as exc:
-            self._logger.error(
-                "DB error fetching bars for list %s: %s", list_id, exc, exc_info=True
-            )
-            return []
+        rows, _total_count = self.get_bars_in_list_page(
+            list_id,
+            limit=limit,
+            offset=offset,
+        )
+        return rows
 
     def get_available_bars(self):
         cursor = self._cursor
@@ -517,6 +640,61 @@ class SilverBarsRepository:
                 "DB error fetching available bars: %s", exc, exc_info=True
             )
             return []
+
+    def search_history_bars(
+        self,
+        *,
+        voucher_term: str = "",
+        weight_text: str = "",
+        status_text: str = "All Statuses",
+        limit: int = 2000,
+    ):
+        cursor = self._cursor
+        if not cursor:
+            return []
+        statement = build_history_bars_query(
+            voucher_term=voucher_term,
+            weight_text=weight_text,
+            status_text=status_text,
+            limit=limit,
+        )
+        try:
+            cursor.execute(statement.query, tuple(statement.params))
+            return cursor.fetchall()
+        except sqlite3.Error as exc:
+            self._logger.error(
+                "DB error searching silver-bar history: %s",
+                exc,
+                exc_info=True,
+            )
+            return []
+
+    def count_bars_by_list_ids(self, list_ids: Iterable[int]) -> dict[int, int]:
+        cursor = self._cursor
+        if not cursor:
+            return {}
+        normalized_ids = self._normalize_bar_ids(list_ids)
+        if not normalized_ids:
+            return {}
+        placeholders = ",".join("?" for _ in normalized_ids)
+        try:
+            cursor.execute(
+                f"SELECT list_id, COUNT(*) AS count FROM silver_bars "
+                f"WHERE list_id IN ({placeholders}) GROUP BY list_id",
+                normalized_ids,
+            )
+            return {
+                int(row["list_id"]): int(row["count"])
+                for row in cursor.fetchall()
+                if row["list_id"] is not None
+            }
+        except sqlite3.Error as exc:
+            self._logger.error(
+                "DB error counting silver bars by list ids: %s",
+                exc,
+                exc_info=True,
+            )
+            return {}
 
     def get_silver_bars_for_estimate(self, voucher_no: str):
         cursor = self._cursor

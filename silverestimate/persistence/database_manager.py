@@ -757,6 +757,59 @@ class DatabaseManager:
             list_id, limit=limit, offset=offset
         )
 
+    def get_available_silver_bars_page(
+        self,
+        *,
+        weight_query=None,
+        weight_tolerance=0.001,
+        min_purity=None,
+        max_purity=None,
+        date_range=None,
+        limit=None,
+    ):
+        return self.silver_bars_repo.get_available_bars_page(
+            weight_query=weight_query,
+            weight_tolerance=weight_tolerance,
+            min_purity=min_purity,
+            max_purity=max_purity,
+            date_range=date_range,
+            limit=limit,
+        )
+
+    def get_silver_bars_in_list_page(self, list_id, *, limit=None, offset=0):
+        return self.silver_bars_repo.get_bars_in_list_page(
+            list_id,
+            limit=limit,
+            offset=offset,
+        )
+
+    def search_silver_bar_history(
+        self,
+        *,
+        voucher_term="",
+        weight_text="",
+        status_text="All Statuses",
+        limit=2000,
+    ):
+        return self.silver_bars_repo.search_history_bars(
+            voucher_term=voucher_term,
+            weight_text=weight_text,
+            status_text=status_text,
+            limit=limit,
+        )
+
+    def count_silver_bars_by_list_ids(self, list_ids):
+        return self.silver_bars_repo.count_bars_by_list_ids(list_ids)
+
+    def mark_silver_bar_list_as_issued(self, list_id, issued_date=None):
+        return self.silver_bars_repo.mark_list_as_issued(
+            list_id,
+            issued_date=issued_date,
+        )
+
+    def reactivate_silver_bar_list(self, list_id):
+        return self.silver_bars_repo.reactivate_list(list_id)
+
     def get_available_bars(self):
         return self.silver_bars_repo.get_available_bars()
 

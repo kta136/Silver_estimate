@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 import logging
-import sqlite3
 import time
 import traceback  # Added for error handling in actions
 from datetime import datetime, timedelta
 
 from PyQt5.QtCore import QObject, Qt, QThread, QTimer, pyqtSignal
-from PyQt5.QtGui import QColor, QKeySequence
+from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -29,13 +28,19 @@ from PyQt5.QtWidgets import (
     QSizePolicy,
     QSpinBox,
     QSplitter,
-    QTableWidget,
-    QTableWidgetItem,
+    QTableView,
     QVBoxLayout,
     QWidget,
 )
 
 from silverestimate.infrastructure.settings import get_app_settings
+from silverestimate.persistence.silver_bars_snapshot_repository import (
+    SilverBarsSnapshotRepository,
+)
+from silverestimate.ui.models import (
+    AvailableSilverBarsTableModel,
+    SelectedListSilverBarsTableModel,
+)
 
 
 class _BarsLoadWorker(QObject):
@@ -53,145 +58,39 @@ class _BarsLoadWorker(QObject):
         self.payload = payload
 
     def run(self):
-        conn = None
         try:
-            if not self.db_path:
-                raise RuntimeError("Temporary database path is unavailable.")
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
+            snapshot = SilverBarsSnapshotRepository(self.db_path)
 
             if self.target == "available":
-                rows, total_count = self._load_available_rows(cursor)
+                rows, total_count = snapshot.get_available_bars_page(
+                    weight_query=(self.payload or {}).get("weight_query"),
+                    weight_tolerance=(self.payload or {}).get(
+                        "weight_tolerance", 0.001
+                    ),
+                    min_purity=(self.payload or {}).get("min_purity"),
+                    max_purity=(self.payload or {}).get("max_purity"),
+                    date_range=(self.payload or {}).get("date_range"),
+                    limit=(self.payload or {}).get("limit"),
+                )
             elif self.target == "list":
-                rows, total_count = self._load_list_rows(cursor)
+                rows, total_count = snapshot.get_bars_in_list_page(
+                    (self.payload or {}).get("list_id"),
+                    limit=(self.payload or {}).get("limit"),
+                    offset=(self.payload or {}).get("offset", 0),
+                )
             else:
                 raise ValueError(f"Unknown load target: {self.target}")
 
             self.data_ready.emit(
                 self.target,
                 self.request_id,
-                [dict(row) for row in rows],
+                list(rows),
                 int(total_count),
             )
         except Exception as exc:
             self.error.emit(self.target, self.request_id, str(exc))
         finally:
-            if conn is not None:
-                try:
-                    conn.close()
-                except Exception:
-                    pass
             self.finished.emit(self.target, self.request_id)
-
-    def _load_available_rows(self, cursor):
-        payload = self.payload or {}
-        query = (
-            "SELECT sb.*, e.note AS estimate_note "
-            "FROM silver_bars sb "
-            "LEFT JOIN estimates e ON sb.estimate_voucher_no = e.voucher_no "
-            "WHERE sb.status = 'In Stock' AND sb.list_id IS NULL"
-        )
-        count_query = "SELECT COUNT(*) FROM silver_bars sb WHERE sb.status = 'In Stock' AND sb.list_id IS NULL"
-        params = []
-        count_params = []
-
-        weight_query = payload.get("weight_query")
-        if weight_query not in (None, ""):
-            try:
-                target = float(weight_query)
-                tolerance = float(payload.get("weight_tolerance", 0.001) or 0.001)
-                query += " AND sb.weight BETWEEN ? AND ?"
-                count_query += " AND sb.weight BETWEEN ? AND ?"
-                bounds = [target - tolerance, target + tolerance]
-                params.extend(bounds)
-                count_params.extend(bounds)
-            except (TypeError, ValueError):
-                pass
-
-        min_purity = payload.get("min_purity")
-        if min_purity is not None:
-            try:
-                val = float(min_purity)
-                query += " AND sb.purity >= ?"
-                count_query += " AND sb.purity >= ?"
-                params.append(val)
-                count_params.append(val)
-            except (TypeError, ValueError):
-                pass
-
-        max_purity = payload.get("max_purity")
-        if max_purity is not None:
-            try:
-                val = float(max_purity)
-                query += " AND sb.purity <= ?"
-                count_query += " AND sb.purity <= ?"
-                params.append(val)
-                count_params.append(val)
-            except (TypeError, ValueError):
-                pass
-
-        date_range = payload.get("date_range")
-        if (
-            date_range
-            and isinstance(date_range, (tuple, list))
-            and len(date_range) == 2
-        ):
-            start_iso, end_iso = date_range
-            if start_iso:
-                query += " AND sb.date_added >= ?"
-                count_query += " AND sb.date_added >= ?"
-                params.append(start_iso)
-                count_params.append(start_iso)
-            if end_iso:
-                query += " AND sb.date_added <= ?"
-                count_query += " AND sb.date_added <= ?"
-                params.append(end_iso)
-                count_params.append(end_iso)
-
-        cursor.execute(count_query, count_params)
-        count_row = cursor.fetchone()
-        total_count = int(count_row[0]) if count_row else 0
-
-        query += " ORDER BY sb.date_added DESC, sb.bar_id DESC"
-        limit = payload.get("limit")
-        if isinstance(limit, int) and limit > 0:
-            query += " LIMIT ?"
-            params.append(int(limit))
-
-        cursor.execute(query, params)
-        return cursor.fetchall(), total_count
-
-    def _load_list_rows(self, cursor):
-        payload = self.payload or {}
-        list_id = payload.get("list_id")
-        if list_id is None:
-            return [], 0
-
-        count_query = "SELECT COUNT(*) FROM silver_bars WHERE list_id = ?"
-        cursor.execute(count_query, (list_id,))
-        count_row = cursor.fetchone()
-        total_count = int(count_row[0]) if count_row else 0
-
-        query = (
-            "SELECT sb.*, e.note AS estimate_note "
-            "FROM silver_bars sb "
-            "LEFT JOIN estimates e ON sb.estimate_voucher_no = e.voucher_no "
-            "WHERE sb.list_id = ? "
-            "ORDER BY sb.bar_id"
-        )
-        params = [list_id]
-        limit = payload.get("limit")
-        if isinstance(limit, int) and limit > 0:
-            query += " LIMIT ?"
-            params.append(int(limit))
-            offset = payload.get("offset")
-            if isinstance(offset, int) and offset > 0:
-                query += " OFFSET ?"
-                params.append(int(offset))
-
-        cursor.execute(query, params)
-        return cursor.fetchall(), total_count
 
 
 class SilverBarDialog(QDialog):
@@ -482,22 +381,9 @@ class SilverBarDialog(QDialog):
         """)
         left_layout.addWidget(self.available_header_badge)
 
-        self.available_bars_table = QTableWidget()
-        self.available_bars_table.setColumnCount(
-            7
-        )  # bar_id, estimate_voucher_no, weight, purity, fine_weight, date_added, status
-        self.available_bars_table.setHorizontalHeaderLabels(
-            [
-                "ID",
-                "Voucher/Note",
-                "Weight (g)",
-                "Purity (%)",
-                "Fine Wt (g)",
-                "Date Added",
-                "Status",
-            ]
-        )
-        self.available_bars_table.setColumnHidden(0, True)  # Hide bar_id
+        self.available_bars_model = AvailableSilverBarsTableModel(self)
+        self.available_bars_table = QTableView()
+        self.available_bars_table.setModel(self.available_bars_model)
         self.available_bars_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.available_bars_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.available_bars_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
@@ -507,18 +393,18 @@ class SilverBarDialog(QDialog):
 
         # Improved table styling for better readability
         self.available_bars_table.setStyleSheet("""
-            QTableWidget {
+            QTableView {
                 font-size: 13px;
                 gridline-color: #ddd;
                 background-color: white;
                 alternate-background-color: #f9f9f9;
                 selection-background-color: #e6f2ff;
             }
-            QTableWidget::item {
+            QTableView::item {
                 padding: 8px 4px;
                 border-bottom: 1px solid #eee;
             }
-            QTableWidget::item:selected {
+            QTableView::item:selected {
                 background-color: #d4e7ff;
                 color: black;
             }
@@ -539,12 +425,12 @@ class SilverBarDialog(QDialog):
         self.available_bars_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.Interactive
         )
-        self.available_bars_table.setColumnWidth(1, 280)
+        self.available_bars_table.setColumnWidth(0, 280)
+        self.available_bars_table.setColumnWidth(1, 110)
         self.available_bars_table.setColumnWidth(2, 110)
-        self.available_bars_table.setColumnWidth(3, 110)
-        self.available_bars_table.setColumnWidth(4, 120)
-        self.available_bars_table.setColumnWidth(5, 150)
-        self.available_bars_table.setColumnWidth(6, 100)
+        self.available_bars_table.setColumnWidth(3, 120)
+        self.available_bars_table.setColumnWidth(4, 150)
+        self.available_bars_table.setColumnWidth(5, 100)
         self.available_bars_table.horizontalHeader().setStretchLastSection(True)
         # Context menu for quick actions
         self.available_bars_table.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -954,20 +840,9 @@ class SilverBarDialog(QDialog):
         right_layout.addLayout(info_actions_row)
 
         # List table with improved styling
-        self.list_bars_table = QTableWidget()
-        self.list_bars_table.setColumnCount(7)
-        self.list_bars_table.setHorizontalHeaderLabels(
-            [
-                "ID",
-                "Voucher/Note",
-                "Weight (g)",
-                "Purity (%)",
-                "Fine Wt (g)",
-                "Date Added",
-                "Status",
-            ]
-        )
-        self.list_bars_table.setColumnHidden(0, True)
+        self.list_bars_model = SelectedListSilverBarsTableModel(self)
+        self.list_bars_table = QTableView()
+        self.list_bars_table.setModel(self.list_bars_model)
         self.list_bars_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.list_bars_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.list_bars_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
@@ -977,18 +852,18 @@ class SilverBarDialog(QDialog):
 
         # Apply same improved styling as available bars table
         self.list_bars_table.setStyleSheet("""
-            QTableWidget {
+            QTableView {
                 font-size: 13px;
                 gridline-color: #ddd;
                 background-color: white;
                 alternate-background-color: #f9f9f9;
                 selection-background-color: #e6f2ff;
             }
-            QTableWidget::item {
+            QTableView::item {
                 padding: 8px 4px;
                 border-bottom: 1px solid #eee;
             }
-            QTableWidget::item:selected {
+            QTableView::item:selected {
                 background-color: #d4e7ff;
                 color: black;
             }
@@ -1009,12 +884,12 @@ class SilverBarDialog(QDialog):
         self.list_bars_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.Interactive
         )
-        self.list_bars_table.setColumnWidth(1, 280)
+        self.list_bars_table.setColumnWidth(0, 280)
+        self.list_bars_table.setColumnWidth(1, 110)
         self.list_bars_table.setColumnWidth(2, 110)
-        self.list_bars_table.setColumnWidth(3, 110)
-        self.list_bars_table.setColumnWidth(4, 120)
-        self.list_bars_table.setColumnWidth(5, 150)
-        self.list_bars_table.setColumnWidth(6, 100)
+        self.list_bars_table.setColumnWidth(3, 120)
+        self.list_bars_table.setColumnWidth(4, 150)
+        self.list_bars_table.setColumnWidth(5, 100)
         self.list_bars_table.horizontalHeader().setStretchLastSection(True)
         self.list_bars_table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.list_bars_table.customContextMenuRequested.connect(
@@ -1167,11 +1042,11 @@ class SilverBarDialog(QDialog):
 
         # Double-click transfers
         try:
-            self.available_bars_table.cellDoubleClicked.connect(
-                lambda r, c: self.add_selected_to_list()
+            self.available_bars_table.doubleClicked.connect(
+                lambda _index: self.add_selected_to_list()
             )
-            self.list_bars_table.cellDoubleClicked.connect(
-                lambda r, c: self.remove_selected_from_list()
+            self.list_bars_table.doubleClicked.connect(
+                lambda _index: self.remove_selected_from_list()
             )
         except Exception:
             pass
@@ -1275,24 +1150,20 @@ class SilverBarDialog(QDialog):
         if not db_path:
             try:
                 if target == "available":
-                    rows = self.db_manager.get_silver_bars(
-                        status="In Stock",
+                    rows, total_count = self.db_manager.get_available_silver_bars_page(
                         weight_query=payload.get("weight_query"),
                         weight_tolerance=payload.get("weight_tolerance", 0.001),
                         min_purity=payload.get("min_purity"),
                         max_purity=payload.get("max_purity"),
                         date_range=payload.get("date_range"),
                         limit=payload.get("limit"),
-                        unassigned_only=True,
                     )
-                    total_count = len(rows or [])
                 else:
-                    rows = self.db_manager.get_bars_in_list(
+                    rows, total_count = self.db_manager.get_silver_bars_in_list_page(
                         payload.get("list_id"),
                         limit=payload.get("limit"),
                         offset=payload.get("offset", 0),
                     )
-                    total_count = len(rows or [])
                 normalized_rows = [
                     dict(row) if not isinstance(row, dict) else row
                     for row in rows or []
@@ -1358,12 +1229,14 @@ class SilverBarDialog(QDialog):
             return
         self._load_started_at.pop((target, request_id), None)
         if target == "available":
-            self.available_bars_table.setRowCount(0)
+            self.available_bars_model.set_rows([], total_count=0)
+            self._populate_table(self.available_bars_table, [], total_rows=0)
             QMessageBox.critical(
                 self, "Error", f"Failed to load available bars: {message}"
             )
         elif target == "list":
-            self.list_bars_table.setRowCount(0)
+            self.list_bars_model.set_rows([], total_count=0)
+            self._populate_table(self.list_bars_table, [], total_rows=0)
             QMessageBox.critical(
                 self,
                 "Error",
@@ -1508,12 +1381,12 @@ class SilverBarDialog(QDialog):
             self.load_bars_in_selected_list()
         else:
             self.list_info_label.setText("No list selected")
-            self.list_bars_table.setRowCount(0)  # Clear list bars table
+            self._clear_management_table(self.list_bars_table)
 
     def load_bars_in_selected_list(self):
         """Loads bars assigned to the currently selected list."""
         if self.current_list_id is None:
-            self.list_bars_table.setRowCount(0)
+            self._clear_management_table(self.list_bars_table)
             return
 
         self._start_bars_load(
@@ -1609,9 +1482,9 @@ class SilverBarDialog(QDialog):
         # Assign selected bars
         bar_ids = []
         for index in selected:
-            item = self.available_bars_table.item(index.row(), 0)
-            if item:
-                bar_ids.append(item.data(Qt.UserRole))
+            bar_id = self._bar_id_from_table(self.available_bars_table, index.row())
+            if bar_id is not None:
+                bar_ids.append(bar_id)
         added_count = 0
         failed = []
         try:
@@ -1651,13 +1524,9 @@ class SilverBarDialog(QDialog):
 
         bar_ids_to_add = []
         for index in selected_rows:
-            bar_id_item = self.available_bars_table.item(
-                index.row(), 0
-            )  # Hidden ID column
-            if bar_id_item:
-                bar_ids_to_add.append(
-                    bar_id_item.data(Qt.UserRole)
-                )  # Get ID from item data
+            bar_id = self._bar_id_from_table(self.available_bars_table, index.row())
+            if bar_id is not None:
+                bar_ids_to_add.append(bar_id)
 
         if not bar_ids_to_add:
             QMessageBox.warning(self, "Error", "Could not get IDs for selected bars.")
@@ -1717,9 +1586,9 @@ class SilverBarDialog(QDialog):
 
         bar_ids_to_remove = []
         for index in selected_rows:
-            bar_id_item = self.list_bars_table.item(index.row(), 0)  # Hidden ID column
-            if bar_id_item:
-                bar_ids_to_remove.append(bar_id_item.data(Qt.UserRole))
+            bar_id = self._bar_id_from_table(self.list_bars_table, index.row())
+            if bar_id is not None:
+                bar_ids_to_remove.append(bar_id)
 
         if not bar_ids_to_remove:
             QMessageBox.warning(self, "Error", "Could not get IDs for selected bars.")
@@ -1861,24 +1730,11 @@ class SilverBarDialog(QDialog):
 
         if reply == QMessageBox.Yes:
             try:
-                # Mark the list as issued
-                issued_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                self.db_manager.cursor.execute(
-                    """
-                    UPDATE silver_bar_lists SET issued_date = ? WHERE list_id = ?
-                """,
-                    (issued_date, self.current_list_id),
+                success = self.db_manager.mark_silver_bar_list_as_issued(
+                    self.current_list_id
                 )
-
-                # Update all bars in this list to 'Issued' status
-                self.db_manager.cursor.execute(
-                    """
-                    UPDATE silver_bars SET status = 'Issued' WHERE list_id = ?
-                """,
-                    (self.current_list_id,),
-                )
-
-                self.db_manager.conn.commit()
+                if not success:
+                    raise RuntimeError("Failed to mark the selected list as issued.")
 
                 QMessageBox.information(
                     self,
@@ -2131,176 +1987,90 @@ class SilverBarDialog(QDialog):
         return []
 
     # --- Helper Methods ---
-    def _populate_table(self, table, bars_data, *, total_rows=None):
-        """Helper function to populate a table widget with bar data and update totals."""
-        start = time.perf_counter()
-        # Prevent signal storms and row shuffling while inserting
-        table.blockSignals(True)
-        sorting_was_enabled = False
+    @staticmethod
+    def _table_cell_value(table, row: int, column: int, role: int = Qt.DisplayRole):
         try:
-            sorting_was_enabled = table.isSortingEnabled()
-            if sorting_was_enabled:
-                table.setSortingEnabled(False)
+            model = table.model()
+            if model is None:
+                return None
+            index = model.index(row, column)
+            if not index.isValid():
+                return None
+            return model.data(index, role)
+        except Exception:
+            return None
+
+    @classmethod
+    def _table_cell_text(cls, table, row: int, column: int) -> str:
+        value = cls._table_cell_value(table, row, column, Qt.DisplayRole)
+        return "" if value is None else str(value)
+
+    @staticmethod
+    def _bar_id_from_table(table, row: int):
+        try:
+            model = table.model()
+            getter = getattr(model, "bar_id_at", None)
+            if callable(getter):
+                return getter(row)
         except Exception:
             pass
-        table.setRowCount(0)  # Clear existing rows
+        return None
 
-        # Initialize totals
+    def _clear_management_table(self, table) -> None:
+        try:
+            model = table.model()
+            setter = getattr(model, "set_rows", None)
+            if callable(setter):
+                setter([], total_count=0)
+        except Exception:
+            pass
+
+    def _populate_table(self, table, bars_data, *, total_rows=None):
+        """Update a model-backed management table and its totals labels."""
+        start = time.perf_counter()
         total_weight = 0.0
         total_fine_weight = 0.0
         bar_count = 0
         try:
-            if bars_data:
-                table.setRowCount(len(bars_data))
-                for row_idx, bar_row in enumerate(bars_data):
-                    bar_id = bar_row["bar_id"]
-                    id_item = QTableWidgetItem(str(bar_id))
-                    id_item.setData(Qt.UserRole, bar_id)  # Store ID in item data
+            normalized_rows = [
+                dict(bar_row) if not isinstance(bar_row, dict) else dict(bar_row)
+                for bar_row in list(bars_data or [])
+            ]
+            model = table.model()
+            setter = getattr(model, "set_rows", None)
+            if callable(setter):
+                setter(normalized_rows, total_count=total_rows)
 
-                    # Access items using dictionary-style keys for sqlite3.Row
-                    voucher_no = (
-                        bar_row["estimate_voucher_no"]
-                        if "estimate_voucher_no" in bar_row.keys()
-                        else "N/A"
-                    )
+            for bar_row in normalized_rows:
+                try:
+                    total_weight += float(bar_row.get("weight") or 0.0)
+                except (TypeError, ValueError):
+                    pass
+                try:
+                    total_fine_weight += float(bar_row.get("fine_weight") or 0.0)
+                except (TypeError, ValueError):
+                    pass
+                bar_count += 1
 
-                    note = (
-                        bar_row["estimate_note"]
-                        if "estimate_note" in bar_row.keys()
-                        and bar_row["estimate_note"] is not None
-                        else ""
-                    )
-
-                    # Create display text with voucher and note
-                    display_text = voucher_no
-                    if note:
-                        display_text += f" ({note})"
-
-                    est_vch_item = QTableWidgetItem(display_text)
-                    # Numeric items with proper sort role
-                    weight_val = (
-                        bar_row["weight"]
-                        if "weight" in bar_row.keys() and bar_row["weight"] is not None
-                        else 0.0
-                    )
-                    purity_val = (
-                        bar_row["purity"]
-                        if "purity" in bar_row.keys() and bar_row["purity"] is not None
-                        else 0.0
-                    )
-                    fine_val = (
-                        bar_row["fine_weight"]
-                        if "fine_weight" in bar_row.keys()
-                        and bar_row["fine_weight"] is not None
-                        else 0.0
-                    )
-                    weight_item = QTableWidgetItem(f"{weight_val:.3f}")
-                    weight_item.setData(Qt.EditRole, float(weight_val))
-                    purity_item = QTableWidgetItem(f"{purity_val:.2f}")
-                    purity_item.setData(Qt.EditRole, float(purity_val))
-                    fine_wt_item = QTableWidgetItem(f"{fine_val:.3f}")
-                    fine_wt_item.setData(Qt.EditRole, float(fine_val))
-                    date_item = QTableWidgetItem(
-                        bar_row["date_added"] if "date_added" in bar_row.keys() else ""
-                    )
-                    status_item = QTableWidgetItem(
-                        bar_row["status"] if "status" in bar_row.keys() else ""
-                    )
-
-                    # Set alignment for numeric columns
-                    weight_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                    purity_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                    fine_wt_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-
-                    # Optional: color by status
-                    try:
-                        status_text = status_item.text()
-                        if status_text == "In Stock":
-                            for it in (
-                                est_vch_item,
-                                weight_item,
-                                purity_item,
-                                fine_wt_item,
-                                date_item,
-                                status_item,
-                            ):
-                                it.setForeground(QColor("#116611"))
-                        elif status_text == "Assigned":
-                            for it in (
-                                est_vch_item,
-                                weight_item,
-                                purity_item,
-                                fine_wt_item,
-                                date_item,
-                                status_item,
-                            ):
-                                it.setForeground(QColor("#134a7e"))
-                    except Exception:
-                        pass
-
-                    # Set items in table
-                    table.setItem(row_idx, 0, id_item)  # Hidden ID
-                    table.setItem(row_idx, 1, est_vch_item)
-                    table.setItem(row_idx, 2, weight_item)
-                    table.setItem(row_idx, 3, purity_item)
-                    table.setItem(row_idx, 4, fine_wt_item)
-                    table.setItem(row_idx, 5, date_item)
-                    table.setItem(row_idx, 6, status_item)
-                    # Update totals
-                    weight = (
-                        bar_row["weight"]
-                        if "weight" in bar_row.keys() and bar_row["weight"] is not None
-                        else 0.0
-                    )
-                    fine_weight = (
-                        bar_row["fine_weight"]
-                        if "fine_weight" in bar_row.keys()
-                        and bar_row["fine_weight"] is not None
-                        else 0.0
-                    )
-                    total_weight += weight
-                    total_fine_weight += fine_weight
-                    bar_count += 1
-
-                loaded_text = f"{bar_count}"
-                if isinstance(total_rows, int) and total_rows >= 0:
-                    loaded_text = f"{bar_count}/{total_rows}"
-                totals_text = (
-                    f"Bars: {bar_count} | Total Weight: {total_weight:.3f} g | "
-                    f"Total Fine Wt: {total_fine_weight:.3f} g | Loaded: {loaded_text}"
-                )
-                if table == self.available_bars_table:
-                    self.available_totals_label.setText(f"Available {totals_text}")
-                    try:
-                        self.available_header_badge.setText(f"Available: {bar_count}")
-                    except Exception:
-                        pass
-                elif table == self.list_bars_table:
-                    self.list_totals_label.setText(f"List {totals_text}")
-                    try:
-                        self.list_header_badge.setText(f"List: {bar_count}")
-                    except Exception:
-                        pass
-            else:
-                loaded_text = "0"
-                if isinstance(total_rows, int) and total_rows >= 0:
-                    loaded_text = f"0/{total_rows}"
-                totals_text = (
-                    f"Bars: 0 | Total Weight: 0.000 g | Total Fine Wt: 0.000 g | "
-                    f"Loaded: {loaded_text}"
-                )
-                if table == self.available_bars_table:
-                    self.available_totals_label.setText(f"Available {totals_text}")
-                    try:
-                        self.available_header_badge.setText("Available: 0")
-                    except Exception:
-                        pass
-                elif table == self.list_bars_table:
-                    self.list_totals_label.setText(f"List {totals_text}")
-                    try:
-                        self.list_header_badge.setText("List: 0")
-                    except Exception:
-                        pass
+            loaded_text = f"{bar_count}"
+            if isinstance(total_rows, int) and total_rows >= 0:
+                loaded_text = f"{bar_count}/{total_rows}"
+            totals_text = (
+                f"Bars: {bar_count} | Total Weight: {total_weight:.3f} g | "
+                f"Total Fine Wt: {total_fine_weight:.3f} g | Loaded: {loaded_text}"
+            )
+            if table == self.available_bars_table:
+                self.available_totals_label.setText(f"Available {totals_text}")
+                try:
+                    self.available_header_badge.setText(f"Available: {bar_count}")
+                except Exception:
+                    pass
+            elif table == self.list_bars_table:
+                self.list_totals_label.setText(f"List {totals_text}")
+                try:
+                    self.list_header_badge.setText(f"List: {bar_count}")
+                except Exception:
+                    pass
         except Exception as e:
             QMessageBox.critical(
                 self,
@@ -2308,13 +2078,10 @@ class SilverBarDialog(QDialog):
                 f"Error populating table: {e}\n{traceback.format_exc()}",
             )
         finally:
-            # Restore sorting state
             try:
-                if sorting_was_enabled:
-                    table.setSortingEnabled(True)
+                table.viewport().update()
             except Exception:
                 pass
-            table.blockSignals(False)
             # Refresh selection summaries when data changes
             try:
                 self._update_selection_summaries()
@@ -2382,9 +2149,8 @@ class SilverBarDialog(QDialog):
             for idx in selected:
                 r = idx.row()
                 values = []
-                for c in range(1, table.columnCount()):  # skip hidden ID col 0
-                    item = table.item(r, c)
-                    values.append(item.text() if item else "")
+                for c in range(table.model().columnCount()):
+                    values.append(self._table_cell_text(table, r, c))
                 rows.append("\t".join(values))
             text = "\n".join(rows)
             from PyQt5.QtWidgets import QApplication
@@ -2563,7 +2329,7 @@ class SilverBarDialog(QDialog):
     def _get_table_column_widths(self, table):
         try:
             header = table.horizontalHeader()
-            return [header.sectionSize(i) for i in range(table.columnCount())]
+            return [header.sectionSize(i) for i in range(table.model().columnCount())]
         except Exception:
             return None
 
@@ -2573,7 +2339,7 @@ class SilverBarDialog(QDialog):
                 return
             header = table.horizontalHeader()
             for i, w in enumerate(widths):
-                if i < table.columnCount() and isinstance(w, int) and w > 0:
+                if i < table.model().columnCount() and isinstance(w, int) and w > 0:
                     header.resizeSection(i, w)
         except Exception:
             pass
@@ -2611,11 +2377,11 @@ class SilverBarDialog(QDialog):
                 self.remove_from_list_button.setEnabled(list_selected and has_list_sel)
             if hasattr(self, "add_all_button"):
                 self.add_all_button.setEnabled(
-                    list_selected and self.available_bars_table.rowCount() > 0
+                    list_selected and self.available_bars_table.model().rowCount() > 0
                 )
             if hasattr(self, "remove_all_button"):
                 self.remove_all_button.setEnabled(
-                    list_selected and self.list_bars_table.rowCount() > 0
+                    list_selected and self.list_bars_table.model().rowCount() > 0
                 )
         except Exception:
             pass
@@ -2641,11 +2407,9 @@ class SilverBarDialog(QDialog):
                 fine_sum = 0.0
                 for idx in sel:
                     r = idx.row()
-                    w_item = table.item(r, 2)
-                    f_item = table.item(r, 4)
                     try:
-                        w_val = w_item.data(Qt.EditRole) if w_item is not None else 0.0
-                        f_val = f_item.data(Qt.EditRole) if f_item is not None else 0.0
+                        w_val = self._table_cell_value(table, r, 1, Qt.EditRole)
+                        f_val = self._table_cell_value(table, r, 3, Qt.EditRole)
                         weight_sum += float(w_val or 0.0)
                         fine_sum += float(f_val or 0.0)
                     except Exception:
@@ -2702,7 +2466,7 @@ class SilverBarDialog(QDialog):
         if self.current_list_id is None:
             QMessageBox.warning(self, "Selection Error", "Please select a list first.")
             return
-        row_count = self.available_bars_table.rowCount()
+        row_count = self.available_bars_table.model().rowCount()
         if row_count == 0:
             QMessageBox.information(self, "No Bars", "No available bars to add.")
             return
@@ -2717,9 +2481,9 @@ class SilverBarDialog(QDialog):
             return
         bar_ids = []
         for r in range(row_count):
-            item = self.available_bars_table.item(r, 0)
-            if item:
-                bar_ids.append(item.data(Qt.UserRole))
+            bar_id = self._bar_id_from_table(self.available_bars_table, r)
+            if bar_id is not None:
+                bar_ids.append(bar_id)
         added = 0
         failed = []
         try:
@@ -2748,7 +2512,7 @@ class SilverBarDialog(QDialog):
         if self.current_list_id is None:
             QMessageBox.warning(self, "Selection Error", "Please select a list first.")
             return
-        row_count = self.list_bars_table.rowCount()
+        row_count = self.list_bars_table.model().rowCount()
         if row_count == 0:
             QMessageBox.information(self, "No Bars", "No bars in the selected list.")
             return
@@ -2763,9 +2527,9 @@ class SilverBarDialog(QDialog):
             return
         bar_ids = []
         for r in range(row_count):
-            item = self.list_bars_table.item(r, 0)
-            if item:
-                bar_ids.append(item.data(Qt.UserRole))
+            bar_id = self._bar_id_from_table(self.list_bars_table, r)
+            if bar_id is not None:
+                bar_ids.append(bar_id)
         removed = 0
         failed = []
         try:
@@ -2818,11 +2582,11 @@ class SilverBarDialog(QDialog):
                         "status",
                     ]
                 )
-                for r in range(self.list_bars_table.rowCount()):
-                    row = []
-                    for c in range(self.list_bars_table.columnCount()):
-                        item = self.list_bars_table.item(r, c)
-                        row.append(item.text() if item else "")
+                model = self.list_bars_table.model()
+                for r in range(model.rowCount()):
+                    row = [self._bar_id_from_table(self.list_bars_table, r) or ""]
+                    for c in range(model.columnCount()):
+                        row.append(self._table_cell_text(self.list_bars_table, r, c))
                     writer.writerow(row)
             QMessageBox.information(
                 self, "Export Complete", f"List exported to\n{path}"

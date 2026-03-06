@@ -30,6 +30,9 @@ from .item_selection_dialog import ItemSelectionDialog
 class EstimateEntryWorkflowController(HostProxy):
     """Handle estimate-entry workflow actions outside table/totals mechanics."""
 
+    def _parent_widget(self):
+        return self.host
+
     def _format_currency(self, value):
         try:
             locale = QLocale.system()
@@ -97,7 +100,7 @@ class EstimateEntryWorkflowController(HostProxy):
 
         if self.has_unsaved_changes():
             reply = QMessageBox.question(
-                self,
+                self._parent_widget(),
                 "Discard Unsaved Changes?",
                 "You have unsaved changes. Loading another estimate will discard them.\n\nContinue?",
                 QMessageBox.Yes | QMessageBox.No,
@@ -119,7 +122,9 @@ class EstimateEntryWorkflowController(HostProxy):
     def save_estimate(self):
         voucher_no = self.voucher_edit.text().strip()
         if not voucher_no:
-            QMessageBox.warning(self, "Input Error", "Voucher number is required.")
+            QMessageBox.warning(
+                self._parent_widget(), "Input Error", "Voucher number is required."
+            )
             return
 
         if not self.presenter:
@@ -139,18 +144,22 @@ class EstimateEntryWorkflowController(HostProxy):
 
             if outcome.success:
                 self._status(outcome.message, 5000)
-                QMessageBox.information(self, "Success", outcome.message)
+                QMessageBox.information(
+                    self._parent_widget(), "Success", outcome.message
+                )
                 self.print_estimate()
                 self.clear_form(confirm=False)
             else:
-                QMessageBox.critical(self, "Save Error", outcome.message)
+                QMessageBox.critical(
+                    self._parent_widget(), "Save Error", outcome.message
+                )
                 self._status(outcome.message, 5000)
             del preparation
         except Exception as exc:
             self.logger.error(
                 "Failed to save estimate %s: %s", voucher_no, exc, exc_info=True
             )
-            QMessageBox.critical(self, "Save Error", str(exc))
+            QMessageBox.critical(self._parent_widget(), "Save Error", str(exc))
 
     def delete_current_estimate(self):
         voucher_no = self.voucher_edit.text().strip()
@@ -158,7 +167,7 @@ class EstimateEntryWorkflowController(HostProxy):
             return
 
         reply = QMessageBox.warning(
-            self,
+            self._parent_widget(),
             "Confirm Delete",
             f"Are you sure you want to delete estimate '{voucher_no}'?",
             QMessageBox.Yes | QMessageBox.Cancel,
@@ -169,7 +178,9 @@ class EstimateEntryWorkflowController(HostProxy):
                 self._status(f"Estimate {voucher_no} deleted.", 3000)
                 self.clear_form(confirm=False)
             else:
-                QMessageBox.warning(self, "Error", "Could not delete estimate.")
+                QMessageBox.warning(
+                    self._parent_widget(), "Error", "Could not delete estimate."
+                )
 
     def print_estimate(self):
         from silverestimate.ui.print_manager import PrintManager
@@ -180,12 +191,12 @@ class EstimateEntryWorkflowController(HostProxy):
 
         current_font = getattr(self.main_window, "print_font", None)
         pm = PrintManager(self.db_manager, print_font=current_font)
-        pm.print_estimate(voucher_no, self)
+        pm.print_estimate(voucher_no, self._parent_widget())
 
     def clear_form(self, confirm: bool = True):
         if confirm:
             reply = QMessageBox.question(
-                self,
+                self._parent_widget(),
                 "Confirm New Estimate",
                 "Start a new estimate? Unsaved changes will be lost.",
                 QMessageBox.Yes | QMessageBox.No,
@@ -232,7 +243,7 @@ class EstimateEntryWorkflowController(HostProxy):
         if not self.has_unsaved_changes():
             return True
         reply = QMessageBox.question(
-            self,
+            self._parent_widget(),
             "Discard Changes?",
             "You have unsaved changes. Exit anyway?",
             QMessageBox.Yes | QMessageBox.No,
@@ -313,11 +324,13 @@ class EstimateEntryWorkflowController(HostProxy):
         if row < 0:
             return
         if self.item_table.rowCount() <= 1:
-            QMessageBox.warning(self, "Error", "Cannot delete the only row.")
+            QMessageBox.warning(
+                self._parent_widget(), "Error", "Cannot delete the only row."
+            )
             return
 
         reply = QMessageBox.question(
-            self,
+            self._parent_widget(),
             "Delete Row",
             f"Delete row {row+1}?",
             QMessageBox.Yes | QMessageBox.No,
@@ -341,7 +354,9 @@ class EstimateEntryWorkflowController(HostProxy):
             )
 
     def prompt_item_selection(self, code: str) -> Optional[Dict]:
-        dialog = ItemSelectionDialog(self.db_manager, code, self)
+        dialog = ItemSelectionDialog(
+            self.db_manager, code, parent=self._parent_widget()
+        )
         if dialog.exec_() == QDialog.Accepted:
             return dialog.get_selected_item()
         return None
@@ -353,7 +368,9 @@ class EstimateEntryWorkflowController(HostProxy):
         from silverestimate.ui.estimate_history import EstimateHistoryDialog
 
         dialog = EstimateHistoryDialog(
-            self.db_manager, main_window_ref=self.main_window, parent=self
+            self.db_manager,
+            main_window_ref=self.main_window,
+            parent=self._parent_widget(),
         )
         if dialog.exec_() == QDialog.Accepted:
             return dialog.selected_voucher
@@ -538,7 +555,7 @@ class EstimateEntryWorkflowController(HostProxy):
         return self.item_table.get_cell_text(row, col)
 
     def show_last_balance_dialog(self):
-        dialog = QDialog(self)
+        dialog = QDialog(self._parent_widget())
         dialog.setWindowTitle("Enter Last Balance")
         layout = QVBoxLayout(dialog)
         form = QFormLayout()

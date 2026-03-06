@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Estimate entry table constants and delegates."""
 
-from PyQt5.QtCore import QEvent, QLocale, Qt
+from PyQt5.QtCore import QEvent, QLocale, Qt, QTimer
 from PyQt5.QtGui import QDoubleValidator, QIntValidator
 from PyQt5.QtWidgets import QLineEdit, QStyledItemDelegate
 
@@ -144,5 +144,64 @@ class NumericDelegate(QStyledItemDelegate):
                             estimate_widget, "_mark_manual_row_navigation"
                         ):
                             estimate_widget._mark_manual_row_navigation()
+
+        return super().eventFilter(editor, event)
+
+
+class CodeDelegate(QStyledItemDelegate):
+    """Delegate that normalizes code edits and preserves Enter navigation."""
+
+    @staticmethod
+    def _normalize_code(value) -> str:
+        return str(value or "").strip().upper()
+
+    def createEditor(self, parent, option, index):
+        editor = QLineEdit(parent)
+        editor.setProperty("modelIndex", index)
+        editor.installEventFilter(self)
+        return editor
+
+    def setEditorData(self, editor, index):
+        if not isinstance(editor, QLineEdit):
+            super().setEditorData(editor, index)
+            return
+
+        value = index.model().data(index, Qt.EditRole)
+        text = str(value) if value is not None else ""
+        editor.setText(text)
+        editor.setProperty("originalCode", self._normalize_code(text))
+
+    def setModelData(self, editor, model, index):
+        if not isinstance(editor, QLineEdit):
+            super().setModelData(editor, model, index)
+            return
+
+        model.setData(index, self._normalize_code(editor.text()), Qt.EditRole)
+
+    def eventFilter(self, editor, event):
+        if event.type() == QEvent.KeyPress and isinstance(editor, QLineEdit):
+            index = editor.property("modelIndex")
+            if index and index.isValid():
+                key = event.key()
+                if key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Tab):
+                    original_code = str(editor.property("originalCode") or "")
+                    unchanged_code = (
+                        self._normalize_code(editor.text()) == original_code
+                    )
+                    self.commitData.emit(editor)
+                    self.closeEditor.emit(editor, QStyledItemDelegate.NoHint)
+
+                    if unchanged_code:
+                        table_widget = self.parent()
+                        if table_widget:
+                            estimate_widget = (
+                                getattr(table_widget, "host_widget", None)
+                                or table_widget.parent()
+                            )
+                            if estimate_widget and hasattr(
+                                estimate_widget, "move_to_next_cell"
+                            ):
+                                QTimer.singleShot(0, estimate_widget.move_to_next_cell)
+                    return True
 
         return super().eventFilter(editor, event)

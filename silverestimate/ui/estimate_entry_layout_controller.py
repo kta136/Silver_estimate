@@ -36,6 +36,7 @@ from .estimate_entry_ui import (
     COL_TYPE,
     COL_WAGE_AMT,
     COL_WAGE_RATE,
+    CodeDelegate,
     NumericDelegate,
 )
 from .inline_status import InlineStatusController
@@ -181,7 +182,9 @@ class EstimateEntryLayoutController(HostProxy):
         self._move_live_rate_card_to_summary_top()
 
     def _setup_table_delegates(self):
+        code_delegate = CodeDelegate(parent=self.item_table)
         numeric_delegate = NumericDelegate(parent=self.item_table)
+        self.item_table.setItemDelegateForColumn(COL_CODE, code_delegate)
         self.item_table.setItemDelegateForColumn(COL_GROSS, numeric_delegate)
         self.item_table.setItemDelegateForColumn(COL_POLY, numeric_delegate)
         self.item_table.setItemDelegateForColumn(COL_PURITY, numeric_delegate)

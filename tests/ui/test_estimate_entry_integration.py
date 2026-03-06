@@ -4,6 +4,8 @@ import types
 
 import pytest
 from PyQt5.QtCore import Qt
+from PyQt5.QtTest import QTest
+from PyQt5.QtWidgets import QLineEdit
 
 from silverestimate.ui.estimate_entry import EstimateEntryWidget
 from silverestimate.ui.estimate_entry_logic import (
@@ -818,6 +820,46 @@ def test_unchanged_purity_commit_still_advances_cursor(qtbot, fake_db):
             and table.currentIndex().column() == COL_WAGE_RATE,
             timeout=1000,
         )
+    finally:
+        widget.deleteLater()
+
+
+def test_unchanged_code_enter_advances_to_gross_without_relookup(qtbot, fake_db):
+    """Pressing Enter on an unchanged code should still advance the cursor."""
+    widget = _make_widget(fake_db)
+    widget.show()
+    try:
+        lookup_calls = []
+
+        def _handle_item_code(row, code):
+            lookup_calls.append((row, code))
+            return False
+
+        widget.presenter.handle_item_code = _handle_item_code
+
+        table = widget.item_table
+        table.set_cell_text(0, COL_CODE, "ROW1")
+        qtbot.waitUntil(lambda: len(lookup_calls) == 1, timeout=1000)
+        initial_lookup_count = len(lookup_calls)
+
+        table.setCurrentCell(0, COL_CODE)
+        widget.current_row = 0
+        widget.current_column = COL_CODE
+        assert table.begin_cell_edit(0, COL_CODE)
+
+        qtbot.waitUntil(lambda: table.findChild(QLineEdit) is not None, timeout=1000)
+        editor = table.findChild(QLineEdit)
+        assert editor is not None
+
+        QTest.keyClick(editor, Qt.Key_Return)
+
+        qtbot.waitUntil(
+            lambda: table.currentIndex().isValid()
+            and table.currentIndex().row() == 0
+            and table.currentIndex().column() == COL_GROSS,
+            timeout=1000,
+        )
+        assert len(lookup_calls) == initial_lookup_count
     finally:
         widget.deleteLater()
 

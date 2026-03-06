@@ -2,7 +2,7 @@ import types
 
 import pytest
 from PyQt5.QtCore import QEventLoop, Qt, QTimer
-from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtWidgets import QDialog, QMessageBox
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.infrastructure.settings import get_app_settings
@@ -586,6 +586,46 @@ def test_populate_row_updates_code_cell(qt_app, fake_db):
         assert table.get_cell_text(0, COL_CODE) == "NEW123"
         assert table.get_cell_text(0, COL_ITEM_NAME) == "New Item"
         assert table.get_row_state(0).code == "NEW123"
+    finally:
+        widget.deleteLater()
+
+
+def test_prompt_item_selection_uses_widget_parent(qt_app, fake_db, monkeypatch):
+    widget = _make_widget(fake_db)
+    captured = {}
+
+    class _DialogStub:
+        def __init__(self, db_manager, search_term, parent=None):
+            captured["db_manager"] = db_manager
+            captured["search_term"] = search_term
+            captured["parent"] = parent
+
+        def exec_(self):
+            return QDialog.Accepted
+
+        def get_selected_item(self):
+            return {
+                "code": "ALT001",
+                "name": "Alt Item",
+                "purity": 91.6,
+                "wage_type": "WT",
+                "wage_rate": 10.0,
+            }
+
+    monkeypatch.setattr(
+        "silverestimate.ui.estimate_entry_workflow_controller.ItemSelectionDialog",
+        _DialogStub,
+        raising=False,
+    )
+
+    try:
+        picked = widget.prompt_item_selection("bad")
+
+        assert captured["db_manager"] is fake_db
+        assert captured["search_term"] == "bad"
+        assert captured["parent"] is widget
+        assert picked is not None
+        assert picked["code"] == "ALT001"
     finally:
         widget.deleteLater()
 

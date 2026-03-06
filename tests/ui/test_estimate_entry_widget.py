@@ -334,7 +334,7 @@ def test_incremental_rebuild_after_row_delete(qt_app, fake_db, monkeypatch):
         )
 
         monkeypatch.setattr(
-            "silverestimate.ui.estimate_entry.QMessageBox.question",
+            "silverestimate.ui.estimate_entry_workflow_controller.QMessageBox.question",
             lambda *a, **k: QMessageBox.Yes,
             raising=False,
         )
@@ -521,7 +521,7 @@ def test_widget_save_and_reload(qt_app, tmp_path, settings_stub, monkeypatch):
 
     # Patch the correct QMessageBox
     monkeypatch.setattr(
-        "silverestimate.ui.estimate_entry.QMessageBox",
+        "silverestimate.ui.estimate_entry_workflow_controller.QMessageBox",
         _MsgBoxStub,
         raising=False,
     )

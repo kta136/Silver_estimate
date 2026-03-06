@@ -4,33 +4,14 @@
 from __future__ import annotations
 
 import logging
-import threading
-import time
-from dataclasses import dataclass, replace
-from typing import Dict, Optional
+from dataclasses import dataclass
+from typing import Dict
 
-from PyQt5 import sip
-from PyQt5.QtCore import QDate, QLocale, QSignalBlocker, Qt, QTimer, pyqtSignal
-from PyQt5.QtWidgets import (
-    QApplication,
-    QDialog,
-    QDialogButtonBox,
-    QDoubleSpinBox,
-    QFormLayout,
-    QMessageBox,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtWidgets import QApplication, QWidget
 
 from silverestimate.domain.estimate_models import EstimateLineCategory, TotalsResult
-from silverestimate.presenter import (
-    EstimateEntryPresenter,
-    EstimateEntryViewState,
-    LoadedEstimate,
-)
-from silverestimate.services.estimate_entry_persistence import (
-    EstimateEntryPersistenceService,
-)
+from silverestimate.presenter import EstimateEntryPresenter, EstimateEntryViewState
 
 from .estimate_entry_layout_controller import EstimateEntryLayoutController
 from .estimate_entry_table_controller import EstimateEntryTableController
@@ -41,13 +22,11 @@ from .estimate_entry_ui import (
     COL_PIECES,
     COL_POLY,
     COL_PURITY,
-    COL_TYPE,
-    COL_WAGE_AMT,
     COL_WAGE_RATE,
 )
+from .estimate_entry_workflow_controller import EstimateEntryWorkflowController
 from .inline_status import InlineStatusController
-from .item_selection_dialog import ItemSelectionDialog
-from .view_models import EstimateEntryRowState, EstimateEntryViewModel
+from .view_models import EstimateEntryViewModel
 
 
 @dataclass(frozen=True)
@@ -93,6 +72,7 @@ class EstimateEntryWidget(QWidget):
         self._layout_controller = EstimateEntryLayoutController(self)
         self._table_controller = EstimateEntryTableController(self)
         self._totals_controller = EstimateEntryTotalsController(self)
+        self._workflow_controller = EstimateEntryWorkflowController(self)
 
         self.db_manager = db_manager
         self.main_window = main_window
@@ -264,306 +244,6 @@ class EstimateEntryWidget(QWidget):
         except Exception as exc:
             self.logger.debug("Could not update mode tooltip: %s", exc)
 
-    def _format_currency(self, value):
-        try:
-            locale = QLocale.system()
-            return locale.toCurrencyString(float(round(value)))
-        except Exception:
-            try:
-                return f"₹ {int(round(value)):,}"
-            except Exception:
-                return str(value)
-
-    def generate_voucher(self):
-        try:
-            self.voucher_edit.returnPressed.disconnect(self.safe_load_estimate)
-        except (TypeError, RuntimeError) as exc:
-            self.logger.debug(
-                "Could not disconnect voucher returnPressed handler: %s", exc
-            )
-
-        if self.presenter:
-            self.presenter.generate_voucher()
-        if hasattr(self, "delete_estimate_button"):
-            self.delete_estimate_button.setEnabled(False)
-        self._estimate_loaded = False
-
-        try:
-            self.voucher_edit.returnPressed.connect(self.safe_load_estimate)
-        except (TypeError, RuntimeError) as exc:
-            self.logger.debug("Could not reconnect voucher returnPressed handler: %s", exc)
-
-    def load_estimate(self):
-        if self.initializing or not self.presenter:
-            return
-
-        voucher_no = self.voucher_edit.text().strip()
-        if not voucher_no:
-            return
-
-        self._status(f"Loading estimate {voucher_no}...", 2000)
-        try:
-            loaded = self.presenter.load_estimate(voucher_no)
-            if loaded:
-                if self.apply_loaded_estimate(loaded):
-                    self._status(f"Estimate {voucher_no} loaded successfully.", 3000)
-            else:
-                self._status(
-                    f"Estimate {voucher_no} not found. Starting new entry.", 4000
-                )
-                self._estimate_loaded = False
-                if hasattr(self, "delete_estimate_button"):
-                    self.delete_estimate_button.setEnabled(False)
-                self.focus_on_code_column(0)
-        except Exception as exc:
-            self.logger.warning("Failed to load estimate %s: %s", voucher_no, exc)
-            self._status(f"Error loading estimate: {exc}", 4000)
-
-    def safe_load_estimate(self):
-        if self._loading_estimate or self.initializing:
-            return
-
-        voucher_text = self.voucher_edit.text().strip()
-        if not voucher_text:
-            return
-
-        if self.has_unsaved_changes():
-            reply = QMessageBox.question(
-                self,
-                "Discard Unsaved Changes?",
-                "You have unsaved changes. Loading another estimate will discard them.\n\nContinue?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
-            )
-            if reply != QMessageBox.Yes:
-                return
-
-        self._loading_estimate = True
-        blocker = QSignalBlocker(self.voucher_edit)
-        try:
-            self.load_estimate()
-        except Exception as exc:
-            self.logger.warning("Unexpected load failure: %s", exc, exc_info=True)
-        finally:
-            del blocker
-            self._loading_estimate = False
-
-    def save_estimate(self):
-        voucher_no = self.voucher_edit.text().strip()
-        if not voucher_no:
-            QMessageBox.warning(self, "Input Error", "Voucher number is required.")
-            return
-
-        if not self.presenter:
-            return
-
-        self._status(f"Saving estimate {voucher_no}...", 2000)
-        self._update_view_model_snapshot()
-
-        service = EstimateEntryPersistenceService(self.view_model)
-        try:
-            outcome, preparation = service.execute_save(
-                voucher_no=voucher_no,
-                date=self.date_edit.date().toString("yyyy-MM-dd"),
-                note=self.note_edit.text().strip() if hasattr(self, "note_edit") else "",
-                presenter=self.presenter,
-            )
-
-            if outcome.success:
-                self._status(outcome.message, 5000)
-                QMessageBox.information(self, "Success", outcome.message)
-                self.print_estimate()
-                self.clear_form(confirm=False)
-            else:
-                QMessageBox.critical(self, "Save Error", outcome.message)
-                self._status(outcome.message, 5000)
-            del preparation
-        except Exception as exc:
-            self.logger.error("Failed to save estimate %s: %s", voucher_no, exc, exc_info=True)
-            QMessageBox.critical(self, "Save Error", str(exc))
-
-    def delete_current_estimate(self):
-        voucher_no = self.voucher_edit.text().strip()
-        if not voucher_no:
-            return
-
-        reply = QMessageBox.warning(
-            self,
-            "Confirm Delete",
-            f"Are you sure you want to delete estimate '{voucher_no}'?",
-            QMessageBox.Yes | QMessageBox.Cancel,
-            QMessageBox.Cancel,
-        )
-        if reply == QMessageBox.Yes and self.presenter:
-            if self.presenter.delete_estimate(voucher_no):
-                self._status(f"Estimate {voucher_no} deleted.", 3000)
-                self.clear_form(confirm=False)
-            else:
-                QMessageBox.warning(self, "Error", "Could not delete estimate.")
-
-    def print_estimate(self):
-        from silverestimate.ui.print_manager import PrintManager
-
-        voucher_no = self.voucher_edit.text().strip()
-        if not voucher_no:
-            return
-
-        current_font = getattr(self.main_window, "print_font", None)
-        pm = PrintManager(self.db_manager, print_font=current_font)
-        pm.print_estimate(voucher_no, self)
-
-    def clear_form(self, confirm: bool = True):
-        if confirm:
-            reply = QMessageBox.question(
-                self,
-                "Confirm New Estimate",
-                "Start a new estimate? Unsaved changes will be lost.",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
-            )
-            if reply != QMessageBox.Yes:
-                return
-
-        self._push_unsaved_block()
-        self.item_table.blockSignals(True)
-        self.processing_cell = True
-        try:
-            self.voucher_edit.clear()
-            if self.presenter:
-                self.presenter.generate_voucher()
-            self.date_edit.setDate(QDate.currentDate())
-            self.silver_rate_spin.setValue(0)
-            if hasattr(self, "note_edit"):
-                self.note_edit.clear()
-
-            self.last_balance_silver = 0.0
-            self.last_balance_amount = 0.0
-
-            if self.return_mode:
-                self.toggle_return_mode()
-            if self.silver_bar_mode:
-                self.toggle_silver_bar_mode()
-
-            self.clear_all_rows()
-            self.add_empty_row()
-            self.calculate_totals()
-
-            self._estimate_loaded = False
-            if hasattr(self, "delete_estimate_button"):
-                self.delete_estimate_button.setEnabled(False)
-        finally:
-            self.processing_cell = False
-            self.item_table.blockSignals(False)
-            self._pop_unsaved_block()
-            QTimer.singleShot(50, lambda: self.focus_on_code_column(0))
-        self._set_unsaved(False, force=True)
-
-    def confirm_exit(self) -> bool:
-        if not self.has_unsaved_changes():
-            return True
-        reply = QMessageBox.question(
-            self,
-            "Discard Changes?",
-            "You have unsaved changes. Exit anyway?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        return reply == QMessageBox.Yes
-
-    def show_history(self):
-        if self.presenter:
-            self.presenter.open_history()
-
-    def toggle_return_mode(self):
-        if not self.return_mode and self.silver_bar_mode:
-            self.toggle_silver_bar_mode()
-
-        self.return_mode = not self.return_mode
-        self.return_toggle_button.setChecked(self.return_mode)
-
-        if self.return_mode:
-            self.return_toggle_button.setText("↩ RETURN ON")
-            self.return_toggle_button.setStyleSheet(
-                "background-color: #e8f4fd; border: 2px solid #0066cc; font-weight: bold; color: #003d7a;"
-            )
-            self.mode_indicator_label.setText("Mode: Return Items")
-            self.mode_indicator_label.setStyleSheet(
-                "font-weight: bold; color: #0066cc;"
-            )
-        else:
-            self.return_toggle_button.setText("↩ Return Items")
-            self.return_toggle_button.setStyleSheet("")
-            self.mode_indicator_label.setText("Mode: Regular")
-            self.mode_indicator_label.setStyleSheet("")
-
-        self._get_table_adapter().refresh_empty_row_type()
-        self.focus_on_empty_row(update_visuals=True)
-        self.view_model.set_modes(
-            return_mode=self.return_mode, silver_bar_mode=self.silver_bar_mode
-        )
-        self._update_mode_tooltip()
-
-    def toggle_silver_bar_mode(self):
-        if not self.silver_bar_mode and self.return_mode:
-            self.toggle_return_mode()
-
-        self.silver_bar_mode = not self.silver_bar_mode
-        self.silver_bar_toggle_button.setChecked(self.silver_bar_mode)
-
-        if self.silver_bar_mode:
-            self.silver_bar_toggle_button.setText("🥈 BAR ON")
-            self.silver_bar_toggle_button.setStyleSheet(
-                "background-color: #fff4e6; border: 2px solid #cc6600; font-weight: bold; color: #994d00;"
-            )
-            self.mode_indicator_label.setText("Mode: Silver Bars")
-            self.mode_indicator_label.setStyleSheet(
-                "font-weight: bold; color: #cc6600;"
-            )
-        else:
-            self.silver_bar_toggle_button.setText("🥈 Silver Bars")
-            self.silver_bar_toggle_button.setStyleSheet("")
-            self.mode_indicator_label.setText("Mode: Regular")
-            self.mode_indicator_label.setStyleSheet("")
-
-        self._get_table_adapter().refresh_empty_row_type()
-        self.focus_on_empty_row(update_visuals=True)
-        self.view_model.set_modes(
-            return_mode=self.return_mode, silver_bar_mode=self.silver_bar_mode
-        )
-        self._update_mode_tooltip()
-
-    def delete_current_row(self):
-        row = self.item_table.currentRow()
-        if row < 0:
-            return
-        if self.item_table.rowCount() <= 1:
-            QMessageBox.warning(self, "Error", "Cannot delete the only row.")
-            return
-
-        reply = QMessageBox.question(
-            self,
-            "Delete Row",
-            f"Delete row {row+1}?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        if reply == QMessageBox.Yes:
-            self.item_table.delete_row(row)
-            if self._totals_incremental_is_active():
-                try:
-                    self._remove_incremental_row(row)
-                except Exception as exc:
-                    self._disable_incremental_totals_and_fallback(exc)
-            self.calculate_totals()
-            self._mark_unsaved()
-            if self.item_table.rowCount() == 0:
-                self.add_empty_row()
-
-            new_row = min(row, self.item_table.rowCount() - 1)
-            QTimer.singleShot(
-                0, lambda: self.item_table.setCurrentCell(new_row, COL_CODE)
-            )
-
     def focus_on_empty_row(self, update_visuals=False):
         self._get_table_adapter().focus_on_empty_row(update_visuals=update_visuals)
 
@@ -582,231 +262,6 @@ class EstimateEntryWidget(QWidget):
     def populate_row(self, row_index: int, item_data: Dict) -> None:
         self._get_table_adapter().populate_row(row_index, item_data)
         self._schedule_columns_autofit()
-
-    def prompt_item_selection(self, code: str) -> Optional[Dict]:
-        dialog = ItemSelectionDialog(self.db_manager, code, self)
-        if dialog.exec_() == QDialog.Accepted:
-            return dialog.get_selected_item()
-        return None
-
-    def focus_after_item_lookup(self, row_index: int) -> None:
-        self._schedule_cell_edit(row_index, COL_GROSS)
-
-    def open_history_dialog(self) -> Optional[str]:
-        from silverestimate.ui.estimate_history import EstimateHistoryDialog
-
-        dialog = EstimateHistoryDialog(
-            self.db_manager, main_window_ref=self.main_window, parent=self
-        )
-        if dialog.exec_() == QDialog.Accepted:
-            return dialog.selected_voucher
-        return None
-
-    def show_silver_bar_management(self) -> None:
-        if hasattr(self.main_window, "show_silver_bars"):
-            self.main_window.show_silver_bars()
-
-    def show_silver_bars(self):
-        self.show_silver_bar_management()
-
-    def apply_loaded_estimate(self, loaded: LoadedEstimate) -> bool:
-        start = time.perf_counter()
-        self._push_unsaved_block()
-        self.item_table.blockSignals(True)
-        self.processing_cell = True
-        try:
-            self.clear_all_rows()
-
-            try:
-                date = QDate.fromString(loaded.date, "yyyy-MM-dd")
-                self.date_edit.setDate(date if date.isValid() else QDate.currentDate())
-            except Exception as exc:
-                self.logger.debug(
-                    "Failed to parse loaded estimate date '%s': %s",
-                    loaded.date,
-                    exc,
-                )
-                self.date_edit.setDate(QDate.currentDate())
-
-            self.silver_rate_spin.setValue(loaded.silver_rate)
-            if hasattr(self, "note_edit"):
-                self.note_edit.setText(loaded.note or "")
-
-            self.last_balance_silver = loaded.last_balance_silver
-            self.last_balance_amount = loaded.last_balance_amount
-
-            row_states = EstimateEntryPersistenceService.build_row_states_from_items(
-                loaded.items
-            )
-            wage_type_by_code: dict[str, str] = {}
-            repo = getattr(self.presenter, "repository", None)
-            if repo:
-                for row_state in row_states:
-                    code = (row_state.code or "").strip()
-                    if not code or code in wage_type_by_code:
-                        continue
-                    try:
-                        item_data = repo.fetch_item(code)
-                    except Exception:
-                        item_data = None
-                    if item_data and item_data.get("wage_type") is not None:
-                        wage_type_by_code[code] = self._normalize_wage_type(
-                            item_data.get("wage_type")
-                        )
-                    else:
-                        wage_type_by_code[code] = "WT"
-
-            prepared_rows: list[EstimateEntryRowState] = []
-            for index, row_state in enumerate(row_states):
-                code = (row_state.code or "").strip()
-                wage_type = wage_type_by_code.get(code, "WT")
-                normalized_pieces = int(row_state.pieces)
-                if wage_type == "WT":
-                    normalized_pieces = 0
-                elif normalized_pieces <= 0:
-                    normalized_pieces = 1
-
-                prepared_rows.append(
-                    replace(
-                        row_state,
-                        code=code.upper(),
-                        wage_type=wage_type,
-                        pieces=normalized_pieces,
-                        row_index=index + 1,
-                    )
-                )
-
-            self.item_table.replace_all_rows(prepared_rows)
-
-            self.add_empty_row()
-            self.calculate_totals()
-            self._schedule_columns_autofit(force=True)
-            self._estimate_loaded = True
-
-            if hasattr(self, "delete_estimate_button"):
-                self.delete_estimate_button.setEnabled(True)
-
-            self.set_voucher_number(loaded.voucher_no)
-            self._log_perf_metric(
-                "estimate_entry.apply_loaded_estimate",
-                start,
-                threshold_ms=25.0,
-                rows=len(row_states),
-            )
-            return True
-        except Exception as exc:
-            self.logger.error("Failed to apply estimate: %s", exc, exc_info=True)
-            return False
-        finally:
-            self.processing_cell = False
-            self.item_table.blockSignals(False)
-            self._pop_unsaved_block()
-            self._set_unsaved(False, force=True)
-
-    def refresh_silver_rate(self):
-        button = getattr(self, "refresh_rate_button", None)
-        if button is not None:
-            button.setEnabled(False)
-        self._status("Refreshing live silver rate...", 2000)
-
-        def worker():
-            try:
-                from silverestimate.services.dda_rate_fetcher import (
-                    fetch_broadcast_rate_exact,
-                    fetch_silver_agra_local_mohar_rate,
-                )
-
-                rate, _, _ = fetch_broadcast_rate_exact(timeout=7)
-                if rate is None:
-                    rate, _ = fetch_silver_agra_local_mohar_rate(timeout=7)
-                self.live_rate_fetched.emit(rate)
-            except Exception as exc:
-                self.logger.warning(
-                    "Live silver rate refresh failed: %s", exc, exc_info=True
-                )
-                self.live_rate_fetched.emit(None)
-
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _apply_refreshed_live_rate(self, rate) -> None:
-        button = getattr(self, "refresh_rate_button", None)
-        if button is not None:
-            button.setEnabled(True)
-        if rate:
-            try:
-                gram_rate = float(rate) / 1000.0
-            except (TypeError, ValueError):
-                gram_rate = None
-            if gram_rate is None:
-                if hasattr(self, "live_rate_value_label"):
-                    self.live_rate_value_label.setText("N/A")
-                self._status("Live rate unavailable.", 3000)
-                return
-            if hasattr(self, "live_rate_value_label"):
-                self.live_rate_value_label.setText(f"₹ {gram_rate:.2f} /g")
-            self._status("Live rate refreshed.", 2000)
-            return
-        if hasattr(self, "live_rate_value_label"):
-            self.live_rate_value_label.setText("N/A")
-        self._status("Live rate unavailable.", 3000)
-
-    def _handle_silver_rate_changed(self, *_):
-        self._schedule_totals_recalc()
-        self._mark_unsaved()
-
-    def _update_view_model_snapshot(self):
-        start = time.perf_counter()
-        rows = list(self.item_table.get_all_rows())
-
-        self.view_model.set_rows(rows)
-        self.view_model.set_totals_inputs(
-            silver_rate=self.silver_rate_spin.value(),
-            last_balance_silver=self.last_balance_silver,
-            last_balance_amount=self.last_balance_amount,
-        )
-        self.view_model.set_modes(
-            return_mode=self.return_mode, silver_bar_mode=self.silver_bar_mode
-        )
-        self._log_perf_metric(
-            "estimate_entry.sync_view_model",
-            start,
-            threshold_ms=15.0,
-            rows=len(rows),
-        )
-
-    def _get_row_code(self, row):
-        return self.item_table.get_cell_text(row, COL_CODE).strip()
-
-    def _get_cell_str(self, row, col):
-        return self.item_table.get_cell_text(row, col)
-
-    def show_last_balance_dialog(self):
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Enter Last Balance")
-        layout = QVBoxLayout(dialog)
-        form = QFormLayout()
-
-        lb_silver = QDoubleSpinBox()
-        lb_silver.setRange(0, 1000000)
-        lb_silver.setValue(self.last_balance_silver)
-        form.addRow("Silver Weight (g):", lb_silver)
-
-        lb_amount = QDoubleSpinBox()
-        lb_amount.setRange(0, 10000000)
-        lb_amount.setValue(self.last_balance_amount)
-        form.addRow("Amount:", lb_amount)
-
-        layout.addLayout(form)
-        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btns.accepted.connect(dialog.accept)
-        btns.rejected.connect(dialog.reject)
-        layout.addWidget(btns)
-
-        if dialog.exec_():
-            self.last_balance_silver = lb_silver.value()
-            self.last_balance_amount = lb_amount.value()
-            self.calculate_totals()
-            self._mark_unsaved()
 
     def _apply_table_font_size(self, size: int) -> bool:
         return self.apply_table_font_size(size)
@@ -886,6 +341,40 @@ def _delegate(controller_attr: str, method_name: str):
     _method.__qualname__ = f"EstimateEntryWidget.{method_name}"
     return _method
 
+
+for _method_name in (
+    "_format_currency",
+    "generate_voucher",
+    "load_estimate",
+    "safe_load_estimate",
+    "save_estimate",
+    "delete_current_estimate",
+    "print_estimate",
+    "clear_form",
+    "confirm_exit",
+    "show_history",
+    "toggle_return_mode",
+    "toggle_silver_bar_mode",
+    "delete_current_row",
+    "prompt_item_selection",
+    "focus_after_item_lookup",
+    "open_history_dialog",
+    "show_silver_bar_management",
+    "show_silver_bars",
+    "apply_loaded_estimate",
+    "refresh_silver_rate",
+    "_apply_refreshed_live_rate",
+    "_handle_silver_rate_changed",
+    "_update_view_model_snapshot",
+    "_get_row_code",
+    "_get_cell_str",
+    "show_last_balance_dialog",
+):
+    setattr(
+        EstimateEntryWidget,
+        _method_name,
+        _delegate("_workflow_controller", _method_name),
+    )
 
 for _method_name in (
     "_setup_ui",

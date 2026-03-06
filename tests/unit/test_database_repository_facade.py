@@ -97,15 +97,12 @@ def test_silver_bar_facade_delegates_keyword_arguments():
     facade = _FacadeHarness()
 
     assert facade.create_silver_bar_list("Test List") == 17
-    assert (
-        facade.get_silver_bars(
-            status="In Stock",
-            weight_query="10",
-            limit=5,
-            offset=2,
-        )
-        == ["bars"]
-    )
+    assert facade.get_silver_bars(
+        status="In Stock",
+        weight_query="10",
+        limit=5,
+        offset=2,
+    ) == ["bars"]
     assert facade.silver_bars_repo.calls == [
         ("create_list", ("Test List",)),
         (

@@ -148,7 +148,9 @@ class SilverBarListActions(HostProxy):
                 bar_ids_to_add.append(bar_id)
 
         if not bar_ids_to_add:
-            QMessageBox.warning(self.host, "Error", "Could not get IDs for selected bars.")
+            QMessageBox.warning(
+                self.host, "Error", "Could not get IDs for selected bars."
+            )
             return
 
         reply = QMessageBox.question(
@@ -163,7 +165,9 @@ class SilverBarListActions(HostProxy):
             try:
                 QApplication.setOverrideCursor(Qt.WaitCursor)
             except Exception as exc:
-                self.logger.debug("Could not enable wait cursor while adding bars: %s", exc)
+                self.logger.debug(
+                    "Could not enable wait cursor while adding bars: %s", exc
+                )
             added_count, failed_ids = self._bulk_assign_to_list(
                 bar_ids_to_add,
                 self.current_list_id,
@@ -209,7 +213,9 @@ class SilverBarListActions(HostProxy):
                 bar_ids_to_remove.append(bar_id)
 
         if not bar_ids_to_remove:
-            QMessageBox.warning(self.host, "Error", "Could not get IDs for selected bars.")
+            QMessageBox.warning(
+                self.host, "Error", "Could not get IDs for selected bars."
+            )
             return
 
         reply = QMessageBox.question(
@@ -231,7 +237,9 @@ class SilverBarListActions(HostProxy):
 
             if removed_count > 0:
                 QMessageBox.information(
-                    self.host, "Success", f"{removed_count} bar(s) removed from the list."
+                    self.host,
+                    "Success",
+                    f"{removed_count} bar(s) removed from the list.",
                 )
             if failed_ids:
                 QMessageBox.warning(
@@ -315,7 +323,9 @@ class SilverBarListActions(HostProxy):
         )
 
         if reply == QMessageBox.Yes:
-            success, message = self.db_manager.delete_silver_bar_list(self.current_list_id)
+            success, message = self.db_manager.delete_silver_bar_list(
+                self.current_list_id
+            )
             if success:
                 QMessageBox.information(
                     self.host, "Success", f"List '{list_name}' deleted successfully."
@@ -508,9 +518,7 @@ class SilverBarListActions(HostProxy):
                 self.list_combo.setCurrentIndex(index)
 
         except Exception as exc:
-            self.logger.error(
-                "Failed to generate optimal list: %s", exc, exc_info=True
-            )
+            self.logger.error("Failed to generate optimal list: %s", exc, exc_info=True)
             QMessageBox.critical(
                 self.host,
                 "Error",
@@ -804,7 +812,9 @@ class SilverBarListActions(HostProxy):
         try:
             QApplication.setOverrideCursor(Qt.WaitCursor)
         except Exception as exc:
-            self.logger.debug("Could not enable wait cursor while adding all bars: %s", exc)
+            self.logger.debug(
+                "Could not enable wait cursor while adding all bars: %s", exc
+            )
         added, failed = self._bulk_assign_to_list(bar_ids, self.current_list_id)
         try:
             QApplication.restoreOverrideCursor()
@@ -896,9 +906,13 @@ class SilverBarListActions(HostProxy):
                 )
                 model = self.list_bars_table.model()
                 for row in range(model.rowCount()):
-                    output_row = [self._bar_id_from_table(self.list_bars_table, row) or ""]
+                    output_row = [
+                        self._bar_id_from_table(self.list_bars_table, row) or ""
+                    ]
                     for column in range(model.columnCount()):
-                        output_row.append(self._table_cell_text(self.list_bars_table, row, column))
+                        output_row.append(
+                            self._table_cell_text(self.list_bars_table, row, column)
+                        )
                     writer.writerow(output_row)
             QMessageBox.information(
                 self.host, "Export Complete", f"List exported to\n{path}"

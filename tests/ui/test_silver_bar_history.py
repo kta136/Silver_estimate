@@ -114,7 +114,10 @@ class _FakeSilverBarHistoryDb:
         return self._clone_rows(self.issued_lists)
 
     def count_silver_bars_by_list_ids(self, list_ids):
-        return {int(list_id): len(self.list_rows.get(int(list_id), [])) for list_id in list_ids}
+        return {
+            int(list_id): len(self.list_rows.get(int(list_id), []))
+            for list_id in list_ids
+        }
 
     def get_bars_in_list(self, list_id, limit=None, offset=0):
         rows = self._clone_rows(self.list_rows.get(int(list_id), []))
@@ -134,11 +137,17 @@ def _row_for_bar_id(model, bar_id: int) -> int:
     raise AssertionError(f"Could not find bar_id={bar_id} in model")
 
 
-def test_history_dialog_loads_models_and_reactivates_list(qtbot, settings_stub, monkeypatch):
+def test_history_dialog_loads_models_and_reactivates_list(
+    qtbot, settings_stub, monkeypatch
+):
     del settings_stub
     db = _FakeSilverBarHistoryDb()
-    monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.Yes)
-    monkeypatch.setattr(QMessageBox, "information", lambda *args, **kwargs: QMessageBox.Ok)
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *args, **kwargs: QMessageBox.Yes
+    )
+    monkeypatch.setattr(
+        QMessageBox, "information", lambda *args, **kwargs: QMessageBox.Ok
+    )
     monkeypatch.setattr(QMessageBox, "critical", lambda *args, **kwargs: QMessageBox.Ok)
 
     dialog = SilverBarHistoryDialog(db)

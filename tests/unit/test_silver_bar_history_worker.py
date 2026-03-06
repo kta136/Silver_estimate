@@ -43,7 +43,13 @@ def _seed_history_worker_db(path: Path) -> None:
             (list_id, list_identifier, list_note, creation_date, issued_date)
             VALUES (?, ?, ?, ?, ?)
             """,
-            (10, "LIST-010", "Issued batch", "2026-02-01 09:00:00", "2026-02-02 09:00:00"),
+            (
+                10,
+                "LIST-010",
+                "Issued batch",
+                "2026-02-01 09:00:00",
+                "2026-02-02 09:00:00",
+            ),
         )
         conn.executemany(
             """

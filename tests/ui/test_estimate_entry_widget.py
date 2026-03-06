@@ -783,10 +783,13 @@ def test_calculate_wage_uses_row_wage_type_without_repository_lookup(qt_app, fak
             widget.add_empty_row()
 
         repo_calls = []
-        fake_db.get_item_by_code = lambda code: repo_calls.append(code) or {
-            "wage_type": "WT",
-            "wage_rate": 1.0,
-        }
+        fake_db.get_item_by_code = lambda code: (
+            repo_calls.append(code)
+            or {
+                "wage_type": "WT",
+                "wage_rate": 1.0,
+            }
+        )
 
         model = table.get_model()
         model.set_row_wage_type(0, "PC")

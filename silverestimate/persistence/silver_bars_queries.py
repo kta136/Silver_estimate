@@ -87,11 +87,7 @@ def build_available_bars_queries(
         except (TypeError, ValueError):
             pass
 
-    if (
-        date_range
-        and isinstance(date_range, (tuple, list))
-        and len(date_range) == 2
-    ):
+    if date_range and isinstance(date_range, (tuple, list)) and len(date_range) == 2:
         start_iso, end_iso = date_range
         if start_iso:
             query += " AND sb.date_added >= ?"

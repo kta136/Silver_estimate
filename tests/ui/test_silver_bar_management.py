@@ -130,11 +130,17 @@ def _row_for_bar_id(model, bar_id: int) -> int:
     raise AssertionError(f"Could not find bar_id={bar_id} in model")
 
 
-def test_management_dialog_uses_model_ids_for_add_and_copy(qtbot, settings_stub, monkeypatch):
+def test_management_dialog_uses_model_ids_for_add_and_copy(
+    qtbot, settings_stub, monkeypatch
+):
     del settings_stub
     db = _FakeSilverBarManagementDb()
-    monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.Yes)
-    monkeypatch.setattr(QMessageBox, "information", lambda *args, **kwargs: QMessageBox.Ok)
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *args, **kwargs: QMessageBox.Yes
+    )
+    monkeypatch.setattr(
+        QMessageBox, "information", lambda *args, **kwargs: QMessageBox.Ok
+    )
     monkeypatch.setattr(QMessageBox, "warning", lambda *args, **kwargs: QMessageBox.Ok)
 
     dialog = SilverBarDialog(db)
@@ -165,11 +171,17 @@ def test_management_dialog_uses_model_ids_for_add_and_copy(qtbot, settings_stub,
     assert dialog.list_bars_model.rowCount() == 2
 
 
-def test_management_dialog_marks_selected_list_as_issued(qtbot, settings_stub, monkeypatch):
+def test_management_dialog_marks_selected_list_as_issued(
+    qtbot, settings_stub, monkeypatch
+):
     del settings_stub
     db = _FakeSilverBarManagementDb()
-    monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.Yes)
-    monkeypatch.setattr(QMessageBox, "information", lambda *args, **kwargs: QMessageBox.Ok)
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *args, **kwargs: QMessageBox.Yes
+    )
+    monkeypatch.setattr(
+        QMessageBox, "information", lambda *args, **kwargs: QMessageBox.Ok
+    )
     monkeypatch.setattr(QMessageBox, "warning", lambda *args, **kwargs: QMessageBox.Ok)
 
     dialog = SilverBarDialog(db)

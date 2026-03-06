@@ -277,9 +277,7 @@ class EstimateTableModel(QAbstractTableModel):
                 return Qt.ItemFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
 
         # All other columns are editable
-        return Qt.ItemFlags(
-            Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable
-        )
+        return Qt.ItemFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable)
 
     def set_row_wage_type(self, row_idx: int, wage_type: str) -> bool:
         """Update a row's wage type and refresh pieces editability."""

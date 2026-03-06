@@ -214,7 +214,9 @@ class EstimateHistoryDialog(QDialog):
                         total_net=float(rn or 0.0),
                         net_fine=net_fine,
                         net_wage=net_wage,
-                        grand_total=(net_fine * silver_rate) + net_wage + last_balance_amount,
+                        grand_total=(net_fine * silver_rate)
+                        + net_wage
+                        + last_balance_amount,
                     )
                 )
             self.estimates_model.set_rows(rows)

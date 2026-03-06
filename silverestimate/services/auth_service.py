@@ -269,6 +269,7 @@ def _clear_log_artifacts() -> None:
         from silverestimate.infrastructure.logger import (  # local import to avoid cycles
             get_log_config as _get_log_config,
         )
+
         get_log_config_fn = _get_log_config
     except Exception:
         get_log_config_fn = None

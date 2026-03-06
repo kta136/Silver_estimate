@@ -64,10 +64,14 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
         self._sort_column = int(column)
         self._sort_order = order
         reverse = order == Qt.DescendingOrder
-        self._rows.sort(key=lambda row: self.sort_key_for_row(row, column), reverse=reverse)
+        self._rows.sort(
+            key=lambda row: self.sort_key_for_row(row, column), reverse=reverse
+        )
         self.layoutChanged.emit()
 
-    def set_rows(self, rows: list[dict[str, Any]], total_count: int | None = None) -> None:
+    def set_rows(
+        self, rows: list[dict[str, Any]], total_count: int | None = None
+    ) -> None:
         self.beginResetModel()
         self._rows = [dict(row) for row in list(rows or [])]
         self._total_count = (
@@ -301,7 +305,9 @@ class HistorySilverBarsTableModel(_BaseSilverBarTableModel):
             return str(payload.get("status") or "Unknown")
         if column == 6:
             if payload.get("list_id"):
-                return str(payload.get("list_identifier") or f"List {payload['list_id']}")
+                return str(
+                    payload.get("list_identifier") or f"List {payload['list_id']}"
+                )
             return "None"
         if column == 7:
             return str(payload.get("date_added") or "")

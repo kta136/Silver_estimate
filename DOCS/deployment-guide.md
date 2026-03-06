@@ -2,9 +2,9 @@
 
 ## Overview
 - Primary target: Windows 10/11 desktops.
-- Build system: PyInstaller 6.x driven from `SilverEstimate.spec` (or explicit one-file command).
+- Build system: PyInstaller 6.x driven from `SilverEstimate.spec`.
 - Runtime Python: 3.13.
-- Artifacts: unpacked directory build plus optional one-file executable zip.
+- Artifacts: a single executable in `dist/`, later zipped for release publishing.
 
 ## Local Windows Packaging
 1. Open PowerShell in the repo root.
@@ -15,21 +15,14 @@
    - `pip install . pyinstaller`
 3. Build with the canonical spec:
    - `python -m PyInstaller --clean --noconfirm SilverEstimate.spec`
-4. Output directories:
-   - `dist/SilverEstimate/` contains the default windowed build with all dependencies.
-   - Optionally zip this folder manually for distribution.
-
-### One-File Executable
-- Run:
-  `python -m PyInstaller --noconfirm --onefile --windowed --name SilverEstimate --hidden-import passlib.handlers.argon2 --hidden-import passlib.handlers.bcrypt --hidden-import keyring.backends --hidden-import keyring.backends.Windows --hidden-import keyring.backends.win32 --hidden-import keyring.backends.fail --hidden-import keyring.backends.null main.py`
-- Produces `dist/SilverEstimate.exe`.
-- Expect slightly longer startup time while PyInstaller unpacks the bundle.
+4. Output artifact:
+   - `dist/SilverEstimate.exe`
+5. Optionally zip the executable manually for distribution.
 
 ### Manual PyInstaller Invocation
-- Spec file: `SilverEstimate.spec` (canonical and required for spec-based builds).
-- Hidden imports are already listed for Argon2/bcrypt handlers and the supported `keyring` backends (Windows Credential Manager, fallback no-op).
+- Spec file: `SilverEstimate.spec` (canonical and required for builds).
+- Hidden imports and other packaging settings live in the spec file.
 - Add datas or icons by editing the spec file if new resources are introduced.
-- Temporary workaround: run `python -m PyInstaller --noconfirm SilverEstimate.spec` to reuse cached venv dependencies.
 
 ## Continuous Delivery (GitHub Actions)
 Workflow: `.github/workflows/release-windows.yml`.
@@ -37,7 +30,7 @@ Workflow: `.github/workflows/release-windows.yml`.
 - Jobs:
   - Checkout repository.
   - Install Python 3.13 and project dependencies from `pyproject.toml` (plus `pyinstaller` for packaging).
-  - Build one-file executable with PyInstaller (same flags as `-OneFile`).
+  - Build the executable from `SilverEstimate.spec`.
   - Rename artifact to `SilverEstimate-<tag>.exe` and zip as `SilverEstimate-<tag>-win64.zip`.
   - Publish the zip to the GitHub Release using `softprops/action-gh-release`.
 
@@ -54,7 +47,7 @@ Workflow: `.github/workflows/release-windows.yml`.
 - For local builds, install via `pip install .` (plus `pyinstaller` for packaging).
 
 ## Testing Before Packaging
-- Run `pytest` from the repo root (requires developer dependencies such as `pytest`, `pytest-qt`, `pytest-mock`).
+- Run `pytest` from the repo root (requires developer dependencies such as `pytest` and `pytest-qt`).
 - Ensure the application starts with `python main.py` before freezing.
 - Verify encrypted database handling by launching the packaged build, creating a password (ensure the OS keyring is available), saving a sample estimate, closing, and reopening.
 

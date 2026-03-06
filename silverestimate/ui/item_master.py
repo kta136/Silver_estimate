@@ -225,7 +225,9 @@ class ItemMasterWidget(QWidget):
 
         code = str(payload.get("code") or "")
         name = str(payload.get("name") or "")
-        purity_str = str(payload.get("purity") if payload.get("purity") is not None else 0.0)
+        purity_str = str(
+            payload.get("purity") if payload.get("purity") is not None else 0.0
+        )
         wage_type = str(payload.get("wage_type") or "WT")
         wage_rate_str = str(
             payload.get("wage_rate") if payload.get("wage_rate") is not None else 0.0

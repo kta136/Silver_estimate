@@ -39,7 +39,9 @@ class FlushScheduler:
         logger: Optional[logging.Logger] = None,
         on_queued_getter: Optional[Callable[[], Callback]] = None,
         on_done_getter: Optional[Callable[[], Callback]] = None,
-        timer_factory: Optional[Callable[[float, Callable[[], None]], _TimerHandle]] = None,
+        timer_factory: Optional[
+            Callable[[float, Callable[[], None]], _TimerHandle]
+        ] = None,
         thread_factory: Optional[Callable[..., _ThreadHandle]] = None,
         time_func: Optional[Callable[[], float]] = None,
         sleep_func: Optional[Callable[[float], None]] = None,

@@ -89,7 +89,7 @@ MainWindow
 - `cryptography` for AES-GCM payload encryption
 - `passlib[argon2]` and `argon2_cffi` for password hashing
 - PyInstaller 6.x for packaging
-- Optional dev tooling: `pytest`, `pytest-qt`, `pytest-mock`, `hypothesis`
+- Optional dev tooling: `pytest`, `pytest-qt`, `hypothesis`
 
 ## Architectural Notes
 - UI and presenter separation keeps heavy logic outside Qt widgets and simplifies unit testing.

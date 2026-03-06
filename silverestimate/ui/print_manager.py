@@ -646,7 +646,7 @@ class PrintManager:
             pad_after_labour = max(1, space_before - 1)
             pad_between = 1
             final_line = (
-                f"{' '*(W_SNO+S)}{fine_str} {wage_str}"
+                f"{' ' * (W_SNO + S)}{fine_str} {wage_str}"
                 + (" " * pad_after_labour)
                 + scost_pad
                 + (" " * pad_between)
@@ -656,7 +656,7 @@ class PrintManager:
             # If silver rate is 0, only show Fine and Labour, omit S.Cost and Total
             part1_len = W_SNO + S + W_FINE + S + W_LBR
             remaining_space = TOTAL_WIDTH - part1_len
-            final_line = f"{' '*(W_SNO+S)}{fine_str} {wage_str}" + (
+            final_line = f"{' ' * (W_SNO + S)}{fine_str} {wage_str}" + (
                 " " * remaining_space
             )
 
@@ -1637,7 +1637,7 @@ class PrintManager:
                 tw += bw
                 tf += bfw
                 html += f"""<tr>
-                               <td>{idx+1}</td>
+                               <td>{idx + 1}</td>
                                <td class="right">{bw:.3f}</td>
                                <td class="right">{bp:.2f}</td>
                                <td class="right">{bfw:.3f}</td>

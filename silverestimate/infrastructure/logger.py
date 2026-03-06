@@ -365,7 +365,7 @@ class LogCleanupScheduler:
         self.is_running = True
         next_cleanup_time = midnight.strftime("%Y-%m-%d %H:%M:%S")
         self.logger.info(
-            f"Log cleanup scheduler started. Next cleanup at {next_cleanup_time} (in {seconds_until_midnight/3600:.1f} hours)"
+            f"Log cleanup scheduler started. Next cleanup at {next_cleanup_time} (in {seconds_until_midnight / 3600:.1f} hours)"
         )
 
     def stop(self):

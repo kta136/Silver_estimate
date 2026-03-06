@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 from pathlib import Path
 
 import nox
@@ -9,51 +10,43 @@ nox.options.sessions = ["pr"]
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 RUFF_TARGETS = ("silverestimate", "tests", "main.py", "noxfile.py")
-PYINSTALLER_HIDDEN_IMPORTS = (
-    "passlib.handlers.argon2",
-    "passlib.handlers.bcrypt",
-    "keyring.backends",
-    "keyring.backends.Windows",
-    "keyring.backends.win32",
-    "keyring.backends.fail",
-    "keyring.backends.null",
-)
+PYINSTALLER_SPEC = PROJECT_ROOT / "SilverEstimate.spec"
 
 
 def clean_artifact(path: Path) -> None:
     try:
+        if path.is_dir():
+            shutil.rmtree(path)
+            return
         path.unlink()
     except FileNotFoundError:
         return
 
 
 def run_pyinstaller_build(session: nox.Session) -> Path:
-    artifact = PROJECT_ROOT / "dist" / (
-        "SilverEstimate.exe" if os.name == "nt" else "SilverEstimate"
+    artifact = (
+        PROJECT_ROOT
+        / "dist"
+        / ("SilverEstimate.exe" if os.name == "nt" else "SilverEstimate")
     )
     clean_artifact(artifact)
 
     session.run("python", "-m", "PyInstaller", "--version")
-    command = [
+    session.run(
         "python",
         "-m",
         "PyInstaller",
+        "--clean",
         "--noconfirm",
-        "--onefile",
-        "--windowed",
-        "--name",
-        "SilverEstimate",
-    ]
-    for hidden_import in PYINSTALLER_HIDDEN_IMPORTS:
-        command.extend(["--hidden-import", hidden_import])
-    command.append("main.py")
-    session.run(*command)
+        str(PYINSTALLER_SPEC),
+    )
     return artifact
 
 
 @nox.session(python=False)
 def ruff(session: nox.Session) -> None:
     session.run("python", "-m", "ruff", "check", *RUFF_TARGETS)
+    session.run("python", "-m", "ruff", "format", "--check", *RUFF_TARGETS)
 
 
 @nox.session(python=False)
@@ -63,7 +56,9 @@ def pylint(session: nox.Session) -> None:
 
 @nox.session(python=False)
 def mypy(session: nox.Session) -> None:
-    session.run("python", "-m", "mypy", "silverestimate", "--config-file=pyproject.toml")
+    session.run(
+        "python", "-m", "mypy", "silverestimate", "--config-file=pyproject.toml"
+    )
 
 
 @nox.session(python=False)
@@ -121,7 +116,9 @@ def tests_full(session: nox.Session) -> None:
 
 @nox.session(python=False)
 def bandit(session: nox.Session) -> None:
-    session.run("python", "-m", "bandit", "-c", "pyproject.toml", "-r", "silverestimate")
+    session.run(
+        "python", "-m", "bandit", "-c", "pyproject.toml", "-r", "silverestimate"
+    )
 
 
 @nox.session(python=False)

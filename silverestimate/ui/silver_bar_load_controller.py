@@ -150,8 +150,8 @@ class SilverBarLoadController(HostProxy):
         worker.data_ready.connect(self._on_bars_load_ready)
         worker.error.connect(self._on_bars_load_error)
         worker.finished.connect(
-            lambda t=target, r=request_id, th=thread, w=worker: self._on_bars_load_finished(
-                t, r, th, w
+            lambda t=target, r=request_id, th=thread, w=worker: (
+                self._on_bars_load_finished(t, r, th, w)
             )
         )
         self._active_load_workers[thread] = worker
@@ -292,7 +292,9 @@ class SilverBarLoadController(HostProxy):
                     display_text += f" - {list_note}"
                 self.list_combo.addItem(display_text, list_row["list_id"])
         except Exception as exc:
-            self.logger.warning("Failed to load silver bar lists: %s", exc, exc_info=True)
+            self.logger.warning(
+                "Failed to load silver bar lists: %s", exc, exc_info=True
+            )
             QMessageBox.critical(self.host, "Error", f"Failed to load lists: {exc}")
         finally:
             try:

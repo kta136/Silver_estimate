@@ -31,6 +31,7 @@ class SilverBarDialog(QDialog):
     """Dialog for managing silver bars and grouping them into lists."""
 
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     def __init__(self, db_manager, parent=None):

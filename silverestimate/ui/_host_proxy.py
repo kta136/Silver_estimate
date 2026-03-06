@@ -16,7 +16,15 @@ class HostProxy:
         return object.__getattribute__(self, "_host")
 
     def __getattribute__(self, name: str) -> Any:
-        if name in {"_host", "host", "__class__", "__dict__", "__setattr__", "__getattr__", "__getattribute__"}:
+        if name in {
+            "_host",
+            "host",
+            "__class__",
+            "__dict__",
+            "__setattr__",
+            "__getattr__",
+            "__getattribute__",
+        }:
             return object.__getattribute__(self, name)
 
         host = object.__getattribute__(self, "_host")

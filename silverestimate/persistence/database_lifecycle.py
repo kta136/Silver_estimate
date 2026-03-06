@@ -41,7 +41,9 @@ class DatabaseLifecycleCoordinator:
         logger: Optional[logging.Logger] = None,
         on_queued_getter: Optional[Callable[[], Callback]] = None,
         on_done_getter: Optional[Callable[[], Callback]] = None,
-        timer_factory: Optional[Callable[[float, Callable[[], None]], _TimerHandle]] = None,
+        timer_factory: Optional[
+            Callable[[float, Callable[[], None]], _TimerHandle]
+        ] = None,
         thread_factory: Optional[Callable[..., _ThreadHandle]] = None,
         time_func: Optional[Callable[[], float]] = None,
         sleep_func: Optional[Callable[[float], None]] = None,
@@ -95,7 +97,9 @@ class DatabaseLifecycleCoordinator:
             self._encrypted_store.set_key(key)
             return self._encrypted_store.encrypt_from_path(temp_db_path)
 
-    def decrypt_current_temp(self, *, on_error: Optional[Callable[[], None]] = None) -> str:
+    def decrypt_current_temp(
+        self, *, on_error: Optional[Callable[[], None]] = None
+    ) -> str:
         """Decrypt the encrypted DB into the current temp path and report status."""
         self._encrypted_store.set_key(self._key_getter())
         status = self._encrypted_store.decrypt_to_path(self._temp_db_path_getter())

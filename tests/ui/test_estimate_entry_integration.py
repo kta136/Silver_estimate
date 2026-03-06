@@ -143,15 +143,15 @@ def test_program_startup_creates_empty_row(qt_app, fake_db):
     widget = _make_widget(fake_db)
     try:
         # Verify initial state
-        assert (
-            widget.item_table.rowCount() >= 1
-        ), "Should have at least one row on startup"
+        assert widget.item_table.rowCount() >= 1, (
+            "Should have at least one row on startup"
+        )
 
         # Verify the row was created via the adapter
         last_row = widget.item_table.rowCount() - 1
-        assert (
-            widget.item_table.get_cell_text(last_row, COL_TYPE) == "No"
-        ), "Empty row should be marked as regular type"
+        assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "No", (
+            "Empty row should be marked as regular type"
+        )
 
         # Verify voucher was generated
         assert widget.voucher_edit.text() == "TEST123"
@@ -176,15 +176,15 @@ def test_initial_empty_row_has_correct_structure(qt_app, fake_db):
         net_index = model.index(last_row, COL_NET_WT)
         wage_index = model.index(last_row, COL_WAGE_AMT)
         fine_index = model.index(last_row, COL_FINE_WT)
-        assert not (
-            model.flags(net_index) & Qt.ItemIsEditable
-        ), "Net weight should be read-only"
-        assert not (
-            model.flags(wage_index) & Qt.ItemIsEditable
-        ), "Wage amount should be read-only"
-        assert not (
-            model.flags(fine_index) & Qt.ItemIsEditable
-        ), "Fine weight should be read-only"
+        assert not (model.flags(net_index) & Qt.ItemIsEditable), (
+            "Net weight should be read-only"
+        )
+        assert not (model.flags(wage_index) & Qt.ItemIsEditable), (
+            "Wage amount should be read-only"
+        )
+        assert not (model.flags(fine_index) & Qt.ItemIsEditable), (
+            "Fine weight should be read-only"
+        )
     finally:
         widget.deleteLater()
 
@@ -655,9 +655,11 @@ def test_manual_row_selection_not_overridden_by_queued_auto_advance(qtbot, fake_
         widget.current_column = COL_CODE
 
         qtbot.waitUntil(
-            lambda: table.currentIndex().isValid()
-            and table.currentIndex().row() == 0
-            and table.currentIndex().column() == COL_CODE,
+            lambda: (
+                table.currentIndex().isValid()
+                and table.currentIndex().row() == 0
+                and table.currentIndex().column() == COL_CODE
+            ),
             timeout=1000,
         )
     finally:
@@ -832,9 +834,11 @@ def test_unchanged_purity_commit_still_advances_cursor(qtbot, fake_db):
         assert table.get_model().setData(purity_index, 91.6, Qt.EditRole)
 
         qtbot.waitUntil(
-            lambda: table.currentIndex().isValid()
-            and table.currentIndex().row() == 0
-            and table.currentIndex().column() == COL_WAGE_RATE,
+            lambda: (
+                table.currentIndex().isValid()
+                and table.currentIndex().row() == 0
+                and table.currentIndex().column() == COL_WAGE_RATE
+            ),
             timeout=1000,
         )
     finally:
@@ -863,9 +867,11 @@ def test_unchanged_code_enter_advances_to_gross_without_relookup(qtbot, fake_db)
         QTest.keyClick(editor, Qt.Key_Return)
 
         qtbot.waitUntil(
-            lambda: table.currentIndex().isValid()
-            and table.currentIndex().row() == 0
-            and table.currentIndex().column() == COL_GROSS,
+            lambda: (
+                table.currentIndex().isValid()
+                and table.currentIndex().row() == 0
+                and table.currentIndex().column() == COL_GROSS
+            ),
             timeout=1000,
         )
         assert len(lookup_calls) == initial_lookup_count
@@ -895,9 +901,11 @@ def test_unchanged_code_tab_advances_to_gross_without_relookup(qtbot, fake_db):
         QTest.keyClick(editor, Qt.Key_Tab)
 
         qtbot.waitUntil(
-            lambda: table.currentIndex().isValid()
-            and table.currentIndex().row() == 0
-            and table.currentIndex().column() == COL_GROSS,
+            lambda: (
+                table.currentIndex().isValid()
+                and table.currentIndex().row() == 0
+                and table.currentIndex().column() == COL_GROSS
+            ),
             timeout=1000,
         )
         assert len(lookup_calls) == initial_lookup_count
@@ -920,9 +928,11 @@ def test_empty_gross_enter_commits_zero_and_advances_to_poly(qtbot, fake_db):
         QTest.keyClick(editor, Qt.Key_Return)
 
         qtbot.waitUntil(
-            lambda: table.currentIndex().isValid()
-            and table.currentIndex().row() == 0
-            and table.currentIndex().column() == COL_POLY,
+            lambda: (
+                table.currentIndex().isValid()
+                and table.currentIndex().row() == 0
+                and table.currentIndex().column() == COL_POLY
+            ),
             timeout=1000,
         )
         assert table.get_cell_text(0, COL_GROSS) == "0.0"
@@ -945,9 +955,11 @@ def test_empty_gross_backspace_moves_to_code_column(qtbot, fake_db):
         QTest.keyClick(editor, Qt.Key_Backspace)
 
         qtbot.waitUntil(
-            lambda: table.currentIndex().isValid()
-            and table.currentIndex().row() == 0
-            and table.currentIndex().column() == COL_CODE,
+            lambda: (
+                table.currentIndex().isValid()
+                and table.currentIndex().row() == 0
+                and table.currentIndex().column() == COL_CODE
+            ),
             timeout=1000,
         )
     finally:

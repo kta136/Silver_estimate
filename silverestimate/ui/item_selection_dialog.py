@@ -120,7 +120,9 @@ class ItemSelectionDialog(QDialog):
             selection_model.selectionChanged.connect(
                 lambda *_: self._update_detail_panel()
             )
-            selection_model.currentChanged.connect(lambda *_: self._update_detail_panel())
+            selection_model.currentChanged.connect(
+                lambda *_: self._update_detail_panel()
+            )
         content_layout.addWidget(self.items_table, 5)
 
         details_card = QFrame()

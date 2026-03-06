@@ -153,7 +153,9 @@ class EncryptedDatabaseStore:
             snapshot_path = tmp.name
             tmp.close()
             try:
-                src = sqlite3.connect(f"file:{temp_db_path}?mode=ro", uri=True, timeout=5)
+                src = sqlite3.connect(
+                    f"file:{temp_db_path}?mode=ro", uri=True, timeout=5
+                )
             except Exception:
                 src = sqlite3.connect(temp_db_path, timeout=5)
             dest = sqlite3.connect(snapshot_path, timeout=5)
@@ -232,7 +234,9 @@ class EncryptedDatabaseStore:
         try:
             if not os.path.exists(plain_temp_path):
                 if logger:
-                    logger.error("Recovery failed: temp file not found: %s", plain_temp_path)
+                    logger.error(
+                        "Recovery failed: temp file not found: %s", plain_temp_path
+                    )
                 return False
 
             salt = EncryptedDatabaseStore.get_or_create_salt(

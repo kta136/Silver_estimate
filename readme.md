@@ -9,7 +9,7 @@ A desktop application built with PyQt5 and an encrypted SQLite database for mana
 [![PR Validation](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml)
 [![Main Validation](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml)
 [![Release Windows](https://github.com/kta136/Silver_estimate/actions/workflows/release-windows.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/release-windows.yml)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Formatter: Ruff](https://img.shields.io/badge/formatter-ruff-%23D7FF64)](https://docs.astral.sh/ruff/)
 [![Lint: Ruff](https://img.shields.io/badge/lint-ruff-%23D7FF64)](https://docs.astral.sh/ruff/)
 [![Type checking: mypy](https://img.shields.io/badge/type%20checking-mypy-blue.svg)](http://mypy-lang.org/)
 [![Security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
@@ -188,7 +188,7 @@ uv run pre-commit run --all-files
 - CI enforces coverage thresholds using explicit pytest coverage flags in workflow commands.
 - To iterate quickly on the application builder branch, run `pytest tests/unit/test_application_builder.py`.
 - Ruff enforces linting and import ordering in CI.
-- Black formatting is enforced locally via pre-commit (CI does not run Black checks).
+- Ruff formatting is enforced locally via pre-commit and checked in CI.
 - Run formatting and hooks before pushing: `pre-commit run --all-files`
 
 ## Deployment
@@ -196,9 +196,8 @@ uv run pre-commit run --all-files
 ### Build Locally (Windows)
 - Prereqs: Python 3.13+, PowerShell
 - Run: `python -m PyInstaller --clean --noconfirm SilverEstimate.spec`
-- One-file exe:
-  `python -m PyInstaller --noconfirm --onefile --windowed --name SilverEstimate --hidden-import passlib.handlers.argon2 --hidden-import passlib.handlers.bcrypt --hidden-import keyring.backends --hidden-import keyring.backends.Windows --hidden-import keyring.backends.win32 --hidden-import keyring.backends.fail --hidden-import keyring.backends.null main.py`
-- Output: `dist/SilverEstimate/` (spec build) or `dist/SilverEstimate.exe` (one-file build)
+- Output: `dist/SilverEstimate.exe` on Windows
+- This is the same spec-based packaging path used by local `nox -s build` and the release workflow
 
 ### GitHub Release (Windows CI)
 - Update version in `silverestimate/infrastructure/app_constants.py` (`APP_VERSION`)

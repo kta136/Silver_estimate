@@ -36,7 +36,9 @@ class EstimateRepositoryDatabase(Protocol):
         self, voucher_no: str
     ) -> Sequence[EstimateRow] | None: ...
 
-    def update_silver_bar_values(self, bar_id: int, weight: float, purity: float) -> bool: ...
+    def update_silver_bar_values(
+        self, bar_id: int, weight: float, purity: float
+    ) -> bool: ...
 
     def add_silver_bar(
         self, voucher_no: str, weight: float, purity: float
@@ -140,9 +142,7 @@ class DatabaseEstimateRepository:
     def notify_silver_bars_for_estimate(self, voucher_no: str) -> None:
         self._db.delete_silver_bars_for_estimate(voucher_no)
 
-    def fetch_silver_bars_for_estimate(
-        self, voucher_no: str
-    ) -> Sequence[EstimateRow]:
+    def fetch_silver_bars_for_estimate(self, voucher_no: str) -> Sequence[EstimateRow]:
         try:
             rows = self._db.get_silver_bars_for_estimate(voucher_no) or []
         except Exception:

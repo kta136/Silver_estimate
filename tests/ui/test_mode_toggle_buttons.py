@@ -81,23 +81,27 @@ def test_return_mode_button_updates_row_type(qtbot, fake_db):
 
         widget.return_toggle_button.click()
         qtbot.waitUntil(
-            lambda: widget.return_mode
-            and widget.return_toggle_button.isChecked()
-            and widget.item_table.get_cell_text(
-                widget.item_table.rowCount() - 1, COL_TYPE
-            )
-            == "Return",
+            lambda: (
+                widget.return_mode
+                and widget.return_toggle_button.isChecked()
+                and widget.item_table.get_cell_text(
+                    widget.item_table.rowCount() - 1, COL_TYPE
+                )
+                == "Return"
+            ),
             timeout=1000,
         )
 
         widget.return_toggle_button.click()
         qtbot.waitUntil(
-            lambda: (not widget.return_mode)
-            and (not widget.return_toggle_button.isChecked())
-            and widget.item_table.get_cell_text(
-                widget.item_table.rowCount() - 1, COL_TYPE
-            )
-            == "No",
+            lambda: (
+                (not widget.return_mode)
+                and (not widget.return_toggle_button.isChecked())
+                and widget.item_table.get_cell_text(
+                    widget.item_table.rowCount() - 1, COL_TYPE
+                )
+                == "No"
+            ),
             timeout=1000,
         )
     finally:
@@ -116,23 +120,27 @@ def test_silver_bar_mode_button_updates_row_type(qtbot, fake_db):
 
         widget.silver_bar_toggle_button.click()
         qtbot.waitUntil(
-            lambda: widget.silver_bar_mode
-            and widget.silver_bar_toggle_button.isChecked()
-            and widget.item_table.get_cell_text(
-                widget.item_table.rowCount() - 1, COL_TYPE
-            )
-            == "Silver Bar",
+            lambda: (
+                widget.silver_bar_mode
+                and widget.silver_bar_toggle_button.isChecked()
+                and widget.item_table.get_cell_text(
+                    widget.item_table.rowCount() - 1, COL_TYPE
+                )
+                == "Silver Bar"
+            ),
             timeout=1000,
         )
 
         widget.silver_bar_toggle_button.click()
         qtbot.waitUntil(
-            lambda: (not widget.silver_bar_mode)
-            and (not widget.silver_bar_toggle_button.isChecked())
-            and widget.item_table.get_cell_text(
-                widget.item_table.rowCount() - 1, COL_TYPE
-            )
-            == "No",
+            lambda: (
+                (not widget.silver_bar_mode)
+                and (not widget.silver_bar_toggle_button.isChecked())
+                and widget.item_table.get_cell_text(
+                    widget.item_table.rowCount() - 1, COL_TYPE
+                )
+                == "No"
+            ),
             timeout=1000,
         )
     finally:
@@ -146,36 +154,42 @@ def test_mode_toggles_are_mutually_exclusive(qtbot, fake_db):
 
         widget.return_toggle_button.click()
         qtbot.waitUntil(
-            lambda: widget.return_mode
-            and widget.return_toggle_button.isChecked()
-            and (not widget.silver_bar_mode)
-            and (not widget.silver_bar_toggle_button.isChecked()),
+            lambda: (
+                widget.return_mode
+                and widget.return_toggle_button.isChecked()
+                and (not widget.silver_bar_mode)
+                and (not widget.silver_bar_toggle_button.isChecked())
+            ),
             timeout=1000,
         )
 
         widget.silver_bar_toggle_button.click()
         qtbot.waitUntil(
-            lambda: (not widget.return_mode)
-            and (not widget.return_toggle_button.isChecked())
-            and widget.silver_bar_mode
-            and widget.silver_bar_toggle_button.isChecked()
-            and widget.item_table.get_cell_text(
-                widget.item_table.rowCount() - 1, COL_TYPE
-            )
-            == "Silver Bar",
+            lambda: (
+                (not widget.return_mode)
+                and (not widget.return_toggle_button.isChecked())
+                and widget.silver_bar_mode
+                and widget.silver_bar_toggle_button.isChecked()
+                and widget.item_table.get_cell_text(
+                    widget.item_table.rowCount() - 1, COL_TYPE
+                )
+                == "Silver Bar"
+            ),
             timeout=1000,
         )
 
         widget.return_toggle_button.click()
         qtbot.waitUntil(
-            lambda: widget.return_mode
-            and widget.return_toggle_button.isChecked()
-            and (not widget.silver_bar_mode)
-            and (not widget.silver_bar_toggle_button.isChecked())
-            and widget.item_table.get_cell_text(
-                widget.item_table.rowCount() - 1, COL_TYPE
-            )
-            == "Return",
+            lambda: (
+                widget.return_mode
+                and widget.return_toggle_button.isChecked()
+                and (not widget.silver_bar_mode)
+                and (not widget.silver_bar_toggle_button.isChecked())
+                and widget.item_table.get_cell_text(
+                    widget.item_table.rowCount() - 1, COL_TYPE
+                )
+                == "Return"
+            ),
             timeout=1000,
         )
     finally:
@@ -190,23 +204,27 @@ def test_ctrl_r_keyboard_shortcut_toggles_return_mode(qtbot, fake_db):
 
         QTest.keyClick(widget, Qt.Key_R, Qt.ControlModifier)
         qtbot.waitUntil(
-            lambda: widget.return_mode
-            and widget.return_toggle_button.isChecked()
-            and widget.item_table.get_cell_text(
-                widget.item_table.rowCount() - 1, COL_TYPE
-            )
-            == "Return",
+            lambda: (
+                widget.return_mode
+                and widget.return_toggle_button.isChecked()
+                and widget.item_table.get_cell_text(
+                    widget.item_table.rowCount() - 1, COL_TYPE
+                )
+                == "Return"
+            ),
             timeout=1000,
         )
 
         QTest.keyClick(widget, Qt.Key_R, Qt.ControlModifier)
         qtbot.waitUntil(
-            lambda: (not widget.return_mode)
-            and (not widget.return_toggle_button.isChecked())
-            and widget.item_table.get_cell_text(
-                widget.item_table.rowCount() - 1, COL_TYPE
-            )
-            == "No",
+            lambda: (
+                (not widget.return_mode)
+                and (not widget.return_toggle_button.isChecked())
+                and widget.item_table.get_cell_text(
+                    widget.item_table.rowCount() - 1, COL_TYPE
+                )
+                == "No"
+            ),
             timeout=1000,
         )
     finally:
@@ -221,23 +239,27 @@ def test_ctrl_b_keyboard_shortcut_toggles_silver_bar_mode(qtbot, fake_db):
 
         QTest.keyClick(widget, Qt.Key_B, Qt.ControlModifier)
         qtbot.waitUntil(
-            lambda: widget.silver_bar_mode
-            and widget.silver_bar_toggle_button.isChecked()
-            and widget.item_table.get_cell_text(
-                widget.item_table.rowCount() - 1, COL_TYPE
-            )
-            == "Silver Bar",
+            lambda: (
+                widget.silver_bar_mode
+                and widget.silver_bar_toggle_button.isChecked()
+                and widget.item_table.get_cell_text(
+                    widget.item_table.rowCount() - 1, COL_TYPE
+                )
+                == "Silver Bar"
+            ),
             timeout=1000,
         )
 
         QTest.keyClick(widget, Qt.Key_B, Qt.ControlModifier)
         qtbot.waitUntil(
-            lambda: (not widget.silver_bar_mode)
-            and (not widget.silver_bar_toggle_button.isChecked())
-            and widget.item_table.get_cell_text(
-                widget.item_table.rowCount() - 1, COL_TYPE
-            )
-            == "No",
+            lambda: (
+                (not widget.silver_bar_mode)
+                and (not widget.silver_bar_toggle_button.isChecked())
+                and widget.item_table.get_cell_text(
+                    widget.item_table.rowCount() - 1, COL_TYPE
+                )
+                == "No"
+            ),
             timeout=1000,
         )
     finally:
@@ -256,14 +278,16 @@ def test_keyboard_shortcuts_respect_mutual_exclusion(qtbot, fake_db):
 
         QTest.keyClick(widget, Qt.Key_B, Qt.ControlModifier)
         qtbot.waitUntil(
-            lambda: (not widget.return_mode)
-            and (not widget.return_toggle_button.isChecked())
-            and widget.silver_bar_mode
-            and widget.silver_bar_toggle_button.isChecked()
-            and widget.item_table.get_cell_text(
-                widget.item_table.rowCount() - 1, COL_TYPE
-            )
-            == "Silver Bar",
+            lambda: (
+                (not widget.return_mode)
+                and (not widget.return_toggle_button.isChecked())
+                and widget.silver_bar_mode
+                and widget.silver_bar_toggle_button.isChecked()
+                and widget.item_table.get_cell_text(
+                    widget.item_table.rowCount() - 1, COL_TYPE
+                )
+                == "Silver Bar"
+            ),
             timeout=1000,
         )
     finally:

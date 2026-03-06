@@ -38,9 +38,7 @@ class _SettingsStub:
         self._key = (org, app)
         self._store = _SettingsStub._data.setdefault(self._key, {})
 
-    def value(
-        self, key, default=None, type=None, **kwargs
-    ):  # noqa: A002 - signature mirrors QSettings
+    def value(self, key, default=None, type=None, **kwargs):  # noqa: A002 - signature mirrors QSettings
         if "defaultValue" in kwargs and default is None:
             default = kwargs["defaultValue"]
         if "type" in kwargs and type is None:

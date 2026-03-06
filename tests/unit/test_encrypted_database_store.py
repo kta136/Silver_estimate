@@ -52,13 +52,10 @@ def test_check_recovery_candidate_prefers_newer_temp_file(tmp_path):
     os.utime(encrypted_db_path, (1, 1))
     os.utime(temp_db_path, (2, 2))
 
-    assert (
-        EncryptedDatabaseStore.check_recovery_candidate(
-            str(encrypted_db_path),
-            settings_factory=lambda: settings,
-        )
-        == str(temp_db_path)
-    )
+    assert EncryptedDatabaseStore.check_recovery_candidate(
+        str(encrypted_db_path),
+        settings_factory=lambda: settings,
+    ) == str(temp_db_path)
 
     os.utime(temp_db_path, (1, 1))
     os.utime(encrypted_db_path, (2, 2))

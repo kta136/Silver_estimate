@@ -79,10 +79,9 @@ def test_encrypt_current_state_uses_commit_checkpoint_and_store(tmp_path):
         key_getter=lambda: state["key"],
         key_setter=lambda value: state.__setitem__("key", value),
         commit=lambda: counts.__setitem__("commit", counts["commit"] + 1) or True,
-        checkpoint=lambda: counts.__setitem__(
-            "checkpoint", counts["checkpoint"] + 1
-        )
-        or True,
+        checkpoint=lambda: (
+            counts.__setitem__("checkpoint", counts["checkpoint"] + 1) or True
+        ),
         logger=logging.getLogger("test.database_lifecycle"),
     )
 
@@ -170,7 +169,9 @@ def test_close_deletes_temp_db_when_encryption_fails_by_default(tmp_path):
     )
 
     coordinator.close(
-        close_connection=lambda: close_calls.__setitem__("count", close_calls["count"] + 1),
+        close_connection=lambda: close_calls.__setitem__(
+            "count", close_calls["count"] + 1
+        ),
         cleanup_temp_db=lambda preserve: cleanup_calls.append(preserve),
     )
 
@@ -199,7 +200,9 @@ def test_close_preserves_temp_db_when_encryption_fails_and_recovery_enabled(tmp_
     )
 
     coordinator.close(
-        close_connection=lambda: close_calls.__setitem__("count", close_calls["count"] + 1),
+        close_connection=lambda: close_calls.__setitem__(
+            "count", close_calls["count"] + 1
+        ),
         cleanup_temp_db=lambda preserve: cleanup_calls.append(preserve),
         preserve_plaintext_on_failure=True,
     )
@@ -228,10 +231,9 @@ def test_request_flush_runs_scheduled_background_encrypt(tmp_path):
         key_getter=lambda: state["key"],
         key_setter=lambda value: state.__setitem__("key", value),
         commit=lambda: counts.__setitem__("commit", counts["commit"] + 1) or True,
-        checkpoint=lambda: counts.__setitem__(
-            "checkpoint", counts["checkpoint"] + 1
-        )
-        or True,
+        checkpoint=lambda: (
+            counts.__setitem__("checkpoint", counts["checkpoint"] + 1) or True
+        ),
         logger=logging.getLogger("test.database_lifecycle"),
         timer_factory=timer_factory,
         thread_factory=lambda **kwargs: _ImmediateThread(**kwargs),

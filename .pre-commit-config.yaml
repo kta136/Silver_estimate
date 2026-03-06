@@ -2,7 +2,7 @@
 # Install: pre-commit install
 # Run manually: pre-commit run --all-files
 # Update: pre-commit autoupdate
-# Formatting policy: Ruff + Black run via pre-commit locally.
+# Formatting policy: Ruff linting and formatting run via pre-commit locally.
 
 repos:
   # Fast linting and import sorting with Ruff
@@ -11,14 +11,7 @@ repos:
     hooks:
       - id: ruff
         args: [--fix, --config=pyproject.toml]
-
-  # Code formatting with Black
-  - repo: https://github.com/psf/black
-    rev: 23.12.1
-    hooks:
-      - id: black
-        language_version: python3.13
-        args: [--config=pyproject.toml]
+      - id: ruff-format
 
   # Type checking with mypy
   - repo: https://github.com/pre-commit/mirrors-mypy
@@ -28,7 +21,6 @@ repos:
         args: [--config-file=pyproject.toml]
         additional_dependencies:
           - PyQt5-stubs>=5.15.6
-          - types-PyYAML>=6.0.0
         exclude: ^tests/
 
   # General pre-commit hooks
@@ -85,13 +77,6 @@ repos:
         args: [-c, pyproject.toml, -r, silverestimate]
         additional_dependencies: ["bandit[toml]"]
 
-  # Check for common security issues
-  - repo: https://github.com/Lucas-C/pre-commit-hooks-safety
-    rev: v1.3.3
-    hooks:
-      - id: python-safety-dependencies-check
-        files: pyproject.toml
-
 # Configuration for pre-commit ci (if using pre-commit.ci service)
 ci:
   autofix_commit_msg: |
@@ -102,5 +87,4 @@ ci:
   autoupdate_branch: ''
   autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
   autoupdate_schedule: weekly
-  skip: [python-safety-dependencies-check]  # Skip in CI (requires network)
   submodules: false

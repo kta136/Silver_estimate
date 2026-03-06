@@ -28,7 +28,9 @@ def test_build_available_bars_queries_applies_filters_and_limit():
     assert "sb.purity <= ?" in statements.query.query
     assert "sb.date_added >= ?" in statements.query.query
     assert "sb.date_added <= ?" in statements.query.query
-    assert statements.query.query.endswith("ORDER BY sb.date_added DESC, sb.bar_id DESC LIMIT ?")
+    assert statements.query.query.endswith(
+        "ORDER BY sb.date_added DESC, sb.bar_id DESC LIMIT ?"
+    )
     assert statements.query.params == (
         9.5,
         10.5,
@@ -50,9 +52,14 @@ def test_build_available_bars_queries_applies_filters_and_limit():
 
 def test_build_bars_in_list_queries_only_adds_offset_when_limited():
     statements = build_bars_in_list_queries(12, limit=50, offset=25)
-    assert statements.query.query.endswith("WHERE sb.list_id = ? ORDER BY sb.bar_id LIMIT ? OFFSET ?")
+    assert statements.query.query.endswith(
+        "WHERE sb.list_id = ? ORDER BY sb.bar_id LIMIT ? OFFSET ?"
+    )
     assert statements.query.params == (12, 50, 25)
-    assert statements.count_query.query == "SELECT COUNT(*) FROM silver_bars WHERE list_id = ?"
+    assert (
+        statements.count_query.query
+        == "SELECT COUNT(*) FROM silver_bars WHERE list_id = ?"
+    )
     assert statements.count_query.params == (12,)
 
     unlimited = build_bars_in_list_queries(12, offset=25)
@@ -71,7 +78,9 @@ def test_build_history_bars_query_applies_filters_and_normalizes_limit():
     assert "(sb.estimate_voucher_no LIKE ? OR e.note LIKE ?)" in statement.query
     assert "sb.weight = ?" in statement.query
     assert "sb.status = ?" in statement.query
-    assert statement.query.endswith("ORDER BY sb.date_added DESC, sb.bar_id DESC LIMIT ?")
+    assert statement.query.endswith(
+        "ORDER BY sb.date_added DESC, sb.bar_id DESC LIMIT ?"
+    )
     assert statement.params == ("%V001%", "%V001%", 12.5, "Assigned", 100)
 
 

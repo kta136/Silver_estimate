@@ -112,7 +112,9 @@ class SilverBarManagementUiBuilder(HostProxy):
         left_layout.addLayout(controls_row)
 
         self.available_bars_table = QTableView(self.host)
-        self.available_bars_model = AvailableSilverBarsTableModel(self.available_bars_table)
+        self.available_bars_model = AvailableSilverBarsTableModel(
+            self.available_bars_table
+        )
         self.available_bars_table.setModel(self.available_bars_model)
         self.available_bars_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.available_bars_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
@@ -124,7 +126,9 @@ class SilverBarManagementUiBuilder(HostProxy):
         left_layout.addWidget(self.available_bars_table, 1)
 
         self.available_totals_label = QLabel("Available Bars: 0")
-        self.available_selection_label = QLabel("Selected: 0 | Weight: 0.000 g | Fine: 0.000 g")
+        self.available_selection_label = QLabel(
+            "Selected: 0 | Weight: 0.000 g | Fine: 0.000 g"
+        )
         left_layout.addWidget(self.available_totals_label)
         left_layout.addWidget(self.available_selection_label)
 
@@ -193,11 +197,15 @@ class SilverBarManagementUiBuilder(HostProxy):
         self.list_bars_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.list_bars_table.setSortingEnabled(True)
         self.list_bars_table.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.list_bars_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.list_bars_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.Stretch
+        )
         right_layout.addWidget(self.list_bars_table, 1)
 
         self.list_totals_label = QLabel("List Bars: 0")
-        self.list_selection_label = QLabel("Selected: 0 | Weight: 0.000 g | Fine: 0.000 g")
+        self.list_selection_label = QLabel(
+            "Selected: 0 | Weight: 0.000 g | Fine: 0.000 g"
+        )
         right_layout.addWidget(self.list_totals_label)
         right_layout.addWidget(self.list_selection_label)
 
@@ -224,16 +232,24 @@ class SilverBarManagementUiBuilder(HostProxy):
         self._filter_reload_timer.setInterval(180)
         self._filter_reload_timer.timeout.connect(self.load_available_bars)
 
-        self.refresh_available_button.clicked.connect(lambda *_: self.load_available_bars())
+        self.refresh_available_button.clicked.connect(
+            lambda *_: self.load_available_bars()
+        )
         self.clear_filters_button.clicked.connect(lambda *_: self._clear_filters())
         self.auto_refresh_checkbox.toggled.connect(self._toggle_auto_refresh)
         self.weight_search_edit.textChanged.connect(self._schedule_available_reload)
         self.weight_tol_spin.valueChanged.connect(self._schedule_available_reload)
         self.purity_min_spin.valueChanged.connect(self._schedule_available_reload)
         self.purity_max_spin.valueChanged.connect(self._schedule_available_reload)
-        self.date_range_combo.currentIndexChanged.connect(self._schedule_available_reload)
-        self.available_limit_spin.valueChanged.connect(self._save_available_limit_setting)
-        self.available_limit_spin.valueChanged.connect(lambda *_: self.load_available_bars())
+        self.date_range_combo.currentIndexChanged.connect(
+            self._schedule_available_reload
+        )
+        self.available_limit_spin.valueChanged.connect(
+            self._save_available_limit_setting
+        )
+        self.available_limit_spin.valueChanged.connect(
+            lambda *_: self.load_available_bars()
+        )
 
         self.list_combo.currentIndexChanged.connect(
             lambda *_: self.list_selection_changed()
@@ -252,9 +268,7 @@ class SilverBarManagementUiBuilder(HostProxy):
         )
 
         self.add_to_list_button.clicked.connect(lambda *_: self.add_selected_to_list())
-        self.add_all_button.clicked.connect(
-            lambda *_: self.add_all_filtered_to_list()
-        )
+        self.add_all_button.clicked.connect(lambda *_: self.add_all_filtered_to_list())
         self.remove_from_list_button.clicked.connect(
             lambda *_: self.remove_selected_from_list()
         )

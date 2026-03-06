@@ -116,7 +116,9 @@ class ItemMasterTableModel(QAbstractTableModel):
             reverse=reverse,
         )
 
-    def _sort_key_for_row(self, payload: dict[str, Any], column: int) -> tuple[Any, ...]:
+    def _sort_key_for_row(
+        self, payload: dict[str, Any], column: int
+    ) -> tuple[Any, ...]:
         value = self.sort_key_value(payload, column)
         return (value is None, value)
 

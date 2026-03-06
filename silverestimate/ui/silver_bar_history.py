@@ -576,7 +576,9 @@ class SilverBarHistoryDialog(QDialog):
                 status_text=str(payload.get("status_text") or "").strip(),
                 limit=int(payload.get("limit", 2000) or 2000),
             )
-            rows = [dict(row) if not isinstance(row, dict) else dict(row) for row in rows]
+            rows = [
+                dict(row) if not isinstance(row, dict) else dict(row) for row in rows
+            ]
             self._on_bars_load_ready(request_id, rows)
         except Exception as exc:
             self._on_bars_load_error(request_id, str(exc))

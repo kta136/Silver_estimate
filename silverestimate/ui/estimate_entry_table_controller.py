@@ -48,7 +48,9 @@ class EstimateEntryTableController(HostProxy):
 
     def _table_runtime_available(self) -> bool:
         table = getattr(self, "item_table", None)
-        if not self._qt_object_available(self.host) or not self._qt_object_available(table):
+        if not self._qt_object_available(self.host) or not self._qt_object_available(
+            table
+        ):
             return False
         model = getattr(table, "_table_model", None)
         return model is not None and self._qt_object_available(model)

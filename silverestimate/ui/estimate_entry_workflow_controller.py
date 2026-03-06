@@ -143,7 +143,9 @@ class EstimateEntryWorkflowController(HostProxy):
             outcome, preparation = service.execute_save(
                 voucher_no=voucher_no,
                 date=self.date_edit.date().toString("yyyy-MM-dd"),
-                note=self.note_edit.text().strip() if hasattr(self, "note_edit") else "",
+                note=self.note_edit.text().strip()
+                if hasattr(self, "note_edit")
+                else "",
                 presenter=self.presenter,
             )
 
@@ -337,7 +339,7 @@ class EstimateEntryWorkflowController(HostProxy):
         reply = QMessageBox.question(
             self._parent_widget(),
             "Delete Row",
-            f"Delete row {row+1}?",
+            f"Delete row {row + 1}?",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )

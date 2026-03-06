@@ -206,7 +206,7 @@ class ItemImportManager(QObject):
                     )
                 except ItemImportParseError as ve:
                     summary["errors"] += 1
-                    self.status_updated.emit(f"Skipping line {i+1}: {ve}")
+                    self.status_updated.emit(f"Skipping line {i + 1}: {ve}")
                     self.progress_updated.emit(processed_count, total_items)
                     continue
 
@@ -276,7 +276,7 @@ class ItemImportManager(QObject):
                         imported_count += 1  # skipped duplicate is still processed
                 except Exception as e_item:
                     summary["errors"] += 1
-                    self.status_updated.emit(f"Error processing line {i+1}: {e_item}")
+                    self.status_updated.emit(f"Error processing line {i + 1}: {e_item}")
                     continue  # Skip to next item on error
 
                 if processed_count % batch_size == 0 and worker_conn is not None:

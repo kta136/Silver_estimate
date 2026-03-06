@@ -56,22 +56,18 @@ def test_settings_apply_calls_public_estimate_widget_methods(
     calls = {"table": 0, "breakdown": 0, "final": 0, "position": 0}
 
     estimate_widget = types.SimpleNamespace(
-        apply_table_font_size=lambda size: calls.__setitem__(
-            "table", calls["table"] + 1
-        )
-        or True,
-        apply_breakdown_font_size=lambda size: calls.__setitem__(
-            "breakdown", calls["breakdown"] + 1
-        )
-        or True,
-        apply_final_calc_font_size=lambda size: calls.__setitem__(
-            "final", calls["final"] + 1
-        )
-        or True,
-        apply_totals_position=lambda value: calls.__setitem__(
-            "position", calls["position"] + 1
-        )
-        or True,
+        apply_table_font_size=lambda size: (
+            calls.__setitem__("table", calls["table"] + 1) or True
+        ),
+        apply_breakdown_font_size=lambda size: (
+            calls.__setitem__("breakdown", calls["breakdown"] + 1) or True
+        ),
+        apply_final_calc_font_size=lambda size: (
+            calls.__setitem__("final", calls["final"] + 1) or True
+        ),
+        apply_totals_position=lambda value: (
+            calls.__setitem__("position", calls["position"] + 1) or True
+        ),
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
     try:

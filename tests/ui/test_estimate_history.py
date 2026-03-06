@@ -141,8 +141,9 @@ def test_populate_table_uses_model_rows_and_selection_lookup(qtbot, monkeypatch)
         )
 
         assert dialog.get_selected_voucher() == "V002"
-        assert dialog.estimates_model.data(
-            dialog.estimates_model.index(target_row, 8)
-        ) == "229.38"
+        assert (
+            dialog.estimates_model.data(dialog.estimates_model.index(target_row, 8))
+            == "229.38"
+        )
     finally:
         dialog.deleteLater()

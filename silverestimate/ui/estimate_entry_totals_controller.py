@@ -74,7 +74,9 @@ class EstimateEntryTotalsController(HostProxy):
                 row_state = get_row(row)
                 if row_state is not None:
                     wage_type = getattr(row_state, "wage_type", "WT")
-                    return "PC" if str(wage_type or "").strip().upper() == "PC" else "WT"
+                    return (
+                        "PC" if str(wage_type or "").strip().upper() == "PC" else "WT"
+                    )
         except (AttributeError, TypeError, RuntimeError, ValueError):
             pass
         return "WT"

@@ -32,17 +32,9 @@ jobs:
           pip install .
           pip install pyinstaller
 
-      - name: Build executable (OneFile)
+      - name: Build executable from canonical spec
         run: |
-          python -m PyInstaller --noconfirm --onefile --windowed --name SilverEstimate `
-            --hidden-import passlib.handlers.argon2 `
-            --hidden-import passlib.handlers.bcrypt `
-            --hidden-import keyring.backends `
-            --hidden-import keyring.backends.Windows `
-            --hidden-import keyring.backends.win32 `
-            --hidden-import keyring.backends.fail `
-            --hidden-import keyring.backends.null `
-            main.py
+          python -m PyInstaller --clean --noconfirm SilverEstimate.spec
 
       - name: Rename executable with version and package artifact
         shell: pwsh

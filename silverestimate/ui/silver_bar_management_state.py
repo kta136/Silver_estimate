@@ -35,7 +35,9 @@ class SilverBarManagementStateStore(HostProxy):
             settings = self._settings()
             settings.setValue("ui/silver_bars/geometry", self.host.saveGeometry())
             if hasattr(self, "_splitter"):
-                settings.setValue("ui/silver_bars/splitter_h", self._splitter.saveState())
+                settings.setValue(
+                    "ui/silver_bars/splitter_h", self._splitter.saveState()
+                )
             settings.setValue(
                 "ui/silver_bars/available_cols",
                 self._get_table_column_widths(self.available_bars_table),
@@ -46,7 +48,9 @@ class SilverBarManagementStateStore(HostProxy):
             )
             self._save_table_sort_state("available", self.available_bars_table)
             self._save_table_sort_state("list", self.list_bars_table)
-            settings.setValue("ui/silver_bars/weight_query", self.weight_search_edit.text())
+            settings.setValue(
+                "ui/silver_bars/weight_query", self.weight_search_edit.text()
+            )
             settings.setValue("ui/silver_bars/current_list_id", self.current_list_id)
             settings.setValue(
                 "ui/silver_bars/weight_tol", float(self.weight_tol_spin.value())
@@ -66,7 +70,9 @@ class SilverBarManagementStateStore(HostProxy):
             )
             settings.sync()
         except Exception as exc:
-            self.logger.debug("Failed to save silver bar dialog state: %s", exc, exc_info=True)
+            self.logger.debug(
+                "Failed to save silver bar dialog state: %s", exc, exc_info=True
+            )
 
     def _restore_ui_state(self):
         try:
@@ -155,7 +161,11 @@ class SilverBarManagementStateStore(HostProxy):
                 return
             header = table.horizontalHeader()
             for index, width in enumerate(widths):
-                if index < table.model().columnCount() and isinstance(width, int) and width > 0:
+                if (
+                    index < table.model().columnCount()
+                    and isinstance(width, int)
+                    and width > 0
+                ):
                     header.resizeSection(index, width)
         except Exception as exc:
             self.logger.debug("Could not apply stored table widths: %s", exc)
@@ -210,7 +220,9 @@ class SilverBarManagementStateStore(HostProxy):
                     return widget
                 widget = widget.parent()
         except Exception as exc:
-            self.logger.debug("Could not resolve main window from silver bar dialog: %s", exc)
+            self.logger.debug(
+                "Could not resolve main window from silver bar dialog: %s", exc
+            )
         return None
 
     def _is_embedded(self):

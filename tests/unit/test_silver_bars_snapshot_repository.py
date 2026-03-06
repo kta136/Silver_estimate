@@ -113,3 +113,33 @@ def test_snapshot_repository_history_search_filters_by_note_and_status(tmp_path)
 
     assert [row["estimate_voucher_no"] for row in rows] == ["V004"]
     assert rows[0]["list_identifier"] == "LIST-002"
+
+
+def test_snapshot_repository_closes_connections_after_queries():
+    class _CursorStub:
+        def execute(self, query, params):
+            self.query = query
+            self.params = params
+
+        def fetchall(self):
+            return [{"estimate_voucher_no": "V001"}]
+
+    class _ConnectionStub:
+        def __init__(self):
+            self.closed = False
+            self.cursor_obj = _CursorStub()
+
+        def cursor(self):
+            return self.cursor_obj
+
+        def close(self):
+            self.closed = True
+
+    repo = SilverBarsSnapshotRepository("unused.sqlite")
+    conn = _ConnectionStub()
+    repo._connect = lambda: conn  # type: ignore[method-assign]
+
+    rows = repo.search_history_bars(voucher_term="V001")
+
+    assert rows == [{"estimate_voucher_no": "V001"}]
+    assert conn.closed is True

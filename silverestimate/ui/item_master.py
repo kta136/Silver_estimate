@@ -2,8 +2,8 @@
 import logging
 import time
 
-from PyQt5.QtCore import QLocale, Qt, QTimer  # Added QLocale
-from PyQt5.QtGui import QDoubleValidator  # Added QDoubleValidator
+from PyQt5.QtCore import QLocale, QModelIndex, Qt, QTimer
+from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -13,13 +13,13 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
+    QTableView,
     QVBoxLayout,
     QWidget,
 )
 
 from silverestimate.domain.item_validation import ItemValidationError, validate_item
+from silverestimate.ui.models import ItemMasterTableModel
 
 
 class ItemMasterWidget(QWidget):
@@ -158,74 +158,39 @@ class ItemMasterWidget(QWidget):
         search_layout.addWidget(self.search_edit)
         layout.addLayout(search_layout)
 
-        self.items_table = QTableWidget()
-        self.items_table.setColumnCount(5)
-        headers = ["Code", "Name", "Purity (%)", "Wage Type", "Wage Rate"]
-        header_tooltips = [
-            "Item Code",
-            "Item Name",
-            "Default Purity",
-            "Default Wage Calc Type",
-            "Default Wage Rate",
-        ]
-        self.items_table.setHorizontalHeaderLabels(headers)
-        # --- Set Header Tooltips ----
-        for i, tooltip in enumerate(header_tooltips):
-            self.items_table.horizontalHeaderItem(i).setToolTip(tooltip)
-        # ---------------------------
-
+        self.items_table = QTableView(self)
+        self.items_model = ItemMasterTableModel(self.items_table)
+        self.items_table.setModel(self.items_model)
         self.items_table.horizontalHeader().setSectionResizeMode(
-            1, QHeaderView.Stretch
-        )  # Name column stretch
+            QHeaderView.ResizeToContents
+        )
+        self.items_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.items_table.verticalHeader().setVisible(False)
-        self.items_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.items_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.items_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.items_table.setSelectionMode(QTableWidget.SingleSelection)
-        self.items_table.itemSelectionChanged.connect(self.on_item_selected)
+        self.items_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.items_table.setSortingEnabled(True)
         self.items_table.setAlternatingRowColors(True)
+        selection_model = self.items_table.selectionModel()
+        if selection_model:
+            selection_model.selectionChanged.connect(lambda *_: self.on_item_selected())
         layout.addWidget(self.items_table)
 
     def load_items(self, search_term=None):
         """Load items from the database into the table."""
         start = time.perf_counter()
         table = self.items_table
+        model = self.items_model
         table.setUpdatesEnabled(False)
         table.blockSignals(True)
         try:
-            table.setSortingEnabled(False)
-            table.setRowCount(0)  # Clear table first
-
             if search_term:
-                items = self.db_manager.search_items(
-                    search_term
-                )  # Returns list of sqlite3.Row
+                items = self.db_manager.search_items(search_term)
             else:
-                items = self.db_manager.get_all_items()  # Returns list of sqlite3.Row
-
-            table.setRowCount(len(items))  # Set row count before populating
-
-            # --- Corrected Loop ---
-            for row, item_row in enumerate(items):  # item_row is sqlite3.Row
-                # Access columns directly using ['key'], providing defaults for None
-                code = item_row["code"] if item_row["code"] is not None else ""
-                name = item_row["name"] if item_row["name"] is not None else ""
-                purity = item_row["purity"] if item_row["purity"] is not None else 0.0
-                wage_type = (
-                    item_row["wage_type"] if item_row["wage_type"] is not None else "WT"
-                )  # Default wage type
-                wage_rate = (
-                    item_row["wage_rate"] if item_row["wage_rate"] is not None else 0.0
-                )
-
-                # Set table cell values using the retrieved or default values
-                table.setItem(row, 0, QTableWidgetItem(code))
-                table.setItem(row, 1, QTableWidgetItem(name))
-                table.setItem(row, 2, QTableWidgetItem(str(purity)))
-                table.setItem(row, 3, QTableWidgetItem(wage_type))
-                table.setItem(row, 4, QTableWidgetItem(str(wage_rate)))
-            # --- End Corrected Loop ---
+                items = self.db_manager.get_all_items()
+            items = list(items or [])
+            model.set_rows(items)
         finally:
-            table.setSortingEnabled(True)
             table.blockSignals(False)
             table.setUpdatesEnabled(True)
             table.viewport().update()
@@ -253,48 +218,62 @@ class ItemMasterWidget(QWidget):
 
     def on_item_selected(self):
         """Handle item selection in the table."""
-        selected_items = self.items_table.selectedItems()
-        if selected_items:
-            row = selected_items[0].row()
-            code = self.items_table.item(row, 0).text()
-            name = self.items_table.item(row, 1).text()
-            purity_str = self.items_table.item(row, 2).text()
-            wage_type = self.items_table.item(row, 3).text()
-            wage_rate_str = self.items_table.item(row, 4).text()
+        payload = self._selected_item_payload()
+        if payload is None:
+            self._set_form_cleared(clear_selection=False)
+            return
 
-            # Populate form fields - use strings for QLineEdit
-            self.code_edit.setText(code)
-            self.name_edit.setText(name)
-            self.purity_edit.setText(purity_str)  # Set text for QLineEdit
-            self.wage_rate_edit.setText(wage_rate_str)  # Set text for QLineEdit
+        code = str(payload.get("code") or "")
+        name = str(payload.get("name") or "")
+        purity_str = str(payload.get("purity") if payload.get("purity") is not None else 0.0)
+        wage_type = str(payload.get("wage_type") or "WT")
+        wage_rate_str = str(
+            payload.get("wage_rate") if payload.get("wage_rate") is not None else 0.0
+        )
 
-            index = self.wage_type_combo.findText(wage_type, Qt.MatchFixedString)
-            self.wage_type_combo.setCurrentIndex(index if index >= 0 else 0)
+        self.code_edit.setText(code)
+        self.name_edit.setText(name)
+        self.purity_edit.setText(purity_str)
+        self.wage_rate_edit.setText(wage_rate_str)
 
-            # Enable/Disable buttons and fields
-            self.update_button.setEnabled(True)
-            self.delete_button.setEnabled(True)
-            self.add_button.setEnabled(False)
-            self.code_edit.setReadOnly(True)
-            self.show_status(f"Selected item: {code}", 2000)
-        else:
-            self.clear_form()
+        index = self.wage_type_combo.findText(wage_type, Qt.MatchFixedString)
+        self.wage_type_combo.setCurrentIndex(index if index >= 0 else 0)
+
+        self.update_button.setEnabled(True)
+        self.delete_button.setEnabled(True)
+        self.add_button.setEnabled(False)
+        self.code_edit.setReadOnly(True)
+        self.show_status(f"Selected item: {code}", 2000)
 
     def clear_form(self):
         """Clear the form fields and reset button states."""
+        self._set_form_cleared(clear_selection=True)
+
+    def _set_form_cleared(self, *, clear_selection: bool) -> None:
         self.code_edit.clear()
         self.code_edit.setReadOnly(False)
         self.name_edit.clear()
-        self.purity_edit.clear()  # Clear QLineEdit
+        self.purity_edit.clear()
         self.wage_type_combo.setCurrentIndex(0)
-        self.wage_rate_edit.clear()  # Clear QLineEdit
+        self.wage_rate_edit.clear()
 
         self.update_button.setEnabled(False)
         self.delete_button.setEnabled(False)
         self.add_button.setEnabled(True)
 
-        self.items_table.clearSelection()
+        if clear_selection:
+            self.items_table.clearSelection()
+            self.items_table.setCurrentIndex(QModelIndex())
         self.show_status("Form cleared.", 1500)
+
+    def _selected_item_payload(self):
+        selection_model = self.items_table.selectionModel()
+        if selection_model is None:
+            return None
+        selected_rows = selection_model.selectedRows()
+        if not selected_rows:
+            return None
+        return self.items_model.row_payload(selected_rows[0].row())
 
     # --- Helper to safely convert locale-aware string to float ---
     def _parse_float(self, text, default=0.0):
@@ -435,7 +414,8 @@ class ItemMasterWidget(QWidget):
     def keyPressEvent(self, event):
         """Handle key press events."""
         if event.key() == Qt.Key_Escape:
-            if self.items_table.selectedItems():
+            selection_model = self.items_table.selectionModel()
+            if selection_model and selection_model.hasSelection():
                 self.clear_form()
             event.accept()
         else:

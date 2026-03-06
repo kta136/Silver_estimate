@@ -7,16 +7,18 @@ from PyQt5.QtWidgets import (
     QDateEdit,
     QDialog,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
+    QTableView,
     QVBoxLayout,
 )
 
-from .print_manager import PrintManager  # Added import
+from silverestimate.ui.models import EstimateHistoryRow, EstimateHistoryTableModel
+
+from .print_manager import PrintManager
 
 
 class EstimateHistoryDialog(QDialog):
@@ -79,20 +81,11 @@ class EstimateHistoryDialog(QDialog):
         layout.addLayout(filter_layout)
 
         # Estimates table
-        self.estimates_table = QTableWidget()
-        self.estimates_table.setColumnCount(9)  # Increased column count to include Note
-        self.estimates_table.setHorizontalHeaderLabels(
-            [
-                "Voucher No",
-                "Date",
-                "Note",
-                "Silver Rate",
-                "Total Gross",
-                "Total Net",
-                "Net Fine",
-                "Net Wage",
-                "Grand Total",  # Moved Note column after Date
-            ]
+        self.estimates_table = QTableView(self)
+        self.estimates_model = EstimateHistoryTableModel(self.estimates_table)
+        self.estimates_table.setModel(self.estimates_model)
+        self.estimates_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.Interactive
         )
 
         # Set column widths (adjusting for new columns)
@@ -107,10 +100,11 @@ class EstimateHistoryDialog(QDialog):
         self.estimates_table.setColumnWidth(8, 110)  # Grand Total
 
         # Table properties
-        self.estimates_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.estimates_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.estimates_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.estimates_table.setSelectionMode(QTableWidget.SingleSelection)
-        self.estimates_table.itemDoubleClicked.connect(self.accept)
+        self.estimates_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.estimates_table.setSortingEnabled(True)
+        self.estimates_table.doubleClicked.connect(lambda *_: self.accept())
 
         layout.addWidget(self.estimates_table)
 
@@ -200,34 +194,31 @@ class EstimateHistoryDialog(QDialog):
         table.setUpdatesEnabled(False)
         table.blockSignals(True)
         try:
-            table.setSortingEnabled(False)
-            table.setRowCount(0)
-            table.setRowCount(len(headers))
-            for row_idx, header in enumerate(headers):
+            rows = []
+            for header in headers:
                 vno = str(header["voucher_no"])
                 rg, rn = agg_map.get(vno, (0.0, 0.0))
-                table.setItem(row_idx, 0, QTableWidgetItem(header["voucher_no"]))
-                table.setItem(row_idx, 1, QTableWidgetItem(header["date"]))
-                note = header.get("note", "")
-                table.setItem(row_idx, 2, QTableWidgetItem(note))
-                table.setItem(
-                    row_idx,
-                    3,
-                    QTableWidgetItem(f"{header.get('silver_rate', 0.0):.2f}"),
+                net_fine = float(header.get("total_fine", 0.0) or 0.0)
+                net_wage = float(header.get("total_wage", 0.0) or 0.0)
+                silver_rate = float(header.get("silver_rate", 0.0) or 0.0)
+                last_balance_amount = float(
+                    header.get("last_balance_amount", 0.0) or 0.0
                 )
-                table.setItem(row_idx, 4, QTableWidgetItem(f"{rg:.3f}"))
-                table.setItem(row_idx, 5, QTableWidgetItem(f"{rn:.3f}"))
-                net_fine = header.get("total_fine", 0.0)
-                table.setItem(row_idx, 6, QTableWidgetItem(f"{net_fine:.3f}"))
-                net_wage = header.get("total_wage", 0.0)
-                table.setItem(row_idx, 7, QTableWidgetItem(f"{net_wage:.2f}"))
-                silver_rate = header.get("silver_rate", 0.0)
-                net_value = net_fine * silver_rate
-                last_balance_amount = header.get("last_balance_amount", 0.0)
-                grand_total = net_value + net_wage + last_balance_amount
-                table.setItem(row_idx, 8, QTableWidgetItem(f"{grand_total:.2f}"))
+                rows.append(
+                    EstimateHistoryRow(
+                        voucher_no=vno,
+                        date=str(header.get("date", "") or ""),
+                        note=str(header.get("note", "") or ""),
+                        silver_rate=silver_rate,
+                        total_gross=float(rg or 0.0),
+                        total_net=float(rn or 0.0),
+                        net_fine=net_fine,
+                        net_wage=net_wage,
+                        grand_total=(net_fine * silver_rate) + net_wage + last_balance_amount,
+                    )
+                )
+            self.estimates_model.set_rows(rows)
         finally:
-            table.setSortingEnabled(True)
             table.blockSignals(False)
             table.setUpdatesEnabled(True)
             table.viewport().update()
@@ -286,12 +277,14 @@ class EstimateHistoryDialog(QDialog):
 
     def get_selected_voucher(self):
         """Get the selected voucher number."""
-        selected_items = self.estimates_table.selectedItems()
-        if not selected_items:
+        selection_model = self.estimates_table.selectionModel()
+        if selection_model is None:
             return None
-
-        row = selected_items[0].row()
-        return self.estimates_table.item(row, 0).text()
+        selected_rows = selection_model.selectedRows()
+        if not selected_rows:
+            return None
+        payload = self.estimates_model.row_payload(selected_rows[0].row())
+        return payload.voucher_no if payload is not None else None
 
     def accept(self):
         """Handle dialog acceptance and return the selected voucher."""

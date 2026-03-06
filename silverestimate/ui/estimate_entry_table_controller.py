@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 
 from PyQt5 import sip
-from PyQt5.QtCore import QTimer, Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import QAbstractItemView, QApplication
 
 from ._host_proxy import HostProxy

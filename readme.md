@@ -10,7 +10,7 @@ A desktop application built with PyQt5 and an encrypted SQLite database for mana
 [![Main Validation](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml)
 [![Release Windows](https://github.com/kta136/Silver_estimate/actions/workflows/release-windows.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/release-windows.yml)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-[![Imports: isort](https://img.shields.io/badge/%20imports-isort-%231674b1?style=flat&labelColor=ef8336)](https://pycqa.github.io/isort/)
+[![Lint: Ruff](https://img.shields.io/badge/lint-ruff-%23D7FF64)](https://docs.astral.sh/ruff/)
 [![Type checking: mypy](https://img.shields.io/badge/type%20checking-mypy-blue.svg)](http://mypy-lang.org/)
 [![Security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
 [![Pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
@@ -162,7 +162,8 @@ Key areas of the codebase:
 - Full local run: `pytest -v`
 - CI enforces coverage thresholds using explicit pytest coverage flags in workflow commands.
 - To iterate quickly on the application builder branch, run `pytest tests/unit/test_application_builder.py`.
-- Formatting is enforced locally via pre-commit (CI does not run Black checks).
+- Ruff enforces linting and import ordering in CI.
+- Black formatting is enforced locally via pre-commit (CI does not run Black checks).
 - Run formatting and hooks before pushing: `pre-commit run --all-files`
 
 ## Deployment

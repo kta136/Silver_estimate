@@ -1,5 +1,6 @@
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import (
+    QAbstractItemView,
     QButtonGroup,
     QCheckBox,
     QComboBox,
@@ -8,6 +9,7 @@ from PyQt5.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -15,10 +17,12 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QRadioButton,
     QSpinBox,
-    QTableWidget,
-    QTableWidgetItem,
+    QTableView,
     QVBoxLayout,
 )
+
+from silverestimate.services.item_import_parser import should_include_line
+from silverestimate.ui.models import ItemImportPreviewRow, ItemImportPreviewTableModel
 
 
 class ItemImportDialog(QDialog):
@@ -181,15 +185,19 @@ class ItemImportDialog(QDialog):
 
         preview_layout.addLayout(preview_header)
 
-        self.preview_table = QTableWidget()
-        self.preview_table.setColumnCount(5)
-        self.preview_table.setHorizontalHeaderLabels(
-            ["Item Code", "Item Name", "Wage Type", "Wage Rate", "Purity %"]
-        )
+        self.preview_table = QTableView(self)
+        self.preview_model = ItemImportPreviewTableModel(self.preview_table)
+        self.preview_table.setModel(self.preview_model)
         self.preview_table.setMinimumHeight(200)
         self.preview_table.setAlternatingRowColors(True)
+        self.preview_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.preview_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.preview_table.setSelectionMode(QAbstractItemView.SingleSelection)
         for i in range(4):  # Set column widths
             self.preview_table.setColumnWidth(i, 100)
+        self.preview_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.Stretch
+        )
         self.preview_table.horizontalHeader().setStretchLastSection(True)
         self.preview_table.setVisible(False)
         preview_layout.addWidget(self.preview_table)
@@ -318,105 +326,17 @@ class ItemImportDialog(QDialog):
                 if not line:
                     continue
 
-                if self.use_filter_check.isChecked():
-                    # Apply filtering for items (numeric index + period)
-                    parts = line.split(delimiter, 1)
-                    if len(parts) > 0:
-                        first_part = parts[0].strip()
-                        if (
-                            first_part.endswith(".")
-                            and first_part[:-1].strip().isdigit()
-                        ):
-                            filtered_lines.append(line)
-                else:
-                    # No filtering, just check if line contains the delimiter
-                    if delimiter in line:
-                        filtered_lines.append(line)
+                if should_include_line(
+                    line,
+                    delimiter=delimiter,
+                    use_filter=self.use_filter_check.isChecked(),
+                ):
+                    filtered_lines.append(line)
 
             # Update the preview table
-            self.preview_table.setRowCount(
-                min(10, len(filtered_lines))
-            )  # Show up to 10 rows
+            rows = self._build_preview_rows(filtered_lines, delimiter)
+            self.preview_model.set_rows(rows)
             self.preview_table.setVisible(True)
-
-            # Get column indices
-            code_idx = self.code_column.value()
-            name_idx = self.name_column.value()
-            type_idx = self.wage_type_column.value()
-            rate_idx = self.wage_rate_column.value()
-            purity_idx = self.purity_column.value()
-
-            max_columns = max(code_idx, name_idx, type_idx, rate_idx, purity_idx) + 1
-
-            # Fill the table
-            for row, line in enumerate(filtered_lines[:10]):  # Only first 10 lines
-                parts = [part.strip() for part in line.split(delimiter)]
-
-                # Skip if not enough parts
-                if len(parts) < max_columns:
-                    for col in range(5):
-                        self.preview_table.setItem(
-                            row, col, QTableWidgetItem("PARSING ERROR")
-                        )
-                    continue
-
-                # Extract values
-                try:
-                    code = parts[code_idx] if code_idx < len(parts) else "ERROR"
-                    name = parts[name_idx] if name_idx < len(parts) else "ERROR"
-                    wage_type = parts[type_idx] if type_idx < len(parts) else "ERROR"
-                    wage_rate = parts[rate_idx] if rate_idx < len(parts) else "ERROR"
-                    purity = parts[purity_idx] if purity_idx < len(parts) else "ERROR"
-
-                    # Show conversion for Q-type wages
-                    rate_display = wage_rate
-                    if wage_type == "Q":
-                        try:
-                            rate_float = float(wage_rate)
-                            # Apply Q-type conversion first for display
-                            if wage_type == "Q":
-                                rate_float /= 1000.0
-                            rate_display = (
-                                f"{rate_float:.3f}"  # Show initially converted rate
-                            )
-
-                            # Apply adjustment factor for display preview
-                            factor_str = self.wage_adjustment_input.text().strip()
-                            if factor_str and (
-                                factor_str.startswith("*") or factor_str.startswith("/")
-                            ):
-                                try:
-                                    op = factor_str[0]
-                                    val = float(factor_str[1:])
-                                    adjusted_rate = rate_float
-                                    if op == "*":
-                                        adjusted_rate *= val
-                                    elif op == "/" and val != 0:
-                                        adjusted_rate /= val
-                                    elif op == "/" and val == 0:
-                                        adjusted_rate = float("inf")  # Indicate error
-
-                                    rate_display += f" → {adjusted_rate:.3f} ({factor_str})"  # Show adjusted rate
-                                except (ValueError, IndexError):
-                                    rate_display += (
-                                        " (Invalid Adj.)"  # Indicate bad factor format
-                                    )
-                        except ValueError:
-                            rate_display = (
-                                wage_rate + " (Invalid Rate)"
-                            )  # Indicate bad original rate
-
-                    # Set items
-                    self.preview_table.setItem(row, 0, QTableWidgetItem(code))
-                    self.preview_table.setItem(row, 1, QTableWidgetItem(name))
-                    self.preview_table.setItem(row, 2, QTableWidgetItem(wage_type))
-                    self.preview_table.setItem(row, 3, QTableWidgetItem(rate_display))
-                    self.preview_table.setItem(row, 4, QTableWidgetItem(purity))
-
-                except Exception as e:
-                    self.status_label.setText(f"Error parsing line {row+1}: {str(e)}")
-                    for col in range(5):
-                        self.preview_table.setItem(row, col, QTableWidgetItem("ERROR"))
 
             # Update status
             total_items = len(filtered_lines)
@@ -427,6 +347,84 @@ class ItemImportDialog(QDialog):
         except Exception as e:
             self.status_label.setText(f"Error previewing file: {str(e)}")
             self.preview_table.setVisible(False)
+
+    def _build_preview_rows(self, filtered_lines, delimiter):
+        rows = []
+        code_idx = self.code_column.value()
+        name_idx = self.name_column.value()
+        type_idx = self.wage_type_column.value()
+        rate_idx = self.wage_rate_column.value()
+        purity_idx = self.purity_column.value()
+        max_columns = max(code_idx, name_idx, type_idx, rate_idx, purity_idx) + 1
+
+        for row_index, line in enumerate(filtered_lines[:10]):
+            parts = [part.strip() for part in line.split(delimiter)]
+            if len(parts) < max_columns:
+                rows.append(self._error_preview_row("PARSING ERROR"))
+                continue
+
+            try:
+                code = parts[code_idx] if code_idx < len(parts) else "ERROR"
+                name = parts[name_idx] if name_idx < len(parts) else "ERROR"
+                wage_type = parts[type_idx] if type_idx < len(parts) else "ERROR"
+                wage_rate = parts[rate_idx] if rate_idx < len(parts) else "ERROR"
+                purity = parts[purity_idx] if purity_idx < len(parts) else "ERROR"
+                rows.append(
+                    ItemImportPreviewRow(
+                        code=code,
+                        name=name,
+                        wage_type=wage_type,
+                        wage_rate=self._format_preview_rate(wage_type, wage_rate),
+                        purity=purity,
+                    )
+                )
+            except Exception as e:
+                self.status_label.setText(
+                    f"Error parsing line {row_index + 1}: {str(e)}"
+                )
+                rows.append(self._error_preview_row("ERROR"))
+        return rows
+
+    def _format_preview_rate(self, wage_type, wage_rate):
+        rate_display = wage_rate
+        if wage_type != "Q":
+            return rate_display
+
+        try:
+            rate_float = float(wage_rate) / 1000.0
+        except ValueError:
+            return wage_rate + " (Invalid Rate)"
+
+        rate_display = f"{rate_float:.3f}"
+        factor_str = self.wage_adjustment_input.text().strip()
+        if not factor_str or not (
+            factor_str.startswith("*") or factor_str.startswith("/")
+        ):
+            return rate_display
+
+        try:
+            op = factor_str[0]
+            val = float(factor_str[1:])
+            adjusted_rate = rate_float
+            if op == "*":
+                adjusted_rate *= val
+            elif op == "/" and val != 0:
+                adjusted_rate /= val
+            elif op == "/" and val == 0:
+                adjusted_rate = float("inf")
+            return f"{rate_display} → {adjusted_rate:.3f} ({factor_str})"
+        except (ValueError, IndexError):
+            return rate_display + " (Invalid Adj.)"
+
+    @staticmethod
+    def _error_preview_row(text):
+        return ItemImportPreviewRow(
+            code=text,
+            name=text,
+            wage_type=text,
+            wage_rate=text,
+            purity=text,
+        )
 
     def start_import(self):
         """Start the import process with the current settings."""

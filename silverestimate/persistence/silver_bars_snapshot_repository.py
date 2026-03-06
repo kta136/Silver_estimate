@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 from typing import Any
 
 from silverestimate.persistence.silver_bars_queries import (
@@ -43,7 +44,7 @@ class SilverBarsSnapshotRepository:
             date_range=date_range,
             limit=limit,
         )
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 statements.count_query.query,
@@ -63,7 +64,7 @@ class SilverBarsSnapshotRepository:
         offset: int = 0,
     ) -> tuple[list[dict[str, Any]], int]:
         statements = build_bars_in_list_queries(list_id, limit=limit, offset=offset)
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 statements.count_query.query,
@@ -89,7 +90,7 @@ class SilverBarsSnapshotRepository:
             status_text=status_text,
             limit=limit,
         )
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             cursor = conn.cursor()
             cursor.execute(statement.query, tuple(statement.params))
             return [dict(row) for row in cursor.fetchall()]

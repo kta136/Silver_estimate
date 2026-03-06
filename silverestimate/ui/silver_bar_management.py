@@ -21,7 +21,7 @@ from PyQt5.QtWidgets import (
 )
 
 from .silver_bar_list_actions import SilverBarListActions
-from .silver_bar_load_controller import _BarsLoadWorker, SilverBarLoadController
+from .silver_bar_load_controller import SilverBarLoadController, _BarsLoadWorker
 from .silver_bar_management_state import SilverBarManagementStateStore
 from .silver_bar_management_ui import SilverBarManagementUiBuilder
 

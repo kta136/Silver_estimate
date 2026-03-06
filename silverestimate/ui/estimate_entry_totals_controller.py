@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from PyQt5 import sip
 
@@ -30,6 +30,9 @@ from .estimate_entry_ui import (
     COL_WAGE_AMT,
     COL_WAGE_RATE,
 )
+
+if TYPE_CHECKING:
+    from .estimate_entry import _RowContribution
 
 
 class EstimateEntryTotalsController(HostProxy):

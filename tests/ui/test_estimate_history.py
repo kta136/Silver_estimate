@@ -1,3 +1,5 @@
+from PyQt5.QtCore import QItemSelectionModel
+
 from silverestimate.ui.estimate_history import EstimateHistoryDialog
 
 
@@ -32,6 +34,13 @@ class _WorkerStub:
 
 class _HistoryHarness:
     pass
+
+
+class _DialogDbStub:
+    temp_db_path = ":memory:"
+
+    def get_first_estimate_date(self):
+        return "2026-01-01"
 
 
 def _build_harness():
@@ -79,3 +88,61 @@ def test_loading_done_does_not_touch_buttons_for_stale_request():
     assert harness.open_button.enabled is False
     assert harness.print_button.enabled is False
     assert harness.delete_button.enabled is False
+
+
+def test_populate_table_uses_model_rows_and_selection_lookup(qtbot, monkeypatch):
+    monkeypatch.setattr(EstimateHistoryDialog, "load_estimates", lambda self: None)
+    dialog = EstimateHistoryDialog(_DialogDbStub(), main_window_ref=None)
+    qtbot.addWidget(dialog)
+    try:
+        dialog.show()
+        qtbot.waitUntil(lambda: dialog.isVisible(), timeout=1000)
+
+        dialog._populate_table(
+            headers=[
+                {
+                    "voucher_no": "V002",
+                    "date": "2026-03-02",
+                    "note": "Second note",
+                    "silver_rate": 95.5,
+                    "total_fine": 1.25,
+                    "total_wage": 100.0,
+                    "last_balance_amount": 10.0,
+                },
+                {
+                    "voucher_no": "V001",
+                    "date": "2026-03-01",
+                    "note": "First note",
+                    "silver_rate": 90.0,
+                    "total_fine": 2.0,
+                    "total_wage": 75.0,
+                    "last_balance_amount": 5.0,
+                },
+            ],
+            agg_map={
+                "V001": (2.5, 2.25),
+                "V002": (1.5, 1.25),
+            },
+            request_id=dialog._load_request_id,
+        )
+
+        assert dialog.estimates_model.rowCount() == 2
+
+        target_row = next(
+            row
+            for row in range(dialog.estimates_model.rowCount())
+            if dialog.estimates_model.row_payload(row).voucher_no == "V002"
+        )
+        index = dialog.estimates_model.index(target_row, 0)
+        dialog.estimates_table.setCurrentIndex(index)
+        dialog.estimates_table.selectionModel().select(
+            index,
+            QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Rows,
+        )
+
+        assert dialog.get_selected_voucher() == "V002"
+        assert dialog.estimates_model.data(
+            dialog.estimates_model.index(target_row, 8)
+        ) == "229.38"
+    finally:
+        dialog.deleteLater()

@@ -1,10 +1,15 @@
 #!/usr/bin/env python
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-from PyQt5.QtCore import QEvent, Qt, QTimer
-from PyQt5.QtGui import QColor, QKeySequence
+from PyQt5.QtCore import (
+    QEvent,
+    QItemSelectionModel,
+    QModelIndex,
+    Qt,
+    QTimer,
+    pyqtSignal,
+)
+from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QDialog,
@@ -16,21 +21,101 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QPushButton,
     QShortcut,
-    QTableWidget,
-    QTableWidgetItem,
+    QTableView,
     QVBoxLayout,
 )
 
+from silverestimate.ui.models import ItemSelectionRecord, ItemSelectionTableModel
 
-@dataclass(frozen=True)
-class _ItemRecord:
-    code: str
-    name: str
-    purity: float
-    wage_type: str
-    wage_rate: float
-    code_upper: str
-    name_upper: str
+
+class _DisplayCell:
+    def __init__(self, text: str) -> None:
+        self._text = text
+
+    def text(self) -> str:
+        return self._text
+
+
+class _ItemSelectionTableView(QTableView):
+    itemDoubleClicked = pyqtSignal(object)
+    itemSelectionChanged = pyqtSignal()
+    currentCellChanged = pyqtSignal(int, int, int, int)
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.doubleClicked.connect(self._emit_item_double_clicked)
+
+    def setModel(self, model) -> None:  # noqa: N802 - Qt API compatibility
+        previous_selection = self.selectionModel()
+        if previous_selection is not None:
+            try:
+                previous_selection.selectionChanged.disconnect(
+                    self._emit_item_selection_changed
+                )
+            except Exception:
+                pass
+            try:
+                previous_selection.currentChanged.disconnect(
+                    self._emit_current_cell_changed
+                )
+            except Exception:
+                pass
+        super().setModel(model)
+        selection_model = self.selectionModel()
+        if selection_model is not None:
+            selection_model.selectionChanged.connect(self._emit_item_selection_changed)
+            selection_model.currentChanged.connect(self._emit_current_cell_changed)
+
+    def rowCount(self) -> int:  # noqa: N802 - compatibility with QTableWidget
+        model = self.model()
+        return model.rowCount() if model is not None else 0
+
+    def currentRow(self) -> int:  # noqa: N802 - compatibility with QTableWidget
+        current = self.currentIndex()
+        return current.row() if current.isValid() else -1
+
+    def item(self, row: int, column: int) -> _DisplayCell | None:
+        model = self.model()
+        if model is None:
+            return None
+        index = model.index(row, column)
+        if not index.isValid():
+            return None
+        value = model.data(index, Qt.DisplayRole)
+        return _DisplayCell("" if value is None else str(value))
+
+    def selectRow(self, row: int) -> None:  # noqa: N802 - compatibility with QTableWidget
+        model = self.model()
+        selection_model = self.selectionModel()
+        if model is None or selection_model is None:
+            return
+        index = model.index(row, 0)
+        if not index.isValid():
+            return
+        self.setCurrentIndex(index)
+        selection_model.select(
+            index,
+            QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Rows,
+        )
+
+    def _emit_item_double_clicked(self, index: QModelIndex) -> None:
+        if index.isValid():
+            self.itemDoubleClicked.emit(self.item(index.row(), index.column()))
+
+    def _emit_item_selection_changed(self, *_args) -> None:
+        self.itemSelectionChanged.emit()
+
+    def _emit_current_cell_changed(
+        self,
+        current: QModelIndex,
+        previous: QModelIndex,
+    ) -> None:
+        self.currentCellChanged.emit(
+            current.row() if current.isValid() else -1,
+            current.column() if current.isValid() else -1,
+            previous.row() if previous.isValid() else -1,
+            previous.column() if previous.isValid() else -1,
+        )
 
 
 class ItemSelectionDialog(QDialog):
@@ -42,7 +127,7 @@ class ItemSelectionDialog(QDialog):
         super().__init__(parent)
         self.db_manager = db_manager
         self.search_term = (search_term or "").strip()
-        self._filtered_items: list[_ItemRecord] = []
+        self._filtered_items: list[ItemSelectionRecord] = []
         self._results_truncated = False
         self._search_provider = self._selection_search_provider()
 
@@ -111,9 +196,9 @@ class ItemSelectionDialog(QDialog):
         content_layout = QHBoxLayout()
         content_layout.setSpacing(8)
 
-        self.items_table = QTableWidget()
-        self.items_table.setColumnCount(3)
-        self.items_table.setHorizontalHeaderLabels(["Code", "Name", "Purity"])
+        self.items_table = _ItemSelectionTableView()
+        self.items_model = ItemSelectionTableModel(self.items_table)
+        self.items_table.setModel(self.items_model)
         self.items_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.items_table.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.ResizeToContents
@@ -122,7 +207,7 @@ class ItemSelectionDialog(QDialog):
             2, QHeaderView.ResizeToContents
         )
         self.items_table.setAlternatingRowColors(True)
-        self.items_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.items_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.items_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.items_table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.items_table.verticalHeader().setDefaultSectionSize(26)
@@ -242,7 +327,7 @@ class ItemSelectionDialog(QDialog):
         )
 
     @staticmethod
-    def _coerce_item_record(payload) -> _ItemRecord | None:
+    def _coerce_item_record(payload) -> ItemSelectionRecord | None:
         data = dict(payload) if not isinstance(payload, dict) else dict(payload)
         code = str(data.get("code", "") or "").strip()
         name = str(data.get("name", "") or "").strip()
@@ -261,7 +346,7 @@ class ItemSelectionDialog(QDialog):
         if wage_type not in {"WT", "PC"}:
             wage_type = "WT"
 
-        return _ItemRecord(
+        return ItemSelectionRecord(
             code=code,
             name=name,
             purity=purity,
@@ -283,13 +368,13 @@ class ItemSelectionDialog(QDialog):
 
     def _ranked_items_from_db(
         self, text: str, provider
-    ) -> tuple[list[_ItemRecord], bool]:
+    ) -> tuple[list[ItemSelectionRecord], bool]:
         rows, truncated = provider(
             text,
             limit=self.MAX_VISIBLE_RESULTS,
         )
 
-        records: list[_ItemRecord] = []
+        records: list[ItemSelectionRecord] = []
         for row in rows or []:
             record = self._coerce_item_record(row)
             if record is None:
@@ -303,26 +388,10 @@ class ItemSelectionDialog(QDialog):
         table.blockSignals(True)
 
         try:
-            table.setRowCount(len(self._filtered_items))
-            highlight = QColor(255, 246, 196)
-            query = (self.search_edit.text() or "").strip().upper()
-
-            for row, item in enumerate(self._filtered_items):
-                code_item = QTableWidgetItem(item.code)
-                name_item = QTableWidgetItem(item.name)
-                purity_item = QTableWidgetItem(f"{item.purity:.2f}")
-                purity_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-
-                if query:
-                    if query in item.code_upper:
-                        code_item.setBackground(highlight)
-                    if query in item.name_upper:
-                        name_item.setBackground(highlight)
-
-                table.setItem(row, 0, code_item)
-                table.setItem(row, 1, name_item)
-                table.setItem(row, 2, purity_item)
-
+            self.items_model.set_rows(
+                self._filtered_items,
+                query=self.search_edit.text(),
+            )
             if self._filtered_items:
                 table.selectRow(0)
             else:
@@ -362,7 +431,7 @@ class ItemSelectionDialog(QDialog):
         self.detail_wage_type.setText("-")
         self.detail_wage_rate.setText("-")
 
-    def _selected_record(self) -> _ItemRecord | None:
+    def _selected_record(self) -> ItemSelectionRecord | None:
         row = self.items_table.currentRow()
         if row < 0 or row >= len(self._filtered_items):
             return None

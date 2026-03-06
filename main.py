@@ -1,9 +1,7 @@
 #!/usr/bin/env python
-import logging
+import faulthandler
 import os
 import sys
-import faulthandler
-import time
 
 # Proactively hide the console as early as possible on Windows when not explicitly requested.
 if os.name == "nt" and os.environ.get("SILVER_SHOW_CONSOLE") != "1":
@@ -17,15 +15,8 @@ if os.name == "nt" and os.environ.get("SILVER_SHOW_CONSOLE") != "1":
     except Exception:
         pass
 
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import (
-    QApplication,
-    QMainWindow,
-    QStackedWidget,
-    QVBoxLayout,
-    QWidget,
-)
+from silverestimate.infrastructure.main_window_runtime import create_main_window
+from silverestimate.ui.main_window import MainWindow
 
 # Fix sys.stdout and sys.stderr for GUI mode (Windows without console)
 if sys.stderr is None:
@@ -37,360 +28,25 @@ if sys.stdout is None:
 try:
     faulthandler.enable()
 except Exception:
-    pass  # Silently ignore if faulthandler fails to enable
-
-
-class MainWindow(QMainWindow):
-    # Thread-safe signal to apply fetched rates on the UI thread
-
-    """Main application window for the Silver Estimation App."""
-
-    def __init__(self, db_manager, logger=None):
-        super().__init__()
-
-        self.logger = logger or logging.getLogger(__name__)
-        self.logger.info("Initializing MainWindow")
-        self._startup_started_at = time.perf_counter()
-        self._startup_started_unix = time.time()
-        self.logger.debug(
-            "[perf] startup.main_window_init_start t_unix=%.6f",
-            self._startup_started_unix,
-        )
-
-        from silverestimate.controllers.live_rate_controller import LiveRateController
-        from silverestimate.controllers.navigation_controller import NavigationController
-        from silverestimate.infrastructure.app_constants import APP_TITLE
-        from silverestimate.infrastructure.application import StartupError
-        from silverestimate.infrastructure.paths import get_asset_path
-        from silverestimate.infrastructure.windows_integration import apply_taskbar_icon
-        from silverestimate.services.estimate_repository import DatabaseEstimateRepository
-        from silverestimate.services.main_commands import MainCommands
-        from silverestimate.services.navigation_service import NavigationService
-        from silverestimate.services.settings_service import SettingsService
-        from silverestimate.ui.estimate_entry import EstimateEntryWidget
-
-        if db_manager is None:
-            raise StartupError(
-                "Database manager not provided. Cannot start application."
-            )
-
-        self.db = db_manager
-        self.settings_service = SettingsService()
-        self._taskbar_icon_handle = None
-
-        try:
-            icon_path = get_asset_path("assets", "icons", "silverestimate.ico")
-            if icon_path.exists():
-                icon = QIcon(str(icon_path))
-                self.setWindowIcon(icon)
-                if sys.platform == "win32":
-                    try:
-                        hwnd = int(self.winId())
-                    except Exception:
-                        hwnd = 0
-                    self._taskbar_icon_handle = apply_taskbar_icon(
-                        hwnd, icon_path, logger=self.logger
-                    )
-            else:
-                self.logger.debug("Window icon not found at %s", icon_path)
-        except Exception as exc:
-            if self.logger:
-                self.logger.debug("Failed to apply window icon: %s", exc)
-
-        self.setWindowTitle(f"{APP_TITLE}[*]")
-
-        self._pending_status_message = None
-
-        default_font = QApplication.font()
-        try:
-            self.print_font = self.settings_service.load_print_font(default_font)
-        except Exception as exc:
-            self.logger.warning("Failed to load print font settings: %s", exc)
-            self.print_font = default_font
-
-        self.central_widget = QWidget()
-        self.setCentralWidget(self.central_widget)
-        self.layout = QVBoxLayout(self.central_widget)
-        self.stack = QStackedWidget(self.central_widget)
-        self.layout.addWidget(self.stack)
-
-        self._geometry_restored = False
-        try:
-            self._geometry_restored = self.settings_service.restore_geometry(self)
-        except Exception as exc:
-            self.logger.debug("Failed to restore window geometry: %s", exc)
-        if not self._geometry_restored:
-            # Give first-run sessions a sensible default size before maximizing later.
-            self.resize(1280, 800)
-
-        self.navigation_service = NavigationService(
-            self, self.stack, logger=self.logger
-        )
-        self.commands = MainCommands(self, self.db, logger=self.logger)
-
-        self.navigation_controller = NavigationController(
-            main_window=self,
-            navigation_service=self.navigation_service,
-            commands=self.commands,
-            logger=self.logger,
-        )
-
-        self.live_rate_controller = LiveRateController(
-            parent=self,
-            widget_getter=lambda: getattr(self, "estimate_widget", None),
-            status_callback=self.show_status_message,
-            logger=self.logger,
-        )
-
-        self.navigation_controller.initialize()
-
-        try:
-            self.logger.info("Creating EstimateEntryWidget...")
-            repository = DatabaseEstimateRepository(self.db)
-            self.estimate_widget = EstimateEntryWidget(self.db, self, repository)
-
-            self.logger.info("Deferring ItemMasterWidget creation (lazy-load)")
-            self.item_master_widget = None
-            self.logger.info("Deferring SilverBar view creation (lazy-load)")
-            self.silver_bar_widget = None
-
-            self.stack.addWidget(self.estimate_widget)
-            self.stack.setCurrentWidget(self.estimate_widget)
-
-            try:
-                if hasattr(self.db, "on_flush_queued"):
-
-                    def _on_flush_q():
-                        QTimer.singleShot(
-                            0,
-                            lambda: self.estimate_widget.show_inline_status(
-                                "Saving.", 1000, "info"
-                            ),
-                        )
-
-                    def _on_flush_done():
-                        QTimer.singleShot(
-                            0, lambda: self.estimate_widget.show_inline_status("", 0)
-                        )
-
-                    self.db.on_flush_queued = _on_flush_q
-                    self.db.on_flush_done = _on_flush_done
-            except Exception as callback_error:
-                self.logger.debug("Could not hook flush callbacks: %s", callback_error)
-
-            QTimer.singleShot(250, self._start_item_cache_preload)
-
-            self.logger.info("Widgets initialized successfully")
-            self.logger.debug(
-                "[perf] startup.main_window_widgets_ready_ms=%.2f t_unix=%.6f",
-                (time.perf_counter() - self._startup_started_at) * 1000.0,
-                time.time(),
-            )
-            try:
-                self.show_status_message("Ready", 2000, level="info")
-            except Exception:
-                pass
-
-            try:
-                self.live_rate_controller.initialize()
-            except Exception as rate_error:
-                if self.logger:
-                    self.logger.debug(
-                        "Live rate initialization failed: %s", rate_error, exc_info=True
-                    )
-
-            pending = getattr(self, "_pending_status_message", None)
-            if pending:
-                self._pending_status_message = None
-                try:
-                    self.show_status_message(*pending)
-                except Exception as exc:
-                    if self.logger:
-                        self.logger.debug(
-                            "Failed to deliver pending status message: %s",
-                            exc,
-                            exc_info=True,
-                        )
-
-            if not self._geometry_restored:
-                try:
-                    self.setWindowState(self.windowState() | Qt.WindowMaximized)
-                except Exception as exc:
-                    if self.logger:
-                        self.logger.debug(
-                            "Failed to apply maximized window state: %s",
-                            exc,
-                            exc_info=True,
-                        )
-            self.logger.debug(
-                "[perf] startup.main_window_ready_ms=%.2f t_unix=%.6f",
-                (time.perf_counter() - self._startup_started_at) * 1000.0,
-                time.time(),
-            )
-            QTimer.singleShot(0, self._log_first_idle_tick)
-        except Exception as exc:
-            self.logger.critical("Failed to initialize widgets: %s", exc, exc_info=True)
-            raise StartupError(
-                f"Failed to initialize application widgets: {exc}"
-            ) from exc
-
-    def _log_first_idle_tick(self) -> None:
-        try:
-            self.logger.debug(
-                "[perf] startup.main_window_first_idle_ms=%.2f t_unix=%.6f",
-                (time.perf_counter() - self._startup_started_at) * 1000.0,
-                time.time(),
-            )
-        except Exception:
-            pass
-
-    def _start_item_cache_preload(self) -> None:
-        try:
-            if hasattr(self.db, "start_preload_item_cache"):
-                self.db.start_preload_item_cache()
-        except Exception as preload_error:
-            self.logger.debug("Item cache preload failed: %s", preload_error)
-
-    def show_status_message(
-        self, message: str, timeout: int = 3000, level: str = "info"
-    ) -> None:
-        """Display a transient status message inline within the estimate view."""
-        widget = getattr(self, "estimate_widget", None)
-        show_inline = getattr(widget, "show_inline_status", None)
-        if callable(show_inline):
-            try:
-                show_inline(message, timeout=timeout, level=level)
-            except Exception as exc:
-                if self.logger:
-                    self.logger.debug("Failed to show inline status message: %s", exc)
-            return
-        self._pending_status_message = (message, timeout, level)
-        if self.logger:
-            try:
-                self.logger.info("Status: %s", message)
-            except Exception:
-                pass
-
-    def refresh_live_rate_now(self):
-        controller = getattr(self, "live_rate_controller", None)
-        if controller:
-            return controller.refresh_now()
-        return None
-
-    def reconfigure_rate_visibility_from_settings(self):
-        controller = getattr(self, "live_rate_controller", None)
-        if not controller:
-            return True
-        return controller.apply_visibility_settings()
-
-    def reconfigure_rate_timer_from_settings(self):
-        controller = getattr(self, "live_rate_controller", None)
-        if controller:
-            controller.apply_timer_settings()
-
-    def show_estimate(self):
-        return self.navigation_controller.show_estimate()
-
-    def show_item_master(self):
-        return self.navigation_controller.show_item_master()
-
-    def show_silver_bars(self):
-        return self.navigation_controller.show_silver_bars()
-
-    def delete_all_data(self, *args, **kwargs):
-        return self.navigation_controller.delete_all_data()
-
-    def delete_all_estimates(self, *args, **kwargs):
-        return self.navigation_controller.delete_all_estimates()
-
-    def show_silver_bar_history(self):
-        return self.navigation_controller.show_silver_bar_history()
-
-    def show_estimate_history(self):
-        return self.navigation_controller.show_estimate_history()
-
-    def show_about(self):
-        return self.navigation_controller.show_about()
-
-    def closeEvent(self, event):
-        """Handle window close event."""
-        estimate_widget = getattr(self, "estimate_widget", None)
-        if estimate_widget and hasattr(estimate_widget, "confirm_exit"):
-            try:
-                if not estimate_widget.confirm_exit():
-                    event.ignore()
-                    return
-            except Exception:
-                pass
-
-        self.logger.info("Application closing")
-        # Persist window geometry/state
-        try:
-            self.settings_service.save_geometry(self)
-        except Exception:
-            pass
-        controller = getattr(self, "live_rate_controller", None)
-        if controller:
-            try:
-                controller.shutdown()
-            except Exception:
-                pass
-        # Close the database connection properly
-        if hasattr(self, "db") and self.db:
-            self.logger.debug("Closing database connection")
-            self.db.close()
-        if sys.platform == "win32" and self._taskbar_icon_handle:
-            from silverestimate.infrastructure.windows_integration import (
-                destroy_icon_handle,
-            )
-
-            destroy_icon_handle(self._taskbar_icon_handle, logger=self.logger)
-            self._taskbar_icon_handle = None
-        try:
-            # Best-effort hide any lingering console window before quitting
-            if sys.platform == "win32" and os.environ.get("SILVER_SHOW_CONSOLE") != "1":
-                from silverestimate.infrastructure.windows_integration import (
-                    hide_console_window,
-                )
-
-                hide_console_window()
-        except Exception:
-            pass
-        try:
-            app = QApplication.instance()
-            if app:
-                app.quit()
-        except Exception:
-            pass
-        super().closeEvent(event)
-
-    # --- Method to show the new Settings dialog ---
-    def show_settings_dialog(self):
-        """Show the centralized settings dialog."""
-        from silverestimate.ui.settings_dialog import SettingsDialog
-
-        dialog = SettingsDialog(main_window_ref=self, parent=self)
-        # Connect the signal if needed for immediate UI updates beyond fonts
-        dialog.exec_()
-
-
-    def show_import_dialog(self):
-        return self.commands.import_items()
-
-
-# --- Application entry point ---
+    pass
 
 
 def main() -> int:
     """Start the SilverEstimate application and return the exit code."""
     if os.name == "nt" and os.environ.get("SILVER_SHOW_CONSOLE") != "1":
-        from silverestimate.infrastructure.windows_integration import hide_console_window
+        from silverestimate.infrastructure.windows_integration import (
+            hide_console_window,
+        )
 
         hide_console_window()
+
     from silverestimate.infrastructure.application import ApplicationBuilder
 
-    builder = ApplicationBuilder(main_window_factory=MainWindow)
+    builder = ApplicationBuilder(main_window_factory=create_main_window)
     return builder.run()
+
+
+__all__ = ["MainWindow", "main"]
 
 
 if __name__ == "__main__":

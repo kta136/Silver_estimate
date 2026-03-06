@@ -175,8 +175,9 @@ class EstimatesRepository:
             chunk = normalized[start : start + chunk_size]
             placeholders = ",".join("?" for _ in chunk)
             try:
+                # Placeholder count is generated locally; values remain parameterized.
                 cursor.execute(
-                    f"SELECT * FROM estimate_items WHERE voucher_no IN ({placeholders}) ORDER BY voucher_no, id",
+                    f"SELECT * FROM estimate_items WHERE voucher_no IN ({placeholders}) ORDER BY voucher_no, id",  # nosec B608
                     chunk,
                 )
                 for row in cursor.fetchall():
@@ -497,8 +498,8 @@ class EstimatesRepository:
     def _set_last_error(self, message: str | None) -> None:
         try:
             setattr(self._db, "last_error", message)
-        except Exception:
-            pass
+        except Exception as exc:
+            self._logger.debug("Failed to store estimate repository error state: %s", exc)
 
     def _find_missing_item_codes(self, items: Iterable[dict]) -> List[str]:
         cursor = self._cursor
@@ -518,8 +519,9 @@ class EstimatesRepository:
         normalized_map = {code: code.upper() for code in unique_codes}
         placeholders = ",".join("?" for _ in unique_codes)
         try:
+            # Placeholder count is generated locally; values remain parameterized.
             cursor.execute(
-                f"SELECT code FROM items WHERE UPPER(code) IN ({placeholders})",
+                f"SELECT code FROM items WHERE UPPER(code) IN ({placeholders})",  # nosec B608
                 [normalized_map[code] for code in unique_codes],
             )
             rows = cursor.fetchall()

@@ -1,3 +1,4 @@
+import logging
 import sqlite3
 import threading
 
@@ -24,6 +25,7 @@ class ItemImportManager(QObject):
     def __init__(self, db_manager):
         super().__init__()
         self.db_manager = db_manager
+        self._logger = logging.getLogger(__name__)
         self.cancel_requested = False
         self._cancel_event = threading.Event()
         self._last_summary = {
@@ -35,9 +37,7 @@ class ItemImportManager(QObject):
 
     def cancel_import(self):
         """Flags the import process to stop."""
-        import logging
-
-        logging.getLogger(__name__).info("Import cancellation requested.")
+        self._logger.info("Import cancellation requested.")
         self.cancel_requested = True
         self._cancel_event.set()
 
@@ -99,8 +99,11 @@ class ItemImportManager(QObject):
                     worker_conn.execute("PRAGMA foreign_keys = ON")
                     worker_conn.execute("PRAGMA journal_mode=WAL")
                     worker_conn.execute("PRAGMA synchronous=NORMAL")
-                except Exception:
-                    pass
+                except Exception as pragma_error:
+                    self._logger.debug(
+                        "Worker import connection pragma configuration failed: %s",
+                        pragma_error,
+                    )
             except Exception as ce:
                 raise RuntimeError(f"Failed to open worker DB connection: {ce}")
 
@@ -116,17 +119,11 @@ class ItemImportManager(QObject):
                                 self.status_updated.emit("Import cancelled by user.")
                                 break
                             lines.append(raw_line)
-                    import logging
-
-                    logging.getLogger(__name__).debug(
-                        f"Successfully read file with encoding: {enc}"
-                    )
+                    self._logger.debug("Successfully read file with encoding: %s", enc)
                     break  # Stop trying encodings if one works
                 except UnicodeDecodeError:
-                    import logging
-
-                    logging.getLogger(__name__).debug(
-                        f"Failed to decode file with {enc}, trying next..."
+                    self._logger.debug(
+                        "Failed to decode file with %s, trying next...", enc
                     )
                     continue
                 except Exception as e_read:  # Catch other file reading errors
@@ -180,8 +177,8 @@ class ItemImportManager(QObject):
             # Begin a transaction for faster bulk import
             try:
                 worker_conn.execute("BEGIN TRANSACTION")
-            except Exception:
-                pass
+            except Exception as exc:
+                self._logger.debug("Failed to begin item import transaction: %s", exc)
 
             # Process items
             for i, line in enumerate(filtered_lines):
@@ -283,8 +280,10 @@ class ItemImportManager(QObject):
                     try:
                         worker_conn.commit()
                         worker_conn.execute("BEGIN TRANSACTION")
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        self._logger.debug(
+                            "Failed to rotate item import batch transaction: %s", exc
+                        )
                     if self._cancel_event.is_set():
                         self.status_updated.emit("Import cancelled by user.")
                         break
@@ -296,14 +295,18 @@ class ItemImportManager(QObject):
             try:
                 if worker_conn:
                     worker_conn.commit()
-            except Exception:
-                pass
+            except Exception as exc:
+                self._logger.debug(
+                    "Failed to commit final item import transaction: %s", exc
+                )
             try:
                 # Request background encryption flush (debounced)
                 if hasattr(self.db_manager, "request_flush"):
                     self.db_manager.request_flush()
-            except Exception:
-                pass
+            except Exception as exc:
+                self._logger.debug(
+                    "Failed to request encrypted flush after item import: %s", exc
+                )
 
             # Finish
             _emit_summary()
@@ -318,9 +321,7 @@ class ItemImportManager(QObject):
                 )  # None indicates success
 
         except Exception as e:
-            import logging
-
-            logging.getLogger(__name__).error("Import failed:", exc_info=True)
+            self._logger.error("Import failed:", exc_info=True)
             self.status_updated.emit(f"Error: {str(e)}")
             summary["errors"] += 1
             _emit_summary()
@@ -332,9 +333,14 @@ class ItemImportManager(QObject):
                 if worker_cur is not None:
                     try:
                         worker_cur.close()
-                    except Exception:
-                        pass
+                    except Exception as close_error:
+                        self._logger.debug(
+                            "Failed to close item import worker cursor: %s",
+                            close_error,
+                        )
                 if worker_conn is not None:
                     worker_conn.close()
-            except Exception:
-                pass
+            except Exception as close_error:
+                self._logger.debug(
+                    "Failed to close item import worker connection: %s", close_error
+                )

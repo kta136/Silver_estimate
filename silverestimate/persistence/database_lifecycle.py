@@ -91,8 +91,8 @@ class DatabaseLifecycleCoordinator:
 
             try:
                 self._checkpoint()
-            except Exception:
-                pass
+            except Exception as exc:
+                self._logger.debug("Checkpoint before encryption failed: %s", exc)
 
             self._encrypted_store.set_key(key)
             return self._encrypted_store.encrypt_from_path(temp_db_path)
@@ -205,8 +205,8 @@ class DatabaseLifecycleCoordinator:
     def _shutdown_scheduler(self) -> None:
         try:
             self._flush_scheduler.shutdown()
-        except Exception:
-            pass
+        except Exception as exc:
+            self._logger.debug("Failed to shut down flush scheduler: %s", exc)
 
 
 __all__ = ["DatabaseLifecycleCoordinator"]

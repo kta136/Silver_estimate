@@ -74,8 +74,11 @@ class SqliteDatabaseRuntime:
             if self._session is not None:
                 try:
                     self._session.clear()
-                except Exception:
-                    pass
+                except Exception as clear_error:
+                    self._logger.debug(
+                        "Failed to clear connection thread guard after connect failure: %s",
+                        clear_error,
+                    )
             raise
 
     def table_exists(
@@ -225,8 +228,8 @@ class SqliteDatabaseRuntime:
             conn.execute("PRAGMA cache_size=-20000")  # ~20 MB page cache
             try:
                 conn.execute("PRAGMA mmap_size=268435456")  # 256 MB
-            except Exception:
-                pass
+            except Exception as exc:
+                self._logger.debug("Could not set SQLite mmap_size pragma: %s", exc)
             self._log_pragma_values(conn)
         except Exception as exc:
             self._logger.warning("One or more PRAGMA settings failed: %s", exc)
@@ -238,8 +241,8 @@ class SqliteDatabaseRuntime:
                 row = cur.fetchone()
                 value = row[0] if row and len(row) > 0 else None
                 self._logger.debug("PRAGMA %s = %s", pragma, value)
-        except Exception:
-            pass
+        except Exception as exc:
+            self._logger.debug("Failed to read SQLite pragma values: %s", exc)
 
     def _prepare_hot_statements(
         self,
@@ -258,13 +261,15 @@ class SqliteDatabaseRuntime:
         try:
             get_item_cursor = conn.cursor()
             get_item_sql = _GET_ITEM_BY_CODE_SQL
-        except Exception:
-            pass
+        except Exception as exc:
+            self._logger.debug("Failed to prepare get-item hot statement: %s", exc)
         try:
             insert_estimate_cursor = conn.cursor()
             insert_estimate_sql = _INSERT_ESTIMATE_ITEM_SQL
-        except Exception:
-            pass
+        except Exception as exc:
+            self._logger.debug(
+                "Failed to prepare insert-estimate-item hot statement: %s", exc
+            )
         return (
             get_item_cursor,
             get_item_sql,

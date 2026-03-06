@@ -70,8 +70,10 @@ class EncryptedDatabaseStore:
                 try:
                     handle.flush()
                     os.fsync(handle.fileno())
-                except Exception:
-                    pass
+                except Exception as exc:
+                    self._logger.debug(
+                        "Failed to fsync encrypted database output file: %s", exc
+                    )
 
             os.replace(tmp_out_path, self.encrypted_db_path)
             duration = time.time() - start_time
@@ -98,8 +100,10 @@ class EncryptedDatabaseStore:
                         snapshot_path,
                         logger=self._logger,
                     )
-            except Exception:
-                pass
+            except Exception as exc:
+                self._logger.debug(
+                    "Failed to clean up encrypted-database snapshot copy: %s", exc
+                )
 
     def decrypt_to_path(self, temp_db_path: str | None) -> str:
         """Decrypt the encrypted DB into ``temp_db_path`` and report the outcome."""
@@ -164,12 +168,17 @@ class EncryptedDatabaseStore:
             finally:
                 try:
                     dest.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    self._logger.debug(
+                        "Failed to close encrypted-database snapshot destination: %s",
+                        exc,
+                    )
                 try:
                     src.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    self._logger.debug(
+                        "Failed to close encrypted-database snapshot source: %s", exc
+                    )
             return snapshot_path
         except Exception as exc:
             self._logger.debug("Snapshot backup failed or skipped: %s", exc)
@@ -260,8 +269,12 @@ class EncryptedDatabaseStore:
                 try:
                     handle.flush()
                     os.fsync(handle.fileno())
-                except Exception:
-                    pass
+                except Exception as exc:
+                    if logger:
+                        logger.debug(
+                            "Failed to fsync recovered encrypted database output: %s",
+                            exc,
+                        )
             os.replace(tmp_out_path, encrypted_db_path)
             if logger:
                 logger.info("Recovered and encrypted temp DB into encrypted store.")
@@ -270,14 +283,23 @@ class EncryptedDatabaseStore:
                     plain_temp_path,
                     logger=logger,
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                if logger:
+                    logger.warning(
+                        "Failed to delete recovered plaintext temp database '%s': %s",
+                        plain_temp_path,
+                        exc,
+                    )
             try:
                 settings = settings_factory()
                 settings.remove("security/last_temp_db_path")
                 settings.sync()
-            except Exception:
-                pass
+            except Exception as exc:
+                if logger:
+                    logger.warning(
+                        "Failed to clear recovery metadata after temp DB recovery: %s",
+                        exc,
+                    )
             return True
         except Exception as exc:
             if logger:

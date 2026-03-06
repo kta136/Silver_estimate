@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import html as html_lib
+import logging
 import traceback  # Keep for debugging
 
 from PyQt5.QtCore import QDate, QLocale, QSizeF
@@ -24,6 +25,8 @@ from PyQt5.QtWidgets import (
 )
 
 from silverestimate.infrastructure.settings import get_app_settings
+
+LOGGER = logging.getLogger(__name__)
 
 
 class PrintManager:
@@ -60,8 +63,8 @@ class PrintManager:
             default_printer_name = settings.value("print/default_printer", "", type=str)
             if default_printer_name:
                 self.printer.setPrinterName(default_printer_name)
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.debug("Failed to load default printer preference: %s", exc)
         # Page size
         try:
             page_size_name = settings.value("print/page_size", "A4", type=str)
@@ -80,7 +83,8 @@ class PrintManager:
                 self.printer.setPageSize(
                     QPageSize(size_map.get(page_size_name, QPageSize.A4))
                 )
-        except Exception:
+        except Exception as exc:
+            LOGGER.debug("Failed to load page size preference: %s", exc)
             self.printer.setPageSize(QPageSize(QPageSize.A4))
         # Orientation
         try:
@@ -90,7 +94,8 @@ class PrintManager:
                 if orientation_name == "Landscape"
                 else QPrinter.Portrait
             )
-        except Exception:
+        except Exception as exc:
+            LOGGER.debug("Failed to load printer orientation preference: %s", exc)
             self.printer.setOrientation(QPrinter.Portrait)
 
         try:
@@ -98,7 +103,8 @@ class PrintManager:
             self.estimate_layout_mode = (layout_mode or "old").lower()
             if self.estimate_layout_mode not in {"old", "new", "thermal"}:
                 self.estimate_layout_mode = "old"
-        except Exception:
+        except Exception as exc:
+            LOGGER.debug("Failed to load estimate layout preference: %s", exc)
             self.estimate_layout_mode = "old"
         # Load margin settings
         default_margins = "10,5,10,5"  # Default: 10mm L/R, 5mm T/B
@@ -1684,8 +1690,8 @@ class PrintManager:
                 # Ensure custom zoom mode before applying factor
                 try:
                     preview_widget.setZoomMode(QPrintPreviewWidget.CustomZoom)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    LOGGER.debug("Failed to switch preview widget to custom zoom: %s", exc)
                 preview_widget.setZoomFactor(zoom_factor)
             else:
                 logging.getLogger(__name__).warning(
@@ -1761,8 +1767,8 @@ class PrintManager:
             def _zoom_in():
                 try:
                     preview_widget.setZoomMode(QPrintPreviewWidget.CustomZoom)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    LOGGER.debug("Failed to switch preview widget to custom zoom: %s", exc)
                 try:
                     z = float(preview_widget.zoomFactor())
                 except Exception:
@@ -1779,8 +1785,8 @@ class PrintManager:
             def _zoom_out():
                 try:
                     preview_widget.setZoomMode(QPrintPreviewWidget.CustomZoom)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    LOGGER.debug("Failed to switch preview widget to custom zoom: %s", exc)
                 try:
                     z = float(preview_widget.zoomFactor())
                 except Exception:
@@ -1797,8 +1803,8 @@ class PrintManager:
             def _fit_width():
                 try:
                     preview_widget.fitToWidth()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    LOGGER.debug("Failed to fit preview to width: %s", exc)
 
             act_fitw.triggered.connect(_fit_width)
             toolbar.addAction(act_fitw)
@@ -1809,8 +1815,8 @@ class PrintManager:
             def _fit_page():
                 try:
                     preview_widget.fitInView()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    LOGGER.debug("Failed to fit preview to page: %s", exc)
 
             act_fitp.triggered.connect(_fit_page)
             toolbar.addAction(act_fitp)
@@ -1866,8 +1872,8 @@ class PrintManager:
             def _safe_last():
                 try:
                     preview_widget.setCurrentPage(preview_widget.pageCount())
-                except Exception:
-                    pass
+                except Exception as exc:
+                    LOGGER.debug("Failed to navigate preview to last page: %s", exc)
 
             act_last.triggered.connect(_safe_last)
             toolbar.addAction(act_last)
@@ -1883,14 +1889,14 @@ class PrintManager:
                     page_info.setText(
                         f"  Page {preview_widget.currentPage()} / {preview_widget.pageCount()}  "
                     )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    LOGGER.debug("Failed to update preview page info: %s", exc)
 
             try:
                 # previewChanged is emitted when the preview is repainted
                 preview_widget.previewChanged.connect(_update_page_info)
-            except Exception:
-                pass
+            except Exception as exc:
+                LOGGER.debug("Failed to hook previewChanged signal: %s", exc)
             # Initialize
             _update_page_info()
 
@@ -1919,8 +1925,8 @@ class PrintManager:
                     prn_name = self.printer.printerName()
                     s = get_app_settings()
                     s.setValue("print/default_printer", prn_name)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    LOGGER.debug("Failed to persist selected printer name: %s", exc)
                 # Refresh preview in case device metrics differ
                 w = preview.findChild(QPrintPreviewWidget)
                 if w:

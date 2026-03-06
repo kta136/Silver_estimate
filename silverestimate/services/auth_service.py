@@ -292,11 +292,13 @@ def _clear_log_artifacts() -> None:
 
     try:
         logging.shutdown()
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.getLogger(__name__).debug(
+            "Logging shutdown failed before log directory cleanup: %s", exc
+        )
 
     try:
         shutil.rmtree(log_dir_path, ignore_errors=False)
-    except Exception:
+    except OSError:
         # Swallow errors silently to avoid leaking wipe events.
-        pass
+        return

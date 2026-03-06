@@ -331,8 +331,10 @@ class ApplicationBuilder:
     def _show_message_box(self, title: str, message: str) -> None:
         try:
             QMessageBox.critical(None, title, message)
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.getLogger(__name__).debug(
+                "Failed to display startup error dialog: %s", exc
+            )
 
     def _handle_unexpected_exception(
         self,

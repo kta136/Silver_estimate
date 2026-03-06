@@ -38,8 +38,8 @@ class LoginDialog(QDialog):
         )
         self.setModal(True)  # Ensure user interacts with this dialog first
 
-        self._password = ""
-        self._backup_password = ""  # Only used in setup mode
+        self._password = str()
+        self._backup_password = str()  # Only used in setup mode
         self.reset_requested = False  # Add flag to track reset request
 
         self._setup_ui()

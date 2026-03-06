@@ -317,8 +317,8 @@ class ItemsRepository:
                 cache_ctrl.invalidate(code)
             else:
                 self._fallback_cache.pop((code or "").upper(), None)
-        except Exception:
-            pass
+        except Exception as exc:
+            self._logger.debug("Failed to invalidate item cache for %s: %s", code, exc)
 
     @staticmethod
     def _normalize_row(row: Any) -> Optional[dict[str, Any]]:

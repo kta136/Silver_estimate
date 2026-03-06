@@ -57,8 +57,8 @@ class LiveRateController(QObject):
         if self._service:
             try:
                 self._service.stop()
-            except Exception:
-                pass
+            except Exception as exc:
+                self._logger.debug("Failed to stop live-rate service: %s", exc)
 
     # --- Public API used by settings dialog ----------------------------
 
@@ -79,8 +79,10 @@ class LiveRateController(QObject):
             if component is not None:
                 try:
                     component.setVisible(show_ui)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    self._logger.debug(
+                        "Failed to update live-rate component visibility: %s", exc
+                    )
         label = getattr(widget, "live_rate_value_label", None)
         if label is not None:
             try:
@@ -88,8 +90,8 @@ class LiveRateController(QObject):
                     label.setText("-")
                 elif label.text() in ("", "-"):
                     label.setText(".")
-            except Exception:
-                pass
+            except Exception as exc:
+                self._logger.debug("Failed to update live-rate label text: %s", exc)
         meta = getattr(widget, "live_rate_meta_label", None)
         if meta is not None:
             try:
@@ -97,8 +99,8 @@ class LiveRateController(QObject):
                     meta.setText("Waiting…")
                 elif label is not None and label.text() in (".", "-"):
                     meta.setText("Waiting…")
-            except Exception:
-                pass
+            except Exception as exc:
+                self._logger.debug("Failed to update live-rate meta text: %s", exc)
         return show_ui
 
     def apply_timer_settings(self, *, force_show_ui: Optional[bool] = None) -> None:
@@ -111,8 +113,8 @@ class LiveRateController(QObject):
             return
         try:
             service.stop()
-        except Exception:
-            pass
+        except Exception as exc:
+            self._logger.debug("Failed to stop live-rate timer before reconfig: %s", exc)
         if auto_refresh and show_ui:
             try:
                 service.start()
@@ -170,8 +172,8 @@ class LiveRateController(QObject):
             return
         try:
             meta_label.setText(text)
-        except Exception:
-            pass
+        except Exception as exc:
+            self._logger.debug("Failed to set live-rate meta label text: %s", exc)
 
     def _fallback_refresh(self) -> None:
         widget = self._widget_getter()

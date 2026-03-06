@@ -115,13 +115,13 @@ class FlushScheduler:
             if self._timer:
                 try:
                     self._timer.cancel()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    self._debug(f"Failed to cancel pending flush timer: {exc}")
             self._timer = self._timer_factory(delay_seconds, _start_worker)
             try:
                 self._timer.daemon = True
-            except Exception:
-                pass
+            except Exception as exc:
+                self._debug(f"Failed to mark flush timer as daemon: {exc}")
             self._timer.start()
 
         self._invoke_callback(self._on_queued_getter())
@@ -137,8 +137,8 @@ class FlushScheduler:
         if timer:
             try:
                 timer.cancel()
-            except Exception:
-                pass
+            except Exception as exc:
+                self._debug(f"Failed to cancel flush timer during shutdown: {exc}")
         if wait and thread and thread.is_alive():
             thread.join(timeout=join_timeout)
             if thread.is_alive():
@@ -156,7 +156,4 @@ class FlushScheduler:
                 self._logger.debug("Flush callback raised: %s", exc, exc_info=True)
 
     def _debug(self, message: str) -> None:
-        try:
-            self._logger.debug(message)
-        except Exception:
-            pass
+        self._logger.debug(message)

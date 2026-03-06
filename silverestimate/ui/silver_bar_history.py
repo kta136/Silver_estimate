@@ -565,8 +565,10 @@ class SilverBarHistoryDialog(QDialog):
             setter = getattr(model, "set_rows", None)
             if callable(setter):
                 setter([])
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.getLogger(__name__).debug(
+                "Failed to clear silver bar history table rows: %s", exc
+            )
 
     def _load_bars_fallback(self, payload: dict, request_id: int) -> None:
         try:
@@ -601,12 +603,14 @@ class SilverBarHistoryDialog(QDialog):
         try:
             thread.quit()
             thread.wait(1000)
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug("Failed to stop silver bar history worker thread: %s", exc)
         try:
             worker.deleteLater()
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug(
+                "Failed to schedule silver bar history worker deletion: %s", exc
+            )
 
     def _schedule_search(self, *args, **kwargs):
         if self._suppress_search:
@@ -646,8 +650,8 @@ class SilverBarHistoryDialog(QDialog):
         )
         try:
             self.bars_table.viewport().update()
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug("Failed to refresh bars table viewport: %s", exc)
 
     def load_issued_lists(self):
         """Load all issued lists."""
@@ -668,8 +672,8 @@ class SilverBarHistoryDialog(QDialog):
             self.lists_model.set_rows(rows)
             try:
                 self.lists_table.viewport().update()
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug("Failed to refresh issued-lists viewport: %s", exc)
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load issued lists: {e}")
@@ -728,8 +732,8 @@ class SilverBarHistoryDialog(QDialog):
             self.list_bars_model.set_rows(normalized_rows)
             try:
                 self.list_bars_table.viewport().update()
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug("Failed to refresh list-bars viewport: %s", exc)
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load list bars: {e}")
@@ -847,16 +851,22 @@ class SilverBarHistoryDialog(QDialog):
         for thread, worker in active:
             try:
                 worker.deleteLater()
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug(
+                    "Failed to schedule silver bar history worker deletion during cancel: %s",
+                    exc,
+                )
             try:
                 if thread.isRunning():
                     thread.quit()
                     if not thread.wait(timeout_ms):
                         thread.terminate()
                         thread.wait(1000)
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug(
+                    "Failed to stop silver bar history worker thread during cancel: %s",
+                    exc,
+                )
 
     def reject(self):
         self._cancel_active_loads()

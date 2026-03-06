@@ -78,29 +78,23 @@ class ItemCacheController:
                             "wage_type": row["wage_type"],
                             "wage_rate": row["wage_rate"],
                         }
-                    except Exception:
-                        continue
+                    except Exception as exc:
+                        self._logger.debug("Skipping malformed item-cache row: %s", exc)
             except Exception as exc:
-                try:
-                    self._logger.debug("Item cache preload failed: %s", exc)
-                except Exception:
-                    pass
+                self._logger.debug("Item cache preload failed: %s", exc)
             else:
                 with self._lock:
                     self._cache = local_cache
                     self._preloaded = True
-                try:
-                    self._logger.debug(
-                        "Preloaded item cache with %s items", len(local_cache)
-                    )
-                except Exception:
-                    pass
+                self._logger.debug("Preloaded item cache with %s items", len(local_cache))
             finally:
                 if conn is not None:
                     try:
                         conn.close()
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        self._logger.debug(
+                            "Failed to close item-cache preload connection: %s", exc
+                        )
 
         thread = threading.Thread(target=_worker, name="ItemCacheWarmup", daemon=True)
         self._thread = thread

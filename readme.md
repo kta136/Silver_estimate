@@ -184,7 +184,7 @@ uv run pre-commit run --all-files
 - Shared validation entrypoints:
   - `uv run nox -s pr` for the required PR gate set
   - `uv run nox -s ci` for the required main-branch gate set
-  - `uv run nox -s advisory` for advisory `pylint`, `bandit`, and `safety`
+  - `uv run nox -s advisory` for advisory `bandit` and `safety`
 - CI enforces coverage thresholds using explicit pytest coverage flags in workflow commands.
 - To iterate quickly on the application builder branch, run `pytest tests/unit/test_application_builder.py`.
 - Ruff enforces linting and import ordering in CI.

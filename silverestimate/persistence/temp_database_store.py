@@ -94,8 +94,10 @@ class TempDatabaseStore:
                 try:
                     handle.flush()
                     os.fsync(handle.fileno())
-                except Exception:
-                    pass
+                except Exception as exc:
+                    active_logger.debug(
+                        "Failed to fsync temporary file during secure delete: %s", exc
+                    )
             os.remove(target)
             active_logger.debug("Securely deleted temporary file: %s", target)
         except Exception as exc:
@@ -104,8 +106,12 @@ class TempDatabaseStore:
             )
             try:
                 os.remove(target)
-            except Exception:
-                pass
+            except Exception as remove_error:
+                active_logger.warning(
+                    "Could not remove temporary file '%s' after wipe failure: %s",
+                    target,
+                    remove_error,
+                )
 
     def _secure_unlink(self) -> None:
         if self._path is None or not self._path.exists():
@@ -121,16 +127,24 @@ class TempDatabaseStore:
         mode = 0o700 if is_dir else 0o600
         try:
             os.chmod(path, mode)
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.getLogger(__name__).debug(
+                "Failed to restrict temp database path permissions for '%s': %s",
+                path,
+                exc,
+            )
 
     def _remove_temp_dir(self) -> None:
         if self._directory is None:
             return
         try:
             self._directory.rmdir()
-        except Exception:
-            pass
+        except Exception as exc:
+            self._logger.debug(
+                "Failed to remove temp database directory '%s': %s",
+                self._directory,
+                exc,
+            )
 
     def _clear_settings_entry(self) -> None:
         if not self._store_metadata or not self._registered:

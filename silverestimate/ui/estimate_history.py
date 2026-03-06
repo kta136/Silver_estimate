@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import logging
 from functools import partial
 
 from PyQt5.QtCore import QDate, QObject, QThread, pyqtSignal
@@ -28,6 +29,7 @@ class EstimateHistoryDialog(QDialog):
     def __init__(self, db_manager, main_window_ref, parent=None):
         super().__init__(parent)  # Use standard parent for QDialog
         self.db_manager = db_manager
+        self.logger = logging.getLogger(__name__)
         self.main_window = main_window_ref  # Store the explicit reference to MainWindow
         self.selected_voucher = None
         self._load_request_id = 0
@@ -163,8 +165,8 @@ class EstimateHistoryDialog(QDialog):
                 self.print_button.setEnabled(False)
             if hasattr(self, "delete_button"):
                 self.delete_button.setEnabled(False)
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug("Failed to disable history action buttons: %s", exc)
 
         worker = _HistoryLoadWorker(
             self.db_manager.temp_db_path,
@@ -230,12 +232,12 @@ class EstimateHistoryDialog(QDialog):
         try:
             thread.quit()
             thread.wait(1000)
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug("Failed to stop estimate history worker thread: %s", exc)
         try:
             worker.deleteLater()
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug("Failed to schedule history worker deletion: %s", exc)
         if request_id is not None and request_id != self._load_request_id:
             return
         try:
@@ -246,8 +248,8 @@ class EstimateHistoryDialog(QDialog):
                 self.print_button.setEnabled(True)
             if hasattr(self, "delete_button"):
                 self.delete_button.setEnabled(True)
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug("Failed to re-enable history action buttons: %s", exc)
 
     def _cancel_active_loads(self, timeout_ms: int = 4000) -> None:
         # Invalidate any pending UI updates from old workers.
@@ -258,16 +260,21 @@ class EstimateHistoryDialog(QDialog):
         for thread, worker in active:
             try:
                 worker.deleteLater()
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug(
+                    "Failed to schedule history worker deletion during cancel: %s", exc
+                )
             try:
                 if thread.isRunning():
                     thread.quit()
                     if not thread.wait(timeout_ms):
                         thread.terminate()
                         thread.wait(1000)
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug(
+                    "Failed to stop estimate history worker thread during cancel: %s",
+                    exc,
+                )
 
     def reject(self):
         self._cancel_active_loads()
@@ -407,8 +414,9 @@ class _HistoryLoadWorker(QObject):
             if headers:
                 voucher_nos = [str(h["voucher_no"]) for h in headers]
                 placeholders = ",".join(["?"] * len(voucher_nos))
+                # Placeholder count is generated locally; values remain parameterized.
                 sql = (
-                    f"SELECT voucher_no, "
+                    f"SELECT voucher_no, "  # nosec B608
                     f"SUM(CASE WHEN is_return=0 AND is_silver_bar=0 THEN gross ELSE 0 END) AS rg, "
                     f"SUM(CASE WHEN is_return=0 AND is_silver_bar=0 THEN net_wt ELSE 0 END) AS rn "
                     f"FROM estimate_items WHERE voucher_no IN ({placeholders}) GROUP BY voucher_no"
@@ -419,8 +427,10 @@ class _HistoryLoadWorker(QObject):
                     agg_map[str(vno)] = (float(rg or 0.0), float(rn or 0.0))
             try:
                 conn.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                logging.getLogger(__name__).debug(
+                    "Failed to close estimate history worker connection: %s", exc
+                )
             self.data_ready.emit(headers, agg_map)
         except Exception as e:
             self.error.emit(str(e))

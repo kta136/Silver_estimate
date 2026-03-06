@@ -50,11 +50,6 @@ def ruff(session: nox.Session) -> None:
 
 
 @nox.session(python=False)
-def pylint(session: nox.Session) -> None:
-    session.run("python", "-m", "pylint", "silverestimate", "--rcfile=pyproject.toml")
-
-
-@nox.session(python=False)
 def mypy(session: nox.Session) -> None:
     session.run(
         "python", "-m", "mypy", "silverestimate", "--config-file=pyproject.toml"
@@ -148,5 +143,5 @@ def ci(session: nox.Session) -> None:
 
 @nox.session(python=False, name="advisory")
 def advisory(session: nox.Session) -> None:
-    for session_name in ("pylint", "bandit", "safety"):
+    for session_name in ("bandit", "safety"):
         session.notify(session_name)

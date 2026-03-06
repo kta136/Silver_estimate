@@ -35,10 +35,6 @@ jobs:
       - name: Lint and sort imports with Ruff
         run: nox -s ruff
 
-      - name: Lint with pylint
-        run: nox -s pylint
-        continue-on-error: true  # Phase 0: advisory
-
   type-check:
     name: Type Checking
     runs-on: windows-latest

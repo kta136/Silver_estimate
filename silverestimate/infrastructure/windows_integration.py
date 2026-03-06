@@ -140,14 +140,16 @@ def hide_console_window(logger=None) -> None:
             try:
                 user32.ShowWindow(hwnd, SW_HIDE)
                 user32.UpdateWindow(hwnd)
-            except Exception:
-                pass
+            except Exception as exc:
+                if logger:
+                    logger.debug("Failed to hide console window handle: %s", exc)
 
         # Detach so the phantom window does not reappear when stdout/stderr flush.
         try:
             kernel32.FreeConsole()
-        except Exception:
-            pass
+        except Exception as exc:
+            if logger:
+                logger.debug("Failed to detach console from process: %s", exc)
     except Exception as exc:
         if logger:
             logger.debug("Failed to hide console window: %s", exc)

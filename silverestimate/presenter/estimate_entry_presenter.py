@@ -157,26 +157,27 @@ class EstimateEntryPresenter:
         raw_items = data.get("items") or []
         items: list[SaveItem] = []
         for idx, raw in enumerate(raw_items, start=1):
+            item: SaveItem | None = None
             try:
-                items.append(
-                    SaveItem(
-                        code=str(raw.get("item_code", "") or "").strip(),
-                        row_number=int(raw.get("id", idx) or idx),
-                        name=str(raw.get("item_name", "") or ""),
-                        gross=float(raw.get("gross", 0.0) or 0.0),
-                        poly=float(raw.get("poly", 0.0) or 0.0),
-                        net_wt=float(raw.get("net_wt", 0.0) or 0.0),
-                        purity=float(raw.get("purity", 0.0) or 0.0),
-                        wage_rate=float(raw.get("wage_rate", 0.0) or 0.0),
-                        pieces=int(raw.get("pieces", 1) or 0),
-                        wage=float(raw.get("wage", 0.0) or 0.0),
-                        fine=float(raw.get("fine", 0.0) or 0.0),
-                        is_return=bool(raw.get("is_return", 0)),
-                        is_silver_bar=bool(raw.get("is_silver_bar", 0)),
-                    )
+                item = SaveItem(
+                    code=str(raw.get("item_code", "") or "").strip(),
+                    row_number=int(raw.get("id", idx) or idx),
+                    name=str(raw.get("item_name", "") or ""),
+                    gross=float(raw.get("gross", 0.0) or 0.0),
+                    poly=float(raw.get("poly", 0.0) or 0.0),
+                    net_wt=float(raw.get("net_wt", 0.0) or 0.0),
+                    purity=float(raw.get("purity", 0.0) or 0.0),
+                    wage_rate=float(raw.get("wage_rate", 0.0) or 0.0),
+                    pieces=int(raw.get("pieces", 1) or 0),
+                    wage=float(raw.get("wage", 0.0) or 0.0),
+                    fine=float(raw.get("fine", 0.0) or 0.0),
+                    is_return=bool(raw.get("is_return", 0)),
+                    is_silver_bar=bool(raw.get("is_silver_bar", 0)),
                 )
-            except Exception:
-                continue
+            except (AttributeError, TypeError, ValueError):
+                item = None
+            if item is not None:
+                items.append(item)
 
         return LoadedEstimate(
             voucher_no=str(header.get("voucher_no", voucher_no) or voucher_no),

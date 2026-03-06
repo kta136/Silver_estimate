@@ -164,8 +164,12 @@ class SilverBarsRepository:
         except sqlite3.Error as exc:
             try:
                 conn.rollback()
-            except Exception:
-                pass
+            except Exception as rollback_error:
+                self._logger.debug(
+                    "Failed to roll back issue-list transaction for list %s: %s",
+                    list_id,
+                    rollback_error,
+                )
             self._logger.error(
                 "DB error marking list %s as issued: %s",
                 list_id,
@@ -197,8 +201,12 @@ class SilverBarsRepository:
         except sqlite3.Error as exc:
             try:
                 conn.rollback()
-            except Exception:
-                pass
+            except Exception as rollback_error:
+                self._logger.debug(
+                    "Failed to roll back reactivate-list transaction for list %s: %s",
+                    list_id,
+                    rollback_error,
+                )
             self._logger.error(
                 "DB error reactivating list %s: %s",
                 list_id,
@@ -349,8 +357,9 @@ class SilverBarsRepository:
                 return 0, normalized
 
             placeholders = ",".join("?" for _ in normalized)
+            # Placeholder count is generated locally; values remain parameterized.
             cursor.execute(
-                f"SELECT bar_id, status, list_id FROM silver_bars "
+                f"SELECT bar_id, status, list_id FROM silver_bars "  # nosec B608
                 f"WHERE bar_id IN ({placeholders})",
                 normalized,
             )
@@ -400,8 +409,12 @@ class SilverBarsRepository:
         except sqlite3.Error as exc:
             try:
                 conn.rollback()
-            except Exception:
-                pass
+            except Exception as rollback_error:
+                self._logger.debug(
+                    "Failed to roll back bulk assign transaction for list %s: %s",
+                    list_id,
+                    rollback_error,
+                )
             self._logger.error(
                 "DB error assigning bars to list %s in bulk: %s",
                 list_id,
@@ -484,8 +497,9 @@ class SilverBarsRepository:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         try:
             placeholders = ",".join("?" for _ in normalized)
+            # Placeholder count is generated locally; values remain parameterized.
             cursor.execute(
-                f"SELECT bar_id, status, list_id FROM silver_bars "
+                f"SELECT bar_id, status, list_id FROM silver_bars "  # nosec B608
                 f"WHERE bar_id IN ({placeholders})",
                 normalized,
             )
@@ -533,8 +547,11 @@ class SilverBarsRepository:
         except sqlite3.Error as exc:
             try:
                 conn.rollback()
-            except Exception:
-                pass
+            except Exception as rollback_error:
+                self._logger.debug(
+                    "Failed to roll back bulk remove transaction: %s",
+                    rollback_error,
+                )
             self._logger.error(
                 "DB error removing bars from list in bulk: %s",
                 exc,
@@ -678,8 +695,9 @@ class SilverBarsRepository:
             return {}
         placeholders = ",".join("?" for _ in normalized_ids)
         try:
+            # Placeholder count is generated locally; values remain parameterized.
             cursor.execute(
-                f"SELECT list_id, COUNT(*) AS count FROM silver_bars "
+                f"SELECT list_id, COUNT(*) AS count FROM silver_bars "  # nosec B608
                 f"WHERE list_id IN ({placeholders}) GROUP BY list_id",
                 normalized_ids,
             )
@@ -822,8 +840,12 @@ class SilverBarsRepository:
         except Exception as exc:
             try:
                 conn.rollback()
-            except Exception:
-                pass
+            except Exception as rollback_error:
+                self._logger.debug(
+                    "Failed to roll back silver-bar sync transaction for estimate %s: %s",
+                    voucher_no,
+                    rollback_error,
+                )
             self._logger.error(
                 "Unexpected error syncing silver bars for estimate %s: %s",
                 voucher_no,
@@ -892,8 +914,12 @@ class SilverBarsRepository:
             )
             try:
                 conn.rollback()
-            except Exception:
-                pass
+            except Exception as rollback_error:
+                self._logger.debug(
+                    "Failed to roll back silver-bar update for %s: %s",
+                    bar_id,
+                    rollback_error,
+                )
             return False
 
     def get_silver_bars(

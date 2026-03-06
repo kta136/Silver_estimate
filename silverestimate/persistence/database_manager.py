@@ -296,8 +296,8 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         self.cursor = None
         try:
             self._session.clear()
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug("Failed to clear connection thread guard: %s", exc)
 
     def _discard_connection_after_init_failure(self) -> None:
         """Best-effort cleanup when initialization fails mid-startup."""
@@ -308,8 +308,11 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
             self.cursor = None
             try:
                 self._session.clear()
-            except Exception:
-                pass
+            except Exception as clear_error:
+                self.logger.debug(
+                    "Failed to clear connection thread guard after init failure: %s",
+                    clear_error,
+                )
 
     # --- Startup Recovery Utilities ---
     def _snapshot_temp_db_copy(self):

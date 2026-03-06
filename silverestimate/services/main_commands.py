@@ -128,8 +128,8 @@ class MainCommands:
             try:
                 worker_thread.quit()
                 worker_thread.wait(2000)
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug("Failed to stop item import worker thread: %s", exc)
 
         item_master = getattr(self.main_window, "item_master_widget", None)
         if item_master is not None and item_master.isVisible():

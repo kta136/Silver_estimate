@@ -1297,21 +1297,27 @@ class SettingsDialog(QDialog):
             idx = self.page_size_combo.findText("A4")
             if idx >= 0:
                 self.page_size_combo.setCurrentIndex(idx)
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.getLogger(__name__).debug(
+                "Failed to apply default page-size selection: %s", exc
+            )
         try:
             idx = self.orientation_combo.findText("Portrait")
             if idx >= 0:
                 self.orientation_combo.setCurrentIndex(idx)
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.getLogger(__name__).debug(
+                "Failed to apply default orientation selection: %s", exc
+            )
 
         try:
             idx = self.estimate_layout_combo.findData("old")
             if idx >= 0:
                 self.estimate_layout_combo.setCurrentIndex(idx)
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.getLogger(__name__).debug(
+                "Failed to apply default estimate-layout selection: %s", exc
+            )
 
         # Logging
         self.debug_mode_checkbox.setChecked(False)
@@ -1366,8 +1372,10 @@ class SettingsDialog(QDialog):
                     if size_f:
                         sample_font.setPointSizeF(max(5.0, float(size_f)))
                     self.print_font_sample.setFont(sample_font)
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.getLogger(__name__).debug(
+                "Failed to update print-font sample label: %s", exc
+            )
 
 
 # Example usage for testing

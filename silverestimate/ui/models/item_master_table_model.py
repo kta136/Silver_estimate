@@ -134,15 +134,17 @@ class ItemMasterTableModel(QAbstractTableModel):
         return mapping.get(column, "")
 
     def _normalize_row(self, row: object) -> dict[str, Any]:
-        try:
-            if hasattr(row, "keys"):
-                row_mapping = cast(Any, row)
-                return {
-                    key: row_mapping[key]
-                    for key in ("code", "name", "purity", "wage_type", "wage_rate")
-                }
-        except Exception:
-            pass
+        if hasattr(row, "keys"):
+            row_mapping = cast(Any, row)
+            keys = getattr(row_mapping, "keys", None)
+            if callable(keys):
+                available_keys = set(keys())
+                required_keys = {"code", "name", "purity", "wage_type", "wage_rate"}
+                if required_keys.issubset(available_keys):
+                    return {
+                        key: row_mapping[key]
+                        for key in ("code", "name", "purity", "wage_type", "wage_rate")
+                    }
         if isinstance(row, dict):
             return {
                 "code": row.get("code"),

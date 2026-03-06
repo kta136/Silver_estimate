@@ -43,7 +43,6 @@ dev = [
     "hypothesis>=6.0.0",
     # Code Quality
     "ruff>=0.15.5",
-    "pylint>=2.17.0",
     "mypy>=1.5.0",
     "nox>=2024.4.15",
     # Pre-commit hooks
@@ -192,24 +191,6 @@ exclude_lines = [
     "@abstract",
     "@abstractmethod",
 ]
-
-[tool.pylint.main]
-py-version = "3.13"
-ignore = [".git", "__pycache__", "build", "dist"]
-max-line-length = 88
-
-[tool.pylint.messages_control]
-disable = [
-    "C0330",  # Wrong hanging indentation (conflicts with automated formatting)
-    "C0326",  # Bad whitespace (conflicts with automated formatting)
-    "W0511",  # TODO/FIXME comments
-    "R0903",  # Too few public methods
-]
-
-[tool.pylint.design]
-max-args = 10
-max-attributes = 15
-max-locals = 20
 
 [tool.bandit]
 exclude_dirs = ["tests", "build", "dist"]

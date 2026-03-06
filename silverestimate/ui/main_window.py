@@ -189,8 +189,8 @@ class MainWindow(QMainWindow):
         )
         try:
             self.show_status_message("Ready", 2000, level="info")
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug("Failed to show initial status message: %s", exc)
 
     def _initialize_live_rate(self) -> None:
         try:
@@ -235,8 +235,8 @@ class MainWindow(QMainWindow):
                 (time.perf_counter() - self._startup_started_at) * 1000.0,
                 time.time(),
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug("Failed to record first idle tick metric: %s", exc)
 
     def _start_item_cache_preload(self) -> None:
         try:
@@ -260,8 +260,8 @@ class MainWindow(QMainWindow):
         self._pending_status_message = (message, timeout, level)
         try:
             self.logger.info("Status: %s", message)
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug("Failed to log status message: %s", exc)
 
     def refresh_live_rate_now(self):
         controller = getattr(self, "live_rate_controller", None)
@@ -314,20 +314,20 @@ class MainWindow(QMainWindow):
                 if not estimate_widget.confirm_exit():
                     event.ignore()
                     return
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug("Estimate exit confirmation failed: %s", exc)
 
         self.logger.info("Application closing")
         try:
             self.settings_service.save_geometry(self)
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug("Failed to save window geometry: %s", exc)
         controller = getattr(self, "live_rate_controller", None)
         if controller:
             try:
                 controller.shutdown()
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug("Failed to shut down live-rate controller: %s", exc)
         if hasattr(self, "db") and self.db:
             self.logger.debug("Closing database connection")
             self.db.close()
@@ -345,14 +345,14 @@ class MainWindow(QMainWindow):
                 )
 
                 hide_console_window()
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug("Failed to hide console window during shutdown: %s", exc)
         try:
             app = QApplication.instance()
             if app:
                 app.quit()
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug("Failed to quit QApplication cleanly: %s", exc)
         super().closeEvent(event)
 
     def show_settings_dialog(self):

@@ -147,8 +147,8 @@ class NavigationService:
             try:
                 if action is not None:
                     action.setChecked(True)
-            except Exception:
-                pass
+            except Exception as exc:
+                self._logger.debug("Failed to sync navigation action state: %s", exc)
 
     def _ensure_db(self) -> bool:
         if not self.db:

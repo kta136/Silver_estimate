@@ -210,11 +210,18 @@ def fetch_broadcast_rate_exact(
         dyn_id = _lookup_com_id_for_target(base_url=base_url, timeout=timeout)
         if dyn_id and dyn_id != com_id:
             for endpoint in BROADCAST_URLS:
+                retry_text: str | None = None
                 try:
-                    text = _fetch_broadcast_payload(endpoint, payload, timeout=timeout)
+                    retry_text = _fetch_broadcast_payload(
+                        endpoint, payload, timeout=timeout
+                    )
                 except Exception:
+                    retry_text = None
+                if retry_text is None:
                     continue
-                candidate_rate, candidate_open = _parse_broadcast_payload(text, dyn_id)
+                candidate_rate, candidate_open = _parse_broadcast_payload(
+                    retry_text, dyn_id
+                )
                 market_open = candidate_open
                 if candidate_rate is not None:
                     rate_val = candidate_rate
@@ -295,17 +302,22 @@ def _parse_broadcast_payload(text: str, target_com_id: int):
             continue
         rec_type = parts[0]
         if rec_type == "4":
+            status_flags: tuple[bool, bool] | None = None
             try:
-                closed_flag = int(parts[3]) == 0
-                message_flag = int(parts[4]) == 1
+                status_flags = (int(parts[3]) == 0, int(parts[4]) == 1)
+            except (IndexError, TypeError, ValueError):
+                status_flags = None
+            if status_flags is not None:
+                closed_flag, message_flag = status_flags
                 if closed_flag or message_flag:
                     market_open = False
-            except Exception:
-                continue
         elif rec_type == "3":
+            cid: int | None = None
             try:
                 cid = int(parts[1])
-            except Exception:
+            except (IndexError, TypeError, ValueError):
+                cid = None
+            if cid is None:
                 continue
             if cid == target_com_id:
                 try:

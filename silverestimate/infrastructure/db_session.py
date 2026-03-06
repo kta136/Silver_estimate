@@ -40,10 +40,7 @@ class ConnectionThreadGuard:
         if connection is None:
             return True
         if not self.is_owner():
-            try:
-                self._logger.debug("Skipping commit on non-owner thread")
-            except Exception:
-                pass
+            self._logger.debug("Skipping commit on non-owner thread")
             return True
         try:
             connection.commit()

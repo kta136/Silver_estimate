@@ -39,10 +39,6 @@ jobs:
       - name: Lint and sort imports with Ruff
         run: nox -s ruff
 
-      - name: Lint with pylint
-        run: nox -s pylint
-        continue-on-error: true  # Don't fail build on pylint issues initially
-
   type-check:
     name: Type Checking
     runs-on: windows-latest

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from PyQt5.QtGui import QFont
@@ -69,13 +70,17 @@ class SettingsService:
         if geometry is not None:
             try:
                 restored = bool(window.restoreGeometry(geometry)) or restored
-            except Exception:
-                pass
+            except Exception as exc:
+                logging.getLogger(__name__).debug(
+                    "Failed to restore window geometry: %s", exc
+                )
         if state is not None:
             try:
                 restored = bool(window.restoreState(state)) or restored
-            except Exception:
-                pass
+            except Exception as exc:
+                logging.getLogger(__name__).debug(
+                    "Failed to restore window state: %s", exc
+                )
         return restored
 
     def save_geometry(self, window) -> None:

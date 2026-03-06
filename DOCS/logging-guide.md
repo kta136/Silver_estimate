@@ -152,9 +152,7 @@ def get_log_config():
 
     # Get log level enable/disable settings
     enable_info = settings.value("logging/enable_info", True, type=bool)
-    enable_error = settings.value("logging/enable_error", None, type=bool)
-    if enable_error is None:
-        enable_error = settings.value("logging/enable_critical", True, type=bool)
+    enable_error = _read_error_logging_enabled(settings)
     enable_debug = settings.value("logging/enable_debug", True, type=bool)
 
     # Get auto-cleanup settings

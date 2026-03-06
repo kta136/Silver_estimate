@@ -263,15 +263,6 @@ class EstimateEntryWidget(QWidget):
         self._get_table_adapter().populate_row(row_index, item_data)
         self._schedule_columns_autofit()
 
-    def _apply_table_font_size(self, size: int) -> bool:
-        return self.apply_table_font_size(size)
-
-    def _apply_breakdown_font_size(self, size: int) -> bool:
-        return self.apply_breakdown_font_size(size)
-
-    def _apply_final_calc_font_size(self, size: int) -> bool:
-        return self.apply_final_calc_font_size(size)
-
     def resizeEvent(self, event):
         self._auto_stretch_item_name()
         super().resizeEvent(event)

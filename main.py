@@ -16,7 +16,6 @@ if os.name == "nt" and os.environ.get("SILVER_SHOW_CONSOLE") != "1":
         pass
 
 from silverestimate.infrastructure.main_window_runtime import create_main_window
-from silverestimate.ui.main_window import MainWindow
 
 # Fix sys.stdout and sys.stderr for GUI mode (Windows without console)
 if sys.stderr is None:
@@ -46,7 +45,7 @@ def main() -> int:
     return builder.run()
 
 
-__all__ = ["MainWindow", "main"]
+__all__ = ["main"]
 
 
 if __name__ == "__main__":

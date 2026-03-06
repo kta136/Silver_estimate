@@ -314,10 +314,3 @@ class LiveRateController(QObject):
         if isinstance(value, (int, float)):
             return value != 0
         return default
-
-    # --- Compatibility helpers ----------------------------------------
-
-    @property
-    def service(self) -> Optional[LiveRateService]:
-        """Expose the underlying service for compatibility with legacy code."""
-        return self._service

@@ -79,9 +79,6 @@ class DatabaseRepositoryFacadeMixin:
     def delete_single_estimate(self, voucher_no):
         return self.estimates_repo.delete_single_estimate(voucher_no)
 
-    def _generate_list_identifier(self):
-        return self.silver_bars_repo.generate_list_identifier()
-
     def create_silver_bar_list(self, note=None):
         return self.silver_bars_repo.create_list(note)
 

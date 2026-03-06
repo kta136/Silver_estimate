@@ -4,8 +4,8 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-import main
 from silverestimate.infrastructure.app_constants import APP_TITLE
+from silverestimate.ui.main_window import MainWindow
 from silverestimate.ui.estimate_entry_logic.constants import (
     COL_CODE,
     COL_FINE_WT,
@@ -181,7 +181,7 @@ def main_window_fixture(qt_app, settings_stub, monkeypatch):
 
     db = FakeDbManager()
     logger = logging.getLogger("test.mainwindow")
-    window = main.MainWindow(db_manager=db, logger=logger)
+    window = MainWindow(db_manager=db, logger=logger)
     live_rate = StubLiveRateController.instances[-1]
 
     try:

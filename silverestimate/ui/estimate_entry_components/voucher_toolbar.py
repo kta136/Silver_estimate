@@ -186,10 +186,6 @@ class VoucherToolbar(QWidget):
         self.status_message_label.setVisible(False)
         details_layout.addWidget(self.status_message_label)
 
-        # Hidden mode indicator kept for backward compatibility (actual badge moved to totals panel)
-        self.mode_indicator_label = QLabel("Regular")
-        self.mode_indicator_label.setVisible(False)
-
     def _create_vertical_divider(self) -> QFrame:
         """Create a vertical divider line.
 
@@ -285,55 +281,6 @@ class VoucherToolbar(QWidget):
             trimmed = f"{trimmed[:45]}…"
         self.note_preview_label.setText(trimmed)
         self.note_preview_label.setVisible(True)
-
-    def set_mode_indicator(self, mode_text: str) -> None:
-        """Set the mode indicator text with color coding.
-
-        Args:
-            mode_text: The mode text to display (e.g., "Mode: Return Items")
-        """
-        self.mode_indicator_label.setText(mode_text)
-
-        # Update colors based on mode
-        if "Return" in mode_text:
-            # Orange theme for return mode
-            self.mode_indicator_label.setStyleSheet("""
-                QLabel {
-                    font-weight: bold;
-                    color: #7c2d12;
-                    background-color: #fed7aa;
-                    border: 1px solid #f97316;
-                    border-radius: 4px;
-                    padding: 4px 8px;
-                    font-size: 10pt;
-                }
-            """)
-        elif "Silver Bar" in mode_text:
-            # Gray/Silver theme for silver bar mode
-            self.mode_indicator_label.setStyleSheet("""
-                QLabel {
-                    font-weight: bold;
-                    color: #27272a;
-                    background-color: #d4d4d8;
-                    border: 1px solid #71717a;
-                    border-radius: 4px;
-                    padding: 4px 8px;
-                    font-size: 10pt;
-                }
-            """)
-        else:
-            # Blue theme for regular mode (default)
-            self.mode_indicator_label.setStyleSheet("""
-                QLabel {
-                    font-weight: bold;
-                    color: palette(windowText);
-                    background-color: #dbeafe;
-                    border: 1px solid #3b82f6;
-                    border-radius: 4px;
-                    padding: 4px 8px;
-                    font-size: 10pt;
-                }
-            """)
 
     def show_unsaved_badge(self, show: bool) -> None:
         """Show or hide the unsaved changes badge.

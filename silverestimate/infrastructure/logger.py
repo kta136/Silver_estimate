@@ -14,6 +14,43 @@ from silverestimate.infrastructure.settings import get_app_settings
 _cleanup_scheduler = None
 
 
+def _coerce_bool_setting(value, default):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if not normalized:
+            return default
+        return normalized in {"1", "true", "yes", "on", "enabled"}
+    if isinstance(value, (int, float)):
+        return value != 0
+    return default
+
+
+def _read_error_logging_enabled(settings):
+    enabled_value = settings.value("logging/enable_critical", None)
+    if enabled_value is not None:
+        return _coerce_bool_setting(enabled_value, True)
+
+    legacy_value = settings.value("logging/enable_error", None)
+    if legacy_value is None:
+        return True
+
+    enabled = _coerce_bool_setting(legacy_value, True)
+    try:
+        settings.setValue("logging/enable_critical", enabled)
+        settings.remove("logging/enable_error")
+        settings.sync()
+    except Exception:
+        logging.getLogger(__name__).debug(
+            "Failed to migrate legacy logging setting to logging/enable_critical",
+            exc_info=True,
+        )
+    return enabled
+
+
 def setup_logging(
     app_name="silver_app",
     log_dir="logs",
@@ -406,12 +443,8 @@ def get_log_config():
 
     log_dir = os.environ.get("SILVER_APP_LOG_DIR", "logs")
 
-    # Get log level enable/disable settings
     enable_info = settings.value("logging/enable_info", True, type=bool)
-    # Backward-compat: accept either enable_error or enable_critical; default True
-    enable_error = settings.value("logging/enable_error", None, type=bool)
-    if enable_error is None:
-        enable_error = settings.value("logging/enable_critical", True, type=bool)
+    enable_error = _read_error_logging_enabled(settings)
     enable_debug = settings.value("logging/enable_debug", True, type=bool)
 
     # Get auto-cleanup settings

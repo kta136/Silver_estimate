@@ -836,13 +836,11 @@ class SettingsDialog(QDialog):
         logger = logging.getLogger(__name__)
         logger.debug("Applying settings...")
 
-        def _apply_estimate_widget_value(method_name, legacy_method_name, value, label):
+        def _apply_estimate_widget_value(method_name, value, label):
             widget = getattr(self.main_window, "estimate_widget", None)
             if widget is None:
                 return
             method = getattr(widget, method_name, None)
-            if not callable(method):
-                method = getattr(widget, legacy_method_name, None)
             if not callable(method):
                 raise RuntimeError(
                     f"Estimate view does not support '{method_name}' for {label}."
@@ -870,7 +868,6 @@ class SettingsDialog(QDialog):
             self.settings.setValue("ui/table_font_size", new_table_size)
             _apply_estimate_widget_value(
                 "apply_table_font_size",
-                "_apply_table_font_size",
                 new_table_size,
                 "table font size",
             )
@@ -879,7 +876,6 @@ class SettingsDialog(QDialog):
             self.settings.setValue("ui/breakdown_font_size", new_breakdown_size)
             _apply_estimate_widget_value(
                 "apply_breakdown_font_size",
-                "_apply_breakdown_font_size",
                 new_breakdown_size,
                 "breakdown font size",
             )
@@ -888,7 +884,6 @@ class SettingsDialog(QDialog):
             self.settings.setValue("ui/final_calc_font_size", new_final_calc_size)
             _apply_estimate_widget_value(
                 "apply_final_calc_font_size",
-                "_apply_final_calc_font_size",
                 new_final_calc_size,
                 "final calculation font size",
             )
@@ -897,7 +892,6 @@ class SettingsDialog(QDialog):
             self.settings.setValue("ui/estimate_totals_position", new_totals_position)
             _apply_estimate_widget_value(
                 "apply_totals_position",
-                "_apply_totals_position",
                 new_totals_position,
                 "totals panel position",
             )
@@ -961,11 +955,6 @@ class SettingsDialog(QDialog):
 
             reconfigure_logging()
             logger.info("Logging settings applied.")
-
-            # Also persist both modern and legacy keys for error log toggle
-            self.settings.setValue(
-                "logging/enable_error", self.enable_critical_checkbox.isChecked()
-            )
             self.settings.sync()
             self.settings_applied.emit()
             logger.info("Settings applied and saved.")
@@ -1391,7 +1380,7 @@ if __name__ == "__main__":
             super().__init__()
             self.print_font = QFont("Arial", 10)  # Dummy attribute
             self.estimate_widget = QWidget()  # Dummy widget
-            self.estimate_widget._apply_table_font_size = lambda size: print(
+            self.estimate_widget.apply_table_font_size = lambda size: print(
                 f"Dummy Apply Table Font: {size}"
             )
             # Add dummy methods needed by the dialog

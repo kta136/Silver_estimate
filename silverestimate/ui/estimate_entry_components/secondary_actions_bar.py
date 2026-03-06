@@ -124,19 +124,6 @@ class SecondaryActionsBar(QWidget):
         layout.addWidget(self.delete_row_button)
         layout.addWidget(self._create_divider())
 
-        # Mode indicator label (hidden, for EstimateLogic compatibility)
-        self.mode_label = QLabel("Mode: Regular")
-        self.mode_label.setStyleSheet("""
-            font-weight: bold;
-            color: palette(windowText);
-            background-color: palette(window);
-            border: 1px solid palette(mid);
-            border-radius: 3px;
-            padding: 2px 6px;
-        """)
-        self.mode_label.setVisible(False)  # Hidden, toolbar has visible one
-        layout.addWidget(self.mode_label)
-
         # Return mode toggle
         self.return_toggle_button = QPushButton("Return")
         self.return_toggle_button.setToolTip(

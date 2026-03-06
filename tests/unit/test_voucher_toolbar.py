@@ -41,12 +41,6 @@ def test_set_note(toolbar):
     assert toolbar.note_edit.text() == "Test note"
 
 
-def test_set_mode_indicator(toolbar):
-    """Test setting mode indicator text."""
-    toolbar.set_mode_indicator("Mode: Return Items")
-    assert toolbar.mode_indicator_label.text() == "Mode: Return Items"
-
-
 def test_show_unsaved_badge(toolbar):
     """Test showing/hiding unsaved badge."""
     # Show the toolbar to ensure visibility changes work

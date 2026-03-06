@@ -39,8 +39,11 @@ class EstimateTableView(QTableView):
         int, int, int, int
     )  # currentRow, currentCol, prevRow, prevCol
 
+    host_widget: QTableView | None
+
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.host_widget = None
         self._table_model = EstimateTableModel(self)
         self._setup_ui()
         self._connect_signals()

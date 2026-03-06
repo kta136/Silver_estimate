@@ -710,13 +710,14 @@ class SettingsDialog(QDialog):
         """Loads the print font from QSettings."""
         # Reusing logic similar to MainWindow.load_settings
         default_font = QFont("Courier New", 7)  # Sensible default for print
-        default_font.float_size = 7.0
+        default_font_size = 7.0
+        setattr(default_font, "float_size", default_font_size)
 
         font_family = self.settings.value(
             "font/family", default_font.family(), type=str
         )
         font_size_float = self.settings.value(
-            "font/size_float", default_font.float_size, type=float
+            "font/size_float", default_font_size, type=float
         )
         font_bold = self.settings.value("font/bold", default_font.bold(), type=bool)
 
@@ -725,7 +726,7 @@ class SettingsDialog(QDialog):
 
         loaded_font = QFont(font_family, int(round(font_size_float)))
         loaded_font.setBold(font_bold)
-        loaded_font.float_size = font_size_float
+        setattr(loaded_font, "float_size", font_size_float)
         return loaded_font
 
     def _load_table_font_size_setting(self):
@@ -1273,7 +1274,7 @@ class SettingsDialog(QDialog):
         """Restore sensible default settings for this dialog and update the UI."""
         # Fonts
         default_font = QFont("Courier New", 7)
-        default_font.float_size = 7.0
+        setattr(default_font, "float_size", 7.0)
         self._current_print_font = default_font
         self.print_font_label.setText(self._get_font_display_text(default_font))
 
@@ -1379,10 +1380,12 @@ if __name__ == "__main__":
         def __init__(self):
             super().__init__()
             self.print_font = QFont("Arial", 10)  # Dummy attribute
-            self.estimate_widget = QWidget()  # Dummy widget
-            self.estimate_widget.apply_table_font_size = lambda size: print(
-                f"Dummy Apply Table Font: {size}"
-            )
+
+            class _DummyEstimateWidget(QWidget):
+                def apply_table_font_size(self, size):
+                    print(f"Dummy Apply Table Font: {size}")
+
+            self.estimate_widget = _DummyEstimateWidget()
             # Add dummy methods needed by the dialog
             self.show_import_dialog = lambda: print("Dummy Show Import Dialog")
             self.delete_all_estimates = lambda: print("Dummy Delete All Estimates")

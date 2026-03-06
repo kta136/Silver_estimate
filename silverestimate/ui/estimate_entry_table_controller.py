@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING
 
 from PyQt5 import sip
 from PyQt5.QtCore import Qt, QTimer
@@ -22,6 +23,11 @@ from .estimate_entry_ui import (
 
 class EstimateEntryTableController(HostProxy):
     """Handle row management, focus, editing, and cell navigation."""
+
+    if TYPE_CHECKING:
+        _enforcing_code_nav: bool
+        _loading_estimate: bool
+        _table_adapter: EstimateTableAdapter | None
 
     def _get_table_adapter(self) -> EstimateTableAdapter:
         if (
@@ -115,7 +121,7 @@ class EstimateEntryTableController(HostProxy):
 
     def current_cell_changed(self, currentRow, currentCol, previousRow, previousCol):
         try:
-            mouse_pressed = QApplication.mouseButtons() != Qt.NoButton
+            mouse_pressed = bool(QApplication.mouseButtons())
         except (AttributeError, RuntimeError):
             mouse_pressed = False
         row_changed = (
@@ -465,7 +471,7 @@ class EstimateEntryTableController(HostProxy):
             app = QApplication.instance()
             if not app:
                 return True
-            focus_widget = app.focusWidget()
+            focus_widget = QApplication.focusWidget()
             if not focus_widget:
                 return True
             if focus_widget is table:

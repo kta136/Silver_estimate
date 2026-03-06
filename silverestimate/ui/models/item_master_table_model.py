@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from PyQt5.QtCore import QAbstractTableModel, QModelIndex, Qt
 
@@ -134,8 +134,9 @@ class ItemMasterTableModel(QAbstractTableModel):
     def _normalize_row(self, row: object) -> dict[str, Any]:
         try:
             if hasattr(row, "keys"):
+                row_mapping = cast(Any, row)
                 return {
-                    key: row[key]
+                    key: row_mapping[key]
                     for key in ("code", "name", "purity", "wage_type", "wage_rate")
                 }
         except Exception:

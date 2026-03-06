@@ -268,8 +268,7 @@ class ItemMasterWidget(QWidget):
 
     def _selected_item_payload(self):
         selection_model = self.items_table.selectionModel()
-        if selection_model is None:
-            return None
+        assert selection_model is not None
         selected_rows = selection_model.selectedRows()
         if not selected_rows:
             return None

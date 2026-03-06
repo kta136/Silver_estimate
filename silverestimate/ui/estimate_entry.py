@@ -5,13 +5,17 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Dict
+from typing import TYPE_CHECKING, Any, Dict, cast
 
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtWidgets import QApplication, QWidget
 
 from silverestimate.domain.estimate_models import EstimateLineCategory, TotalsResult
-from silverestimate.presenter import EstimateEntryPresenter, EstimateEntryViewState
+from silverestimate.presenter import (
+    EstimateEntryPresenter,
+    EstimateEntryView,
+    EstimateEntryViewState,
+)
 
 from .estimate_entry_layout_controller import EstimateEntryLayoutController
 from .estimate_entry_table_controller import EstimateEntryTableController
@@ -51,6 +55,16 @@ class _RunningCategoryTotals:
 class EstimateEntryWidget(QWidget):
     """Widget for silver estimate entry and management."""
 
+    if TYPE_CHECKING:
+        item_table: Any
+        mode_indicator_label: Any
+        secondary_actions: Any
+        toolbar: Any
+        totals_panel: Any
+        voucher_edit: Any
+
+        def __getattr__(self, name: str) -> Any: ...
+
     live_rate_fetched = pyqtSignal(object)
     EDITABLE_ENTRY_COLS = (
         COL_CODE,
@@ -76,7 +90,9 @@ class EstimateEntryWidget(QWidget):
 
         self.db_manager = db_manager
         self.main_window = main_window
-        self.presenter = EstimateEntryPresenter(self, repository)
+        self.presenter = EstimateEntryPresenter(
+            cast(EstimateEntryView, self), repository
+        )
         self.live_rate_fetched.connect(self._apply_refreshed_live_rate)
 
         self.initializing = True

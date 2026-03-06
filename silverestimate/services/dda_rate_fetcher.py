@@ -5,7 +5,7 @@ import ssl
 import urllib.error
 import urllib.request
 from html import unescape
-from typing import Optional
+from typing import Any, Optional, cast
 from urllib.parse import urlparse
 
 DEFAULT_BASE_URL = "http://www.ddasilver.com/"
@@ -32,6 +32,9 @@ BROADCAST_CLIENT = "ddasil"
 _TLS_RETRY_ALLOWED_HOSTS = frozenset(
     filter(None, (urlparse(url).hostname for url in BROADCAST_URLS))
 )
+
+RateValue = int | float
+RateMetadata = dict[str, Any]
 
 
 def fetch_silver_agra_local_mohar_rate(
@@ -70,7 +73,7 @@ def _parse_scraped_rate(html: str, target_name: str):
         return None, {}
 
     cells_html = row_match.group("body")
-    metadata = {}
+    metadata: RateMetadata = {}
 
     for div_match in re.finditer(
         r'<div\s+[^>]*class="([^"]+)"[^>]*>\s*([^<]*)</div>',
@@ -108,8 +111,8 @@ def _parse_scraped_rate(html: str, target_name: str):
         except Exception:
             return None
 
-    rate_float = None
-    source = None
+    rate_float: float | None = None
+    source: str | None = None
     sell_rate_val = _convert_to_float(metadata.get("sell_rate"))
     if sell_rate_val is not None:
         # Use the raw commodity rate for the exact target row.
@@ -129,7 +132,7 @@ def _parse_scraped_rate(html: str, target_name: str):
     if "." in rate_str:
         decimals = len(rate_str.split(".", 1)[1].rstrip("0"))
     if decimals <= 0:
-        rate_val = int(round(rate_float))
+        rate_val: RateValue = int(round(rate_float))
     else:
         decimals = min(decimals, 4)
         rate_val = round(rate_float, decimals)
@@ -253,7 +256,7 @@ def _fetch_url_text(
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.read().decode("utf-8", errors="replace")
+            return cast(bytes, resp.read()).decode("utf-8", errors="replace")
     except urllib.error.URLError as exc:
         if not _is_tls_cert_error(exc):
             raise
@@ -266,7 +269,7 @@ def _fetch_url_text(
         with urllib.request.urlopen(
             req, timeout=timeout, context=insecure_context
         ) as resp:
-            return resp.read().decode("utf-8", errors="replace")
+            return cast(bytes, resp.read()).decode("utf-8", errors="replace")
 
 
 def _fetch_broadcast_payload(endpoint: str, payload: bytes, timeout: int) -> str:

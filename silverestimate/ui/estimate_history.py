@@ -278,8 +278,7 @@ class EstimateHistoryDialog(QDialog):
     def get_selected_voucher(self):
         """Get the selected voucher number."""
         selection_model = self.estimates_table.selectionModel()
-        if selection_model is None:
-            return None
+        assert selection_model is not None
         selected_rows = selection_model.selectedRows()
         if not selected_rows:
             return None

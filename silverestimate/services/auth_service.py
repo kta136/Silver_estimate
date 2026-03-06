@@ -8,7 +8,7 @@ import shutil
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from PyQt5.QtWidgets import QDialog, QMessageBox, QWidget
 
@@ -264,17 +264,19 @@ def perform_data_wipe(
 
 def _clear_log_artifacts() -> None:
     """Remove application log files and directories without emitting logs."""
+    get_log_config_fn: Callable[[], dict[str, object]] | None = None
     try:
         from silverestimate.infrastructure.logger import (  # local import to avoid cycles
-            get_log_config,
+            get_log_config as _get_log_config,
         )
+        get_log_config_fn = _get_log_config
     except Exception:
-        get_log_config = None  # type: ignore[assignment]
+        get_log_config_fn = None
 
     configured_dir = LOG_DIR
-    if get_log_config:
+    if get_log_config_fn is not None:
         try:
-            configured = get_log_config().get("log_dir")
+            configured = get_log_config_fn().get("log_dir")
             if configured:
                 configured_dir = configured
         except Exception:

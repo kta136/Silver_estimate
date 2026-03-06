@@ -2,9 +2,19 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 
 class DatabaseRepositoryFacadeMixin:
     """Expose repository operations through the legacy DatabaseManager API."""
+
+    if TYPE_CHECKING:
+        items_repo: Any
+        estimates_repo: Any
+        silver_bars_repo: Any
+        _item_cache_controller: Any | None
+        temp_db_path: str | None
+        last_error: str | None
 
     def get_item_by_code(self, code):
         return self.items_repo.get_item_by_code(code)

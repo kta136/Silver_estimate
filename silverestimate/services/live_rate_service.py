@@ -4,15 +4,19 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional, Protocol, Tuple
 
 from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 
-from silverestimate.infrastructure.settings import get_app_settings
+from silverestimate.infrastructure.settings import SettingsReader, get_app_settings
 from silverestimate.services.dda_rate_fetcher import (
     fetch_broadcast_rate_exact,
     fetch_silver_agra_local_mohar_rate,
 )
+
+
+class _BackgroundThread(Protocol):
+    def start(self) -> None: ...
 
 
 class LiveRateService(QObject):
@@ -22,8 +26,8 @@ class LiveRateService(QObject):
         self,
         parent: Optional[QObject] = None,
         logger: Optional[logging.Logger] = None,
-        settings_provider: Callable[[], object] = get_app_settings,
-        thread_factory: Callable[..., object] = threading.Thread,
+        settings_provider: Callable[[], SettingsReader] = get_app_settings,
+        thread_factory: Callable[..., _BackgroundThread] = threading.Thread,
         broadcast_fetcher: Callable[..., Tuple[object, object, object]] = (
             fetch_broadcast_rate_exact
         ),

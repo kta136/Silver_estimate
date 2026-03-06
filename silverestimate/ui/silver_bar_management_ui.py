@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
@@ -35,6 +37,7 @@ class SilverBarManagementUiBuilder(HostProxy):
     """Build the management dialog widget tree and connect signals."""
 
     def init_ui(self):
+        host_widget = cast(QWidget, self.host)
         self.host.setWindowTitle("Silver Bar Management (v2.0)")
         self.host.setMinimumSize(1180, 760)
 
@@ -291,20 +294,20 @@ class SilverBarManagementUiBuilder(HostProxy):
         )
 
         try:
-            QShortcut(QKeySequence.Refresh, self.host, activated=self.load_available_bars)
-            QShortcut(QKeySequence("Ctrl+N"), self.host, activated=self.create_new_list)
-            QShortcut(QKeySequence.Print, self.host, activated=self.print_selected_list)
-            QShortcut(QKeySequence.Cancel, self.host, activated=self.reject)
-            QShortcut(
-                QKeySequence.Delete,
-                self.list_bars_table,
-                activated=self.remove_selected_from_list,
+            refresh_shortcut = QShortcut(QKeySequence.Refresh, host_widget)
+            refresh_shortcut.activated.connect(self.load_available_bars)
+            new_list_shortcut = QShortcut(QKeySequence("Ctrl+N"), host_widget)
+            new_list_shortcut.activated.connect(self.create_new_list)
+            print_shortcut = QShortcut(QKeySequence.Print, host_widget)
+            print_shortcut.activated.connect(self.print_selected_list)
+            cancel_shortcut = QShortcut(QKeySequence.Cancel, host_widget)
+            cancel_shortcut.activated.connect(self.reject)
+            remove_shortcut = QShortcut(QKeySequence.Delete, self.list_bars_table)
+            remove_shortcut.activated.connect(self.remove_selected_from_list)
+            add_shortcut = QShortcut(
+                QKeySequence(Qt.Key_Return), self.available_bars_table
             )
-            QShortcut(
-                QKeySequence(Qt.Key_Return),
-                self.available_bars_table,
-                activated=self.add_selected_to_list,
-            )
+            add_shortcut.activated.connect(self.add_selected_to_list)
         except (AttributeError, RuntimeError, TypeError) as exc:
             self.logger.debug("Failed to configure silver bar shortcuts: %s", exc)
 

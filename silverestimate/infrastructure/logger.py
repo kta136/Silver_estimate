@@ -11,7 +11,7 @@ from PyQt5.QtCore import QtMsgType
 from silverestimate.infrastructure.settings import get_app_settings
 
 # Global variable to store the cleanup scheduler instance
-_cleanup_scheduler = None
+_cleanup_scheduler: "LogCleanupScheduler | None" = None
 
 
 def _coerce_bool_setting(value, default):

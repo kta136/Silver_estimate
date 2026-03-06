@@ -254,8 +254,8 @@ class EstimatesRepository:
         try:
             self._set_last_error(None)
             conn.execute("BEGIN TRANSACTION")
-            regular_items = list(regular_items or [])
-            return_items = list(return_items or [])
+            regular_items_list = list(regular_items or [])
+            return_items_list = list(return_items or [])
             cursor.execute(
                 "SELECT 1 FROM estimates WHERE voucher_no = ?", (voucher_no,)
             )
@@ -266,7 +266,7 @@ class EstimatesRepository:
             last_balance_amount = totals.get("last_balance_amount", 0.0)
             voucher_no_int = self._voucher_to_int(voucher_no)
 
-            all_items = regular_items + return_items
+            all_items = regular_items_list + return_items_list
             missing_codes = self._find_missing_item_codes(all_items)
             if missing_codes:
                 conn.rollback()
@@ -330,7 +330,7 @@ class EstimatesRepository:
                 "DELETE FROM estimate_items WHERE voucher_no = ?", (voucher_no,)
             )
             params = []
-            for item in regular_items:
+            for item in regular_items_list:
                 params.append(
                     (
                         voucher_no,
@@ -348,7 +348,7 @@ class EstimatesRepository:
                         0,
                     )
                 )
-            for item in return_items:
+            for item in return_items_list:
                 params.append(
                     (
                         voucher_no,
@@ -390,7 +390,7 @@ class EstimatesRepository:
         except sqlite3.IntegrityError as exc:
             conn.rollback()
             detail_message = self._diagnose_integrity_error(
-                exc, regular_items + return_items
+                exc, regular_items_list + return_items_list
             )
             self._logger.error(
                 "DB integrity error saving estimate %s: %s",

@@ -104,7 +104,10 @@ extend-exclude = [
 ]
 
 [tool.ruff.lint]
-select = ["E9", "F63", "F7", "F82", "I"]
+select = ["E9", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/ui/test_estimate_entry_integration.py" = ["F841"]
 
 [tool.mypy]
 python_version = "3.13"
@@ -133,6 +136,39 @@ module = [
     "passlib.*",
 ]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "silverestimate.domain.estimate_models",
+    "silverestimate.domain.item_validation",
+    "silverestimate.infrastructure.app_constants",
+    "silverestimate.infrastructure.paths",
+    "silverestimate.infrastructure.settings",
+    "silverestimate.persistence.temp_database_store",
+    "silverestimate.persistence.encrypted_database_store",
+    "silverestimate.persistence.database_startup",
+    "silverestimate.persistence.items_repository",
+    "silverestimate.security.encryption",
+    "silverestimate.security.credential_store",
+    "silverestimate.services.estimate_calculator",
+    "silverestimate.services.estimate_repository",
+    "silverestimate.services.item_import_parser",
+    "silverestimate.persistence.flush_scheduler",
+    "silverestimate.persistence.migrations",
+    "silverestimate.persistence.database_lifecycle",
+    "silverestimate.persistence.silver_bars_queries",
+    "silverestimate.persistence.silver_bars_snapshot_repository",
+    "silverestimate.persistence.sqlite_database_runtime",
+    "silverestimate.presenter.estimate_entry_presenter",
+    "silverestimate.infrastructure.application",
+    "silverestimate.ui._host_proxy",
+    "silverestimate.ui.estimate_entry_components.primary_actions_bar",
+    "silverestimate.ui.estimate_entry_components.secondary_actions_bar",
+    "silverestimate.ui.estimate_entry_logic.constants",
+    "silverestimate.ui.view_models.estimate_entry_view_model",
+]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

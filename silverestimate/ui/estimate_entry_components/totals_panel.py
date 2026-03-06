@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, cast
+
 from PyQt5.QtCore import QSize, Qt, QTimer, pyqtSignal
 from PyQt5.QtWidgets import (
     QAbstractItemView,
@@ -59,6 +61,26 @@ class TotalsPanel(QWidget):
     """
 
     section_order_changed = pyqtSignal(list)
+
+    if TYPE_CHECKING:
+        mode_indicator_label: QLabel
+        overall_gross_label: QLabel
+        overall_poly_label: QLabel
+        total_gross_label: QLabel
+        total_net_label: QLabel
+        total_fine_label: QLabel
+        return_gross_label: QLabel
+        return_net_label: QLabel
+        return_fine_label: QLabel
+        bar_gross_label: QLabel
+        bar_net_label: QLabel
+        bar_fine_label: QLabel
+        net_fine_label: QLabel
+        net_wage_label: QLabel
+        grand_total_label: QLabel
+        _summary_sections_list: _SummarySectionsListWidget
+        _sidebar_top_host: QWidget
+        _sidebar_top_layout: QVBoxLayout
 
     _FINAL_SECTION_KEY = "final_calc"
     _DEFAULT_SECTION_ORDER = [
@@ -178,11 +200,12 @@ class TotalsPanel(QWidget):
         ]
 
     def _snapshot_display_state(self) -> dict[str, object]:
-        snapshot: dict[str, object] = {"texts": {}}
+        texts: dict[str, str] = {}
+        snapshot: dict[str, object] = {"texts": texts}
         for attr_name in self._all_value_attr_names():
             label = getattr(self, attr_name, None)
             if isinstance(label, QLabel):
-                snapshot["texts"][attr_name] = label.text()
+                texts[attr_name] = label.text()
 
         breakdown_size = None
         for attr_name in self._breakdown_value_attr_names():
@@ -534,16 +557,12 @@ class TotalsPanel(QWidget):
         if not hasattr(self, "_summary_sections_list"):
             return
         viewport = self._summary_sections_list.viewport()
-        if viewport is None:
-            return
         target_width = max(0, viewport.width() - 2)
         for idx in range(self._summary_sections_list.count()):
             item = self._summary_sections_list.item(idx)
             if item is None:
                 continue
             card = self._summary_sections_list.itemWidget(item)
-            if card is None:
-                continue
             card.setMinimumWidth(target_width)
             card.adjustSize()
             hint = card.sizeHint()
@@ -697,7 +716,7 @@ class TotalsPanel(QWidget):
             item = self._sidebar_top_layout.takeAt(0)
             child_widget = item.widget()
             if child_widget is not None:
-                child_widget.setParent(None)
+                child_widget.setParent(cast(QWidget, None))
 
         if widget is None:
             self._sidebar_top_host.setVisible(False)

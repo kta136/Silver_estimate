@@ -4,15 +4,59 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Mapping, Optional, Protocol, Sequence
 
+EstimateRow = Mapping[str, Any]
+
+
+class EstimateRepositoryDatabase(Protocol):
+    """Minimal database-manager contract used by the estimate presenter."""
+
+    last_error: str | None
+
+    def get_item_by_code(self, code: str) -> EstimateRow | None: ...
+
+    def generate_voucher_no(self) -> str: ...
+
+    def get_estimate_by_voucher(self, voucher_no: str) -> EstimateRow | None: ...
+
+    def estimate_exists(self, voucher_no: str) -> bool: ...
+
+    def save_estimate_with_returns(
+        self,
+        voucher_no: str,
+        date: str,
+        silver_rate: float,
+        regular_items: list[EstimateRow],
+        return_items: list[EstimateRow],
+        totals: dict[str, Any],
+    ) -> bool: ...
+
+    def delete_silver_bars_for_estimate(self, voucher_no: str) -> None: ...
+
+    def get_silver_bars_for_estimate(
+        self, voucher_no: str
+    ) -> Sequence[EstimateRow] | None: ...
+
+    def update_silver_bar_values(self, bar_id: int, weight: float, purity: float) -> bool: ...
+
+    def add_silver_bar(
+        self, voucher_no: str, weight: float, purity: float
+    ) -> int | None: ...
+
+    def sync_silver_bars_for_estimate(
+        self, voucher_no: str, bars: list[EstimateRow]
+    ) -> tuple[int, int]: ...
+
+    def delete_single_estimate(self, voucher_no: str) -> bool: ...
+
 
 class EstimateRepository(Protocol):
     """Interface exposing persistence operations required by the estimate UI."""
 
-    def fetch_item(self, code: str) -> Optional[Mapping[str, Any]]: ...
+    def fetch_item(self, code: str) -> Optional[EstimateRow]: ...
 
     def generate_voucher_no(self) -> str: ...
 
-    def load_estimate(self, voucher_no: str) -> Optional[Mapping[str, Any]]: ...
+    def load_estimate(self, voucher_no: str) -> Optional[EstimateRow]: ...
 
     def estimate_exists(self, voucher_no: str) -> bool: ...
 
@@ -21,8 +65,8 @@ class EstimateRepository(Protocol):
         voucher_no: str,
         date: str,
         silver_rate: float,
-        regular_items: Iterable[Mapping[str, Any]],
-        return_items: Iterable[Mapping[str, Any]],
+        regular_items: Iterable[EstimateRow],
+        return_items: Iterable[EstimateRow],
         totals: Mapping[str, Any],
     ) -> bool: ...
 
@@ -30,7 +74,7 @@ class EstimateRepository(Protocol):
 
     def fetch_silver_bars_for_estimate(
         self, voucher_no: str
-    ) -> Sequence[Mapping[str, Any]]: ...
+    ) -> Sequence[EstimateRow]: ...
 
     def count_silver_bars_for_estimate(self, voucher_no: str) -> int: ...
 
@@ -41,7 +85,7 @@ class EstimateRepository(Protocol):
     ) -> Optional[int]: ...
 
     def sync_silver_bars_for_estimate(
-        self, voucher_no: str, bars: Iterable[Mapping[str, Any]]
+        self, voucher_no: str, bars: Iterable[EstimateRow]
     ) -> tuple[int, int]: ...
 
     def last_error(self) -> Optional[str]: ...
@@ -52,10 +96,10 @@ class EstimateRepository(Protocol):
 class DatabaseEstimateRepository:
     """Adapter that wraps the existing database manager API."""
 
-    def __init__(self, db_manager: Any) -> None:
+    def __init__(self, db_manager: EstimateRepositoryDatabase) -> None:
         self._db = db_manager
 
-    def fetch_item(self, code: str) -> Optional[Mapping[str, Any]]:
+    def fetch_item(self, code: str) -> Optional[EstimateRow]:
         try:
             return self._db.get_item_by_code(code)
         except Exception:
@@ -64,7 +108,7 @@ class DatabaseEstimateRepository:
     def generate_voucher_no(self) -> str:
         return self._db.generate_voucher_no()
 
-    def load_estimate(self, voucher_no: str) -> Optional[Mapping[str, Any]]:
+    def load_estimate(self, voucher_no: str) -> Optional[EstimateRow]:
         return self._db.get_estimate_by_voucher(voucher_no)
 
     def estimate_exists(self, voucher_no: str) -> bool:
@@ -78,8 +122,8 @@ class DatabaseEstimateRepository:
         voucher_no: str,
         date: str,
         silver_rate: float,
-        regular_items: Iterable[Mapping[str, Any]],
-        return_items: Iterable[Mapping[str, Any]],
+        regular_items: Iterable[EstimateRow],
+        return_items: Iterable[EstimateRow],
         totals: Mapping[str, Any],
     ) -> bool:
         return bool(
@@ -96,14 +140,14 @@ class DatabaseEstimateRepository:
     def notify_silver_bars_for_estimate(self, voucher_no: str) -> None:
         self._db.delete_silver_bars_for_estimate(voucher_no)
 
-    def fetch_silver_bars_for_estimate(self, voucher_no: str):
+    def fetch_silver_bars_for_estimate(
+        self, voucher_no: str
+    ) -> Sequence[EstimateRow]:
         try:
             rows = self._db.get_silver_bars_for_estimate(voucher_no) or []
         except Exception:
             rows = []
-        normalized_rows = [
-            dict(row) if not isinstance(row, dict) else dict(row) for row in rows
-        ]
+        normalized_rows = [dict(row) for row in rows]
         sorted_rows = (
             sorted(
                 normalized_rows,
@@ -133,7 +177,7 @@ class DatabaseEstimateRepository:
             return None
 
     def sync_silver_bars_for_estimate(
-        self, voucher_no: str, bars: Iterable[Mapping[str, Any]]
+        self, voucher_no: str, bars: Iterable[EstimateRow]
     ) -> tuple[int, int]:
         bars_list = list(bars or [])
         try:

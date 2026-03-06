@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from typing import TYPE_CHECKING, Any
 
 from PyQt5.QtWidgets import (
     QButtonGroup,
@@ -28,6 +29,9 @@ from .silver_bar_management_ui import SilverBarManagementUiBuilder
 
 class SilverBarDialog(QDialog):
     """Dialog for managing silver bars and grouping them into lists."""
+
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
 
     def __init__(self, db_manager, parent=None):
         super().__init__(parent)

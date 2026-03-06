@@ -60,7 +60,8 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from PyQt5.QtCore import QSettings
+
+from silverestimate.infrastructure.settings import SettingsStore
 
 SALT_SETTINGS_KEY = "security/db_salt"
 DEFAULT_SALT_BYTES = 16  # 128 bits
@@ -69,7 +70,7 @@ NONCE_BYTES = 12  # 96 bits (GCM standard)
 
 
 def get_or_create_salt(
-    settings: QSettings,
+    settings: SettingsStore,
     logger: Optional[logging.Logger] = None,
     *,
     settings_key: str = SALT_SETTINGS_KEY,

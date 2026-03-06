@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, cast
 
 from PyQt5 import sip
 from PyQt5.QtCore import Qt
@@ -39,7 +39,6 @@ from .estimate_entry_ui import (
     CodeDelegate,
     NumericDelegate,
 )
-from .inline_status import InlineStatusController
 
 
 class EstimateEntryLayoutController(HostProxy):
@@ -314,7 +313,7 @@ class EstimateEntryLayoutController(HostProxy):
 
         if normalized == "bottom":
             if sidebar_panel.parent() is splitter:
-                sidebar_panel.setParent(None)
+                sidebar_panel.setParent(cast(QWidget, None))
             if bottom_panel.parent() is not splitter:
                 splitter.addWidget(bottom_panel)
 
@@ -327,7 +326,7 @@ class EstimateEntryLayoutController(HostProxy):
             self.totals_panel = bottom_panel
         else:
             if bottom_panel.parent() is splitter:
-                bottom_panel.setParent(None)
+                bottom_panel.setParent(cast(QWidget, None))
             if sidebar_panel.parent() is not splitter:
                 splitter.addWidget(sidebar_panel)
 

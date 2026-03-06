@@ -53,7 +53,7 @@ def dp_combination_range(bars, min_target: float, max_target: float):
     min_target_int = int(min_target * 10)
     max_target_int = int(max_target * 10)
 
-    dp = {0: (0, [])}
+    dp: dict[int, tuple[int, list[int]]] = {0: (0, [])}
 
     for index, bar in enumerate(bars):
         bar_weight = int(bar["fine_weight"] * 10)

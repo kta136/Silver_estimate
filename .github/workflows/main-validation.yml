@@ -60,7 +60,6 @@ jobs:
 
       - name: Type check with mypy
         run: mypy silverestimate --config-file=pyproject.toml
-        continue-on-error: true  # Phase 0: advisory
 
   test-full:
     name: Full Tests (Python 3.13)

@@ -7,12 +7,18 @@ import os
 import sqlite3
 import tempfile
 import time
-from typing import Callable, Optional
+from typing import Any, Callable, Optional, cast
 
 from cryptography.exceptions import InvalidTag
 
-from silverestimate.infrastructure.settings import get_app_settings
+from silverestimate.infrastructure.settings import (
+    SettingsStore,
+    get_app_settings,
+)
 from silverestimate.security import encryption as crypto_utils
+
+RateValue = int | float
+RateMetadata = dict[str, Any]
 
 
 class EncryptedDatabaseStore:
@@ -182,7 +188,7 @@ class EncryptedDatabaseStore:
     def get_or_create_salt(
         *,
         logger: Optional[logging.Logger] = None,
-        settings_factory: Callable[[], object] = get_app_settings,
+        settings_factory: Callable[[], SettingsStore] = get_app_settings,
     ) -> bytes:
         settings = settings_factory()
         return crypto_utils.get_or_create_salt(settings, logger=logger)
@@ -191,10 +197,10 @@ class EncryptedDatabaseStore:
     def check_recovery_candidate(
         encrypted_db_path: str,
         *,
-        settings_factory: Callable[[], object] = get_app_settings,
+        settings_factory: Callable[[], SettingsStore] = get_app_settings,
     ) -> str | None:
         settings = settings_factory()
-        temp_path = settings.value("security/last_temp_db_path")
+        temp_path = cast(str | None, settings.value("security/last_temp_db_path"))
         if not temp_path or not isinstance(temp_path, str):
             return None
         if not os.path.exists(temp_path):
@@ -216,7 +222,7 @@ class EncryptedDatabaseStore:
         password: str,
         *,
         logger: Optional[logging.Logger] = None,
-        settings_factory: Callable[[], object] = get_app_settings,
+        settings_factory: Callable[[], SettingsStore] = get_app_settings,
         iterations: int = crypto_utils.DEFAULT_KDF_ITERATIONS,
     ) -> bool:
         try:

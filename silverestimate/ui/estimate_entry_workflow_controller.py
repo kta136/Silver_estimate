@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import replace
-from typing import Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional, cast
 
 from PyQt5.QtCore import QDate, QLocale, QSignalBlocker, QTimer
 from PyQt5.QtWidgets import (
@@ -29,6 +29,11 @@ from .item_selection_dialog import ItemSelectionDialog
 
 class EstimateEntryWorkflowController(HostProxy):
     """Handle estimate-entry workflow actions outside table/totals mechanics."""
+
+    if TYPE_CHECKING:
+        _loading_estimate: bool
+        return_mode: bool
+        silver_bar_mode: bool
 
     def _parent_widget(self):
         return self.host
@@ -358,7 +363,7 @@ class EstimateEntryWorkflowController(HostProxy):
             self.db_manager, code, parent=self._parent_widget()
         )
         if dialog.exec_() == QDialog.Accepted:
-            return dialog.get_selected_item()
+            return cast(Optional[Dict], dialog.get_selected_item())
         return None
 
     def focus_after_item_lookup(self, row_index: int) -> None:

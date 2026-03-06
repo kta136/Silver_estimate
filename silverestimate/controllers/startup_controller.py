@@ -115,12 +115,6 @@ class StartupController:
                 "Authentication cancelled or failed; exiting startup sequence"
             )
             return StartupResult(status=StartupStatus.CANCELLED)
-
-        if not isinstance(auth_result, AuthenticationResult):
-            self._logger.critical(
-                "Unexpected authentication result type: %r", auth_result
-            )
-            return StartupResult(status=StartupStatus.FAILED)
         self._logger.debug(
             "[perf] startup.auth_accepted_ms=%.2f t_unix=%.6f",
             (time.perf_counter() - startup_t0) * 1000.0,

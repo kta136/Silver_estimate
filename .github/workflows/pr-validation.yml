@@ -64,7 +64,6 @@ jobs:
 
       - name: Type check with mypy
         run: mypy silverestimate --config-file=pyproject.toml
-        continue-on-error: true  # Don't fail build on mypy issues initially
 
   test-fast:
     name: Fast Tests (Python 3.13)

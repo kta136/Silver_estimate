@@ -6,17 +6,33 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Optional
 
-try:
-    import keyring
-    from keyring.errors import KeyringError, PasswordDeleteError
-except Exception:  # pragma: no cover - keyring missing at runtime
-    keyring = None  # type: ignore[assignment]
+keyring: Any | None
+KeyringError: type[Exception]
+PasswordDeleteError: type[Exception]
 
-    class KeyringError(Exception):
+try:
+    import keyring as _keyring
+    from keyring.errors import (
+        KeyringError as _ImportedKeyringError,
+    )
+    from keyring.errors import (
+        PasswordDeleteError as _ImportedPasswordDeleteError,
+    )
+except Exception:  # pragma: no cover - keyring missing at runtime
+    keyring = None
+
+    class _FallbackKeyringError(Exception):
         """Fallback KeyringError when keyring package is unavailable."""
 
-    class PasswordDeleteError(KeyringError):
+    class _FallbackPasswordDeleteError(_FallbackKeyringError):
         """Fallback PasswordDeleteError when keyring package is unavailable."""
+
+    KeyringError = _FallbackKeyringError
+    PasswordDeleteError = _FallbackPasswordDeleteError
+else:
+    keyring = _keyring
+    KeyringError = _ImportedKeyringError
+    PasswordDeleteError = _ImportedPasswordDeleteError
 
 
 SERVICE_NAME = "SilverEstimateApp"
@@ -152,12 +168,13 @@ def get_password_hash(
         ) from exc
 
     if value:
-        return value
+        return str(value)
 
     if not settings:
         return None
 
-    legacy_value = settings.value(descriptor.legacy_key)
+    legacy_value_raw = settings.value(descriptor.legacy_key)
+    legacy_value = str(legacy_value_raw) if legacy_value_raw else None
     if legacy_value:
         try:
             kr.set_password(SERVICE_NAME, descriptor.secure_id, legacy_value)

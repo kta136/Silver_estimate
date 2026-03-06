@@ -97,6 +97,16 @@ See also: `DOCS/project-architecture.md`.
 3. Create a virtual environment
 4. Install dependencies
 
+Recommended for development with `uv`:
+
+```bash
+uv sync --extra dev
+```
+
+This repository now includes a committed `uv.lock` file so local development and CI can converge on the same resolved dependency set.
+
+Fallback with the standard library `venv` + `pip`:
+
 ```powershell
 # Windows (PowerShell)
 python -m venv .venv
@@ -154,6 +164,16 @@ Key areas of the codebase:
 - `silverestimate/security/` – AES-GCM utilities and keyring-backed credential storage.
 - `silverestimate/infrastructure/` – logging, settings helpers, and app constants.
 - `DOCS/` – deep-dive documentation (architecture, API reference, deployment, security, etc.).
+
+Recommended development commands with `uv`:
+
+```bash
+uv sync --extra dev
+uv run python main.py
+uv run pytest -v
+uv run mypy silverestimate --config-file=pyproject.toml
+uv run pre-commit run --all-files
+```
 
 ## Testing
 

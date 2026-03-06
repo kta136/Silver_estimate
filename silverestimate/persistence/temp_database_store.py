@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 from typing import Callable, Optional
 
-from silverestimate.infrastructure.settings import get_app_settings
+from silverestimate.infrastructure.settings import SettingsStore, get_app_settings
 
 
 class TempDatabaseStore:
@@ -22,7 +22,7 @@ class TempDatabaseStore:
         *,
         logger: Optional[logging.Logger] = None,
         store_metadata: bool = True,
-        settings_factory: Callable[[], object] = get_app_settings,
+        settings_factory: Callable[[], SettingsStore] = get_app_settings,
     ) -> None:
         self._logger = logger or logging.getLogger(__name__)
         self._path: Optional[Path] = None

@@ -7,7 +7,7 @@ from typing import Callable, Optional, Tuple
 
 from PyQt5.QtCore import QDateTime, QLocale, QObject, QTimer
 
-from silverestimate.infrastructure.settings import get_app_settings
+from silverestimate.infrastructure.settings import SettingsReader, get_app_settings
 from silverestimate.services.live_rate_service import LiveRateService
 
 LiveRateWidgetGetter = Callable[[], Optional[object]]
@@ -25,7 +25,7 @@ class LiveRateController(QObject):
         status_callback: Optional[StatusCallback],
         logger: Optional[logging.Logger] = None,
         service_factory: Callable[..., LiveRateService] = LiveRateService,
-        settings_provider: Callable[[], object] = get_app_settings,
+        settings_provider: Callable[[], SettingsReader] = get_app_settings,
         single_shot: Callable[[int, Callable[[], None]], None] = QTimer.singleShot,
     ) -> None:
         super().__init__(parent)

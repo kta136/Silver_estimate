@@ -6,6 +6,7 @@ import time
 from typing import TYPE_CHECKING, Optional
 
 from PyQt5 import sip
+from PyQt5.QtWidgets import QDoubleSpinBox
 
 from silverestimate.domain.estimate_models import (
     CategoryTotals,
@@ -32,11 +33,24 @@ from .estimate_entry_ui import (
 )
 
 if TYPE_CHECKING:
-    from .estimate_entry import _RowContribution
+    from .estimate_entry import _RowContribution, _RunningCategoryTotals
+    from .estimate_entry_components import EstimateTableView
 
 
 class EstimateEntryTotalsController(HostProxy):
     """Own totals recompute and incremental aggregation behavior."""
+
+    if TYPE_CHECKING:
+        item_table: EstimateTableView
+        silver_rate_spin: QDoubleSpinBox
+        _agg_overall_gross: float
+        _agg_overall_poly: float
+        _agg_regular: _RunningCategoryTotals
+        _agg_returns: _RunningCategoryTotals
+        _agg_silver_bars: _RunningCategoryTotals
+        _incremental_totals_enabled: bool
+        _incremental_totals_failed: bool
+        _row_contrib_cache: dict[int, _RowContribution]
 
     def calculate_net_weight(self):
         self._recompute_row_derived_values(self.current_row)
@@ -59,9 +73,8 @@ class EstimateEntryTotalsController(HostProxy):
             if callable(get_row):
                 row_state = get_row(row)
                 if row_state is not None:
-                    return self._normalize_wage_type(
-                        getattr(row_state, "wage_type", "WT")
-                    )
+                    wage_type = getattr(row_state, "wage_type", "WT")
+                    return "PC" if str(wage_type or "").strip().upper() == "PC" else "WT"
         except (AttributeError, TypeError, RuntimeError, ValueError):
             pass
         return "WT"
@@ -266,7 +279,7 @@ class EstimateEntryTotalsController(HostProxy):
         if not self._row_contrib_cache:
             return
 
-        shifted = {}
+        shifted: dict[int, _RowContribution] = {}
         for index in sorted(self._row_contrib_cache):
             contrib = self._row_contrib_cache[index]
             shifted[index - 1 if index > row else index] = contrib

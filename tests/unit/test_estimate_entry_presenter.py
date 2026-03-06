@@ -1,4 +1,3 @@
-import logging
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional
 
@@ -9,7 +8,6 @@ from silverestimate.presenter import (
     EstimateEntryViewState,
     LoadedEstimate,
     SaveItem,
-    SaveOutcome,
     SavePayload,
 )
 

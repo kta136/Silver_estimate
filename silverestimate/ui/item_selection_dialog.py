@@ -196,9 +196,9 @@ class ItemSelectionDialog(QDialog):
         footer.addWidget(cancel_button)
         root.addLayout(footer)
 
-        QShortcut(QKeySequence.Find, self, activated=self._focus_search)
-        QShortcut(QKeySequence(Qt.Key_Return), self, activated=self._accept_top_result)
-        QShortcut(QKeySequence(Qt.Key_Enter), self, activated=self._accept_top_result)
+        QShortcut(QKeySequence.Find, self, self._focus_search)
+        QShortcut(QKeySequence(Qt.Key_Return), self, self._accept_top_result)
+        QShortcut(QKeySequence(Qt.Key_Enter), self, self._accept_top_result)
 
         self.search_edit.setText(self.search_term)
         QTimer.singleShot(0, self._focus_search)
@@ -373,8 +373,7 @@ class ItemSelectionDialog(QDialog):
 
     def _select_row(self, row: int) -> None:
         selection_model = self.items_table.selectionModel()
-        if selection_model is None:
-            return
+        assert selection_model is not None
         index = self.items_model.index(row, 0)
         if not index.isValid():
             return

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import TYPE_CHECKING
 
 from PyQt5.QtCore import QObject, QThread, pyqtSignal
 from PyQt5.QtWidgets import QMessageBox
@@ -68,6 +69,10 @@ class _BarsLoadWorker(QObject):
 
 class SilverBarLoadController(HostProxy):
     """Coordinate async available/list loads and stale-response handling."""
+
+    if TYPE_CHECKING:
+        _available_load_request_id: int
+        _list_load_request_id: int
 
     def _schedule_available_reload(self, *args, **kwargs):
         del args, kwargs

@@ -8,7 +8,7 @@ import time
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, cast
 
 import PyQt5.QtCore as QtCore
 from PyQt5.QtCore import Qt
@@ -60,9 +60,10 @@ class ApplicationContext:
             except Exception as exc:
                 if self.logger:
                     self.logger.debug("Failed to stop cleanup scheduler: %s", exc)
-        if self.main_window and getattr(self.main_window, "db", None):
+        main_window_db = getattr(self.main_window, "db", None)
+        if self.main_window and main_window_db:
             try:
-                self.main_window.db.close()
+                main_window_db.close()
             except Exception as exc:
                 if self.logger:
                     self.logger.debug("Failed to close database on exit: %s", exc)
@@ -87,7 +88,7 @@ class ApplicationBuilder:
         asset_resolver: Callable[..., Path] = get_asset_path,
         icon_factory: Callable[[str], QIcon] = QIcon,
         qt_handler: Callable[..., None] = qt_message_handler,
-        qt_attributes: Tuple[int, ...] = (
+        qt_attributes: Tuple[int | Qt.ApplicationAttribute, ...] = (
             Qt.AA_EnableHighDpiScaling,
             Qt.AA_UseHighDpiPixmaps,
         ),
@@ -197,7 +198,7 @@ class ApplicationBuilder:
 
         for attr in self._qt_attributes:
             try:
-                QApplication.setAttribute(attr)
+                QApplication.setAttribute(cast(Qt.ApplicationAttribute, attr))
             except Exception as exc:
                 if context.logger:
                     context.logger.warning(
@@ -207,7 +208,12 @@ class ApplicationBuilder:
         if sys.platform == "win32":
             set_app_user_model_id(self._user_model_id)
 
-        app = QApplication.instance() or QApplication(sys.argv)
+        existing_app = QApplication.instance()
+        app = (
+            existing_app
+            if isinstance(existing_app, QApplication)
+            else QApplication(sys.argv)
+        )
         context.app = app
         # Hidden parent widget for dialogs shown before the main window exists.
         # Some tests monkeypatch QApplication with a lightweight stub; skip
@@ -232,21 +238,23 @@ class ApplicationBuilder:
     def _authenticate(
         self, context: ApplicationContext
     ) -> Tuple[Optional["DatabaseManager"], Optional[int]]:
-        startup_module = None
-        status_enum = None
+        status_enum: Any | None = None
         factory = self._startup_controller_factory
         if factory is None:
-            from silverestimate.controllers import startup_controller as startup_module
+            from silverestimate.controllers.startup_controller import (
+                StartupController,
+                StartupStatus,
+            )
 
-            factory = startup_module.StartupController
-            status_enum = startup_module.StartupStatus
+            factory = StartupController
+            status_enum = StartupStatus
         else:
             try:
-                from silverestimate.controllers import (
-                    startup_controller as startup_module,
+                from silverestimate.controllers.startup_controller import (
+                    StartupStatus,
                 )
 
-                status_enum = startup_module.StartupStatus
+                status_enum = StartupStatus
             except Exception:
                 status_enum = None
 

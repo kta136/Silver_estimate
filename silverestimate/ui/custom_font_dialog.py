@@ -105,7 +105,7 @@ class CustomFontDialog(QDialog):
         font.setPointSize(int(round(size)))
         font.setBold(self.bold_checkbox.isChecked())
         # Add the float size as a custom property if needed for saving/loading exact value
-        font.float_size = size  # Store the original float value
+        setattr(font, "float_size", size)
         return font
 
     def accept(self):

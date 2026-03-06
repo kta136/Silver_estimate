@@ -6,7 +6,7 @@ import logging
 import os
 import sys
 import time
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable
 
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QIcon
@@ -130,9 +130,9 @@ class MainWindow(QMainWindow):
 
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
-        self.layout = QVBoxLayout(self.central_widget)
+        self._root_layout = QVBoxLayout(self.central_widget)
         self.stack = QStackedWidget(self.central_widget)
-        self.layout.addWidget(self.stack)
+        self._root_layout.addWidget(self.stack)
 
         self._geometry_restored = False
         try:

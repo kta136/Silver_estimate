@@ -1,8 +1,6 @@
 import sqlite3
 from pathlib import Path
 
-import pytest
-
 from silverestimate.ui.silver_bar_management import _BarsLoadWorker
 
 

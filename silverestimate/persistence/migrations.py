@@ -42,6 +42,7 @@ def run_schema_setup(db: "DatabaseManager") -> None:
 
 def _ensure_core_tables(db: "DatabaseManager", current_version: int) -> None:
     cursor = db.cursor
+    assert cursor is not None
     # Core domain tables (items, estimates, estimate_items)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS items (
@@ -144,6 +145,8 @@ def _ensure_core_tables(db: "DatabaseManager", current_version: int) -> None:
 def _apply_versioned_migrations(db: "DatabaseManager", current_version: int) -> None:
     cursor = db.cursor
     logger = db.logger
+    assert cursor is not None
+    assert logger is not None
 
     if current_version >= 3:
         logger.debug("Schema version >= 3 detected; skipping legacy migration checks.")
@@ -215,6 +218,10 @@ def _apply_versioned_migrations(db: "DatabaseManager", current_version: int) -> 
 def _ensure_indexes(db: "DatabaseManager") -> None:
     cursor = db.cursor
     logger = db.logger
+    conn = db.conn
+    assert cursor is not None
+    assert logger is not None
+    assert conn is not None
 
     try:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_items_code ON items(code)")
@@ -269,7 +276,7 @@ def _ensure_indexes(db: "DatabaseManager") -> None:
             "CREATE INDEX IF NOT EXISTS idx_sbar_lists_identifier ON silver_bar_lists(list_identifier)"
         )
 
-        db.conn.commit()
+        conn.commit()
         logger.info("Database indexes ensured.")
     except sqlite3.Error as exc:
         logger.warning("Failed creating one or more indexes: %s", exc)

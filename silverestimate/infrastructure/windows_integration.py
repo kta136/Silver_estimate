@@ -7,12 +7,15 @@ executed outside of Windows.
 
 from __future__ import annotations
 
+import ctypes
 import sys
 from pathlib import Path
 from typing import Optional
 
-if sys.platform == "win32":  # pragma: no cover - platform specific
-    import ctypes
+
+def _is_windows() -> bool:
+    """Return True when Windows APIs should be available."""
+    return sys.platform == "win32"
 
 
 def set_app_user_model_id(app_id: str, logger=None) -> None:
@@ -22,11 +25,15 @@ def set_app_user_model_id(app_id: str, logger=None) -> None:
     Having a stable ID ensures taskbar grouping works and allows custom icons
     to appear even when the application is launched via python.exe.
     """
-    if sys.platform != "win32":
+    if not _is_windows():
         return
 
     try:  # pragma: no cover - Windows API
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
+        windll = getattr(ctypes, "windll", None)
+        shell32 = getattr(windll, "shell32", None)
+        if shell32 is None:
+            return
+        shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
     except Exception as exc:  # pragma: no cover - defensive logging only
         if logger:
             logger.debug("Failed to set AppUserModelID: %s", exc)
@@ -41,7 +48,7 @@ def apply_taskbar_icon(
     Returns:
         Optional[int]: An HICON handle if the icon was applied, otherwise None.
     """
-    if sys.platform != "win32":
+    if not _is_windows():
         return None
 
     if not icon_path.exists():
@@ -55,8 +62,12 @@ def apply_taskbar_icon(
         return None
 
     try:  # pragma: no cover - Windows API
+        windll = getattr(ctypes, "windll", None)
+        user32 = getattr(windll, "user32", None)
+        if user32 is None:
+            return None
         load_flags = 0x00000010 | 0x00000040  # LR_LOADFROMFILE | LR_DEFAULTSIZE
-        hicon = ctypes.windll.user32.LoadImageW(
+        hicon = user32.LoadImageW(
             None,
             str(icon_path),
             1,  # IMAGE_ICON
@@ -73,10 +84,10 @@ def apply_taskbar_icon(
         ICON_SMALL = 0
         ICON_BIG = 1
 
-        ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, hicon)
-        ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, hicon)
+        user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, hicon)
+        user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, hicon)
 
-        return hicon
+        return int(hicon)
     except Exception as exc:  # pragma: no cover - defensive logging only
         if logger:
             logger.debug("Failed to apply Windows taskbar icon: %s", exc)
@@ -87,11 +98,15 @@ def destroy_icon_handle(handle: Optional[int], logger=None) -> None:
     """
     Release a previously loaded icon handle to avoid GDI leaks.
     """
-    if sys.platform != "win32" or not handle:
+    if not _is_windows() or not handle:
         return
 
     try:  # pragma: no cover - Windows API
-        ctypes.windll.user32.DestroyIcon(handle)
+        windll = getattr(ctypes, "windll", None)
+        user32 = getattr(windll, "user32", None)
+        if user32 is None:
+            return
+        user32.DestroyIcon(handle)
     except Exception as exc:  # pragma: no cover - defensive logging only
         if logger:
             logger.debug("Failed to destroy icon handle: %s", exc)
@@ -105,12 +120,15 @@ def hide_console_window(logger=None) -> None:
     titled "python". Hiding it prevents the phantom window while still allowing developers
     to opt in by setting SILVER_SHOW_CONSOLE=1.
     """
-    if sys.platform != "win32":
+    if not _is_windows():
         return
 
     try:  # pragma: no cover - Windows API
-        user32 = ctypes.windll.user32
-        kernel32 = ctypes.windll.kernel32
+        windll = getattr(ctypes, "windll", None)
+        user32 = getattr(windll, "user32", None)
+        kernel32 = getattr(windll, "kernel32", None)
+        if user32 is None or kernel32 is None:
+            return
         SW_HIDE = 0
 
         hwnd = kernel32.GetConsoleWindow()

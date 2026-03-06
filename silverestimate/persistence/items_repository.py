@@ -15,7 +15,7 @@ class ItemsRepository:
     def __init__(self, db_manager: Any) -> None:
         self._db = db_manager
         self._logger = getattr(db_manager, "logger", logging.getLogger(__name__))
-        self._fallback_cache = {}
+        self._fallback_cache: dict[str, dict[str, Any]] = {}
 
     @property
     def _conn(self) -> Optional[sqlite3.Connection]:
@@ -64,6 +64,8 @@ class ItemsRepository:
                 return None
 
             normalized = self._normalize_row(row)
+            if normalized is None:
+                return None
             if cache_ctrl:
                 cache_ctrl.store(code, normalized)
             else:
@@ -327,4 +329,4 @@ class ItemsRepository:
         try:
             return dict(row)
         except Exception:
-            return row
+            return None

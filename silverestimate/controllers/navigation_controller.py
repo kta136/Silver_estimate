@@ -145,15 +145,14 @@ class NavigationController:
         view_group = QActionGroup(self._main_window)
         view_group.setExclusive(True)
 
-        view_estimate_action = QAction(
-            "&Estimate Entry", self._main_window, checkable=True
-        )
-        view_item_master_action = QAction(
-            "&Item Master", self._main_window, checkable=True
-        )
+        view_estimate_action = QAction("&Estimate Entry", self._main_window)
+        view_estimate_action.setCheckable(True)
+        view_item_master_action = QAction("&Item Master", self._main_window)
+        view_item_master_action.setCheckable(True)
         view_silver_bars_action = QAction(
-            "Open &Silver Bars Dialog", self._main_window, checkable=True
+            "Open &Silver Bars Dialog", self._main_window
         )
+        view_silver_bars_action.setCheckable(True)
 
         view_group.addAction(view_estimate_action)
         view_group.addAction(view_item_master_action)

@@ -62,24 +62,24 @@ class EstimateTableAdapter:
         table.blockSignals(True)
         previous_row = getattr(owner, "current_row", -1)
         try:
-            canonical_code = (item_data.get("code", "") or "").strip()  # type: ignore[arg-type]
+            canonical_code = str(item_data.get("code", "") or "").strip()
             display_code = canonical_code.upper() if canonical_code else ""
 
             table.set_cell_text(row_index, COL_CODE, display_code)
             table.set_cell_text(
                 row_index,
                 COL_ITEM_NAME,
-                str(item_data.get("name", "")),  # type: ignore[arg-type]
+                str(item_data.get("name", "")),
             )
             table.set_cell_text(
                 row_index,
                 COL_PURITY,
-                str(item_data.get("purity", 0.0)),  # type: ignore[arg-type]
+                str(item_data.get("purity", 0.0)),
             )
             table.set_cell_text(
                 row_index,
                 COL_WAGE_RATE,
-                str(item_data.get("wage_rate", 0.0)),  # type: ignore[arg-type]
+                str(item_data.get("wage_rate", 0.0)),
             )
 
             wage_type = self._normalize_wage_type(item_data.get("wage_type"))

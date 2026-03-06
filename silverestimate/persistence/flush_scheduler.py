@@ -5,9 +5,25 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Callable, Optional
+from typing import Callable, Optional, Protocol
 
 Callback = Optional[Callable[[], None]]
+
+
+class _TimerHandle(Protocol):
+    daemon: bool
+
+    def start(self) -> None: ...
+
+    def cancel(self) -> None: ...
+
+
+class _ThreadHandle(Protocol):
+    def start(self) -> None: ...
+
+    def join(self, timeout: float | None = None) -> None: ...
+
+    def is_alive(self) -> bool: ...
 
 
 class FlushScheduler:
@@ -23,8 +39,8 @@ class FlushScheduler:
         logger: Optional[logging.Logger] = None,
         on_queued_getter: Optional[Callable[[], Callback]] = None,
         on_done_getter: Optional[Callable[[], Callback]] = None,
-        timer_factory: Optional[Callable[[float, Callable[[], None]], object]] = None,
-        thread_factory: Optional[Callable[..., object]] = None,
+        timer_factory: Optional[Callable[[float, Callable[[], None]], _TimerHandle]] = None,
+        thread_factory: Optional[Callable[..., _ThreadHandle]] = None,
         time_func: Optional[Callable[[], float]] = None,
         sleep_func: Optional[Callable[[float], None]] = None,
     ) -> None:
@@ -37,8 +53,8 @@ class FlushScheduler:
         self._on_done_getter = on_done_getter or (lambda: None)
 
         self._lock = threading.Lock()
-        self._timer: Optional[object] = None
-        self._thread: Optional[object] = None
+        self._timer: Optional[_TimerHandle] = None
+        self._thread: Optional[_ThreadHandle] = None
         self._in_progress = False
         self._timer_factory = timer_factory or (
             lambda delay, callback: threading.Timer(delay, callback)
@@ -94,7 +110,7 @@ class FlushScheduler:
                 self._thread = thread
 
         with self._lock:
-            if self._timer and hasattr(self._timer, "cancel"):
+            if self._timer:
                 try:
                     self._timer.cancel()
                 except Exception:
@@ -116,12 +132,12 @@ class FlushScheduler:
             timer = self._timer
             thread = self._thread
             self._timer = None
-        if timer and hasattr(timer, "cancel"):
+        if timer:
             try:
                 timer.cancel()
             except Exception:
                 pass
-        if wait and thread and hasattr(thread, "is_alive") and thread.is_alive():
+        if wait and thread and thread.is_alive():
             thread.join(timeout=join_timeout)
             if thread.is_alive():
                 deadline = self._time_func() + poll_timeout

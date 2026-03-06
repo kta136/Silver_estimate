@@ -5,18 +5,17 @@ from typing import Any, Dict, List, Optional
 import pytest
 
 from silverestimate.infrastructure.app_constants import APP_TITLE
-from silverestimate.ui.main_window import MainWindow
 from silverestimate.ui.estimate_entry_logic.constants import (
     COL_CODE,
     COL_FINE_WT,
     COL_GROSS,
-    COL_ITEM_NAME,
     COL_NET_WT,
     COL_POLY,
     COL_PURITY,
     COL_WAGE_AMT,
     COL_WAGE_RATE,
 )
+from silverestimate.ui.main_window import MainWindow
 
 
 @dataclass

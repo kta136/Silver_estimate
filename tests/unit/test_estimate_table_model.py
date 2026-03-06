@@ -6,15 +6,10 @@ from PyQt5.QtCore import Qt
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.ui.estimate_entry_logic.constants import (
     COL_CODE,
-    COL_FINE_WT,
     COL_GROSS,
     COL_ITEM_NAME,
-    COL_NET_WT,
     COL_PIECES,
-    COL_POLY,
     COL_PURITY,
-    COL_WAGE_AMT,
-    COL_WAGE_RATE,
 )
 from silverestimate.ui.models.estimate_table_model import EstimateTableModel
 from silverestimate.ui.view_models.estimate_entry_view_model import (

@@ -27,6 +27,7 @@ class NumericDelegate(QStyledItemDelegate):
         editor.setProperty("modelIndex", index)
         col = index.column()
         locale = QLocale.system()
+        validator: QDoubleValidator | QIntValidator
 
         if col in [COL_GROSS, COL_POLY, COL_PURITY, COL_WAGE_RATE]:
             decimals = 3 if col in [COL_GROSS, COL_POLY] else 2

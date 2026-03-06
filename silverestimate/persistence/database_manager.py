@@ -149,6 +149,7 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
 
     def _connect_temp_db(self):
         """Connects sqlite3 to the temporary database file."""
+        assert self.temp_db_path is not None
         state = self._sqlite_runtime.connect(self.temp_db_path)
         self.conn = state.conn
         self.cursor = state.cursor

@@ -71,7 +71,7 @@ class SilverBarsRepository:
             self._logger.info(
                 "Created silver bar list %s (ID: %s).", list_identifier, list_id
             )
-            return list_id
+            return int(list_id) if list_id is not None else None
         except sqlite3.Error as exc:
             self._logger.error(
                 "DB error creating silver bar list: %s", exc, exc_info=True
@@ -130,7 +130,7 @@ class SilverBarsRepository:
                 (new_note, list_id),
             )
             conn.commit()
-            return cursor.rowcount > 0
+            return bool(int(cursor.rowcount) > 0)
         except sqlite3.Error as exc:
             self._logger.error(
                 "DB error updating list note for ID %s: %s", list_id, exc, exc_info=True
@@ -857,7 +857,8 @@ class SilverBarsRepository:
                 ),
             )
             conn.commit()
-            return cursor.lastrowid
+            bar_id = cursor.lastrowid
+            return int(bar_id) if bar_id is not None else None
         except sqlite3.Error as exc:
             self._logger.error(
                 "DB Error adding silver bar for estimate %s: %s",
@@ -884,7 +885,7 @@ class SilverBarsRepository:
                 (weight, purity, fine_weight, bar_id),
             )
             conn.commit()
-            return cursor.rowcount > 0
+            return bool(int(cursor.rowcount) > 0)
         except sqlite3.Error as exc:
             self._logger.error(
                 "DB Error updating silver bar %s: %s", bar_id, exc, exc_info=True

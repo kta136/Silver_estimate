@@ -88,7 +88,7 @@ class SavePayload:
     items: Sequence[SaveItem]
     regular_items: Sequence[SaveItem]
     return_items: Sequence[SaveItem]
-    totals: Mapping[str, float]
+    totals: Mapping[str, object]
 
 
 @dataclass(frozen=True)

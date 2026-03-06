@@ -265,19 +265,21 @@ class EstimateTableModel(QAbstractTableModel):
             The item flags
         """
         if not index.isValid():
-            return Qt.NoItemFlags
+            return Qt.ItemFlags(Qt.NoItemFlags)
 
         # Calculated columns are read-only
         col = index.column()
         if col in (COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT, COL_TYPE):
-            return Qt.ItemIsEnabled | Qt.ItemIsSelectable
+            return Qt.ItemFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
         if col == COL_PIECES:
             row_data = self.get_row(index.row())
             if row_data and row_data.wage_type != "PC":
-                return Qt.ItemIsEnabled | Qt.ItemIsSelectable
+                return Qt.ItemFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
 
         # All other columns are editable
-        return Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable
+        return Qt.ItemFlags(
+            Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable
+        )
 
     def set_row_wage_type(self, row_idx: int, wage_type: str) -> bool:
         """Update a row's wage type and refresh pieces editability."""

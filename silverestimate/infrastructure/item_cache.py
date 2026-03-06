@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
-from typing import Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 
 class ItemCacheController:
@@ -13,13 +13,13 @@ class ItemCacheController:
 
     def __init__(self, logger: Optional[logging.Logger] = None) -> None:
         self._logger = logger or logging.getLogger(__name__)
-        self._cache: Dict[str, object] = {}
+        self._cache: Dict[str, dict[str, Any]] = {}
         self._thread: Optional[threading.Thread] = None
         self._preloaded = False
         self._lock = threading.Lock()
 
     @property
-    def cache(self) -> Dict[str, object]:
+    def cache(self) -> Dict[str, dict[str, Any]]:
         return self._cache
 
     def get(self, code: str):
@@ -27,16 +27,21 @@ class ItemCacheController:
             return None
         return self._cache.get(code.upper())
 
-    def store(self, code: str, value) -> None:
+    def store(self, code: str, value: object) -> None:
         if not code:
             return
-        to_store = value
-        if value is not None and not isinstance(value, dict):
+        to_store: dict[str, Any] | None
+        if value is None:
+            to_store = None
+        elif isinstance(value, dict):
+            to_store = value
+        else:
             try:
-                to_store = dict(value)
+                to_store = dict(cast(Any, value))
             except Exception:
-                to_store = value
-        self._cache[code.upper()] = to_store
+                return
+        if to_store is not None:
+            self._cache[code.upper()] = to_store
 
     def invalidate(self, code: str) -> None:
         if not code:
@@ -53,7 +58,7 @@ class ItemCacheController:
             return
 
         def _worker() -> None:
-            local_cache = {}
+            local_cache: dict[str, dict[str, Any]] = {}
             conn = None
             try:
                 conn = sqlite3.connect(db_path)

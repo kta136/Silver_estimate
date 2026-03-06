@@ -2,7 +2,6 @@
 
 import pytest
 
-from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.ui.estimate_entry_components.estimate_table_view import (
     EstimateTableView,
 )

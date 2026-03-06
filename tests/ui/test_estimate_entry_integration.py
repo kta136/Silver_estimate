@@ -117,6 +117,18 @@ def _make_widget(db_manager):
     return widget
 
 
+def _begin_inline_edit(qtbot, widget, row: int, column: int) -> QLineEdit:
+    table = widget.item_table
+    table.setCurrentCell(row, column)
+    widget.current_row = row
+    widget.current_column = column
+    assert table.begin_cell_edit(row, column)
+    qtbot.waitUntil(lambda: table.findChild(QLineEdit) is not None, timeout=1000)
+    editor = table.findChild(QLineEdit)
+    assert editor is not None
+    return editor
+
+
 # ============================================================================
 # Program Startup Tests
 # ============================================================================
@@ -796,6 +808,11 @@ def test_revisiting_row_with_same_code_preserves_manual_overrides(qtbot, fake_db
         widget.deleteLater()
 
 
+# ============================================================================
+# Keyboard Editing Regression Tests
+# ============================================================================
+
+
 def test_unchanged_purity_commit_still_advances_cursor(qtbot, fake_db):
     """Committing unchanged purity should still advance to wage-rate column."""
     widget = _make_widget(fake_db)
@@ -842,15 +859,7 @@ def test_unchanged_code_enter_advances_to_gross_without_relookup(qtbot, fake_db)
         qtbot.waitUntil(lambda: len(lookup_calls) == 1, timeout=1000)
         initial_lookup_count = len(lookup_calls)
 
-        table.setCurrentCell(0, COL_CODE)
-        widget.current_row = 0
-        widget.current_column = COL_CODE
-        assert table.begin_cell_edit(0, COL_CODE)
-
-        qtbot.waitUntil(lambda: table.findChild(QLineEdit) is not None, timeout=1000)
-        editor = table.findChild(QLineEdit)
-        assert editor is not None
-
+        editor = _begin_inline_edit(qtbot, widget, 0, COL_CODE)
         QTest.keyClick(editor, Qt.Key_Return)
 
         qtbot.waitUntil(
@@ -860,6 +869,87 @@ def test_unchanged_code_enter_advances_to_gross_without_relookup(qtbot, fake_db)
             timeout=1000,
         )
         assert len(lookup_calls) == initial_lookup_count
+    finally:
+        widget.deleteLater()
+
+
+def test_unchanged_code_tab_advances_to_gross_without_relookup(qtbot, fake_db):
+    """Pressing Tab on an unchanged code should keep the same no-relookup behavior."""
+    widget = _make_widget(fake_db)
+    widget.show()
+    try:
+        lookup_calls = []
+
+        def _handle_item_code(row, code):
+            lookup_calls.append((row, code))
+            return False
+
+        widget.presenter.handle_item_code = _handle_item_code
+
+        table = widget.item_table
+        table.set_cell_text(0, COL_CODE, "ROW1")
+        qtbot.waitUntil(lambda: len(lookup_calls) == 1, timeout=1000)
+        initial_lookup_count = len(lookup_calls)
+
+        editor = _begin_inline_edit(qtbot, widget, 0, COL_CODE)
+        QTest.keyClick(editor, Qt.Key_Tab)
+
+        qtbot.waitUntil(
+            lambda: table.currentIndex().isValid()
+            and table.currentIndex().row() == 0
+            and table.currentIndex().column() == COL_GROSS,
+            timeout=1000,
+        )
+        assert len(lookup_calls) == initial_lookup_count
+    finally:
+        widget.deleteLater()
+
+
+def test_empty_gross_enter_commits_zero_and_advances_to_poly(qtbot, fake_db):
+    """Enter on an empty gross editor should still preserve row progression."""
+    widget = _make_widget(fake_db)
+    widget.show()
+    try:
+        widget.clear_all_rows()
+        widget.table_adapter.add_empty_row()
+        table = widget.item_table
+        table.set_cell_text(0, COL_CODE, "ROW1")
+
+        editor = _begin_inline_edit(qtbot, widget, 0, COL_GROSS)
+        editor.clear()
+        QTest.keyClick(editor, Qt.Key_Return)
+
+        qtbot.waitUntil(
+            lambda: table.currentIndex().isValid()
+            and table.currentIndex().row() == 0
+            and table.currentIndex().column() == COL_POLY,
+            timeout=1000,
+        )
+        assert table.get_cell_text(0, COL_GROSS) == "0.0"
+    finally:
+        widget.deleteLater()
+
+
+def test_empty_gross_backspace_moves_to_code_column(qtbot, fake_db):
+    """Backspace on an empty gross editor should navigate back to code."""
+    widget = _make_widget(fake_db)
+    widget.show()
+    try:
+        widget.clear_all_rows()
+        widget.table_adapter.add_empty_row()
+        table = widget.item_table
+        table.set_cell_text(0, COL_CODE, "ROW1")
+
+        editor = _begin_inline_edit(qtbot, widget, 0, COL_GROSS)
+        editor.clear()
+        QTest.keyClick(editor, Qt.Key_Backspace)
+
+        qtbot.waitUntil(
+            lambda: table.currentIndex().isValid()
+            and table.currentIndex().row() == 0
+            and table.currentIndex().column() == COL_CODE,
+            timeout=1000,
+        )
     finally:
         widget.deleteLater()
 

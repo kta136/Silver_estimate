@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from PyQt5 import sip
 from PyQt5.QtCore import Qt, QTimer
@@ -37,13 +37,33 @@ class EstimateEntryTableController(HostProxy):
             self._table_adapter = EstimateTableAdapter(self.host, self.item_table)
         return self._table_adapter
 
+    @staticmethod
+    def _qt_object_available(obj: Any) -> bool:
+        try:
+            return not sip.isdeleted(obj)
+        except TypeError:
+            return obj is not None
+        except RuntimeError:
+            return False
+
+    def _table_runtime_available(self) -> bool:
+        table = getattr(self, "item_table", None)
+        if not self._qt_object_available(self.host) or not self._qt_object_available(table):
+            return False
+        model = getattr(table, "_table_model", None)
+        return model is not None and self._qt_object_available(model)
+
     def populate_item_row(self, item_data):
         if self.current_row < 0:
             return
         self.populate_row(self.current_row, item_data)
 
     def add_empty_row(self):
+        if not self._table_runtime_available():
+            return
         self._get_table_adapter().add_empty_row()
+        if not self._table_runtime_available():
+            return
         if self._totals_incremental_is_active():
             try:
                 row_index = self.item_table.rowCount() - 1

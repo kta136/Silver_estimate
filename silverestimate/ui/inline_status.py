@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
+from PyQt5 import sip
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QLabel
 
@@ -25,6 +26,15 @@ class InlineStatusController:
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self.clear)
 
+    @staticmethod
+    def _qt_object_available(obj: Any) -> bool:
+        try:
+            return not sip.isdeleted(obj)
+        except TypeError:
+            return obj is not None
+        except RuntimeError:
+            return False
+
     def show(self, message: str, *, timeout: int = 3000, level: str = "info") -> None:
         label = self._label_getter()
         if label is None:
@@ -43,12 +53,23 @@ class InlineStatusController:
         except Exception:
             self._logger.debug("Could not update inline status label", exc_info=True)
 
-        self._timer.stop()
-        if isinstance(timeout, int) and timeout > 0:
-            self._timer.start(timeout)
+        if not self._qt_object_available(self._timer):
+            return
+
+        try:
+            self._timer.stop()
+            if isinstance(timeout, int) and timeout > 0:
+                self._timer.start(timeout)
+        except RuntimeError:
+            return
 
     def clear(self) -> None:
-        self._timer.stop()
+        if not self._qt_object_available(self._timer):
+            return
+        try:
+            self._timer.stop()
+        except RuntimeError:
+            return
         label = self._label_getter()
         if label is None:
             return

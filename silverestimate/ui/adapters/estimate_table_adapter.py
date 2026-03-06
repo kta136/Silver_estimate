@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import weakref
-from typing import Mapping
+from typing import Any, Mapping
 
 from PyQt5 import sip
 from PyQt5.QtCore import QTimer
@@ -39,6 +39,37 @@ class EstimateTableAdapter:
             if sip.isdeleted(owner):
                 return
             owner.focus_on_code_column(row)
+        except RuntimeError:
+            return
+
+    @staticmethod
+    def _qt_object_available(obj: Any) -> bool:
+        try:
+            return not sip.isdeleted(obj)
+        except TypeError:
+            return obj is not None
+        except RuntimeError:
+            return False
+
+    def _table_runtime_available(self) -> bool:
+        table = self._table
+        if not self._qt_object_available(table):
+            return False
+        model = getattr(table, "_table_model", None)
+        return model is not None and self._qt_object_available(model)
+
+    def _owner_runtime_available(self) -> bool:
+        return self._qt_object_available(self._owner)
+
+    def _runtime_available(self) -> bool:
+        return self._owner_runtime_available() and self._table_runtime_available()
+
+    def _safe_status(self, message: str, timeout: int) -> None:
+        owner = self._owner
+        if not self._owner_runtime_available():
+            return
+        try:
+            owner._status(message, timeout)
         except RuntimeError:
             return
 
@@ -108,8 +139,11 @@ class EstimateTableAdapter:
     def add_empty_row(self) -> None:
         table = self._table
         owner = self._owner
+        processing_cell_set = False
 
         try:
+            if not self._runtime_available():
+                return
             if table.rowCount() > 0:
                 last_row = table.rowCount() - 1
                 last_code = table.get_cell_text(last_row, COL_CODE).strip()
@@ -122,7 +156,10 @@ class EstimateTableAdapter:
                     return
 
             owner.processing_cell = True
+            processing_cell_set = True
             row = table.append_empty_row()
+            if row < 0:
+                return
             self._apply_mode_category(row)
 
             owner_ref = weakref.ref(owner)
@@ -130,11 +167,18 @@ class EstimateTableAdapter:
                 50,
                 lambda: self._safe_focus_owner_code(owner_ref, row),
             )
+        except RuntimeError:
+            if not self._runtime_available():
+                return
+            raise
         except Exception as exc:  # pragma: no cover
+            if not self._runtime_available():
+                return
             owner.logger.error("Error adding empty row: %s", exc, exc_info=True)
-            owner._status("Unable to add new row", 3500)
+            self._safe_status("Unable to add new row", 3500)
         finally:
-            owner.processing_cell = False
+            if processing_cell_set and self._owner_runtime_available():
+                owner.processing_cell = False
 
     def refresh_empty_row_type(self) -> None:
         table = self._table

@@ -146,6 +146,7 @@ class DatabaseLifecycleCoordinator:
         *,
         close_connection: CloseConnectionCallback,
         cleanup_temp_db: CleanupCallback,
+        preserve_plaintext_on_failure: bool = False,
     ) -> None:
         """Flush on shutdown, close the connection, and clean temp artifacts."""
         self._shutdown_scheduler()
@@ -184,10 +185,16 @@ class DatabaseLifecycleCoordinator:
         if encrypt_success:
             cleanup_temp_db(False)
         elif encryption_attempted:
-            self._logger.critical(
-                "Preserving temporary database file due to encryption failure."
-            )
-            cleanup_temp_db(True)
+            if preserve_plaintext_on_failure:
+                self._logger.critical(
+                    "Preserving temporary database file due to encryption failure."
+                )
+                cleanup_temp_db(True)
+            else:
+                self._logger.critical(
+                    "Plaintext temp-db recovery is disabled; deleting temporary database file."
+                )
+                cleanup_temp_db(False)
         else:
             cleanup_temp_db(False)
 

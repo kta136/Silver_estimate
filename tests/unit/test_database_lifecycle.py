@@ -149,7 +149,7 @@ def test_reencrypt_with_new_password_restores_old_key_on_failure(tmp_path):
     assert state["key"] == b"old-key"
 
 
-def test_close_preserves_temp_db_when_encryption_fails(tmp_path):
+def test_close_deletes_temp_db_when_encryption_fails_by_default(tmp_path):
     temp_db_path = tmp_path / "plain.sqlite"
     temp_db_path.write_bytes(b"payload")
     store = _StubEncryptedStore()
@@ -172,6 +172,36 @@ def test_close_preserves_temp_db_when_encryption_fails(tmp_path):
     coordinator.close(
         close_connection=lambda: close_calls.__setitem__("count", close_calls["count"] + 1),
         cleanup_temp_db=lambda preserve: cleanup_calls.append(preserve),
+    )
+
+    assert close_calls["count"] == 1
+    assert cleanup_calls == [False]
+
+
+def test_close_preserves_temp_db_when_encryption_fails_and_recovery_enabled(tmp_path):
+    temp_db_path = tmp_path / "plain.sqlite"
+    temp_db_path.write_bytes(b"payload")
+    store = _StubEncryptedStore()
+    store.encrypt_result = False
+    state = {"key": b"1" * 32}
+    close_calls = {"count": 0}
+    cleanup_calls = []
+
+    coordinator = DatabaseLifecycleCoordinator(
+        encrypted_store=store,
+        connection_getter=lambda: object(),
+        temp_db_path_getter=lambda: str(temp_db_path),
+        key_getter=lambda: state["key"],
+        key_setter=lambda value: state.__setitem__("key", value),
+        commit=lambda: True,
+        checkpoint=lambda: True,
+        logger=logging.getLogger("test.database_lifecycle"),
+    )
+
+    coordinator.close(
+        close_connection=lambda: close_calls.__setitem__("count", close_calls["count"] + 1),
+        cleanup_temp_db=lambda preserve: cleanup_calls.append(preserve),
+        preserve_plaintext_on_failure=True,
     )
 
     assert close_calls["count"] == 1

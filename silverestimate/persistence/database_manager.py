@@ -95,7 +95,8 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         # Ensure directory for encrypted DB exists
         os.makedirs(os.path.dirname(self.encrypted_db_path), exist_ok=True)
 
-        recovery_enabled = getattr(settings_module, "ENABLE_TEMP_DB_RECOVERY", True)
+        recovery_enabled = getattr(settings_module, "ENABLE_TEMP_DB_RECOVERY", False)
+        self._recovery_enabled = recovery_enabled
         self._temp_store = _TempDatabaseStore(
             logger=self.logger,
             store_metadata=recovery_enabled,
@@ -191,7 +192,7 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
     def _decrypt_db(self):
         """Decrypts the database file to the temporary path. Returns status."""
         return self._lifecycle.decrypt_current_temp(
-            on_error=lambda: self._cleanup_temp_db(keep_file=True)
+            on_error=lambda: self._cleanup_temp_db(keep_file=False)
         )
 
     def _cleanup_temp_db(self, keep_file=False):
@@ -275,6 +276,7 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         self._lifecycle.close(
             close_connection=self._close_connection,
             cleanup_temp_db=lambda preserve: self._cleanup_temp_db(keep_file=preserve),
+            preserve_plaintext_on_failure=self._recovery_enabled,
         )
 
     def flush_to_encrypted(self):

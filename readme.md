@@ -170,8 +170,9 @@ Recommended development commands with `uv`:
 ```bash
 uv sync --extra dev
 uv run python main.py
-uv run pytest -v
-uv run mypy silverestimate --config-file=pyproject.toml
+uv run nox -s pr
+uv run nox -s ci
+uv run nox -s advisory
 uv run pre-commit run --all-files
 ```
 
@@ -180,6 +181,10 @@ uv run pre-commit run --all-files
 - Tests live under `tests/` and use pytest (with `pytest-qt` for UI hooks).
 - Local smoke command: `pytest -v tests/test_security.py tests/services/test_auth_service.py`
 - Full local run: `pytest -v`
+- Shared validation entrypoints:
+  - `uv run nox -s pr` for the required PR gate set
+  - `uv run nox -s ci` for the required main-branch gate set
+  - `uv run nox -s advisory` for advisory `pylint`, `bandit`, and `safety`
 - CI enforces coverage thresholds using explicit pytest coverage flags in workflow commands.
 - To iterate quickly on the application builder branch, run `pytest tests/unit/test_application_builder.py`.
 - Ruff enforces linting and import ordering in CI.

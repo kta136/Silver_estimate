@@ -8,7 +8,9 @@ from PyQt5.QtCore import QSettings
 
 from .app_constants import LEGACY_SETTINGS_ORG, SETTINGS_APP, SETTINGS_ORG
 
-ENABLE_TEMP_DB_RECOVERY = True
+# Plaintext temp-db recovery is opt-in. The default favors wiping temporary
+# plaintext SQLite files over preserving them for manual recovery.
+ENABLE_TEMP_DB_RECOVERY = False
 
 
 class SettingsReader(Protocol):

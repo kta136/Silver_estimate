@@ -15,6 +15,7 @@ from silverestimate.infrastructure.settings import (
     SettingsStore,
     get_app_settings,
 )
+from silverestimate.persistence.temp_database_store import TempDatabaseStore
 from silverestimate.security import encryption as crypto_utils
 
 RateValue = int | float
@@ -93,7 +94,10 @@ class EncryptedDatabaseStore:
         finally:
             try:
                 if snapshot_path and os.path.exists(snapshot_path):
-                    os.remove(snapshot_path)
+                    TempDatabaseStore.secure_delete_path(
+                        snapshot_path,
+                        logger=self._logger,
+                    )
             except Exception:
                 pass
 
@@ -258,7 +262,10 @@ class EncryptedDatabaseStore:
             if logger:
                 logger.info("Recovered and encrypted temp DB into encrypted store.")
             try:
-                os.remove(plain_temp_path)
+                TempDatabaseStore.secure_delete_path(
+                    plain_temp_path,
+                    logger=logger,
+                )
             except Exception:
                 pass
             try:

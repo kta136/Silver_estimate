@@ -26,6 +26,7 @@ class TempDatabaseStore:
     ) -> None:
         self._logger = logger or logging.getLogger(__name__)
         self._path: Optional[Path] = None
+        self._directory: Optional[Path] = None
         self._registered = False
         self._store_metadata = store_metadata
         self._settings_factory = settings_factory
@@ -37,9 +38,12 @@ class TempDatabaseStore:
     def create(self, suffix: str = ".sqlite") -> Path:
         if self._path is not None:
             raise RuntimeError("Temporary database already initialised.")
-        handle = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-        handle.close()
-        self._path = Path(handle.name)
+        self._directory = Path(tempfile.mkdtemp(prefix="silverestimate-db-"))
+        self._restrict_path_permissions(self._directory, is_dir=True)
+        self._path = self._directory / f"session{suffix}"
+        fd = os.open(self._path, os.O_CREAT | os.O_EXCL | os.O_RDWR, 0o600)
+        os.close(fd)
+        self._restrict_path_permissions(self._path, is_dir=False)
         return self._path
 
     def register_for_recovery(self) -> None:
@@ -57,21 +61,31 @@ class TempDatabaseStore:
         """Securely delete the temp file and clear recovery breadcrumbs."""
         if not preserve:
             self._secure_unlink()
+            self._remove_temp_dir()
             self._path = None
+            self._directory = None
             self._registered = False
             self._clear_settings_entry()
         elif self._store_metadata and self._path is not None and not self._registered:
             self.register_for_recovery()
 
-    def _secure_unlink(self) -> None:
-        if self._path is None or not self._path.exists():
-            self._clear_settings_entry()
+    @classmethod
+    def secure_delete_path(
+        cls,
+        path: str | Path | None,
+        *,
+        logger: Optional[logging.Logger] = None,
+    ) -> None:
+        target = Path(path) if path is not None else None
+        if target is None or not target.exists():
             return
+
+        active_logger = logger or logging.getLogger(__name__)
         try:
-            with open(self._path, "r+b", buffering=0) as handle:
+            with open(target, "r+b", buffering=0) as handle:
                 length = handle.seek(0, os.SEEK_END)
                 handle.seek(0)
-                chunk = b"\x00" * self._WIPE_CHUNK_SIZE
+                chunk = b"\x00" * cls._WIPE_CHUNK_SIZE
                 remaining = length
                 while remaining > 0:
                     to_write = chunk if remaining >= len(chunk) else b"\x00" * remaining
@@ -82,20 +96,41 @@ class TempDatabaseStore:
                     os.fsync(handle.fileno())
                 except Exception:
                     pass
-            os.remove(self._path)
-            self._logger.debug(
-                "Temporary database file securely deleted: %s", self._path
-            )
+            os.remove(target)
+            active_logger.debug("Securely deleted temporary file: %s", target)
         except Exception as exc:
-            self._logger.warning(
-                "Could not securely delete temporary DB '%s': %s", self._path, exc
+            active_logger.warning(
+                "Could not securely delete temporary file '%s': %s", target, exc
             )
             try:
-                os.remove(self._path)
+                os.remove(target)
             except Exception:
                 pass
+
+    def _secure_unlink(self) -> None:
+        if self._path is None or not self._path.exists():
+            self._clear_settings_entry()
+            return
+        try:
+            self.secure_delete_path(self._path, logger=self._logger)
         finally:
             self._clear_settings_entry()
+
+    @staticmethod
+    def _restrict_path_permissions(path: Path, *, is_dir: bool) -> None:
+        mode = 0o700 if is_dir else 0o600
+        try:
+            os.chmod(path, mode)
+        except Exception:
+            pass
+
+    def _remove_temp_dir(self) -> None:
+        if self._directory is None:
+            return
+        try:
+            self._directory.rmdir()
+        except Exception:
+            pass
 
     def _clear_settings_entry(self) -> None:
         if not self._store_metadata or not self._registered:

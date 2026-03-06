@@ -44,6 +44,8 @@ def test_create_allocates_file(temp_store_factory):
     store = factory()
     path = store.create()
     assert path.exists()
+    assert path.name == "session.sqlite"
+    assert "silverestimate-db-" in path.parent.name
     assert entries == {}
 
 

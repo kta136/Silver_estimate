@@ -96,6 +96,8 @@ class EstimateEntryTableController(HostProxy):
         start = time.perf_counter()
         if self._is_continuous_column_autofit_enabled():
             self._schedule_columns_autofit(columns=[column])
+        else:
+            self._ensure_column_can_fit_content(column)
         self.handle_cell_changed(row, column)
         self._log_perf_metric(
             "estimate_entry.cell_edit",

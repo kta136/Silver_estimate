@@ -7,6 +7,8 @@ from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QComboBox,
+    QFrame,
+    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -20,6 +22,7 @@ from PyQt5.QtWidgets import (
 
 from silverestimate.domain.item_validation import ItemValidationError, validate_item
 from silverestimate.ui.models import ItemMasterTableModel
+from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
 
 
 class ItemMasterWidget(QWidget):
@@ -50,80 +53,116 @@ class ItemMasterWidget(QWidget):
 
     def init_ui(self):
         """Initialize the user interface."""
+        self.setObjectName("ItemMasterWidget")
+        self.setStyleSheet(
+            build_management_screen_stylesheet(
+                root_selector="QWidget#ItemMasterWidget",
+                card_names=[
+                    "ItemMasterHeaderCard",
+                    "ItemMasterFormCard",
+                    "ItemMasterSearchCard",
+                ],
+                title_label="ItemMasterTitleLabel",
+                subtitle_label="ItemMasterSubtitleLabel",
+                field_label="ItemMasterFieldLabel",
+                primary_button="ItemMasterPrimaryButton",
+                secondary_button="ItemMasterSecondaryButton",
+                danger_button="ItemMasterDangerButton",
+                input_selectors=["QLineEdit", "QComboBox"],
+                include_table=True,
+            )
+        )
+
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
+
+        header_card = QFrame(self)
+        header_card.setObjectName("ItemMasterHeaderCard")
+        header_layout = QVBoxLayout(header_card)
+        header_layout.setContentsMargins(12, 12, 12, 12)
+        header_layout.setSpacing(2)
 
         header_label = QLabel("Item Master")
-        header_label.setStyleSheet("font-size: 16pt; font-weight: bold;")
-        layout.addWidget(header_label)
+        header_label.setObjectName("ItemMasterTitleLabel")
+        header_layout.addWidget(header_label)
 
-        form_layout = QHBoxLayout()
+        subtitle_label = QLabel("Maintain catalog codes, purity defaults, and wage settings.")
+        subtitle_label.setObjectName("ItemMasterSubtitleLabel")
+        header_layout.addWidget(subtitle_label)
+        layout.addWidget(header_card)
 
-        form_layout.addWidget(QLabel("Code:"))
+        form_card = QFrame(self)
+        form_card.setObjectName("ItemMasterFormCard")
+        form_layout = QGridLayout(form_card)
+        form_layout.setContentsMargins(12, 12, 12, 12)
+        form_layout.setHorizontalSpacing(10)
+        form_layout.setVerticalSpacing(6)
+
+        code_label = QLabel("Code")
+        code_label.setObjectName("ItemMasterFieldLabel")
+        form_layout.addWidget(code_label, 0, 0)
         self.code_edit = QLineEdit()
         self.code_edit.setMaximumWidth(100)
         self.code_edit.setToolTip(
             "Unique code for the item (e.g., CH001, SB999). Cannot be changed after adding."
         )
-        form_layout.addWidget(self.code_edit)
+        form_layout.addWidget(self.code_edit, 1, 0)
 
-        form_layout.addWidget(QLabel("Name:"))
+        name_label = QLabel("Name")
+        name_label.setObjectName("ItemMasterFieldLabel")
+        form_layout.addWidget(name_label, 0, 1)
         self.name_edit = QLineEdit()
         self.name_edit.setMinimumWidth(200)
         self.name_edit.setToolTip("Descriptive name of the item.")
-        form_layout.addWidget(self.name_edit)
+        form_layout.addWidget(self.name_edit, 1, 1)
 
-        # --- Purity: Replaced QDoubleSpinBox with QLineEdit + Validator ---
-        form_layout.addWidget(QLabel("Purity (%):"))
-        self.purity_edit = QLineEdit()  # Changed from spin box
-        self.purity_edit.setMaximumWidth(80)  # Set a reasonable width
-        self.purity_edit.setToolTip(
-            "Default silver purity percentage."
-        )  # Updated tooltip
-        # Apply validator with realistic purity range.
+        purity_label = QLabel("Purity (%)")
+        purity_label.setObjectName("ItemMasterFieldLabel")
+        form_layout.addWidget(purity_label, 0, 2)
+        self.purity_edit = QLineEdit()
+        self.purity_edit.setMaximumWidth(90)
+        self.purity_edit.setToolTip("Default silver purity percentage.")
         purity_validator = QDoubleValidator(0.00, 100.00, 2, self.purity_edit)
         purity_validator.setNotation(QDoubleValidator.StandardNotation)
-        purity_validator.setLocale(
-            QLocale.system()
-        )  # Use system locale for decimal separator
+        purity_validator.setLocale(QLocale.system())
         self.purity_edit.setValidator(purity_validator)
-        form_layout.addWidget(self.purity_edit)
-        # --------------------------------------------------------------------
+        form_layout.addWidget(self.purity_edit, 1, 2)
 
-        form_layout.addWidget(QLabel("Wage Type:"))
+        wage_type_label = QLabel("Wage Type")
+        wage_type_label.setObjectName("ItemMasterFieldLabel")
+        form_layout.addWidget(wage_type_label, 0, 3)
         self.wage_type_combo = QComboBox()
         self.wage_type_combo.addItems(["PC", "WT"])
         self.wage_type_combo.setToolTip(
             "Select wage calculation method: PC (Per Piece) or WT (Per Weight/Gram)."
         )
-        form_layout.addWidget(self.wage_type_combo)
+        form_layout.addWidget(self.wage_type_combo, 1, 3)
 
-        # --- Wage Rate: Replaced QDoubleSpinBox with QLineEdit + Validator ---
-        form_layout.addWidget(QLabel("Wage Rate:"))
-        self.wage_rate_edit = QLineEdit()  # Changed from spin box
-        self.wage_rate_edit.setMaximumWidth(100)  # Set a reasonable width
+        wage_rate_label = QLabel("Wage Rate")
+        wage_rate_label.setObjectName("ItemMasterFieldLabel")
+        form_layout.addWidget(wage_rate_label, 0, 4)
+        self.wage_rate_edit = QLineEdit()
+        self.wage_rate_edit.setMaximumWidth(110)
         self.wage_rate_edit.setToolTip(
             "Wage rate corresponding to the selected Wage Type."
         )
-        # Apply Validator
-        rate_validator = QDoubleValidator(
-            0.00, 100000.00, 2, self.wage_rate_edit
-        )  # Range 0+, 2 decimals
+        rate_validator = QDoubleValidator(0.00, 100000.00, 2, self.wage_rate_edit)
         rate_validator.setNotation(QDoubleValidator.StandardNotation)
-        rate_validator.setLocale(QLocale.system())  # Use system locale
+        rate_validator.setLocale(QLocale.system())
         self.wage_rate_edit.setValidator(rate_validator)
-        form_layout.addWidget(self.wage_rate_edit)
-        # --------------------------------------------------------------------
-
-        form_layout.addStretch()
-        layout.addLayout(form_layout)
+        form_layout.addWidget(self.wage_rate_edit, 1, 4)
 
         button_layout = QHBoxLayout()
+        button_layout.setSpacing(8)
         self.add_button = QPushButton("Add New Item")
+        self.add_button.setObjectName("ItemMasterPrimaryButton")
         self.add_button.setToolTip("Add the details entered above as a new item.")
         self.add_button.clicked.connect(self.add_item)
         button_layout.addWidget(self.add_button)
 
         self.update_button = QPushButton("Update Selected")
+        self.update_button.setObjectName("ItemMasterSecondaryButton")
         self.update_button.setToolTip(
             "Update the currently selected item in the table with the details entered above."
         )
@@ -132,6 +171,7 @@ class ItemMasterWidget(QWidget):
         button_layout.addWidget(self.update_button)
 
         self.delete_button = QPushButton("Delete Selected")
+        self.delete_button.setObjectName("ItemMasterDangerButton")
         self.delete_button.setToolTip(
             "Delete the currently selected item from the table (use with caution!)."
         )
@@ -140,6 +180,7 @@ class ItemMasterWidget(QWidget):
         button_layout.addWidget(self.delete_button)
 
         self.clear_button = QPushButton("Clear Form")
+        self.clear_button.setObjectName("ItemMasterSecondaryButton")
         self.clear_button.setToolTip(
             "Clear the input fields above and deselect the table."
         )
@@ -147,16 +188,24 @@ class ItemMasterWidget(QWidget):
         button_layout.addWidget(self.clear_button)
 
         button_layout.addStretch()
-        layout.addLayout(button_layout)
+        form_layout.addLayout(button_layout, 2, 0, 1, 5)
+        layout.addWidget(form_card)
 
-        search_layout = QHBoxLayout()
-        search_layout.addWidget(QLabel("Search Items:"))
+        search_card = QFrame(self)
+        search_card.setObjectName("ItemMasterSearchCard")
+        search_layout = QHBoxLayout(search_card)
+        search_layout.setContentsMargins(12, 10, 12, 10)
+        search_layout.setSpacing(8)
+
+        search_label = QLabel("Search")
+        search_label.setObjectName("ItemMasterFieldLabel")
+        search_layout.addWidget(search_label)
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText("Search by code or name...")
         self.search_edit.setToolTip("Type here to filter the item list below.")
         self.search_edit.textChanged.connect(self._schedule_search)
         search_layout.addWidget(self.search_edit)
-        layout.addLayout(search_layout)
+        layout.addWidget(search_card)
 
         self.items_table = QTableView(self)
         self.items_model = ItemMasterTableModel(self.items_table)

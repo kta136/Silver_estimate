@@ -7,6 +7,8 @@ from PyQt5.QtWidgets import (
     QAbstractItemView,
     QDateEdit,
     QDialog,
+    QFrame,
+    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -20,6 +22,7 @@ from PyQt5.QtWidgets import (
 from silverestimate.ui.models import EstimateHistoryRow, EstimateHistoryTableModel
 
 from .print_manager import PrintManager
+from .shared_screen_theme import build_management_screen_stylesheet
 
 
 class EstimateHistoryDialog(QDialog):
@@ -42,45 +45,86 @@ class EstimateHistoryDialog(QDialog):
         self.setWindowTitle("Estimate History")
         self.setMinimumWidth(1000)
         self.setMinimumHeight(600)
+        self.setObjectName("EstimateHistoryDialog")
+        self.setStyleSheet(
+            build_management_screen_stylesheet(
+                root_selector="QDialog#EstimateHistoryDialog",
+                card_names=[
+                    "HistoryHeaderCard",
+                    "HistoryFilterCard",
+                    "HistoryActionCard",
+                ],
+                title_label="HistoryTitleLabel",
+                subtitle_label="HistorySubtitleLabel",
+                field_label="HistoryFieldLabel",
+                primary_button="HistoryPrimaryButton",
+                secondary_button="HistorySecondaryButton",
+                danger_button="HistoryDangerButton",
+                include_table=True,
+            )
+        )
 
         # Main layout
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
 
-        # Header
+        header_card = QFrame(self)
+        header_card.setObjectName("HistoryHeaderCard")
+        header_layout = QVBoxLayout(header_card)
+        header_layout.setContentsMargins(12, 12, 12, 12)
+        header_layout.setSpacing(2)
+
         header_label = QLabel("Estimate History")
-        header_label.setStyleSheet("font-size: 16pt; font-weight: bold;")
-        layout.addWidget(header_label)
+        header_label.setObjectName("HistoryTitleLabel")
+        header_layout.addWidget(header_label)
 
-        # Search filters
-        filter_layout = QHBoxLayout()
+        subtitle_label = QLabel("Search, reopen, print, or delete saved estimates.")
+        subtitle_label.setObjectName("HistorySubtitleLabel")
+        header_layout.addWidget(subtitle_label)
+        layout.addWidget(header_card)
 
-        # Date range filter
-        filter_layout.addWidget(QLabel("From:"))
+        filter_card = QFrame(self)
+        filter_card.setObjectName("HistoryFilterCard")
+        filter_grid = QGridLayout(filter_card)
+        filter_grid.setContentsMargins(12, 12, 12, 12)
+        filter_grid.setHorizontalSpacing(10)
+        filter_grid.setVerticalSpacing(6)
+
+        from_label = QLabel("From")
+        from_label.setObjectName("HistoryFieldLabel")
+        filter_grid.addWidget(from_label, 0, 0)
         self.date_from = QDateEdit()
         self.date_from.setCalendarPopup(True)
         first_estimate_date = self._resolve_first_estimate_date()
         self.date_from.setDate(first_estimate_date)
-        filter_layout.addWidget(self.date_from)
+        self.date_from.setMaximumWidth(130)
+        filter_grid.addWidget(self.date_from, 1, 0)
 
-        filter_layout.addWidget(QLabel("To:"))
+        to_label = QLabel("To")
+        to_label.setObjectName("HistoryFieldLabel")
+        filter_grid.addWidget(to_label, 0, 1)
         self.date_to = QDateEdit()
         self.date_to.setCalendarPopup(True)
         self.date_to.setDate(QDate.currentDate())
-        filter_layout.addWidget(self.date_to)
+        self.date_to.setMaximumWidth(130)
+        filter_grid.addWidget(self.date_to, 1, 1)
 
-        # Voucher search
-        filter_layout.addWidget(QLabel("Voucher No:"))
+        voucher_label = QLabel("Voucher No")
+        voucher_label.setObjectName("HistoryFieldLabel")
+        filter_grid.addWidget(voucher_label, 0, 2)
         self.voucher_search = QLineEdit()
-        self.voucher_search.setMaximumWidth(150)
-        filter_layout.addWidget(self.voucher_search)
+        self.voucher_search.setPlaceholderText("Search voucher...")
+        self.voucher_search.setMaximumWidth(180)
+        filter_grid.addWidget(self.voucher_search, 1, 2)
 
-        # Search button
         self.search_button = QPushButton("Search")
+        self.search_button.setObjectName("HistoryPrimaryButton")
         self.search_button.clicked.connect(self.load_estimates)
-        filter_layout.addWidget(self.search_button)
+        filter_grid.addWidget(self.search_button, 1, 3)
+        filter_grid.setColumnStretch(4, 1)
 
-        # Add filters to main layout
-        layout.addLayout(filter_layout)
+        layout.addWidget(filter_card)
 
         # Estimates table
         self.estimates_table = QTableView(self)
@@ -106,35 +150,44 @@ class EstimateHistoryDialog(QDialog):
         self.estimates_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.estimates_table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.estimates_table.setSortingEnabled(True)
+        self.estimates_table.setAlternatingRowColors(True)
+        self.estimates_table.verticalHeader().setVisible(False)
         self.estimates_table.doubleClicked.connect(lambda *_: self.accept())
 
         layout.addWidget(self.estimates_table)
 
-        # Buttons
-        button_layout = QHBoxLayout()
+        actions_card = QFrame(self)
+        actions_card.setObjectName("HistoryActionCard")
+        button_layout = QHBoxLayout(actions_card)
+        button_layout.setContentsMargins(12, 10, 12, 10)
+        button_layout.setSpacing(8)
 
         self.open_button = QPushButton("Open Selected")
+        self.open_button.setObjectName("HistoryPrimaryButton")
         self.open_button.clicked.connect(self.accept)
         button_layout.addWidget(self.open_button)
 
         self.print_button = QPushButton("Print Selected")
+        self.print_button.setObjectName("HistorySecondaryButton")
         self.print_button.clicked.connect(self.print_estimate)
         button_layout.addWidget(self.print_button)
 
-        self.delete_button = QPushButton("Delete Selected")  # New button
+        self.delete_button = QPushButton("Delete Selected")
+        self.delete_button.setObjectName("HistoryDangerButton")
         self.delete_button.setToolTip("Permanently delete the selected estimate")
         self.delete_button.clicked.connect(
             self.delete_selected_estimate
-        )  # Connect to new handler
+        )
         button_layout.addWidget(self.delete_button)
 
-        button_layout.addStretch(1)  # Add stretch before close
+        button_layout.addStretch(1)
 
         self.close_button = QPushButton("Close")
+        self.close_button.setObjectName("HistorySecondaryButton")
         self.close_button.clicked.connect(self.reject)
         button_layout.addWidget(self.close_button)
 
-        layout.addLayout(button_layout)
+        layout.addWidget(actions_card)
 
     def _resolve_first_estimate_date(self):
         """Resolve the earliest estimate date, falling back to today."""

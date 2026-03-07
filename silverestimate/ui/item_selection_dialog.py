@@ -19,6 +19,7 @@ from PyQt5.QtWidgets import (
 )
 
 from silverestimate.ui.models import ItemSelectionRecord, ItemSelectionTableModel
+from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
 
 
 class ItemSelectionDialog(QDialog):
@@ -46,31 +47,53 @@ class ItemSelectionDialog(QDialog):
         self.setMinimumSize(780, 460)
         self.resize(860, 520)
         self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
+        self.setObjectName("ItemSelectionDialog")
+        self.setStyleSheet(
+            build_management_screen_stylesheet(
+                root_selector="QDialog#ItemSelectionDialog",
+                card_names=["ItemSelectionHeader", "ItemSelectionDetails"],
+                title_label="ItemSelectionTitleLabel",
+                subtitle_label="ItemSelectionSubtitleLabel",
+                field_label="ItemSelectionFieldLabel",
+                primary_button="ItemSelectionPrimaryButton",
+                secondary_button="ItemSelectionSecondaryButton",
+                input_selectors=["QLineEdit"],
+                include_table=True,
+                extra_rules="""
+                QLabel#ItemSelectionBodyLabel {
+                    color: #475569;
+                    font-size: 9pt;
+                }
+                QLabel#ItemSelectionMutedLabel {
+                    color: #64748b;
+                    font-size: 9pt;
+                }
+                QLabel#ItemSelectionEmptyLabel {
+                    color: #64748b;
+                    font-style: italic;
+                }
+                """,
+            )
+        )
 
         root = QVBoxLayout(self)
         root.setSpacing(10)
+        root.setContentsMargins(12, 12, 12, 12)
 
         header_band = QFrame()
         header_band.setObjectName("ItemSelectionHeader")
-        header_band.setStyleSheet(
-            "QFrame#ItemSelectionHeader {"
-            "background: palette(base);"
-            "border: 1px solid palette(midlight);"
-            "border-radius: 6px;"
-            "padding: 4px;"
-            "}"
-        )
         header_layout = QVBoxLayout(header_band)
         header_layout.setContentsMargins(10, 8, 10, 8)
         header_layout.setSpacing(2)
 
         title = QLabel("Item Code Not Found")
-        title.setStyleSheet("font-weight: 600; font-size: 13px;")
+        title.setObjectName("ItemSelectionTitleLabel")
         header_layout.addWidget(title)
 
         self.subtitle_label = QLabel(
             f"Code '{self.search_term}' was not found. Select the closest item."
         )
+        self.subtitle_label.setObjectName("ItemSelectionSubtitleLabel")
         self.subtitle_label.setWordWrap(True)
         header_layout.addWidget(self.subtitle_label)
         root.addWidget(header_band)
@@ -78,7 +101,9 @@ class ItemSelectionDialog(QDialog):
         search_layout = QHBoxLayout()
         search_layout.setSpacing(6)
 
-        search_layout.addWidget(QLabel("Search:"))
+        search_label = QLabel("Search")
+        search_label.setObjectName("ItemSelectionFieldLabel")
+        search_layout.addWidget(search_label)
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText("Try code prefix or item name")
         self.search_edit.textChanged.connect(self._schedule_filter)
@@ -87,10 +112,12 @@ class ItemSelectionDialog(QDialog):
         search_layout.addWidget(self.search_edit, 1)
 
         self.clear_search_button = QPushButton("Clear")
+        self.clear_search_button.setObjectName("ItemSelectionSecondaryButton")
         self.clear_search_button.clicked.connect(self._clear_search)
         search_layout.addWidget(self.clear_search_button)
 
         self.result_count_label = QLabel("0 matches")
+        self.result_count_label.setObjectName("ItemSelectionMutedLabel")
         self.result_count_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.result_count_label.setMinimumWidth(120)
         search_layout.addWidget(self.result_count_label)
@@ -127,45 +154,48 @@ class ItemSelectionDialog(QDialog):
 
         details_card = QFrame()
         details_card.setObjectName("ItemSelectionDetails")
-        details_card.setStyleSheet(
-            "QFrame#ItemSelectionDetails {"
-            "border: 1px solid palette(midlight);"
-            "border-radius: 6px;"
-            "background: palette(base);"
-            "}"
-        )
         details_card.setMinimumWidth(240)
         details_layout = QVBoxLayout(details_card)
         details_layout.setContentsMargins(10, 10, 10, 10)
         details_layout.setSpacing(8)
 
         details_title = QLabel("Selected Item")
-        details_title.setStyleSheet("font-weight: 600;")
+        details_title.setObjectName("ItemSelectionFieldLabel")
         details_layout.addWidget(details_title)
 
         grid = QGridLayout()
         grid.setHorizontalSpacing(10)
         grid.setVerticalSpacing(6)
-        grid.addWidget(QLabel("Code"), 0, 0)
+        code_label = QLabel("Code")
+        code_label.setObjectName("ItemSelectionFieldLabel")
+        grid.addWidget(code_label, 0, 0)
         self.detail_code = QLabel("-")
         self.detail_code.setTextInteractionFlags(Qt.TextSelectableByMouse)
         grid.addWidget(self.detail_code, 0, 1)
 
-        grid.addWidget(QLabel("Name"), 1, 0)
+        name_label = QLabel("Name")
+        name_label.setObjectName("ItemSelectionFieldLabel")
+        grid.addWidget(name_label, 1, 0)
         self.detail_name = QLabel("-")
         self.detail_name.setWordWrap(True)
         self.detail_name.setTextInteractionFlags(Qt.TextSelectableByMouse)
         grid.addWidget(self.detail_name, 1, 1)
 
-        grid.addWidget(QLabel("Purity"), 2, 0)
+        purity_label = QLabel("Purity")
+        purity_label.setObjectName("ItemSelectionFieldLabel")
+        grid.addWidget(purity_label, 2, 0)
         self.detail_purity = QLabel("-")
         grid.addWidget(self.detail_purity, 2, 1)
 
-        grid.addWidget(QLabel("Wage Type"), 3, 0)
+        type_label = QLabel("Wage Type")
+        type_label.setObjectName("ItemSelectionFieldLabel")
+        grid.addWidget(type_label, 3, 0)
         self.detail_wage_type = QLabel("-")
         grid.addWidget(self.detail_wage_type, 3, 1)
 
-        grid.addWidget(QLabel("Wage Rate"), 4, 0)
+        rate_label = QLabel("Wage Rate")
+        rate_label.setObjectName("ItemSelectionFieldLabel")
+        grid.addWidget(rate_label, 4, 0)
         self.detail_wage_rate = QLabel("-")
         grid.addWidget(self.detail_wage_rate, 4, 1)
 
@@ -179,21 +209,23 @@ class ItemSelectionDialog(QDialog):
             "No matches found. Try fewer letters or check code spelling."
         )
         self.empty_label.setAlignment(Qt.AlignCenter)
-        self.empty_label.setStyleSheet("color: #666; font-style: italic;")
+        self.empty_label.setObjectName("ItemSelectionEmptyLabel")
         self.empty_label.hide()
         root.addWidget(self.empty_label)
 
         footer = QHBoxLayout()
         self.hint_label = QLabel("Enter: Select  Esc: Cancel  Ctrl+F: Search")
-        self.hint_label.setStyleSheet("color: #666;")
+        self.hint_label.setObjectName("ItemSelectionMutedLabel")
         footer.addWidget(self.hint_label)
         footer.addStretch(1)
 
         self.select_button = QPushButton("Select")
+        self.select_button.setObjectName("ItemSelectionPrimaryButton")
         self.select_button.clicked.connect(self._accept_if_selected)
         footer.addWidget(self.select_button)
 
         cancel_button = QPushButton("Cancel")
+        cancel_button.setObjectName("ItemSelectionSecondaryButton")
         cancel_button.clicked.connect(self.reject)
         footer.addWidget(cancel_button)
         root.addLayout(footer)

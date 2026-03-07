@@ -23,6 +23,7 @@ from PyQt5.QtWidgets import (
 
 from silverestimate.services.item_import_parser import should_include_line
 from silverestimate.ui.models import ItemImportPreviewRow, ItemImportPreviewTableModel
+from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
 
 
 class ItemImportDialog(QDialog):
@@ -40,19 +41,86 @@ class ItemImportDialog(QDialog):
         self.setWindowTitle("Import Item List")
         self.setMinimumWidth(600)
         self.setMinimumHeight(600)
+        self.setObjectName("ItemImportDialog")
+        self.setStyleSheet(
+            build_management_screen_stylesheet(
+                root_selector="QDialog#ItemImportDialog",
+                card_names=["ItemImportHeaderCard"],
+                title_label="ItemImportTitleLabel",
+                subtitle_label="ItemImportSubtitleLabel",
+                field_label="ItemImportFieldLabel",
+                primary_button="ItemImportPrimaryButton",
+                secondary_button="ItemImportSecondaryButton",
+                input_selectors=["QLineEdit", "QComboBox", "QSpinBox"],
+                include_table=True,
+                extra_rules="""
+                QGroupBox {
+                    background-color: #ffffff;
+                    border: 1px solid #d8e1ec;
+                    border-radius: 12px;
+                    color: #0f172a;
+                    font-weight: 700;
+                    margin-top: 12px;
+                    padding: 12px;
+                }
+                QGroupBox::title {
+                    subcontrol-origin: margin;
+                    left: 10px;
+                    padding: 0 4px;
+                }
+                QProgressBar {
+                    background-color: #e2e8f0;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 8px;
+                    color: #0f172a;
+                    min-height: 18px;
+                    text-align: center;
+                }
+                QProgressBar::chunk {
+                    background-color: #0f766e;
+                    border-radius: 7px;
+                }
+                QLabel#ItemImportStatusLabel {
+                    color: #475569;
+                    font-size: 9pt;
+                }
+                """,
+            )
+        )
         self._last_import_summary = None
         self.setup_ui()
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
+
+        header_card = QGroupBox(self)
+        header_card.setObjectName("ItemImportHeaderCard")
+        header_layout = QVBoxLayout(header_card)
+        header_layout.setContentsMargins(12, 12, 12, 12)
+        header_layout.setSpacing(2)
+        title = QLabel("Import Item List")
+        title.setObjectName("ItemImportTitleLabel")
+        header_layout.addWidget(title)
+        subtitle = QLabel(
+            "Preview a source file, tune parsing rules, and import item master rows safely."
+        )
+        subtitle.setObjectName("ItemImportSubtitleLabel")
+        subtitle.setWordWrap(True)
+        header_layout.addWidget(subtitle)
+        layout.addWidget(header_card)
 
         # File selection
         file_layout = QHBoxLayout()
-        file_layout.addWidget(QLabel("File:"))
+        file_field_label = QLabel("File")
+        file_field_label.setObjectName("ItemImportFieldLabel")
+        file_layout.addWidget(file_field_label)
         self.file_label = QLabel("No file selected")
         file_layout.addWidget(self.file_label, 1)  # Add stretch
 
         self.browse_button = QPushButton("Browse...")
+        self.browse_button.setObjectName("ItemImportSecondaryButton")
         self.browse_button.clicked.connect(self.browse_file)
         file_layout.addWidget(self.browse_button)
         layout.addLayout(file_layout)
@@ -63,7 +131,9 @@ class ItemImportDialog(QDialog):
 
         # Delimiter selection
         delimiter_layout = QHBoxLayout()
-        delimiter_layout.addWidget(QLabel("Delimiter:"))
+        delimiter_label = QLabel("Delimiter")
+        delimiter_label.setObjectName("ItemImportFieldLabel")
+        delimiter_layout.addWidget(delimiter_label)
 
         self.delimiter_combo = QComboBox()
         self.delimiter_combo.addItems(["|", ",", ";", "Tab", "Space", "Custom"])
@@ -86,12 +156,16 @@ class ItemImportDialog(QDialog):
 
         # Column mapping
         column_layout = QHBoxLayout()
-        column_layout.addWidget(QLabel("Column Indices (starting from 0):"))
+        columns_label = QLabel("Column Indices (starting from 0)")
+        columns_label.setObjectName("ItemImportFieldLabel")
+        column_layout.addWidget(columns_label)
         config_layout.addLayout(column_layout)
 
         # Create a grid for column mappings
         columns_grid = QGridLayout()
-        columns_grid.addWidget(QLabel("Code:"), 0, 0)
+        code_label = QLabel("Code")
+        code_label.setObjectName("ItemImportFieldLabel")
+        columns_grid.addWidget(code_label, 0, 0)
         self.code_column = QSpinBox()
         self.code_column.setValue(0)  # Default to 0
         self.code_column.valueChanged.connect(
@@ -99,7 +173,9 @@ class ItemImportDialog(QDialog):
         )
         columns_grid.addWidget(self.code_column, 0, 1)
 
-        columns_grid.addWidget(QLabel("Name:"), 0, 2)
+        name_label = QLabel("Name")
+        name_label.setObjectName("ItemImportFieldLabel")
+        columns_grid.addWidget(name_label, 0, 2)
         self.name_column = QSpinBox()
         self.name_column.setValue(1)  # Default to 1
         self.name_column.valueChanged.connect(
@@ -107,7 +183,9 @@ class ItemImportDialog(QDialog):
         )
         columns_grid.addWidget(self.name_column, 0, 3)
 
-        columns_grid.addWidget(QLabel("Wage Type:"), 1, 0)
+        wage_type_label = QLabel("Wage Type")
+        wage_type_label.setObjectName("ItemImportFieldLabel")
+        columns_grid.addWidget(wage_type_label, 1, 0)
         self.wage_type_column = QSpinBox()
         self.wage_type_column.setValue(3)  # Default to 3 (assuming common order)
         self.wage_type_column.valueChanged.connect(
@@ -115,7 +193,9 @@ class ItemImportDialog(QDialog):
         )
         columns_grid.addWidget(self.wage_type_column, 1, 1)
 
-        columns_grid.addWidget(QLabel("Wage Rate:"), 1, 2)
+        wage_rate_label = QLabel("Wage Rate")
+        wage_rate_label.setObjectName("ItemImportFieldLabel")
+        columns_grid.addWidget(wage_rate_label, 1, 2)
         self.wage_rate_column = QSpinBox()
         self.wage_rate_column.setValue(4)  # Default to 4 (assuming common order)
         self.wage_rate_column.valueChanged.connect(
@@ -123,7 +203,9 @@ class ItemImportDialog(QDialog):
         )
         columns_grid.addWidget(self.wage_rate_column, 1, 3)
 
-        columns_grid.addWidget(QLabel("Purity %:"), 2, 0)
+        purity_label = QLabel("Purity %")
+        purity_label.setObjectName("ItemImportFieldLabel")
+        columns_grid.addWidget(purity_label, 2, 0)
         self.purity_column = QSpinBox()
         self.purity_column.setValue(2)  # Default to 2 (assuming common order)
         self.purity_column.valueChanged.connect(
@@ -135,7 +217,9 @@ class ItemImportDialog(QDialog):
 
         # Wage Rate Adjustment
         adjustment_layout = QHBoxLayout()
-        adjustment_layout.addWidget(QLabel("Wage Rate Adjustment:"))
+        adjustment_label = QLabel("Wage Rate Adjustment")
+        adjustment_label.setObjectName("ItemImportFieldLabel")
+        adjustment_layout.addWidget(adjustment_label)
         self.wage_adjustment_input = QLineEdit()
         self.wage_adjustment_input.setPlaceholderText("e.g., *1.1 or /1000 (optional)")
         self.wage_adjustment_input.setToolTip(
@@ -174,9 +258,12 @@ class ItemImportDialog(QDialog):
         # Add preview table
         preview_layout = QVBoxLayout()
         preview_header = QHBoxLayout()
-        preview_header.addWidget(QLabel("File Data Preview:"))
+        preview_title = QLabel("File Data Preview")
+        preview_title.setObjectName("ItemImportFieldLabel")
+        preview_header.addWidget(preview_title)
 
         self.refresh_preview = QPushButton("Refresh Preview")
+        self.refresh_preview.setObjectName("ItemImportSecondaryButton")
         self.refresh_preview.clicked.connect(
             lambda: self.preview_file_data(self.file_label.text())
         )
@@ -227,6 +314,7 @@ class ItemImportDialog(QDialog):
         layout.addWidget(self.progress_bar)
 
         self.status_label = QLabel("")
+        self.status_label.setObjectName("ItemImportStatusLabel")
         layout.addWidget(self.status_label)
 
         # Buttons section
@@ -234,10 +322,12 @@ class ItemImportDialog(QDialog):
         button_layout.addStretch()
 
         self.import_button = QPushButton("Import")
+        self.import_button.setObjectName("ItemImportPrimaryButton")
         self.import_button.clicked.connect(self.start_import)
         self.import_button.setEnabled(False)
 
         self.close_button = QPushButton("Close")
+        self.close_button.setObjectName("ItemImportSecondaryButton")
         self.close_button.clicked.connect(self.reject)
 
         button_layout.addWidget(self.import_button)

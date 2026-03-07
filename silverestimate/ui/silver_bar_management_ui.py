@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -29,6 +30,7 @@ from silverestimate.ui.models import (
     AvailableSilverBarsTableModel,
     SelectedListSilverBarsTableModel,
 )
+from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
 
 from ._host_proxy import HostProxy
 
@@ -40,22 +42,81 @@ class SilverBarManagementUiBuilder(HostProxy):
         host_widget = cast(QWidget, self.host)
         self.host.setWindowTitle("Silver Bar Management (v2.0)")
         self.host.setMinimumSize(1180, 760)
+        host_widget.setObjectName("SilverBarManagementDialog")
+        host_widget.setStyleSheet(
+            build_management_screen_stylesheet(
+                root_selector="QDialog#SilverBarManagementDialog",
+                card_names=["SilverBarManagementHeaderCard"],
+                title_label="SilverBarManagementTitleLabel",
+                subtitle_label="SilverBarManagementSubtitleLabel",
+                primary_button="SilverBarPrimaryButton",
+                secondary_button="SilverBarSecondaryButton",
+                danger_button="SilverBarDangerButton",
+                input_selectors=["QLineEdit", "QComboBox", "QSpinBox", "QDoubleSpinBox"],
+                include_table=True,
+                extra_rules="""
+                QWidget#SilverBarManagementPane,
+                QWidget#SilverBarTransferPane {
+                    background-color: #ffffff;
+                    border: 1px solid #d8e1ec;
+                    border-radius: 12px;
+                }
+                QLabel#SilverBarSectionLabel {
+                    color: #0f172a;
+                    font-size: 10pt;
+                    font-weight: 700;
+                }
+                QLabel#SilverBarBadgeLabel,
+                QLabel#SilverBarSummaryLabel {
+                    background-color: #f8fafc;
+                    border: 1px solid #d8e1ec;
+                    border-radius: 8px;
+                    color: #334155;
+                    font-weight: 600;
+                    padding: 6px 8px;
+                }
+                QSplitter::handle {
+                    background-color: #e2e8f0;
+                    width: 6px;
+                }
+                """,
+            )
+        )
 
         main_layout = QVBoxLayout(self.host)
         main_layout.setContentsMargins(16, 16, 16, 16)
         main_layout.setSpacing(12)
 
+        header_card = QFrame(self.host)
+        header_card.setObjectName("SilverBarManagementHeaderCard")
+        header_layout = QVBoxLayout(header_card)
+        header_layout.setContentsMargins(12, 12, 12, 12)
+        header_layout.setSpacing(2)
+        title = QLabel("Silver Bar Management")
+        title.setObjectName("SilverBarManagementTitleLabel")
+        header_layout.addWidget(title)
+        subtitle = QLabel(
+            "Move bars into lists, manage issuance, and generate optimal lists without leaving the workflow."
+        )
+        subtitle.setObjectName("SilverBarManagementSubtitleLabel")
+        subtitle.setWordWrap(True)
+        header_layout.addWidget(subtitle)
+        main_layout.addWidget(header_card)
+
         self._splitter = QSplitter(Qt.Horizontal, self.host)
         self._splitter.setChildrenCollapsible(False)
 
         left_widget = QWidget(self.host)
+        left_widget.setObjectName("SilverBarManagementPane")
         left_layout = QVBoxLayout(left_widget)
         left_layout.setContentsMargins(8, 8, 8, 8)
         left_layout.setSpacing(8)
 
         left_header = QHBoxLayout()
         left_title = QLabel("Available Silver Bars")
+        left_title.setObjectName("SilverBarSectionLabel")
         self.available_header_badge = QLabel("Available: 0")
+        self.available_header_badge.setObjectName("SilverBarBadgeLabel")
         left_header.addWidget(left_title)
         left_header.addStretch()
         left_header.addWidget(self.available_header_badge)
@@ -131,31 +192,37 @@ class SilverBarManagementUiBuilder(HostProxy):
         )
         left_layout.addWidget(self.available_totals_label)
         left_layout.addWidget(self.available_selection_label)
+        self.available_totals_label.setObjectName("SilverBarSummaryLabel")
+        self.available_selection_label.setObjectName("SilverBarSummaryLabel")
 
         center_widget = QWidget(self.host)
+        center_widget.setObjectName("SilverBarTransferPane")
         center_layout = QVBoxLayout(center_widget)
+        center_layout.setContentsMargins(12, 12, 12, 12)
         center_layout.addStretch()
         self.add_to_list_button = QPushButton("Add >")
         self.add_all_button = QPushButton("Add All >>")
         self.remove_from_list_button = QPushButton("< Remove")
         self.remove_all_button = QPushButton("<< Remove All")
-        for button in (
-            self.add_to_list_button,
-            self.add_all_button,
-            self.remove_from_list_button,
-            self.remove_all_button,
-        ):
+        for button in (self.add_to_list_button, self.add_all_button):
+            button.setObjectName("SilverBarPrimaryButton")
+            center_layout.addWidget(button)
+        for button in (self.remove_from_list_button, self.remove_all_button):
+            button.setObjectName("SilverBarDangerButton")
             center_layout.addWidget(button)
         center_layout.addStretch()
 
         right_widget = QWidget(self.host)
+        right_widget.setObjectName("SilverBarManagementPane")
         right_layout = QVBoxLayout(right_widget)
         right_layout.setContentsMargins(8, 8, 8, 8)
         right_layout.setSpacing(8)
 
         right_header = QHBoxLayout()
         right_title = QLabel("Lists")
+        right_title.setObjectName("SilverBarSectionLabel")
         self.list_header_badge = QLabel("List: 0")
+        self.list_header_badge.setObjectName("SilverBarBadgeLabel")
         right_header.addWidget(right_title)
         right_header.addStretch()
         right_header.addWidget(self.list_header_badge)
@@ -165,13 +232,17 @@ class SilverBarManagementUiBuilder(HostProxy):
         self.list_combo = QComboBox()
         list_row.addWidget(self.list_combo, 1)
         self.create_list_button = QPushButton("New List")
+        self.create_list_button.setObjectName("SilverBarPrimaryButton")
         list_row.addWidget(self.create_list_button)
         right_layout.addLayout(list_row)
 
         action_row = QHBoxLayout()
         self.edit_note_button = QPushButton("Edit Note")
+        self.edit_note_button.setObjectName("SilverBarSecondaryButton")
         self.delete_list_button = QPushButton("Delete List")
+        self.delete_list_button.setObjectName("SilverBarDangerButton")
         self.mark_issued_button = QPushButton("Mark Issued")
+        self.mark_issued_button.setObjectName("SilverBarPrimaryButton")
         action_row.addWidget(self.edit_note_button)
         action_row.addWidget(self.delete_list_button)
         action_row.addWidget(self.mark_issued_button)
@@ -179,8 +250,11 @@ class SilverBarManagementUiBuilder(HostProxy):
 
         print_row = QHBoxLayout()
         self.print_list_button = QPushButton("Print")
+        self.print_list_button.setObjectName("SilverBarSecondaryButton")
         self.export_list_button = QPushButton("Export CSV")
+        self.export_list_button.setObjectName("SilverBarSecondaryButton")
         self.generate_optimal_button = QPushButton("Generate Optimal")
+        self.generate_optimal_button.setObjectName("SilverBarPrimaryButton")
         print_row.addWidget(self.print_list_button)
         print_row.addWidget(self.export_list_button)
         print_row.addWidget(self.generate_optimal_button)
@@ -206,6 +280,8 @@ class SilverBarManagementUiBuilder(HostProxy):
         self.list_selection_label = QLabel(
             "Selected: 0 | Weight: 0.000 g | Fine: 0.000 g"
         )
+        self.list_totals_label.setObjectName("SilverBarSummaryLabel")
+        self.list_selection_label.setObjectName("SilverBarSummaryLabel")
         right_layout.addWidget(self.list_totals_label)
         right_layout.addWidget(self.list_selection_label)
 
@@ -218,8 +294,10 @@ class SilverBarManagementUiBuilder(HostProxy):
         bottom_row = QHBoxLayout()
         bottom_row.addStretch()
         self.print_bottom_button = QPushButton("Print")
+        self.print_bottom_button.setObjectName("SilverBarSecondaryButton")
         bottom_row.addWidget(self.print_bottom_button)
         self.close_button = QPushButton("Close")
+        self.close_button.setObjectName("SilverBarSecondaryButton")
         bottom_row.addWidget(self.close_button)
         main_layout.addLayout(bottom_row)
 
@@ -235,6 +313,8 @@ class SilverBarManagementUiBuilder(HostProxy):
         self.refresh_available_button.clicked.connect(
             lambda *_: self.load_available_bars()
         )
+        self.refresh_available_button.setObjectName("SilverBarSecondaryButton")
+        self.clear_filters_button.setObjectName("SilverBarSecondaryButton")
         self.clear_filters_button.clicked.connect(lambda *_: self._clear_filters())
         self.auto_refresh_checkbox.toggled.connect(self._toggle_auto_refresh)
         self.weight_search_edit.textChanged.connect(self._schedule_available_reload)

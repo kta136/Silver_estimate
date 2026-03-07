@@ -22,9 +22,15 @@ COL_TYPE = 10
 class NumericDelegate(QStyledItemDelegate):
     """Delegate that validates and normalizes numeric table cell input."""
 
+    @staticmethod
+    def _style_editor(editor: QLineEdit) -> None:
+        editor.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        editor.setClearButtonEnabled(False)
+
     def createEditor(self, parent, option, index):
         editor = QLineEdit(parent)
         editor.setProperty("modelIndex", index)
+        self._style_editor(editor)
         col = index.column()
         locale = QLocale.system()
         validator: QDoubleValidator | QIntValidator
@@ -63,6 +69,7 @@ class NumericDelegate(QStyledItemDelegate):
             display_text = str(value) if value is not None else ""
 
         editor.setText(display_text)
+        editor.selectAll()
 
     def setModelData(self, editor, model, index):
         if not isinstance(editor, QLineEdit):
@@ -159,6 +166,7 @@ class CodeDelegate(QStyledItemDelegate):
     def createEditor(self, parent, option, index):
         editor = QLineEdit(parent)
         editor.setProperty("modelIndex", index)
+        editor.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         editor.installEventFilter(self)
         return editor
 
@@ -171,6 +179,7 @@ class CodeDelegate(QStyledItemDelegate):
         text = str(value) if value is not None else ""
         editor.setText(text)
         editor.setProperty("originalCode", self._normalize_code(text))
+        editor.selectAll()
 
     def setModelData(self, editor, model, index):
         if not isinstance(editor, QLineEdit):

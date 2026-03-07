@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import (
     QButtonGroup,
     QDialog,
     QDoubleSpinBox,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -25,6 +26,7 @@ from .silver_bar_list_actions import SilverBarListActions
 from .silver_bar_load_controller import SilverBarLoadController, _BarsLoadWorker
 from .silver_bar_management_state import SilverBarManagementStateStore
 from .silver_bar_management_ui import SilverBarManagementUiBuilder
+from .shared_screen_theme import build_management_screen_stylesheet
 
 
 class SilverBarDialog(QDialog):
@@ -111,6 +113,30 @@ class OptimalListDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Generate Optimal List")
         self.setMinimumSize(450, 400)
+        self.setObjectName("OptimalListDialog")
+        self.setStyleSheet(
+            build_management_screen_stylesheet(
+                root_selector="QDialog#OptimalListDialog",
+                card_names=[
+                    "OptimalListHeaderCard",
+                    "OptimalListWeightCard",
+                    "OptimalListNameCard",
+                    "OptimalListPreferenceCard",
+                ],
+                title_label="OptimalListTitleLabel",
+                subtitle_label="OptimalListSubtitleLabel",
+                field_label="OptimalListFieldLabel",
+                primary_button="OptimalListPrimaryButton",
+                secondary_button="OptimalListSecondaryButton",
+                input_selectors=["QLineEdit", "QDoubleSpinBox"],
+                extra_rules="""
+                QLabel#OptimalListBodyLabel {
+                    color: #475569;
+                    font-size: 9pt;
+                }
+                """,
+            )
+        )
         self.target_fine_weight = 0.0
         self.list_name = ""
         self.optimization_type = "min_bars"
@@ -121,22 +147,32 @@ class OptimalListDialog(QDialog):
     def _init_ui(self):
         layout = QVBoxLayout(self)
         layout.setSpacing(16)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(12, 12, 12, 12)
 
+        header_card = QFrame(self)
+        header_card.setObjectName("OptimalListHeaderCard")
+        header_layout = QVBoxLayout(header_card)
+        header_layout.setContentsMargins(12, 12, 12, 12)
+        header_layout.setSpacing(2)
         title = QLabel("Generate Optimal Silver Bar List")
-        title.setStyleSheet(
-            "font-size: 16px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;"
+        title.setObjectName("OptimalListTitleLabel")
+        header_layout.addWidget(title)
+        subtitle = QLabel(
+            "Define a target weight range and let the optimizer build the best list."
         )
-        layout.addWidget(title)
+        subtitle.setObjectName("OptimalListSubtitleLabel")
+        subtitle.setWordWrap(True)
+        header_layout.addWidget(subtitle)
+        layout.addWidget(header_card)
 
-        weight_group = QWidget(self)
+        weight_group = QFrame(self)
+        weight_group.setObjectName("OptimalListWeightCard")
         weight_layout = QVBoxLayout(weight_group)
         weight_layout.setSpacing(12)
+        weight_layout.setContentsMargins(12, 12, 12, 12)
 
         weight_title = QLabel("Target Fine Weight Range (grams):")
-        weight_title.setStyleSheet(
-            "font-weight: 600; font-size: 13px; margin-bottom: 8px;"
-        )
+        weight_title.setObjectName("OptimalListFieldLabel")
         weight_layout.addWidget(weight_title)
 
         minmax_layout = QHBoxLayout()
@@ -166,24 +202,33 @@ class OptimalListDialog(QDialog):
         range_explanation = QLabel(
             "The algorithm will find bars with total fine weight between these values."
         )
+        range_explanation.setObjectName("OptimalListBodyLabel")
         range_explanation.setWordWrap(True)
         weight_layout.addWidget(range_explanation)
         layout.addWidget(weight_group)
 
-        list_name_group = QWidget(self)
+        list_name_group = QFrame(self)
+        list_name_group.setObjectName("OptimalListNameCard")
         list_name_layout = QVBoxLayout(list_name_group)
         list_name_layout.setSpacing(8)
-        list_name_layout.addWidget(QLabel("List Name:"))
+        list_name_layout.setContentsMargins(12, 12, 12, 12)
+        list_name_label = QLabel("List Name")
+        list_name_label.setObjectName("OptimalListFieldLabel")
+        list_name_layout.addWidget(list_name_label)
         self.list_name_edit = QLineEdit()
         self.list_name_edit.setPlaceholderText("Enter a name for the new list")
         self.list_name_edit.setText(f"Optimal-{datetime.now():%Y%m%d-%H%M}")
         list_name_layout.addWidget(self.list_name_edit)
         layout.addWidget(list_name_group)
 
-        opt_group = QWidget(self)
+        opt_group = QFrame(self)
+        opt_group.setObjectName("OptimalListPreferenceCard")
         opt_layout = QVBoxLayout(opt_group)
         opt_layout.setSpacing(12)
-        opt_layout.addWidget(QLabel("Optimization Preference:"))
+        opt_layout.setContentsMargins(12, 12, 12, 12)
+        preference_label = QLabel("Optimization Preference")
+        preference_label.setObjectName("OptimalListFieldLabel")
+        opt_layout.addWidget(preference_label)
 
         self.opt_button_group = QButtonGroup(self)
         self.min_bars_radio = QRadioButton("Minimum number of silver bars")
@@ -197,6 +242,7 @@ class OptimalListDialog(QDialog):
         explanation = QLabel(
             "Minimum bars prefers fewer bars. Maximum bars uses as many bars as possible within range."
         )
+        explanation.setObjectName("OptimalListBodyLabel")
         explanation.setWordWrap(True)
         opt_layout.addWidget(explanation)
         layout.addWidget(opt_group)
@@ -206,9 +252,11 @@ class OptimalListDialog(QDialog):
         button_layout = QHBoxLayout()
         button_layout.addStretch()
         cancel_button = QPushButton("Cancel")
+        cancel_button.setObjectName("OptimalListSecondaryButton")
         cancel_button.clicked.connect(self.reject)
         button_layout.addWidget(cancel_button)
         generate_button = QPushButton("Generate List")
+        generate_button.setObjectName("OptimalListPrimaryButton")
         generate_button.setDefault(True)
         generate_button.clicked.connect(self.accept)
         button_layout.addWidget(generate_button)

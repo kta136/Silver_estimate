@@ -23,6 +23,7 @@ from silverestimate.services.estimate_entry_persistence import (
 )
 
 from ._host_proxy import HostProxy
+from .estimate_entry_theme import refresh_widget_style
 from .estimate_entry_ui import COL_CODE, COL_GROSS
 from .item_selection_dialog import ItemSelectionDialog
 
@@ -286,36 +287,32 @@ class EstimateEntryWorkflowController(HostProxy):
 
     def _sync_mode_controls(self) -> None:
         if self.return_mode:
-            self.return_toggle_button.setText("↩ RETURN ON")
-            self.return_toggle_button.setStyleSheet(
-                "background-color: #e8f4fd; border: 2px solid #0066cc; font-weight: bold; color: #003d7a;"
-            )
+            self.return_toggle_button.setText("Return On")
+            self.return_toggle_button.setProperty("modeState", "return")
         else:
-            self.return_toggle_button.setText("↩ Return Items")
-            self.return_toggle_button.setStyleSheet("")
+            self.return_toggle_button.setText("Return")
+            self.return_toggle_button.setProperty("modeState", "idle")
 
         if self.silver_bar_mode:
-            self.silver_bar_toggle_button.setText("🥈 BAR ON")
-            self.silver_bar_toggle_button.setStyleSheet(
-                "background-color: #fff4e6; border: 2px solid #cc6600; font-weight: bold; color: #994d00;"
-            )
+            self.silver_bar_toggle_button.setText("Bars On")
+            self.silver_bar_toggle_button.setProperty("modeState", "silver_bar")
         else:
-            self.silver_bar_toggle_button.setText("🥈 Silver Bars")
-            self.silver_bar_toggle_button.setStyleSheet("")
+            self.silver_bar_toggle_button.setText("Bars")
+            self.silver_bar_toggle_button.setProperty("modeState", "idle")
 
         if self.return_mode:
             self.mode_indicator_label.setText("Mode: Return Items")
-            self.mode_indicator_label.setStyleSheet(
-                "font-weight: bold; color: #0066cc;"
-            )
+            self.mode_indicator_label.setProperty("modeState", "return")
         elif self.silver_bar_mode:
             self.mode_indicator_label.setText("Mode: Silver Bars")
-            self.mode_indicator_label.setStyleSheet(
-                "font-weight: bold; color: #cc6600;"
-            )
+            self.mode_indicator_label.setProperty("modeState", "silver_bar")
         else:
             self.mode_indicator_label.setText("Mode: Regular")
-            self.mode_indicator_label.setStyleSheet("")
+            self.mode_indicator_label.setProperty("modeState", "regular")
+
+        refresh_widget_style(self.return_toggle_button)
+        refresh_widget_style(self.silver_bar_toggle_button)
+        refresh_widget_style(self.mode_indicator_label)
 
     def _finalize_mode_change(self) -> None:
         self._get_table_adapter().refresh_empty_row_type()

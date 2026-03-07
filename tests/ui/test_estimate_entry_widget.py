@@ -2,7 +2,7 @@ import types
 
 import pytest
 from PyQt5.QtCore import QEventLoop, Qt, QTimer
-from PyQt5.QtWidgets import QDialog, QMessageBox
+from PyQt5.QtWidgets import QDialog, QHeaderView, QMessageBox, QLineEdit
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.infrastructure.settings import get_app_settings
@@ -758,6 +758,70 @@ def test_column_autofit_defaults_to_explicit_mode(qt_app, fake_db):
         widget._pending_autofit_columns.clear()
         widget._schedule_columns_autofit([col], delay_ms=0)
         assert col not in widget._pending_autofit_columns
+    finally:
+        widget.deleteLater()
+
+
+def test_non_autofit_uses_native_stretch_for_item_name(qt_app, fake_db):
+    widget = _make_widget(fake_db)
+    try:
+        header = widget.item_table.horizontalHeader()
+        assert header.sectionResizeMode(COL_ITEM_NAME) == QHeaderView.Stretch
+        assert header.sectionResizeMode(COL_CODE) == QHeaderView.Interactive
+    finally:
+        widget.deleteLater()
+
+
+def test_non_autofit_persists_fixed_column_widths_only(qt_app, fake_db, settings_stub):
+    widget = _make_widget(fake_db)
+    try:
+        widget.item_table.setColumnWidth(COL_CODE, 137)
+        widget._save_column_widths_setting()
+        saved = widget._settings().value("ui/estimate_table_column_widths", type=str)
+        assert saved is not None
+        tokens = [int(token) for token in saved.split(",")]
+        assert tokens[COL_CODE] == 137
+        assert tokens[COL_ITEM_NAME] == -1
+
+        widget_reloaded = _make_widget(fake_db)
+        try:
+            header = widget_reloaded.item_table.horizontalHeader()
+            assert header.sectionResizeMode(COL_ITEM_NAME) == QHeaderView.Stretch
+            assert widget_reloaded.item_table.columnWidth(COL_CODE) == 137
+        finally:
+            widget_reloaded.deleteLater()
+    finally:
+        widget.deleteLater()
+
+
+def test_non_autofit_expands_fixed_column_when_edit_content_grows(qt_app, fake_db):
+    widget = _make_widget(fake_db)
+    try:
+        table = widget.item_table
+        base_width = table.columnWidth(COL_CODE)
+
+        table.set_cell_text(0, COL_CODE, "LONG-CODE-123456789")
+        widget.handle_cell_changed(0, COL_CODE)
+        widget._ensure_column_can_fit_content(COL_CODE)
+
+        assert table.columnWidth(COL_CODE) > base_width
+    finally:
+        widget.deleteLater()
+
+
+def test_numeric_cell_editor_is_right_aligned_and_selects_text(qtbot, fake_db):
+    widget = _make_widget(fake_db)
+    try:
+        widget.item_table.set_cell_text(0, COL_GROSS, "12.5")
+        widget.item_table.setCurrentCell(0, COL_GROSS)
+        assert widget.item_table.begin_cell_edit(0, COL_GROSS)
+        qtbot.waitUntil(
+            lambda: widget.item_table.findChild(QLineEdit) is not None, timeout=1000
+        )
+        editor = widget.item_table.findChild(QLineEdit)
+        assert editor is not None
+        assert bool(editor.alignment() & Qt.AlignRight)
+        assert editor.selectedText() == "12.5"
     finally:
         widget.deleteLater()
 

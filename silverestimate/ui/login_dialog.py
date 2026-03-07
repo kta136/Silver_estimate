@@ -1,5 +1,6 @@
 from PyQt5.QtWidgets import (
     QDialog,
+    QFrame,
     QFormLayout,
     QHBoxLayout,
     QInputDialog,
@@ -9,6 +10,8 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QVBoxLayout,
 )
+
+from .shared_screen_theme import build_management_screen_stylesheet
 
 _pwd_context = None
 
@@ -37,6 +40,36 @@ class LoginDialog(QDialog):
             "Authentication Required" if not is_setup else "Create Passwords"
         )
         self.setModal(True)  # Ensure user interacts with this dialog first
+        self.setObjectName("LoginDialog")
+        self.setMinimumWidth(460 if not self.is_setup else 420)
+        self.setStyleSheet(
+            build_management_screen_stylesheet(
+                root_selector="QDialog#LoginDialog",
+                card_names=["LoginHeaderCard", "LoginFormCard", "LoginDangerCard"],
+                title_label="LoginTitleLabel",
+                subtitle_label="LoginSubtitleLabel",
+                field_label="LoginFieldLabel",
+                primary_button="LoginPrimaryButton",
+                secondary_button="LoginSecondaryButton",
+                danger_button="LoginDangerButton",
+                input_selectors=["QLineEdit"],
+                extra_rules="""
+                QLabel#LoginBodyText {
+                    color: #475569;
+                    font-size: 9pt;
+                }
+                QLabel#LoginDangerTitle {
+                    color: #991b1b;
+                    font-size: 9pt;
+                    font-weight: 700;
+                }
+                QLabel#LoginDangerBody {
+                    color: #7f1d1d;
+                    font-size: 8.5pt;
+                }
+                """,
+            )
+        )
 
         self._password = str()
         self._backup_password = str()  # Only used in setup mode
@@ -50,9 +83,51 @@ class LoginDialog(QDialog):
     def _setup_ui(self):
         """Create the UI elements for the dialog."""
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
+
+        header_card = QFrame(self)
+        header_card.setObjectName("LoginHeaderCard")
+        header_layout = QVBoxLayout(header_card)
+        header_layout.setContentsMargins(12, 12, 12, 12)
+        header_layout.setSpacing(2)
+
+        title_label = QLabel(
+            "Create Passwords" if self.is_setup else "Authentication Required"
+        )
+        title_label.setObjectName("LoginTitleLabel")
+        header_layout.addWidget(title_label)
+
+        subtitle_label = QLabel(
+            "Set your main and secondary passwords to initialize secure access."
+            if self.is_setup
+            else "Enter your password to open the application."
+        )
+        subtitle_label.setObjectName("LoginSubtitleLabel")
+        subtitle_label.setWordWrap(True)
+        header_layout.addWidget(subtitle_label)
+        layout.addWidget(header_card)
+
+        form_card = QFrame(self)
+        form_card.setObjectName("LoginFormCard")
+        form_card_layout = QVBoxLayout(form_card)
+        form_card_layout.setContentsMargins(12, 12, 12, 12)
+        form_card_layout.setSpacing(10)
+
+        intro_label = QLabel(
+            "Choose strong passwords and keep them memorized. The main password protects day-to-day access."
+            if self.is_setup
+            else "Use your main password for normal access. Data reset is kept separate below because it is irreversible."
+        )
+        intro_label.setObjectName("LoginBodyText")
+        intro_label.setWordWrap(True)
+        form_card_layout.addWidget(intro_label)
+
         form_layout = QFormLayout()
+        form_layout.setSpacing(10)
 
         self.password_label = QLabel("Password:")
+        self.password_label.setObjectName("LoginFieldLabel")
         self.password_input = QLineEdit()
         self.password_input.setEchoMode(QLineEdit.Password)
         if self.is_setup:
@@ -68,6 +143,7 @@ class LoginDialog(QDialog):
         if self.is_setup:
             # Renamed label to be less descriptive of function
             self.backup_password_label = QLabel("Secondary Password:")
+            self.backup_password_label.setObjectName("LoginFieldLabel")
             self.backup_password_input = QLineEdit()
             self.backup_password_input.setEchoMode(QLineEdit.Password)
             self.backup_password_input.setToolTip(
@@ -77,6 +153,7 @@ class LoginDialog(QDialog):
 
             # Renamed label
             self.confirm_password_label = QLabel("Confirm Secondary Password:")
+            self.confirm_password_label.setObjectName("LoginFieldLabel")
             self.confirm_password_input = QLineEdit()
             self.confirm_password_input.setEchoMode(QLineEdit.Password)
             self.confirm_password_input.setToolTip(
@@ -84,13 +161,15 @@ class LoginDialog(QDialog):
             )
             form_layout.addRow(self.confirm_password_label, self.confirm_password_input)
 
-        layout.addLayout(form_layout)
+        form_card_layout.addLayout(form_layout)
+        layout.addWidget(form_card)
 
         # Buttons
         button_layout = QHBoxLayout()
         self.ok_button = QPushButton(
             "Login" if not self.is_setup else "Create Passwords"
         )
+        self.ok_button.setObjectName("LoginPrimaryButton")
         if self.is_setup:
             self.ok_button.setToolTip(
                 "Create passwords and initialize the application\nBoth passwords will be saved securely\nApplication will start after setup"
@@ -101,30 +180,47 @@ class LoginDialog(QDialog):
             )
 
         self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.setObjectName("LoginSecondaryButton")
         self.cancel_button.setToolTip(
             "Exit without logging in\nApplication will close\nNo data will be accessed or modified"
         )
 
         button_layout.addStretch()
-        # Add Reset button only in login mode
-        if not self.is_setup:
-            self.reset_button = QPushButton("Wipe All Data...")
-            self.reset_button.setStyleSheet("color: red;")  # Make it stand out
-            self.reset_button.setToolTip(
-                "Permanently delete all application data and credentials\n"
-                "Includes items, estimates, silver bars, and lists\n"
-                "Requires typing DELETE to confirm"
-            )
-            button_layout.addWidget(self.reset_button)
-            button_layout.addSpacing(20)  # Add some space
 
         button_layout.addWidget(self.cancel_button)
         button_layout.addWidget(self.ok_button)
         layout.addLayout(button_layout)
 
-        self.setMinimumWidth(
-            400 if not self.is_setup else 350
-        )  # Wider if reset button is present
+        if not self.is_setup:
+            danger_card = QFrame(self)
+            danger_card.setObjectName("LoginDangerCard")
+            danger_layout = QVBoxLayout(danger_card)
+            danger_layout.setContentsMargins(12, 12, 12, 12)
+            danger_layout.setSpacing(6)
+
+            danger_title = QLabel("Trouble signing in?")
+            danger_title.setObjectName("LoginDangerTitle")
+            danger_layout.addWidget(danger_title)
+
+            danger_body = QLabel(
+                "Full data wipe is permanent. Use it only when you intentionally want to reset the application."
+            )
+            danger_body.setObjectName("LoginDangerBody")
+            danger_body.setWordWrap(True)
+            danger_layout.addWidget(danger_body)
+
+            danger_action_layout = QHBoxLayout()
+            danger_action_layout.addStretch()
+            self.reset_button = QPushButton("Wipe All Data...")
+            self.reset_button.setObjectName("LoginDangerButton")
+            self.reset_button.setToolTip(
+                "Permanently delete all application data and credentials\n"
+                "Includes items, estimates, silver bars, and lists\n"
+                "Requires typing DELETE to confirm"
+            )
+            danger_action_layout.addWidget(self.reset_button)
+            danger_layout.addLayout(danger_action_layout)
+            layout.addWidget(danger_card)
 
     def _connect_signals(self):
         """Connect UI signals to slots."""

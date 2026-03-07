@@ -127,6 +127,12 @@ class EstimateTableModel(QAbstractTableModel):
             # Regular rows use default palette (white)
             return QBrush(QColor(255, 255, 255))
 
+        if role == Qt.BackgroundRole and col in (COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT):
+            return QBrush(QColor("#f8fafc"))
+
+        if role == Qt.ForegroundRole and col in (COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT):
+            return QBrush(QColor("#334155"))
+
         if role == Qt.TextAlignmentRole:
             if col in (
                 COL_GROSS,

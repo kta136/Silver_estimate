@@ -38,6 +38,7 @@ from silverestimate.security.credential_store import CredentialStoreError
 from .custom_font_dialog import CustomFontDialog
 from .item_export_manager import ItemExportManager  # Import the new export manager
 from .login_dialog import LoginDialog  # Needed for password verification/hashing
+from .shared_screen_theme import build_management_screen_stylesheet
 
 
 class SettingsDialog(QDialog):
@@ -51,6 +52,82 @@ class SettingsDialog(QDialog):
         self.main_window = main_window_ref  # Store reference to main window
         self.setWindowTitle("Application Settings")
         self.setMinimumWidth(640)
+        self.setMinimumHeight(720)
+        self.setObjectName("SettingsDialog")
+        self.setStyleSheet(
+            build_management_screen_stylesheet(
+                root_selector="QDialog#SettingsDialog",
+                card_names=["SettingsHeaderCard", "SettingsPageCard"],
+                title_label="SettingsTitleLabel",
+                subtitle_label="SettingsSubtitleLabel",
+                primary_button="SettingsPrimaryButton",
+                danger_button="SettingsDangerButton",
+                input_selectors=[
+                    "QLineEdit",
+                    "QComboBox",
+                    "QSpinBox",
+                    "QDoubleSpinBox",
+                    "QListWidget",
+                    "QListView",
+                ],
+                extra_rules="""
+                QListWidget#SettingsSidebar {
+                    background-color: #ffffff;
+                    border: 1px solid #d8e1ec;
+                    border-radius: 12px;
+                    outline: none;
+                    padding: 8px;
+                }
+                QListWidget#SettingsSidebar::item {
+                    border-radius: 8px;
+                    color: #334155;
+                    margin: 2px 0;
+                    padding: 8px 10px;
+                }
+                QListWidget#SettingsSidebar::item:selected {
+                    background-color: #dbeafe;
+                    color: #0f172a;
+                    font-weight: 700;
+                }
+                QListWidget#SettingsSidebar::item:hover:!selected {
+                    background-color: #eef2ff;
+                }
+                QGroupBox {
+                    background-color: #ffffff;
+                    border: 1px solid #d8e1ec;
+                    border-radius: 10px;
+                    color: #0f172a;
+                    font-weight: 700;
+                    margin-top: 12px;
+                    padding: 12px 12px 10px 12px;
+                }
+                QGroupBox::title {
+                    subcontrol-origin: margin;
+                    left: 10px;
+                    padding: 0 4px;
+                }
+                QLabel {
+                    color: #334155;
+                }
+                QPushButton {
+                    background-color: #f8fafc;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 8px;
+                    color: #0f172a;
+                    font-weight: 600;
+                    min-height: 24px;
+                    padding: 5px 10px;
+                }
+                QPushButton:hover {
+                    background-color: #eef2f7;
+                    border-color: #94a3b8;
+                }
+                QDialogButtonBox {
+                    padding-top: 4px;
+                }
+                """,
+            )
+        )
 
         # Load current settings
         self.settings = get_app_settings()
@@ -66,6 +143,7 @@ class SettingsDialog(QDialog):
         # Sidebar + pages (cleaner than rotated west tabs)
         style = self.style()
         self.sidebar = QListWidget()
+        self.sidebar.setObjectName("SettingsSidebar")
         self.sidebar.setViewMode(QListView.ListMode)
         self.sidebar.setIconSize(QSize(20, 20))
         self.sidebar.setSpacing(4)
@@ -141,9 +219,14 @@ class SettingsDialog(QDialog):
         )
         # Disable Apply until change
         self.buttonBox.button(QDialogButtonBox.Apply).setEnabled(False)
+        self.buttonBox.button(QDialogButtonBox.Apply).setObjectName(
+            "SettingsPrimaryButton"
+        )
+        self.buttonBox.button(QDialogButtonBox.Ok).setObjectName("SettingsPrimaryButton")
 
         # Add Restore Defaults button
         restore_btn = QPushButton("Restore Defaults…")
+        restore_btn.setObjectName("SettingsDangerButton")
         restore_btn.setToolTip(
             "Reset all settings to default values\nWill not affect saved estimates or data\nChanges take effect immediately"
         )
@@ -152,10 +235,38 @@ class SettingsDialog(QDialog):
 
         # Layout
         layout = QVBoxLayout()
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
+
+        header_card = QFrame(self)
+        header_card.setObjectName("SettingsHeaderCard")
+        header_layout = QVBoxLayout(header_card)
+        header_layout.setContentsMargins(12, 12, 12, 12)
+        header_layout.setSpacing(2)
+
+        title_label = QLabel("Application Settings")
+        title_label.setObjectName("SettingsTitleLabel")
+        header_layout.addWidget(title_label)
+
+        subtitle_label = QLabel(
+            "Manage interface behavior, printing, data tools, security, and logging."
+        )
+        subtitle_label.setObjectName("SettingsSubtitleLabel")
+        header_layout.addWidget(subtitle_label)
+        layout.addWidget(header_card)
+
         # content row: sidebar + pages
         content = QHBoxLayout()
+        content.setSpacing(10)
         content.addWidget(self.sidebar)
-        content.addWidget(self.pages, 1)
+
+        page_card = QFrame(self)
+        page_card.setObjectName("SettingsPageCard")
+        page_card_layout = QVBoxLayout(page_card)
+        page_card_layout.setContentsMargins(12, 12, 12, 12)
+        page_card_layout.addWidget(self.pages)
+        content.addWidget(page_card, 1)
+
         layout.addLayout(content)
         layout.addWidget(self.buttonBox)  # Use self.buttonBox here
         self.setLayout(layout)
@@ -427,20 +538,20 @@ class SettingsDialog(QDialog):
         button_layout = QHBoxLayout()
 
         self.delete_estimates_button = QPushButton("Delete All Estimates...")
+        self.delete_estimates_button.setObjectName("SettingsDangerButton")
         self.delete_estimates_button.setToolTip(
             "Remove all estimate records\nKeeps item master and silver bar data intact\nRequires confirmation"
         )
-        self.delete_estimates_button.setStyleSheet("color: orange;")
         self.delete_estimates_button.clicked.connect(
             self.main_window.delete_all_estimates
         )
         button_layout.addWidget(self.delete_estimates_button)
 
         self.delete_all_data_button = QPushButton("DELETE ALL DATA")
+        self.delete_all_data_button.setObjectName("SettingsDangerButton")
         self.delete_all_data_button.setToolTip(
             "Reset all application data\nIncludes: estimates, items, silver bars, lists\nRequires typing DELETE to confirm"
         )
-        self.delete_all_data_button.setStyleSheet("color: red; font-weight: bold;")
         self.delete_all_data_button.clicked.connect(self.main_window.delete_all_data)
         button_layout.addWidget(self.delete_all_data_button)
 

@@ -9,6 +9,8 @@ from PyQt5 import sip
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QLabel
 
+from .estimate_entry_theme import refresh_widget_style
+
 
 class InlineStatusController:
     """Manage transient inline status messages on a QLabel."""
@@ -41,15 +43,10 @@ class InlineStatusController:
             self._logger.info("Status: %s", message)
             return
 
-        color = {
-            "info": "#2b6cb0",
-            "warning": "#8a6d3b",
-            "error": "#a61b1b",
-        }.get((level or "info").lower(), "#2b6cb0")
-
         try:
-            label.setStyleSheet(f"color: {color}; padding-left: 8px;")
+            label.setProperty("statusLevel", (level or "info").lower())
             label.setText(message or "")
+            refresh_widget_style(label)
         except Exception:
             self._logger.debug("Could not update inline status label", exc_info=True)
 
@@ -74,6 +71,8 @@ class InlineStatusController:
         if label is None:
             return
         try:
+            label.setProperty("statusLevel", "info")
             label.setText("")
+            refresh_widget_style(label)
         except Exception:
             self._logger.debug("Could not clear inline status label", exc_info=True)

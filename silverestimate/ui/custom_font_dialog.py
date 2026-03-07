@@ -9,11 +9,14 @@ from PyQt5.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
+    QFrame,
     QFontComboBox,
     QHBoxLayout,
     QLabel,
     QVBoxLayout,
 )
+
+from .shared_screen_theme import build_management_screen_stylesheet
 
 
 class CustomFontDialog(QDialog):
@@ -25,6 +28,35 @@ class CustomFontDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Font Settings")
         self.setMinimumWidth(400)
+        self.setObjectName("CustomFontDialog")
+        self.setStyleSheet(
+            build_management_screen_stylesheet(
+                root_selector="QDialog#CustomFontDialog",
+                card_names=[
+                    "CustomFontHeaderCard",
+                    "CustomFontSettingsCard",
+                    "CustomFontPreviewCard",
+                ],
+                title_label="CustomFontTitleLabel",
+                subtitle_label="CustomFontSubtitleLabel",
+                field_label="CustomFontFieldLabel",
+                primary_button="CustomFontPrimaryButton",
+                secondary_button="CustomFontSecondaryButton",
+                input_selectors=["QFontComboBox", "QDoubleSpinBox"],
+                extra_rules="""
+                QLabel#CustomFontPreviewLabel {
+                    color: #0f172a;
+                    font-size: 10pt;
+                    font-weight: 600;
+                }
+                QFrame#CustomFontSampleFrame {
+                    background-color: #ffffff;
+                    border: 1px solid #d8e1ec;
+                    border-radius: 10px;
+                }
+                """,
+            )
+        )
 
         if initial_font is None:
             initial_font = QApplication.font()  # Default to application font
@@ -50,31 +82,76 @@ class CustomFontDialog(QDialog):
         self.preview_label = QLabel("AaBbYyZz", self)
         self.preview_label.setMinimumHeight(60)
         self.preview_label.setAlignment(Qt.AlignCenter)
-        self.preview_label.setStyleSheet(
-            "border: 1px solid #ccc; background-color: white;"
-        )
 
         self.button_box = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self
         )
+        self.button_box.button(QDialogButtonBox.Ok).setObjectName(
+            "CustomFontPrimaryButton"
+        )
+        self.button_box.button(QDialogButtonBox.Cancel).setObjectName(
+            "CustomFontSecondaryButton"
+        )
 
         # --- Layout ---
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
+
+        header_card = QFrame(self)
+        header_card.setObjectName("CustomFontHeaderCard")
+        header_layout = QVBoxLayout(header_card)
+        header_layout.setContentsMargins(12, 12, 12, 12)
+        header_layout.setSpacing(2)
+
+        title = QLabel("Font Settings")
+        title.setObjectName("CustomFontTitleLabel")
+        header_layout.addWidget(title)
+
+        subtitle = QLabel("Adjust family, size, and weight for printed estimates.")
+        subtitle.setObjectName("CustomFontSubtitleLabel")
+        subtitle.setWordWrap(True)
+        header_layout.addWidget(subtitle)
+        layout.addWidget(header_card)
+
+        settings_card = QFrame(self)
+        settings_card.setObjectName("CustomFontSettingsCard")
+        settings_layout = QVBoxLayout(settings_card)
+        settings_layout.setContentsMargins(12, 12, 12, 12)
+        settings_layout.setSpacing(10)
 
         form_layout = QHBoxLayout()
-        form_layout.addWidget(QLabel("Font Family:"))
+        family_label = QLabel("Font Family")
+        family_label.setObjectName("CustomFontFieldLabel")
+        form_layout.addWidget(family_label)
         form_layout.addWidget(self.font_combo, 1)  # Stretch font combo
-        layout.addLayout(form_layout)
+        settings_layout.addLayout(form_layout)
 
         size_bold_layout = QHBoxLayout()
-        size_bold_layout.addWidget(QLabel("Size:"))
+        size_label = QLabel("Size")
+        size_label.setObjectName("CustomFontFieldLabel")
+        size_bold_layout.addWidget(size_label)
         size_bold_layout.addWidget(self.size_spinbox)
         size_bold_layout.addStretch(1)
         size_bold_layout.addWidget(self.bold_checkbox)
-        layout.addLayout(size_bold_layout)
+        settings_layout.addLayout(size_bold_layout)
+        layout.addWidget(settings_card)
 
-        layout.addWidget(QLabel("Preview:"))
-        layout.addWidget(self.preview_label)
+        preview_card = QFrame(self)
+        preview_card.setObjectName("CustomFontPreviewCard")
+        preview_layout = QVBoxLayout(preview_card)
+        preview_layout.setContentsMargins(12, 12, 12, 12)
+        preview_layout.setSpacing(8)
+        preview_title = QLabel("Preview")
+        preview_title.setObjectName("CustomFontPreviewLabel")
+        preview_layout.addWidget(preview_title)
+        preview_frame = QFrame(self)
+        preview_frame.setObjectName("CustomFontSampleFrame")
+        preview_frame_layout = QVBoxLayout(preview_frame)
+        preview_frame_layout.setContentsMargins(12, 12, 12, 12)
+        preview_frame_layout.addWidget(self.preview_label)
+        preview_layout.addWidget(preview_frame)
+        layout.addWidget(preview_card)
         layout.addWidget(self.button_box)
 
         # --- Connections ---

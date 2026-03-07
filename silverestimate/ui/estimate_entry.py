@@ -138,13 +138,9 @@ class EstimateEntryWidget(QWidget):
         self._agg_overall_gross = 0.0
         self._agg_overall_poly = 0.0
 
-        self._use_stretch_for_item_name = False
         self._programmatic_resizing = False
         self._column_autofit_mode = self._read_column_autofit_mode_setting()
-        self._auto_fit_columns_by_content = self._column_autofit_mode in (
-            "explicit",
-            "continuous",
-        )
+        self._auto_fit_columns_by_content = self._column_autofit_mode == "continuous"
         self._pending_autofit_columns: set[int] = set()
         self._column_autofit_timer = QTimer(self)
         self._column_autofit_timer.setSingleShot(True)
@@ -161,9 +157,6 @@ class EstimateEntryWidget(QWidget):
         self._column_save_timer.setInterval(350)
         self._column_save_timer.timeout.connect(self._save_column_widths_setting)
         self._load_column_widths_setting()
-
-        if self._use_stretch_for_item_name:
-            QTimer.singleShot(0, self._auto_stretch_item_name)
 
         self._status_helper = InlineStatusController(
             parent=self,
@@ -406,6 +399,7 @@ for _method_name in (
     "_column_width_limits",
     "_schedule_columns_autofit",
     "_apply_pending_column_autofit",
+    "_ensure_column_can_fit_content",
     "_save_column_widths_setting",
     "_load_column_widths_setting",
     "_on_item_table_section_resized",

@@ -7,6 +7,7 @@ from typing import Optional, cast
 from PyQt5 import sip
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
+    QHeaderView,
     QHBoxLayout,
     QSizePolicy,
     QSplitter,
@@ -39,49 +40,45 @@ from .estimate_entry_ui import (
     CodeDelegate,
     NumericDelegate,
 )
+from .estimate_entry_theme import ESTIMATE_ENTRY_STYLESHEET
 
 
 class EstimateEntryLayoutController(HostProxy):
     """Own layout wiring, totals placement, and persisted UI preferences."""
 
     def _setup_ui(self):
+        self.host.setObjectName("EstimateEntryRoot")
+        self.host.setStyleSheet(ESTIMATE_ENTRY_STYLESHEET)
+
         layout = QVBoxLayout(self.host)
-        layout.setSpacing(4)
+        layout.setSpacing(6)
         layout.setContentsMargins(0, 0, 0, 0)
 
         header_container = QWidget()
         header_container.setObjectName("EstimateHeaderContainer")
-        header_container.setStyleSheet(
-            """
-            QWidget#EstimateHeaderContainer {
-                background-color: palette(base);
-                border: 1px solid palette(midlight);
-                border-radius: 6px;
-            }
-            """
-        )
         header_layout = QHBoxLayout(header_container)
-        header_layout.setContentsMargins(4, 2, 4, 2)
-        header_layout.setSpacing(6)
+        header_layout.setContentsMargins(8, 8, 8, 8)
+        header_layout.setSpacing(8)
 
         self.toolbar = VoucherToolbar()
         self.toolbar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         header_layout.addWidget(self.toolbar, 5)
 
         actions_panel = QWidget()
+        actions_panel.setObjectName("EstimateHeaderActions")
         actions_panel_layout = QHBoxLayout(actions_panel)
         actions_panel_layout.setContentsMargins(0, 0, 0, 0)
-        actions_panel_layout.setSpacing(6)
+        actions_panel_layout.setSpacing(8)
 
         self.primary_actions = PrimaryActionsBar(shortcut_parent=self.host)
         self.primary_actions.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        actions_panel_layout.addWidget(self.primary_actions, 1)
+        actions_panel_layout.addWidget(self.primary_actions)
 
         self.secondary_actions = SecondaryActionsBar(shortcut_parent=self.host)
         self.secondary_actions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        actions_panel_layout.addWidget(self.secondary_actions, 2)
+        actions_panel_layout.addWidget(self.secondary_actions)
 
-        header_layout.addWidget(actions_panel, 7)
+        header_layout.addWidget(actions_panel, 4)
         layout.addWidget(header_container, 0)
 
         self._content_splitter = QSplitter(Qt.Horizontal)
@@ -236,7 +233,7 @@ class EstimateEntryLayoutController(HostProxy):
         )
 
     def _bind_totals_panel_labels(self) -> None:
-        self.mode_indicator_label = self.totals_panel.mode_indicator_label
+        self.mode_indicator_label = self.toolbar.mode_indicator_label
 
         self.overall_gross_label = self.totals_panel.overall_gross_label
         self.overall_poly_label = self.totals_panel.overall_poly_label
@@ -433,6 +430,82 @@ class EstimateEntryLayoutController(HostProxy):
             COL_TYPE: (74, 220),
         }
 
+    def _default_column_widths(self) -> dict[int, int]:
+        return {
+            COL_CODE: 82,
+            COL_GROSS: 80,
+            COL_POLY: 80,
+            COL_NET_WT: 82,
+            COL_PURITY: 80,
+            COL_WAGE_RATE: 82,
+            COL_PIECES: 60,
+            COL_WAGE_AMT: 82,
+            COL_FINE_WT: 82,
+            COL_TYPE: 78,
+        }
+
+    def _apply_non_autofit_column_layout(
+        self, saved_widths: dict[int, int] | None = None
+    ) -> None:
+        table = getattr(self, "item_table", None)
+        if table is None or sip.isdeleted(table):
+            return
+
+        widths = dict(self._default_column_widths())
+        if isinstance(saved_widths, dict):
+            for col, width in saved_widths.items():
+                if col == COL_ITEM_NAME:
+                    continue
+                if isinstance(col, int) and isinstance(width, int):
+                    widths[col] = width
+
+        self._programmatic_resizing = True
+        try:
+            for col in range(table.columnCount()):
+                stretch = col == COL_ITEM_NAME
+                table.set_column_stretch(col, stretch=stretch)
+                if not stretch and col in widths:
+                    table.setColumnWidth(col, widths[col])
+        except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
+            self.logger.debug("Failed to apply non-autofit column layout: %s", exc)
+        finally:
+            self._programmatic_resizing = False
+
+    def _ensure_column_can_fit_content(self, column: int) -> None:
+        if self._is_continuous_column_autofit_enabled():
+            return
+        if column == COL_ITEM_NAME:
+            return
+
+        table = getattr(self, "item_table", None)
+        if table is None or sip.isdeleted(table):
+            return
+        if column < 0 or column >= table.columnCount():
+            return
+
+        model = table.model()
+        if model is None or sip.isdeleted(model):
+            return
+
+        limits = self._column_width_limits()
+        min_width, max_width = limits.get(column, (60, 700))
+        metrics = table.fontMetrics()
+        header_text = model.headerData(column, Qt.Horizontal, Qt.DisplayRole) or ""
+        header_width = metrics.horizontalAdvance(str(header_text)) + 28
+        hint_width = table.sizeHintForColumn(column) + 16
+        target_width = max(min_width, min(max_width, max(header_width, hint_width)))
+        current_width = table.columnWidth(column)
+        if target_width <= current_width:
+            return
+
+        self._programmatic_resizing = True
+        try:
+            table.setColumnWidth(column, int(target_width))
+        except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
+            self.logger.debug("Failed to expand column %s for content: %s", column, exc)
+        finally:
+            self._programmatic_resizing = False
+
     def _schedule_columns_autofit(
         self,
         columns: Optional[list[int]] = None,
@@ -440,8 +513,6 @@ class EstimateEntryLayoutController(HostProxy):
         delay_ms: int = 70,
         force: bool = False,
     ) -> None:
-        if not getattr(self, "_auto_fit_columns_by_content", False):
-            return
         if not force and not self._is_continuous_column_autofit_enabled():
             return
         table = getattr(self, "item_table", None)
@@ -465,8 +536,6 @@ class EstimateEntryLayoutController(HostProxy):
             self.logger.debug("Failed to schedule column auto-fit: %s", exc)
 
     def _apply_pending_column_autofit(self) -> None:
-        if not getattr(self, "_auto_fit_columns_by_content", False):
-            return
         if not self._is_table_valid():
             return
 
@@ -474,6 +543,8 @@ class EstimateEntryLayoutController(HostProxy):
         columns = sorted(self._pending_autofit_columns)
         self._pending_autofit_columns.clear()
         if not columns:
+            if not self._is_continuous_column_autofit_enabled():
+                return
             columns = list(range(table.columnCount()))
 
         model = table.model()
@@ -510,7 +581,7 @@ class EstimateEntryLayoutController(HostProxy):
             return
         try:
             widths = [
-                str(self.item_table.columnWidth(i))
+                str(self.item_table.columnWidth(i) if i != COL_ITEM_NAME else -1)
                 for i in range(self.item_table.columnCount())
             ]
             self._settings().setValue(
@@ -520,53 +591,52 @@ class EstimateEntryLayoutController(HostProxy):
             self.logger.debug("Failed to save column widths setting: %s", exc)
 
     def _load_column_widths_setting(self):
-        if self._auto_fit_columns_by_content:
-            self._use_stretch_for_item_name = False
+        if self._is_continuous_column_autofit_enabled():
+            self._programmatic_resizing = True
+            try:
+                for col in range(self.item_table.columnCount()):
+                    self.item_table.set_column_stretch(col, stretch=False)
+            finally:
+                self._programmatic_resizing = False
             self._schedule_columns_autofit(delay_ms=0, force=True)
             return
 
+        saved_widths: dict[int, int] = {}
         val = self._settings().value("ui/estimate_table_column_widths", type=str)
         if val:
             try:
                 widths = [int(w) for w in val.split(",")]
                 for i, w in enumerate(widths):
-                    if i < self.item_table.columnCount():
-                        self.item_table.setColumnWidth(i, w)
-                self._use_stretch_for_item_name = False
+                    if i < self.item_table.columnCount() and i != COL_ITEM_NAME and w > 0:
+                        saved_widths[i] = w
             except (TypeError, ValueError) as exc:
                 self.logger.debug("Failed to restore column widths setting: %s", exc)
-                self._use_stretch_for_item_name = True
-        else:
-            self._use_stretch_for_item_name = True
+        self._apply_non_autofit_column_layout(saved_widths)
 
     def _on_item_table_section_resized(self, idx, old, new):
-        del idx, old, new
-        if not self._programmatic_resizing:
-            self._use_stretch_for_item_name = False
+        del old, new
+        if not self._programmatic_resizing and idx != COL_ITEM_NAME:
             self._column_save_timer.start()
 
     def _auto_stretch_item_name(self):
         if self._auto_fit_columns_by_content:
             return
-        if not self._use_stretch_for_item_name:
+        table = getattr(self, "item_table", None)
+        if table is None or sip.isdeleted(table):
             return
-        total = self.item_table.viewport().width()
-        used = sum(
-            self.item_table.columnWidth(i)
-            for i in range(self.item_table.columnCount())
-            if i != COL_ITEM_NAME
-        )
-        self._programmatic_resizing = True
-        self.item_table.setColumnWidth(COL_ITEM_NAME, max(120, total - used - 20))
-        self._programmatic_resizing = False
+        current_widths = {
+            col: table.columnWidth(col)
+            for col in range(table.columnCount())
+            if col != COL_ITEM_NAME
+        }
+        self._apply_non_autofit_column_layout(current_widths)
 
     def _reset_columns_layout(self):
-        if self._auto_fit_columns_by_content:
+        if self._is_continuous_column_autofit_enabled():
             self._schedule_columns_autofit(delay_ms=0, force=True)
             return
         self._settings().remove("ui/estimate_table_column_widths")
-        self._use_stretch_for_item_name = True
-        self._auto_stretch_item_name()
+        self._apply_non_autofit_column_layout()
 
     def _load_table_font_size_setting(self):
         size = self._settings().value("ui/table_font_size", defaultValue=9, type=int)
@@ -595,8 +665,9 @@ class EstimateEntryLayoutController(HostProxy):
             font = self.item_table.font()
             font.setPointSize(size_i)
             self.item_table.setFont(font)
-            row_height = max(20, min(34, size_i + 14))
+            row_height = max(28, min(38, size_i + 20))
             self.item_table.verticalHeader().setDefaultSectionSize(row_height)
+            self.item_table.verticalHeader().setMinimumSectionSize(max(26, row_height - 2))
             self._schedule_columns_autofit(delay_ms=0, force=True)
             self.item_table.viewport().update()
             return True

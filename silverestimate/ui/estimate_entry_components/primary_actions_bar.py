@@ -30,46 +30,11 @@ class PrimaryActionsBar(QWidget):
     def _setup_ui(self) -> None:
         """Set up the user interface with compact spacing."""
         self.setObjectName("PrimaryActionStrip")
-        self.setStyleSheet("""
-            QWidget#PrimaryActionStrip {
-                background-color: palette(base);
-                border: 1px solid palette(midlight);
-                border-radius: 6px;
-            }
-            QWidget#PrimaryActionStrip QPushButton {
-                font-weight: 600;
-                padding: 2px 8px;
-                min-width: 78px;
-                min-height: 24px;
-                max-height: 24px;
-                font-size: 8.5pt;
-                border: 1px solid palette(mid);
-                border-radius: 4px;
-                background-color: palette(button);
-                color: palette(buttonText);
-            }
-            QWidget#PrimaryActionStrip QPushButton:hover {
-                background-color: palette(light);
-            }
-            QWidget#PrimaryActionStrip QPushButton#SavePrimaryButton {
-                background-color: #0f766e;
-                border: 1px solid #0f766e;
-                color: #ffffff;
-            }
-            QWidget#PrimaryActionStrip QPushButton#SavePrimaryButton:hover {
-                background-color: #0d9488;
-                border: 1px solid #0d9488;
-            }
-            QWidget#PrimaryActionStrip QPushButton:disabled {
-                color: palette(mid);
-                background-color: palette(window);
-            }
-        """)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         layout = QHBoxLayout(self)
-        layout.setSpacing(6)
-        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(4)
+        layout.setContentsMargins(6, 6, 6, 6)
 
         # Save button (primary action - will get emphasis later)
         self.save_button = QPushButton("Save")
@@ -83,6 +48,7 @@ class PrimaryActionsBar(QWidget):
 
         # Print button
         self.print_button = QPushButton("Print")
+        self.print_button.setObjectName("PrintPrimaryButton")
         self.print_button.setToolTip(
             "Preview and print the current estimate (Ctrl+P)\n\n"
             "Requires saving the estimate first\n"
@@ -92,6 +58,7 @@ class PrimaryActionsBar(QWidget):
 
         # New button
         self.new_button = QPushButton("New")
+        self.new_button.setObjectName("NewPrimaryButton")
         self.new_button.setToolTip(
             "Clear the form to start a new estimate (Ctrl+N)\n\n"
             "Resets all fields and generates new voucher\n"

@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (
     QApplication,
     QComboBox,
     QDialog,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -30,6 +31,7 @@ from silverestimate.ui.models import (
     HistorySilverBarsTableModel,
     IssuedSilverBarListsTableModel,
 )
+from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
 
 
 class SilverBarHistoryDialog(QDialog):
@@ -41,6 +43,53 @@ class SilverBarHistoryDialog(QDialog):
         self.logger = logging.getLogger(__name__)
         self.setWindowTitle("Silver Bar History")
         self.setMinimumSize(1200, 800)
+        self.setObjectName("SilverBarHistoryDialog")
+        self.setStyleSheet(
+            build_management_screen_stylesheet(
+                root_selector="QDialog#SilverBarHistoryDialog",
+                card_names=["SilverBarHistoryHeaderCard"],
+                title_label="SilverBarHistoryTitleLabel",
+                subtitle_label="SilverBarHistorySubtitleLabel",
+                field_label="SilverBarHistoryFieldLabel",
+                primary_button="SilverBarHistoryPrimaryButton",
+                secondary_button="SilverBarHistorySecondaryButton",
+                input_selectors=["QLineEdit", "QComboBox", "QSpinBox"],
+                include_table=True,
+                extra_rules="""
+                QTabWidget::pane {
+                    background-color: #ffffff;
+                    border: 1px solid #d8e1ec;
+                    border-radius: 12px;
+                    top: -1px;
+                }
+                QTabBar::tab {
+                    padding: 8px 14px;
+                    margin-right: 4px;
+                    background-color: #f8fafc;
+                    border: 1px solid #d8e1ec;
+                    border-bottom: none;
+                    border-radius: 8px 8px 0 0;
+                    color: #334155;
+                }
+                QTabBar::tab:selected {
+                    background-color: #ffffff;
+                    color: #0f172a;
+                    font-weight: 700;
+                }
+                QTabBar::tab:hover:!selected {
+                    background-color: #eef2ff;
+                }
+                QLabel#SilverBarHistorySummaryLabel {
+                    background-color: #f8fafc;
+                    border: 1px solid #d8e1ec;
+                    border-radius: 8px;
+                    color: #334155;
+                    font-weight: 600;
+                    padding: 8px;
+                }
+                """,
+            )
+        )
         self._suppress_search = False
         self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
@@ -59,39 +108,24 @@ class SilverBarHistoryDialog(QDialog):
         main_layout.setContentsMargins(16, 16, 16, 16)
         main_layout.setSpacing(12)
 
-        # Title
-        title = QLabel("Silver Bar History & Search")
-        title.setStyleSheet("""
-            font-weight: bold;
-            font-size: 18px;
-            color: #2c3e50;
-            margin-bottom: 10px;
-        """)
-        main_layout.addWidget(title)
+        header_card = QFrame(self)
+        header_card.setObjectName("SilverBarHistoryHeaderCard")
+        header_layout = QVBoxLayout(header_card)
+        header_layout.setContentsMargins(12, 12, 12, 12)
+        header_layout.setSpacing(2)
+        title = QLabel("Silver Bar History")
+        title.setObjectName("SilverBarHistoryTitleLabel")
+        header_layout.addWidget(title)
+        subtitle = QLabel(
+            "Search all bars, inspect issued lists, and reactivate historical lists when needed."
+        )
+        subtitle.setObjectName("SilverBarHistorySubtitleLabel")
+        subtitle.setWordWrap(True)
+        header_layout.addWidget(subtitle)
+        main_layout.addWidget(header_card)
 
         # Create tab widget
         self.tab_widget = QTabWidget()
-        self.tab_widget.setStyleSheet("""
-            QTabWidget::pane {
-                border: 1px solid #ccc;
-                border-radius: 4px;
-            }
-            QTabBar::tab {
-                padding: 8px 16px;
-                margin-right: 2px;
-                background-color: #f8f9fa;
-                border: 1px solid #ddd;
-                border-bottom: none;
-                border-radius: 4px 4px 0 0;
-            }
-            QTabBar::tab:selected {
-                background-color: white;
-                font-weight: 600;
-            }
-            QTabBar::tab:hover {
-                background-color: #e9ecef;
-            }
-        """)
 
         # Tab 1: All Silver Bars
         self.bars_tab = self.create_bars_tab()
@@ -108,21 +142,7 @@ class SilverBarHistoryDialog(QDialog):
         close_layout.addStretch()
 
         close_button = QPushButton("Close")
-        close_button.setStyleSheet("""
-            QPushButton {
-                padding: 8px 16px;
-                font-size: 13px;
-                font-weight: 600;
-                border: 1px solid #6c757d;
-                background-color: #f8f9fa;
-                color: #495057;
-                border-radius: 4px;
-                min-width: 80px;
-            }
-            QPushButton:hover {
-                background-color: #e9ecef;
-            }
-        """)
+        close_button.setObjectName("SilverBarHistorySecondaryButton")
         close_button.clicked.connect(self.accept)
         close_layout.addWidget(close_button)
 
@@ -145,48 +165,24 @@ class SilverBarHistoryDialog(QDialog):
         search_row1.setSpacing(12)
 
         # Voucher search
-        voucher_label = QLabel("Voucher/Note:")
-        voucher_label.setStyleSheet("font-weight: 600; min-width: 100px;")
+        voucher_label = QLabel("Voucher/Note")
+        voucher_label.setObjectName("SilverBarHistoryFieldLabel")
+        voucher_label.setMinimumWidth(100)
         search_row1.addWidget(voucher_label)
 
         self.voucher_edit = QLineEdit()
         self.voucher_edit.setPlaceholderText("Search voucher or note")
-        self.voucher_edit.setStyleSheet("""
-            QLineEdit {
-                padding: 6px;
-                font-size: 13px;
-                border: 1px solid #ccc;
-                border-radius: 3px;
-                min-width: 200px;
-            }
-            QLineEdit:focus {
-                border-color: #007acc;
-            }
-        """)
         self.voucher_edit.textChanged.connect(self._schedule_search)
         search_row1.addWidget(self.voucher_edit)
 
         # Weight search
-        weight_label = QLabel("Weight (g):")
-        weight_label.setStyleSheet(
-            "font-weight: 600; min-width: 80px; margin-left: 20px;"
-        )
+        weight_label = QLabel("Weight (g)")
+        weight_label.setObjectName("SilverBarHistoryFieldLabel")
+        weight_label.setMinimumWidth(80)
         search_row1.addWidget(weight_label)
 
         self.weight_edit = QLineEdit()
         self.weight_edit.setPlaceholderText("Enter weight")
-        self.weight_edit.setStyleSheet("""
-            QLineEdit {
-                padding: 6px;
-                font-size: 13px;
-                border: 1px solid #ccc;
-                border-radius: 3px;
-                min-width: 120px;
-            }
-            QLineEdit:focus {
-                border-color: #007acc;
-            }
-        """)
         self.weight_edit.textChanged.connect(self._schedule_search)
         search_row1.addWidget(self.weight_edit)
 
@@ -198,34 +194,22 @@ class SilverBarHistoryDialog(QDialog):
         search_row2.setSpacing(12)
 
         # Status filter
-        status_label = QLabel("Status:")
-        status_label.setStyleSheet("font-weight: 600; min-width: 100px;")
+        status_label = QLabel("Status")
+        status_label.setObjectName("SilverBarHistoryFieldLabel")
+        status_label.setMinimumWidth(100)
         search_row2.addWidget(status_label)
 
         self.status_combo = QComboBox()
         self.status_combo.addItems(
             ["All Statuses", "In Stock", "Assigned", "Issued", "Sold"]
         )
-        self.status_combo.setStyleSheet("""
-            QComboBox {
-                padding: 6px 8px;
-                font-size: 13px;
-                border: 1px solid #ccc;
-                border-radius: 3px;
-                min-width: 120px;
-            }
-            QComboBox:focus {
-                border-color: #007acc;
-            }
-        """)
         self.status_combo.currentTextChanged.connect(self._schedule_search)
         search_row2.addWidget(self.status_combo)
 
         # Max rows limit
-        limit_label = QLabel("Max Rows:")
-        limit_label.setStyleSheet(
-            "font-weight: 600; min-width: 80px; margin-left: 20px;"
-        )
+        limit_label = QLabel("Max Rows")
+        limit_label.setObjectName("SilverBarHistoryFieldLabel")
+        limit_label.setMinimumWidth(80)
         search_row2.addWidget(limit_label)
 
         self.max_rows_spin = QSpinBox()
@@ -252,19 +236,7 @@ class SilverBarHistoryDialog(QDialog):
 
         # Clear filters button
         clear_button = QPushButton("Clear Filters")
-        clear_button.setStyleSheet("""
-            QPushButton {
-                padding: 6px 12px;
-                font-size: 12px;
-                border: 1px solid #666;
-                background-color: #f5f5f5;
-                color: #333;
-                border-radius: 3px;
-            }
-            QPushButton:hover {
-                background-color: #e5e5e5;
-            }
-        """)
+        clear_button.setObjectName("SilverBarHistorySecondaryButton")
         clear_button.clicked.connect(self.clear_filters)
         search_row2.addWidget(clear_button)
 
@@ -280,41 +252,6 @@ class SilverBarHistoryDialog(QDialog):
         self.bars_table.setAlternatingRowColors(True)
         self.bars_table.setSortingEnabled(True)
         self.bars_table.verticalHeader().setVisible(False)
-
-        # Apply styling
-        self.bars_table.setStyleSheet("""
-            QTableView {
-                font-size: 13px;
-                gridline-color: #ddd;
-                background-color: white;
-                alternate-background-color: #f9f9f9;
-                selection-background-color: #3daee9;
-                selection-color: white;
-            }
-            QTableView::item {
-                padding: 6px 4px;
-                border-bottom: 1px solid #eee;
-                color: #333;
-            }
-            QTableView::item:selected {
-                background-color: #3daee9 !important;
-                color: white !important;
-            }
-            QTableView::item:selected:active {
-                background-color: #2980b9 !important;
-                color: white !important;
-            }
-            QTableView::item:hover {
-                background-color: #e8f4fd;
-            }
-            QHeaderView::section {
-                background-color: #f0f0f0;
-                padding: 8px 4px;
-                border: 1px solid #ddd;
-                font-weight: 600;
-                font-size: 12px;
-            }
-        """)
 
         self.bars_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
         self.bars_table.setColumnWidth(0, 80)
@@ -336,13 +273,7 @@ class SilverBarHistoryDialog(QDialog):
 
         # Summary label
         self.bars_summary = QLabel("Total Bars: 0")
-        self.bars_summary.setStyleSheet("""
-            font-weight: 600;
-            background-color: #f8f9fa;
-            padding: 8px;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-        """)
+        self.bars_summary.setObjectName("SilverBarHistorySummaryLabel")
         layout.addWidget(self.bars_summary)
 
         return tab_widget
@@ -356,12 +287,7 @@ class SilverBarHistoryDialog(QDialog):
 
         # Issued lists table
         lists_header = QLabel("Issued Lists")
-        lists_header.setStyleSheet("""
-            font-weight: bold;
-            font-size: 16px;
-            color: #2c3e50;
-            margin-bottom: 8px;
-        """)
+        lists_header.setObjectName("SilverBarHistoryFieldLabel")
         layout.addWidget(lists_header)
 
         self.lists_model = IssuedSilverBarListsTableModel(self)
@@ -372,41 +298,6 @@ class SilverBarHistoryDialog(QDialog):
         self.lists_table.setAlternatingRowColors(True)
         self.lists_table.setSortingEnabled(True)
         self.lists_table.verticalHeader().setVisible(False)
-
-        # Apply styling
-        self.lists_table.setStyleSheet("""
-            QTableView {
-                font-size: 13px;
-                gridline-color: #ddd;
-                background-color: white;
-                alternate-background-color: #f9f9f9;
-                selection-background-color: #3daee9;
-                selection-color: white;
-            }
-            QTableView::item {
-                padding: 8px 4px;
-                border-bottom: 1px solid #eee;
-                color: #333;
-            }
-            QTableView::item:selected {
-                background-color: #3daee9 !important;
-                color: white !important;
-            }
-            QTableView::item:selected:active {
-                background-color: #2980b9 !important;
-                color: white !important;
-            }
-            QTableView::item:hover {
-                background-color: #e8f4fd;
-            }
-            QHeaderView::section {
-                background-color: #f0f0f0;
-                padding: 8px 4px;
-                border: 1px solid #ddd;
-                font-weight: 600;
-                font-size: 12px;
-            }
-        """)
 
         self.lists_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.Interactive
@@ -434,13 +325,7 @@ class SilverBarHistoryDialog(QDialog):
 
         # List details section
         details_header = QLabel("List Details")
-        details_header.setStyleSheet("""
-            font-weight: bold;
-            font-size: 14px;
-            color: #2c3e50;
-            margin-top: 16px;
-            margin-bottom: 8px;
-        """)
+        details_header.setObjectName("SilverBarHistoryFieldLabel")
         layout.addWidget(details_header)
 
         # Bars in selected list
@@ -452,8 +337,6 @@ class SilverBarHistoryDialog(QDialog):
         self.list_bars_table.setAlternatingRowColors(True)
         self.list_bars_table.setSortingEnabled(True)
         self.list_bars_table.verticalHeader().setVisible(False)
-        self.list_bars_table.setStyleSheet(self.bars_table.styleSheet())
-
         self.list_bars_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.Interactive
         )
@@ -473,25 +356,7 @@ class SilverBarHistoryDialog(QDialog):
         actions_layout.addStretch()
 
         self.reactivate_button = QPushButton("Reactivate List")
-        self.reactivate_button.setStyleSheet("""
-            QPushButton {
-                padding: 8px 16px;
-                font-size: 13px;
-                font-weight: 600;
-                border: 1px solid #28a745;
-                background-color: #28a745;
-                color: white;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #218838;
-            }
-            QPushButton:disabled {
-                background-color: #ccc;
-                border-color: #ccc;
-                color: #999;
-            }
-        """)
+        self.reactivate_button.setObjectName("SilverBarHistoryPrimaryButton")
         self.reactivate_button.setToolTip(
             "Reactivate selected list (move back to active lists)"
         )

@@ -49,6 +49,7 @@ class EstimateTableView(QTableView):
         self._connect_signals()
 
     def _setup_ui(self) -> None:
+        self.setObjectName("EstimateTableView")
         self.setModel(self._table_model)
 
         self.setAlternatingRowColors(True)
@@ -65,8 +66,8 @@ class EstimateTableView(QTableView):
 
         vertical_header = self.verticalHeader()
         vertical_header.setVisible(True)
-        vertical_header.setDefaultSectionSize(24)
-        vertical_header.setMinimumSectionSize(20)
+        vertical_header.setDefaultSectionSize(30)
+        vertical_header.setMinimumSectionSize(28)
 
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_context_menu)
@@ -77,32 +78,6 @@ class EstimateTableView(QTableView):
         palette.setColor(QPalette.Highlight, QColor("#dbeafe"))
         palette.setColor(QPalette.HighlightedText, QColor("#111827"))
         self.setPalette(palette)
-
-        self.setStyleSheet("""
-            QTableView {
-                gridline-color: #e0e0e0;
-                selection-background-color: #e2e8f0;
-                selection-color: #111827;
-            }
-            QTableView::item {
-                padding: 1px 4px;
-            }
-            QTableView::item:hover {
-                background-color: #f3f4f6;
-            }
-            QHeaderView::section {
-                background-color: #f9fafb;
-                color: #1f2937;
-                border: 0px;
-                border-right: 1px solid #e5e7eb;
-                font-weight: 600;
-                padding: 4px 6px;
-            }
-            QTableCornerButton::section {
-                background-color: #f9fafb;
-                border: none;
-            }
-            """)
 
     def _connect_signals(self) -> None:
         self._table_model.data_changed_detailed.connect(self._on_data_changed_detailed)

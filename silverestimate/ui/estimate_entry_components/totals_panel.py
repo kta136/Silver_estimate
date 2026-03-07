@@ -264,54 +264,30 @@ class TotalsPanel(QWidget):
             return
         self._setup_horizontal_ui()
 
-    def _section_style_tokens(self, section_key: str) -> dict[str, str]:
-        key = (section_key or "regular").strip().lower()
-        palette = {
-            "totals": {
-                "title": "#1d4ed8",
-                "label": "#1e3a8a",
-                "value": "#1e40af",
-            },
-            "regular": {
-                "title": "#0f172a",
-                "label": "#334155",
-                "value": "#111827",
-            },
-            "return": {
-                "title": "#991b1b",
-                "label": "#9f1239",
-                "value": "#b91c1c",
-            },
-            "silver_bar": {
-                "title": "#166534",
-                "label": "#166534",
-                "value": "#15803d",
-            },
-        }
-        return palette.get(key, palette["regular"])
-
     def _create_breakdown_form(self, title, labels_attrs, section_key: str = "regular"):
-        tokens = self._section_style_tokens(section_key)
         form = QFormLayout()
         form.setSpacing(2)
         form.setHorizontalSpacing(6)
         form.setVerticalSpacing(2)
 
         title_label = QLabel(f"{title}")
+        title_label.setObjectName("SectionTitle")
+        title_label.setProperty("sectionKind", section_key)
         title_font = title_label.font()
         title_font.setBold(True)
         title_font.setUnderline(True)
         title_label.setFont(title_font)
-        title_label.setStyleSheet(f"color: {tokens['title']};")
         form.addRow(title_label)
 
         for label_text, attr_name, default_value in labels_attrs:
             row_label = QLabel(label_text)
-            row_label.setStyleSheet(f"color: {tokens['label']};")
+            row_label.setObjectName("MetricLabel")
+            row_label.setProperty("sectionKind", section_key)
 
             value_label = QLabel(default_value)
+            value_label.setObjectName("MetricValue")
+            value_label.setProperty("sectionKind", section_key)
             value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            value_label.setStyleSheet(f"color: {tokens['value']}; font-weight: 600;")
             setattr(self, attr_name, value_label)
             form.addRow(row_label, value_label)
         return form
@@ -340,6 +316,8 @@ class TotalsPanel(QWidget):
         final_calc_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
 
         final_title_label = QLabel("Final Calculation")
+        final_title_label.setObjectName("SectionTitle")
+        final_title_label.setProperty("sectionKind", self._FINAL_SECTION_KEY)
         final_title_font = final_title_label.font()
         final_title_font.setBold(True)
         final_title_font.setUnderline(True)
@@ -347,26 +325,30 @@ class TotalsPanel(QWidget):
         final_calc_form.addRow(final_title_label)
 
         self.net_fine_label = QLabel("0.0")
-        self.net_fine_label.setStyleSheet("font-weight: bold;")
+        self.net_fine_label.setObjectName("MetricValue")
+        self.net_fine_label.setProperty("sectionKind", self._FINAL_SECTION_KEY)
         self.net_fine_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.net_fine_label.setSizePolicy(
             QSizePolicy.MinimumExpanding, QSizePolicy.Preferred
         )
         self.net_fine_label.setMinimumWidth(84)
         net_fine_header = QLabel("Net Fine Wt:")
+        net_fine_header.setObjectName("FinalMetricLabel")
         net_fine_header_font = net_fine_header.font()
         net_fine_header_font.setBold(True)
         net_fine_header.setFont(net_fine_header_font)
         final_calc_form.addRow(net_fine_header, self.net_fine_label)
 
         self.net_wage_label = QLabel("0")
-        self.net_wage_label.setStyleSheet("font-weight: bold;")
+        self.net_wage_label.setObjectName("MetricValue")
+        self.net_wage_label.setProperty("sectionKind", self._FINAL_SECTION_KEY)
         self.net_wage_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.net_wage_label.setSizePolicy(
             QSizePolicy.MinimumExpanding, QSizePolicy.Preferred
         )
         self.net_wage_label.setMinimumWidth(84)
         net_wage_header = QLabel("Net Wage:")
+        net_wage_header.setObjectName("FinalMetricLabel")
         net_wage_header_font = net_wage_header.font()
         net_wage_header_font.setBold(True)
         net_wage_header.setFont(net_wage_header_font)
@@ -378,13 +360,14 @@ class TotalsPanel(QWidget):
         final_calc_form.addRow(line_before_grand)
 
         self.grand_total_label = QLabel("0")
-        self.grand_total_label.setStyleSheet("font-weight: bold; color: #059669;")
+        self.grand_total_label.setObjectName("GrandTotalValue")
         self.grand_total_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.grand_total_label.setSizePolicy(
             QSizePolicy.MinimumExpanding, QSizePolicy.Preferred
         )
         self.grand_total_label.setMinimumWidth(84)
         grand_total_header = QLabel("Grand Total:")
+        grand_total_header.setObjectName("FinalMetricLabel")
         grand_total_header_font = grand_total_header.font()
         grand_total_header_font.setBold(True)
         grand_total_header.setFont(grand_total_header_font)
@@ -418,7 +401,6 @@ class TotalsPanel(QWidget):
     def _create_sidebar_section_card(
         self, title, labels_attrs, section_key: str = "regular"
     ) -> QFrame:
-        tokens = self._section_style_tokens(section_key)
         card = QFrame()
         card.setObjectName("TotalsCard")
         card.setProperty("sectionKind", section_key)
@@ -429,8 +411,18 @@ class TotalsPanel(QWidget):
 
         section_title = QLabel(title)
         section_title.setObjectName("SectionTitle")
-        section_title.setStyleSheet(f"color: {tokens['title']}; font-weight: 700;")
-        card_layout.addWidget(section_title)
+        section_title.setProperty("sectionKind", section_key)
+        title_row = QHBoxLayout()
+        title_row.setContentsMargins(0, 0, 0, 0)
+        title_row.setSpacing(6)
+        title_row.addWidget(section_title)
+        title_row.addStretch(1)
+
+        drag_handle = QLabel("≡")
+        drag_handle.setObjectName("SectionDragHandle")
+        drag_handle.setToolTip("Drag to reorder this summary card")
+        title_row.addWidget(drag_handle)
+        card_layout.addLayout(title_row)
 
         form = QFormLayout()
         form.setHorizontalSpacing(8)
@@ -438,11 +430,12 @@ class TotalsPanel(QWidget):
         form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         for label_text, attr_name, default_value in labels_attrs:
             label_widget = QLabel(label_text)
-            label_widget.setStyleSheet(f"color: {tokens['label']};")
+            label_widget.setObjectName("MetricLabel")
+            label_widget.setProperty("sectionKind", section_key)
 
             value_label = QLabel(default_value)
             value_label.setObjectName("MetricValue")
-            value_label.setStyleSheet(f"color: {tokens['value']}; font-weight: 600;")
+            value_label.setProperty("sectionKind", section_key)
             value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             setattr(self, attr_name, value_label)
             form.addRow(label_widget, value_label)
@@ -464,15 +457,28 @@ class TotalsPanel(QWidget):
 
         final_title = QLabel("Final Calculation")
         final_title.setObjectName("SectionTitle")
-        final_layout.addRow(final_title)
+        final_title.setProperty("sectionKind", self._FINAL_SECTION_KEY)
+        title_row = QHBoxLayout()
+        title_row.setContentsMargins(0, 0, 0, 0)
+        title_row.setSpacing(6)
+        title_row.addWidget(final_title)
+        title_row.addStretch(1)
+
+        drag_handle = QLabel("≡")
+        drag_handle.setObjectName("SectionDragHandle")
+        drag_handle.setToolTip("Drag to reorder this summary card")
+        title_row.addWidget(drag_handle)
+        final_layout.addRow(title_row)
 
         self.net_fine_label = QLabel("0.0")
         self.net_fine_label.setObjectName("MetricValue")
+        self.net_fine_label.setProperty("sectionKind", self._FINAL_SECTION_KEY)
         self.net_fine_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         final_layout.addRow("Net Fine Wt:", self.net_fine_label)
 
         self.net_wage_label = QLabel("0")
         self.net_wage_label.setObjectName("MetricValue")
+        self.net_wage_label.setProperty("sectionKind", self._FINAL_SECTION_KEY)
         self.net_wage_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         final_layout.addRow("Net Wage:", self.net_wage_label)
 
@@ -598,66 +604,6 @@ class TotalsPanel(QWidget):
     def _setup_sidebar_ui(self) -> None:
         self.setObjectName("TotalsSidebar")
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
-        self.setStyleSheet("""
-            QWidget#TotalsSidebar {
-                background-color: #f8fafc;
-                border: 1px solid #dbeafe;
-                border-radius: 8px;
-            }
-            QFrame#TotalsCard {
-                background-color: #ffffff;
-                border: 1px solid #e2e8f0;
-                border-radius: 6px;
-            }
-            QFrame#TotalsCard[sectionKind="totals"] {
-                background-color: #eff6ff;
-                border: 1px solid #bfdbfe;
-            }
-            QFrame#TotalsCard[sectionKind="regular"] {
-                background-color: #f8fafc;
-                border: 1px solid #cbd5e1;
-            }
-            QFrame#TotalsCard[sectionKind="return"] {
-                background-color: #fff1f2;
-                border: 1px solid #fecdd3;
-            }
-            QFrame#TotalsCard[sectionKind="silver_bar"] {
-                background-color: #f0fdf4;
-                border: 1px solid #bbf7d0;
-            }
-            QFrame#FinalCalcCard {
-                background-color: #eff6ff;
-                border: 1px solid #bfdbfe;
-                border-radius: 6px;
-            }
-            QListWidget#SummarySectionsList {
-                background: transparent;
-                border: none;
-                outline: none;
-            }
-            QListWidget#SummarySectionsList::item {
-                background: transparent;
-                border: none;
-                padding: 0px;
-                margin: 0px;
-            }
-            QListWidget#SummarySectionsList::item:selected {
-                background: transparent;
-                border: none;
-            }
-            QLabel#SectionTitle {
-                color: #0f172a;
-                font-weight: 700;
-            }
-            QLabel#MetricValue {
-                color: #0f172a;
-                font-weight: 600;
-            }
-            QLabel#GrandTotalValue {
-                color: #065f46;
-                font-weight: 800;
-            }
-        """)
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(8, 8, 8, 8)
@@ -677,7 +623,7 @@ class TotalsPanel(QWidget):
         summary_title.setObjectName("SectionTitle")
         header_row.addWidget(summary_title)
         drag_hint = QLabel("Drag cards to reorder")
-        drag_hint.setStyleSheet("color: #475569;")
+        drag_hint.setObjectName("SummaryDragHint")
         header_row.addWidget(drag_hint)
         header_row.addStretch(1)
         main_layout.addLayout(header_row)
@@ -853,6 +799,4 @@ class TotalsPanel(QWidget):
         font = self.grand_total_label.font()
         font.setPointSize(int(size))
         self.grand_total_label.setFont(font)
-        # Keep color in stylesheet
-        self.grand_total_label.setStyleSheet("font-weight: bold; color: #059669;")
         self._schedule_sidebar_item_size_sync()

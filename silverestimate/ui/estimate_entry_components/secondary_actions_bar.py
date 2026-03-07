@@ -66,66 +66,28 @@ class SecondaryActionsBar(QWidget):
     def _setup_ui(self) -> None:
         """Set up the user interface with compact spacing."""
         self.setObjectName("SecondaryActionStrip")
-        self.setStyleSheet("""
-            QWidget#SecondaryActionStrip {
-                background-color: palette(window);
-                border: 1px solid palette(mid);
-                border-radius: 6px;
-            }
-            QWidget#SecondaryActionStrip QPushButton,
-            QWidget#SecondaryActionStrip QToolButton {
-                padding: 2px 8px;
-                min-height: 24px;
-                max-height: 24px;
-                font-size: 8pt;
-            }
-            QWidget#SecondaryActionStrip QPushButton:hover,
-            QWidget#SecondaryActionStrip QToolButton:hover {
-                background-color: palette(light);
-            }
-            QWidget#SecondaryActionStrip QPushButton:checked,
-            QWidget#SecondaryActionStrip QToolButton:checked {
-                background-color: palette(midlight);
-                border: 2px solid palette(highlight);
-            }
-            QWidget#SecondaryActionStrip QToolButton#DeleteEstimateButton {
-                color: #b91c1c;
-                border: 1px solid #fca5a5;
-                border-radius: 4px;
-                background-color: #fef2f2;
-                padding: 2px 8px;
-            }
-            QWidget#SecondaryActionStrip QToolButton#DeleteEstimateButton:hover {
-                background-color: #fee2e2;
-                border-color: #ef4444;
-            }
-            QWidget#SecondaryActionStrip QToolButton#DeleteEstimateButton:disabled {
-                color: #9ca3af;
-                border-color: #cbd5e1;
-                background-color: #f8fafc;
-            }
-        """)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         layout = QHBoxLayout(self)
         layout.setSpacing(6)
-        layout.setContentsMargins(6, 4, 6, 4)
+        layout.setContentsMargins(6, 6, 6, 6)
         self._main_layout = layout
 
         # Delete Row button
         self.delete_row_button = QPushButton("Delete")
+        self.delete_row_button.setObjectName("DeleteRowButton")
         self.delete_row_button.setToolTip(
             "Delete the currently selected row\n"
             "Keyboard: Ctrl+D\n"
             "Removes the active row from the estimate\n"
             "Cannot be undone"
         )
-        self.delete_row_button.setMaximumWidth(72)
         layout.addWidget(self.delete_row_button)
         layout.addWidget(self._create_divider())
 
         # Return mode toggle
         self.return_toggle_button = QPushButton("Return")
+        self.return_toggle_button.setObjectName("ReturnModeButton")
         self.return_toggle_button.setToolTip(
             "Toggle Return Item entry mode for new rows\n"
             "Keyboard: Ctrl+R\n"
@@ -133,11 +95,11 @@ class SecondaryActionsBar(QWidget):
             "Affects calculations and item type"
         )
         self.return_toggle_button.setCheckable(True)
-        self.return_toggle_button.setMaximumWidth(96)
         layout.addWidget(self.return_toggle_button)
 
         # Silver bar mode toggle
-        self.silver_bar_toggle_button = QPushButton("Bar Mode")
+        self.silver_bar_toggle_button = QPushButton("Bars")
+        self.silver_bar_toggle_button.setObjectName("SilverBarModeButton")
         self.silver_bar_toggle_button.setToolTip(
             "Toggle Silver Bar entry mode for new rows\n"
             "Keyboard: Ctrl+B\n"
@@ -145,7 +107,6 @@ class SecondaryActionsBar(QWidget):
             "Cannot use both Return and Silver Bar modes"
         )
         self.silver_bar_toggle_button.setCheckable(True)
-        self.silver_bar_toggle_button.setMaximumWidth(96)
         layout.addWidget(self.silver_bar_toggle_button)
 
         # Backward compatibility aliases
@@ -156,6 +117,7 @@ class SecondaryActionsBar(QWidget):
 
         # Last Balance button
         self.last_balance_button = QToolButton()
+        self.last_balance_button.setObjectName("BalanceButton")
         self.last_balance_button.setText("Balance")
         self.last_balance_button.setToolTip(
             "Add Last Balance to this estimate\n"
@@ -170,6 +132,7 @@ class SecondaryActionsBar(QWidget):
 
         # Estimate history button
         self.history_button = QToolButton()
+        self.history_button.setObjectName("HistoryButton")
         self.history_button.setText("History")
         self.history_button.setToolTip(
             "View, load, or print past estimates\n"
@@ -184,6 +147,7 @@ class SecondaryActionsBar(QWidget):
 
         # Manage Silver Bars button
         self.silver_bars_button = QToolButton()
+        self.silver_bars_button.setObjectName("BarListButton")
         self.silver_bars_button.setText("Bar List")
         self.silver_bars_button.setToolTip(
             "View and manage silver bar inventory\n"
@@ -203,18 +167,11 @@ class SecondaryActionsBar(QWidget):
         # Live rate value and meta info in vertical layout
         self.live_rate_container = QWidget()
         self.live_rate_container.setObjectName("LiveRateCard")
-        self.live_rate_container.setStyleSheet("""
-            QWidget#LiveRateCard {
-                background-color: #e6f0ff;
-                border: 1px solid #93c5fd;
-                border-radius: 12px;
-            }
-        """)
         self.live_rate_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         rate_layout = QHBoxLayout(self.live_rate_container)
-        rate_layout.setContentsMargins(8, 4, 6, 4)
-        rate_layout.setSpacing(6)
+        rate_layout.setContentsMargins(6, 5, 6, 5)
+        rate_layout.setSpacing(4)
 
         left_stack = QVBoxLayout()
         left_stack.setContentsMargins(0, 0, 0, 0)
@@ -226,18 +183,7 @@ class SecondaryActionsBar(QWidget):
 
         self.live_rate_value_label = QLabel("…")
         self.live_rate_value_label.setObjectName("LiveRateValue")
-        self.live_rate_value_label.setStyleSheet("""
-            QLabel#LiveRateValue {
-                color: #0f172a;
-                background-color: #e6f0ff;
-                border: 1px solid #93c5fd;
-                border-radius: 10px;
-                padding: 2px 8px;
-                font-weight: 700;
-                font-size: 11pt;
-            }
-        """)
-        self.live_rate_value_label.setMinimumWidth(110)
+        self.live_rate_value_label.setMinimumWidth(96)
         self.live_rate_value_label.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
         rate_layout.addWidget(self.live_rate_value_label)
 
@@ -257,7 +203,6 @@ class SecondaryActionsBar(QWidget):
         self.live_rate_meta_label.setObjectName("LiveRateMeta")
         self.live_rate_meta_label.setAccessibleName("Live Rate Status")
         self.live_rate_meta_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self.live_rate_meta_label.setStyleSheet("color: #475569; font-size: 8pt;")
         left_stack.addWidget(self.live_rate_meta_label)
 
         rate_layout.addLayout(left_stack)

@@ -84,6 +84,7 @@ def test_return_mode_button_updates_row_type(qtbot, fake_db):
             lambda: (
                 widget.return_mode
                 and widget.return_toggle_button.isChecked()
+                and widget.mode_indicator_label.text() == "Mode: Return Items"
                 and widget.item_table.get_cell_text(
                     widget.item_table.rowCount() - 1, COL_TYPE
                 )
@@ -123,6 +124,7 @@ def test_silver_bar_mode_button_updates_row_type(qtbot, fake_db):
             lambda: (
                 widget.silver_bar_mode
                 and widget.silver_bar_toggle_button.isChecked()
+                and widget.mode_indicator_label.text() == "Mode: Silver Bars"
                 and widget.item_table.get_cell_text(
                     widget.item_table.rowCount() - 1, COL_TYPE
                 )

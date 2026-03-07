@@ -6,10 +6,14 @@ from PyQt5.QtCore import Qt
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.ui.estimate_entry_logic.constants import (
     COL_CODE,
+    COL_FINE_WT,
     COL_GROSS,
     COL_ITEM_NAME,
+    COL_NET_WT,
     COL_PIECES,
     COL_PURITY,
+    COL_TYPE,
+    COL_WAGE_AMT,
 )
 from silverestimate.ui.models.estimate_table_model import EstimateTableModel
 from silverestimate.ui.view_models.estimate_entry_view_model import (
@@ -258,6 +262,33 @@ def test_set_row_wage_type_updates_flags_and_normalizes(model):
     row = model.get_row(0)
     assert row is not None
     assert row.wage_type == "WT"
+
+
+def test_calculated_columns_have_distinct_visual_roles(model):
+    """Calculated columns should read as non-editable outputs."""
+    model.add_row(
+        EstimateEntryRowState(
+            code="TEST1",
+            net_weight=10.0,
+            wage_amount=100.0,
+            fine_weight=9.1,
+        )
+    )
+
+    for column in (COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT):
+        index = model.index(0, column)
+        background = model.data(index, Qt.BackgroundRole)
+        foreground = model.data(index, Qt.ForegroundRole)
+        assert background is not None
+        assert foreground is not None
+
+
+def test_type_column_keeps_category_background_role(model):
+    """Type column background should still reflect the line category."""
+    model.add_row(EstimateEntryRowState(code="RET1", category=EstimateLineCategory.RETURN))
+    index = model.index(0, COL_TYPE)
+    background = model.data(index, Qt.BackgroundRole)
+    assert background is not None
 
 
 def test_set_data_pieces_defaults_for_wage_type(model):

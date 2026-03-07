@@ -18,6 +18,8 @@ def test_initial_state(toolbar):
     assert toolbar.get_note() == ""
     assert toolbar.get_date() == QDate.currentDate()
     assert not toolbar.unsaved_badge.isVisible()
+    assert toolbar.mode_indicator_label.text() == "Mode: Regular"
+    assert toolbar.status_message_label.text() == ""
 
 
 def test_set_voucher_number(toolbar):
@@ -39,6 +41,7 @@ def test_set_note(toolbar):
     toolbar.set_note("Test note")
     assert toolbar.get_note() == "Test note"
     assert toolbar.note_edit.text() == "Test note"
+    assert not toolbar.note_edit.isHidden()
 
 
 def test_show_unsaved_badge(toolbar):

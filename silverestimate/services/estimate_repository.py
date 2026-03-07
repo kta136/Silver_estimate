@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Mapping, Optional, Protocol, Sequence
+from typing import Any, Iterable, Mapping, Optional, Protocol
 
 EstimateRow = Mapping[str, Any]
 
@@ -27,10 +27,6 @@ class EstimateRepositoryDatabase(Protocol):
         return_items: list[EstimateRow],
         totals: dict[str, Any],
     ) -> bool: ...
-
-    def get_silver_bars_for_estimate(
-        self, voucher_no: str
-    ) -> Sequence[EstimateRow] | None: ...
 
     def sync_silver_bars_for_estimate(
         self, voucher_no: str, bars: list[EstimateRow]

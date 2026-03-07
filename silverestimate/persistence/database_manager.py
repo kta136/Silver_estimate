@@ -19,7 +19,6 @@ from silverestimate.persistence.temp_database_store import TempDatabaseStore
 from silverestimate.security import encryption as crypto_utils
 
 # Constants
-SALT_KEY = crypto_utils.SALT_SETTINGS_KEY  # Legacy alias for settings key
 KDF_ITERATIONS = crypto_utils.DEFAULT_KDF_ITERATIONS  # PBKDF2 iteration count
 
 
@@ -328,13 +327,6 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         Uses a short-lived separate connection so it is safe from any thread.
         """
         return self._encrypted_store.checkpoint_wal(self.temp_db_path)
-
-    @staticmethod
-    def _get_or_create_salt_static(logger=None):
-        return EncryptedDatabaseStore.get_or_create_salt(
-            logger=logger,
-            settings_factory=get_app_settings,
-        )
 
     @staticmethod
     def check_recovery_candidate(encrypted_db_path):

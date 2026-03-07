@@ -109,10 +109,6 @@ class SecondaryActionsBar(QWidget):
         self.silver_bar_toggle_button.setCheckable(True)
         layout.addWidget(self.silver_bar_toggle_button)
 
-        # Backward compatibility aliases
-        self.return_button = self.return_toggle_button
-        self.silver_bar_button = self.silver_bar_toggle_button
-
         layout.addWidget(self._create_divider())
 
         # Last Balance button
@@ -159,10 +155,6 @@ class SecondaryActionsBar(QWidget):
         layout.addWidget(self.silver_bars_button)
 
         layout.addStretch()
-
-        # Compatibility label (not shown) so legacy controllers can still target it
-        self.live_rate_label = QLabel("")
-        self.live_rate_label.setVisible(False)
 
         # Live rate value and meta info in vertical layout
         self.live_rate_container = QWidget()

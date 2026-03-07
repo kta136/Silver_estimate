@@ -130,11 +130,10 @@ class EstimateEntryLayoutController(HostProxy):
         self.history_button = self.secondary_actions.history_button
 
         self.delete_row_button = self.secondary_actions.delete_row_button
-        self.return_toggle_button = self.secondary_actions.return_button
-        self.silver_bar_toggle_button = self.secondary_actions.silver_bar_button
+        self.return_toggle_button = self.secondary_actions.return_toggle_button
+        self.silver_bar_toggle_button = self.secondary_actions.silver_bar_toggle_button
         self.last_balance_button = self.secondary_actions.last_balance_button
         self.silver_bars_button = self.secondary_actions.silver_bars_button
-        self.live_rate_label = self.secondary_actions.live_rate_label
         self.live_rate_value_label = self.secondary_actions.live_rate_value_label
         self.live_rate_meta_label = self.secondary_actions.live_rate_meta_label
         self.refresh_rate_button = self.secondary_actions.refresh_rate_button

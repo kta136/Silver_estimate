@@ -59,7 +59,6 @@ class _LabelStub:
 
 class _WidgetStub:
     def __init__(self):
-        self.live_rate_label = _LabelStub()
         self.live_rate_value_label = _LabelStub("-")
         self.live_rate_meta_label = _LabelStub("")
         self.refresh_rate_button = _LabelStub()
@@ -107,7 +106,6 @@ def test_apply_visibility_settings_hides_rate_widgets_when_disabled():
     )
 
     assert controller.apply_visibility_settings() is False
-    assert widget.live_rate_label.visible is False
     assert widget.live_rate_value_label.visible is False
     assert widget.live_rate_meta_label.visible is False
     assert widget.refresh_rate_button.visible is False
@@ -123,7 +121,6 @@ def test_apply_visibility_settings_shows_placeholder_when_enabled():
     )
 
     assert controller.apply_visibility_settings() is True
-    assert widget.live_rate_label.visible is True
     assert widget.live_rate_value_label.text() == "."
     assert widget.live_rate_meta_label.text() == "Waiting…"
 

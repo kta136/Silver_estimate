@@ -70,7 +70,6 @@ class LiveRateController(QObject):
         if not widget:
             return show_ui
         components = (
-            getattr(widget, "live_rate_label", None),
             getattr(widget, "live_rate_value_label", None),
             getattr(widget, "live_rate_meta_label", None),
             getattr(widget, "refresh_rate_button", None),

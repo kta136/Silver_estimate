@@ -64,7 +64,6 @@ class TotalsPanel(QWidget):
     section_order_changed = pyqtSignal(list)
 
     if TYPE_CHECKING:
-        mode_indicator_label: QLabel
         overall_gross_label: QLabel
         overall_poly_label: QLabel
         total_gross_label: QLabel
@@ -256,10 +255,6 @@ class TotalsPanel(QWidget):
 
     def _setup_ui(self) -> None:
         """Set up the user interface."""
-        # Hidden compatibility label so existing logic can continue to update it
-        self.mode_indicator_label = QLabel("Mode: Regular")
-        self.mode_indicator_label.setVisible(False)
-
         if self._layout_mode == "sidebar":
             self._setup_sidebar_ui()
             return

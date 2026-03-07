@@ -5,12 +5,18 @@ import ssl
 import urllib.error
 import urllib.request
 from html import unescape
+from math import ceil
 from typing import Any, Optional, cast
 from urllib.parse import urlparse
 
 DEFAULT_BASE_URL = "http://www.ddasilver.com/"
+# DDASilver's homepage currently fails normal HTTPS certificate verification.
+# Keep the scrape URL on HTTP unless the vendor fixes TLS and the endpoint is
+# re-verified. Do not recommend switching this to HTTPS blindly.
 # Policy note: keep this exact DDASilver commodity target fixed for live-rate
 # fetches until product requirements explicitly specify a different item.
+# Do not swap this to another DDASilver row, a spot quote, or a different feed
+# just because it looks numerically closer without an explicit requirement.
 TARGET_NAME = "Silver Agra Local Mohar"
 
 SCRAPE_HEADERS = {
@@ -23,6 +29,9 @@ SCRAPE_HEADERS = {
 # The vendor recently migrated the live feed to a new host (13.235.208.189)
 # but left the previous endpoint running with stale data. Probe the new host
 # first and fall back to the legacy endpoint to remain compatible.
+# Verified on 2026-03-07: strict HTTPS does not work for these hosts because
+# certificate validation fails (self-signed cert / hostname mismatch). Keep
+# the broadcast endpoints on HTTP unless the vendor publishes valid TLS.
 BROADCAST_URLS = (
     "http://13.235.208.189/lmxtrade/winbullliteapi/api/v1/broadcastrates",
     "http://3.109.80.6/lmxtrade/winbullliteapi/api/v1/broadcastrates",
@@ -115,19 +124,33 @@ def _parse_scraped_rate(html: str, target_name: str):
 
     rate_float: float | None = None
     source: str | None = None
-    sell_rate_val = _convert_to_float(metadata.get("sell_rate"))
-    if sell_rate_val is not None:
-        # Use the raw commodity rate for the exact target row.
-        rate_float = sell_rate_val
-        source = "sell_rate"
+    # Prefer a numeric on-screen value when DDASilver exposes one directly.
+    # If the visible rate cell is "-", keep using this row only and derive the
+    # business rate from the hidden sell rate plus display purity instead of
+    # falling back to some other commodity or broadcast line.
+    display_val = _convert_to_float(metadata.get("display_rate"))
+    if display_val is not None:
+        rate_float = display_val
+        source = "display_rate"
     if rate_float is None:
-        display_val = _convert_to_float(metadata.get("display_rate"))
-        if display_val is not None:
-            rate_float = display_val
-            source = "display_rate"
+        sell_rate_val = _convert_to_float(metadata.get("sell_rate"))
+        if sell_rate_val is not None:
+            rate_float = sell_rate_val
+            source = "sell_rate"
 
     if rate_float is None:
         return None, metadata
+
+    if source == "sell_rate":
+        purity_val = _convert_to_float(metadata.get("com_display_purity"))
+        if purity_val is not None and 0 < purity_val < 100:
+            # Business-required fallback. Example observed on 2026-03-07:
+            # 275569 at 99% purity must yield 272814, not the raw 275569.
+            metadata["applied_adjustment"] = "sell_rate * display_purity_percent"
+            metadata["applied_purity_percent"] = purity_val
+            metadata["parsed_decimals"] = 0
+            metadata["raw_source"] = source
+            return int(ceil(rate_float * (purity_val / 100.0))), metadata
 
     decimals = 0
     rate_str = f"{rate_float}"
@@ -287,6 +310,9 @@ def _fetch_url_text(
         if host not in _TLS_RETRY_ALLOWED_HOSTS:
             raise ValueError("Blocked request to untrusted endpoint") from exc
 
+        # DDASilver's broadcast HTTPS currently responds only with invalid certs.
+        # This retry is intentionally limited to the known vendor hosts; do not
+        # generalize it or describe HTTPS as "fixed" until the vendor resolves TLS.
         insecure_context = ssl._create_unverified_context()  # nosec B323
         with urllib.request.urlopen(
             req, timeout=timeout, context=insecure_context

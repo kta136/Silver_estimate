@@ -1,11 +1,11 @@
-# Silver Estimation App - v2.6.10
+# Silver Estimation App - v2.7
 
 A desktop application built with PyQt5 and an encrypted SQLite database for managing silver sales estimates - item-wise entries, silver bar inventory, returns, and print-ready outputs.
 
 [![Python](https://img.shields.io/badge/Python-3.13+-blue.svg)](https://www.python.org/)
 [![PyQt5](https://img.shields.io/badge/PyQt5-5.15+-green.svg)](https://www.riverbankcomputing.com/software/pyqt/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v2.6.10-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v2.7-orange.svg)](CHANGELOG.md)
 [![PR Validation](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml)
 [![Main Validation](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml)
 [![Release Windows](https://github.com/kta136/Silver_estimate/actions/workflows/release-windows.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/release-windows.yml)
@@ -58,6 +58,12 @@ The app helps silver shops to:
 - **Services**: `MainCommands`, `SettingsService`, `LiveRateService`, and `AuthService` encapsulate reusable logic; authentication relies on the secure credential store.
 - **Persistence**: `DatabaseManager` plus repository classes (`items`, `estimates`, `silver_bars`) manage the decrypted working copy, WAL checkpoints, and AES-GCM encryption.
 - **Security & infrastructure**: OS keyring-backed credential storage (`silverestimate/security/credential_store.py`), structured logging with optional cleanup scheduler, and QSettings helpers maintain app state safely.
+
+### Live Rate Maintainer Notes
+
+- Keep live-rate fetches pinned to DDASilver item `Silver Agra Local Mohar` unless product requirements explicitly change.
+- If DDASilver shows `-` in the visible rate cell, derive the required rate from `sell_rate * com_display_purity / 100` and round up to the next integer. Example observed on 2026-03-07: `275569 * 99% = 272814`.
+- Do not recommend migrating the DDASilver URLs to HTTPS unless the vendor fixes certificate validation and the endpoints are re-verified. As of 2026-03-07, strict HTTPS fails for both the homepage and the broadcast feed.
 
 ### Key Design Principles
 - Separation of concerns: UI, presenter, services, and persistence remain loosely coupled.
@@ -253,6 +259,10 @@ c 2023-2025 Silver Estimation App
 ---
 
 ## Version History (highlights)
+
+### v2.7 (2026-03-07)
+- Restored the DDASilver fallback live-rate calculation to the required purity-adjusted value for `Silver Agra Local Mohar`
+- Added maintainer notes documenting that strict HTTPS does not currently work for the DDASilver homepage and broadcast feed
 
 ### v2.6.7 (2026-02-18)
 - Corrected DDASilver live-rate parsing to use the `Silver Agra Local Mohar` target row value directly

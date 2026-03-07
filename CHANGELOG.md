@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7] - 2026-03-07
+
+### Changed
+- Bumped application/package version to `2.7`
+- Updated project README version header and badge to `v2.7`
+- Added maintainer documentation for the DDASilver live-rate source policy, purity-adjusted fallback, and the current HTTPS limitation
+
+### Fixed
+- Restored the DDASilver `Silver Agra Local Mohar` fallback calculation to the required purity-adjusted live rate
+
 ## [2.6.10] - 2026-03-07
 
 ### Added

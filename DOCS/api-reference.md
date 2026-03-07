@@ -83,6 +83,8 @@ This guide documents the primary controller, service, and persistence APIs expos
     LiveRateService(parent: Optional[QObject] = None, logger: Optional[logging.Logger] = None)
 
 - Source policy: live-rate fetches are pinned to DDASilver item `Silver Agra Local Mohar` (via `services/dda_rate_fetcher.py::TARGET_NAME`) and should remain fixed until a new explicit requirement changes it.
+- Parsing policy: if DDASilver's visible rate cell is not numeric, keep deriving the business-required value from `sell_rate * com_display_purity / 100` and round up to the next integer. Example observed on 2026-03-07: `275569 * 99% = 272814`.
+- HTTPS policy: do not recommend changing the DDASilver live-rate URLs from HTTP to HTTPS unless the vendor fixes certificate validation and the endpoints are re-verified. As of 2026-03-07, strict HTTPS fails for both the homepage and the broadcast host.
 - **rate_updated** – Qt signal emitting (broadcast_rate, api_rate, market_open) tuples.
 - **start() / stop()** – manage the auto-refresh timer using settings for cadence and enablement.
 - **refresh_now()** – fetch the latest rates (broadcast first, API fallback) in a background thread and emit results.

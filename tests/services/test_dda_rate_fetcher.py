@@ -20,7 +20,7 @@ class _FakeResponse:
         return False
 
 
-def test_fetch_silver_agra_local_mohar_rate_parses_sell_rate(monkeypatch):
+def test_fetch_silver_agra_local_mohar_rate_prefers_numeric_display_rate(monkeypatch):
     html = f"""
     <html><body>
       <table>
@@ -48,7 +48,7 @@ def test_fetch_silver_agra_local_mohar_rate_parses_sell_rate(monkeypatch):
 
     assert rate == 95000
     assert metadata["source"] == "scraped"
-    assert metadata["raw_source"] == "sell_rate"
+    assert metadata["raw_source"] == "display_rate"
 
 
 def test_fetch_silver_agra_local_mohar_rate_returns_none_on_network_failure(
@@ -237,6 +237,29 @@ def test_parse_scraped_rate_rounds_integer_sell_rate_without_adjustment():
 
     assert rate == 42000
     assert metadata["raw_source"] == "sell_rate"
+    assert metadata["parsed_decimals"] == 0
+
+
+def test_parse_scraped_rate_applies_display_purity_when_display_missing():
+    html = f"""
+    <tr>
+      <td>{dda_rate_fetcher.TARGET_NAME}</td>
+      <td>
+        <div class="redround">-</div>
+        <div class="sell_rate">275569.00</div>
+        <div class="com_display_purity">99</div>
+      </td>
+    </tr>
+    """
+
+    rate, metadata = dda_rate_fetcher._parse_scraped_rate(
+        html, dda_rate_fetcher.TARGET_NAME
+    )
+
+    assert rate == 272814
+    assert metadata["raw_source"] == "sell_rate"
+    assert metadata["applied_adjustment"] == "sell_rate * display_purity_percent"
+    assert metadata["applied_purity_percent"] == 99.0
     assert metadata["parsed_decimals"] == 0
 
 

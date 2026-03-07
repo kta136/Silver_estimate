@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (
     QDialog,
-    QFrame,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QInputDialog,
     QLabel,

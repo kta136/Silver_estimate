@@ -4,6 +4,7 @@ from .theme_tokens import (
     CARD_BORDER,
     DANGER_BG,
     DANGER_BORDER,
+    FIELD_TEXT,
     FOCUS_RING,
     HEADER_BG,
     HEADER_TEXT,
@@ -15,7 +16,6 @@ from .theme_tokens import (
     SURFACE_BG,
     TEXT_MUTED,
     TEXT_STRONG,
-    FIELD_TEXT,
 )
 
 

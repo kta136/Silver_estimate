@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 """Estimate entry table constants and delegates."""
 
-from PyQt5.QtCore import QEvent, QLocale, Qt, QTimer
+from PyQt5.QtCore import QEvent, Qt, QTimer
 from PyQt5.QtGui import QDoubleValidator, QIntValidator
 from PyQt5.QtWidgets import QLineEdit, QStyledItemDelegate
+
+from silverestimate.ui import estimate_table_formatting
+from silverestimate.ui.numeric_font import numeric_table_font
 
 # --- Column Constants (shared by estimate entry table paths) ---
 COL_CODE = 0
@@ -26,13 +29,14 @@ class NumericDelegate(QStyledItemDelegate):
     def _style_editor(editor: QLineEdit) -> None:
         editor.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         editor.setClearButtonEnabled(False)
+        editor.setFont(numeric_table_font(editor.font()))
 
     def createEditor(self, parent, option, index):
         editor = QLineEdit(parent)
         editor.setProperty("modelIndex", index)
         self._style_editor(editor)
         col = index.column()
-        locale = QLocale.system()
+        locale = estimate_table_formatting.get_estimate_table_locale()
         validator: QDoubleValidator | QIntValidator
 
         if col in [COL_GROSS, COL_POLY, COL_PURITY, COL_WAGE_RATE]:
@@ -78,7 +82,7 @@ class NumericDelegate(QStyledItemDelegate):
 
         col = index.column()
         value = editor.text().strip()
-        locale = QLocale.system()
+        locale = estimate_table_formatting.get_estimate_table_locale()
 
         if col in [COL_GROSS, COL_POLY]:
             if not value:

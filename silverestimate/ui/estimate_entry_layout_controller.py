@@ -7,7 +7,6 @@ from typing import Optional, cast
 from PyQt5 import sip
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QHeaderView,
     QHBoxLayout,
     QSizePolicy,
     QSplitter,
@@ -25,6 +24,7 @@ from .estimate_entry_components import (
     TotalsPanel,
     VoucherToolbar,
 )
+from .estimate_entry_theme import ESTIMATE_ENTRY_STYLESHEET
 from .estimate_entry_ui import (
     COL_CODE,
     COL_FINE_WT,
@@ -40,7 +40,6 @@ from .estimate_entry_ui import (
     CodeDelegate,
     NumericDelegate,
 )
-from .estimate_entry_theme import ESTIMATE_ENTRY_STYLESHEET
 
 
 class EstimateEntryLayoutController(HostProxy):
@@ -607,7 +606,11 @@ class EstimateEntryLayoutController(HostProxy):
             try:
                 widths = [int(w) for w in val.split(",")]
                 for i, w in enumerate(widths):
-                    if i < self.item_table.columnCount() and i != COL_ITEM_NAME and w > 0:
+                    if (
+                        i < self.item_table.columnCount()
+                        and i != COL_ITEM_NAME
+                        and w > 0
+                    ):
                         saved_widths[i] = w
             except (TypeError, ValueError) as exc:
                 self.logger.debug("Failed to restore column widths setting: %s", exc)
@@ -667,7 +670,9 @@ class EstimateEntryLayoutController(HostProxy):
             self.item_table.setFont(font)
             row_height = max(28, min(38, size_i + 20))
             self.item_table.verticalHeader().setDefaultSectionSize(row_height)
-            self.item_table.verticalHeader().setMinimumSectionSize(max(26, row_height - 2))
+            self.item_table.verticalHeader().setMinimumSectionSize(
+                max(26, row_height - 2)
+            )
             self._schedule_columns_autofit(delay_ms=0, force=True)
             self.item_table.viewport().update()
             return True

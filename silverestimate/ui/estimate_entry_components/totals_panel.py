@@ -19,6 +19,7 @@ from PyQt5.QtWidgets import (
 )
 
 from silverestimate.domain.estimate_models import TotalsResult
+from silverestimate.ui.estimate_table_formatting import format_indian_number
 
 
 class _SummarySectionsListWidget(QListWidget):
@@ -681,7 +682,7 @@ class TotalsPanel(QWidget):
     def _format_weight(value: float) -> str:
         """Format weight values with two decimals."""
         try:
-            return f"{float(value):.2f}"
+            return format_indian_number(value, 2)
         except Exception:
             return "0.00"
 
@@ -689,7 +690,7 @@ class TotalsPanel(QWidget):
     def _format_whole(value: float) -> str:
         """Format whole-number values."""
         try:
-            return f"{float(value):.0f}"
+            return format_indian_number(value, 0)
         except Exception:
             return "0"
 

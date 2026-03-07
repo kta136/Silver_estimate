@@ -87,7 +87,9 @@ class ItemMasterWidget(QWidget):
         header_label.setObjectName("ItemMasterTitleLabel")
         header_layout.addWidget(header_label)
 
-        subtitle_label = QLabel("Maintain catalog codes, purity defaults, and wage settings.")
+        subtitle_label = QLabel(
+            "Maintain catalog codes, purity defaults, and wage settings."
+        )
         subtitle_label.setObjectName("ItemMasterSubtitleLabel")
         header_layout.addWidget(subtitle_label)
         layout.addWidget(header_card)

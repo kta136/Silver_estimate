@@ -2,6 +2,7 @@
 
 import pytest
 from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QTableView
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.ui.estimate_entry_logic.constants import (
@@ -11,11 +12,14 @@ from silverestimate.ui.estimate_entry_logic.constants import (
     COL_ITEM_NAME,
     COL_NET_WT,
     COL_PIECES,
+    COL_POLY,
     COL_PURITY,
     COL_TYPE,
     COL_WAGE_AMT,
+    COL_WAGE_RATE,
 )
 from silverestimate.ui.models.estimate_table_model import EstimateTableModel
+from silverestimate.ui.numeric_font import numeric_table_font
 from silverestimate.ui.view_models.estimate_entry_view_model import (
     EstimateEntryRowState,
 )
@@ -95,7 +99,35 @@ def test_set_data(model):
     index = model.index(0, COL_GROSS)
     success = model.setData(index, 150.5, Qt.EditRole)
     assert success is True
-    assert model.data(index, Qt.DisplayRole) == 150.5
+    assert model.data(index, Qt.DisplayRole) == "150.500"
+    assert model.data(index, Qt.EditRole) == 150.5
+
+
+def test_numeric_display_role_formats_using_column_precision_and_grouping(model):
+    model.add_row(
+        EstimateEntryRowState(
+            gross=1234567.5,
+            poly=12345.25,
+            net_weight=1234567.5,
+            purity=91.6,
+            wage_rate=1500.0,
+            pieces=123456,
+            wage_amount=1234567.0,
+            fine_weight=1130778.77,
+        )
+    )
+
+    assert model.data(model.index(0, COL_GROSS), Qt.DisplayRole) == "12,34,567.500"
+    assert model.data(model.index(0, COL_POLY), Qt.DisplayRole) == "12,345.250"
+    assert model.data(model.index(0, COL_NET_WT), Qt.DisplayRole) == "12,34,567.50"
+    assert model.data(model.index(0, COL_PURITY), Qt.DisplayRole) == "91.60"
+    assert model.data(model.index(0, COL_WAGE_RATE), Qt.DisplayRole) == "1,500.00"
+    assert model.data(model.index(0, COL_PIECES), Qt.DisplayRole) == "1,23,456"
+    assert model.data(model.index(0, COL_WAGE_AMT), Qt.DisplayRole) == "12,34,567"
+    assert model.data(model.index(0, COL_FINE_WT), Qt.DisplayRole) == "11,30,778.77"
+
+    assert model.data(model.index(0, COL_GROSS), Qt.EditRole) == 1234567.5
+    assert model.data(model.index(0, COL_PIECES), Qt.EditRole) == 123456
 
 
 def test_remove_row(model):
@@ -166,6 +198,56 @@ def test_header_data(model):
     assert model.headerData(1, Qt.Vertical, Qt.DisplayRole) == 2
 
 
+def test_numeric_columns_return_font_role_derived_from_table_font(qt_app):
+    table = QTableView()
+    table_font = table.font()
+    table_font.setPointSize(13)
+    table.setFont(table_font)
+
+    model = EstimateTableModel(table)
+    model.add_row(EstimateEntryRowState())
+
+    expected_font = numeric_table_font(table.font())
+    for column in (
+        COL_GROSS,
+        COL_POLY,
+        COL_NET_WT,
+        COL_PURITY,
+        COL_WAGE_RATE,
+        COL_PIECES,
+        COL_WAGE_AMT,
+        COL_FINE_WT,
+    ):
+        font = model.data(model.index(0, column), Qt.FontRole)
+        assert font is not None
+        assert font.key() == expected_font.key()
+
+
+def test_non_numeric_columns_do_not_return_font_role(model):
+    model.add_row(EstimateEntryRowState())
+
+    for column in (COL_CODE, COL_ITEM_NAME, COL_TYPE):
+        assert model.data(model.index(0, column), Qt.FontRole) is None
+
+
+def test_numeric_columns_keep_right_alignment(model):
+    model.add_row(EstimateEntryRowState())
+
+    for column in (
+        COL_GROSS,
+        COL_POLY,
+        COL_NET_WT,
+        COL_PURITY,
+        COL_WAGE_RATE,
+        COL_PIECES,
+        COL_WAGE_AMT,
+        COL_FINE_WT,
+    ):
+        assert model.data(model.index(0, column), Qt.TextAlignmentRole) == (
+            Qt.AlignRight | Qt.AlignVCenter
+        )
+
+
 def test_data_changed_signal(model):
     """Test that data changed signal is emitted."""
     model.add_row()
@@ -213,7 +295,8 @@ def test_set_data_unchanged_non_code_still_emits_signals(model):
     index = model.index(0, COL_PURITY)
     assert model.setData(index, 91.6, Qt.EditRole)
 
-    assert model.data(index, Qt.DisplayRole) == 91.6
+    assert model.data(index, Qt.DisplayRole) == "91.60"
+    assert model.data(index, Qt.EditRole) == 91.6
     assert len(detailed_events) == 1
     assert len(changed_events) == 1
 
@@ -285,7 +368,9 @@ def test_calculated_columns_have_distinct_visual_roles(model):
 
 def test_type_column_keeps_category_background_role(model):
     """Type column background should still reflect the line category."""
-    model.add_row(EstimateEntryRowState(code="RET1", category=EstimateLineCategory.RETURN))
+    model.add_row(
+        EstimateEntryRowState(code="RET1", category=EstimateLineCategory.RETURN)
+    )
     index = model.index(0, COL_TYPE)
     background = model.data(index, Qt.BackgroundRole)
     assert background is not None
@@ -299,5 +384,7 @@ def test_set_data_pieces_defaults_for_wage_type(model):
     assert model.setData(model.index(0, COL_PIECES), "", Qt.EditRole)
     assert model.setData(model.index(1, COL_PIECES), "", Qt.EditRole)
 
-    assert model.data(model.index(0, COL_PIECES), Qt.DisplayRole) == 0
-    assert model.data(model.index(1, COL_PIECES), Qt.DisplayRole) == 1
+    assert model.data(model.index(0, COL_PIECES), Qt.DisplayRole) == "0"
+    assert model.data(model.index(1, COL_PIECES), Qt.DisplayRole) == "1"
+    assert model.data(model.index(0, COL_PIECES), Qt.EditRole) == 0
+    assert model.data(model.index(1, COL_PIECES), Qt.EditRole) == 1

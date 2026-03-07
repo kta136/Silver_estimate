@@ -6,7 +6,6 @@ from PyQt5.QtWidgets import QWidget
 
 from .theme_tokens import apply_theme_tokens
 
-
 ESTIMATE_ENTRY_STYLESHEET = apply_theme_tokens(
     """
 QWidget#EstimateEntryRoot {
@@ -384,8 +383,6 @@ def refresh_widget_style(widget: QWidget | None) -> None:
     if widget is None:
         return
     style = widget.style()
-    if style is None:
-        return
     style.unpolish(widget)
     style.polish(widget)
     widget.update()

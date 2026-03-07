@@ -116,7 +116,7 @@ class EstimateTableAdapter:
             wage_type = self._normalize_wage_type(item_data.get("wage_type"))
             table.set_row_wage_type(row_index, wage_type)
 
-            current_pieces = table.get_cell_text(row_index, COL_PIECES).strip()
+            current_pieces = table.get_cell_edit_text(row_index, COL_PIECES).strip()
             if wage_type == "WT":
                 table.set_cell_text(row_index, COL_PIECES, "0")
             elif not current_pieces or current_pieces == "0":

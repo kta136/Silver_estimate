@@ -175,9 +175,7 @@ class EstimateHistoryDialog(QDialog):
         self.delete_button = QPushButton("Delete Selected")
         self.delete_button.setObjectName("HistoryDangerButton")
         self.delete_button.setToolTip("Permanently delete the selected estimate")
-        self.delete_button.clicked.connect(
-            self.delete_selected_estimate
-        )
+        self.delete_button.clicked.connect(self.delete_selected_estimate)
         button_layout.addWidget(self.delete_button)
 
         button_layout.addStretch(1)

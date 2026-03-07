@@ -2,7 +2,7 @@ import types
 
 import pytest
 from PyQt5.QtCore import QEventLoop, Qt, QTimer
-from PyQt5.QtWidgets import QDialog, QHeaderView, QMessageBox, QLineEdit
+from PyQt5.QtWidgets import QDialog, QHeaderView, QLineEdit, QMessageBox
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.infrastructure.settings import get_app_settings
@@ -812,7 +812,8 @@ def test_non_autofit_expands_fixed_column_when_edit_content_grows(qt_app, fake_d
 def test_numeric_cell_editor_is_right_aligned_and_selects_text(qtbot, fake_db):
     widget = _make_widget(fake_db)
     try:
-        widget.item_table.set_cell_text(0, COL_GROSS, "12.5")
+        widget.item_table.set_cell_text(0, COL_GROSS, "1234567.5")
+        assert widget.item_table.get_cell_text(0, COL_GROSS) == "12,34,567.500"
         widget.item_table.setCurrentCell(0, COL_GROSS)
         assert widget.item_table.begin_cell_edit(0, COL_GROSS)
         qtbot.waitUntil(
@@ -820,8 +821,29 @@ def test_numeric_cell_editor_is_right_aligned_and_selects_text(qtbot, fake_db):
         )
         editor = widget.item_table.findChild(QLineEdit)
         assert editor is not None
+        model_font = widget.item_table.get_model().data(
+            widget.item_table.get_model().index(0, COL_GROSS), Qt.FontRole
+        )
+        assert model_font is not None
         assert bool(editor.alignment() & Qt.AlignRight)
-        assert editor.selectedText() == "12.5"
+        assert editor.font().key() == model_font.key()
+        assert editor.text() == "1234567.5"
+        assert editor.selectedText() == "1234567.5"
+    finally:
+        widget.deleteLater()
+
+
+def test_numeric_helpers_read_raw_values_when_display_is_grouped(qt_app, fake_db):
+    widget = _make_widget(fake_db)
+    try:
+        table = widget.item_table
+        table.set_cell_text(0, COL_GROSS, "1234567.5")
+        table.set_cell_text(0, COL_PIECES, "123456")
+
+        assert table.get_cell_text(0, COL_GROSS) == "12,34,567.500"
+        assert table.get_cell_text(0, COL_PIECES) == "1,23,456"
+        assert widget._get_cell_float(0, COL_GROSS) == pytest.approx(1234567.5)
+        assert widget._get_cell_int(0, COL_PIECES) == 123456
     finally:
         widget.deleteLater()
 

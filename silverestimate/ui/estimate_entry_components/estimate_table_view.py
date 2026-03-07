@@ -195,11 +195,23 @@ class EstimateTableView(QTableView):
             return None
         return self._table_model.data(index, role)
 
-    def get_cell_text(self, row: int, column: int) -> str:
+    def get_cell_display_text(self, row: int, column: int) -> str:
         value = self.get_cell_value(row, column, Qt.DisplayRole)
         if value is None:
             return ""
         return str(value)
+
+    def get_cell_edit_value(self, row: int, column: int) -> Any:
+        return self.get_cell_value(row, column, Qt.EditRole)
+
+    def get_cell_edit_text(self, row: int, column: int) -> str:
+        value = self.get_cell_edit_value(row, column)
+        if value is None:
+            return ""
+        return str(value)
+
+    def get_cell_text(self, row: int, column: int) -> str:
+        return self.get_cell_display_text(row, column)
 
     def set_cell_value(self, row: int, column: int, value: Any) -> bool:
         if not (0 <= row < self._table_model.rowCount()):

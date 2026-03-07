@@ -507,16 +507,16 @@ class EstimateEntryTableController(HostProxy):
             return False
 
     def _get_cell_float(self, row, col, default=0.0):
-        text = self.item_table.get_cell_text(row, col).strip()
+        value = self.item_table.get_cell_edit_value(row, col)
         try:
-            return float(text.replace(",", ".")) if text else default
+            return float(value) if value not in (None, "") else default
         except (AttributeError, TypeError, ValueError):
             return default
 
     def _get_cell_int(self, row, col, default=1):
-        text = self.item_table.get_cell_text(row, col).strip()
+        value = self.item_table.get_cell_edit_value(row, col)
         try:
-            return int(text) if text else default
+            return int(value) if value not in (None, "") else default
         except (AttributeError, TypeError, ValueError):
             return default
 

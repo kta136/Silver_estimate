@@ -499,7 +499,9 @@ class EstimatesRepository:
         try:
             setattr(self._db, "last_error", message)
         except Exception as exc:
-            self._logger.debug("Failed to store estimate repository error state: %s", exc)
+            self._logger.debug(
+                "Failed to store estimate repository error state: %s", exc
+            )
 
     def _find_missing_item_codes(self, items: Iterable[dict]) -> List[str]:
         cursor = self._cursor

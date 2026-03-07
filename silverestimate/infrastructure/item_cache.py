@@ -86,7 +86,9 @@ class ItemCacheController:
                 with self._lock:
                     self._cache = local_cache
                     self._preloaded = True
-                self._logger.debug("Preloaded item cache with %s items", len(local_cache))
+                self._logger.debug(
+                    "Preloaded item cache with %s items", len(local_cache)
+                )
             finally:
                 if conn is not None:
                     try:

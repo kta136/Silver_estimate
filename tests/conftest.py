@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from PyQt5.QtCore import QLocale
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -180,3 +181,11 @@ def pytest_collection_modifyitems(items):
             item.add_marker(pytest.mark.unit)
         if any(path.endswith(suffix) for suffix in _SLOW_PATH_SUFFIXES):
             item.add_marker(pytest.mark.slow)
+
+
+@pytest.fixture(autouse=True)
+def estimate_table_locale(monkeypatch):
+    monkeypatch.setattr(
+        "silverestimate.ui.estimate_table_formatting.get_estimate_table_locale",
+        lambda: QLocale(QLocale.English, QLocale.India),
+    )

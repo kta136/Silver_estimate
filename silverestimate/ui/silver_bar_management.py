@@ -19,14 +19,13 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QRadioButton,
     QVBoxLayout,
-    QWidget,
 )
 
+from .shared_screen_theme import build_management_screen_stylesheet
 from .silver_bar_list_actions import SilverBarListActions
 from .silver_bar_load_controller import SilverBarLoadController, _BarsLoadWorker
 from .silver_bar_management_state import SilverBarManagementStateStore
 from .silver_bar_management_ui import SilverBarManagementUiBuilder
-from .shared_screen_theme import build_management_screen_stylesheet
 
 
 class SilverBarDialog(QDialog):

@@ -287,8 +287,8 @@ def test_adapter_populate_row_uses_model_first_updates(qt_app, fake_db):
 
         assert table.get_cell_text(0, COL_CODE) == "TEST001"
         assert table.get_cell_text(0, COL_ITEM_NAME) == "Test Item"
-        assert table.get_cell_text(0, COL_PURITY) == "92.5"
-        assert table.get_cell_text(0, COL_WAGE_RATE) == "10.0"
+        assert table.get_cell_text(0, COL_PURITY) == "92.50"
+        assert table.get_cell_text(0, COL_WAGE_RATE) == "10.00"
     finally:
         widget.deleteLater()
 
@@ -795,8 +795,8 @@ def test_revisiting_row_with_same_code_preserves_manual_overrides(qtbot, fake_db
         # User manually overrides row values.
         table.set_cell_text(0, COL_PURITY, "95.5")
         table.set_cell_text(0, COL_WAGE_RATE, "22.0")
-        assert table.get_cell_text(0, COL_PURITY) == "95.5"
-        assert table.get_cell_text(0, COL_WAGE_RATE) == "22.0"
+        assert table.get_cell_text(0, COL_PURITY) == "95.50"
+        assert table.get_cell_text(0, COL_WAGE_RATE) == "22.00"
 
         # Revisit/commit same code value. Should be treated as no-op.
         code_index = table.get_model().index(0, COL_CODE)
@@ -804,8 +804,8 @@ def test_revisiting_row_with_same_code_preserves_manual_overrides(qtbot, fake_db
         qtbot.wait(40)
 
         assert len(lookup_calls) == initial_lookup_count
-        assert table.get_cell_text(0, COL_PURITY) == "95.5"
-        assert table.get_cell_text(0, COL_WAGE_RATE) == "22.0"
+        assert table.get_cell_text(0, COL_PURITY) == "95.50"
+        assert table.get_cell_text(0, COL_WAGE_RATE) == "22.00"
     finally:
         widget.deleteLater()
 
@@ -935,7 +935,7 @@ def test_empty_gross_enter_commits_zero_and_advances_to_poly(qtbot, fake_db):
             ),
             timeout=1000,
         )
-        assert table.get_cell_text(0, COL_GROSS) == "0.0"
+        assert table.get_cell_text(0, COL_GROSS) == "0.000"
     finally:
         widget.deleteLater()
 

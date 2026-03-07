@@ -469,7 +469,9 @@ class SilverBarHistoryDialog(QDialog):
             thread.quit()
             thread.wait(1000)
         except Exception as exc:
-            self.logger.debug("Failed to stop silver bar history worker thread: %s", exc)
+            self.logger.debug(
+                "Failed to stop silver bar history worker thread: %s", exc
+            )
         try:
             worker.deleteLater()
         except Exception as exc:

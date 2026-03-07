@@ -114,7 +114,9 @@ class LiveRateController(QObject):
         try:
             service.stop()
         except Exception as exc:
-            self._logger.debug("Failed to stop live-rate timer before reconfig: %s", exc)
+            self._logger.debug(
+                "Failed to stop live-rate timer before reconfig: %s", exc
+            )
         if auto_refresh and show_ui:
             try:
                 service.start()

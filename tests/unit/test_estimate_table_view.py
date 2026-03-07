@@ -5,6 +5,7 @@ import pytest
 from silverestimate.ui.estimate_entry_components.estimate_table_view import (
     EstimateTableView,
 )
+from silverestimate.ui.estimate_entry_logic.constants import COL_GROSS
 from silverestimate.ui.view_models.estimate_entry_view_model import (
     EstimateEntryRowState,
 )
@@ -136,6 +137,15 @@ def test_focus_cell(table_view):
 
     assert table_view.get_current_row() == 0
     assert table_view.get_current_column() == 0
+
+
+def test_display_and_edit_accessors_use_different_roles(table_view):
+    table_view.add_row(EstimateEntryRowState(gross=1234567.5))
+
+    assert table_view.get_cell_text(0, COL_GROSS) == "12,34,567.500"
+    assert table_view.get_cell_display_text(0, COL_GROSS) == "12,34,567.500"
+    assert table_view.get_cell_edit_value(0, COL_GROSS) == 1234567.5
+    assert table_view.get_cell_edit_text(0, COL_GROSS) == "1234567.5"
 
 
 def test_get_current_row_when_empty(table_view):

@@ -7,17 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Removed
-- Deleted two dormant UI modules (unused mode-toggle component and legacy table-font dialog)
-- Removed obsolete mode-toggle export from `silverestimate/ui/estimate_entry_components/__init__.py`
-- Removed legacy-only unit test surface for the deleted mode-toggle component
+## [2.6.9] - 2026-03-07
+
+### Added
+- Added numeric-column typography improvements in the estimate table using a dedicated numeric font path for display and edit states
 
 ### Fixed
 - Removed unreachable legacy exception block in `EstimatesRepository._voucher_to_int`
 - Moved estimate-history button re-enable logic into reachable `_loading_done` completion path
+- Split estimate-entry numeric `DisplayRole` and `EditRole` values so formatted table cells still edit with raw numeric text
+- Applied Indian-style digit grouping across estimate table numeric columns and summary totals
+- Aligned estimate-table numeric display, parsing, and validation around a shared locale-aware formatting path
 
 ### Changed
 - Performed a full dead-code cleanup sweep across `main.py` and `silverestimate/**` (unused imports/locals, stale compatibility scaffolding, wildcard constant exports)
+- Bumped application/package version to `2.6.9`
+- Updated project README version header and badge to `v2.6.9`
+
+### Removed
+- Deleted two dormant UI modules (unused mode-toggle component and legacy table-font dialog)
+- Removed obsolete mode-toggle export from `silverestimate/ui/estimate_entry_components/__init__.py`
+- Removed legacy-only unit test surface for the deleted mode-toggle component
 
 ## [2.6.8] - 2026-02-22
 

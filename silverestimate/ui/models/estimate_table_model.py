@@ -8,6 +8,7 @@ from PyQt5.QtCore import QAbstractTableModel, QModelIndex, Qt, pyqtSignal
 from PyQt5.QtGui import QBrush, QColor
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
+from silverestimate.ui import estimate_table_formatting
 from silverestimate.ui.estimate_entry_logic.constants import (
     COL_CODE,
     COL_FINE_WT,
@@ -21,6 +22,7 @@ from silverestimate.ui.estimate_entry_logic.constants import (
     COL_WAGE_AMT,
     COL_WAGE_RATE,
 )
+from silverestimate.ui.numeric_font import numeric_table_font
 from silverestimate.ui.view_models.estimate_entry_view_model import (
     EstimateEntryRowState,
 )
@@ -50,6 +52,7 @@ class EstimateTableModel(QAbstractTableModel):
         "Fine Wt",
         "Type",
     ]
+    _NUMERIC_COLUMNS = estimate_table_formatting.NUMERIC_COLUMNS
 
     def __init__(self, parent=None):
         """Initialize the table model.
@@ -59,6 +62,47 @@ class EstimateTableModel(QAbstractTableModel):
         """
         super().__init__(parent)
         self._rows: list[EstimateEntryRowState] = []
+
+    def _numeric_display_font(self):
+        parent = self.parent()
+        base_font = (
+            parent.font() if parent is not None and hasattr(parent, "font") else None
+        )
+        return numeric_table_font(base_font)
+
+    @staticmethod
+    def _raw_cell_value(row_data: EstimateEntryRowState, col: int) -> Any:
+        if col == COL_CODE:
+            return row_data.code
+        if col == COL_ITEM_NAME:
+            return row_data.name
+        if col == COL_GROSS:
+            return row_data.gross
+        if col == COL_POLY:
+            return row_data.poly
+        if col == COL_NET_WT:
+            return row_data.net_weight
+        if col == COL_PURITY:
+            return row_data.purity
+        if col == COL_WAGE_RATE:
+            return row_data.wage_rate
+        if col == COL_PIECES:
+            return row_data.pieces
+        if col == COL_WAGE_AMT:
+            return row_data.wage_amount
+        if col == COL_FINE_WT:
+            return row_data.fine_weight
+        if col == COL_TYPE:
+            return row_data.category.display_name() if row_data.category else ""
+        return None
+
+    def _display_cell_value(self, row_data: EstimateEntryRowState, col: int) -> Any:
+        raw_value = self._raw_cell_value(row_data, col)
+        if col in self._NUMERIC_COLUMNS:
+            return estimate_table_formatting.format_estimate_table_number(
+                col, raw_value
+            )
+        return raw_value
 
     @staticmethod
     def _normalize_wage_type(value: Any) -> str:
@@ -93,30 +137,14 @@ class EstimateTableModel(QAbstractTableModel):
         row_data = self._rows[index.row()]
         col = index.column()
 
-        if role in (Qt.DisplayRole, Qt.EditRole):
-            if col == COL_CODE:
-                return row_data.code
-            elif col == COL_ITEM_NAME:
-                return row_data.name
-            elif col == COL_GROSS:
-                return row_data.gross
-            elif col == COL_POLY:
-                return row_data.poly
-            elif col == COL_NET_WT:
-                return row_data.net_weight
-            elif col == COL_PURITY:
-                return row_data.purity
-            elif col == COL_WAGE_RATE:
-                return row_data.wage_rate
-            elif col == COL_PIECES:
-                return row_data.pieces
-            elif col == COL_WAGE_AMT:
-                return row_data.wage_amount
-            elif col == COL_FINE_WT:
-                return row_data.fine_weight
-            elif col == COL_TYPE:
-                return row_data.category.display_name() if row_data.category else ""
-            return None
+        if role == Qt.DisplayRole:
+            return self._display_cell_value(row_data, col)
+
+        if role == Qt.EditRole:
+            return self._raw_cell_value(row_data, col)
+
+        if role == Qt.FontRole and col in self._NUMERIC_COLUMNS:
+            return self._numeric_display_font()
 
         if role == Qt.BackgroundRole and col == COL_TYPE:
             category = row_data.category
@@ -134,16 +162,7 @@ class EstimateTableModel(QAbstractTableModel):
             return QBrush(QColor("#334155"))
 
         if role == Qt.TextAlignmentRole:
-            if col in (
-                COL_GROSS,
-                COL_POLY,
-                COL_NET_WT,
-                COL_PURITY,
-                COL_WAGE_RATE,
-                COL_PIECES,
-                COL_WAGE_AMT,
-                COL_FINE_WT,
-            ):
+            if col in self._NUMERIC_COLUMNS:
                 return Qt.AlignRight | Qt.AlignVCenter
             if col == COL_TYPE:
                 return Qt.AlignCenter | Qt.AlignVCenter

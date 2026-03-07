@@ -1691,7 +1691,9 @@ class PrintManager:
                 try:
                     preview_widget.setZoomMode(QPrintPreviewWidget.CustomZoom)
                 except Exception as exc:
-                    LOGGER.debug("Failed to switch preview widget to custom zoom: %s", exc)
+                    LOGGER.debug(
+                        "Failed to switch preview widget to custom zoom: %s", exc
+                    )
                 preview_widget.setZoomFactor(zoom_factor)
             else:
                 logging.getLogger(__name__).warning(
@@ -1768,7 +1770,9 @@ class PrintManager:
                 try:
                     preview_widget.setZoomMode(QPrintPreviewWidget.CustomZoom)
                 except Exception as exc:
-                    LOGGER.debug("Failed to switch preview widget to custom zoom: %s", exc)
+                    LOGGER.debug(
+                        "Failed to switch preview widget to custom zoom: %s", exc
+                    )
                 try:
                     z = float(preview_widget.zoomFactor())
                 except Exception:
@@ -1786,7 +1790,9 @@ class PrintManager:
                 try:
                     preview_widget.setZoomMode(QPrintPreviewWidget.CustomZoom)
                 except Exception as exc:
-                    LOGGER.debug("Failed to switch preview widget to custom zoom: %s", exc)
+                    LOGGER.debug(
+                        "Failed to switch preview widget to custom zoom: %s", exc
+                    )
                 try:
                     z = float(preview_widget.zoomFactor())
                 except Exception:

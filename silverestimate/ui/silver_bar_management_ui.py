@@ -52,7 +52,12 @@ class SilverBarManagementUiBuilder(HostProxy):
                 primary_button="SilverBarPrimaryButton",
                 secondary_button="SilverBarSecondaryButton",
                 danger_button="SilverBarDangerButton",
-                input_selectors=["QLineEdit", "QComboBox", "QSpinBox", "QDoubleSpinBox"],
+                input_selectors=[
+                    "QLineEdit",
+                    "QComboBox",
+                    "QSpinBox",
+                    "QDoubleSpinBox",
+                ],
                 include_table=True,
                 extra_rules="""
                 QWidget#SilverBarManagementPane,

@@ -67,8 +67,8 @@ def test_set_totals(panel):
     assert panel.bar_net_label.text() == "95.00"
     assert panel.bar_fine_label.text() == "87.00"
     assert panel.net_fine_label.text() == "252.00"
-    assert panel.net_wage_label.text() == "5000"
-    assert panel.grand_total_label.text() == "₹ 125000"
+    assert panel.net_wage_label.text() == "5,000"
+    assert panel.grand_total_label.text() == "₹ 1,25,000"
 
 
 def test_clear_totals(panel):
@@ -166,8 +166,8 @@ def test_decimal_formatting(panel):
     panel.set_totals(totals)
 
     assert panel.overall_gross_label.text() == "123.46"
-    assert panel.total_fine_label.text() == "1000.00"
-    assert panel.net_wage_label.text() == "1235"
+    assert panel.total_fine_label.text() == "1,000.00"
+    assert panel.net_wage_label.text() == "1,235"
 
 
 def test_sidebar_section_order_can_be_reordered(qt_app):

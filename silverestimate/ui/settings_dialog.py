@@ -222,7 +222,9 @@ class SettingsDialog(QDialog):
         self.buttonBox.button(QDialogButtonBox.Apply).setObjectName(
             "SettingsPrimaryButton"
         )
-        self.buttonBox.button(QDialogButtonBox.Ok).setObjectName("SettingsPrimaryButton")
+        self.buttonBox.button(QDialogButtonBox.Ok).setObjectName(
+            "SettingsPrimaryButton"
+        )
 
         # Add Restore Defaults button
         restore_btn = QPushButton("Restore Defaults…")

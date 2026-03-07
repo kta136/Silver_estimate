@@ -66,7 +66,9 @@ class VoucherToolbar(QWidget):
         self.status_message_label = QLabel("")
         self.status_message_label.setObjectName("EstimateStatusLabel")
         self.status_message_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self.status_message_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        self.status_message_label.setSizePolicy(
+            QSizePolicy.Fixed, QSizePolicy.Preferred
+        )
 
         voucher_label = QLabel("Voucher")
         voucher_label.setObjectName("VoucherFieldLabel")

@@ -90,6 +90,12 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
     def total_count(self) -> int:
         return self._total_count
 
+    def loaded_count(self) -> int:
+        return len(self._rows)
+
+    def clear_rows(self) -> None:
+        self.set_rows([], total_count=0)
+
     def row_payload(self, row: int) -> Optional[dict[str, Any]]:
         if 0 <= row < len(self._rows):
             return self._rows[row]
@@ -139,6 +145,12 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
         del row
         return None
 
+    def total_weight(self) -> float:
+        return self._sum_numeric_field("weight")
+
+    def total_fine_weight(self) -> float:
+        return self._sum_numeric_field("fine_weight")
+
     @staticmethod
     def _format_float(value: Any, places: int) -> str:
         try:
@@ -158,6 +170,15 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
         if normalized == "Sold":
             return QBrush(QColor("#f7f0ff"))
         return None
+
+    def _sum_numeric_field(self, key: str) -> float:
+        total = 0.0
+        for row in self._rows:
+            try:
+                total += float(row.get(key) or 0.0)
+            except (TypeError, ValueError):
+                continue
+        return total
 
 
 class _ManagementSilverBarsTableModel(_BaseSilverBarTableModel):

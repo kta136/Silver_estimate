@@ -466,6 +466,8 @@ for _method_name in (
     "_row_wage_type",
     "_recompute_row_derived_values",
     "_schedule_totals_recalc",
+    "_apply_incremental_totals_now",
+    "_refresh_totals_after_row_edit",
     "_log_perf_metric",
     "_inactive_row_contribution",
     "_totals_incremental_is_active",

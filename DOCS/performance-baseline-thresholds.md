@@ -55,5 +55,5 @@ Instrumentation emits `[perf]` entries in debug logs for the primary hotspots.
    - silver bars: 5,000 rows
 3. Extract `[perf]` lines from logs and compute p95 values per metric.
 4. Startup import-time check:
-   - `python3 -X importtime -c "import main" 2> importtime.log`
+   - `python -X importtime -c "import main" 2> importtime.log`
    - Use `importtime.log` to compare cumulative import cost before/after startup changes.

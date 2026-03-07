@@ -197,13 +197,11 @@ class SilverBarLoadController(HostProxy):
             return
         self._load_started_at.pop((target, request_id), None)
         if target == "available":
-            self.available_bars_model.set_rows([], total_count=0)
             self._populate_table(self.available_bars_table, [], total_rows=0)
             QMessageBox.critical(
                 self.host, "Error", f"Failed to load available bars: {message}"
             )
         elif target == "list":
-            self.list_bars_model.set_rows([], total_count=0)
             self._populate_table(self.list_bars_table, [], total_rows=0)
             QMessageBox.critical(
                 self.host,

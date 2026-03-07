@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QProgressDialog,
     QPushButton,
     QTableView,
     QVBoxLayout,
@@ -21,7 +22,7 @@ from PyQt5.QtWidgets import (
 
 from silverestimate.ui.models import EstimateHistoryRow, EstimateHistoryTableModel
 
-from .print_manager import PrintManager
+from .print_manager import PrintManager, PrintPreviewBuildWorker
 from .shared_screen_theme import build_management_screen_stylesheet
 
 
@@ -37,6 +38,8 @@ class EstimateHistoryDialog(QDialog):
         self.selected_voucher = None
         self._load_request_id = 0
         self._active_load_workers: dict[QThread, QObject] = {}
+        self._print_preview_request_id = 0
+        self._active_print_preview_workers: dict[QThread, QObject] = {}
         self.init_ui()
         self.load_estimates()
 
@@ -329,10 +332,12 @@ class EstimateHistoryDialog(QDialog):
 
     def reject(self):
         self._cancel_active_loads()
+        self._cancel_active_print_previews()
         super().reject()
 
     def closeEvent(self, event):
         self._cancel_active_loads()
+        self._cancel_active_print_previews()
         super().closeEvent(event)
 
     def get_selected_voucher(self):
@@ -371,16 +376,174 @@ class EstimateHistoryDialog(QDialog):
             print_font_setting = self.main_window.print_font
         # ---------------------------------------------------------
 
-        # Create print manager instance, passing the font, and print the selected estimate
-        print_manager = PrintManager(self.db_manager, print_font=print_font_setting)
-        success = print_manager.print_estimate(
-            voucher_no, self
-        )  # 'self' used as parent for dialogs
-
-        if not success:
+        estimate_data = self.db_manager.get_estimate_by_voucher(voucher_no)
+        if not estimate_data:
             QMessageBox.warning(
-                self, "Print Error", f"Failed to print estimate {voucher_no}."
+                self, "Print Error", f"Estimate {voucher_no} could not be loaded."
             )
+            return
+
+        print_manager = PrintManager(self.db_manager, print_font=print_font_setting)
+        self._start_print_preview_build(
+            print_manager=print_manager,
+            build_preview=lambda: print_manager.build_estimate_preview_payload(
+                voucher_no,
+                estimate_data=estimate_data,
+            ),
+        )
+
+    def _next_print_preview_request_id(self) -> int:
+        self._print_preview_request_id += 1
+        return self._print_preview_request_id
+
+    def _start_print_preview_build(self, *, print_manager, build_preview) -> None:
+        request_id = self._next_print_preview_request_id()
+        progress = QProgressDialog("Preparing print preview...", "", 0, 0, self)
+        progress.setCancelButton(None)
+        progress.setWindowTitle("Print Preview")
+        progress.setMinimumDuration(0)
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
+        progress.show()
+
+        worker = PrintPreviewBuildWorker(request_id, build_preview)
+        thread = QThread(self)
+        worker.moveToThread(thread)
+        self._active_print_preview_workers[thread] = worker
+
+        thread.started.connect(worker.run)
+        worker.preview_ready.connect(
+            partial(
+                self._on_print_preview_ready,
+                thread=thread,
+                worker=worker,
+                print_manager=print_manager,
+                progress=progress,
+            )
+        )
+        worker.preview_error.connect(
+            partial(
+                self._on_print_preview_error,
+                thread=thread,
+                worker=worker,
+                progress=progress,
+            )
+        )
+        worker.finished.connect(
+            partial(
+                self._finish_print_preview_build,
+                thread=thread,
+                worker=worker,
+                progress=progress,
+            )
+        )
+        thread.start()
+
+    def _on_print_preview_ready(
+        self,
+        request_id,
+        payload,
+        *,
+        thread,
+        worker,
+        print_manager,
+        progress,
+    ) -> None:
+        del thread, worker
+        if request_id != self._print_preview_request_id:
+            return
+        try:
+            progress.close()
+        except Exception as exc:
+            self.logger.debug("Failed to close history print preview progress: %s", exc)
+        if payload is None:
+            QMessageBox.warning(
+                self,
+                "Print Error",
+                "Failed to prepare the selected estimate for preview.",
+            )
+            return
+        print_manager.show_preview(payload, parent_widget=self)
+
+    def _on_print_preview_error(
+        self,
+        request_id,
+        message,
+        *,
+        thread,
+        worker,
+        progress,
+    ) -> None:
+        del thread, worker
+        if request_id != self._print_preview_request_id:
+            return
+        try:
+            progress.close()
+        except Exception as exc:
+            self.logger.debug(
+                "Failed to close history print preview progress after error: %s",
+                exc,
+            )
+        QMessageBox.warning(self, "Print Error", message)
+
+    def _finish_print_preview_build(
+        self,
+        request_id,
+        *,
+        thread,
+        worker,
+        progress,
+    ) -> None:
+        self._active_print_preview_workers.pop(thread, None)
+        try:
+            progress.close()
+            progress.deleteLater()
+        except Exception as exc:
+            self.logger.debug(
+                "Failed to dispose history print preview progress dialog: %s",
+                exc,
+            )
+        try:
+            thread.quit()
+            thread.wait(1000)
+        except Exception as exc:
+            self.logger.debug(
+                "Failed to stop estimate history preview worker thread: %s", exc
+            )
+        try:
+            worker.deleteLater()
+            thread.deleteLater()
+        except Exception as exc:
+            self.logger.debug(
+                "Failed to schedule history preview worker deletion: %s", exc
+            )
+        if request_id != self._print_preview_request_id:
+            return
+
+    def _cancel_active_print_previews(self, timeout_ms: int = 4000) -> None:
+        self._print_preview_request_id += 1
+        active = list(self._active_print_preview_workers.items())
+        self._active_print_preview_workers.clear()
+
+        for thread, worker in active:
+            try:
+                worker.deleteLater()
+            except Exception as exc:
+                self.logger.debug(
+                    "Failed to schedule history preview worker deletion during cancel: %s",
+                    exc,
+                )
+            try:
+                if thread.isRunning():
+                    thread.quit()
+                    if not thread.wait(timeout_ms):
+                        thread.terminate()
+                        thread.wait(1000)
+            except Exception as exc:
+                self.logger.debug(
+                    "Failed to stop estimate history preview worker during cancel: %s",
+                    exc,
+                )
 
     def delete_selected_estimate(self):
         """Handle deletion of the selected estimate."""

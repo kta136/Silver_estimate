@@ -1,5 +1,10 @@
+import logging
+
 from PyQt5.QtWidgets import QApplication, QMessageBox
 
+from silverestimate.ui.silver_bar_list_print_controller import (
+    SilverBarListPrintController,
+)
 from silverestimate.ui.silver_bar_management import SilverBarDialog
 
 
@@ -123,6 +128,43 @@ class _FakeSilverBarManagementDb:
         return True
 
 
+class _ThreadStub:
+    def __init__(self):
+        self.quit_called = False
+        self.wait_called = False
+        self.deleted = False
+
+    def quit(self):
+        self.quit_called = True
+
+    def wait(self, _timeout):
+        self.wait_called = True
+        return True
+
+    def deleteLater(self):
+        self.deleted = True
+
+
+class _WorkerStub:
+    def __init__(self):
+        self.deleted = False
+
+    def deleteLater(self):
+        self.deleted = True
+
+
+class _ProgressStub:
+    def __init__(self):
+        self.closed = False
+        self.deleted = False
+
+    def close(self):
+        self.closed = True
+
+    def deleteLater(self):
+        self.deleted = True
+
+
 def _row_for_bar_id(model, bar_id: int) -> int:
     for row in range(model.rowCount()):
         if model.bar_id_at(row) == bar_id:
@@ -196,3 +238,34 @@ def test_management_dialog_marks_selected_list_as_issued(
 
     assert db.marked_calls == [10]
     assert dialog.list_combo.count() == 1
+
+
+def test_list_print_preview_cleanup_removes_worker():
+    harness = type(
+        "_Harness",
+        (),
+        {
+            "_active_print_preview_workers": {},
+            "logger": logging.getLogger("test-list-preview"),
+        },
+    )()
+    thread = _ThreadStub()
+    worker = _WorkerStub()
+    progress = _ProgressStub()
+    harness._active_print_preview_workers[thread] = worker
+
+    SilverBarListPrintController._finish_list_print_preview_build(
+        harness,
+        1,
+        thread=thread,
+        worker=worker,
+        progress=progress,
+    )
+
+    assert thread.quit_called is True
+    assert thread.wait_called is True
+    assert thread.deleted is True
+    assert worker.deleted is True
+    assert progress.closed is True
+    assert progress.deleted is True
+    assert thread not in harness._active_print_preview_workers

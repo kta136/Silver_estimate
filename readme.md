@@ -1,11 +1,11 @@
-# Silver Estimation App - v2.6.9
+# Silver Estimation App - v2.6.10
 
 A desktop application built with PyQt5 and an encrypted SQLite database for managing silver sales estimates - item-wise entries, silver bar inventory, returns, and print-ready outputs.
 
 [![Python](https://img.shields.io/badge/Python-3.13+-blue.svg)](https://www.python.org/)
 [![PyQt5](https://img.shields.io/badge/PyQt5-5.15+-green.svg)](https://www.riverbankcomputing.com/software/pyqt/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v2.6.9-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v2.6.10-orange.svg)](CHANGELOG.md)
 [![PR Validation](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml)
 [![Main Validation](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml)
 [![Release Windows](https://github.com/kta136/Silver_estimate/actions/workflows/release-windows.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/release-windows.yml)
@@ -104,6 +104,7 @@ uv sync --extra dev
 ```
 
 This repository now includes a committed `uv.lock` file so local development and CI can converge on the same resolved dependency set.
+Before running `uv` or any repo command, ensure `python` resolves to Python 3.13 or newer in your shell. This repository includes `.python-version` for `pyenv` users.
 
 Fallback with the standard library `venv` + `pip`:
 
@@ -111,14 +112,16 @@ Fallback with the standard library `venv` + `pip`:
 # Windows (PowerShell)
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install .
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
 ```
 
 ```bash
 # macOS/Linux
-python3 -m venv .venv
+python -m venv .venv
 source .venv/bin/activate
-pip install .
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
 ```
 
 > Note: The app relies on the operating system keyring for storing password hashes. Windows Credential Manager and macOS Keychain work out of the box. On Linux, install a SecretService-compatible keyring (for example `gnome-keyring`) or configure an alternative backend before launching the app.

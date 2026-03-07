@@ -12,7 +12,7 @@
    - `python -m venv .venv`
    - `.\.venv\Scripts\Activate.ps1`
    - `python -m pip install --upgrade pip`
-   - `pip install . pyinstaller`
+   - `python -m pip install -e ".[dev]"`
 3. Build with the canonical spec:
    - `python -m PyInstaller --clean --noconfirm SilverEstimate.spec`
 4. Output artifact:
@@ -44,7 +44,8 @@ Workflow: `.github/workflows/release-windows.yml`.
 ## Dependency Management
 - Runtime dependencies are defined in `pyproject.toml` (`[project.dependencies]`).
 - Development dependencies are defined in `pyproject.toml` (`[project.optional-dependencies].dev`).
-- For local builds, install via `pip install .` (plus `pyinstaller` for packaging).
+- Preferred local bootstrap: `uv sync --extra dev` after `python` resolves to Python 3.13+.
+- Fallback local bootstrap: `python -m venv .venv`, activate it, then `python -m pip install -e ".[dev]"`.
 
 ## Testing Before Packaging
 - Run `pytest` from the repo root (requires developer dependencies such as `pytest` and `pytest-qt`).
@@ -54,7 +55,7 @@ Workflow: `.github/workflows/release-windows.yml`.
 ## Common Troubleshooting
 - **Missing DLLs:** Ensure the host machine has the Microsoft Visual C++ redistributables. PyInstaller bundles the interpreter but relies on system runtimes.
 - **Antivirus false positives:** Sign the executable when distributing to customers; CI output is unsigned. Consider submitting the binary to Microsoft Defender for pre-approval.
-- **Stale virtual environment:** Delete `.venv/` if dependency versions are inconsistent, then reinstall with `pip install . pyinstaller`.
+- **Stale virtual environment:** Delete `.venv/` if dependency versions are inconsistent, then reinstall with `python -m pip install -e ".[dev]"`.
 - **Spec updates ignored:** Remove `build/` and `dist/` folders to force PyInstaller to regenerate caches after editing the spec.
 
 ## Future Enhancements

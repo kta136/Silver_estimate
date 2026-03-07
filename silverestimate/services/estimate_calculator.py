@@ -10,6 +10,7 @@ from silverestimate.domain.estimate_models import (
     EstimateLineCategory,
     TotalsResult,
 )
+from silverestimate.domain.estimate_totals import build_totals_result
 
 
 def compute_net_weight(gross: float, poly: float) -> float:
@@ -67,28 +68,12 @@ def compute_totals(
     return_totals = compute_category_totals(line_list, EstimateLineCategory.RETURN)
     bar_totals = compute_category_totals(line_list, EstimateLineCategory.SILVER_BAR)
 
-    net_fine_core = regular_totals.fine - bar_totals.fine - return_totals.fine
-    net_wage_core = regular_totals.wage - bar_totals.wage - return_totals.wage
-    net_value_core = net_fine_core * silver_rate if silver_rate > 0 else 0.0
-
-    net_fine = net_fine_core + last_balance_silver
-    net_wage = net_wage_core + last_balance_amount
-    net_value = net_fine * silver_rate if silver_rate > 0 else 0.0
-    grand_total = net_value + net_wage if silver_rate > 0 else net_wage
-
-    return TotalsResult(
+    return build_totals_result(
         overall_gross=overall_gross,
         overall_poly=overall_poly,
         regular=regular_totals,
         returns=return_totals,
         silver_bars=bar_totals,
-        net_fine_core=net_fine_core,
-        net_wage_core=net_wage_core,
-        net_value_core=net_value_core,
-        net_fine=net_fine,
-        net_wage=net_wage,
-        net_value=net_value,
-        grand_total=grand_total,
         silver_rate=silver_rate,
         last_balance_silver=last_balance_silver,
         last_balance_amount=last_balance_amount,

@@ -13,6 +13,7 @@ from silverestimate.domain.estimate_models import (
     EstimateLineCategory,
     TotalsResult,
 )
+from silverestimate.domain.estimate_totals import build_totals_result
 from silverestimate.services.estimate_calculator import (
     compute_fine_weight,
     compute_net_weight,
@@ -82,6 +83,7 @@ class EstimateEntryTotalsController(HostProxy):
         return "WT"
 
     def _recompute_row_derived_values(self, row: int, *, schedule_totals: bool = True):
+        started_at = time.perf_counter()
         if row is None or row < 0:
             return
         if row >= self.item_table.rowCount():
@@ -108,7 +110,7 @@ class EstimateEntryTotalsController(HostProxy):
             self._update_incremental_for_row(row)
 
             if schedule_totals:
-                self._schedule_totals_recalc()
+                self._refresh_totals_after_row_edit(start=started_at)
         except (AttributeError, TypeError, ValueError) as exc:
             self.logger.warning(
                 "Failed to recompute row %s derived values: %s", row, exc, exc_info=True
@@ -127,6 +129,29 @@ class EstimateEntryTotalsController(HostProxy):
         except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
             self.logger.debug("Failed to schedule totals recalculation: %s", exc)
             self.calculate_totals()
+
+    def _apply_incremental_totals_now(self, *, start: float | None = None) -> bool:
+        if not self._totals_incremental_is_active():
+            return False
+        if not self._is_table_valid():
+            return False
+        if len(self._row_contrib_cache) != self.item_table.rowCount():
+            return False
+
+        started_at = time.perf_counter() if start is None else start
+        totals = self._build_totals_result_from_aggregates()
+        self.apply_totals(totals)
+        self._log_perf_metric(
+            "estimate_entry.totals_incremental_apply",
+            started_at,
+            threshold_ms=15.0,
+        )
+        return True
+
+    def _refresh_totals_after_row_edit(self, *, start: float | None = None) -> None:
+        if self._apply_incremental_totals_now(start=start):
+            return
+        self._schedule_totals_recalc()
 
     def _log_perf_metric(
         self,
@@ -301,34 +326,15 @@ class EstimateEntryTotalsController(HostProxy):
         return_totals = self._frozen_category_totals(self._agg_returns)
         bar_totals = self._frozen_category_totals(self._agg_silver_bars)
 
-        silver_rate = float(self.silver_rate_spin.value())
-        last_balance_silver = float(self.last_balance_silver)
-        last_balance_amount = float(self.last_balance_amount)
-
-        net_fine_core = regular_totals.fine - bar_totals.fine - return_totals.fine
-        net_wage_core = regular_totals.wage - bar_totals.wage - return_totals.wage
-        net_value_core = net_fine_core * silver_rate if silver_rate > 0 else 0.0
-        net_fine = net_fine_core + last_balance_silver
-        net_wage = net_wage_core + last_balance_amount
-        net_value = net_fine * silver_rate if silver_rate > 0 else 0.0
-        grand_total = net_value + net_wage if silver_rate > 0 else net_wage
-
-        return TotalsResult(
+        return build_totals_result(
             overall_gross=float(self._agg_overall_gross),
             overall_poly=float(self._agg_overall_poly),
             regular=regular_totals,
             returns=return_totals,
             silver_bars=bar_totals,
-            net_fine_core=net_fine_core,
-            net_wage_core=net_wage_core,
-            net_value_core=net_value_core,
-            net_fine=net_fine,
-            net_wage=net_wage,
-            net_value=net_value,
-            grand_total=grand_total,
-            silver_rate=silver_rate,
-            last_balance_silver=last_balance_silver,
-            last_balance_amount=last_balance_amount,
+            silver_rate=float(self.silver_rate_spin.value()),
+            last_balance_silver=float(self.last_balance_silver),
+            last_balance_amount=float(self.last_balance_amount),
         )
 
     def _calculate_totals_full_legacy(self, *, start: float | None = None) -> None:

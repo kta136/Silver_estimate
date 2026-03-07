@@ -22,10 +22,15 @@ from PyQt5.QtWidgets import (
 )
 
 from .shared_screen_theme import build_management_screen_stylesheet
-from .silver_bar_list_actions import SilverBarListActions
+from .silver_bar_list_lifecycle_controller import SilverBarListLifecycleController
+from .silver_bar_list_print_controller import SilverBarListPrintController
 from .silver_bar_load_controller import SilverBarLoadController, _BarsLoadWorker
 from .silver_bar_management_state import SilverBarManagementStateStore
 from .silver_bar_management_ui import SilverBarManagementUiBuilder
+from .silver_bar_optimization_controller import SilverBarOptimizationController
+from .silver_bar_selection_state_controller import SilverBarSelectionStateController
+from .silver_bar_table_controller import SilverBarTableController
+from .silver_bar_transfer_controller import SilverBarTransferController
 
 
 class SilverBarDialog(QDialog):
@@ -47,7 +52,12 @@ class SilverBarDialog(QDialog):
 
         self._ui_builder = SilverBarManagementUiBuilder(self)
         self._load_controller = SilverBarLoadController(self)
-        self._actions_controller = SilverBarListActions(self)
+        self._list_lifecycle_controller = SilverBarListLifecycleController(self)
+        self._list_print_controller = SilverBarListPrintController(self)
+        self._optimization_controller = SilverBarOptimizationController(self)
+        self._selection_state_controller = SilverBarSelectionStateController(self)
+        self._table_controller = SilverBarTableController(self)
+        self._transfer_controller = SilverBarTransferController(self)
         self._state_store = SilverBarManagementStateStore(self)
 
         self.init_ui()
@@ -102,7 +112,7 @@ class SilverBarDialog(QDialog):
         super().reject()
 
     def generate_optimal_list(self):
-        return self._actions_controller.generate_optimal_list(OptimalListDialog)
+        return self._optimization_controller.generate_optimal_list(OptimalListDialog)
 
 
 class OptimalListDialog(QDialog):
@@ -331,14 +341,46 @@ for _method_name in (
 for _method_name in (
     "_bulk_assign_to_list",
     "_bulk_remove_from_list",
-    "create_new_list",
-    "_create_list_from_selection",
     "add_selected_to_list",
     "remove_selected_from_list",
+    "add_all_filtered_to_list",
+    "remove_all_from_list",
+    "export_current_list_to_csv",
+):
+    setattr(
+        SilverBarDialog,
+        _method_name,
+        _delegate("_transfer_controller", _method_name),
+    )
+
+for _method_name in (
+    "create_new_list",
+    "_create_list_from_selection",
     "edit_list_note",
     "delete_selected_list",
     "mark_list_as_issued",
+):
+    setattr(
+        SilverBarDialog,
+        _method_name,
+        _delegate("_list_lifecycle_controller", _method_name),
+    )
+
+for _method_name in (
     "print_selected_list",
+    "_next_print_preview_request_id",
+    "_start_list_print_preview_build",
+    "_on_list_print_preview_ready",
+    "_on_list_print_preview_error",
+    "_finish_list_print_preview_build",
+):
+    setattr(
+        SilverBarDialog,
+        _method_name,
+        _delegate("_list_print_controller", _method_name),
+    )
+
+for _method_name in (
     "_table_cell_value",
     "_table_cell_text",
     "_bar_id_from_table",
@@ -347,18 +389,12 @@ for _method_name in (
     "_show_available_context_menu",
     "_show_list_context_menu",
     "_copy_selected_rows",
-    "_update_transfer_buttons_state",
-    "_on_selection_changed",
-    "_update_selection_summaries",
     "_clear_filters",
-    "add_all_filtered_to_list",
-    "remove_all_from_list",
-    "export_current_list_to_csv",
 ):
     setattr(
         SilverBarDialog,
         _method_name,
-        _delegate("_actions_controller", _method_name),
+        _delegate("_table_controller", _method_name),
     )
 
 for _method_name in (
@@ -377,6 +413,17 @@ for _method_name in (
     "_navigate_back_to_estimate",
 ):
     setattr(SilverBarDialog, _method_name, _delegate("_state_store", _method_name))
+
+for _method_name in (
+    "_update_transfer_buttons_state",
+    "_on_selection_changed",
+    "_update_selection_summaries",
+):
+    setattr(
+        SilverBarDialog,
+        _method_name,
+        _delegate("_selection_state_controller", _method_name),
+    )
 
 
 def show_silver_bar_management(db_manager, parent=None):

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.10] - 2026-03-07
+
+### Added
+- Added `.python-version` pinning and documented `python`-first local setup flows for the project environment
+- Added targeted settings, totals, and silver-bar controller test coverage around the ongoing refactor work
+
+### Changed
+- Refactored print preview, print settings, and silver-bar management workflows into smaller focused controllers/helpers
+- Consolidated estimate totals calculation logic into a shared domain helper used by both full and incremental paths
+- Standardized repository scripts and developer docs on `python` and `python -m ...` commands
+- Bumped application/package version to `2.6.10`
+- Updated project README version header and badge to `v2.6.10`
+
+### Fixed
+- Cleared remaining `bandit` advisory failures in the DDASilver fetcher and print-preview cleanup paths
+- Revalidated lint, typing, tests, coverage, security checks, and packaging on Python `3.13.12`
+
 ## [2.6.9] - 2026-03-07
 
 ### Added

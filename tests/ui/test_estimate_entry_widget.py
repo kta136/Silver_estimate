@@ -273,6 +273,36 @@ def test_incremental_totals_match_full_single_row_edit(qt_app, fake_db):
         widget.deleteLater()
 
 
+def test_incremental_row_edit_applies_totals_without_recalc_schedule(qt_app, fake_db):
+    widget = _make_widget(fake_db)
+    try:
+        table = _set_row(
+            widget,
+            0,
+            regular_item(gross=10, poly=1, purity=92.5, wage_rate=10),
+        )
+        assert widget._totals_incremental_is_active()
+
+        scheduled = {"count": 0}
+
+        def _unexpected_schedule(*args, **kwargs):
+            scheduled["count"] += 1
+            raise AssertionError("incremental row edit should not schedule totals")
+
+        widget._schedule_totals_recalc = _unexpected_schedule
+
+        table.set_cell_text(0, COL_GROSS, "12.0")
+        widget.handle_cell_changed(0, COL_GROSS)
+
+        assert scheduled["count"] == 0
+        assert float(widget.total_gross_label.text()) == pytest.approx(12.0)
+        assert float(widget.total_net_label.text()) == pytest.approx(11.0)
+        assert float(widget.total_fine_label.text()) == pytest.approx(10.175, abs=0.01)
+        assert float(widget.net_wage_label.text()) == pytest.approx(110.0)
+    finally:
+        widget.deleteLater()
+
+
 def test_incremental_totals_match_full_multi_row_mixed_categories(qt_app, fake_db):
     widget = _make_widget(fake_db)
     try:

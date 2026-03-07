@@ -15,6 +15,7 @@ class _ThreadStub:
     def __init__(self):
         self.quit_called = False
         self.wait_called = False
+        self.deleted = False
 
     def quit(self):
         self.quit_called = True
@@ -23,10 +24,25 @@ class _ThreadStub:
         self.wait_called = True
         return True
 
+    def deleteLater(self):
+        self.deleted = True
+
 
 class _WorkerStub:
     def __init__(self):
         self.deleted = False
+
+    def deleteLater(self):
+        self.deleted = True
+
+
+class _ProgressStub:
+    def __init__(self):
+        self.closed = False
+        self.deleted = False
+
+    def close(self):
+        self.closed = True
 
     def deleteLater(self):
         self.deleted = True
@@ -88,6 +104,33 @@ def test_loading_done_does_not_touch_buttons_for_stale_request():
     assert harness.open_button.enabled is False
     assert harness.print_button.enabled is False
     assert harness.delete_button.enabled is False
+
+
+def test_finish_print_preview_build_cleans_up_worker():
+    harness = _HistoryHarness()
+    harness._print_preview_request_id = 2
+    harness._active_print_preview_workers = {}
+    harness.logger = type("_Logger", (), {"debug": lambda *args, **kwargs: None})()
+    thread = _ThreadStub()
+    worker = _WorkerStub()
+    progress = _ProgressStub()
+    harness._active_print_preview_workers[thread] = worker
+
+    EstimateHistoryDialog._finish_print_preview_build(
+        harness,
+        2,
+        thread=thread,
+        worker=worker,
+        progress=progress,
+    )
+
+    assert thread.quit_called is True
+    assert thread.wait_called is True
+    assert thread.deleted is True
+    assert worker.deleted is True
+    assert progress.closed is True
+    assert progress.deleted is True
+    assert thread not in harness._active_print_preview_workers
 
 
 def test_populate_table_uses_model_rows_and_selection_lookup(qtbot, monkeypatch):

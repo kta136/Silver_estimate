@@ -254,7 +254,7 @@ class EstimateEntryTableController(HostProxy):
         if not code:
             self._status("Enter item code first", 1500)
             self._update_incremental_for_row(self.current_row)
-            self._schedule_totals_recalc()
+            self._refresh_totals_after_row_edit()
             if self._should_force_code_focus():
                 QTimer.singleShot(
                     0, lambda: self.focus_on_code_column(self.current_row)

@@ -3,7 +3,6 @@ import logging  # Ensure logging is available for getLogger calls
 
 from PyQt5.QtCore import QSize, Qt, QUrl, pyqtSignal
 from PyQt5.QtGui import QDesktopServices, QFont
-from PyQt5.QtPrintSupport import QPrinterInfo
 from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -38,6 +37,7 @@ from silverestimate.security.credential_store import CredentialStoreError
 from .custom_font_dialog import CustomFontDialog
 from .item_export_manager import ItemExportManager  # Import the new export manager
 from .login_dialog import LoginDialog  # Needed for password verification/hashing
+from .settings_print_controller import PrintSettingsWidgets, SettingsPrintController
 from .shared_screen_theme import build_management_screen_stylesheet
 
 
@@ -131,6 +131,7 @@ class SettingsDialog(QDialog):
 
         # Load current settings
         self.settings = get_app_settings()
+        self._print_settings_controller = SettingsPrintController(self.settings)
 
         # Store temporary font objects for editing
         self._current_print_font = self._load_print_font_setting()
@@ -488,7 +489,7 @@ class SettingsDialog(QDialog):
         # --- Default Printer ---
         self.printer_combo = QComboBox()
         self.printer_combo.setToolTip("Default printer for printing and quick print")
-        self._refresh_printer_list()
+        self._print_settings_controller.refresh_printer_list(self.printer_combo)
         self.printer_combo.currentIndexChanged.connect(self._mark_dirty)
         form_layout.addRow("Default Printer:", self.printer_combo)
 
@@ -809,6 +810,19 @@ class SettingsDialog(QDialog):
 
     # --- Helper Methods ---
 
+    def _print_settings_widgets(self):
+        return PrintSettingsWidgets(
+            margin_left_spin=self.margin_left_spin,
+            margin_top_spin=self.margin_top_spin,
+            margin_right_spin=self.margin_right_spin,
+            margin_bottom_spin=self.margin_bottom_spin,
+            preview_zoom_spin=self.preview_zoom_spin,
+            printer_combo=self.printer_combo,
+            page_size_combo=self.page_size_combo,
+            orientation_combo=self.orientation_combo,
+            estimate_layout_combo=self.estimate_layout_combo,
+        )
+
     def _get_font_display_text(self, font):
         """Generate display text for a QFont object."""
         if not font:
@@ -844,31 +858,28 @@ class SettingsDialog(QDialog):
 
     def _load_table_font_size_setting(self):
         """Loads the table font size from QSettings."""
-        default_size = 9
-        min_size = 7
-        max_size = 16
-        size = self.settings.value(
-            "ui/table_font_size", defaultValue=default_size, type=int
+        return self._load_clamped_int_setting(
+            "ui/table_font_size",
+            default_size=9,
+            min_size=7,
+            max_size=16,
         )
-        return max(min_size, min(size, max_size))  # Clamp value
 
     def _load_breakdown_font_size_setting(self):
-        default_size = 9
-        min_size = 7
-        max_size = 16
-        size = self.settings.value(
-            "ui/breakdown_font_size", defaultValue=default_size, type=int
+        return self._load_clamped_int_setting(
+            "ui/breakdown_font_size",
+            default_size=9,
+            min_size=7,
+            max_size=16,
         )
-        return max(min_size, min(size, max_size))
 
     def _load_final_calc_font_size_setting(self):
-        default_size = 10
-        min_size = 8
-        max_size = 20
-        size = self.settings.value(
-            "ui/final_calc_font_size", defaultValue=default_size, type=int
+        return self._load_clamped_int_setting(
+            "ui/final_calc_font_size",
+            default_size=10,
+            min_size=8,
+            max_size=20,
         )
-        return max(min_size, min(size, max_size))
 
     def _load_totals_position_setting(self):
         value = self.settings.value(
@@ -878,57 +889,30 @@ class SettingsDialog(QDialog):
             return value
         return "right"
 
+    def _load_clamped_int_setting(
+        self,
+        key: str,
+        *,
+        default_size: int,
+        min_size: int,
+        max_size: int,
+    ) -> int:
+        value = self.settings.value(key, defaultValue=default_size, type=int)
+        try:
+            numeric_value = int(value)
+        except (TypeError, ValueError):
+            logging.getLogger(__name__).warning(
+                "Invalid integer setting for %s: %r; using %s",
+                key,
+                value,
+                default_size,
+            )
+            return default_size
+        return max(min_size, min(numeric_value, max_size))
+
     def _load_print_settings_to_ui(self):
         """Load current printing settings into the UI controls."""
-        margins = self.settings.value(
-            "print/margins", defaultValue="10,2,10,2", type=str
-        ).split(",")
-        if len(margins) == 4:
-            try:
-                self.margin_left_spin.setValue(int(margins[0]))
-                self.margin_top_spin.setValue(int(margins[1]))
-                self.margin_right_spin.setValue(int(margins[2]))
-                self.margin_bottom_spin.setValue(int(margins[3]))
-            except ValueError:
-                logging.getLogger(__name__).warning(
-                    "Invalid margin format in settings."
-                )
-                # Keep default spinbox values
-        else:
-            logging.getLogger(__name__).warning(
-                "Margin setting not found or invalid format."
-            )
-
-        default_zoom = 1.25
-        zoom = self.settings.value(
-            "print/preview_zoom", defaultValue=default_zoom, type=float
-        )
-        self.preview_zoom_spin.setValue(zoom)
-
-        # Default printer
-        saved_printer = self.settings.value("print/default_printer", "", type=str)
-        if saved_printer:
-            idx = self.printer_combo.findText(saved_printer)
-            if idx >= 0:
-                self.printer_combo.setCurrentIndex(idx)
-
-        # Page size and orientation
-        page_size = self.settings.value("print/page_size", "A4", type=str)
-        idx_ps = self.page_size_combo.findText(page_size)
-        if idx_ps >= 0:
-            self.page_size_combo.setCurrentIndex(idx_ps)
-
-        orientation = self.settings.value("print/orientation", "Portrait", type=str)
-        idx_or = self.orientation_combo.findText(orientation)
-        if idx_or >= 0:
-            self.orientation_combo.setCurrentIndex(idx_or)
-
-        layout_mode = self.settings.value("print/estimate_layout", "old", type=str)
-        idx_layout = self.estimate_layout_combo.findData(layout_mode)
-        if idx_layout < 0:
-            idx_layout = self.estimate_layout_combo.findData("old")
-        if idx_layout >= 0:
-            self.estimate_layout_combo.setCurrentIndex(idx_layout)
+        self._print_settings_controller.load_to_ui(self._print_settings_widgets())
 
     def _show_print_font_dialog(self):
         """Show the custom print font dialog."""
@@ -1010,29 +994,18 @@ class SettingsDialog(QDialog):
                 "totals panel position",
             )
 
-            margins = f"{self.margin_left_spin.value()},{self.margin_top_spin.value()},{self.margin_right_spin.value()},{self.margin_bottom_spin.value()}"
-            self.settings.setValue("print/margins", margins)
-            logger.debug("Saved margins: %s", margins)
-
-            preview_zoom = self.preview_zoom_spin.value()
-            self.settings.setValue("print/preview_zoom", preview_zoom)
-            logger.debug("Saved preview zoom: %s", preview_zoom)
-
-            default_printer = self.printer_combo.currentText().strip()
-            if default_printer:
-                self.settings.setValue("print/default_printer", default_printer)
-                logger.debug("Saved default printer: %s", default_printer)
-
-            self.settings.setValue(
-                "print/page_size", self.page_size_combo.currentText()
+            print_state = self._print_settings_controller.save_from_ui(
+                self._print_settings_widgets()
             )
-            self.settings.setValue(
-                "print/orientation", self.orientation_combo.currentText()
+            logger.debug(
+                "Saved print settings: margins=%s zoom=%s printer=%s page_size=%s orientation=%s layout=%s",
+                self._print_settings_controller.serialize_margins(print_state.margins),
+                print_state.preview_zoom,
+                print_state.default_printer,
+                print_state.page_size,
+                print_state.orientation,
+                print_state.estimate_layout,
             )
-
-            layout_choice = self.estimate_layout_combo.currentData() or "old"
-            self.settings.setValue("print/estimate_layout", layout_choice)
-            logger.debug("Saved estimate layout: %s", layout_choice)
 
             # Live Rates settings
             ui_enabled = bool(self.live_enabled_checkbox.isChecked())
@@ -1373,15 +1346,7 @@ class SettingsDialog(QDialog):
 
     def _refresh_printer_list(self):
         """Populate the default printer combo with available printers."""
-        try:
-            self.printer_combo.clear()
-            printers = QPrinterInfo.availablePrinters()
-            names = [p.printerName() for p in printers] if printers else []
-            # Keep a deterministic order
-            names.sort(key=lambda s: s.lower())
-            self.printer_combo.addItems(names)
-        except Exception as e:
-            logging.getLogger(__name__).warning(f"Failed to read printers: {e}")
+        self._print_settings_controller.refresh_printer_list(self.printer_combo)
 
     def _restore_defaults(self):
         """Restore sensible default settings for this dialog and update the UI."""
@@ -1400,37 +1365,9 @@ class SettingsDialog(QDialog):
             self.totals_position_combo.setCurrentIndex(idx_totals)
 
         # Printing
-        self.margin_left_spin.setValue(10)
-        self.margin_top_spin.setValue(2)
-        self.margin_right_spin.setValue(10)
-        self.margin_bottom_spin.setValue(2)
-        self.preview_zoom_spin.setValue(1.25)
-        # Page setup defaults
-        try:
-            idx = self.page_size_combo.findText("A4")
-            if idx >= 0:
-                self.page_size_combo.setCurrentIndex(idx)
-        except Exception as exc:
-            logging.getLogger(__name__).debug(
-                "Failed to apply default page-size selection: %s", exc
-            )
-        try:
-            idx = self.orientation_combo.findText("Portrait")
-            if idx >= 0:
-                self.orientation_combo.setCurrentIndex(idx)
-        except Exception as exc:
-            logging.getLogger(__name__).debug(
-                "Failed to apply default orientation selection: %s", exc
-            )
-
-        try:
-            idx = self.estimate_layout_combo.findData("old")
-            if idx >= 0:
-                self.estimate_layout_combo.setCurrentIndex(idx)
-        except Exception as exc:
-            logging.getLogger(__name__).debug(
-                "Failed to apply default estimate-layout selection: %s", exc
-            )
+        self._print_settings_controller.apply_defaults_to_ui(
+            self._print_settings_widgets()
+        )
 
         # Logging
         self.debug_mode_checkbox.setChecked(False)

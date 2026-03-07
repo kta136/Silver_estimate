@@ -5,15 +5,25 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import replace
-from typing import TYPE_CHECKING, Dict, Optional, cast
+from typing import TYPE_CHECKING, Callable, Dict, Optional, cast
 
-from PyQt5.QtCore import QDate, QLocale, QSignalBlocker, QTimer
+from PyQt5.QtCore import (
+    QDate,
+    QLocale,
+    QObject,
+    QSignalBlocker,
+    Qt,
+    QThread,
+    QTimer,
+    pyqtSignal,
+)
 from PyQt5.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
     QMessageBox,
+    QProgressDialog,
     QVBoxLayout,
 )
 
@@ -28,6 +38,32 @@ from .estimate_entry_ui import COL_CODE, COL_GROSS
 from .item_selection_dialog import ItemSelectionDialog
 
 
+class _EstimatePreviewBuildWorker(QObject):
+    """Background worker that prepares print-preview HTML off the UI thread."""
+
+    preview_ready = pyqtSignal(int, object)
+    preview_error = pyqtSignal(int, str)
+    finished = pyqtSignal(int)
+
+    def __init__(
+        self,
+        request_id: int,
+        build_preview: Callable[[], object],
+    ) -> None:
+        super().__init__()
+        self._request_id = request_id
+        self._build_preview = build_preview
+
+    def run(self) -> None:
+        try:
+            payload = self._build_preview()
+            self.preview_ready.emit(self._request_id, payload)
+        except Exception as exc:
+            self.preview_error.emit(self._request_id, str(exc))
+        finally:
+            self.finished.emit(self._request_id)
+
+
 class EstimateEntryWorkflowController(HostProxy):
     """Handle estimate-entry workflow actions outside table/totals mechanics."""
 
@@ -35,6 +71,8 @@ class EstimateEntryWorkflowController(HostProxy):
         _loading_estimate: bool
         return_mode: bool
         silver_bar_mode: bool
+        _print_preview_request_id: int
+        _active_print_preview_workers: dict[QThread, QObject]
 
     def _parent_widget(self):
         return self.host
@@ -199,7 +237,171 @@ class EstimateEntryWorkflowController(HostProxy):
 
         current_font = getattr(self.main_window, "print_font", None)
         pm = PrintManager(self.db_manager, print_font=current_font)
-        pm.print_estimate(voucher_no, self._parent_widget())
+        estimate_data = self.db_manager.get_estimate_by_voucher(voucher_no)
+        if not estimate_data:
+            QMessageBox.warning(
+                self._parent_widget(),
+                "Print Error",
+                f"Estimate {voucher_no} not found.",
+            )
+            return
+
+        self._status("Preparing print preview...", 2000)
+        self._start_estimate_print_preview_build(
+            print_manager=pm,
+            voucher_no=voucher_no,
+            estimate_data=estimate_data,
+        )
+
+    def _next_print_preview_request_id(self) -> int:
+        next_id = int(getattr(self, "_print_preview_request_id", 0)) + 1
+        self._print_preview_request_id = next_id
+        return next_id
+
+    def _start_estimate_print_preview_build(
+        self,
+        *,
+        print_manager,
+        voucher_no: str,
+        estimate_data,
+    ) -> None:
+        request_id = self._next_print_preview_request_id()
+        progress = QProgressDialog(
+            "Preparing print preview...",
+            "",
+            0,
+            0,
+            self._parent_widget(),
+        )
+        progress.setCancelButton(None)
+        progress.setWindowTitle("Print Preview")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
+        progress.show()
+
+        worker = _EstimatePreviewBuildWorker(
+            request_id,
+            lambda: print_manager.build_estimate_preview_payload(
+                voucher_no,
+                estimate_data=estimate_data,
+            ),
+        )
+        thread = QThread(self.host)
+        worker.moveToThread(thread)
+
+        active_workers = getattr(self, "_active_print_preview_workers", None)
+        if active_workers is None:
+            self._active_print_preview_workers = {}
+            active_workers = self._active_print_preview_workers
+        active_workers[thread] = worker
+
+        thread.started.connect(worker.run)
+        worker.preview_ready.connect(
+            lambda rid, payload: self._on_estimate_print_preview_ready(
+                rid,
+                payload,
+                print_manager=print_manager,
+                progress=progress,
+            )
+        )
+        worker.preview_error.connect(
+            lambda rid, message: self._on_estimate_print_preview_error(
+                rid,
+                message,
+                progress=progress,
+            )
+        )
+        worker.finished.connect(
+            lambda rid: self._finalize_estimate_print_preview_build(
+                rid,
+                thread=thread,
+                worker=worker,
+                progress=progress,
+            )
+        )
+        thread.start()
+
+    def _on_estimate_print_preview_ready(
+        self,
+        request_id: int,
+        payload,
+        *,
+        print_manager,
+        progress: QProgressDialog,
+    ) -> None:
+        if request_id != getattr(self, "_print_preview_request_id", 0):
+            return
+        if payload is None:
+            self._on_estimate_print_preview_error(
+                request_id,
+                "Estimate preview data could not be prepared.",
+                progress=progress,
+            )
+            return
+        try:
+            progress.close()
+        except Exception as exc:
+            self.logger.debug(
+                "Failed to close estimate print preview progress: %s", exc
+            )
+        print_manager.show_preview(payload, parent_widget=self._parent_widget())
+
+    def _on_estimate_print_preview_error(
+        self,
+        request_id: int,
+        message: str,
+        *,
+        progress: QProgressDialog,
+    ) -> None:
+        if request_id != getattr(self, "_print_preview_request_id", 0):
+            return
+        try:
+            progress.close()
+        except Exception as exc:
+            self.logger.debug(
+                "Failed to close estimate print preview progress after error: %s",
+                exc,
+            )
+        QMessageBox.critical(
+            self._parent_widget(),
+            "Print Error",
+            f"Error preparing print preview: {message}",
+        )
+
+    def _finalize_estimate_print_preview_build(
+        self,
+        request_id: int,
+        *,
+        thread: QThread,
+        worker: QObject,
+        progress: QProgressDialog,
+    ) -> None:
+        del request_id
+        try:
+            progress.close()
+            progress.deleteLater()
+        except Exception as exc:
+            self.logger.debug(
+                "Failed to dispose estimate print preview progress dialog: %s",
+                exc,
+            )
+        active_workers = getattr(self, "_active_print_preview_workers", {})
+        active_workers.pop(thread, None)
+        try:
+            thread.quit()
+            thread.wait(2000)
+        except Exception as exc:
+            self.logger.debug("Failed to stop print preview worker thread: %s", exc)
+        try:
+            worker.deleteLater()
+            thread.deleteLater()
+        except Exception as exc:
+            self.logger.debug(
+                "Failed to schedule estimate preview worker deletion: %s",
+                exc,
+            )
 
     def clear_form(self, confirm: bool = True):
         if confirm:

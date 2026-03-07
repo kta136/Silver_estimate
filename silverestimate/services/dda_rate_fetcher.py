@@ -29,6 +29,7 @@ BROADCAST_URLS = (
 )
 BROADCAST_URL = BROADCAST_URLS[0]
 BROADCAST_CLIENT = "ddasil"
+_ALLOWED_URL_SCHEMES = frozenset({"http", "https"})
 _TLS_RETRY_ALLOWED_HOSTS = frozenset(
     filter(None, (urlparse(url).hostname for url in BROADCAST_URLS))
 )
@@ -48,11 +49,12 @@ def fetch_silver_agra_local_mohar_rate(
     - metadata contains the raw hidden-row fields when available
     """
     url = base_url.rstrip("/") + "/"
+    _validate_request_url(url)
     headers = dict(SCRAPE_HEADERS)
     headers.setdefault("Referer", url)
     req = urllib.request.Request(url, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310
             html = resp.read().decode("utf-8", errors="replace")
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError):
         return None, {}
@@ -247,6 +249,18 @@ def _is_tls_cert_error(exc: urllib.error.URLError) -> bool:
     return "certificate verify failed" in message
 
 
+def _validate_request_url(url: str) -> str:
+    parsed = urlparse(url)
+    scheme = (parsed.scheme or "").lower()
+    if scheme not in _ALLOWED_URL_SCHEMES:
+        raise ValueError(
+            f"Blocked request with unsupported scheme: {scheme or '<none>'}"
+        )
+    if not parsed.hostname:
+        raise ValueError("Blocked request with missing hostname")
+    return url
+
+
 def _fetch_url_text(
     url: str,
     timeout: int = 10,
@@ -255,6 +269,7 @@ def _fetch_url_text(
     headers: dict[str, str] | None = None,
     method: str | None = None,
 ) -> str:
+    _validate_request_url(url)
     req = urllib.request.Request(
         url,
         data=data,
@@ -262,7 +277,7 @@ def _fetch_url_text(
         method=method,
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310
             return cast(bytes, resp.read()).decode("utf-8", errors="replace")
     except urllib.error.URLError as exc:
         if not _is_tls_cert_error(exc):
@@ -272,10 +287,10 @@ def _fetch_url_text(
         if host not in _TLS_RETRY_ALLOWED_HOSTS:
             raise ValueError("Blocked request to untrusted endpoint") from exc
 
-        insecure_context = ssl._create_unverified_context()
+        insecure_context = ssl._create_unverified_context()  # nosec B323
         with urllib.request.urlopen(
             req, timeout=timeout, context=insecure_context
-        ) as resp:
+        ) as resp:  # nosec B310
             return cast(bytes, resp.read()).decode("utf-8", errors="replace")
 
 

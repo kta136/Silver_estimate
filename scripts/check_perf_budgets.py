@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """Fail CI when p95 performance telemetry exceeds configured budgets."""
 
 from __future__ import annotations

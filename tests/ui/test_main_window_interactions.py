@@ -35,7 +35,6 @@ class FakeDbManager:
     )
     generate_calls: int = 0
     saved_estimates: List[Dict[str, Any]] = field(default_factory=list)
-    deleted_bars_for: Optional[str] = None
     preload_started: bool = False
     closed: bool = False
     on_flush_queued: Optional[Any] = None
@@ -43,7 +42,6 @@ class FakeDbManager:
 
     def __post_init__(self) -> None:
         self.item_cache_controller = None
-        self.next_bar_id = 1
 
     # --- Lifecycle -------------------------------------------------
     def start_preload_item_cache(self) -> None:
@@ -83,24 +81,6 @@ class FakeDbManager:
             }
         )
         return True
-
-    def delete_silver_bars_for_estimate(self, voucher_no: str) -> None:
-        self.deleted_bars_for = voucher_no
-
-    def get_silver_bars(
-        self, estimate_voucher_no: Optional[str] = None, **kwargs
-    ) -> List[Dict[str, Any]]:
-        return []
-
-    def update_silver_bar_values(
-        self, bar_id: int, weight: float, purity: float
-    ) -> bool:
-        return True
-
-    def add_silver_bar(self, voucher_no: str, weight: float, purity: float) -> int:
-        bar_id = self.next_bar_id
-        self.next_bar_id += 1
-        return bar_id
 
     def delete_single_estimate(self, voucher_no: str) -> bool:
         return True

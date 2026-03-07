@@ -22,7 +22,7 @@ from silverestimate.services.estimate_calculator import (
 from silverestimate.ui.view_models import EstimateEntryRowState
 
 from ._host_proxy import HostProxy
-from .estimate_entry_ui import (
+from .estimate_entry_logic.constants import (
     COL_FINE_WT,
     COL_GROSS,
     COL_NET_WT,
@@ -49,7 +49,6 @@ class EstimateEntryTotalsController(HostProxy):
         _agg_regular: _RunningCategoryTotals
         _agg_returns: _RunningCategoryTotals
         _agg_silver_bars: _RunningCategoryTotals
-        _incremental_totals_enabled: bool
         _incremental_totals_failed: bool
         _row_contrib_cache: dict[int, _RowContribution]
 
@@ -177,9 +176,7 @@ class EstimateEntryTotalsController(HostProxy):
         return _RowContribution()
 
     def _totals_incremental_is_active(self) -> bool:
-        return bool(
-            self._incremental_totals_enabled and not self._incremental_totals_failed
-        )
+        return not self._incremental_totals_failed
 
     @staticmethod
     def _category_bucket_for(
@@ -337,15 +334,6 @@ class EstimateEntryTotalsController(HostProxy):
             last_balance_amount=float(self.last_balance_amount),
         )
 
-    def _calculate_totals_full_legacy(self, *, start: float | None = None) -> None:
-        started_at = time.perf_counter() if start is None else start
-        self._update_view_model_snapshot()
-        totals = self.view_model.compute_totals()
-        self.apply_totals(totals)
-        self._log_perf_metric(
-            "estimate_entry.totals_recompute", started_at, threshold_ms=15.0
-        )
-
     def _disable_incremental_totals_and_fallback(self, exc: Exception) -> None:
         if not self._incremental_totals_failed:
             self.logger.warning(
@@ -357,9 +345,6 @@ class EstimateEntryTotalsController(HostProxy):
 
     def calculate_totals(self):
         start = time.perf_counter()
-        if not self._incremental_totals_enabled:
-            self._calculate_totals_full_legacy(start=start)
-            return
         if self._incremental_totals_failed:
             return
 

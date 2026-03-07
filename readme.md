@@ -167,7 +167,7 @@ Key areas of the codebase:
 - `silverestimate/controllers/` – startup, navigation, and live-rate controllers.
 - `silverestimate/presenter/estimate_entry_presenter.py` – presenter coordinating save/load logic and calculations.
 - `silverestimate/ui/estimate_entry.py` – main estimate widget combining UI helpers and presenter.
-- `silverestimate/ui/estimate_entry_logic/` – table helpers, persistence mixins, and calculations wiring.
+- `silverestimate/ui/estimate_entry_logic/` – shared estimate-table column constants used by models, formatting helpers, and tests.
 - `silverestimate/services/` – auth, settings, live-rate, main commands, and repository adapters.
 - `silverestimate/persistence/` – `DatabaseManager`, repositories, migrations, and flush scheduler.
 - `silverestimate/security/` – AES-GCM utilities and keyring-backed credential storage.
@@ -246,9 +246,7 @@ For support and troubleshooting:
   - [Project architecture](DOCS/project-architecture.md)
   - [API reference](DOCS/api-reference.md)
   - [Security architecture](DOCS/security-architecture.md)
-  - [Logging guide](DOCS/logging-guide.md)
   - [Performance baseline thresholds](DOCS/performance-baseline-thresholds.md)
-  - [Remaining performance tasks](DOCS/performance-remaining-tasks.md)
 
 ## License
 

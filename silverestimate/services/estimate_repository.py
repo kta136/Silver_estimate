@@ -18,8 +18,6 @@ class EstimateRepositoryDatabase(Protocol):
 
     def get_estimate_by_voucher(self, voucher_no: str) -> EstimateRow | None: ...
 
-    def estimate_exists(self, voucher_no: str) -> bool: ...
-
     def save_estimate_with_returns(
         self,
         voucher_no: str,
@@ -30,19 +28,9 @@ class EstimateRepositoryDatabase(Protocol):
         totals: dict[str, Any],
     ) -> bool: ...
 
-    def delete_silver_bars_for_estimate(self, voucher_no: str) -> None: ...
-
     def get_silver_bars_for_estimate(
         self, voucher_no: str
     ) -> Sequence[EstimateRow] | None: ...
-
-    def update_silver_bar_values(
-        self, bar_id: int, weight: float, purity: float
-    ) -> bool: ...
-
-    def add_silver_bar(
-        self, voucher_no: str, weight: float, purity: float
-    ) -> int | None: ...
 
     def sync_silver_bars_for_estimate(
         self, voucher_no: str, bars: list[EstimateRow]
@@ -60,8 +48,6 @@ class EstimateRepository(Protocol):
 
     def load_estimate(self, voucher_no: str) -> Optional[EstimateRow]: ...
 
-    def estimate_exists(self, voucher_no: str) -> bool: ...
-
     def save_estimate(
         self,
         voucher_no: str,
@@ -71,20 +57,6 @@ class EstimateRepository(Protocol):
         return_items: Iterable[EstimateRow],
         totals: Mapping[str, Any],
     ) -> bool: ...
-
-    def notify_silver_bars_for_estimate(self, voucher_no: str) -> None: ...
-
-    def fetch_silver_bars_for_estimate(
-        self, voucher_no: str
-    ) -> Sequence[EstimateRow]: ...
-
-    def count_silver_bars_for_estimate(self, voucher_no: str) -> int: ...
-
-    def update_silver_bar(self, bar_id: int, weight: float, purity: float) -> bool: ...
-
-    def add_silver_bar(
-        self, voucher_no: str, weight: float, purity: float
-    ) -> Optional[int]: ...
 
     def sync_silver_bars_for_estimate(
         self, voucher_no: str, bars: Iterable[EstimateRow]
@@ -113,12 +85,6 @@ class DatabaseEstimateRepository:
     def load_estimate(self, voucher_no: str) -> Optional[EstimateRow]:
         return self._db.get_estimate_by_voucher(voucher_no)
 
-    def estimate_exists(self, voucher_no: str) -> bool:
-        try:
-            return bool(self._db.estimate_exists(voucher_no))
-        except Exception:
-            return False
-
     def save_estimate(
         self,
         voucher_no: str,
@@ -138,43 +104,6 @@ class DatabaseEstimateRepository:
                 dict(totals or {}),
             )
         )
-
-    def notify_silver_bars_for_estimate(self, voucher_no: str) -> None:
-        self._db.delete_silver_bars_for_estimate(voucher_no)
-
-    def fetch_silver_bars_for_estimate(self, voucher_no: str) -> Sequence[EstimateRow]:
-        try:
-            rows = self._db.get_silver_bars_for_estimate(voucher_no) or []
-        except Exception:
-            rows = []
-        normalized_rows = [dict(row) for row in rows]
-        sorted_rows = (
-            sorted(
-                normalized_rows,
-                key=lambda row: int(row.get("bar_id", 0) or 0),
-            )
-            if normalized_rows
-            else []
-        )
-        return sorted_rows
-
-    def count_silver_bars_for_estimate(self, voucher_no: str) -> int:
-        bars = self.fetch_silver_bars_for_estimate(voucher_no)
-        return len(bars)
-
-    def update_silver_bar(self, bar_id: int, weight: float, purity: float) -> bool:
-        try:
-            return bool(self._db.update_silver_bar_values(bar_id, weight, purity))
-        except Exception:
-            return False
-
-    def add_silver_bar(
-        self, voucher_no: str, weight: float, purity: float
-    ) -> Optional[int]:
-        try:
-            return self._db.add_silver_bar(voucher_no, weight, purity)
-        except Exception:
-            return None
 
     def sync_silver_bars_for_estimate(
         self, voucher_no: str, bars: Iterable[EstimateRow]

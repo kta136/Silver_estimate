@@ -17,10 +17,7 @@ from silverestimate.presenter import (
     EstimateEntryViewState,
 )
 
-from .estimate_entry_layout_controller import EstimateEntryLayoutController
-from .estimate_entry_table_controller import EstimateEntryTableController
-from .estimate_entry_totals_controller import EstimateEntryTotalsController
-from .estimate_entry_ui import (
+from .estimate_entry_logic.constants import (
     COL_CODE,
     COL_GROSS,
     COL_PIECES,
@@ -28,6 +25,9 @@ from .estimate_entry_ui import (
     COL_PURITY,
     COL_WAGE_RATE,
 )
+from .estimate_entry_layout_controller import EstimateEntryLayoutController
+from .estimate_entry_table_controller import EstimateEntryTableController
+from .estimate_entry_totals_controller import EstimateEntryTotalsController
 from .estimate_entry_workflow_controller import EstimateEntryWorkflowController
 from .inline_status import InlineStatusController
 from .view_models import EstimateEntryViewModel
@@ -119,18 +119,7 @@ class EstimateEntryWidget(QWidget):
             return_mode=self.return_mode,
             silver_bar_mode=self.silver_bar_mode,
         )
-        self._incremental_totals_enabled = True
         self._incremental_totals_failed = False
-        try:
-            self._incremental_totals_enabled = bool(
-                self._settings().value(
-                    "perf/incremental_totals_enabled",
-                    defaultValue=True,
-                    type=bool,
-                )
-            )
-        except (AttributeError, TypeError, ValueError):
-            self._incremental_totals_enabled = True
         self._row_contrib_cache: dict[int, _RowContribution] = {}
         self._agg_regular = _RunningCategoryTotals()
         self._agg_returns = _RunningCategoryTotals()
@@ -481,7 +470,6 @@ for _method_name in (
     "_remove_incremental_row",
     "_frozen_category_totals",
     "_build_totals_result_from_aggregates",
-    "_calculate_totals_full_legacy",
     "_disable_incremental_totals_and_fallback",
     "calculate_totals",
 ):

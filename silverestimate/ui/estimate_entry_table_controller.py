@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import QAbstractItemView, QApplication
 
 from ._host_proxy import HostProxy
 from .adapters import EstimateTableAdapter
-from .estimate_entry_ui import (
+from .estimate_entry_logic.constants import (
     COL_CODE,
     COL_GROSS,
     COL_PIECES,

@@ -33,8 +33,8 @@ from silverestimate.services.estimate_entry_persistence import (
 )
 
 from ._host_proxy import HostProxy
+from .estimate_entry_logic.constants import COL_CODE, COL_GROSS
 from .estimate_entry_theme import refresh_widget_style
-from .estimate_entry_ui import COL_CODE, COL_GROSS
 from .item_selection_dialog import ItemSelectionDialog
 
 

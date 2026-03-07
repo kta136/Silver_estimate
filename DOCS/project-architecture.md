@@ -30,7 +30,7 @@ A PyQt5 desktop application for silver shops that combines encrypted persistence
 
 ### 5. UI Layer
 - **`silverestimate/ui/estimate_entry.py`**: composite widget that wires UI helpers, presenter callbacks, and logic mixins.
-- **`silverestimate/ui/estimate_entry_logic/`**: calculation helpers, persistence mixins, table utilities, and inline status plumbing consumed by the widget.
+- **`silverestimate/ui/estimate_entry_logic/`**: shared estimate-table column constants consumed by models, formatting helpers, and tests.
 - **`silverestimate/ui/item_master.py`**: CRUD console with validation, search, and bulk operations.
 - **`silverestimate/ui/silver_bar_management.py`**: list-based bar inventory manager with print/export and issuance workflows.
 - **`silverestimate/ui/estimate_history.py` / `silverestimate/ui/silver_bar_history.py`**: history browsers with filtering, reactivation, and batch actions.

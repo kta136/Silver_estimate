@@ -32,20 +32,13 @@ class FakeRepository:
     def __init__(self):
         self.generated_voucher = "V001"
         self.load_estimate_response: Optional[Dict] = None
-        self.estimate_exists_flag = False
         self.save_calls: List[Dict] = []
         self.save_result = True
         self.last_error_value: Optional[str] = None
         self.fetch_item_map: Dict[str, Dict] = {}
-        self.fetched_silver_bars: List[Dict] = []
-        self.update_bar_results: List[bool] = []
-        self.add_bar_results: List[Optional[int]] = []
-        self.update_calls: List[Dict] = []
-        self.add_calls: List[Dict] = []
         self.sync_calls: List[Dict] = []
         self.sync_result: tuple[int, int] = (0, 0)
         self.deleted_vouchers: List[str] = []
-        self.notify_calls: List[str] = []
 
     def generate_voucher_no(self) -> str:
         return self.generated_voucher
@@ -55,12 +48,6 @@ class FakeRepository:
 
     def fetch_item(self, code: str) -> Optional[Dict]:
         return self.fetch_item_map.get(code)
-
-    def estimate_exists(self, voucher_no: str) -> bool:
-        return self.estimate_exists_flag
-
-    def notify_silver_bars_for_estimate(self, voucher_no: str) -> None:
-        self.notify_calls.append(voucher_no)
 
     def save_estimate(
         self,
@@ -82,25 +69,6 @@ class FakeRepository:
             }
         )
         return self.save_result
-
-    def fetch_silver_bars_for_estimate(self, voucher_no: str) -> List[Dict]:
-        return list(self.fetched_silver_bars)
-
-    def update_silver_bar(self, bar_id: int, weight: float, purity: float) -> bool:
-        self.update_calls.append({"bar_id": bar_id, "weight": weight, "purity": purity})
-        if self.update_bar_results:
-            return self.update_bar_results.pop(0)
-        return True
-
-    def add_silver_bar(
-        self, voucher_no: str, weight: float, purity: float
-    ) -> Optional[int]:
-        self.add_calls.append(
-            {"voucher": voucher_no, "weight": weight, "purity": purity}
-        )
-        if self.add_bar_results:
-            return self.add_bar_results.pop(0)
-        return 1
 
     def sync_silver_bars_for_estimate(
         self, voucher_no: str, bars: Iterable[Dict]
@@ -356,8 +324,6 @@ def test_save_estimate_prefers_bulk_bar_sync_when_available(presenter_fixtures):
     assert outcome.success
     assert outcome.bars_added == 1
     assert len(repo.sync_calls) == 1
-    assert repo.update_calls == []
-    assert repo.add_calls == []
 
 
 def test_save_estimate_failure_returns_error(presenter_fixtures):

@@ -5,7 +5,6 @@ from PyQt5.QtCore import QEventLoop, Qt, QTimer
 from PyQt5.QtWidgets import QDialog, QHeaderView, QLineEdit, QMessageBox
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
-from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.persistence.database_manager import DatabaseManager
 from silverestimate.presenter.estimate_entry_presenter import LoadedEstimate, SaveItem
 from silverestimate.ui.estimate_entry import EstimateEntryWidget
@@ -100,14 +99,6 @@ class _RepositoryStub:
     def fetch_item(self, code):
         return self.db.get_item_by_code(code)
 
-    def estimate_exists(self, voucher_no):
-        return bool(self.load_estimate(voucher_no))
-
-    def notify_silver_bars_for_estimate(self, voucher_no):
-        deleter = getattr(self.db, "delete_silver_bars_for_estimate", None)
-        if callable(deleter):
-            deleter(voucher_no)
-
     def save_estimate(
         self, voucher_no, date, silver_rate, regular_items, return_items, totals
     ):
@@ -124,25 +115,6 @@ class _RepositoryStub:
                 )
             )
         return True
-
-    def fetch_silver_bars_for_estimate(self, voucher_no):
-        fetcher = getattr(self.db, "get_silver_bars", None)
-        if callable(fetcher):
-            rows = fetcher(estimate_voucher_no=voucher_no) or []
-            return [dict(row) for row in rows]
-        return []
-
-    def update_silver_bar(self, bar_id, weight, purity):
-        updater = getattr(self.db, "update_silver_bar_values", None)
-        if callable(updater):
-            return bool(updater(bar_id, weight, purity))
-        return True
-
-    def add_silver_bar(self, voucher_no, weight, purity):
-        adder = getattr(self.db, "add_silver_bar", None)
-        if callable(adder):
-            return adder(voucher_no, weight, purity)
-        return None
 
     def sync_silver_bars_for_estimate(self, voucher_no, bars):
         syncer = getattr(self.db, "sync_silver_bars_for_estimate", None)
@@ -251,14 +223,6 @@ def test_incremental_totals_match_full_single_row_edit(qt_app, fake_db):
             regular_item(gross=10, poly=1, purity=92.5, wage_rate=10),
         )
         assert widget._totals_incremental_is_active()
-        legacy_calls = {"count": 0}
-        original_legacy = widget._calculate_totals_full_legacy
-
-        def _legacy_spy(*args, **kwargs):
-            legacy_calls["count"] += 1
-            return original_legacy(*args, **kwargs)
-
-        widget._calculate_totals_full_legacy = _legacy_spy
 
         table.set_cell_text(0, COL_GROSS, "12.0")
         widget.handle_cell_changed(0, COL_GROSS)
@@ -268,7 +232,6 @@ def test_incremental_totals_match_full_single_row_edit(qt_app, fake_db):
         assert float(widget.total_net_label.text()) == pytest.approx(11.0)
         assert float(widget.total_fine_label.text()) == pytest.approx(10.175, abs=0.01)
         assert float(widget.net_wage_label.text()) == pytest.approx(110.0)
-        assert legacy_calls["count"] == 0
     finally:
         widget.deleteLater()
 
@@ -323,14 +286,6 @@ def test_incremental_totals_match_full_multi_row_mixed_categories(qt_app, fake_d
         widget.toggle_silver_bar_mode()
 
         assert widget._totals_incremental_is_active()
-        legacy_calls = {"count": 0}
-        original_legacy = widget._calculate_totals_full_legacy
-
-        def _legacy_spy(*args, **kwargs):
-            legacy_calls["count"] += 1
-            return original_legacy(*args, **kwargs)
-
-        widget._calculate_totals_full_legacy = _legacy_spy
 
         widget.item_table.set_cell_text(0, COL_GROSS, "11.0")
         widget.handle_cell_changed(0, COL_GROSS)
@@ -345,7 +300,6 @@ def test_incremental_totals_match_full_multi_row_mixed_categories(qt_app, fake_d
         assert float(widget.bar_gross_label.text()) == pytest.approx(3.0)
         assert float(widget.net_fine_label.text()) == pytest.approx(4.55, abs=0.01)
         assert float(widget.net_wage_label.text()) == pytest.approx(84.0, abs=0.01)
-        assert legacy_calls["count"] == 0
     finally:
         widget.deleteLater()
 
@@ -440,29 +394,6 @@ def test_incremental_rebuild_after_apply_loaded_estimate(qt_app, fake_db):
         widget.deleteLater()
 
 
-def test_incremental_toggle_off_uses_legacy_path(qt_app, fake_db, settings_stub):
-    settings = get_app_settings()
-    settings.setValue("perf/incremental_totals_enabled", False)
-    widget = _make_widget(fake_db)
-    try:
-        assert widget._incremental_totals_enabled is False
-        assert not widget._totals_incremental_is_active()
-        assert widget._row_contrib_cache == {}
-
-        legacy_calls = {"count": 0}
-        original_legacy = widget._calculate_totals_full_legacy
-
-        def _legacy_spy(*args, **kwargs):
-            legacy_calls["count"] += 1
-            return original_legacy(*args, **kwargs)
-
-        widget._calculate_totals_full_legacy = _legacy_spy
-        widget.calculate_totals()
-        assert legacy_calls["count"] >= 1
-    finally:
-        widget.deleteLater()
-
-
 def test_incremental_failure_does_not_use_legacy_fallback(qt_app, fake_db):
     widget = _make_widget(fake_db)
     try:
@@ -473,15 +404,6 @@ def test_incremental_failure_does_not_use_legacy_fallback(qt_app, fake_db):
         )
         assert widget._totals_incremental_is_active()
 
-        legacy_calls = {"count": 0}
-        original_legacy = widget._calculate_totals_full_legacy
-
-        def _legacy_spy(*args, **kwargs):
-            legacy_calls["count"] += 1
-            return original_legacy(*args, **kwargs)
-
-        widget._calculate_totals_full_legacy = _legacy_spy
-
         def _boom(_row_state):
             raise RuntimeError("forced incremental failure")
 
@@ -491,13 +413,11 @@ def test_incremental_failure_does_not_use_legacy_fallback(qt_app, fake_db):
         _pump_events(160)
 
         assert widget._incremental_totals_failed is True
-        assert legacy_calls["count"] == 0
         assert float(widget.total_gross_label.text()) == pytest.approx(10.0)
 
         widget.item_table.set_cell_text(0, COL_GROSS, "12.0")
         widget.handle_cell_changed(0, COL_GROSS)
         _pump_events(160)
-        assert legacy_calls["count"] == 0
         assert float(widget.total_gross_label.text()) == pytest.approx(10.0)
         assert float(widget.net_wage_label.text()) == pytest.approx(90.0)
     finally:

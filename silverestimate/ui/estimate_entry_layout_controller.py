@@ -24,8 +24,7 @@ from .estimate_entry_components import (
     TotalsPanel,
     VoucherToolbar,
 )
-from .estimate_entry_theme import ESTIMATE_ENTRY_STYLESHEET
-from .estimate_entry_ui import (
+from .estimate_entry_logic.constants import (
     COL_CODE,
     COL_FINE_WT,
     COL_GROSS,
@@ -37,6 +36,9 @@ from .estimate_entry_ui import (
     COL_TYPE,
     COL_WAGE_AMT,
     COL_WAGE_RATE,
+)
+from .estimate_entry_theme import ESTIMATE_ENTRY_STYLESHEET
+from .estimate_entry_ui import (
     CodeDelegate,
     NumericDelegate,
 )

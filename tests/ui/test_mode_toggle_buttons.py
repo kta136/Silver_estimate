@@ -40,9 +40,6 @@ class _RepositoryStub:
     def fetch_item(self, code):
         return self.db.get_item_by_code(code)
 
-    def estimate_exists(self, voucher_no):
-        return False
-
     def save_estimate(self, *args, **kwargs):
         return True
 

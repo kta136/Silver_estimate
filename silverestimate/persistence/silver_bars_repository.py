@@ -891,37 +891,6 @@ class SilverBarsRepository:
             conn.rollback()
             return None
 
-    def update_silver_bar_values(
-        self, bar_id: int, weight: float, purity: float
-    ) -> bool:
-        conn, cursor = self._conn, self._cursor
-        if not conn or not cursor:
-            return False
-        try:
-            fine_weight = float(weight) * (float(purity) / 100.0)
-        except Exception:
-            fine_weight = 0.0
-        try:
-            cursor.execute(
-                "UPDATE silver_bars SET weight = ?, purity = ?, fine_weight = ? WHERE bar_id = ?",
-                (weight, purity, fine_weight, bar_id),
-            )
-            conn.commit()
-            return bool(int(cursor.rowcount) > 0)
-        except sqlite3.Error as exc:
-            self._logger.error(
-                "DB Error updating silver bar %s: %s", bar_id, exc, exc_info=True
-            )
-            try:
-                conn.rollback()
-            except Exception as rollback_error:
-                self._logger.debug(
-                    "Failed to roll back silver-bar update for %s: %s",
-                    bar_id,
-                    rollback_error,
-                )
-            return False
-
     def get_silver_bars(
         self,
         *,
@@ -1040,49 +1009,6 @@ class SilverBarsRepository:
                 self._logger.error(
                     "DB error cleaning list %s: %s", list_id, exc, exc_info=True
                 )
-
-    def delete_silver_bars_for_estimate(self, voucher_no: str) -> bool:
-        if not voucher_no:
-            self._logger.warning(
-                "delete_silver_bars_for_estimate called with empty voucher_no"
-            )
-            return True
-        cursor = self._cursor
-        if not cursor:
-            return True
-        self._logger.info(
-            "delete_silver_bars_for_estimate called for %s but silver bars are now permanent.",
-            voucher_no,
-        )
-        self._logger.info(
-            "Silver bars are preserved and should be managed through the Silver Bar Management interface."
-        )
-        try:
-            cursor.execute(
-                "SELECT COUNT(*) FROM silver_bars WHERE estimate_voucher_no = ?",
-                (voucher_no,),
-            )
-            total_bars = cursor.fetchone()[0]
-            cursor.execute(
-                "SELECT COUNT(*) FROM silver_bars WHERE estimate_voucher_no = ? AND list_id IS NOT NULL",
-                (voucher_no,),
-            )
-            bars_in_lists = cursor.fetchone()[0]
-            self._logger.info(
-                "Estimate %s has %s silver bars total, %s in lists.",
-                voucher_no,
-                total_bars,
-                bars_in_lists,
-            )
-            return True
-        except sqlite3.Error as exc:
-            self._logger.error(
-                "DB error checking silver bars for estimate %s: %s",
-                voucher_no,
-                exc,
-                exc_info=True,
-            )
-            return True
 
     # ------------------------------------------------------------------
 

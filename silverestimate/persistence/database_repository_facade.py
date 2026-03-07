@@ -47,26 +47,6 @@ class DatabaseRepositoryFacadeMixin:
     def get_estimate_by_voucher(self, voucher_no):
         return self.estimates_repo.get_estimate_by_voucher(voucher_no)
 
-    def estimate_exists(self, voucher_no):
-        return self.estimates_repo.estimate_exists(voucher_no)
-
-    def get_estimates(self, date_from=None, date_to=None, voucher_search=None):
-        return self.estimates_repo.get_estimates(
-            date_from=date_from,
-            date_to=date_to,
-            voucher_search=voucher_search,
-        )
-
-    def get_estimate_headers(self, date_from=None, date_to=None, voucher_search=None):
-        return self.estimates_repo.get_estimate_headers(
-            date_from=date_from,
-            date_to=date_to,
-            voucher_search=voucher_search,
-        )
-
-    def get_first_estimate_date(self):
-        return self.estimates_repo.get_first_estimate_date()
-
     def generate_voucher_no(self):
         return self.estimates_repo.generate_voucher_no()
 
@@ -196,24 +176,8 @@ class DatabaseRepositoryFacadeMixin:
     def reactivate_silver_bar_list(self, list_id):
         return self.silver_bars_repo.reactivate_list(list_id)
 
-    def get_available_bars(self):
-        return self.silver_bars_repo.get_available_bars()
-
-    def get_silver_bars_for_estimate(self, voucher_no):
-        return self.silver_bars_repo.get_silver_bars_for_estimate(voucher_no)
-
     def sync_silver_bars_for_estimate(self, voucher_no, bars):
         return self.silver_bars_repo.sync_silver_bars_for_estimate(voucher_no, bars)
-
-    def add_silver_bar(self, estimate_voucher_no, weight, purity):
-        return self.silver_bars_repo.add_silver_bar(
-            estimate_voucher_no,
-            weight,
-            purity,
-        )
-
-    def update_silver_bar_values(self, bar_id, weight, purity):
-        return self.silver_bars_repo.update_silver_bar_values(bar_id, weight, purity)
 
     def get_silver_bars(
         self,
@@ -240,9 +204,5 @@ class DatabaseRepositoryFacadeMixin:
             limit=limit,
             offset=offset,
         )
-
-    def delete_silver_bars_for_estimate(self, voucher_no):
-        return self.silver_bars_repo.delete_silver_bars_for_estimate(voucher_no)
-
 
 __all__ = ["DatabaseRepositoryFacadeMixin"]

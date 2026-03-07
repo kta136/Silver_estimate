@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Estimate entry table constants and delegates."""
+"""Estimate entry table delegates."""
 
 from PyQt5.QtCore import QEvent, Qt, QTimer
 from PyQt5.QtGui import QDoubleValidator, QIntValidator
@@ -7,19 +7,7 @@ from PyQt5.QtWidgets import QLineEdit, QStyledItemDelegate
 
 from silverestimate.ui import estimate_table_formatting
 from silverestimate.ui.numeric_font import numeric_table_font
-
-# --- Column Constants (shared by estimate entry table paths) ---
-COL_CODE = 0
-COL_ITEM_NAME = 1
-COL_GROSS = 2
-COL_POLY = 3
-COL_NET_WT = 4
-COL_PURITY = 5
-COL_WAGE_RATE = 6
-COL_PIECES = 7
-COL_WAGE_AMT = 8
-COL_FINE_WT = 9
-COL_TYPE = 10
+from .estimate_entry_logic import constants as table_cols
 
 
 class NumericDelegate(QStyledItemDelegate):
@@ -39,13 +27,22 @@ class NumericDelegate(QStyledItemDelegate):
         locale = estimate_table_formatting.get_estimate_table_locale()
         validator: QDoubleValidator | QIntValidator
 
-        if col in [COL_GROSS, COL_POLY, COL_PURITY, COL_WAGE_RATE]:
-            decimals = 3 if col in [COL_GROSS, COL_POLY] else 2
+        if col in (
+            table_cols.COL_GROSS,
+            table_cols.COL_POLY,
+            table_cols.COL_PURITY,
+            table_cols.COL_WAGE_RATE,
+        ):
+            decimals = (
+                3
+                if col in (table_cols.COL_GROSS, table_cols.COL_POLY)
+                else 2
+            )
             validator = QDoubleValidator(0.0, 999999.999, decimals, editor)
             validator.setNotation(QDoubleValidator.StandardNotation)
             validator.setLocale(locale)
             editor.setValidator(validator)
-        elif col == COL_PIECES:
+        elif col == table_cols.COL_PIECES:
             validator = QIntValidator(0, 999999, editor)
             editor.setValidator(validator)
         else:
@@ -61,7 +58,7 @@ class NumericDelegate(QStyledItemDelegate):
 
         value = index.model().data(index, Qt.EditRole)
         col = index.column()
-        if col in [COL_GROSS, COL_POLY]:
+        if col in (table_cols.COL_GROSS, table_cols.COL_POLY):
             try:
                 if value is not None and float(value) == 0.0:
                     display_text = ""
@@ -84,7 +81,7 @@ class NumericDelegate(QStyledItemDelegate):
         value = editor.text().strip()
         locale = estimate_table_formatting.get_estimate_table_locale()
 
-        if col in [COL_GROSS, COL_POLY]:
+        if col in (table_cols.COL_GROSS, table_cols.COL_POLY):
             if not value:
                 model.setData(index, 0.0, Qt.EditRole)
             else:
@@ -98,15 +95,15 @@ class NumericDelegate(QStyledItemDelegate):
             return
 
         try:
-            if col in [COL_PURITY, COL_WAGE_RATE]:
+            if col in (table_cols.COL_PURITY, table_cols.COL_WAGE_RATE):
                 double_val, ok = locale.toDouble(value)
                 model.setData(index, double_val if ok else 0.0, Qt.EditRole)
-            elif col == COL_PIECES:
+            elif col == table_cols.COL_PIECES:
                 model.setData(index, int(value) if value else 0, Qt.EditRole)
             else:
                 model.setData(index, value, Qt.EditRole)
         except ValueError:
-            if col == COL_PIECES:
+            if col == table_cols.COL_PIECES:
                 model.setData(index, 0, Qt.EditRole)
             else:
                 model.setData(index, value, Qt.EditRole)
@@ -124,7 +121,10 @@ class NumericDelegate(QStyledItemDelegate):
                 col = index.column()
                 key = event.key()
                 if key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Tab):
-                    if col in [COL_GROSS, COL_POLY] and editor.text() == "":
+                    if col in (
+                        table_cols.COL_GROSS,
+                        table_cols.COL_POLY,
+                    ) and editor.text() == "":
                         index.model().setData(index, 0.0, Qt.EditRole)
                         self.closeEditor.emit(
                             editor, QStyledItemDelegate.SubmitModelCache

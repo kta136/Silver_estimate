@@ -69,14 +69,6 @@ class _RepositoryStub:
     def fetch_item(self, code):
         return self.db.get_item_by_code(code)
 
-    def estimate_exists(self, voucher_no):
-        return bool(self.load_estimate(voucher_no))
-
-    def notify_silver_bars_for_estimate(self, voucher_no):
-        deleter = getattr(self.db, "delete_silver_bars_for_estimate", None)
-        if callable(deleter):
-            deleter(voucher_no)
-
     def save_estimate(
         self, voucher_no, date, silver_rate, regular_items, return_items, totals
     ):

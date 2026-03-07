@@ -243,10 +243,6 @@ class EstimateEntryPresenter:
     def save_estimate(self, payload: SavePayload) -> SaveOutcome:
         """Persist the estimate and synchronize related silver bar metadata."""
         try:
-            exists = self._repository.estimate_exists(payload.voucher_no)
-            if exists:
-                self._repository.notify_silver_bars_for_estimate(payload.voucher_no)
-
             regular_dicts = [self._item_to_dict(item) for item in payload.regular_items]
             return_dicts = [self._item_to_dict(item) for item in payload.return_items]
             success = self._repository.save_estimate(

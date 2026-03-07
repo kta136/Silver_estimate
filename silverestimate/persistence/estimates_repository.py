@@ -89,25 +89,6 @@ class EstimatesRepository:
             )
             return None
 
-    def estimate_exists(self, voucher_no: str) -> bool:
-        cursor = self._cursor
-        if not cursor or not voucher_no:
-            return False
-        try:
-            cursor.execute(
-                "SELECT 1 FROM estimates WHERE voucher_no = ? LIMIT 1",
-                (voucher_no,),
-            )
-            return cursor.fetchone() is not None
-        except sqlite3.Error as exc:
-            self._logger.error(
-                "DB Error checking estimate existence %s: %s",
-                voucher_no,
-                exc,
-                exc_info=True,
-            )
-            return False
-
     def get_estimates(self, date_from=None, date_to=None, voucher_search=None):
         cursor = self._cursor
         if not cursor:

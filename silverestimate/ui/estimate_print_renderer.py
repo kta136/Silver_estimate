@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html as html_lib
 import logging
+import math
 from typing import Callable
 
 
@@ -50,6 +51,23 @@ class EstimatePrintRenderer:
                     }}
                     body {{ margin: 0; }}
                     </style></head><body><pre>{escaped_content}</pre></body></html>"""
+
+    @staticmethod
+    def _format_indian_grouped_integer(value: float | int) -> str:
+        rounded_value = math.ceil(float(value))
+        sign = "-" if rounded_value < 0 else ""
+        digits = str(abs(rounded_value))
+        if len(digits) <= 3:
+            return f"{sign}{digits}"
+        last_three = digits[-3:]
+        remaining = digits[:-3]
+        grouped = []
+        while len(remaining) > 2:
+            grouped.append(remaining[-2:])
+            remaining = remaining[:-2]
+        if remaining:
+            grouped.append(remaining)
+        return f"{sign}{','.join(reversed(grouped))},{last_three}"
 
     def generate_old_format(self, estimate_data):
         """Generate manually formatted text using spaces, matching preview image."""
@@ -626,17 +644,19 @@ class EstimatePrintRenderer:
         silver_cost = net_fine_display * silver_rate
         total_cost = net_wage_display + silver_cost
 
-        fine_str = f"{net_fine_display:{W_FINE}.2f}"
+        fine_display = (
+            f"{self._format_indian_grouped_integer(net_fine_display)} gm"
+        )
+        fine_str = fine_display.rjust(max(W_FINE, len(fine_display)))
         wage_str = f"{int(round(net_wage_display)):{W_LBR}.0f}"
         scost_pad = (
             "S.Cost : " + self._format_currency_locale(int(round(silver_cost)))
         ).rjust(22)
-        total_pad = (
-            "Total: " + self._format_currency_locale(int(round(total_cost)))
-        ).rjust(18)
+        total_display = f"Total: Rs. {self._format_indian_grouped_integer(total_cost)}"
+        total_pad = total_display.rjust(max(18, len(total_display)))
 
         if silver_rate > 0:
-            part1_len = W_SNO + S + W_FINE + S + W_LBR
+            part1_len = W_SNO + S + len(fine_str) + S + W_LBR
             space_before = TOTAL_WIDTH - part1_len - len(scost_pad) - len(total_pad) - 2
             pad_after_labour = max(1, space_before - 1)
             final_line = (
@@ -647,10 +667,9 @@ class EstimatePrintRenderer:
                 + total_pad
             )
         else:
-            remaining_space = TOTAL_WIDTH - (W_SNO + S + W_FINE + S + W_LBR)
-            final_line = f"{' ' * (W_SNO + S)}{fine_str} {wage_str}" + (
-                " " * remaining_space
-            )
+            amount_display = f"Rs. {self._format_indian_grouped_integer(total_cost)}"
+            amount_pad = amount_display.rjust(max(W_LBR, len(amount_display)))
+            final_line = f"{' ' * (W_SNO + S)}{fine_str} {amount_pad}"
 
         output.append(final_line[:TOTAL_WIDTH])
         output.append(sep_eq)

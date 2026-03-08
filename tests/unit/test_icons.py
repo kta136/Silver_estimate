@@ -43,12 +43,26 @@ def test_get_icon_supports_extended_action_mappings(qtbot, monkeypatch):
     icons.get_icon("delete_row", widget=widget)
     icons.get_icon("reset_layout", widget=widget)
     icons.get_icon("print_estimate", widget=widget)
+    icons.get_icon("silver_bars", widget=widget)
+    icons.get_icon("bar_mode", widget=widget)
+    icons.get_icon("view_single_page", widget=widget)
+    icons.get_icon("view_facing_pages", widget=widget)
+    icons.get_icon("view_overview", widget=widget)
+    icons.get_icon("exit", widget=widget)
+    icons.get_icon("close", widget=widget)
 
     assert [call[0] for call in stub.calls] == [
         "mdi6.calculator-variant-outline",
         "mdi6.table-row-remove",
         "mdi6.table-column-width",
-        "mdi6.printer",
+        "mdi6.printer-outline",
+        "mdi6.gold",
+        "mdi6.weight",
+        "mdi6.file-outline",
+        "mdi6.book-open-page-variant-outline",
+        "mdi6.view-grid-outline",
+        "mdi6.logout-variant",
+        "mdi6.close",
     ]
 
 

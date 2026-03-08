@@ -70,10 +70,10 @@ class EstimateEntryLayoutController(HostProxy):
         actions_panel.setObjectName("EstimateHeaderActions")
         actions_panel_layout = QHBoxLayout(actions_panel)
         actions_panel_layout.setContentsMargins(0, 0, 0, 0)
-        actions_panel_layout.setSpacing(6)
+        actions_panel_layout.setSpacing(4)
 
         self.primary_actions = PrimaryActionsBar(shortcut_parent=self.host)
-        self.primary_actions.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.primary_actions.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
         actions_panel_layout.addWidget(self.primary_actions)
 
         self.secondary_actions = SecondaryActionsBar(shortcut_parent=self.host)

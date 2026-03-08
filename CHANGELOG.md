@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8] - 2026-03-08
+
+### Changed
+- Bumped application/package version to `2.8`
+- Updated project README version header and badge to `v2.8`
+- Tightened the estimate-entry action layout so the toolbar reads more compactly without costing table space
+- Standardized mdi6-based icons across the estimate workflow and supporting dialogs
+- Rebuilt the print-preview toolbar into a single consistent action set with clearer grouping for print/export, layout, zoom, and navigation
+
+### Fixed
+- Restored visible primary save-button styling on the estimate screen by correcting the scoped stylesheet selector
+- Collected `qtawesome` resources in the Windows build spec so packaged icons render reliably
+- Removed duplicated built-in preview actions that were leaving mixed icon sets in the print-preview toolbar
+
 ## [2.7] - 2026-03-07
 
 ### Changed

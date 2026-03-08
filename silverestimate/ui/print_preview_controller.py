@@ -16,6 +16,7 @@ from PyQt5.QtPrintSupport import (
 )
 from PyQt5.QtWidgets import (
     QAction,
+    QActionGroup,
     QComboBox,
     QDialog,
     QFileDialog,
@@ -172,6 +173,7 @@ class PrintPreviewController:
         if not toolbar:
             return
 
+        toolbar.clear()
         toolbar.setMovable(False)
         toolbar.setToolButtonStyle(Qt.ToolButtonIconOnly)
         toolbar.setIconSize(QSize(24, 24))
@@ -187,11 +189,19 @@ class PrintPreviewController:
 
         payload = state["payload"]
 
-        act_pdf = QAction(
-            get_icon("save_pdf", widget=preview),
-            "Save PDF",
-            preview,
+        act_qprint = QAction(get_icon("print", widget=preview), "Quick Print", preview)
+        act_qprint.setToolTip("Send directly to the selected printer (Ctrl+Shift+P)")
+        act_qprint.setShortcut("Ctrl+Shift+P")
+        act_qprint.triggered.connect(
+            lambda: self._quick_print_current(
+                preview,
+                state["payload"],
+                parent_widget,
+            )
         )
+        toolbar.addAction(act_qprint)
+
+        act_pdf = QAction(get_icon("save_pdf", widget=preview), "Save PDF", preview)
         act_pdf.setToolTip("Export the current preview to a PDF file (Ctrl+S)")
         act_pdf.setShortcut("Ctrl+S")
         act_pdf.triggered.connect(
@@ -199,11 +209,16 @@ class PrintPreviewController:
         )
         toolbar.addAction(act_pdf)
 
-        act_page = QAction(
-            get_icon("page_setup", widget=preview),
-            "Page Setup",
+        act_sel_prn = QAction(
+            get_icon("printer_select", widget=preview),
+            "Printer",
             preview,
         )
+        act_sel_prn.setToolTip("Choose a printer and keep it for this session")
+        act_sel_prn.triggered.connect(lambda: self._choose_printer(preview))
+        toolbar.addAction(act_sel_prn)
+
+        act_page = QAction(get_icon("page_setup", widget=preview), "Page Setup", preview)
         act_page.setToolTip("Choose page size, margins, and paper setup")
         act_page.triggered.connect(lambda: self._page_setup_and_refresh(preview))
         toolbar.addAction(act_page)
@@ -225,23 +240,8 @@ class PrintPreviewController:
         toolbar.addSeparator()
 
         if preview_widget:
-            act_zi = QAction(
-                get_icon("zoom_in", widget=preview),
-                "Zoom In",
-                preview,
-            )
-            act_zi.setShortcut("Ctrl++")
-            act_zi.triggered.connect(lambda: self._zoom_in(preview_widget))
-            toolbar.addAction(act_zi)
-
-            act_zo = QAction(
-                get_icon("zoom_out", widget=preview),
-                "Zoom Out",
-                preview,
-            )
-            act_zo.setShortcut("Ctrl+-")
-            act_zo.triggered.connect(lambda: self._zoom_out(preview_widget))
-            toolbar.addAction(act_zo)
+            self._add_view_mode_actions(toolbar, preview_widget, preview)
+            toolbar.addSeparator()
 
             act_fitw = QAction(
                 get_icon("fit_width", widget=preview),
@@ -260,6 +260,24 @@ class PrintPreviewController:
             act_fitp.setShortcut("Ctrl+F")
             act_fitp.triggered.connect(lambda: self._fit_page(preview_widget))
             toolbar.addAction(act_fitp)
+
+            act_zo = QAction(
+                get_icon("zoom_out", widget=preview),
+                "Zoom Out",
+                preview,
+            )
+            act_zo.setShortcut("Ctrl+-")
+            act_zo.triggered.connect(lambda: self._zoom_out(preview_widget))
+            toolbar.addAction(act_zo)
+
+            act_zi = QAction(
+                get_icon("zoom_in", widget=preview),
+                "Zoom In",
+                preview,
+            )
+            act_zi.setShortcut("Ctrl++")
+            act_zi.triggered.connect(lambda: self._zoom_in(preview_widget))
+            toolbar.addAction(act_zi)
 
         spacer = QWidget(preview)
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -338,32 +356,60 @@ class PrintPreviewController:
                 LOGGER.debug("Failed to hook previewChanged signal: %s", exc)
             update_page_info()
 
-        toolbar.addSeparator()
+    def _add_view_mode_actions(
+        self,
+        toolbar: QToolBar,
+        preview_widget: QPrintPreviewWidget,
+        preview: QPrintPreviewDialog,
+    ) -> None:
+        group = QActionGroup(preview)
+        group.setExclusive(True)
 
-        act_qprint = QAction(
-            get_icon("print", widget=preview),
-            "Quick Print",
-            preview,
-        )
-        act_qprint.setToolTip("Send directly to the selected printer (Ctrl+Shift+P)")
-        act_qprint.setShortcut("Ctrl+Shift+P")
-        act_qprint.triggered.connect(
-            lambda: self._quick_print_current(
-                preview,
-                state["payload"],
-                parent_widget,
+        view_actions: list[tuple[QAction, int]] = []
+        for icon_name, text, mode in (
+            (
+                "view_single_page",
+                "Single Page",
+                int(QPrintPreviewWidget.SinglePageView),
+            ),
+            (
+                "view_facing_pages",
+                "Facing Pages",
+                int(QPrintPreviewWidget.FacingPagesView),
+            ),
+            (
+                "view_overview",
+                "All Pages",
+                int(QPrintPreviewWidget.AllPagesView),
+            ),
+        ):
+            action = QAction(get_icon(icon_name, widget=preview), text, preview)
+            action.setCheckable(True)
+            action.triggered.connect(
+                lambda checked=False, view_mode=mode: self._set_view_mode(
+                    preview_widget,
+                    view_mode,
+                )
             )
-        )
-        toolbar.addAction(act_qprint)
+            group.addAction(action)
+            toolbar.addAction(action)
+            view_actions.append((action, mode))
 
-        act_sel_prn = QAction(
-            get_icon("printer_select", widget=preview),
-            "Printer",
-            preview,
-        )
-        act_sel_prn.setToolTip("Choose a printer and keep it for this session")
-        act_sel_prn.triggered.connect(lambda: self._choose_printer(preview))
-        toolbar.addAction(act_sel_prn)
+        def sync_view_actions() -> None:
+            try:
+                current_mode = int(preview_widget.viewMode())
+            except Exception:
+                current_mode = int(QPrintPreviewWidget.SinglePageView)
+            for action, mode in view_actions:
+                action.blockSignals(True)
+                action.setChecked(mode == current_mode)
+                action.blockSignals(False)
+
+        sync_view_actions()
+        try:
+            preview_widget.previewChanged.connect(sync_view_actions)
+        except Exception as exc:
+            LOGGER.debug("Failed to sync preview view mode actions: %s", exc)
 
     def _build_orientation_combo(self, preview: QPrintPreviewDialog) -> QComboBox:
         combo = QComboBox(preview)
@@ -490,6 +536,16 @@ class PrintPreviewController:
             preview_widget.fitInView()
         except Exception as exc:
             LOGGER.debug("Failed to fit preview to page: %s", exc)
+
+    def _set_view_mode(
+        self,
+        preview_widget: QPrintPreviewWidget,
+        view_mode: int,
+    ) -> None:
+        try:
+            preview_widget.setViewMode(view_mode)
+        except Exception as exc:
+            LOGGER.debug("Failed to set preview view mode: %s", exc)
 
     def _go_next_page(self, preview_widget: QPrintPreviewWidget) -> None:
         try:

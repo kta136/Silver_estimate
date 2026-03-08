@@ -70,9 +70,21 @@ class SecondaryActionsBar(QWidget):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         layout = QHBoxLayout(self)
-        layout.setSpacing(5)
-        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(0)
+        layout.setContentsMargins(4, 4, 4, 4)
         self._main_layout = layout
+
+        self._left_actions_layout = QHBoxLayout()
+        self._left_actions_layout.setSpacing(3)
+        self._left_actions_layout.setContentsMargins(0, 0, 0, 0)
+        layout.addLayout(self._left_actions_layout)
+
+        layout.addStretch(1)
+
+        self._right_actions_layout = QHBoxLayout()
+        self._right_actions_layout.setSpacing(4)
+        self._right_actions_layout.setContentsMargins(0, 0, 0, 0)
+        layout.addLayout(self._right_actions_layout)
 
         # Delete Row button
         self.delete_row_button = QPushButton()
@@ -87,8 +99,8 @@ class SecondaryActionsBar(QWidget):
             "Removes the active row from the estimate\n"
             "Cannot be undone"
         )
-        layout.addWidget(self.delete_row_button)
-        layout.addWidget(self._create_divider())
+        self._left_actions_layout.addWidget(self.delete_row_button)
+        self._left_actions_layout.addWidget(self._create_divider())
 
         # Return mode toggle
         self.return_toggle_button = QPushButton()
@@ -104,7 +116,7 @@ class SecondaryActionsBar(QWidget):
             "Affects calculations and item type"
         )
         self.return_toggle_button.setCheckable(True)
-        layout.addWidget(self.return_toggle_button)
+        self._left_actions_layout.addWidget(self.return_toggle_button)
 
         # Silver bar mode toggle
         self.silver_bar_toggle_button = QPushButton()
@@ -120,9 +132,9 @@ class SecondaryActionsBar(QWidget):
             "Cannot use both Return and Silver Bar modes"
         )
         self.silver_bar_toggle_button.setCheckable(True)
-        layout.addWidget(self.silver_bar_toggle_button)
+        self._left_actions_layout.addWidget(self.silver_bar_toggle_button)
 
-        layout.addWidget(self._create_divider())
+        self._left_actions_layout.addWidget(self._create_divider())
 
         # Last Balance button
         self.last_balance_button = QToolButton()
@@ -136,7 +148,7 @@ class SecondaryActionsBar(QWidget):
             "Will show dialog if multiple balances available"
         )
         self.last_balance_button.setAutoRaise(True)
-        layout.addWidget(self.last_balance_button)
+        self._left_actions_layout.addWidget(self.last_balance_button)
 
         # Estimate history button
         self.history_button = QToolButton()
@@ -150,7 +162,7 @@ class SecondaryActionsBar(QWidget):
             "Double-click to load an estimate"
         )
         self.history_button.setAutoRaise(True)
-        layout.addWidget(self.history_button)
+        self._left_actions_layout.addWidget(self.history_button)
 
         # Manage Silver Bars button
         self.silver_bars_button = QToolButton()
@@ -164,9 +176,7 @@ class SecondaryActionsBar(QWidget):
             "Manage bar transfers"
         )
         self.silver_bars_button.setAutoRaise(True)
-        layout.addWidget(self.silver_bars_button)
-
-        layout.addStretch()
+        self._left_actions_layout.addWidget(self.silver_bars_button)
 
         # Live rate value and meta info in vertical layout
         self.live_rate_container = QWidget()
@@ -212,9 +222,9 @@ class SecondaryActionsBar(QWidget):
 
         rate_layout.addLayout(left_stack)
 
-        layout.addWidget(self.live_rate_container)
+        self._right_actions_layout.addWidget(self.live_rate_container)
         self.live_rate_divider = self._create_divider()
-        layout.addWidget(self.live_rate_divider)
+        self._right_actions_layout.addWidget(self.live_rate_divider)
 
         # Delete estimate button (isolated on the far right as destructive action)
         self.delete_estimate_button = QToolButton()
@@ -234,11 +244,11 @@ class SecondaryActionsBar(QWidget):
         )
         self.delete_estimate_button.setEnabled(False)
         self.delete_estimate_button.setAutoRaise(False)
-        layout.addWidget(self.delete_estimate_button)
+        self._right_actions_layout.addWidget(self.delete_estimate_button)
 
     def show_live_rate_in_header(self, show_divider: bool = True) -> None:
         """Ensure live-rate card is attached in the header action strip."""
-        layout = getattr(self, "_main_layout", None)
+        layout = getattr(self, "_right_actions_layout", None)
         if not isinstance(layout, QHBoxLayout):
             return
         if getattr(self, "live_rate_container", None) is None:
@@ -269,7 +279,7 @@ class SecondaryActionsBar(QWidget):
         divider = QFrame()
         divider.setFrameShape(QFrame.VLine)
         divider.setFrameShadow(QFrame.Sunken)
-        divider.setFixedHeight(22)
+        divider.setFixedHeight(18)
         return divider
 
     @staticmethod

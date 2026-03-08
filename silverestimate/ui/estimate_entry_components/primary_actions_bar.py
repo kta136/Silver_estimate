@@ -32,11 +32,11 @@ class PrimaryActionsBar(QWidget):
     def _setup_ui(self) -> None:
         """Set up the user interface with compact spacing."""
         self.setObjectName("PrimaryActionStrip")
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
 
         layout = QHBoxLayout(self)
-        layout.setSpacing(4)
-        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(3)
+        layout.setContentsMargins(4, 4, 4, 4)
 
         # Save button (primary action - will get emphasis later)
         self.save_button = QPushButton()
@@ -73,8 +73,6 @@ class PrimaryActionsBar(QWidget):
             "Will ask for confirmation if unsaved changes"
         )
         layout.addWidget(self.new_button)
-
-        layout.addStretch()
 
     @staticmethod
     def _configure_icon_button(button: QPushButton, *, label: str) -> None:

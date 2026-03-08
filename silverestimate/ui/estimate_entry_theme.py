@@ -124,7 +124,7 @@ QPushButton#VoucherLoadButton {
     background-color: __HEADER_BG__;
     border: 1px solid __INPUT_BORDER__;
     border-radius: 8px;
-    padding: 2px 8px;
+    padding: 2px 7px;
     min-height: 16px;
     font-weight: 600;
 }
@@ -132,11 +132,11 @@ QPushButton#VoucherLoadButton {
 QWidget#PrimaryActionStrip QPushButton[iconOnly="true"],
 QWidget#SecondaryActionStrip QPushButton[iconOnly="true"],
 QWidget#SecondaryActionStrip QToolButton[iconOnly="true"] {
-    min-width: 32px;
-    max-width: 32px;
+    min-width: 30px;
+    max-width: 30px;
     min-height: 24px;
     max-height: 24px;
-    padding: 2px;
+    padding: 1px;
 }
 
 QWidget#PrimaryActionStrip QPushButton:hover,
@@ -164,18 +164,18 @@ QPushButton#VoucherLoadButton:disabled {
     border-color: #dbe4ee;
 }
 
-QPushButton#SavePrimaryButton {
+QWidget#PrimaryActionStrip QPushButton#SavePrimaryButton {
     color: #ffffff;
     background-color: __PRIMARY_BG__;
     border-color: __PRIMARY_BG__;
 }
 
-QPushButton#SavePrimaryButton:hover {
+QWidget#PrimaryActionStrip QPushButton#SavePrimaryButton:hover {
     background-color: __PRIMARY_BG_HOVER__;
     border-color: __PRIMARY_BG_HOVER__;
 }
 
-QPushButton#SavePrimaryButton:pressed {
+QWidget#PrimaryActionStrip QPushButton#SavePrimaryButton:pressed {
     background-color: #0b5f59;
     border-color: #0b5f59;
 }

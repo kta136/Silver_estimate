@@ -10,6 +10,7 @@ from PyQt5.QtGui import QColor, QPalette
 from PyQt5.QtWidgets import QAction, QHeaderView, QMenu, QTableView
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
+from silverestimate.ui.icons import get_icon
 from silverestimate.ui.models.estimate_table_model import EstimateTableModel
 from silverestimate.ui.view_models.estimate_entry_view_model import (
     EstimateEntryRowState,
@@ -117,16 +118,19 @@ class EstimateTableView(QTableView):
         menu = QMenu(self)
 
         reset_action = QAction("Reset Column Layout", self)
+        reset_action.setIcon(get_icon("reset_layout", widget=self))
         reset_action.triggered.connect(self.column_layout_reset_requested.emit)
         menu.addAction(reset_action)
 
         menu.addSeparator()
 
         delete_action = QAction("Delete Current Row", self)
+        delete_action.setIcon(get_icon("delete_row", widget=self, color="#dc2626"))
         delete_action.triggered.connect(self._delete_current_row)
         menu.addAction(delete_action)
 
         history_action = QAction("Open Estimate History", self)
+        history_action.setIcon(get_icon("history", widget=self))
         history_action.triggered.connect(self.history_requested.emit)
         menu.addAction(history_action)
 

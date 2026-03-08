@@ -3,7 +3,6 @@ import logging
 from functools import partial
 
 from PyQt5.QtCore import QDate, QObject, QThread, Qt, pyqtSignal
-from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QDateEdit,
@@ -17,13 +16,13 @@ from PyQt5.QtWidgets import (
     QProgressDialog,
     QPushButton,
     QSizePolicy,
-    QStyle,
     QTableView,
     QVBoxLayout,
 )
 
 from silverestimate.ui.models import EstimateHistoryRow, EstimateHistoryTableModel
 
+from .icons import get_icon
 from .print_manager import PrintManager, PrintPreviewBuildWorker
 from .shared_screen_theme import build_management_screen_stylesheet
 
@@ -151,9 +150,7 @@ class EstimateHistoryDialog(QDialog):
 
         self.search_button = QPushButton("Search")
         self.search_button.setObjectName("HistoryPrimaryButton")
-        self.search_button.setIcon(
-            self._icon("edit-find", QStyle.SP_FileDialogContentsView)
-        )
+        self.search_button.setIcon(get_icon("search", widget=self, color="#ffffff"))
         self.search_button.clicked.connect(self.load_estimates)
         filter_layout.addWidget(self.search_button)
 
@@ -199,18 +196,14 @@ class EstimateHistoryDialog(QDialog):
 
         self.open_button = QPushButton("Open")
         self.open_button.setObjectName("HistoryPrimaryButton")
-        self.open_button.setIcon(
-            self._icon("document-open", QStyle.SP_DialogOpenButton)
-        )
+        self.open_button.setIcon(get_icon("open", widget=self, color="#ffffff"))
         self.open_button.setToolTip("Open the selected estimate")
         self.open_button.clicked.connect(self.accept)
         button_layout.addWidget(self.open_button)
 
         self.print_button = QPushButton("Print")
         self.print_button.setObjectName("HistorySecondaryButton")
-        self.print_button.setIcon(
-            self._icon("document-print", QStyle.SP_FileIcon)
-        )
+        self.print_button.setIcon(get_icon("print", widget=self))
         self.print_button.setToolTip("Open print preview for the selected estimate")
         self.print_button.clicked.connect(self.print_estimate)
         button_layout.addWidget(self.print_button)
@@ -218,9 +211,7 @@ class EstimateHistoryDialog(QDialog):
         self.delete_button = QPushButton("Delete")
         self.delete_button.setObjectName("HistoryDangerButton")
         self.delete_button.setToolTip("Permanently delete the selected estimate")
-        self.delete_button.setIcon(
-            self._icon("edit-delete", QStyle.SP_TrashIcon)
-        )
+        self.delete_button.setIcon(get_icon("delete", widget=self, color="#dc2626"))
         self.delete_button.clicked.connect(self.delete_selected_estimate)
         button_layout.addWidget(self.delete_button)
 
@@ -228,21 +219,13 @@ class EstimateHistoryDialog(QDialog):
 
         self.close_button = QPushButton("Close")
         self.close_button.setObjectName("HistorySecondaryButton")
-        self.close_button.setIcon(
-            self._icon("window-close", QStyle.SP_DialogCloseButton)
-        )
+        self.close_button.setIcon(get_icon("close", widget=self))
         self.close_button.clicked.connect(self.reject)
         button_layout.addWidget(self.close_button)
 
         layout.addWidget(actions_card)
 
         self._update_results_summary()
-
-    def _icon(self, theme_name: str, fallback: QStyle.StandardPixmap) -> QIcon:
-        themed = QIcon.fromTheme(theme_name)
-        if not themed.isNull():
-            return themed
-        return self.style().standardIcon(fallback)
 
     def _resolve_first_estimate_date(self):
         """Resolve the earliest estimate date, falling back to today."""

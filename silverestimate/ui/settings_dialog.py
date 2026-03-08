@@ -24,7 +24,6 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QSpinBox,
     QStackedWidget,
-    QStyle,
     QVBoxLayout,
     QWidget,
 )
@@ -35,6 +34,7 @@ from silverestimate.security.credential_store import CredentialStoreError
 
 # Import dependent dialogs and modules
 from .custom_font_dialog import CustomFontDialog
+from .icons import get_icon
 from .item_export_manager import ItemExportManager  # Import the new export manager
 from .login_dialog import LoginDialog  # Needed for password verification/hashing
 from .settings_print_controller import PrintSettingsWidgets, SettingsPrintController
@@ -142,7 +142,6 @@ class SettingsDialog(QDialog):
         # Add more settings variables as needed
 
         # Sidebar + pages (cleaner than rotated west tabs)
-        style = self.style()
         self.sidebar = QListWidget()
         self.sidebar.setObjectName("SettingsSidebar")
         self.sidebar.setViewMode(QListView.ListMode)
@@ -157,37 +156,37 @@ class SettingsDialog(QDialog):
         page_defs = [
             (
                 "User Interface",
-                style.standardIcon(QStyle.SP_DesktopIcon),
+                get_icon("user_interface", widget=self),
                 self._create_ui_tab(),
             ),
             (
                 "Live Rates",
-                style.standardIcon(QStyle.SP_BrowserReload),
+                get_icon("live_rates", widget=self),
                 self._create_live_rates_tab(),
             ),
             (
                 "Printing",
-                style.standardIcon(QStyle.SP_FileDialogDetailedView),
+                get_icon("printing", widget=self),
                 self._create_print_tab(),
             ),
             (
                 "Data Management",
-                style.standardIcon(QStyle.SP_DirHomeIcon),
+                get_icon("data_management", widget=self),
                 self._create_data_tab(),
             ),
             (
                 "Security",
-                style.standardIcon(QStyle.SP_MessageBoxWarning),
+                get_icon("security", widget=self),
                 self._create_security_tab(),
             ),
             (
                 "Import/Export",
-                style.standardIcon(QStyle.SP_DialogOpenButton),
+                get_icon("import_export", widget=self),
                 self._create_import_export_tab(),
             ),
             (
                 "Logging",
-                style.standardIcon(QStyle.SP_FileDialogInfoView),
+                get_icon("logging", widget=self),
                 self._create_logging_tab(),
             ),
         ]

@@ -274,7 +274,9 @@ def test_incremental_row_edit_applies_totals_without_recalc_schedule(qt_app, fak
         widget.deleteLater()
 
 
-def test_incremental_totals_match_full_multi_row_mixed_categories(qt_app, fake_db):
+def test_incremental_totals_match_full_multi_row_mixed_categories(
+    qt_app, qtbot, fake_db
+):
     widget = _make_widget(fake_db)
     try:
         _set_row(widget, 0, regular_item(gross=10, poly=1, purity=90.0, wage_rate=10.0))
@@ -301,7 +303,10 @@ def test_incremental_totals_match_full_multi_row_mixed_categories(qt_app, fake_d
         widget.handle_cell_changed(1, COL_GROSS)
         widget.item_table.set_cell_text(2, COL_PURITY, "95.0")
         widget.handle_cell_changed(2, COL_PURITY)
-        _pump_events(160)
+        qtbot.waitUntil(
+            lambda: float(widget.total_gross_label.text()) == pytest.approx(11.0),
+            timeout=500,
+        )
 
         assert float(widget.total_gross_label.text()) == pytest.approx(11.0)
         assert float(widget.return_gross_label.text()) == pytest.approx(2.5)
@@ -940,7 +945,7 @@ def test_calculate_wage_uses_row_wage_type_without_repository_lookup(qt_app, fak
         widget.deleteLater()
 
 
-def test_totals_recalc_is_debounced(qt_app, fake_db):
+def test_totals_recalc_is_debounced(qt_app, qtbot, fake_db):
     widget = _make_widget(fake_db)
     try:
         calls = []
@@ -957,7 +962,7 @@ def test_totals_recalc_is_debounced(qt_app, fake_db):
         widget._schedule_totals_recalc(delay_ms=10)
         widget._schedule_totals_recalc(delay_ms=10)
         widget._schedule_totals_recalc(delay_ms=10)
-        _pump_events(60)
+        qtbot.waitUntil(lambda: len(calls) == 1, timeout=500)
 
         assert len(calls) == 1
     finally:

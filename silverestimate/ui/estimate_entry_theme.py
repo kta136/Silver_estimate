@@ -129,6 +129,16 @@ QPushButton#VoucherLoadButton {
     font-weight: 600;
 }
 
+QWidget#PrimaryActionStrip QPushButton[iconOnly="true"],
+QWidget#SecondaryActionStrip QPushButton[iconOnly="true"],
+QWidget#SecondaryActionStrip QToolButton[iconOnly="true"] {
+    min-width: 32px;
+    max-width: 32px;
+    min-height: 24px;
+    max-height: 24px;
+    padding: 2px;
+}
+
 QWidget#PrimaryActionStrip QPushButton:hover,
 QWidget#SecondaryActionStrip QPushButton:hover,
 QWidget#SecondaryActionStrip QToolButton:hover,

@@ -505,13 +505,11 @@ class EstimateEntryWorkflowController(HostProxy):
         self._finalize_mode_change()
 
     def _sync_mode_controls(self) -> None:
-        self.return_toggle_button.setText("Return")
         if self.return_mode:
             self.return_toggle_button.setProperty("modeState", "return")
         else:
             self.return_toggle_button.setProperty("modeState", "idle")
 
-        self.silver_bar_toggle_button.setText("Bar Mode")
         if self.silver_bar_mode:
             self.silver_bar_toggle_button.setProperty("modeState", "silver_bar")
         else:

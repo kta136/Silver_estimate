@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import QSize, Qt, pyqtSignal
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
     QFrame,
@@ -13,11 +13,12 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QShortcut,
     QSizePolicy,
-    QStyle,
     QToolButton,
     QVBoxLayout,
     QWidget,
 )
+
+from silverestimate.ui.icons import get_icon
 
 
 class SecondaryActionsBar(QWidget):
@@ -74,8 +75,12 @@ class SecondaryActionsBar(QWidget):
         self._main_layout = layout
 
         # Delete Row button
-        self.delete_row_button = QPushButton("Delete Row")
+        self.delete_row_button = QPushButton()
         self.delete_row_button.setObjectName("DeleteRowButton")
+        self.delete_row_button.setIcon(
+            get_icon("delete_row", widget=self, color="#dc2626")
+        )
+        self._configure_icon_button(self.delete_row_button, label="Delete Row")
         self.delete_row_button.setToolTip(
             "Delete the currently selected row\n"
             "Keyboard: Ctrl+D\n"
@@ -86,8 +91,12 @@ class SecondaryActionsBar(QWidget):
         layout.addWidget(self._create_divider())
 
         # Return mode toggle
-        self.return_toggle_button = QPushButton("Return")
+        self.return_toggle_button = QPushButton()
         self.return_toggle_button.setObjectName("ReturnModeButton")
+        self.return_toggle_button.setIcon(
+            get_icon("return_mode", widget=self, color="#2563eb")
+        )
+        self._configure_icon_button(self.return_toggle_button, label="Return")
         self.return_toggle_button.setToolTip(
             "Toggle Return Item entry mode for new rows\n"
             "Keyboard: Ctrl+R\n"
@@ -98,8 +107,12 @@ class SecondaryActionsBar(QWidget):
         layout.addWidget(self.return_toggle_button)
 
         # Silver bar mode toggle
-        self.silver_bar_toggle_button = QPushButton("Bar Mode")
+        self.silver_bar_toggle_button = QPushButton()
         self.silver_bar_toggle_button.setObjectName("SilverBarModeButton")
+        self.silver_bar_toggle_button.setIcon(
+            get_icon("bar_mode", widget=self, color="#0f766e")
+        )
+        self._configure_icon_button(self.silver_bar_toggle_button, label="Bar Mode")
         self.silver_bar_toggle_button.setToolTip(
             "Toggle Silver Bar entry mode for new rows\n"
             "Keyboard: Ctrl+B\n"
@@ -114,7 +127,8 @@ class SecondaryActionsBar(QWidget):
         # Last Balance button
         self.last_balance_button = QToolButton()
         self.last_balance_button.setObjectName("BalanceButton")
-        self.last_balance_button.setText("Balance")
+        self.last_balance_button.setIcon(get_icon("balance", widget=self))
+        self._configure_icon_button(self.last_balance_button, label="Balance")
         self.last_balance_button.setToolTip(
             "Add Last Balance to this estimate\n"
             "Adds previous unpaid balance\n"
@@ -127,7 +141,8 @@ class SecondaryActionsBar(QWidget):
         # Estimate history button
         self.history_button = QToolButton()
         self.history_button.setObjectName("HistoryButton")
-        self.history_button.setText("History")
+        self.history_button.setIcon(get_icon("history", widget=self))
+        self._configure_icon_button(self.history_button, label="History")
         self.history_button.setToolTip(
             "View, load, or print past estimates\n"
             "Keyboard: Ctrl+H\n"
@@ -140,7 +155,8 @@ class SecondaryActionsBar(QWidget):
         # Manage Silver Bars button
         self.silver_bars_button = QToolButton()
         self.silver_bars_button.setObjectName("BarListButton")
-        self.silver_bars_button.setText("Bar List")
+        self.silver_bars_button.setIcon(get_icon("silver_bars", widget=self))
+        self._configure_icon_button(self.silver_bars_button, label="Bar List")
         self.silver_bars_button.setToolTip(
             "View and manage silver bar inventory\n"
             "Add, edit, or assign silver bars\n"
@@ -178,8 +194,9 @@ class SecondaryActionsBar(QWidget):
         self.refresh_rate_button = QToolButton()
         self.refresh_rate_button.setToolTip("Refresh live silver rate and set it here")
         self.refresh_rate_button.setIcon(
-            self.style().standardIcon(QStyle.SP_BrowserReload)
+            get_icon("refresh", widget=self, color="#0f766e")
         )
+        self._configure_icon_button(self.refresh_rate_button, label="Refresh Silver Rate")
         self.refresh_rate_button.setAutoRaise(True)
         self.refresh_rate_button.setCursor(Qt.PointingHandCursor)
         self.refresh_rate_button.setAccessibleName("Refresh Silver Rate")
@@ -202,7 +219,13 @@ class SecondaryActionsBar(QWidget):
         # Delete estimate button (isolated on the far right as destructive action)
         self.delete_estimate_button = QToolButton()
         self.delete_estimate_button.setObjectName("DeleteEstimateButton")
-        self.delete_estimate_button.setText("Delete Estimate")
+        self.delete_estimate_button.setIcon(
+            get_icon("delete_estimate", widget=self, color="#dc2626")
+        )
+        self._configure_icon_button(
+            self.delete_estimate_button,
+            label="Delete Estimate",
+        )
         self.delete_estimate_button.setToolTip(
             "Delete the currently loaded estimate\n"
             "Permanently removes estimate from database\n"
@@ -248,6 +271,17 @@ class SecondaryActionsBar(QWidget):
         divider.setFrameShadow(QFrame.Sunken)
         divider.setFixedHeight(22)
         return divider
+
+    @staticmethod
+    def _configure_icon_button(button, *, label: str) -> None:
+        button.setAccessibleName(label)
+        if button.icon().isNull():
+            button.setText(label)
+            button.setProperty("iconOnly", False)
+            return
+        button.setText("")
+        button.setProperty("iconOnly", True)
+        button.setIconSize(QSize(18, 18))
 
     def _setup_shortcuts(self) -> None:
         """Set up keyboard shortcuts.

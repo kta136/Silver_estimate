@@ -7,7 +7,6 @@ import os
 from typing import Callable
 
 from PyQt5.QtCore import QEvent, QObject, QSize, Qt
-from PyQt5.QtGui import QIcon
 from PyQt5.QtPrintSupport import (
     QPageSetupDialog,
     QPrintDialog,
@@ -25,12 +24,12 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QSizePolicy,
     QSpinBox,
-    QStyle,
     QToolBar,
     QWidget,
 )
 
 from silverestimate.infrastructure.settings import get_app_settings
+from silverestimate.ui.icons import get_icon
 from silverestimate.ui.print_payload_builder import PrintPreviewPayload
 
 LOGGER = logging.getLogger(__name__)
@@ -189,7 +188,7 @@ class PrintPreviewController:
         payload = state["payload"]
 
         act_pdf = QAction(
-            self._icon(preview, "document-save", QStyle.SP_DialogSaveButton),
+            get_icon("save_pdf", widget=preview),
             "Save PDF",
             preview,
         )
@@ -201,11 +200,7 @@ class PrintPreviewController:
         toolbar.addAction(act_pdf)
 
         act_page = QAction(
-            self._icon(
-                preview,
-                "document-properties",
-                QStyle.SP_FileDialogDetailedView,
-            ),
+            get_icon("page_setup", widget=preview),
             "Page Setup",
             preview,
         )
@@ -231,7 +226,7 @@ class PrintPreviewController:
 
         if preview_widget:
             act_zi = QAction(
-                self._icon(preview, "zoom-in", QStyle.SP_ArrowUp),
+                get_icon("zoom_in", widget=preview),
                 "Zoom In",
                 preview,
             )
@@ -240,7 +235,7 @@ class PrintPreviewController:
             toolbar.addAction(act_zi)
 
             act_zo = QAction(
-                self._icon(preview, "zoom-out", QStyle.SP_ArrowDown),
+                get_icon("zoom_out", widget=preview),
                 "Zoom Out",
                 preview,
             )
@@ -249,7 +244,7 @@ class PrintPreviewController:
             toolbar.addAction(act_zo)
 
             act_fitw = QAction(
-                self._icon(preview, "zoom-fit-width", QStyle.SP_TitleBarShadeButton),
+                get_icon("fit_width", widget=preview),
                 "Fit Width",
                 preview,
             )
@@ -258,7 +253,7 @@ class PrintPreviewController:
             toolbar.addAction(act_fitw)
 
             act_fitp = QAction(
-                self._icon(preview, "zoom-fit-best", QStyle.SP_TitleBarUnshadeButton),
+                get_icon("fit_page", widget=preview),
                 "Fit Page",
                 preview,
             )
@@ -272,7 +267,7 @@ class PrintPreviewController:
 
         if preview_widget:
             act_first = QAction(
-                self._icon(preview, "go-first", QStyle.SP_MediaSkipBackward),
+                get_icon("page_first", widget=preview),
                 "First",
                 preview,
             )
@@ -282,7 +277,7 @@ class PrintPreviewController:
             toolbar.addAction(act_first)
 
             act_prev = QAction(
-                self._icon(preview, "go-previous", QStyle.SP_MediaSeekBackward),
+                get_icon("page_previous", widget=preview),
                 "Prev",
                 preview,
             )
@@ -302,7 +297,7 @@ class PrintPreviewController:
             toolbar.addWidget(page_spin.parentWidget())
 
             act_next = QAction(
-                self._icon(preview, "go-next", QStyle.SP_MediaSeekForward),
+                get_icon("page_next", widget=preview),
                 "Next",
                 preview,
             )
@@ -312,7 +307,7 @@ class PrintPreviewController:
             toolbar.addAction(act_next)
 
             act_last = QAction(
-                self._icon(preview, "go-last", QStyle.SP_MediaSkipForward),
+                get_icon("page_last", widget=preview),
                 "Last",
                 preview,
             )
@@ -346,7 +341,7 @@ class PrintPreviewController:
         toolbar.addSeparator()
 
         act_qprint = QAction(
-            self._icon(preview, "document-print", QStyle.SP_DialogOkButton),
+            get_icon("print", widget=preview),
             "Quick Print",
             preview,
         )
@@ -362,20 +357,13 @@ class PrintPreviewController:
         toolbar.addAction(act_qprint)
 
         act_sel_prn = QAction(
-            self._icon(preview, "printer", QStyle.SP_ComputerIcon),
+            get_icon("printer_select", widget=preview),
             "Printer",
             preview,
         )
         act_sel_prn.setToolTip("Choose a printer and keep it for this session")
         act_sel_prn.triggered.connect(lambda: self._choose_printer(preview))
         toolbar.addAction(act_sel_prn)
-
-    @staticmethod
-    def _icon(widget, theme_name: str, fallback: QStyle.StandardPixmap) -> QIcon:
-        themed = QIcon.fromTheme(theme_name)
-        if not themed.isNull():
-            return themed
-        return widget.style().standardIcon(fallback)
 
     def _build_orientation_combo(self, preview: QPrintPreviewDialog) -> QComboBox:
         combo = QComboBox(preview)

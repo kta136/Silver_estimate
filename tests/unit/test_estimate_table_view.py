@@ -242,6 +242,26 @@ def test_history_requested_signal(table_view):
     assert hasattr(table_view, "history_requested")
 
 
+def test_context_menu_actions_have_icons(table_view, monkeypatch):
+    captured = {}
+
+    def _fake_exec(menu, *_args, **_kwargs):
+        captured["actions"] = [(action.text(), action.icon()) for action in menu.actions()]
+
+    monkeypatch.setattr("PyQt5.QtWidgets.QMenu.exec_", _fake_exec)
+
+    table_view._show_context_menu(table_view.rect().center())
+
+    assert [text for text, _icon in captured["actions"] if text] == [
+        "Reset Column Layout",
+        "Delete Current Row",
+        "Open Estimate History",
+    ]
+    for text, icon in captured["actions"]:
+        if text:
+            assert not icon.isNull(), text
+
+
 def test_item_lookup_requested_signal(table_view):
     """Test that item lookup signal exists."""
     assert hasattr(table_view, "item_lookup_requested")

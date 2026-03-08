@@ -136,7 +136,10 @@ class StubLiveRateController:
 @pytest.fixture
 def main_window_fixture(qt_app, settings_stub, monkeypatch):
     """Create a MainWindow instance with test doubles injected."""
+    previous_quit_on_close = qt_app.quitOnLastWindowClosed()
+    qt_app.setQuitOnLastWindowClosed(False)
     StubLiveRateController.instances.clear()
+    monkeypatch.setattr("PyQt5.QtWidgets.QApplication.quit", lambda self=None: None)
     monkeypatch.setattr(
         "silverestimate.controllers.live_rate_controller.LiveRateController",
         StubLiveRateController,
@@ -168,7 +171,9 @@ def main_window_fixture(qt_app, settings_stub, monkeypatch):
     finally:
         if window:
             window.close()
+            window.deleteLater()
             qt_app.processEvents()
+        qt_app.setQuitOnLastWindowClosed(previous_quit_on_close)
         StubLiveRateController.instances.clear()
 
 
@@ -191,6 +196,44 @@ def test_main_window_startup_sets_up_estimate_view(main_window_fixture, qt_app, 
     # Main navigation wired (menu action created by controller).
     assert hasattr(window, "_menu_estimate_action")
     assert window._menu_estimate_action is not None
+    assert not window._menu_estimate_action.icon().isNull()
+    assert not window._menu_item_master_action.icon().isNull()
+    assert not window._menu_silver_action.icon().isNull()
+    assert not window.refresh_rate_action.icon().isNull()
+
+    widget = window.estimate_widget
+    assert not widget.save_button.icon().isNull()
+    assert not widget.print_button.icon().isNull()
+    assert not widget.clear_button.icon().isNull()
+    assert not widget.delete_row_button.icon().isNull()
+    assert not widget.return_toggle_button.icon().isNull()
+    assert not widget.silver_bar_toggle_button.icon().isNull()
+    assert not widget.history_button.icon().isNull()
+    assert not widget.last_balance_button.icon().isNull()
+    assert not widget.silver_bars_button.icon().isNull()
+    assert not widget.delete_estimate_button.icon().isNull()
+
+    assert widget.save_button.text() == ""
+    assert widget.print_button.text() == ""
+    assert widget.clear_button.text() == ""
+    assert widget.delete_row_button.text() == ""
+    assert widget.return_toggle_button.text() == ""
+    assert widget.silver_bar_toggle_button.text() == ""
+    assert widget.history_button.text() == ""
+    assert widget.last_balance_button.text() == ""
+    assert widget.silver_bars_button.text() == ""
+    assert widget.delete_estimate_button.text() == ""
+
+    assert widget.save_button.accessibleName() == "Save"
+    assert widget.print_button.accessibleName() == "Print"
+    assert widget.clear_button.accessibleName() == "New"
+    assert widget.delete_row_button.accessibleName() == "Delete Row"
+    assert widget.return_toggle_button.accessibleName() == "Return"
+    assert widget.silver_bar_toggle_button.accessibleName() == "Bar Mode"
+    assert widget.last_balance_button.accessibleName() == "Balance"
+    assert widget.history_button.accessibleName() == "History"
+    assert widget.silver_bars_button.accessibleName() == "Bar List"
+    assert widget.delete_estimate_button.accessibleName() == "Delete Estimate"
 
     # Public helpers delegate to controller.
     live_rate.refresh_calls = 0

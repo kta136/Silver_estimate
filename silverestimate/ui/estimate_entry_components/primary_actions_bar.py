@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import QSize, Qt, pyqtSignal
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import QHBoxLayout, QPushButton, QShortcut, QSizePolicy, QWidget
+
+from silverestimate.ui.icons import get_icon
 
 
 class PrimaryActionsBar(QWidget):
@@ -37,8 +39,10 @@ class PrimaryActionsBar(QWidget):
         layout.setContentsMargins(5, 5, 5, 5)
 
         # Save button (primary action - will get emphasis later)
-        self.save_button = QPushButton("Save")
+        self.save_button = QPushButton()
         self.save_button.setObjectName("SavePrimaryButton")
+        self.save_button.setIcon(get_icon("save", widget=self, color="#ffffff"))
+        self._configure_icon_button(self.save_button, label="Save")
         self.save_button.setToolTip(
             "Save the current estimate details (Ctrl+S)\n\n"
             "Saves all items and totals to database\n"
@@ -47,8 +51,10 @@ class PrimaryActionsBar(QWidget):
         layout.addWidget(self.save_button)
 
         # Print button
-        self.print_button = QPushButton("Print")
+        self.print_button = QPushButton()
         self.print_button.setObjectName("PrintPrimaryButton")
+        self.print_button.setIcon(get_icon("print_estimate", widget=self))
+        self._configure_icon_button(self.print_button, label="Print")
         self.print_button.setToolTip(
             "Preview and print the current estimate (Ctrl+P)\n\n"
             "Requires saving the estimate first\n"
@@ -57,8 +63,10 @@ class PrimaryActionsBar(QWidget):
         layout.addWidget(self.print_button)
 
         # New button
-        self.new_button = QPushButton("New")
+        self.new_button = QPushButton()
         self.new_button.setObjectName("NewPrimaryButton")
+        self.new_button.setIcon(get_icon("new", widget=self))
+        self._configure_icon_button(self.new_button, label="New")
         self.new_button.setToolTip(
             "Clear the form to start a new estimate (Ctrl+N)\n\n"
             "Resets all fields and generates new voucher\n"
@@ -67,6 +75,17 @@ class PrimaryActionsBar(QWidget):
         layout.addWidget(self.new_button)
 
         layout.addStretch()
+
+    @staticmethod
+    def _configure_icon_button(button: QPushButton, *, label: str) -> None:
+        button.setAccessibleName(label)
+        if button.icon().isNull():
+            button.setText(label)
+            button.setProperty("iconOnly", False)
+            return
+        button.setText("")
+        button.setProperty("iconOnly", True)
+        button.setIconSize(QSize(18, 18))
 
     def _setup_shortcuts(self) -> None:
         """Set up keyboard shortcuts.

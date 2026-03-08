@@ -10,6 +10,7 @@ from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import QAction, QActionGroup, QMenuBar, QMessageBox
 
 from silverestimate.infrastructure.app_constants import APP_VERSION
+from silverestimate.ui.icons import get_icon
 
 
 class NavigationController:
@@ -78,11 +79,13 @@ class NavigationController:
         file_menu = menu_bar.addMenu("&File")
 
         estimate_action = QAction("&Estimate Entry", self._main_window)
+        estimate_action.setIcon(get_icon("estimate_entry", widget=self._main_window))
         estimate_action.setShortcut("Alt+E")
         estimate_action.triggered.connect(self.show_estimate)
         file_menu.addAction(estimate_action)
 
         item_master_action = QAction("&Item Master", self._main_window)
+        item_master_action.setIcon(get_icon("item_master", widget=self._main_window))
         item_master_action.setShortcut("Alt+I")
         item_master_action.triggered.connect(self.show_item_master)
         file_menu.addAction(item_master_action)
@@ -90,12 +93,14 @@ class NavigationController:
         file_menu.addSeparator()
 
         save_action = QAction("&Save", self._main_window)
+        save_action.setIcon(get_icon("save", widget=self._main_window))
         save_action.setShortcut(QKeySequence.Save)
         save_action.setShortcutContext(Qt.ApplicationShortcut)
         save_action.triggered.connect(self._main_window.commands.save_estimate)
         file_menu.addAction(save_action)
 
         print_action = QAction("&Print", self._main_window)
+        print_action.setIcon(get_icon("print", widget=self._main_window))
         print_action.setShortcut(QKeySequence.Print)
         print_action.setShortcutContext(Qt.ApplicationShortcut)
         print_action.triggered.connect(self._main_window.commands.print_estimate)
@@ -104,6 +109,7 @@ class NavigationController:
         file_menu.addSeparator()
 
         exit_action = QAction("E&xit", self._main_window)
+        exit_action.setIcon(get_icon("exit", widget=self._main_window))
         exit_action.setShortcut(QKeySequence.Quit)
         exit_action.triggered.connect(self._main_window.close)
         file_menu.addAction(exit_action)
@@ -113,6 +119,7 @@ class NavigationController:
         silver_bars_action = QAction(
             "Open &Silver Bar Management Dialog...", self._main_window
         )
+        silver_bars_action.setIcon(get_icon("silver_bars", widget=self._main_window))
         silver_bars_action.setStatusTip(
             "Add, view, transfer, or assign silver bars to lists"
         )
@@ -120,6 +127,9 @@ class NavigationController:
         tools_menu.addAction(silver_bars_action)
 
         silver_history_action = QAction("Silver Bar &History", self._main_window)
+        silver_history_action.setIcon(
+            get_icon("silver_history", widget=self._main_window)
+        )
         silver_history_action.setStatusTip(
             "View history of all silver bars and issued lists"
         )
@@ -129,11 +139,13 @@ class NavigationController:
         tools_menu.addSeparator()
 
         settings_action = QAction("&Settings...", self._main_window)
+        settings_action.setIcon(get_icon("settings", widget=self._main_window))
         settings_action.setStatusTip("Configure application settings")
         settings_action.triggered.connect(self._main_window.show_settings_dialog)
         tools_menu.addAction(settings_action)
 
         refresh_rate_action = QAction("Refresh Live Rate Now", self._main_window)
+        refresh_rate_action.setIcon(get_icon("refresh", widget=self._main_window))
         refresh_rate_action.setStatusTip(
             "Fetch the latest live silver rate immediately"
         )
@@ -146,10 +158,13 @@ class NavigationController:
         view_group.setExclusive(True)
 
         view_estimate_action = QAction("&Estimate Entry", self._main_window)
+        view_estimate_action.setIcon(get_icon("estimate_entry", widget=self._main_window))
         view_estimate_action.setCheckable(True)
         view_item_master_action = QAction("&Item Master", self._main_window)
+        view_item_master_action.setIcon(get_icon("item_master", widget=self._main_window))
         view_item_master_action.setCheckable(True)
         view_silver_bars_action = QAction("Open &Silver Bars Dialog", self._main_window)
+        view_silver_bars_action.setIcon(get_icon("silver_bars", widget=self._main_window))
         view_silver_bars_action.setCheckable(True)
 
         view_group.addAction(view_estimate_action)
@@ -168,11 +183,13 @@ class NavigationController:
 
         reports_menu = menu_bar.addMenu("&Reports")
         history_action = QAction("Estimate &History", self._main_window)
+        history_action.setIcon(get_icon("history", widget=self._main_window))
         history_action.triggered.connect(self.show_estimate_history)
         reports_menu.addAction(history_action)
 
         help_menu = menu_bar.addMenu("&Help")
         about_action = QAction("&About", self._main_window)
+        about_action.setIcon(get_icon("about", widget=self._main_window))
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
 

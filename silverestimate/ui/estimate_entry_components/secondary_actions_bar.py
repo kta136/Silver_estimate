@@ -283,7 +283,11 @@ class SecondaryActionsBar(QWidget):
         return divider
 
     @staticmethod
-    def _configure_icon_button(button, *, label: str) -> None:
+    def _configure_icon_button(
+        button: QPushButton | QToolButton,
+        *,
+        label: str,
+    ) -> None:
         button.setAccessibleName(label)
         if button.icon().isNull():
             button.setText(label)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, cast
 
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QStyle, QWidget
@@ -194,11 +194,14 @@ def get_icon(
     if _qtawesome is not None:
         try:
             icon_color = color or _DEFAULT_COLOR
-            return _qtawesome.icon(
-                mdi6_name,
-                color=icon_color,
-                color_active=active_color or icon_color,
-                color_disabled=_DISABLED_COLOR,
+            return cast(
+                QIcon,
+                _qtawesome.icon(
+                    mdi6_name,
+                    color=icon_color,
+                    color_active=active_color or icon_color,
+                    color_disabled=_DISABLED_COLOR,
+                ),
             )
         except Exception as exc:  # pragma: no cover - depends on QtAwesome state
             LOGGER.debug("Failed to build qtawesome icon %s: %s", mdi6_name, exc)
@@ -217,7 +220,7 @@ def get_icon(
 def _resolve_style(widget: QWidget | None) -> QStyle | None:
     if widget is not None:
         return widget.style()
-    app = QApplication.instance()
+    app = cast(QApplication | None, QApplication.instance())
     if app is None:
         return None
     return app.style()

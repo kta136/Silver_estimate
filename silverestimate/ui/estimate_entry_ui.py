@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import QLineEdit, QStyledItemDelegate
 
 from silverestimate.ui import estimate_table_formatting
 from silverestimate.ui.numeric_font import numeric_table_font
+
 from .estimate_entry_logic import constants as table_cols
 
 

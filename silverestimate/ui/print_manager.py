@@ -12,8 +12,8 @@ from silverestimate.infrastructure.settings import get_app_settings
 from .estimate_print_renderer import EstimatePrintRenderer
 from .print_payload_builder import PrintPayloadBuilder, PrintPreviewPayload
 from .print_preview_controller import PrintPreviewController
-from .silver_bar_print_renderer import SilverBarPrintRenderer
 from .settings_print_controller import PRINT_ORIENTATION_MIGRATION_KEY
+from .silver_bar_print_renderer import SilverBarPrintRenderer
 
 LOGGER = logging.getLogger(__name__)
 
@@ -177,7 +177,7 @@ class PrintManager:
             if orientation_name == "Portrait" and not explicit:
                 settings.setValue("print/orientation", "Landscape")
                 return "Landscape"
-            return orientation_name
+            return str(orientation_name)
         return "Landscape"
 
     def format_indian_rupees(self, number):

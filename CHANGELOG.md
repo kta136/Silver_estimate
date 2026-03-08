@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.1] - 2026-03-08
+
+### Changed
+- Bumped application/package version to `2.8.1`
+- Updated project README version header and badge to `v2.8.1`
+- Applied the CI-required import sorting and small type-safety fixes across the release branch
+
+### Fixed
+- Resolved the `Ruff` import-order failures introduced during the `v2.8` UI and print-preview work
+- Resolved `mypy` failures in the icon helper, print preview, print manager, settings print controller, secondary action bar, and Windows startup path
+- Restored green `main` validation for the post-release branch state
+
 ## [2.8] - 2026-03-08
 
 ### Changed

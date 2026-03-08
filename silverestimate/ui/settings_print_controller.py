@@ -222,7 +222,7 @@ class SettingsPrintController:
                 )
                 self._settings.setValue("print/orientation", DEFAULT_ORIENTATION)
                 return DEFAULT_ORIENTATION
-            return raw_value
+            return str(raw_value)
         if raw_value is None:
             return DEFAULT_ORIENTATION
         LOGGER.warning(

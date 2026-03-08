@@ -8,10 +8,12 @@ if os.name == "nt" and os.environ.get("SILVER_SHOW_CONSOLE") != "1":
     try:
         import ctypes
 
-        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
-        if hwnd:
-            ctypes.windll.user32.ShowWindow(hwnd, 0)  # SW_HIDE
-        ctypes.windll.kernel32.FreeConsole()
+        windll = getattr(ctypes, "windll", None)
+        if windll is not None:
+            hwnd = windll.kernel32.GetConsoleWindow()
+            if hwnd:
+                windll.user32.ShowWindow(hwnd, 0)  # SW_HIDE
+            windll.kernel32.FreeConsole()
     except Exception:
         pass
 

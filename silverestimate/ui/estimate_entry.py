@@ -17,6 +17,7 @@ from silverestimate.presenter import (
     EstimateEntryViewState,
 )
 
+from .estimate_entry_layout_controller import EstimateEntryLayoutController
 from .estimate_entry_logic.constants import (
     COL_CODE,
     COL_GROSS,
@@ -25,7 +26,6 @@ from .estimate_entry_logic.constants import (
     COL_PURITY,
     COL_WAGE_RATE,
 )
-from .estimate_entry_layout_controller import EstimateEntryLayoutController
 from .estimate_entry_table_controller import EstimateEntryTableController
 from .estimate_entry_totals_controller import EstimateEntryTotalsController
 from .estimate_entry_workflow_controller import EstimateEntryWorkflowController

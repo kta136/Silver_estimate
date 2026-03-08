@@ -1,11 +1,11 @@
-# Silver Estimation App - v2.8
+# Silver Estimation App - v2.8.1
 
 A desktop application built with PyQt5 and an encrypted SQLite database for managing silver sales estimates - item-wise entries, silver bar inventory, returns, and print-ready outputs.
 
 [![Python](https://img.shields.io/badge/Python-3.13+-blue.svg)](https://www.python.org/)
 [![PyQt5](https://img.shields.io/badge/PyQt5-5.15+-green.svg)](https://www.riverbankcomputing.com/software/pyqt/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v2.8-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v2.8.1-orange.svg)](CHANGELOG.md)
 [![PR Validation](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml)
 [![Main Validation](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml)
 [![Release Windows](https://github.com/kta136/Silver_estimate/actions/workflows/release-windows.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/release-windows.yml)
@@ -257,6 +257,10 @@ c 2023-2025 Silver Estimation App
 ---
 
 ## Version History (highlights)
+
+### v2.8.1 (2026-03-08)
+- Fixed the follow-up lint and type-check issues from the `v2.8` release so `main` validation is green again
+- Hardened Windows startup typing, print-preview enum handling, and icon helper typing used by the refreshed UI work
 
 ### v2.8 (2026-03-08)
 - Refined the estimate-entry header and action strips to preserve table space while tightening button grouping and icon usage

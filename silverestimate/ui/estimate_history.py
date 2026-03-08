@@ -2,7 +2,7 @@
 import logging
 from functools import partial
 
-from PyQt5.QtCore import QDate, QObject, QThread, Qt, pyqtSignal
+from PyQt5.QtCore import QDate, QObject, Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QDateEdit,

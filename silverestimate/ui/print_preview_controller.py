@@ -365,22 +365,22 @@ class PrintPreviewController:
         group = QActionGroup(preview)
         group.setExclusive(True)
 
-        view_actions: list[tuple[QAction, int]] = []
+        view_actions: list[tuple[QAction, QPrintPreviewWidget.ViewMode]] = []
         for icon_name, text, mode in (
             (
                 "view_single_page",
                 "Single Page",
-                int(QPrintPreviewWidget.SinglePageView),
+                QPrintPreviewWidget.SinglePageView,
             ),
             (
                 "view_facing_pages",
                 "Facing Pages",
-                int(QPrintPreviewWidget.FacingPagesView),
+                QPrintPreviewWidget.FacingPagesView,
             ),
             (
                 "view_overview",
                 "All Pages",
-                int(QPrintPreviewWidget.AllPagesView),
+                QPrintPreviewWidget.AllPagesView,
             ),
         ):
             action = QAction(get_icon(icon_name, widget=preview), text, preview)
@@ -397,9 +397,9 @@ class PrintPreviewController:
 
         def sync_view_actions() -> None:
             try:
-                current_mode = int(preview_widget.viewMode())
+                current_mode = preview_widget.viewMode()
             except Exception:
-                current_mode = int(QPrintPreviewWidget.SinglePageView)
+                current_mode = QPrintPreviewWidget.SinglePageView
             for action, mode in view_actions:
                 action.blockSignals(True)
                 action.setChecked(mode == current_mode)
@@ -540,7 +540,7 @@ class PrintPreviewController:
     def _set_view_mode(
         self,
         preview_widget: QPrintPreviewWidget,
-        view_mode: int,
+        view_mode: QPrintPreviewWidget.ViewMode,
     ) -> None:
         try:
             preview_widget.setViewMode(view_mode)
@@ -677,10 +677,10 @@ class PrintPreviewController:
     def _set_orientation_and_refresh(
         self,
         preview: QPrintPreviewDialog,
-        orientation,
+        orientation: QPrinter.Orientation,
     ) -> None:
         try:
-            self._printer.setOrientation(int(orientation))
+            self._printer.setOrientation(orientation)
         except Exception as exc:
             LOGGER.debug("Failed to set preview orientation: %s", exc)
             return

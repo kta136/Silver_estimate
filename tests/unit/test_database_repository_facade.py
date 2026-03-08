@@ -11,6 +11,11 @@ class _StubItemRepo:
         self.calls.append(("add_item", args))
         return "added"
 
+    def get_items_by_codes(self, codes):
+        values = tuple(codes)
+        self.calls.append(("get_items_by_codes", values))
+        return {code: {"code": code} for code in values}
+
 
 class _StubEstimateRepo:
     def __init__(self):
@@ -19,6 +24,10 @@ class _StubEstimateRepo:
     def save_estimate_with_returns(self, *args):
         self.calls.append(("save_estimate_with_returns", args))
         return "saved"
+
+    def get_estimate_history_rows(self, **kwargs):
+        self.calls.append(("get_estimate_history_rows", kwargs))
+        return [{"voucher_no": "100"}]
 
 
 class _StubSilverBarsRepo:
@@ -56,10 +65,15 @@ def test_item_facade_delegates_and_preload_uses_temp_db_path():
     facade = _FacadeHarness()
 
     assert facade.add_item("ITM001", "Sample", 92.5, "WT", 10.0) == "added"
+    assert facade.get_items_by_codes(["ITM001", "ITM002"]) == {
+        "ITM001": {"code": "ITM001"},
+        "ITM002": {"code": "ITM002"},
+    }
     facade.start_preload_item_cache()
 
     assert facade.items_repo.calls == [
-        ("add_item", ("ITM001", "Sample", 92.5, "WT", 10.0))
+        ("add_item", ("ITM001", "Sample", 92.5, "WT", 10.0)),
+        ("get_items_by_codes", ("ITM001", "ITM002")),
     ]
     assert facade._item_cache_controller.calls == ["/tmp/db.sqlite"]
 
@@ -89,6 +103,29 @@ def test_estimate_facade_clears_last_error_before_delegating():
                 [{"code": "RET001"}],
                 {"total_net": 1.0},
             ),
+        )
+    ]
+
+
+def test_estimate_facade_delegates_history_rows_lookup():
+    facade = _FacadeHarness()
+
+    assert (
+        facade.get_estimate_history_rows(
+            date_from="2025-01-01",
+            date_to="2025-01-31",
+            voucher_search="10",
+        )
+        == [{"voucher_no": "100"}]
+    )
+    assert facade.estimates_repo.calls == [
+        (
+            "get_estimate_history_rows",
+            {
+                "date_from": "2025-01-01",
+                "date_to": "2025-01-31",
+                "voucher_search": "10",
+            },
         )
     ]
 

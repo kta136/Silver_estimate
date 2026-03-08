@@ -69,6 +69,15 @@ class _RepositoryStub:
     def fetch_item(self, code):
         return self.db.get_item_by_code(code)
 
+    def fetch_items_by_codes(self, codes):
+        rows = {}
+        for code in codes:
+            item = self.db.get_item_by_code(code)
+            if item is None:
+                continue
+            rows[str(code or "").strip().upper()] = item
+        return rows
+
     def save_estimate(
         self, voucher_no, date, silver_rate, regular_items, return_items, totals
     ):

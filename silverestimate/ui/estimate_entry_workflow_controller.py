@@ -631,28 +631,12 @@ class EstimateEntryWorkflowController(HostProxy):
             row_states = EstimateEntryPersistenceService.build_row_states_from_items(
                 loaded.items
             )
-            wage_type_by_code: dict[str, str] = {}
-            repo = getattr(self.presenter, "repository", None)
-            if repo:
-                for row_state in row_states:
-                    code = (row_state.code or "").strip()
-                    if not code or code in wage_type_by_code:
-                        continue
-                    try:
-                        item_data = repo.fetch_item(code)
-                    except Exception:
-                        item_data = None
-                    if item_data and item_data.get("wage_type") is not None:
-                        wage_type_by_code[code] = self._normalize_wage_type(
-                            item_data.get("wage_type")
-                        )
-                    else:
-                        wage_type_by_code[code] = "WT"
-
             prepared_rows = []
             for index, row_state in enumerate(row_states):
                 code = (row_state.code or "").strip()
-                wage_type = wage_type_by_code.get(code, "WT")
+                wage_type = self._normalize_wage_type(
+                    getattr(row_state, "wage_type", "WT")
+                )
                 normalized_pieces = int(row_state.pieces)
                 if wage_type == "WT":
                     normalized_pieces = 0

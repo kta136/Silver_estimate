@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import logging
 from functools import partial
+import time
 
 from PyQt5.QtCore import QDate, QObject, Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import (
@@ -21,6 +22,7 @@ from PyQt5.QtWidgets import (
 )
 
 from silverestimate.ui.models import EstimateHistoryRow, EstimateHistoryTableModel
+from silverestimate.persistence.estimates_repository import fetch_estimate_history_rows
 
 from .icons import get_icon
 from .print_manager import PrintManager, PrintPreviewBuildWorker
@@ -167,12 +169,17 @@ class EstimateHistoryDialog(QDialog):
         self.estimates_model = EstimateHistoryTableModel(self.estimates_table)
         self.estimates_table.setModel(self.estimates_model)
         header = self.estimates_table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(QHeaderView.Interactive)
         header.setSectionResizeMode(2, QHeaderView.Stretch)
-        for column in range(3, 9):
-            header.setSectionResizeMode(column, QHeaderView.ResizeToContents)
         header.setStretchLastSection(False)
+        self.estimates_table.setColumnWidth(0, 110)
+        self.estimates_table.setColumnWidth(1, 110)
+        self.estimates_table.setColumnWidth(3, 100)
+        self.estimates_table.setColumnWidth(4, 105)
+        self.estimates_table.setColumnWidth(5, 105)
+        self.estimates_table.setColumnWidth(6, 105)
+        self.estimates_table.setColumnWidth(7, 110)
+        self.estimates_table.setColumnWidth(8, 130)
 
         # Table properties
         self.estimates_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -247,6 +254,7 @@ class EstimateHistoryDialog(QDialog):
         self._load_request_id += 1
         request_id = self._load_request_id
         self.results_summary_label.setText("Loading estimates...")
+        started_at = time.perf_counter()
 
         # Start threaded load and return early to keep UI responsive
         try:
@@ -260,8 +268,18 @@ class EstimateHistoryDialog(QDialog):
         except Exception as exc:
             self.logger.debug("Failed to disable history action buttons: %s", exc)
 
+        temp_db_path = getattr(self.db_manager, "temp_db_path", None)
+        if not isinstance(temp_db_path, str) or not temp_db_path or temp_db_path == ":memory:":
+            try:
+                rows = self._load_estimates_sync()
+                self._populate_table(rows, request_id=request_id, started_at=started_at)
+            except Exception as exc:
+                self._handle_load_error(str(exc), request_id)
+                self._loading_done(None, None, request_id)
+            return
+
         worker = _HistoryLoadWorker(
-            self.db_manager.temp_db_path,
+            temp_db_path,
             self.date_from.date().toString("yyyy-MM-dd"),
             self.date_to.date().toString("yyyy-MM-dd"),
             self.voucher_search.text().strip(),
@@ -269,43 +287,63 @@ class EstimateHistoryDialog(QDialog):
         thread = QThread(self)
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
-        worker.data_ready.connect(partial(self._populate_table, request_id=request_id))
+        worker.data_ready.connect(
+            partial(self._populate_table, request_id=request_id, started_at=started_at)
+        )
         worker.error.connect(partial(self._handle_load_error, request_id=request_id))
-        worker.finished.connect(partial(self._loading_done, thread, worker, request_id))
+        worker.finished.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(partial(self._loading_done, thread, None, request_id))
         self._active_load_workers[thread] = worker
         thread.start()
         return
+
+    def _load_estimates_sync(self) -> list[dict]:
+        getter = getattr(self.db_manager, "get_estimate_history_rows", None)
+        if callable(getter):
+            return list(
+                getter(
+                    date_from=self.date_from.date().toString("yyyy-MM-dd"),
+                    date_to=self.date_to.date().toString("yyyy-MM-dd"),
+                    voucher_search=self.voucher_search.text().strip(),
+                )
+                or []
+            )
+        raise RuntimeError("Estimate history rows are unavailable.")
 
     def _handle_load_error(self, message, request_id, *_) -> None:
         if request_id != self._load_request_id:
             return
         QMessageBox.warning(self, "Load Error", message)
 
-    def _populate_table(self, headers, agg_map, request_id=None, *_) -> None:
+    def _populate_table(self, history_rows, request_id=None, started_at=None, *_) -> None:
         if request_id is not None and request_id != self._load_request_id:
             return
         table = self.estimates_table
+        sorting_enabled = table.isSortingEnabled()
         table.setUpdatesEnabled(False)
         table.blockSignals(True)
         try:
             rows = []
-            for header in headers:
-                vno = str(header["voucher_no"])
-                rg, rn = agg_map.get(vno, (0.0, 0.0))
-                net_fine = float(header.get("total_fine", 0.0) or 0.0)
-                net_wage = float(header.get("total_wage", 0.0) or 0.0)
-                silver_rate = float(header.get("silver_rate", 0.0) or 0.0)
+            for history_row in history_rows or []:
+                vno = str(history_row.get("voucher_no", "") or "")
+                total_gross = float(history_row.get("total_gross", 0.0) or 0.0)
+                total_net = float(history_row.get("total_net", 0.0) or 0.0)
+                net_fine = float(history_row.get("total_fine", 0.0) or 0.0)
+                net_wage = float(history_row.get("total_wage", 0.0) or 0.0)
+                silver_rate = float(history_row.get("silver_rate", 0.0) or 0.0)
                 last_balance_amount = float(
-                    header.get("last_balance_amount", 0.0) or 0.0
+                    history_row.get("last_balance_amount", 0.0) or 0.0
                 )
                 rows.append(
                     EstimateHistoryRow(
                         voucher_no=vno,
-                        date=str(header.get("date", "") or ""),
-                        note=str(header.get("note", "") or ""),
+                        date=str(history_row.get("date", "") or ""),
+                        note=str(history_row.get("note", "") or ""),
                         silver_rate=silver_rate,
-                        total_gross=float(rg or 0.0),
-                        total_net=float(rn or 0.0),
+                        total_gross=total_gross,
+                        total_net=total_net,
                         net_fine=net_fine,
                         net_wage=net_wage,
                         grand_total=(net_fine * silver_rate)
@@ -313,6 +351,8 @@ class EstimateHistoryDialog(QDialog):
                         + last_balance_amount,
                     )
                 )
+            if sorting_enabled:
+                table.setSortingEnabled(False)
             self.estimates_model.set_rows(rows)
             self._update_results_summary(len(rows))
             if rows:
@@ -320,21 +360,30 @@ class EstimateHistoryDialog(QDialog):
             else:
                 table.clearSelection()
         finally:
+            if sorting_enabled:
+                table.setSortingEnabled(True)
             table.blockSignals(False)
             table.setUpdatesEnabled(True)
             table.viewport().update()
+        if started_at is not None:
+            elapsed_ms = (time.perf_counter() - started_at) * 1000.0
+            if elapsed_ms >= 20.0:
+                self.logger.debug(
+                    "[perf] estimate_history.load_estimates=%.2fms rows=%s",
+                    elapsed_ms,
+                    len(rows),
+                )
 
     def _loading_done(self, thread, worker, request_id=None, *_) -> None:
-        self._active_load_workers.pop(thread, None)
-        try:
-            thread.quit()
-            thread.wait(1000)
-        except Exception as exc:
-            self.logger.debug("Failed to stop estimate history worker thread: %s", exc)
-        try:
-            worker.deleteLater()
-        except Exception as exc:
-            self.logger.debug("Failed to schedule history worker deletion: %s", exc)
+        if thread is not None:
+            self._active_load_workers.pop(thread, None)
+        if worker is not None:
+            try:
+                worker.deleteLater()
+            except Exception as exc:
+                self.logger.debug(
+                    "Failed to schedule history worker deletion: %s", exc
+                )
         if request_id is not None and request_id != self._load_request_id:
             return
         try:
@@ -646,7 +695,7 @@ class EstimateHistoryDialog(QDialog):
 
 
 class _HistoryLoadWorker(QObject):
-    data_ready = pyqtSignal(list, dict)
+    data_ready = pyqtSignal(list)
     error = pyqtSignal(str)
     finished = pyqtSignal()
 
@@ -660,51 +709,26 @@ class _HistoryLoadWorker(QObject):
     def run(self):
         import sqlite3
 
+        conn = None
         try:
             conn = sqlite3.connect(self.db_path)
             conn.row_factory = sqlite3.Row
             cur = conn.cursor()
-            # Headers only
-            query = "SELECT * FROM estimates WHERE 1=1"
-            params = []
-            if self.date_from:
-                query += " AND date >= ?"
-                params.append(self.date_from)
-            if self.date_to:
-                query += " AND date <= ?"
-                params.append(self.date_to)
-            if self.voucher_search:
-                query += " AND voucher_no LIKE ?"
-                params.append(f"%{self.voucher_search}%")
-            cur.execute(
-                query + " ORDER BY voucher_no_int DESC, voucher_no DESC",
-                params,
+            rows = fetch_estimate_history_rows(
+                cur,
+                date_from=self.date_from,
+                date_to=self.date_to,
+                voucher_search=self.voucher_search,
             )
-            headers = [dict(r) for r in cur.fetchall()]
-
-            agg_map = {}
-            if headers:
-                voucher_nos = [str(h["voucher_no"]) for h in headers]
-                placeholders = ",".join(["?"] * len(voucher_nos))
-                # Placeholder count is generated locally; values remain parameterized.
-                sql = (
-                    f"SELECT voucher_no, "  # nosec B608
-                    f"SUM(CASE WHEN is_return=0 AND is_silver_bar=0 THEN gross ELSE 0 END) AS rg, "
-                    f"SUM(CASE WHEN is_return=0 AND is_silver_bar=0 THEN net_wt ELSE 0 END) AS rn "
-                    f"FROM estimate_items WHERE voucher_no IN ({placeholders}) GROUP BY voucher_no"
-                )
-                cur.execute(sql, voucher_nos)
-                for row in cur.fetchall():
-                    vno, rg, rn = row[0], row[1], row[2]
-                    agg_map[str(vno)] = (float(rg or 0.0), float(rn or 0.0))
-            try:
-                conn.close()
-            except Exception as exc:
-                logging.getLogger(__name__).debug(
-                    "Failed to close estimate history worker connection: %s", exc
-                )
-            self.data_ready.emit(headers, agg_map)
+            self.data_ready.emit(rows)
         except Exception as e:
             self.error.emit(str(e))
         finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception as exc:
+                    logging.getLogger(__name__).debug(
+                        "Failed to close estimate history worker connection: %s", exc
+                    )
             self.finished.emit()

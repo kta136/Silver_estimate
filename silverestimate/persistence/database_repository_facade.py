@@ -19,6 +19,9 @@ class DatabaseRepositoryFacadeMixin:
     def get_item_by_code(self, code):
         return self.items_repo.get_item_by_code(code)
 
+    def get_items_by_codes(self, codes):
+        return self.items_repo.get_items_by_codes(codes)
+
     def start_preload_item_cache(self):
         """Warm up the item cache off the UI thread using a separate connection."""
         controller = getattr(self, "_item_cache_controller", None)
@@ -46,6 +49,13 @@ class DatabaseRepositoryFacadeMixin:
 
     def get_estimate_by_voucher(self, voucher_no):
         return self.estimates_repo.get_estimate_by_voucher(voucher_no)
+
+    def get_estimate_history_rows(self, date_from=None, date_to=None, voucher_search=None):
+        return self.estimates_repo.get_estimate_history_rows(
+            date_from=date_from,
+            date_to=date_to,
+            voucher_search=voucher_search,
+        )
 
     def generate_voucher_no(self):
         return self.estimates_repo.generate_voucher_no()

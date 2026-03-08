@@ -22,6 +22,7 @@ def _row(
     purity: float = 0.0,
     wage_rate: float = 0.0,
     pieces: int = 1,
+    wage_type: str = "WT",
 ) -> EstimateEntryRowState:
     return EstimateEntryRowState(
         code=code,
@@ -34,6 +35,7 @@ def _row(
         purity=purity,
         wage_rate=wage_rate,
         pieces=pieces,
+        wage_type=wage_type,
         category=category,
     )
 
@@ -106,6 +108,7 @@ def test_prepare_save_payload_aggregates_rows():
     assert len(payload.items) == 3
     assert {item.code for item in payload.regular_items} == {"REG001"}
     assert {item.code for item in payload.return_items} == {"RET001", "BAR001"}
+    assert payload.regular_items[0].wage_type == "WT"
     assert payload.totals["total_gross"] == pytest.approx(15.0)
     assert payload.totals["total_net"] == pytest.approx(13.8)
     assert payload.totals["net_fine"] == pytest.approx(3.978)
@@ -240,6 +243,7 @@ def test_build_row_states_from_items_roundtrip():
             fine=0.72,
             is_return=True,
             is_silver_bar=False,
+            wage_type="PC",
         ),
     ]
 
@@ -248,3 +252,4 @@ def test_build_row_states_from_items_roundtrip():
     assert rows[0].category.is_regular()
     assert rows[1].category.is_return()
     assert rows[1].row_index == 2
+    assert rows[1].wage_type == "PC"

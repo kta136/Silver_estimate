@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping as MappingABC
 from typing import Any, Iterable, Mapping, Optional, Protocol
 
 EstimateRow = Mapping[str, Any]
@@ -13,6 +14,8 @@ class EstimateRepositoryDatabase(Protocol):
     last_error: str | None
 
     def get_item_by_code(self, code: str) -> EstimateRow | None: ...
+
+    def get_items_by_codes(self, codes: Iterable[str]) -> Mapping[str, EstimateRow]: ...
 
     def generate_voucher_no(self) -> str: ...
 
@@ -39,6 +42,8 @@ class EstimateRepository(Protocol):
     """Interface exposing persistence operations required by the estimate UI."""
 
     def fetch_item(self, code: str) -> Optional[EstimateRow]: ...
+
+    def fetch_items_by_codes(self, codes: Iterable[str]) -> Mapping[str, EstimateRow]: ...
 
     def generate_voucher_no(self) -> str: ...
 
@@ -74,6 +79,13 @@ class DatabaseEstimateRepository:
             return self._db.get_item_by_code(code)
         except Exception:
             return None
+
+    def fetch_items_by_codes(self, codes: Iterable[str]) -> Mapping[str, EstimateRow]:
+        try:
+            rows = self._db.get_items_by_codes(codes)
+        except Exception:
+            return {}
+        return rows if isinstance(rows, MappingABC) else {}
 
     def generate_voucher_no(self) -> str:
         return self._db.generate_voucher_no()

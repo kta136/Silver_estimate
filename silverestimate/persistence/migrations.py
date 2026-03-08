@@ -80,6 +80,7 @@ def _ensure_core_tables(db: "DatabaseManager", current_version: int) -> None:
             purity REAL DEFAULT 0,
             wage_rate REAL DEFAULT 0,
             pieces INTEGER DEFAULT 1,
+            wage_type TEXT,
             wage REAL DEFAULT 0,
             fine REAL DEFAULT 0,
             is_return INTEGER DEFAULT 0,
@@ -148,8 +149,8 @@ def _apply_versioned_migrations(db: "DatabaseManager", current_version: int) -> 
     assert cursor is not None
     assert logger is not None
 
-    if current_version >= 3:
-        logger.debug("Schema version >= 3 detected; skipping legacy migration checks.")
+    if current_version >= 4:
+        logger.debug("Schema version >= 4 detected; skipping legacy migration checks.")
         return
 
     if current_version < 1:
@@ -213,6 +214,14 @@ def _apply_versioned_migrations(db: "DatabaseManager", current_version: int) -> 
               AND voucher_no_int IS NULL
             """)
         db._update_schema_version(3)
+
+    if current_version < 4:
+        logger.info(
+            "Performing schema migration to version 4: Adding estimate item wage type..."
+        )
+        if not db._column_exists("estimate_items", "wage_type"):
+            cursor.execute("ALTER TABLE estimate_items ADD COLUMN wage_type TEXT")
+        db._update_schema_version(4)
 
 
 def _ensure_indexes(db: "DatabaseManager") -> None:

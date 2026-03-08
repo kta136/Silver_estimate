@@ -8,6 +8,86 @@ from datetime import datetime
 from typing import Any, Iterable, List, Optional
 
 
+def fetch_estimate_history_rows(
+    cursor: sqlite3.Cursor,
+    *,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    voucher_search: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return estimate-history rows with regular-item aggregates in one query."""
+    query = """
+        WITH filtered_estimates AS (
+            SELECT
+                voucher_no,
+                voucher_no_int,
+                date,
+                note,
+                silver_rate,
+                total_fine,
+                total_wage,
+                last_balance_amount
+            FROM estimates
+            WHERE 1=1
+    """
+    params: list[Any] = []
+    if date_from:
+        query += " AND date >= ?"
+        params.append(date_from)
+    if date_to:
+        query += " AND date <= ?"
+        params.append(date_to)
+    if voucher_search:
+        query += " AND voucher_no LIKE ?"
+        params.append(f"%{voucher_search}%")
+
+    query += """
+        )
+        SELECT
+            e.voucher_no,
+            e.date,
+            e.note,
+            e.silver_rate,
+            e.total_fine,
+            e.total_wage,
+            e.last_balance_amount,
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN ei.is_return = 0 AND ei.is_silver_bar = 0
+                        THEN ei.gross
+                        ELSE 0
+                    END
+                ),
+                0
+            ) AS total_gross,
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN ei.is_return = 0 AND ei.is_silver_bar = 0
+                        THEN ei.net_wt
+                        ELSE 0
+                    END
+                ),
+                0
+            ) AS total_net
+        FROM filtered_estimates e
+        LEFT JOIN estimate_items ei ON ei.voucher_no = e.voucher_no
+        GROUP BY
+            e.voucher_no,
+            e.voucher_no_int,
+            e.date,
+            e.note,
+            e.silver_rate,
+            e.total_fine,
+            e.total_wage,
+            e.last_balance_amount
+        ORDER BY e.voucher_no_int DESC, e.voucher_no DESC
+    """
+    cursor.execute(query, params)
+    return [dict(row) for row in cursor.fetchall()]
+
+
 class EstimatesRepository:
     """Encapsulate estimate header/item persistence logic."""
 
@@ -135,6 +215,30 @@ class EstimatesRepository:
             }
             for header in headers
         ]
+
+    def get_estimate_history_rows(
+        self,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        voucher_search: str | None = None,
+    ) -> list[dict[str, Any]]:
+        cursor = self._cursor
+        if not cursor:
+            return []
+        try:
+            return fetch_estimate_history_rows(
+                cursor,
+                date_from=date_from,
+                date_to=date_to,
+                voucher_search=voucher_search,
+            )
+        except sqlite3.Error as exc:
+            self._logger.error(
+                "DB Error getting estimate history rows: %s",
+                exc,
+                exc_info=True,
+            )
+            return []
 
     def _load_estimate_items_by_voucher(
         self, voucher_nos: Iterable[str]
@@ -324,6 +428,7 @@ class EstimatesRepository:
                         float(item.get("purity", 0.0)),
                         float(item.get("wage_rate", 0.0)),
                         int(item.get("pieces", 1)),
+                        str(item.get("wage_type", "WT") or "WT"),
                         float(item.get("wage", 0.0)),
                         float(item.get("fine", 0.0)),
                         0,
@@ -342,6 +447,7 @@ class EstimatesRepository:
                         float(item.get("purity", 0.0)),
                         float(item.get("wage_rate", 0.0)),
                         int(item.get("pieces", 1)),
+                        str(item.get("wage_type", "WT") or "WT"),
                         float(item.get("wage", 0.0)),
                         float(item.get("fine", 0.0)),
                         1 if item.get("is_return", False) else 0,
@@ -356,12 +462,12 @@ class EstimatesRepository:
                         prepared.executemany(stmt, params)
                     else:
                         cursor.executemany(
-                            "INSERT INTO estimate_items (voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage, fine, is_return, is_silver_bar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            "INSERT INTO estimate_items (voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage_type, wage, fine, is_return, is_silver_bar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                             params,
                         )
                 except sqlite3.Error:
                     cursor.executemany(
-                        "INSERT INTO estimate_items (voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage, fine, is_return, is_silver_bar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        "INSERT INTO estimate_items (voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage_type, wage, fine, is_return, is_silver_bar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         params,
                     )
 

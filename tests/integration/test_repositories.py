@@ -87,11 +87,12 @@ def test_items_repository_roundtrip(fake_db):
     assert fake_db._flush_requested
 
 
-def test_schema_setup_upgrades_to_v3_and_adds_numeric_voucher_column(fake_db):
+def test_schema_setup_upgrades_to_v4_and_adds_estimate_item_wage_type(fake_db):
     fake_db.cursor.execute("SELECT MAX(version) AS v FROM schema_version")
     row = fake_db.cursor.fetchone()
-    assert row["v"] == 3
+    assert row["v"] == 4
     assert fake_db._column_exists("estimates", "voucher_no_int")
+    assert fake_db._column_exists("estimate_items", "wage_type")
 
 
 def test_migration_v3_backfills_numeric_vouchers_from_legacy_schema():
@@ -145,7 +146,69 @@ def test_migration_v3_backfills_numeric_vouchers_from_legacy_schema():
         assert rows["AB-1"] is None
 
         db.cursor.execute("SELECT MAX(version) AS v FROM schema_version")
-        assert db.cursor.fetchone()["v"] == 3
+        assert db.cursor.fetchone()["v"] == 4
+    finally:
+        db.conn.close()
+
+
+def test_migration_v4_adds_estimate_item_wage_type_without_backfill():
+    db = FakeDB()
+    try:
+        db.cursor.execute("""
+            CREATE TABLE schema_version (
+                id INTEGER PRIMARY KEY,
+                version INTEGER NOT NULL,
+                applied_date TEXT NOT NULL
+            )
+        """)
+        db.cursor.execute(
+            "INSERT INTO schema_version (version, applied_date) VALUES (?, ?)",
+            (3, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+        )
+        db.cursor.execute("""
+            CREATE TABLE estimates (
+                voucher_no TEXT PRIMARY KEY,
+                voucher_no_int INTEGER,
+                date TEXT NOT NULL,
+                silver_rate REAL DEFAULT 0,
+                total_gross REAL DEFAULT 0,
+                total_net REAL DEFAULT 0,
+                total_fine REAL DEFAULT 0,
+                total_wage REAL DEFAULT 0,
+                note TEXT,
+                last_balance_silver REAL DEFAULT 0,
+                last_balance_amount REAL DEFAULT 0
+            )
+        """)
+        db.cursor.execute("""
+            CREATE TABLE estimate_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                voucher_no TEXT,
+                item_code TEXT,
+                item_name TEXT,
+                gross REAL DEFAULT 0,
+                poly REAL DEFAULT 0,
+                net_wt REAL DEFAULT 0,
+                purity REAL DEFAULT 0,
+                wage_rate REAL DEFAULT 0,
+                pieces INTEGER DEFAULT 1,
+                wage REAL DEFAULT 0,
+                fine REAL DEFAULT 0,
+                is_return INTEGER DEFAULT 0,
+                is_silver_bar INTEGER DEFAULT 0
+            )
+        """)
+        db.cursor.execute(
+            "INSERT INTO estimate_items (voucher_no, item_code, item_name) VALUES (?, ?, ?)",
+            ("100", "ITM001", "Item"),
+        )
+        db.conn.commit()
+
+        migrations.run_schema_setup(db)
+
+        assert db._column_exists("estimate_items", "wage_type")
+        db.cursor.execute("SELECT wage_type FROM estimate_items")
+        assert db.cursor.fetchone()["wage_type"] is None
     finally:
         db.conn.close()
 
@@ -180,6 +243,18 @@ def test_items_repository_search_uses_prefix_then_contains_fallback(fake_db):
     assert [row["code"] for row in fallback_rows] == ["XABC99"]
 
     assert repo.search_items("Q") == []
+
+
+def test_items_repository_batch_fetch_returns_normalized_codes(fake_db):
+    repo = ItemsRepository(fake_db)
+    repo.add_item("abc001", "Alpha Brace", 91.0, "WT", 5.0)
+    repo.add_item("PC001", "Pendant", 88.0, "PC", 12.0)
+
+    rows = repo.get_items_by_codes(["ABC001", "pc001", "missing"])
+
+    assert set(rows.keys()) == {"ABC001", "PC001"}
+    assert rows["ABC001"]["name"] == "Alpha Brace"
+    assert rows["PC001"]["wage_type"] == "PC"
 
 
 def test_items_repository_selection_search_ranking_and_limit(fake_db):
@@ -234,6 +309,70 @@ def test_estimates_repository_save_and_fetch(fake_db):
     data = repo.get_estimate_by_voucher("100")
     assert data["header"]["voucher_no"] == "100"
     assert len(data["items"]) == 1
+    assert data["items"][0]["wage_type"] == "WT"
+
+
+def test_estimates_repository_history_rows_include_regular_item_aggregates(fake_db):
+    repo = EstimatesRepository(fake_db)
+    items_repo = ItemsRepository(fake_db)
+    assert items_repo.add_item("REG001", "Regular", 92.5, "WT", 10.0)
+    assert items_repo.add_item("RET001", "Return", 80.0, "PC", 5.0)
+
+    assert repo.save_estimate_with_returns(
+        voucher_no="500",
+        date="2025-02-01",
+        silver_rate=75000.0,
+        regular_items=[
+            regular_item(
+                code="REG001",
+                name="Regular",
+                gross=10.0,
+                poly=1.0,
+                net_wt=9.0,
+                purity=92.5,
+                wage_rate=10.0,
+                pieces=1,
+                wage=90.0,
+                fine=8.325,
+            )
+        ],
+        return_items=[
+            return_item(
+                code="RET001",
+                name="Return",
+                gross=3.0,
+                poly=0.5,
+                net_wt=2.5,
+                purity=80.0,
+                wage_rate=5.0,
+                pieces=2,
+                wage=10.0,
+                fine=2.0,
+            )
+        ],
+        totals=estimate_totals(
+            total_gross=13.0,
+            total_net=11.5,
+            net_fine=6.325,
+            net_wage=80.0,
+            note="History row",
+            last_balance_amount=15.0,
+        ),
+    )
+
+    rows = repo.get_estimate_history_rows(
+        date_from="2025-02-01",
+        date_to="2025-02-28",
+        voucher_search="50",
+    )
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["voucher_no"] == "500"
+    assert row["total_gross"] == 10.0
+    assert row["total_net"] == 9.0
+    assert row["note"] == "History row"
+    assert row["last_balance_amount"] == 15.0
 
 
 def test_estimates_repository_returns_first_estimate_date(fake_db):

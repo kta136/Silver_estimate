@@ -192,3 +192,49 @@ def test_import_emits_skipped_summary_in_skip_mode(qt_app, tmp_path):
     assert finished[-1][0] == 1
     assert finished[-1][1] == 1
     assert finished[-1][2] in ("", None)
+
+
+def test_import_tracks_duplicates_created_within_same_file(qt_app, tmp_path):
+    db_path = tmp_path / "import.sqlite"
+    _create_items_db(db_path)
+    manager = ItemImportManager(_DbManagerStub(db_path))
+
+    import_file = tmp_path / "items_repeated.txt"
+    import_file.write_text(
+        (
+            "N900|New Item|92.5|WT|10.0\n"
+            "N900|New Item Updated|93.0|WT|12.0\n"
+        ),
+        encoding="utf-8",
+    )
+
+    settings = _default_import_settings()
+    settings["duplicate_mode"] = 1  # UPDATE
+    summaries = []
+    finished = []
+    manager.import_summary_updated.connect(
+        lambda summary: summaries.append(dict(summary))
+    )
+    manager.import_finished.connect(
+        lambda success, total, err: finished.append((success, total, err))
+    )
+    manager.import_from_file(str(import_file), settings)
+
+    assert summaries[-1] == {
+        "inserted": 1,
+        "updated": 1,
+        "skipped": 0,
+        "errors": 0,
+    }
+    assert finished[-1] == (2, 2, "")
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        row = conn.execute(
+            "SELECT name, purity, wage_rate FROM items WHERE code = ?",
+            ("N900",),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    assert row == ("New Item Updated", 93.0, 12.0)

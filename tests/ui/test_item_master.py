@@ -1,3 +1,4 @@
+import sqlite3
 import types
 
 from PyQt5.QtCore import QItemSelectionModel
@@ -106,5 +107,80 @@ def test_item_master_search_reloads_table_model(qtbot):
         assert db.search_calls == ["ank"]
         assert widget.items_model.rowCount() == 1
         assert widget.items_model.row_payload(0)["code"] == "ITM002"
+    finally:
+        widget.deleteLater()
+
+
+def test_item_master_async_snapshot_load_populates_rows(qtbot, tmp_path):
+    db_path = tmp_path / "items.sqlite"
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            CREATE TABLE items (
+                code TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                purity REAL DEFAULT 0,
+                wage_type TEXT DEFAULT 'WT',
+                wage_rate REAL DEFAULT 0
+            )
+            """
+        )
+        conn.executemany(
+            "INSERT INTO items (code, name, purity, wage_type, wage_rate) VALUES (?, ?, ?, ?, ?)",
+            [
+                ("ITM001", "Ring", 92.5, "WT", 10.0),
+                ("ITM002", "Anklet", 80.0, "PC", 5.0),
+            ],
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    db = _StubDbManager()
+    db.temp_db_path = str(db_path)
+
+    widget = ItemMasterWidget(db)
+    qtbot.addWidget(widget)
+    try:
+        qtbot.waitUntil(lambda: widget.items_model.rowCount() == 2, timeout=2000)
+        assert {widget.items_model.row_payload(i)["code"] for i in range(2)} == {
+            "ITM001",
+            "ITM002",
+        }
+    finally:
+        widget.close()
+        widget.deleteLater()
+
+
+def test_item_master_ignores_stale_async_results(qtbot):
+    db = _StubDbManager()
+    widget = ItemMasterWidget(db)
+    qtbot.addWidget(widget)
+    try:
+        original_codes = [
+            widget.items_model.row_payload(row)["code"]
+            for row in range(widget.items_model.rowCount())
+        ]
+        widget._load_request_id = 2
+        widget._load_request_meta = {1: (0.0, "old"), 2: (0.0, "new")}
+
+        widget._handle_async_load_result(
+            1,
+            [
+                {
+                    "code": "OLD001",
+                    "name": "Old",
+                    "purity": 90.0,
+                    "wage_type": "WT",
+                    "wage_rate": 10.0,
+                }
+            ],
+        )
+
+        assert [
+            widget.items_model.row_payload(row)["code"]
+            for row in range(widget.items_model.rowCount())
+        ] == original_codes
     finally:
         widget.deleteLater()

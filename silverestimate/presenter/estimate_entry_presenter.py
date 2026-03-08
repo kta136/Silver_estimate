@@ -73,6 +73,7 @@ class SaveItem:
     fine: float
     is_return: bool
     is_silver_bar: bool
+    wage_type: str = "WT"
 
 
 @dataclass(frozen=True)
@@ -155,12 +156,14 @@ class EstimateEntryPresenter:
 
         header = data.get("header") or {}
         raw_items = data.get("items") or []
+        fallback_wage_types = self._load_wage_type_fallbacks(raw_items)
         items: list[SaveItem] = []
         for idx, raw in enumerate(raw_items, start=1):
             item: SaveItem | None = None
             try:
+                code = str(raw.get("item_code", "") or "").strip()
                 item = SaveItem(
-                    code=str(raw.get("item_code", "") or "").strip(),
+                    code=code,
                     row_number=int(raw.get("id", idx) or idx),
                     name=str(raw.get("item_name", "") or ""),
                     gross=float(raw.get("gross", 0.0) or 0.0),
@@ -169,6 +172,10 @@ class EstimateEntryPresenter:
                     purity=float(raw.get("purity", 0.0) or 0.0),
                     wage_rate=float(raw.get("wage_rate", 0.0) or 0.0),
                     pieces=int(raw.get("pieces", 1) or 0),
+                    wage_type=self._resolve_loaded_wage_type(
+                        raw,
+                        fallback_wage_types.get(code.upper()),
+                    ),
                     wage=float(raw.get("wage", 0.0) or 0.0),
                     fine=float(raw.get("fine", 0.0) or 0.0),
                     is_return=bool(raw.get("is_return", 0)),
@@ -319,11 +326,59 @@ class EstimateEntryPresenter:
             "purity": float(item.purity),
             "wage_rate": float(item.wage_rate),
             "pieces": int(item.pieces),
+            "wage_type": EstimateEntryPresenter._normalize_wage_type(item.wage_type),
             "wage": float(item.wage),
             "fine": float(item.fine),
             "is_return": bool(item.is_return),
             "is_silver_bar": bool(item.is_silver_bar),
         }
+
+    @staticmethod
+    def _normalize_wage_type(value: object) -> str:
+        return "PC" if str(value or "").strip().upper() == "PC" else "WT"
+
+    def _load_wage_type_fallbacks(
+        self, raw_items: Sequence[Mapping[str, object]]
+    ) -> dict[str, str]:
+        unresolved_codes = [
+            code
+            for raw in raw_items
+            if self._raw_wage_type(raw) is None
+            for code in [str(raw.get("item_code", "") or "").strip().upper()]
+            if code
+        ]
+        if not unresolved_codes:
+            return {}
+        rows = self._repository.fetch_items_by_codes(unresolved_codes)
+        resolved: dict[str, str] = {}
+        for code, row in dict(rows or {}).items():
+            normalized_code = str(code or "").strip().upper()
+            if not normalized_code:
+                continue
+            resolved[normalized_code] = self._normalize_wage_type(
+                (row or {}).get("wage_type")
+            )
+        return resolved
+
+    @classmethod
+    def _resolve_loaded_wage_type(
+        cls,
+        raw_item: Mapping[str, object],
+        fallback_wage_type: Optional[str],
+    ) -> str:
+        raw_wage_type = cls._raw_wage_type(raw_item)
+        if raw_wage_type is not None:
+            return raw_wage_type
+        if fallback_wage_type is not None:
+            return cls._normalize_wage_type(fallback_wage_type)
+        return "WT"
+
+    @classmethod
+    def _raw_wage_type(cls, raw_item: Mapping[str, object]) -> Optional[str]:
+        normalized = str((raw_item or {}).get("wage_type", "") or "").strip().upper()
+        if normalized in {"PC", "WT"}:
+            return cls._normalize_wage_type(normalized)
+        return None
 
     def delete_estimate(self, voucher_no: str) -> bool:
         """Delete an estimate by voucher number."""

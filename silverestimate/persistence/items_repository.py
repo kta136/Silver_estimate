@@ -4,9 +4,57 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 from silverestimate.domain.item_validation import ItemValidationError, validate_item
+
+ITEM_CATALOG_COLUMNS = "code, name, purity, wage_type, wage_rate"
+
+
+def fetch_item_catalog_rows(
+    cursor: sqlite3.Cursor,
+    search_term: str,
+) -> list[sqlite3.Row]:
+    """Return item-master rows while preserving current search semantics."""
+    term = (search_term or "").strip()
+    if not term:
+        cursor.execute(
+            f"SELECT {ITEM_CATALOG_COLUMNS} FROM items ORDER BY code COLLATE NOCASE"
+        )
+        return cursor.fetchall()
+
+    prefix_pattern = f"{term}%"
+    cursor.execute(
+        f"""
+        SELECT {ITEM_CATALOG_COLUMNS} FROM items WHERE code LIKE ? COLLATE NOCASE
+        UNION ALL
+        SELECT {ITEM_CATALOG_COLUMNS} FROM items
+        WHERE name LIKE ? COLLATE NOCASE
+          AND code NOT LIKE ? COLLATE NOCASE
+        ORDER BY code COLLATE NOCASE
+        """,
+        (prefix_pattern, prefix_pattern, prefix_pattern),
+    )
+    prefix_rows = cursor.fetchall()
+    if prefix_rows:
+        return prefix_rows
+
+    if len(term) < 2:
+        return []
+
+    pattern = f"%{term}%"
+    cursor.execute(
+        f"""
+        SELECT {ITEM_CATALOG_COLUMNS} FROM items WHERE code LIKE ? COLLATE NOCASE
+        UNION ALL
+        SELECT {ITEM_CATALOG_COLUMNS} FROM items
+        WHERE name LIKE ? COLLATE NOCASE
+          AND code NOT LIKE ? COLLATE NOCASE
+        ORDER BY code COLLATE NOCASE
+        """,
+        (pattern, pattern, pattern),
+    )
+    return cursor.fetchall()
 
 
 class ItemsRepository:
@@ -80,45 +128,7 @@ class ItemsRepository:
         if not cursor:
             return []
         try:
-            term = (search_term or "").strip()
-            if not term:
-                cursor.execute("SELECT * FROM items ORDER BY code")
-                return cursor.fetchall()
-
-            # Prefix paths can leverage dedicated NOCASE indexes.
-            prefix_pattern = f"{term}%"
-            cursor.execute(
-                """
-                SELECT * FROM items WHERE code LIKE ? COLLATE NOCASE
-                UNION ALL
-                SELECT * FROM items
-                WHERE name LIKE ? COLLATE NOCASE
-                  AND code NOT LIKE ? COLLATE NOCASE
-                ORDER BY code COLLATE NOCASE
-                """,
-                (prefix_pattern, prefix_pattern, prefix_pattern),
-            )
-            prefix_rows = cursor.fetchall()
-            if prefix_rows:
-                return prefix_rows
-
-            # Fallback: substring search for broader matching on longer queries.
-            if len(term) < 2:
-                return []
-
-            pattern = f"%{term}%"
-            cursor.execute(
-                """
-                SELECT * FROM items WHERE code LIKE ? COLLATE NOCASE
-                UNION ALL
-                SELECT * FROM items
-                WHERE name LIKE ? COLLATE NOCASE
-                  AND code NOT LIKE ? COLLATE NOCASE
-                ORDER BY code COLLATE NOCASE
-                """,
-                (pattern, pattern, pattern),
-            )
-            return cursor.fetchall()
+            return fetch_item_catalog_rows(cursor, search_term)
         except sqlite3.Error as exc:
             self._logger.error("DB Error search_items: %s", exc, exc_info=True)
             return []
@@ -201,11 +211,59 @@ class ItemsRepository:
         if not cursor:
             return []
         try:
-            cursor.execute("SELECT * FROM items ORDER BY code")
-            return cursor.fetchall()
+            return fetch_item_catalog_rows(cursor, "")
         except sqlite3.Error as exc:
             self._logger.error("DB Error get_all_items: %s", exc, exc_info=True)
             return []
+
+    def get_items_by_codes(self, codes: Iterable[str]) -> dict[str, dict[str, Any]]:
+        cursor = self._cursor
+        if not cursor:
+            return {}
+
+        normalized_codes = list(
+            dict.fromkeys(
+                code
+                for code in (
+                    str(raw_code or "").strip().upper() for raw_code in (codes or [])
+                )
+                if code
+            )
+        )
+        if not normalized_codes:
+            return {}
+
+        rows_by_code: dict[str, dict[str, Any]] = {}
+        chunk_size = 900
+        for start in range(0, len(normalized_codes), chunk_size):
+            chunk = normalized_codes[start : start + chunk_size]
+            placeholders = ",".join("?" for _ in chunk)
+            try:
+                cursor.execute(
+                    f"SELECT {ITEM_CATALOG_COLUMNS} FROM items WHERE UPPER(code) IN ({placeholders})",  # nosec B608
+                    chunk,
+                )
+                for row in cursor.fetchall():
+                    normalized = self._normalize_row(row)
+                    if normalized is None:
+                        continue
+                    code = str(normalized.get("code", "") or "").strip().upper()
+                    if not code:
+                        continue
+                    rows_by_code[code] = normalized
+            except sqlite3.Error as exc:
+                self._logger.error(
+                    "DB Error get_items_by_codes: %s", exc, exc_info=True
+                )
+                return {}
+
+        cache_ctrl = self._cache_controller
+        if cache_ctrl:
+            for code, row in rows_by_code.items():
+                cache_ctrl.store(code, row)
+        else:
+            self._fallback_cache.update(rows_by_code)
+        return rows_by_code
 
     def add_item(
         self, code: str, name: str, purity: float, wage_type: str, wage_rate: float

@@ -36,6 +36,7 @@ class FakeRepository:
         self.save_result = True
         self.last_error_value: Optional[str] = None
         self.fetch_item_map: Dict[str, Dict] = {}
+        self.fetch_items_calls: List[List[str]] = []
         self.sync_calls: List[Dict] = []
         self.sync_result: tuple[int, int] = (0, 0)
         self.deleted_vouchers: List[str] = []
@@ -48,6 +49,15 @@ class FakeRepository:
 
     def fetch_item(self, code: str) -> Optional[Dict]:
         return self.fetch_item_map.get(code)
+
+    def fetch_items_by_codes(self, codes: Iterable[str]) -> Dict[str, Dict]:
+        requested = [str(code) for code in codes]
+        self.fetch_items_calls.append(requested)
+        return {
+            code: self.fetch_item_map[code]
+            for code in requested
+            if code in self.fetch_item_map
+        }
 
     def save_estimate(
         self,
@@ -367,6 +377,7 @@ def test_load_estimate_transforms_repository_response(presenter_fixtures):
                 "purity": 91.0,
                 "wage_rate": 20.0,
                 "pieces": 1,
+                "wage_type": "PC",
                 "wage": 90.0,
                 "fine": 4.095,
                 "is_return": 1,
@@ -381,6 +392,46 @@ def test_load_estimate_transforms_repository_response(presenter_fixtures):
     assert loaded.voucher_no == "VX"
     assert len(loaded.items) == 1
     assert loaded.items[0].is_return is True
+    assert loaded.items[0].wage_type == "PC"
+    assert repo.fetch_items_calls == []
+
+
+def test_load_estimate_uses_batched_fallback_for_missing_wage_type(
+    presenter_fixtures,
+):
+    presenter, view, repo = presenter_fixtures
+    repo.fetch_item_map = {
+        "WT001": {
+            "code": "WT001",
+            "wage_type": "WT",
+            "wage_rate": 10.0,
+        }
+    }
+    repo.load_estimate_response = {
+        "header": {"voucher_no": "VX"},
+        "items": [
+            {
+                "item_code": "WT001",
+                "item_name": "Item",
+                "gross": 5.0,
+                "poly": 0.5,
+                "net_wt": 4.5,
+                "purity": 91.0,
+                "wage_rate": 20.0,
+                "pieces": 1,
+                "wage": 90.0,
+                "fine": 4.095,
+                "is_return": 0,
+                "is_silver_bar": 0,
+            }
+        ],
+    }
+
+    loaded = presenter.load_estimate("VX")
+
+    assert loaded is not None
+    assert loaded.items[0].wage_type == "WT"
+    assert repo.fetch_items_calls == [["WT001"]]
 
 
 # Helpers -----------------------------------------------------------------

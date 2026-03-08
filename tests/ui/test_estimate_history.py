@@ -59,6 +59,10 @@ class _DialogDbStub:
     def get_first_estimate_date(self):
         return "2026-01-01"
 
+    def get_estimate_history_rows(self, date_from=None, date_to=None, voucher_search=None):
+        del date_from, date_to, voucher_search
+        return []
+
 
 def _build_harness():
     harness = _HistoryHarness()
@@ -79,8 +83,6 @@ def test_loading_done_re_enables_buttons_for_current_request():
 
     EstimateHistoryDialog._loading_done(harness, thread, worker, 2)
 
-    assert thread.quit_called is True
-    assert thread.wait_called is True
     assert worker.deleted is True
     assert thread not in harness._active_load_workers
     assert harness.search_button.enabled is True
@@ -97,8 +99,6 @@ def test_loading_done_does_not_touch_buttons_for_stale_request():
 
     EstimateHistoryDialog._loading_done(harness, thread, worker, 1)
 
-    assert thread.quit_called is True
-    assert thread.wait_called is True
     assert worker.deleted is True
     assert thread not in harness._active_load_workers
     assert harness.search_button.enabled is False
@@ -143,12 +143,14 @@ def test_populate_table_uses_model_rows_and_selection_lookup(qtbot, monkeypatch)
         qtbot.waitUntil(lambda: dialog.isVisible(), timeout=1000)
 
         dialog._populate_table(
-            headers=[
+            history_rows=[
                 {
                     "voucher_no": "V002",
                     "date": "2026-03-02",
                     "note": "Second note",
                     "silver_rate": 95.5,
+                    "total_gross": 1.5,
+                    "total_net": 1.25,
                     "total_fine": 1.25,
                     "total_wage": 100.0,
                     "last_balance_amount": 10.0,
@@ -158,15 +160,13 @@ def test_populate_table_uses_model_rows_and_selection_lookup(qtbot, monkeypatch)
                     "date": "2026-03-01",
                     "note": "First note",
                     "silver_rate": 90.0,
+                    "total_gross": 2.5,
+                    "total_net": 2.25,
                     "total_fine": 2.0,
                     "total_wage": 75.0,
                     "last_balance_amount": 5.0,
                 },
             ],
-            agg_map={
-                "V001": (2.5, 2.25),
-                "V002": (1.5, 1.25),
-            },
             request_id=dialog._load_request_id,
         )
 

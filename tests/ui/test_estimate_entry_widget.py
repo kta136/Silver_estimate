@@ -101,6 +101,15 @@ class _RepositoryStub:
     def fetch_item(self, code):
         return self.db.get_item_by_code(code)
 
+    def fetch_items_by_codes(self, codes):
+        rows = {}
+        for code in codes:
+            item = self.db.get_item_by_code(code)
+            if item is None:
+                continue
+            rows[str(code or "").strip().upper()] = item
+        return rows
+
     def save_estimate(
         self, voucher_no, date, silver_rate, regular_items, return_items, totals
     ):
@@ -674,6 +683,45 @@ def test_apply_loaded_estimate_normalizes_wt_pieces_to_zero(qt_app, fake_db):
         assert table.get_cell_text(0, COL_PIECES) == "0"
         pieces_index = table.get_model().index(0, COL_PIECES)
         assert not bool(table.get_model().flags(pieces_index) & Qt.ItemIsEditable)
+    finally:
+        widget.deleteLater()
+
+
+def test_apply_loaded_estimate_normalizes_pc_pieces_to_one(qt_app, fake_db):
+    widget = _make_widget(fake_db)
+    try:
+        loaded = LoadedEstimate(
+            voucher_no="V002",
+            date="2026-02-14",
+            silver_rate=100.0,
+            note="",
+            last_balance_silver=0.0,
+            last_balance_amount=0.0,
+            items=(
+                SaveItem(
+                    code="PC001",
+                    row_number=1,
+                    name="PC Item",
+                    gross=10.0,
+                    poly=1.0,
+                    net_wt=9.0,
+                    purity=92.5,
+                    wage_rate=10.0,
+                    pieces=0,
+                    wage=90.0,
+                    fine=8.33,
+                    is_return=False,
+                    is_silver_bar=False,
+                    wage_type="PC",
+                ),
+            ),
+        )
+
+        assert widget.apply_loaded_estimate(loaded)
+        table = widget.item_table
+        assert table.get_cell_text(0, COL_PIECES) == "1"
+        pieces_index = table.get_model().index(0, COL_PIECES)
+        assert bool(table.get_model().flags(pieces_index) & Qt.ItemIsEditable)
     finally:
         widget.deleteLater()
 

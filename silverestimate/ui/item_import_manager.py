@@ -1,6 +1,7 @@
 import logging
 import sqlite3
 import threading
+import time
 
 from PyQt5.QtCore import QObject, pyqtSignal
 
@@ -14,6 +15,11 @@ from silverestimate.services.item_import_parser import (
 
 class ItemImportManager(QObject):
     """Handles the actual item import process."""
+
+    _EXISTING_CODE_CHUNK_SIZE = 900
+    _PROGRESS_EMIT_INTERVAL = 25
+    _STATUS_EMIT_INTERVAL = 25
+    _EMIT_INTERVAL_SECONDS = 0.05
 
     progress_updated = pyqtSignal(int, int)  # current, total
     status_updated = pyqtSignal(str)  # message
@@ -61,6 +67,52 @@ class ItemImportManager(QObject):
             snapshot = dict(summary)
             self._last_summary = snapshot
             self.import_summary_updated.emit(snapshot)
+
+        last_progress_emit_count = -1
+        last_progress_emit_time = 0.0
+        last_status_emit_count = -1
+        last_status_emit_time = 0.0
+
+        def _emit_progress(current: int, total: int, *, force: bool = False) -> None:
+            nonlocal last_progress_emit_count, last_progress_emit_time
+            now = time.perf_counter()
+            should_emit = force
+            if not should_emit:
+                should_emit = (
+                    current <= 10
+                    or current >= total
+                    or current - last_progress_emit_count
+                    >= self._PROGRESS_EMIT_INTERVAL
+                    or (now - last_progress_emit_time) >= self._EMIT_INTERVAL_SECONDS
+                )
+            if not should_emit:
+                return
+            last_progress_emit_count = current
+            last_progress_emit_time = now
+            self.progress_updated.emit(current, total)
+
+        def _emit_status(
+            message: str,
+            *,
+            current: int | None = None,
+            force: bool = False,
+        ) -> None:
+            nonlocal last_status_emit_count, last_status_emit_time
+            now = time.perf_counter()
+            count_marker = int(current or 0)
+            should_emit = force
+            if not should_emit:
+                should_emit = (
+                    count_marker <= 10
+                    or count_marker - last_status_emit_count
+                    >= self._STATUS_EMIT_INTERVAL
+                    or (now - last_status_emit_time) >= self._EMIT_INTERVAL_SECONDS
+                )
+            if not should_emit:
+                return
+            last_status_emit_count = count_marker
+            last_status_emit_time = now
+            self.status_updated.emit(message)
 
         try:
             # Extract settings
@@ -169,9 +221,10 @@ class ItemImportManager(QObject):
             if total_items == 0:
                 raise ValueError("No valid item lines found in the file.")
 
-            self.progress_updated.emit(0, total_items)
-            self.status_updated.emit(
-                f"Found {total_items} potential items. Starting import..."
+            _emit_progress(0, total_items, force=True)
+            _emit_status(
+                f"Found {total_items} potential items. Starting import...",
+                force=True,
             )
 
             # Begin a transaction for faster bulk import
@@ -180,14 +233,12 @@ class ItemImportManager(QObject):
             except Exception as exc:
                 self._logger.debug("Failed to begin item import transaction: %s", exc)
 
-            # Process items
+            parsed_entries = []
             for i, line in enumerate(filtered_lines):
-                processed_count = i + 1
                 if self._cancel_event.is_set():
-                    self.status_updated.emit("Import cancelled by user.")
-                    break  # Exit the loop
+                    _emit_status("Import cancelled by user.", force=True)
+                    break
 
-                # Parse the line using configured column indices
                 parts = [part.strip() for part in line.split(delimiter)]
 
                 try:
@@ -203,20 +254,48 @@ class ItemImportManager(QObject):
                     )
                 except ItemImportParseError as ve:
                     summary["errors"] += 1
-                    self.status_updated.emit(f"Skipping line {i + 1}: {ve}")
-                    self.progress_updated.emit(processed_count, total_items)
+                    processed_count = i + 1
+                    _emit_status(
+                        f"Skipping line {i + 1}: {ve}",
+                        current=processed_count,
+                        force=True,
+                    )
+                    _emit_progress(processed_count, total_items)
                     continue
 
-                try:
-                    worker_cur.execute(
-                        "SELECT 1 FROM items WHERE code = ? COLLATE NOCASE",
-                        (parsed.code,),
-                    )
-                    existing_item = worker_cur.fetchone()
+                parsed_entries.append((i + 1, parsed))
 
+            if self._cancel_event.is_set():
+                try:
+                    if worker_conn:
+                        worker_conn.commit()
+                except Exception as exc:
+                    self._logger.debug(
+                        "Failed to commit item import before cancellation: %s", exc
+                    )
+                _emit_summary()
+                self.import_finished.emit(
+                    imported_count,
+                    processed_count or 1,
+                    "Import Cancelled",
+                )
+                return
+
+            existing_codes = self._load_existing_codes(
+                worker_cur,
+                (parsed.code for _, parsed in parsed_entries),
+            )
+
+            # Process items
+            for processed_count, parsed in parsed_entries:
+                if self._cancel_event.is_set():
+                    _emit_status("Import cancelled by user.", force=True)
+                    break
+                try:
                     # Handle based on duplicate mode
                     should_import = True
                     action = "Adding"
+                    existing_item = parsed.code in existing_codes
 
                     if existing_item:
                         if duplicate_mode == 0:  # SKIP
@@ -231,7 +310,10 @@ class ItemImportManager(QObject):
                             action = "Skipping duplicate (unknown mode)"
                             summary["skipped"] += 1
 
-                    self.status_updated.emit(f"{action}: {parsed.code} - {parsed.name}")
+                    _emit_status(
+                        f"{action}: {parsed.code} - {parsed.name}",
+                        current=processed_count,
+                    )
 
                     # Add or update item
                     if should_import:
@@ -251,8 +333,10 @@ class ItemImportManager(QObject):
                                 summary["updated"] += 1
                             else:
                                 summary["errors"] += 1
-                                self.status_updated.emit(
-                                    f"Failed to update existing item: {parsed.code}"
+                                _emit_status(
+                                    f"Failed to update existing item: {parsed.code}",
+                                    current=processed_count,
+                                    force=True,
                                 )
                         elif not existing_item:
                             worker_cur.execute(
@@ -265,6 +349,7 @@ class ItemImportManager(QObject):
                                     parsed.wage_rate,
                                 ),
                             )
+                            existing_codes.add(parsed.code)
                             imported_count += 1
                             summary["inserted"] += 1
                         else:  # Should be a skip
@@ -273,7 +358,11 @@ class ItemImportManager(QObject):
                         imported_count += 1  # skipped duplicate is still processed
                 except Exception as e_item:
                     summary["errors"] += 1
-                    self.status_updated.emit(f"Error processing line {i + 1}: {e_item}")
+                    _emit_status(
+                        f"Error processing line {processed_count}: {e_item}",
+                        current=processed_count,
+                        force=True,
+                    )
                     continue  # Skip to next item on error
 
                 if processed_count % batch_size == 0 and worker_conn is not None:
@@ -285,11 +374,11 @@ class ItemImportManager(QObject):
                             "Failed to rotate item import batch transaction: %s", exc
                         )
                     if self._cancel_event.is_set():
-                        self.status_updated.emit("Import cancelled by user.")
+                        _emit_status("Import cancelled by user.", force=True)
                         break
 
                 # Update progress
-                self.progress_updated.emit(processed_count, total_items)
+                _emit_progress(processed_count, total_items)
 
             # Commit changes and trigger encryption flush
             try:
@@ -316,13 +405,14 @@ class ItemImportManager(QObject):
                     imported_count, processed_count, "Import Cancelled"
                 )
             else:
+                _emit_progress(total_items, total_items, force=True)
                 self.import_finished.emit(
                     imported_count, total_items, None
                 )  # None indicates success
 
         except Exception as e:
             self._logger.error("Import failed:", exc_info=True)
-            self.status_updated.emit(f"Error: {str(e)}")
+            _emit_status(f"Error: {str(e)}", force=True)
             summary["errors"] += 1
             _emit_summary()
             # Emit finished signal with error message
@@ -344,3 +434,37 @@ class ItemImportManager(QObject):
                 self._logger.debug(
                     "Failed to close item import worker connection: %s", close_error
                 )
+
+    def _load_existing_codes(
+        self,
+        cursor,
+        codes,
+    ) -> set[str]:
+        normalized_codes = list(
+            dict.fromkeys(
+                code
+                for code in (
+                    str(raw_code or "").strip().upper() for raw_code in (codes or [])
+                )
+                if code
+            )
+        )
+        if not normalized_codes:
+            return set()
+
+        existing_codes: set[str] = set()
+        for start in range(0, len(normalized_codes), self._EXISTING_CODE_CHUNK_SIZE):
+            chunk = normalized_codes[
+                start : start + self._EXISTING_CODE_CHUNK_SIZE
+            ]
+            placeholders = ",".join("?" for _ in chunk)
+            cursor.execute(
+                f"SELECT code FROM items WHERE UPPER(code) IN ({placeholders})",  # nosec B608
+                chunk,
+            )
+            existing_codes.update(
+                str(row[0] or "").strip().upper()
+                for row in cursor.fetchall()
+                if row and str(row[0] or "").strip()
+            )
+        return existing_codes

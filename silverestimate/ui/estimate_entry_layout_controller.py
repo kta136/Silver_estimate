@@ -52,14 +52,15 @@ class EstimateEntryLayoutController(HostProxy):
         self.host.setStyleSheet(ESTIMATE_ENTRY_STYLESHEET)
 
         layout = QVBoxLayout(self.host)
-        layout.setSpacing(6)
+        layout.setSpacing(4)
         layout.setContentsMargins(0, 0, 0, 0)
 
         header_container = QWidget()
         header_container.setObjectName("EstimateHeaderContainer")
+        header_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         header_layout = QHBoxLayout(header_container)
-        header_layout.setContentsMargins(8, 8, 8, 8)
-        header_layout.setSpacing(8)
+        header_layout.setContentsMargins(6, 6, 6, 6)
+        header_layout.setSpacing(6)
 
         self.toolbar = VoucherToolbar()
         self.toolbar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -69,7 +70,7 @@ class EstimateEntryLayoutController(HostProxy):
         actions_panel.setObjectName("EstimateHeaderActions")
         actions_panel_layout = QHBoxLayout(actions_panel)
         actions_panel_layout.setContentsMargins(0, 0, 0, 0)
-        actions_panel_layout.setSpacing(8)
+        actions_panel_layout.setSpacing(6)
 
         self.primary_actions = PrimaryActionsBar(shortcut_parent=self.host)
         self.primary_actions.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)

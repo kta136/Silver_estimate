@@ -69,12 +69,12 @@ class SecondaryActionsBar(QWidget):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         layout = QHBoxLayout(self)
-        layout.setSpacing(6)
-        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(5)
+        layout.setContentsMargins(5, 5, 5, 5)
         self._main_layout = layout
 
         # Delete Row button
-        self.delete_row_button = QPushButton("Delete")
+        self.delete_row_button = QPushButton("Delete Row")
         self.delete_row_button.setObjectName("DeleteRowButton")
         self.delete_row_button.setToolTip(
             "Delete the currently selected row\n"
@@ -98,7 +98,7 @@ class SecondaryActionsBar(QWidget):
         layout.addWidget(self.return_toggle_button)
 
         # Silver bar mode toggle
-        self.silver_bar_toggle_button = QPushButton("Bars")
+        self.silver_bar_toggle_button = QPushButton("Bar Mode")
         self.silver_bar_toggle_button.setObjectName("SilverBarModeButton")
         self.silver_bar_toggle_button.setToolTip(
             "Toggle Silver Bar entry mode for new rows\n"
@@ -124,8 +124,6 @@ class SecondaryActionsBar(QWidget):
         self.last_balance_button.setAutoRaise(True)
         layout.addWidget(self.last_balance_button)
 
-        layout.addWidget(self._create_divider())
-
         # Estimate history button
         self.history_button = QToolButton()
         self.history_button.setObjectName("HistoryButton")
@@ -138,8 +136,6 @@ class SecondaryActionsBar(QWidget):
         )
         self.history_button.setAutoRaise(True)
         layout.addWidget(self.history_button)
-
-        layout.addWidget(self._create_divider())
 
         # Manage Silver Bars button
         self.silver_bars_button = QToolButton()
@@ -206,7 +202,7 @@ class SecondaryActionsBar(QWidget):
         # Delete estimate button (isolated on the far right as destructive action)
         self.delete_estimate_button = QToolButton()
         self.delete_estimate_button.setObjectName("DeleteEstimateButton")
-        self.delete_estimate_button.setText("Delete Est.")
+        self.delete_estimate_button.setText("Delete Estimate")
         self.delete_estimate_button.setToolTip(
             "Delete the currently loaded estimate\n"
             "Permanently removes estimate from database\n"

@@ -376,6 +376,40 @@ def test_type_column_keeps_category_background_role(model):
     assert background is not None
 
 
+def test_type_column_displays_regular_for_regular_rows(model):
+    model.add_row(
+        EstimateEntryRowState(code="REG1", category=EstimateLineCategory.REGULAR)
+    )
+
+    assert model.data(model.index(0, COL_TYPE), Qt.DisplayRole) == "Regular"
+
+
+def test_type_column_uses_semantic_mode_colors(model):
+    model.add_row(
+        EstimateEntryRowState(code="REG1", category=EstimateLineCategory.REGULAR)
+    )
+    model.add_row(
+        EstimateEntryRowState(code="RET1", category=EstimateLineCategory.RETURN)
+    )
+    model.add_row(
+        EstimateEntryRowState(code="BAR1", category=EstimateLineCategory.SILVER_BAR)
+    )
+
+    regular_bg = model.data(model.index(0, COL_TYPE), Qt.BackgroundRole)
+    regular_fg = model.data(model.index(0, COL_TYPE), Qt.ForegroundRole)
+    return_bg = model.data(model.index(1, COL_TYPE), Qt.BackgroundRole)
+    return_fg = model.data(model.index(1, COL_TYPE), Qt.ForegroundRole)
+    bar_bg = model.data(model.index(2, COL_TYPE), Qt.BackgroundRole)
+    bar_fg = model.data(model.index(2, COL_TYPE), Qt.ForegroundRole)
+
+    assert regular_bg.color().name() == "#f8fafc"
+    assert regular_fg.color().name() == "#334155"
+    assert return_bg.color().name() == "#dbeafe"
+    assert return_fg.color().name() == "#1d4ed8"
+    assert bar_bg.color().name() == "#fff7ed"
+    assert bar_fg.color().name() == "#b45309"
+
+
 def test_set_data_pieces_defaults_for_wage_type(model):
     """Pieces empty input should map to WT=0 and PC=1."""
     model.add_row(EstimateEntryRowState(code="WT001", wage_type="WT", pieces=7))

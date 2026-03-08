@@ -2,13 +2,13 @@
 import logging
 from functools import partial
 
-from PyQt5.QtCore import QDate, QObject, QThread, pyqtSignal
+from PyQt5.QtCore import QDate, QObject, QThread, Qt, pyqtSignal
+from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QDateEdit,
     QDialog,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -16,6 +16,8 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QProgressDialog,
     QPushButton,
+    QSizePolicy,
+    QStyle,
     QTableView,
     QVBoxLayout,
 )
@@ -46,8 +48,7 @@ class EstimateHistoryDialog(QDialog):
     def init_ui(self):
         """Set up the user interface."""
         self.setWindowTitle("Estimate History")
-        self.setMinimumWidth(1000)
-        self.setMinimumHeight(600)
+        self.setMinimumSize(960, 540)
         self.setObjectName("EstimateHistoryDialog")
         self.setStyleSheet(
             build_management_screen_stylesheet(
@@ -63,90 +64,118 @@ class EstimateHistoryDialog(QDialog):
                 primary_button="HistoryPrimaryButton",
                 secondary_button="HistorySecondaryButton",
                 danger_button="HistoryDangerButton",
+                input_selectors=["QLineEdit", "QDateEdit"],
                 include_table=True,
+                extra_rules="""
+                QLabel#HistorySummaryLabel {
+                    background-color: #f8fafc;
+                    border: 1px solid #d8e1ec;
+                    border-radius: 8px;
+                    color: #475569;
+                    font-weight: 600;
+                    padding: 5px 10px;
+                }
+                QLabel#HistoryTitleLabel {
+                    font-size: 13pt;
+                    color: #1e3a5f;
+                }
+                QTableView {
+                    color: #1e293b;
+                    font-size: 8.8pt;
+                    alternate-background-color: #fbfdff;
+                }
+                QTableView::item {
+                    padding: 4px 6px;
+                }
+                QHeaderView::section {
+                    background-color: #f8fafc;
+                    color: #475569;
+                    padding: 5px 7px;
+                }
+                """,
             )
         )
 
         # Main layout
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(10)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
 
         header_card = QFrame(self)
         header_card.setObjectName("HistoryHeaderCard")
-        header_layout = QVBoxLayout(header_card)
-        header_layout.setContentsMargins(12, 12, 12, 12)
-        header_layout.setSpacing(2)
+        header_layout = QHBoxLayout(header_card)
+        header_layout.setContentsMargins(12, 6, 12, 6)
+        header_layout.setSpacing(8)
 
         header_label = QLabel("Estimate History")
         header_label.setObjectName("HistoryTitleLabel")
-        header_layout.addWidget(header_label)
-
-        subtitle_label = QLabel("Search, reopen, print, or delete saved estimates.")
-        subtitle_label.setObjectName("HistorySubtitleLabel")
-        header_layout.addWidget(subtitle_label)
+        header_layout.addWidget(header_label, 0, Qt.AlignLeft)
+        header_layout.addStretch(1)
         layout.addWidget(header_card)
 
         filter_card = QFrame(self)
         filter_card.setObjectName("HistoryFilterCard")
-        filter_grid = QGridLayout(filter_card)
-        filter_grid.setContentsMargins(12, 12, 12, 12)
-        filter_grid.setHorizontalSpacing(10)
-        filter_grid.setVerticalSpacing(6)
+        filter_layout = QHBoxLayout(filter_card)
+        filter_layout.setContentsMargins(12, 7, 12, 7)
+        filter_layout.setSpacing(6)
 
         from_label = QLabel("From")
         from_label.setObjectName("HistoryFieldLabel")
-        filter_grid.addWidget(from_label, 0, 0)
+        filter_layout.addWidget(from_label)
         self.date_from = QDateEdit()
         self.date_from.setCalendarPopup(True)
         first_estimate_date = self._resolve_first_estimate_date()
         self.date_from.setDate(first_estimate_date)
-        self.date_from.setMaximumWidth(130)
-        filter_grid.addWidget(self.date_from, 1, 0)
+        self.date_from.setFixedWidth(118)
+        filter_layout.addWidget(self.date_from)
 
         to_label = QLabel("To")
         to_label.setObjectName("HistoryFieldLabel")
-        filter_grid.addWidget(to_label, 0, 1)
+        filter_layout.addWidget(to_label)
         self.date_to = QDateEdit()
         self.date_to.setCalendarPopup(True)
         self.date_to.setDate(QDate.currentDate())
-        self.date_to.setMaximumWidth(130)
-        filter_grid.addWidget(self.date_to, 1, 1)
+        self.date_to.setFixedWidth(118)
+        filter_layout.addWidget(self.date_to)
 
         voucher_label = QLabel("Voucher No")
         voucher_label.setObjectName("HistoryFieldLabel")
-        filter_grid.addWidget(voucher_label, 0, 2)
+        filter_layout.addWidget(voucher_label)
         self.voucher_search = QLineEdit()
         self.voucher_search.setPlaceholderText("Search voucher...")
-        self.voucher_search.setMaximumWidth(180)
-        filter_grid.addWidget(self.voucher_search, 1, 2)
+        self.voucher_search.setClearButtonEnabled(True)
+        self.voucher_search.setMinimumWidth(160)
+        self.voucher_search.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.voucher_search.returnPressed.connect(self.load_estimates)
+        filter_layout.addWidget(self.voucher_search, 1)
 
         self.search_button = QPushButton("Search")
         self.search_button.setObjectName("HistoryPrimaryButton")
+        self.search_button.setIcon(
+            self._icon("edit-find", QStyle.SP_FileDialogContentsView)
+        )
         self.search_button.clicked.connect(self.load_estimates)
-        filter_grid.addWidget(self.search_button, 1, 3)
-        filter_grid.setColumnStretch(4, 1)
+        filter_layout.addWidget(self.search_button)
+
+        self.results_summary_label = QLabel("Loading estimates...")
+        self.results_summary_label.setObjectName("HistorySummaryLabel")
+        self.results_summary_label.setAlignment(Qt.AlignCenter)
+        filter_layout.addWidget(self.results_summary_label)
 
         layout.addWidget(filter_card)
 
         # Estimates table
         self.estimates_table = QTableView(self)
+        self.estimates_table.setObjectName("HistoryTable")
         self.estimates_model = EstimateHistoryTableModel(self.estimates_table)
         self.estimates_table.setModel(self.estimates_model)
-        self.estimates_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.Interactive
-        )
-
-        # Set column widths (adjusting for new columns)
-        self.estimates_table.setColumnWidth(0, 110)  # Voucher No
-        self.estimates_table.setColumnWidth(1, 90)  # Date
-        self.estimates_table.setColumnWidth(2, 200)  # Note (Moved here)
-        self.estimates_table.setColumnWidth(3, 90)  # Silver Rate
-        self.estimates_table.setColumnWidth(4, 90)  # Total Gross
-        self.estimates_table.setColumnWidth(5, 90)  # Total Net
-        self.estimates_table.setColumnWidth(6, 90)  # Net Fine
-        self.estimates_table.setColumnWidth(7, 90)  # Net Wage
-        self.estimates_table.setColumnWidth(8, 110)  # Grand Total
+        header = self.estimates_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.Stretch)
+        for column in range(3, 9):
+            header.setSectionResizeMode(column, QHeaderView.ResizeToContents)
+        header.setStretchLastSection(False)
 
         # Table properties
         self.estimates_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -154,30 +183,44 @@ class EstimateHistoryDialog(QDialog):
         self.estimates_table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.estimates_table.setSortingEnabled(True)
         self.estimates_table.setAlternatingRowColors(True)
+        self.estimates_table.setShowGrid(False)
+        self.estimates_table.setWordWrap(False)
         self.estimates_table.verticalHeader().setVisible(False)
+        self.estimates_table.verticalHeader().setDefaultSectionSize(30)
         self.estimates_table.doubleClicked.connect(lambda *_: self.accept())
 
-        layout.addWidget(self.estimates_table)
+        layout.addWidget(self.estimates_table, 1)
 
         actions_card = QFrame(self)
         actions_card.setObjectName("HistoryActionCard")
         button_layout = QHBoxLayout(actions_card)
-        button_layout.setContentsMargins(12, 10, 12, 10)
+        button_layout.setContentsMargins(12, 8, 12, 8)
         button_layout.setSpacing(8)
 
-        self.open_button = QPushButton("Open Selected")
+        self.open_button = QPushButton("Open")
         self.open_button.setObjectName("HistoryPrimaryButton")
+        self.open_button.setIcon(
+            self._icon("document-open", QStyle.SP_DialogOpenButton)
+        )
+        self.open_button.setToolTip("Open the selected estimate")
         self.open_button.clicked.connect(self.accept)
         button_layout.addWidget(self.open_button)
 
-        self.print_button = QPushButton("Print Selected")
+        self.print_button = QPushButton("Print")
         self.print_button.setObjectName("HistorySecondaryButton")
+        self.print_button.setIcon(
+            self._icon("document-print", QStyle.SP_FileIcon)
+        )
+        self.print_button.setToolTip("Open print preview for the selected estimate")
         self.print_button.clicked.connect(self.print_estimate)
         button_layout.addWidget(self.print_button)
 
-        self.delete_button = QPushButton("Delete Selected")
+        self.delete_button = QPushButton("Delete")
         self.delete_button.setObjectName("HistoryDangerButton")
         self.delete_button.setToolTip("Permanently delete the selected estimate")
+        self.delete_button.setIcon(
+            self._icon("edit-delete", QStyle.SP_TrashIcon)
+        )
         self.delete_button.clicked.connect(self.delete_selected_estimate)
         button_layout.addWidget(self.delete_button)
 
@@ -185,10 +228,21 @@ class EstimateHistoryDialog(QDialog):
 
         self.close_button = QPushButton("Close")
         self.close_button.setObjectName("HistorySecondaryButton")
+        self.close_button.setIcon(
+            self._icon("window-close", QStyle.SP_DialogCloseButton)
+        )
         self.close_button.clicked.connect(self.reject)
         button_layout.addWidget(self.close_button)
 
         layout.addWidget(actions_card)
+
+        self._update_results_summary()
+
+    def _icon(self, theme_name: str, fallback: QStyle.StandardPixmap) -> QIcon:
+        themed = QIcon.fromTheme(theme_name)
+        if not themed.isNull():
+            return themed
+        return self.style().standardIcon(fallback)
 
     def _resolve_first_estimate_date(self):
         """Resolve the earliest estimate date, falling back to today."""
@@ -209,6 +263,7 @@ class EstimateHistoryDialog(QDialog):
         """Load estimates based on search criteria (runs queries in a background thread)."""
         self._load_request_id += 1
         request_id = self._load_request_id
+        self.results_summary_label.setText("Loading estimates...")
 
         # Start threaded load and return early to keep UI responsive
         try:
@@ -276,6 +331,11 @@ class EstimateHistoryDialog(QDialog):
                     )
                 )
             self.estimates_model.set_rows(rows)
+            self._update_results_summary(len(rows))
+            if rows:
+                table.selectRow(0)
+            else:
+                table.clearSelection()
         finally:
             table.blockSignals(False)
             table.setUpdatesEnabled(True)
@@ -304,6 +364,21 @@ class EstimateHistoryDialog(QDialog):
                 self.delete_button.setEnabled(True)
         except Exception as exc:
             self.logger.debug("Failed to re-enable history action buttons: %s", exc)
+
+    def _update_results_summary(self, row_count: int | None = None) -> None:
+        total = self.estimates_model.rowCount() if row_count is None else int(row_count)
+        if total <= 0:
+            text = "No estimates found"
+        elif total == 1:
+            text = "1 estimate"
+        else:
+            text = f"{total} estimates"
+
+        if self.voucher_search.text().strip():
+            text += " match current filters"
+        else:
+            text += " in current date range"
+        self.results_summary_label.setText(text)
 
     def _cancel_active_loads(self, timeout_ms: int = 4000) -> None:
         # Invalidate any pending UI updates from old workers.

@@ -2,8 +2,15 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Callable
+
+
+def _sanitize_filename_stem(value: str) -> str:
+    normalized = re.sub(r"[^A-Za-z0-9._-]+", "-", str(value or "").strip())
+    normalized = normalized.strip("-.")
+    return normalized or "document"
 
 
 @dataclass(frozen=True)
@@ -13,6 +20,12 @@ class PrintPreviewPayload:
     html_content: str
     title: str
     table_mode: bool = False
+    document_kind: str = "document"
+    identifier: str = ""
+    suggested_filename: str = "document.pdf"
+    layout_mode: str = ""
+    available_layouts: tuple[str, ...] = ()
+    layout_factory: Callable[[str], "PrintPreviewPayload | None"] | None = None
 
 
 class PrintPayloadBuilder:
@@ -35,19 +48,31 @@ class PrintPayloadBuilder:
         if not resolved_data:
             return None
 
-        normalized_layout = (layout_mode or "old").lower()
-        if normalized_layout == "new":
-            html_text = render_new(resolved_data)
-        elif normalized_layout == "thermal":
-            html_text = render_thermal(resolved_data)
-        else:
-            html_text = render_old(resolved_data)
+        def build_payload(selected_layout: str) -> PrintPreviewPayload:
+            normalized_layout = (selected_layout or "old").lower()
+            if normalized_layout == "new":
+                html_text = render_new(resolved_data)
+            elif normalized_layout == "thermal":
+                html_text = render_thermal(resolved_data)
+            else:
+                normalized_layout = "old"
+                html_text = render_old(resolved_data)
 
-        return PrintPreviewPayload(
-            html_content=html_text,
-            title=f"Print Preview - Estimate {voucher_no}",
-            table_mode=False,
-        )
+            return PrintPreviewPayload(
+                html_content=html_text,
+                title=f"Print Preview - Estimate {voucher_no}",
+                table_mode=False,
+                document_kind="estimate",
+                identifier=str(voucher_no or ""),
+                suggested_filename=(
+                    f"{_sanitize_filename_stem(f'Estimate-{voucher_no}')}.pdf"
+                ),
+                layout_mode=normalized_layout,
+                available_layouts=("old", "new", "thermal"),
+                layout_factory=build_payload,
+            )
+
+        return build_payload(layout_mode)
 
     def build_silver_bar_inventory_preview_payload(
         self,
@@ -64,6 +89,9 @@ class PrintPayloadBuilder:
             html_content=render_inventory(bars, status_filter),
             title="Print Preview - Silver Bar Inventory",
             table_mode=True,
+            document_kind="silver_bar_inventory",
+            identifier=str(status_filter or "all"),
+            suggested_filename="Silver-Bar-Inventory.pdf",
         )
 
     def build_silver_bar_list_preview_payload(
@@ -86,4 +114,9 @@ class PrintPayloadBuilder:
             html_content=render_list_details(list_info, bars_in_list),
             title=f"Print Preview - List {identifier}",
             table_mode=True,
+            document_kind="silver_bar_list",
+            identifier=str(identifier),
+            suggested_filename=(
+                f"{_sanitize_filename_stem(f'Silver-Bar-List-{identifier}')}.pdf"
+            ),
         )

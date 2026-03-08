@@ -1,6 +1,7 @@
 """Tests for EstimateTableView component."""
 
 import pytest
+from PyQt5.QtGui import QPalette
 
 from silverestimate.ui.estimate_entry_components.estimate_table_view import (
     EstimateTableView,
@@ -244,3 +245,15 @@ def test_history_requested_signal(table_view):
 def test_item_lookup_requested_signal(table_view):
     """Test that item lookup signal exists."""
     assert hasattr(table_view, "item_lookup_requested")
+
+
+def test_selection_palette_matches_active_and_inactive_states(table_view):
+    palette = table_view.palette()
+
+    assert palette.color(QPalette.Highlight).name() == "#dbeafe"
+    assert palette.color(QPalette.HighlightedText).name() == "#0f172a"
+    assert palette.color(QPalette.Inactive, QPalette.Highlight).name() == "#dbeafe"
+    assert (
+        palette.color(QPalette.Inactive, QPalette.HighlightedText).name()
+        == "#0f172a"
+    )

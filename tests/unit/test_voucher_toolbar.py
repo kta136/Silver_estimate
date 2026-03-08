@@ -19,6 +19,9 @@ def test_initial_state(toolbar):
     assert toolbar.get_date() == QDate.currentDate()
     assert not toolbar.unsaved_badge.isVisible()
     assert toolbar.mode_indicator_label.text() == "Mode: Regular"
+    assert not toolbar.mode_indicator_label.isHidden()
+    assert toolbar.layout().indexOf(toolbar.mode_indicator_label) >= 0
+    assert toolbar.mode_indicator_label.property("modeState") == "regular"
     assert toolbar.status_message_label.text() == ""
 
 

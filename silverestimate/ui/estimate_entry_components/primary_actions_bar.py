@@ -34,7 +34,7 @@ class PrimaryActionsBar(QWidget):
 
         layout = QHBoxLayout(self)
         layout.setSpacing(4)
-        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setContentsMargins(5, 5, 5, 5)
 
         # Save button (primary action - will get emphasis later)
         self.save_button = QPushButton("Save")

@@ -170,6 +170,15 @@ def test_decimal_formatting(panel):
     assert panel.net_wage_label.text() == "1,235"
 
 
+def test_final_calc_font_size_keeps_grand_total_more_prominent(panel):
+    panel.set_final_calc_font_size(11)
+
+    assert panel.net_fine_label.font().pointSize() == 11
+    assert panel.net_wage_label.font().pointSize() == 11
+    assert panel.grand_total_label.font().pointSize() == 14
+    assert panel.grand_total_label.font().bold()
+
+
 def test_sidebar_section_order_can_be_reordered(qt_app):
     panel = TotalsPanel(layout_mode="sidebar")
     panel.set_section_order(["silver_bar", "return", "totals", "regular"])
@@ -198,8 +207,10 @@ def test_sidebar_rows_moved_emits_section_order_signal(qt_app):
     panel._on_sidebar_section_rows_moved()
 
     assert emissions
-    assert emissions[-1][0] == "silver_bar"
-    assert panel.section_order()[0] == "silver_bar"
+    assert emissions[-1][0] == "final_calc"
+    assert emissions[-1][1] == "silver_bar"
+    assert panel.section_order()[0] == "final_calc"
+    assert panel.section_order()[1] == "silver_bar"
 
 
 def test_sidebar_swap_requested_swaps_card_positions(qt_app):
@@ -207,27 +218,36 @@ def test_sidebar_swap_requested_swaps_card_positions(qt_app):
     emissions = []
     panel.section_order_changed.connect(lambda order: emissions.append(order))
 
-    panel._on_sidebar_section_swap_requested(0, 2)
+    panel._on_sidebar_section_swap_requested(1, 3)
 
     assert panel.section_order() == [
-        "regular",
-        "totals",
         "final_calc",
         "return",
+        "regular",
+        "totals",
         "silver_bar",
     ]
     ui_order = [
         panel._summary_sections_list.item(i).data(Qt.UserRole)
         for i in range(panel._summary_sections_list.count())
     ]
-    assert ui_order == ["regular", "totals", "final_calc", "return", "silver_bar"]
+    assert ui_order == ["final_calc", "return", "regular", "totals", "silver_bar"]
     assert emissions[-1] == [
-        "regular",
-        "totals",
         "final_calc",
         "return",
+        "regular",
+        "totals",
         "silver_bar",
     ]
+
+
+def test_sidebar_swap_requested_keeps_final_calc_pinned(qt_app):
+    panel = TotalsPanel(layout_mode="sidebar")
+    original_order = panel.section_order()
+
+    panel._on_sidebar_section_swap_requested(0, 2)
+
+    assert panel.section_order() == original_order
 
 
 def test_sidebar_rows_moved_keeps_all_cards_visible(qt_app):
@@ -252,6 +272,14 @@ def test_sidebar_items_are_not_drop_targets(qt_app):
         item = panel._summary_sections_list.item(idx)
         assert item is not None
         assert not bool(item.flags() & Qt.ItemIsDropEnabled)
+
+
+def test_sidebar_final_calc_item_is_not_draggable(qt_app):
+    panel = TotalsPanel(layout_mode="sidebar")
+    first_item = panel._summary_sections_list.item(0)
+    assert first_item is not None
+    assert first_item.data(Qt.UserRole) == "final_calc"
+    assert not bool(first_item.flags() & Qt.ItemIsDragEnabled)
 
 
 def test_sidebar_cards_resize_with_available_width(qt_app):

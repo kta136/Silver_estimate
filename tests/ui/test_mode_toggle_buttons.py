@@ -72,7 +72,7 @@ def test_return_mode_button_updates_row_type(qtbot, fake_db):
         _wait_for_initialized(qtbot, widget)
 
         last_row = widget.item_table.rowCount() - 1
-        assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "No"
+        assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "Regular"
         assert not widget.return_mode
         assert not widget.return_toggle_button.isChecked()
 
@@ -98,7 +98,7 @@ def test_return_mode_button_updates_row_type(qtbot, fake_db):
                 and widget.item_table.get_cell_text(
                     widget.item_table.rowCount() - 1, COL_TYPE
                 )
-                == "No"
+                == "Regular"
             ),
             timeout=1000,
         )
@@ -112,7 +112,7 @@ def test_silver_bar_mode_button_updates_row_type(qtbot, fake_db):
         _wait_for_initialized(qtbot, widget)
 
         last_row = widget.item_table.rowCount() - 1
-        assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "No"
+        assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "Regular"
         assert not widget.silver_bar_mode
         assert not widget.silver_bar_toggle_button.isChecked()
 
@@ -138,7 +138,7 @@ def test_silver_bar_mode_button_updates_row_type(qtbot, fake_db):
                 and widget.item_table.get_cell_text(
                     widget.item_table.rowCount() - 1, COL_TYPE
                 )
-                == "No"
+                == "Regular"
             ),
             timeout=1000,
         )
@@ -222,7 +222,7 @@ def test_ctrl_r_keyboard_shortcut_toggles_return_mode(qtbot, fake_db):
                 and widget.item_table.get_cell_text(
                     widget.item_table.rowCount() - 1, COL_TYPE
                 )
-                == "No"
+                == "Regular"
             ),
             timeout=1000,
         )
@@ -257,7 +257,7 @@ def test_ctrl_b_keyboard_shortcut_toggles_silver_bar_mode(qtbot, fake_db):
                 and widget.item_table.get_cell_text(
                     widget.item_table.rowCount() - 1, COL_TYPE
                 )
-                == "No"
+                == "Regular"
             ),
             timeout=1000,
         )

@@ -149,17 +149,24 @@ class EstimateTableModel(QAbstractTableModel):
         if role == Qt.BackgroundRole and col == COL_TYPE:
             category = row_data.category
             if category is EstimateLineCategory.RETURN:
-                return QBrush(QColor(255, 200, 200))
+                return QBrush(QColor("#dbeafe"))
             if category is EstimateLineCategory.SILVER_BAR:
-                return QBrush(QColor(200, 255, 200))
-            # Regular rows use default palette (white)
-            return QBrush(QColor(255, 255, 255))
-
-        if role == Qt.BackgroundRole and col in (COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT):
+                return QBrush(QColor("#fff7ed"))
             return QBrush(QColor("#f8fafc"))
 
-        if role == Qt.ForegroundRole and col in (COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT):
+        if role == Qt.ForegroundRole and col == COL_TYPE:
+            category = row_data.category
+            if category is EstimateLineCategory.RETURN:
+                return QBrush(QColor("#1d4ed8"))
+            if category is EstimateLineCategory.SILVER_BAR:
+                return QBrush(QColor("#b45309"))
             return QBrush(QColor("#334155"))
+
+        if role == Qt.BackgroundRole and col in (COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT):
+            return QBrush(QColor("#f1f5f9"))
+
+        if role == Qt.ForegroundRole and col in (COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT):
+            return QBrush(QColor("#0f172a"))
 
         if role == Qt.TextAlignmentRole:
             if col in self._NUMERIC_COLUMNS:

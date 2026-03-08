@@ -74,9 +74,11 @@ class EstimateTableView(QTableView):
 
         palette = self.palette()
         palette.setColor(QPalette.Base, QColor("#ffffff"))
-        palette.setColor(QPalette.AlternateBase, QColor("#f4f6f8"))
+        palette.setColor(QPalette.AlternateBase, QColor("#f8fbff"))
         palette.setColor(QPalette.Highlight, QColor("#dbeafe"))
-        palette.setColor(QPalette.HighlightedText, QColor("#111827"))
+        palette.setColor(QPalette.HighlightedText, QColor("#0f172a"))
+        palette.setColor(QPalette.Inactive, QPalette.Highlight, QColor("#dbeafe"))
+        palette.setColor(QPalette.Inactive, QPalette.HighlightedText, QColor("#0f172a"))
         self.setPalette(palette)
 
     def _connect_signals(self) -> None:

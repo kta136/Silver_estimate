@@ -145,8 +145,8 @@ class TotalsPanel(QWidget):
         for key in normalized:
             if key not in deduped:
                 deduped.append(key)
-        if cls._FINAL_SECTION_KEY not in deduped:
-            deduped.insert(0, cls._FINAL_SECTION_KEY)
+        deduped = [key for key in deduped if key != cls._FINAL_SECTION_KEY]
+        deduped.insert(0, cls._FINAL_SECTION_KEY)
         for key in cls._DEFAULT_SECTION_ORDER:
             if key not in deduped:
                 deduped.append(key)
@@ -294,6 +294,17 @@ class TotalsPanel(QWidget):
         sep.setFrameShadow(QFrame.Sunken)
         return sep
 
+    @staticmethod
+    def _create_metric_header(
+        text: str, *, object_name: str = "FinalMetricLabel"
+    ) -> QLabel:
+        label = QLabel(text)
+        label.setObjectName(object_name)
+        header_font = label.font()
+        header_font.setBold(True)
+        label.setFont(header_font)
+        return label
+
     def _setup_horizontal_ui(self) -> None:
         self.setObjectName("TotalsContainer")
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
@@ -328,11 +339,7 @@ class TotalsPanel(QWidget):
             QSizePolicy.MinimumExpanding, QSizePolicy.Preferred
         )
         self.net_fine_label.setMinimumWidth(84)
-        net_fine_header = QLabel("Net Fine Wt:")
-        net_fine_header.setObjectName("FinalMetricLabel")
-        net_fine_header_font = net_fine_header.font()
-        net_fine_header_font.setBold(True)
-        net_fine_header.setFont(net_fine_header_font)
+        net_fine_header = self._create_metric_header("Net Fine Wt:")
         final_calc_form.addRow(net_fine_header, self.net_fine_label)
 
         self.net_wage_label = QLabel("0")
@@ -343,11 +350,7 @@ class TotalsPanel(QWidget):
             QSizePolicy.MinimumExpanding, QSizePolicy.Preferred
         )
         self.net_wage_label.setMinimumWidth(84)
-        net_wage_header = QLabel("Net Wage:")
-        net_wage_header.setObjectName("FinalMetricLabel")
-        net_wage_header_font = net_wage_header.font()
-        net_wage_header_font.setBold(True)
-        net_wage_header.setFont(net_wage_header_font)
+        net_wage_header = self._create_metric_header("Net Wage:")
         final_calc_form.addRow(net_wage_header, self.net_wage_label)
 
         line_before_grand = QFrame()
@@ -361,12 +364,10 @@ class TotalsPanel(QWidget):
         self.grand_total_label.setSizePolicy(
             QSizePolicy.MinimumExpanding, QSizePolicy.Preferred
         )
-        self.grand_total_label.setMinimumWidth(84)
-        grand_total_header = QLabel("Grand Total:")
-        grand_total_header.setObjectName("FinalMetricLabel")
-        grand_total_header_font = grand_total_header.font()
-        grand_total_header_font.setBold(True)
-        grand_total_header.setFont(grand_total_header_font)
+        self.grand_total_label.setMinimumWidth(96)
+        grand_total_header = self._create_metric_header(
+            "Grand Total:", object_name="GrandTotalLabel"
+        )
         final_calc_form.addRow(grand_total_header, self.grand_total_label)
 
         return final_calc_form
@@ -416,7 +417,7 @@ class TotalsPanel(QWidget):
 
         drag_handle = QLabel("≡")
         drag_handle.setObjectName("SectionDragHandle")
-        drag_handle.setToolTip("Drag to reorder this summary card")
+        drag_handle.setToolTip("Drag to reorder this breakdown card")
         title_row.addWidget(drag_handle)
         card_layout.addLayout(title_row)
 
@@ -459,24 +460,21 @@ class TotalsPanel(QWidget):
         title_row.setSpacing(6)
         title_row.addWidget(final_title)
         title_row.addStretch(1)
-
-        drag_handle = QLabel("≡")
-        drag_handle.setObjectName("SectionDragHandle")
-        drag_handle.setToolTip("Drag to reorder this summary card")
-        title_row.addWidget(drag_handle)
         final_layout.addRow(title_row)
 
         self.net_fine_label = QLabel("0.0")
         self.net_fine_label.setObjectName("MetricValue")
         self.net_fine_label.setProperty("sectionKind", self._FINAL_SECTION_KEY)
         self.net_fine_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        final_layout.addRow("Net Fine Wt:", self.net_fine_label)
+        final_layout.addRow(
+            self._create_metric_header("Net Fine Wt:"), self.net_fine_label
+        )
 
         self.net_wage_label = QLabel("0")
         self.net_wage_label.setObjectName("MetricValue")
         self.net_wage_label.setProperty("sectionKind", self._FINAL_SECTION_KEY)
         self.net_wage_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        final_layout.addRow("Net Wage:", self.net_wage_label)
+        final_layout.addRow(self._create_metric_header("Net Wage:"), self.net_wage_label)
 
         line_before_grand = QFrame()
         line_before_grand.setFrameShape(QFrame.HLine)
@@ -486,7 +484,10 @@ class TotalsPanel(QWidget):
         self.grand_total_label = QLabel("0")
         self.grand_total_label.setObjectName("GrandTotalValue")
         self.grand_total_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        final_layout.addRow("Grand Total:", self.grand_total_label)
+        final_layout.addRow(
+            self._create_metric_header("Grand Total:", object_name="GrandTotalLabel"),
+            self.grand_total_label,
+        )
 
         return card
 
@@ -532,6 +533,12 @@ class TotalsPanel(QWidget):
         ):
             return
         if source_row == target_row:
+            self._schedule_sidebar_item_size_sync()
+            return
+        if self._section_order[source_row] == self._FINAL_SECTION_KEY:
+            self._schedule_sidebar_item_size_sync()
+            return
+        if self._section_order[target_row] == self._FINAL_SECTION_KEY:
             self._schedule_sidebar_item_size_sync()
             return
 
@@ -587,9 +594,10 @@ class TotalsPanel(QWidget):
                     )
                 item = QListWidgetItem()
                 item.setData(Qt.UserRole, section_key)
-                item.setFlags(
-                    Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsDragEnabled
-                )
+                item_flags = Qt.ItemIsEnabled | Qt.ItemIsSelectable
+                if section_key != self._FINAL_SECTION_KEY:
+                    item_flags |= Qt.ItemIsDragEnabled
+                item.setFlags(item_flags)
                 self._summary_sections_list.addItem(item)
                 self._summary_sections_list.setItemWidget(item, card)
         finally:
@@ -618,7 +626,7 @@ class TotalsPanel(QWidget):
         summary_title = QLabel("Summary")
         summary_title.setObjectName("SectionTitle")
         header_row.addWidget(summary_title)
-        drag_hint = QLabel("Drag cards to reorder")
+        drag_hint = QLabel("Drag breakdown cards to reorder")
         drag_hint.setObjectName("SummaryDragHint")
         header_row.addWidget(drag_hint)
         header_row.addStretch(1)
@@ -789,10 +797,12 @@ class TotalsPanel(QWidget):
         for label in [self.net_fine_label, self.net_wage_label]:
             font = label.font()
             font.setPointSize(int(size))
+            font.setBold(True)
             label.setFont(font)
 
-        # Grand total - preserve bold and color
+        # Keep grand total visually dominant without consuming extra layout height.
         font = self.grand_total_label.font()
-        font.setPointSize(int(size))
+        font.setPointSize(max(int(size) + 3, int(size)))
+        font.setBold(True)
         self.grand_total_label.setFont(font)
         self._schedule_sidebar_item_size_sync()

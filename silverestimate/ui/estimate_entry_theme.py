@@ -30,6 +30,10 @@ QWidget#EstimateHeaderActions {
     border: none;
 }
 
+QWidget#EstimateHeaderContainer {
+    border-color: __CARD_BORDER_SOFT__;
+}
+
 QWidget#VoucherToolbar,
 QWidget#PrimaryActionStrip,
 QWidget#SecondaryActionStrip {
@@ -53,7 +57,7 @@ QLabel#UnsavedBadge {
     background-color: #fff7ed;
     border: 1px solid #fdba74;
     border-radius: 999px;
-    padding: 2px 8px;
+    padding: 1px 8px;
     font-weight: 600;
 }
 
@@ -62,7 +66,7 @@ QLabel#EstimateModeBadge {
     background-color: __HEADER_BG__;
     border: 1px solid __INPUT_BORDER__;
     border-radius: 999px;
-    padding: 4px 10px;
+    padding: 2px 8px;
     font-weight: 600;
 }
 
@@ -80,7 +84,7 @@ QLabel#EstimateModeBadge[modeState="silver_bar"] {
 
 QLabel#EstimateStatusLabel {
     color: __TEXT_MUTED__;
-    padding: 2px 0px;
+    padding: 1px 0px;
     font-size: 8.5pt;
 }
 
@@ -102,7 +106,7 @@ QWidget#EstimateEntryRoot QDoubleSpinBox {
     background-color: __SURFACE_BG__;
     border: 1px solid __INPUT_BORDER__;
     border-radius: 8px;
-    padding: 3px 7px;
+    padding: 2px 7px;
     min-height: 14px;
 }
 
@@ -120,8 +124,8 @@ QPushButton#VoucherLoadButton {
     background-color: __HEADER_BG__;
     border: 1px solid __INPUT_BORDER__;
     border-radius: 8px;
-    padding: 3px 8px;
-    min-height: 18px;
+    padding: 2px 8px;
+    min-height: 16px;
     font-weight: 600;
 }
 
@@ -129,8 +133,16 @@ QWidget#PrimaryActionStrip QPushButton:hover,
 QWidget#SecondaryActionStrip QPushButton:hover,
 QWidget#SecondaryActionStrip QToolButton:hover,
 QPushButton#VoucherLoadButton:hover {
-    background-color: #eef2f7;
-    border-color: #94a3b8;
+    background-color: #e8eef6;
+    border-color: #7c8ea6;
+}
+
+QWidget#PrimaryActionStrip QPushButton:pressed,
+QWidget#SecondaryActionStrip QPushButton:pressed,
+QWidget#SecondaryActionStrip QToolButton:pressed,
+QPushButton#VoucherLoadButton:pressed {
+    background-color: #dbe4ef;
+    border-color: #64748b;
 }
 
 QWidget#PrimaryActionStrip QPushButton:disabled,
@@ -153,6 +165,32 @@ QPushButton#SavePrimaryButton:hover {
     border-color: __PRIMARY_BG_HOVER__;
 }
 
+QPushButton#SavePrimaryButton:pressed {
+    background-color: #0b5f59;
+    border-color: #0b5f59;
+}
+
+QPushButton#DeleteRowButton {
+    color: #991b1b;
+    background-color: #fff7f7;
+    border-color: #fecaca;
+    font-weight: 600;
+}
+
+QPushButton#DeleteRowButton:hover,
+QToolButton#DeleteEstimateButton:hover {
+    color: #ffffff;
+    background-color: #ef4444;
+    border-color: #dc2626;
+}
+
+QPushButton#DeleteRowButton:pressed,
+QToolButton#DeleteEstimateButton:pressed {
+    color: #ffffff;
+    background-color: #dc2626;
+    border-color: #b91c1c;
+}
+
 QPushButton#ReturnModeButton[modeState="return"],
 QPushButton#SilverBarModeButton[modeState="silver_bar"] {
     border-width: 2px;
@@ -172,13 +210,8 @@ QPushButton#SilverBarModeButton[modeState="silver_bar"] {
 
 QToolButton#DeleteEstimateButton {
     color: #b91c1c;
-    background-color: __DANGER_BG__;
-    border-color: __DANGER_BORDER__;
-}
-
-QToolButton#DeleteEstimateButton:hover {
-    background-color: #ffe4e6;
-    border-color: #fb7185;
+    background-color: #fff7f7;
+    border-color: #fecaca;
 }
 
 QWidget#LiveRateCard {
@@ -199,7 +232,7 @@ QLabel#LiveRateValue {
 QLabel#LiveRateMeta,
 QLabel#SummaryDragHint {
     color: __TEXT_MUTED__;
-    font-size: 8.5pt;
+    font-size: 8pt;
 }
 
 QWidget#TotalsContainer {
@@ -208,6 +241,7 @@ QWidget#TotalsContainer {
 
 QTableView#EstimateTableView {
     background-color: __SURFACE_BG__;
+    alternate-background-color: #f8fbff;
     gridline-color: #d9e2ec;
     selection-background-color: __SELECTION_BG__;
     selection-color: __TEXT_STRONG__;
@@ -216,17 +250,20 @@ QTableView#EstimateTableView {
 }
 
 QTableView#EstimateTableView::item {
-    padding: 2px 5px;
+    padding: 1px 5px;
 }
 
 QTableView#EstimateTableView::item:hover {
-    background-color: __HEADER_BG__;
+    background-color: #f1f5f9;
 }
 
-QTableView#EstimateTableView::item:selected:active {
-    background-color: __SELECTION_BG__;
+QTableView#EstimateTableView::item:selected,
+QTableView#EstimateTableView::item:selected:active,
+QTableView#EstimateTableView::item:selected:!active {
+    background-color: #dbeafe;
     color: __TEXT_STRONG__;
-    border: 1px solid __FOCUS_RING__;
+    border-top: 1px solid #60a5fa;
+    border-bottom: 1px solid #60a5fa;
 }
 
 QTableView#EstimateTableView QLineEdit {
@@ -249,7 +286,7 @@ QHeaderView::section {
     border: none;
     border-right: 1px solid #e2e8f0;
     border-bottom: 1px solid #e2e8f0;
-    padding: 6px 8px;
+    padding: 5px 8px;
     font-weight: 700;
 }
 
@@ -272,8 +309,8 @@ QFrame#FinalCalcCard {
 
 QFrame#TotalsCard[sectionKind="totals"],
 QFrame#FinalCalcCard {
-    background-color: #eff6ff;
-    border-color: #bfdbfe;
+    background-color: #f7fbff;
+    border-color: #93c5fd;
 }
 
 QFrame#TotalsCard[sectionKind="return"] {
@@ -323,6 +360,7 @@ QLabel#SectionTitle[sectionKind="silver_bar"] {
 
 QLabel#SectionTitle[sectionKind="final_calc"] {
     color: #0f172a;
+    font-size: 10pt;
 }
 
 QLabel#MetricLabel {
@@ -365,6 +403,11 @@ QLabel#MetricValue[sectionKind="silver_bar"] {
     color: #15803d;
 }
 
+QLabel#MetricValue[sectionKind="final_calc"] {
+    color: #0f172a;
+    font-weight: 700;
+}
+
 QLabel#GrandTotalValue {
     color: #065f46;
     font-weight: 800;
@@ -373,6 +416,11 @@ QLabel#GrandTotalValue {
 QLabel#FinalMetricLabel {
     color: __HEADER_TEXT__;
     font-weight: 700;
+}
+
+QLabel#GrandTotalLabel {
+    color: #0f172a;
+    font-weight: 800;
 }
 """
 )

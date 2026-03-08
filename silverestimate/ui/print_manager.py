@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import logging
-import traceback  # Keep for debugging
 from typing import Callable
 
 from PyQt5.QtCore import QLocale, QObject, QSizeF, pyqtSignal
@@ -14,8 +13,11 @@ from .estimate_print_renderer import EstimatePrintRenderer
 from .print_payload_builder import PrintPayloadBuilder, PrintPreviewPayload
 from .print_preview_controller import PrintPreviewController
 from .silver_bar_print_renderer import SilverBarPrintRenderer
+from .settings_print_controller import PRINT_ORIENTATION_MIGRATION_KEY
 
 LOGGER = logging.getLogger(__name__)
+
+_SUPPORTED_PRINT_ORIENTATIONS = {"Portrait", "Landscape"}
 
 
 class PrintPreviewBuildWorker(QObject):
@@ -103,7 +105,7 @@ class PrintManager:
             self.printer.setPageSize(QPageSize(QPageSize.A4))
         # Orientation
         try:
-            orientation_name = settings.value("print/orientation", "Portrait", type=str)
+            orientation_name = self._load_orientation_preference(settings)
             self.printer.setOrientation(
                 QPrinter.Landscape
                 if orientation_name == "Landscape"
@@ -111,7 +113,7 @@ class PrintManager:
             )
         except Exception as exc:
             LOGGER.debug("Failed to load printer orientation preference: %s", exc)
-            self.printer.setOrientation(QPrinter.Portrait)
+            self.printer.setOrientation(QPrinter.Landscape)
 
         try:
             layout_mode = settings.value("print/estimate_layout", "old", type=str)
@@ -161,6 +163,23 @@ class PrintManager:
         )
         self._silver_bar_renderer = SilverBarPrintRenderer()
 
+    @staticmethod
+    def _load_orientation_preference(settings) -> str:
+        orientation_name = settings.value("print/orientation", None, type=str)
+        explicit = bool(
+            settings.value(
+                PRINT_ORIENTATION_MIGRATION_KEY,
+                False,
+                type=bool,
+            )
+        )
+        if orientation_name in _SUPPORTED_PRINT_ORIENTATIONS:
+            if orientation_name == "Portrait" and not explicit:
+                settings.setValue("print/orientation", "Landscape")
+                return "Landscape"
+            return orientation_name
+        return "Landscape"
+
     def format_indian_rupees(self, number):
         """Formats a number into Indian Rupees notation (Lakhs, Crores)."""
         # Ensure number is integer after rounding
@@ -208,11 +227,13 @@ class PrintManager:
                 return False
             self.show_preview(payload, parent_widget=parent_widget)
             return True
-        except Exception as e:
+        except Exception as exc:
+            LOGGER.exception("Failed to prepare estimate print preview: %s", exc)
             QMessageBox.critical(
                 parent_widget,
                 "Print Error",
-                f"Error preparing print preview: {e}\n{traceback.format_exc()}",
+                "Could not prepare the estimate print preview.\n\n"
+                "Check the estimate data and print settings, then try again.",
             )
             return False
 
@@ -242,12 +263,7 @@ class PrintManager:
         parent_widget=None,
     ) -> None:
         """Open a prepared preview payload on the GUI thread."""
-        self._preview_controller.open_preview(
-            payload.html_content,
-            parent_widget=parent_widget,
-            title=payload.title,
-            table_mode=payload.table_mode,
-        )
+        self._preview_controller.open_preview(payload, parent_widget=parent_widget)
 
     def print_silver_bars(self, status_filter=None, parent_widget=None):
         """Prints the INVENTORY list of silver bars using preview."""
@@ -263,11 +279,16 @@ class PrintManager:
             self.show_preview(payload, parent_widget=parent_widget)
             return True
 
-        except Exception as e:
+        except Exception as exc:
+            LOGGER.exception(
+                "Failed to prepare silver bar inventory print preview: %s",
+                exc,
+            )
             QMessageBox.critical(
                 parent_widget,
                 "Print Error",
-                f"Error preparing inventory print preview: {e}\n{traceback.format_exc()}",
+                "Could not prepare the silver bar inventory preview.\n\n"
+                "Check the selected printer and print settings, then try again.",
             )
             return False
 
@@ -299,11 +320,13 @@ class PrintManager:
                 return False
             self.show_preview(payload, parent_widget=parent_widget)
             return True
-        except Exception as e:
+        except Exception as exc:
+            LOGGER.exception("Failed to prepare list print preview: %s", exc)
             QMessageBox.critical(
                 parent_widget,
                 "Print Error",
-                f"Error preparing list print preview: {e}\n{traceback.format_exc()}",
+                "Could not prepare the list print preview.\n\n"
+                "Check the list data and print settings, then try again.",
             )
             return False
 

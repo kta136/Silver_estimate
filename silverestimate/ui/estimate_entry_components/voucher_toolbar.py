@@ -37,14 +37,15 @@ class VoucherToolbar(QWidget):
         """
         super().__init__(parent)
         self.setObjectName("VoucherToolbar")
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._setup_ui()
         self._connect_signals()
 
     def _setup_ui(self) -> None:
         """Set up a compact single-row metadata toolbar."""
         layout = QHBoxLayout(self)
-        layout.setSpacing(6)
-        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(5)
+        layout.setContentsMargins(5, 5, 5, 5)
 
         self.unsaved_badge = QLabel("")
         self.unsaved_badge.setObjectName("UnsavedBadge")
@@ -57,15 +58,16 @@ class VoucherToolbar(QWidget):
 
         self.mode_indicator_label = QLabel("Mode: Regular")
         self.mode_indicator_label.setObjectName("EstimateModeBadge")
+        self.mode_indicator_label.setProperty("modeState", "regular")
         self.mode_indicator_label.setAlignment(Qt.AlignCenter)
         self.mode_indicator_label.setToolTip(
             "Current mode: Regular Items\nCtrl+R: Return Items\nCtrl+B: Silver Bars"
         )
-        self.mode_indicator_label.setVisible(False)
+        layout.addWidget(self.mode_indicator_label)
 
         self.status_message_label = QLabel("")
         self.status_message_label.setObjectName("EstimateStatusLabel")
-        self.status_message_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.status_message_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.status_message_label.setSizePolicy(
             QSizePolicy.Fixed, QSizePolicy.Preferred
         )

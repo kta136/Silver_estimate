@@ -1,8 +1,8 @@
 import types
 
 import pytest
-from PyQt5.QtCore import QEventLoop, Qt, QTimer
-from PyQt5.QtWidgets import QDialog, QHeaderView, QLineEdit, QMessageBox
+from PyQt5.QtCore import QDate, QEventLoop, Qt, QTimer
+from PyQt5.QtWidgets import QDialog, QHeaderView, QLineEdit, QMessageBox, QWidget
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.persistence.database_manager import DatabaseManager
@@ -56,6 +56,8 @@ def _set_row(widget, row, item):
     while table.rowCount() <= row:
         widget.add_empty_row()
     table.set_cell_text(row, COL_CODE, str(item["code"]))
+    if item.get("name"):
+        table.set_cell_text(row, COL_ITEM_NAME, str(item["name"]))
     table.set_cell_text(row, COL_GROSS, str(item["gross"]))
     table.set_cell_text(row, COL_POLY, str(item["poly"]))
     table.set_cell_text(row, COL_PURITY, str(item["purity"]))
@@ -154,6 +156,13 @@ def _pump_events(wait_ms: int = 20) -> None:
     loop.exec_()
 
 
+def _find_named_widget(root: QWidget, object_name: str) -> QWidget | None:
+    for child in root.findChildren(QWidget):
+        if child.objectName() == object_name:
+            return child
+    return None
+
+
 def test_widget_generates_voucher_on_init(qt_app, fake_db):
     widget = _make_widget(fake_db)
     try:
@@ -202,8 +211,7 @@ def test_widget_multi_row_totals(qt_app, fake_db):
     table = widget.item_table
     widget.calculate_totals()
 
-    # Note: EstimateTableView displays "No", "Return", "Silver Bar" even if we set "regular" internally
-    assert table.get_cell_text(0, COL_TYPE) == "No"
+    assert table.get_cell_text(0, COL_TYPE) == "Regular"
     assert table.get_cell_text(1, COL_TYPE) == "Return"
     assert table.get_cell_text(2, COL_TYPE) == "Silver Bar"
 
@@ -491,7 +499,7 @@ def test_widget_save_and_reload(qt_app, tmp_path, settings_stub, monkeypatch):
             rows.append((code_text, table.get_cell_text(row, COL_TYPE)))
 
     assert rows == [
-        ("REG001", "No"),
+        ("REG001", "Regular"),
         ("BAR001", "Silver Bar"),
         ("RET001", "Return"),
     ]
@@ -505,10 +513,57 @@ def test_widget_save_and_reload(qt_app, tmp_path, settings_stub, monkeypatch):
     manager.close()
 
 
+def test_print_estimate_uses_current_unsaved_state(qt_app, fake_db, monkeypatch):
+    widget = _make_widget(fake_db)
+    captured = {}
+
+    class _PrintManagerStub:
+        def __init__(self, db_manager, print_font=None):
+            captured["db_manager"] = db_manager
+            captured["print_font"] = print_font
+
+    monkeypatch.setattr(
+        "silverestimate.ui.print_manager.PrintManager",
+        _PrintManagerStub,
+    )
+
+    def _capture_start(*, print_manager, voucher_no, estimate_data):
+        captured["print_manager"] = print_manager
+        captured["voucher_no"] = voucher_no
+        captured["estimate_data"] = estimate_data
+
+    widget._start_estimate_print_preview_build = _capture_start
+    widget.voucher_edit.setText("LIVE001")
+    widget.date_edit.setDate(QDate(2026, 2, 14))
+    widget.note_edit.setText("Unsaved note")
+    _set_row(
+        widget,
+        0,
+        regular_item(gross=10, poly=1, purity=92.5, wage_rate=10),
+    )
+
+    widget.print_estimate()
+
+    header = captured["estimate_data"]["header"]
+    item = captured["estimate_data"]["items"][0]
+
+    assert captured["db_manager"] is fake_db
+    assert captured["voucher_no"] == "LIVE001"
+    assert header["voucher_no"] == "LIVE001"
+    assert header["date"] == "2026-02-14"
+    assert header["note"] == "Unsaved note"
+    assert item["item_code"] == "REG001"
+    assert item["item_name"] == "Regular Item"
+    assert item["is_return"] == 0
+    assert item["is_silver_bar"] == 0
+
+    widget.deleteLater()
+
+
 def test_toggle_modes_updates_empty_row(qt_app, fake_db):
     widget = _make_widget(fake_db)
     last_row = widget.item_table.rowCount() - 1
-    assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "No"
+    assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "Regular"
     widget.toggle_return_mode()
     last_row = widget.item_table.rowCount() - 1
     assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "Return"
@@ -517,7 +572,7 @@ def test_toggle_modes_updates_empty_row(qt_app, fake_db):
     assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "Silver Bar"
     widget.toggle_silver_bar_mode()
     last_row = widget.item_table.rowCount() - 1
-    assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "No"
+    assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "Regular"
 
 
 def test_populate_row_updates_code_cell(qt_app, fake_db):
@@ -645,6 +700,45 @@ def test_totals_position_switching_and_persistence(qt_app, fake_db, settings_stu
         assert (
             widget._settings().value("ui/estimate_totals_position", type=str) == "right"
         )
+    finally:
+        widget.deleteLater()
+
+
+def test_live_rate_card_moves_between_sidebar_and_header(qt_app, fake_db):
+    widget = _make_widget(fake_db)
+    try:
+        sidebar_top_host = widget._totals_panel_sidebar._sidebar_top_host
+
+        assert widget.secondary_actions.live_rate_container.parent() is sidebar_top_host
+        assert not sidebar_top_host.isHidden()
+
+        widget._apply_totals_position("bottom")
+        qt_app.processEvents()
+
+        assert widget.secondary_actions.live_rate_container.parent() is widget.secondary_actions
+        assert not widget.secondary_actions.live_rate_divider.isHidden()
+
+        widget._apply_totals_position("right")
+        qt_app.processEvents()
+
+        assert widget.secondary_actions.live_rate_container.parent() is sidebar_top_host
+        assert widget.secondary_actions.live_rate_divider.isHidden()
+    finally:
+        widget.deleteLater()
+
+
+def test_compact_header_preserves_table_viewport_height(qt_app, fake_db):
+    widget = _make_widget(fake_db)
+    try:
+        widget.resize(1280, 800)
+        widget.show()
+        qt_app.processEvents()
+
+        header_container = _find_named_widget(widget, "EstimateHeaderContainer")
+        assert header_container is not None
+        assert header_container.height() <= 60
+        assert widget.mode_indicator_label.isVisible()
+        assert widget.item_table.viewport().height() >= 694
     finally:
         widget.deleteLater()
 

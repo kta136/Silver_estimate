@@ -1,5 +1,7 @@
 from PyQt5.QtGui import QFont
+from PyQt5.QtPrintSupport import QPrinter
 
+from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.ui.print_manager import PrintManager
 
 
@@ -65,6 +67,8 @@ def test_build_estimate_preview_payload_uses_selected_layout(qt_app, settings_st
     }
 
     manager.estimate_layout_mode = "thermal"
+    manager._generate_estimate_old_format = lambda data: "OLD"
+    manager._generate_estimate_new_format = lambda data: "NEW"
     manager._generate_estimate_thermal_format = lambda data: "THERMAL"
 
     payload = manager.build_estimate_preview_payload(
@@ -76,6 +80,16 @@ def test_build_estimate_preview_payload_uses_selected_layout(qt_app, settings_st
     assert payload.html_content == "THERMAL"
     assert payload.title == "Print Preview - Estimate V-002"
     assert payload.table_mode is False
+    assert payload.document_kind == "estimate"
+    assert payload.identifier == "V-002"
+    assert payload.suggested_filename == "Estimate-V-002.pdf"
+    assert payload.layout_mode == "thermal"
+    assert payload.available_layouts == ("old", "new", "thermal")
+
+    switched = payload.layout_factory("new")
+    assert switched is not None
+    assert switched.html_content == "NEW"
+    assert switched.layout_mode == "new"
 
 
 def test_show_preview_delegates_to_preview_dialog(qt_app, settings_stub):
@@ -83,9 +97,7 @@ def test_show_preview_delegates_to_preview_dialog(qt_app, settings_stub):
     calls = []
 
     manager._preview_controller.open_preview = (
-        lambda html_content, parent_widget, title, table_mode=False: calls.append(
-            (html_content, parent_widget, title, table_mode)
-        )
+        lambda payload, parent_widget=None: calls.append((payload, parent_widget))
     )
 
     payload = manager.build_estimate_preview_payload(
@@ -106,7 +118,7 @@ def test_show_preview_delegates_to_preview_dialog(qt_app, settings_stub):
 
     manager.show_preview(payload, parent_widget="parent")
 
-    assert calls == [(payload.html_content, "parent", payload.title, False)]
+    assert calls == [(payload, "parent")]
 
 
 def test_build_silver_bar_list_preview_payload_marks_table_mode(qt_app, settings_stub):
@@ -122,6 +134,7 @@ def test_build_silver_bar_list_preview_payload_marks_table_mode(qt_app, settings
     assert payload.html_content == "LIST-HTML"
     assert payload.title == "Print Preview - List LIST-010"
     assert payload.table_mode is True
+    assert payload.suggested_filename == "Silver-Bar-List-LIST-010.pdf"
 
 
 def test_build_silver_bar_inventory_preview_payload_marks_table_mode(
@@ -144,6 +157,7 @@ def test_build_silver_bar_inventory_preview_payload_marks_table_mode(
     assert payload.html_content == "INVENTORY-AVAILABLE-1"
     assert payload.title == "Print Preview - Silver Bar Inventory"
     assert payload.table_mode is True
+    assert payload.suggested_filename == "Silver-Bar-Inventory.pdf"
 
 
 def test_generate_list_details_html_escapes_list_note(qt_app, settings_stub):
@@ -167,3 +181,29 @@ def test_generate_list_details_html_escapes_list_note(qt_app, settings_stub):
     assert "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;" in rendered
     assert "<b>fragile</b>" not in rendered
     assert "&lt;b&gt;fragile&lt;/b&gt;" in rendered
+
+
+def test_print_manager_migrates_legacy_portrait_default_to_landscape(
+    qt_app, settings_stub
+):
+    del qt_app, settings_stub
+    settings = get_app_settings()
+    settings.setValue("print/orientation", "Portrait")
+
+    manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
+
+    assert manager.printer.orientation() == QPrinter.Landscape
+    assert settings.value("print/orientation") == "Landscape"
+
+
+def test_print_manager_preserves_explicit_portrait_orientation(
+    qt_app, settings_stub
+):
+    del qt_app, settings_stub
+    settings = get_app_settings()
+    settings.setValue("print/orientation", "Portrait")
+    settings.setValue("print/orientation_explicit", True)
+
+    manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
+
+    assert manager.printer.orientation() == QPrinter.Portrait

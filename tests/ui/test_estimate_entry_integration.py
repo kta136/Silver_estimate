@@ -141,7 +141,7 @@ def test_program_startup_creates_empty_row(qt_app, fake_db):
 
         # Verify the row was created via the adapter
         last_row = widget.item_table.rowCount() - 1
-        assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "No", (
+        assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "Regular", (
             "Empty row should be marked as regular type"
         )
 
@@ -204,7 +204,7 @@ def test_adapter_add_empty_row_via_button(qt_app, fake_db):
 
         assert widget.item_table.rowCount() == 1, "Should add one row"
 
-        assert widget.item_table.get_cell_text(0, COL_TYPE) == "No"
+        assert widget.item_table.get_cell_text(0, COL_TYPE) == "Regular"
     finally:
         widget.deleteLater()
 
@@ -460,7 +460,7 @@ def test_mode_toggle_updates_empty_row_type_via_adapter(qt_app, fake_db):
         last_row = table.rowCount() - 1
 
         # Initial state (display labels)
-        assert table.get_cell_text(last_row, COL_TYPE) == "No"
+        assert table.get_cell_text(last_row, COL_TYPE) == "Regular"
 
         # Toggle return mode
         widget.toggle_return_mode()
@@ -477,7 +477,7 @@ def test_mode_toggle_updates_empty_row_type_via_adapter(qt_app, fake_db):
         # Toggle off
         widget.toggle_silver_bar_mode()
         last_row = table.rowCount() - 1
-        assert table.get_cell_text(last_row, COL_TYPE) == "No"
+        assert table.get_cell_text(last_row, COL_TYPE) == "Regular"
     finally:
         widget.deleteLater()
 

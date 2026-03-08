@@ -13,8 +13,9 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_PRINT_MARGINS = (10, 2, 10, 2)
 DEFAULT_PREVIEW_ZOOM = 1.25
 DEFAULT_PAGE_SIZE = "A4"
-DEFAULT_ORIENTATION = "Portrait"
+DEFAULT_ORIENTATION = "Landscape"
 DEFAULT_ESTIMATE_LAYOUT = "old"
+PRINT_ORIENTATION_MIGRATION_KEY = "print/orientation_explicit"
 SUPPORTED_PAGE_SIZES = ("A4", "A5", "Letter", "Legal", "Thermal 80mm")
 SUPPORTED_ORIENTATIONS = ("Portrait", "Landscape")
 SUPPORTED_ESTIMATE_LAYOUTS = ("old", "new", "thermal")
@@ -61,16 +62,7 @@ class SettingsPrintController:
             default=DEFAULT_PAGE_SIZE,
             setting_name="print/page_size",
         )
-        orientation = self._validated_value(
-            self._settings.value(
-                "print/orientation",
-                DEFAULT_ORIENTATION,
-                type=str,
-            ),
-            supported=SUPPORTED_ORIENTATIONS,
-            default=DEFAULT_ORIENTATION,
-            setting_name="print/orientation",
-        )
+        orientation = self._load_orientation()
         estimate_layout = self._validated_value(
             self._settings.value(
                 "print/estimate_layout",
@@ -144,6 +136,7 @@ class SettingsPrintController:
             self._settings.setValue("print/default_printer", state.default_printer)
         self._settings.setValue("print/page_size", state.page_size)
         self._settings.setValue("print/orientation", state.orientation)
+        self._settings.setValue(PRINT_ORIENTATION_MIGRATION_KEY, True)
         self._settings.setValue("print/estimate_layout", state.estimate_layout)
 
     def apply_defaults_to_ui(self, widgets: PrintSettingsWidgets) -> PrintSettingsState:
@@ -212,6 +205,33 @@ class SettingsPrintController:
         except (TypeError, ValueError):
             LOGGER.warning("Invalid preview zoom in settings: %r", raw_value)
             return DEFAULT_PREVIEW_ZOOM
+
+    def _load_orientation(self) -> str:
+        raw_value = self._settings.value("print/orientation", None, type=str)
+        explicit = bool(
+            self._settings.value(
+                PRINT_ORIENTATION_MIGRATION_KEY,
+                False,
+                type=bool,
+            )
+        )
+        if raw_value in SUPPORTED_ORIENTATIONS:
+            if raw_value == "Portrait" and not explicit:
+                LOGGER.info(
+                    "Migrating legacy default print orientation from Portrait to Landscape."
+                )
+                self._settings.setValue("print/orientation", DEFAULT_ORIENTATION)
+                return DEFAULT_ORIENTATION
+            return raw_value
+        if raw_value is None:
+            return DEFAULT_ORIENTATION
+        LOGGER.warning(
+            "Invalid %s setting value %r; using %s",
+            "print/orientation",
+            raw_value,
+            DEFAULT_ORIENTATION,
+        )
+        return DEFAULT_ORIENTATION
 
     @staticmethod
     def _validated_value(

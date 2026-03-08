@@ -237,12 +237,29 @@ class EstimateEntryWorkflowController(HostProxy):
 
         current_font = getattr(self.main_window, "print_font", None)
         pm = PrintManager(self.db_manager, print_font=current_font)
-        estimate_data = self.db_manager.get_estimate_by_voucher(voucher_no)
-        if not estimate_data:
+        try:
+            estimate_data = self._build_current_estimate_preview_data(voucher_no)
+        except ValueError as exc:
+            message = str(exc)
+            if message == "No valid items found to save.":
+                message = "Add at least one valid item before opening print preview."
             QMessageBox.warning(
                 self._parent_widget(),
                 "Print Error",
-                f"Estimate {voucher_no} not found.",
+                message,
+            )
+            return
+        except Exception as exc:
+            self.logger.error(
+                "Failed to build estimate preview data for %s: %s",
+                voucher_no,
+                exc,
+                exc_info=True,
+            )
+            QMessageBox.critical(
+                self._parent_widget(),
+                "Print Error",
+                "Could not prepare the current estimate for print preview.",
             )
             return
 
@@ -488,18 +505,16 @@ class EstimateEntryWorkflowController(HostProxy):
         self._finalize_mode_change()
 
     def _sync_mode_controls(self) -> None:
+        self.return_toggle_button.setText("Return")
         if self.return_mode:
-            self.return_toggle_button.setText("Return On")
             self.return_toggle_button.setProperty("modeState", "return")
         else:
-            self.return_toggle_button.setText("Return")
             self.return_toggle_button.setProperty("modeState", "idle")
 
+        self.silver_bar_toggle_button.setText("Bar Mode")
         if self.silver_bar_mode:
-            self.silver_bar_toggle_button.setText("Bars On")
             self.silver_bar_toggle_button.setProperty("modeState", "silver_bar")
         else:
-            self.silver_bar_toggle_button.setText("Bars")
             self.silver_bar_toggle_button.setProperty("modeState", "idle")
 
         if self.return_mode:
@@ -739,6 +754,13 @@ class EstimateEntryWorkflowController(HostProxy):
         rows = list(self.item_table.get_all_rows())
 
         self.view_model.set_rows(rows)
+        self.view_model.set_voucher_metadata(
+            voucher_number=self.voucher_edit.text().strip(),
+            voucher_date=self.date_edit.date().toString("yyyy-MM-dd"),
+            voucher_note=(
+                self.note_edit.text().strip() if hasattr(self, "note_edit") else ""
+            ),
+        )
         self.view_model.set_totals_inputs(
             silver_rate=self.silver_rate_spin.value(),
             last_balance_silver=self.last_balance_silver,
@@ -753,6 +775,51 @@ class EstimateEntryWorkflowController(HostProxy):
             threshold_ms=15.0,
             rows=len(rows),
         )
+
+    def _build_current_estimate_preview_data(self, voucher_no: str) -> Dict:
+        self._update_view_model_snapshot()
+        metadata = self.view_model.get_voucher_metadata()
+        service = EstimateEntryPersistenceService(self.view_model)
+        preparation = service.prepare_save_payload(
+            voucher_no=voucher_no,
+            date=metadata.get("voucher_date", ""),
+            note=metadata.get("voucher_note", ""),
+        )
+        if preparation.skipped_rows:
+            skipped = ", ".join(str(row) for row in preparation.skipped_rows)
+            self._status(f"Preview skipped invalid rows: {skipped}", 5000)
+
+        items = []
+        for item in preparation.payload.items:
+            items.append(
+                {
+                    "id": item.row_number,
+                    "item_code": item.code,
+                    "item_name": item.name,
+                    "gross": item.gross,
+                    "poly": item.poly,
+                    "net_wt": item.net_wt,
+                    "purity": item.purity,
+                    "wage_rate": item.wage_rate,
+                    "pieces": item.pieces,
+                    "wage": item.wage,
+                    "fine": item.fine,
+                    "is_return": 1 if item.is_return else 0,
+                    "is_silver_bar": 1 if item.is_silver_bar else 0,
+                }
+            )
+
+        return {
+            "header": {
+                "voucher_no": metadata.get("voucher_number", voucher_no) or voucher_no,
+                "date": metadata.get("voucher_date", ""),
+                "silver_rate": preparation.payload.silver_rate,
+                "note": preparation.payload.note,
+                "last_balance_silver": preparation.payload.last_balance_silver,
+                "last_balance_amount": preparation.payload.last_balance_amount,
+            },
+            "items": items,
+        }
 
     def _get_row_code(self, row):
         return self.item_table.get_cell_text(row, COL_CODE).strip()

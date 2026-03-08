@@ -1,4 +1,5 @@
 from PyQt5.QtCore import QItemSelectionModel
+from PyQt5.QtWidgets import QFrame
 
 from silverestimate.ui.estimate_history import EstimateHistoryDialog
 
@@ -170,6 +171,7 @@ def test_populate_table_uses_model_rows_and_selection_lookup(qtbot, monkeypatch)
         )
 
         assert dialog.estimates_model.rowCount() == 2
+        assert dialog.results_summary_label.text() == "2 estimates in current date range"
 
         target_row = next(
             row
@@ -188,5 +190,26 @@ def test_populate_table_uses_model_rows_and_selection_lookup(qtbot, monkeypatch)
             dialog.estimates_model.data(dialog.estimates_model.index(target_row, 8))
             == "229.38"
         )
+    finally:
+        dialog.deleteLater()
+
+
+def test_estimate_history_uses_compact_top_controls(qtbot, monkeypatch):
+    monkeypatch.setattr(EstimateHistoryDialog, "load_estimates", lambda self: None)
+    dialog = EstimateHistoryDialog(_DialogDbStub(), main_window_ref=None)
+    qtbot.addWidget(dialog)
+    try:
+        dialog.resize(1280, 800)
+        dialog.show()
+        qtbot.waitUntil(lambda: dialog.isVisible(), timeout=1000)
+
+        header_card = dialog.findChild(QFrame, "HistoryHeaderCard")
+        filter_card = dialog.findChild(QFrame, "HistoryFilterCard")
+
+        assert header_card is not None
+        assert filter_card is not None
+        assert header_card.height() <= 54
+        assert filter_card.height() <= 56
+        assert dialog.estimates_table.viewport().height() >= 560
     finally:
         dialog.deleteLater()

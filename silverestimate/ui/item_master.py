@@ -47,7 +47,7 @@ class _ItemMasterLoadWorker(QObject):
             rows = fetch_item_catalog_rows(cursor, self.search_term)
             self.data_ready.emit(
                 self.request_id,
-                [dict(row) if not isinstance(row, dict) else row for row in rows],
+                [dict(row) for row in rows],
             )
         except Exception as exc:
             self.error.emit(self.request_id, str(exc))
@@ -281,7 +281,9 @@ class ItemMasterWidget(QWidget):
             items = self._load_items_sync(normalized_term)
         except Exception as exc:
             QMessageBox.warning(self, "Load Error", str(exc))
-            self.logger.warning("Failed to load item master rows: %s", exc, exc_info=True)
+            self.logger.warning(
+                "Failed to load item master rows: %s", exc, exc_info=True
+            )
             return
         self._apply_loaded_items(
             list(items or []),
@@ -323,8 +325,8 @@ class ItemMasterWidget(QWidget):
         worker.finished.connect(worker.deleteLater)
         thread.finished.connect(thread.deleteLater)
         thread.finished.connect(
-            lambda finished_request_id=request_id, th=thread: (
-                self._finish_async_load(finished_request_id, th)
+            lambda finished_request_id=request_id, th=thread: self._finish_async_load(
+                finished_request_id, th
             )
         )
         self._active_load_workers[thread] = worker
@@ -398,9 +400,7 @@ class ItemMasterWidget(QWidget):
             try:
                 worker.deleteLater()
             except Exception as exc:
-                self.logger.debug(
-                    "Failed to queue item-master worker cleanup: %s", exc
-                )
+                self.logger.debug("Failed to queue item-master worker cleanup: %s", exc)
             try:
                 if thread.isRunning():
                     thread.quit()

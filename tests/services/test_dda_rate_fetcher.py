@@ -111,6 +111,67 @@ def test_lookup_com_id_for_target_handles_valid_and_invalid_values(monkeypatch):
     assert dda_rate_fetcher._lookup_com_id_for_target() is None
 
 
+def test_lookup_homepage_broadcast_url_extracts_bcurl(monkeypatch):
+    monkeypatch.setattr(
+        dda_rate_fetcher,
+        "_HOMEPAGE_BROADCAST_URL",
+        None,
+    )
+    monkeypatch.setattr(
+        dda_rate_fetcher,
+        "_fetch_url_text",
+        lambda url, **kwargs: (
+            'var bcurl = "http://live.example/feed";'
+            if url == "http://example.test/"
+            else ""
+        ),
+    )
+
+    endpoint = dda_rate_fetcher._lookup_homepage_broadcast_url(
+        base_url="http://example.test"
+    )
+
+    assert endpoint == "http://live.example/feed"
+
+
+def test_fetch_broadcast_rate_exact_prefers_homepage_advertised_endpoint(monkeypatch):
+    monkeypatch.setattr(
+        dda_rate_fetcher,
+        "_HOMEPAGE_BROADCAST_URL",
+        None,
+    )
+    monkeypatch.setattr(
+        dda_rate_fetcher,
+        "BROADCAST_URLS",
+        (
+            "http://stale-one/feed",
+            "http://stale-two/feed",
+        ),
+    )
+    monkeypatch.setattr(
+        dda_rate_fetcher,
+        "_lookup_homepage_broadcast_url",
+        lambda **kwargs: "http://homepage-live/feed",
+    )
+
+    calls = []
+
+    def _fake_fetch(endpoint, payload, timeout):  # noqa: ARG001
+        calls.append(endpoint)
+        if endpoint == "http://homepage-live/feed":
+            return "3\t47\t0\t0\t52500"
+        raise AssertionError(f"unexpected endpoint call: {endpoint}")
+
+    monkeypatch.setattr(dda_rate_fetcher, "_fetch_broadcast_payload", _fake_fetch)
+
+    rate, market_open, info = dda_rate_fetcher.fetch_broadcast_rate_exact()
+
+    assert rate == 52500
+    assert market_open is True
+    assert info["endpoint"] == "http://homepage-live/feed"
+    assert calls == ["http://homepage-live/feed"]
+
+
 def test_main_prints_scraped_rate(monkeypatch, capsys):
     monkeypatch.setattr(
         dda_rate_fetcher,
@@ -141,6 +202,11 @@ def test_main_falls_back_to_broadcast_when_scrape_fails(monkeypatch, capsys):
 
 
 def test_fetch_broadcast_rate_exact_returns_errors_when_all_endpoints_fail(monkeypatch):
+    monkeypatch.setattr(
+        dda_rate_fetcher,
+        "_lookup_homepage_broadcast_url",
+        lambda **kwargs: None,
+    )
     monkeypatch.setattr(
         dda_rate_fetcher,
         "BROADCAST_URLS",
@@ -284,6 +350,11 @@ def test_fetch_url_text_raises_non_tls_urlerror(monkeypatch):
 
 
 def test_dynamic_broadcast_lookup_continues_when_dynamic_fetch_errors(monkeypatch):
+    monkeypatch.setattr(
+        dda_rate_fetcher,
+        "_lookup_homepage_broadcast_url",
+        lambda **kwargs: None,
+    )
     monkeypatch.setattr(dda_rate_fetcher, "BROADCAST_URLS", ("http://one",))
     monkeypatch.setattr(dda_rate_fetcher, "_lookup_com_id_for_target", lambda **_: 99)
 
@@ -378,6 +449,11 @@ def test_parse_broadcast_payload_marks_market_closed_and_extracts_rate():
 def test_fetch_broadcast_rate_exact_falls_back_to_secondary_endpoint(monkeypatch):
     monkeypatch.setattr(
         dda_rate_fetcher,
+        "_lookup_homepage_broadcast_url",
+        lambda **kwargs: None,
+    )
+    monkeypatch.setattr(
+        dda_rate_fetcher,
         "BROADCAST_URLS",
         (
             "http://primary.invalid/feed",
@@ -401,6 +477,11 @@ def test_fetch_broadcast_rate_exact_falls_back_to_secondary_endpoint(monkeypatch
 
 
 def test_fetch_broadcast_rate_exact_uses_dynamic_com_id_when_static_misses(monkeypatch):
+    monkeypatch.setattr(
+        dda_rate_fetcher,
+        "_lookup_homepage_broadcast_url",
+        lambda **kwargs: None,
+    )
     monkeypatch.setattr(
         dda_rate_fetcher,
         "BROADCAST_URLS",

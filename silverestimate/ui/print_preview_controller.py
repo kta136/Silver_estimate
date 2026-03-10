@@ -218,7 +218,9 @@ class PrintPreviewController:
         act_sel_prn.triggered.connect(lambda: self._choose_printer(preview))
         toolbar.addAction(act_sel_prn)
 
-        act_page = QAction(get_icon("page_setup", widget=preview), "Page Setup", preview)
+        act_page = QAction(
+            get_icon("page_setup", widget=preview), "Page Setup", preview
+        )
         act_page.setToolTip("Choose page size, margins, and paper setup")
         act_page.triggered.connect(lambda: self._page_setup_and_refresh(preview))
         toolbar.addAction(act_page)
@@ -434,7 +436,9 @@ class PrintPreviewController:
         combo.setObjectName("PreviewLayoutCombo")
         combo.setToolTip("Switch the estimate print layout without leaving preview")
         for layout_mode in payload.available_layouts:
-            combo.addItem(_LAYOUT_LABELS.get(layout_mode, layout_mode.title()), layout_mode)
+            combo.addItem(
+                _LAYOUT_LABELS.get(layout_mode, layout_mode.title()), layout_mode
+            )
         index = combo.findData(payload.layout_mode)
         combo.setCurrentIndex(index if index >= 0 else 0)
         return combo

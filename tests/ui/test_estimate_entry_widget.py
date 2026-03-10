@@ -768,7 +768,10 @@ def test_live_rate_card_moves_between_sidebar_and_header(qt_app, fake_db):
         widget._apply_totals_position("bottom")
         qt_app.processEvents()
 
-        assert widget.secondary_actions.live_rate_container.parent() is widget.secondary_actions
+        assert (
+            widget.secondary_actions.live_rate_container.parent()
+            is widget.secondary_actions
+        )
         assert not widget.secondary_actions.live_rate_divider.isHidden()
 
         widget._apply_totals_position("right")

@@ -50,7 +50,9 @@ class DatabaseRepositoryFacadeMixin:
     def get_estimate_by_voucher(self, voucher_no):
         return self.estimates_repo.get_estimate_by_voucher(voucher_no)
 
-    def get_estimate_history_rows(self, date_from=None, date_to=None, voucher_search=None):
+    def get_estimate_history_rows(
+        self, date_from=None, date_to=None, voucher_search=None
+    ):
         return self.estimates_repo.get_estimate_history_rows(
             date_from=date_from,
             date_to=date_to,
@@ -214,5 +216,6 @@ class DatabaseRepositoryFacadeMixin:
             limit=limit,
             offset=offset,
         )
+
 
 __all__ = ["DatabaseRepositoryFacadeMixin"]

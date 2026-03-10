@@ -201,10 +201,7 @@ def test_import_tracks_duplicates_created_within_same_file(qt_app, tmp_path):
 
     import_file = tmp_path / "items_repeated.txt"
     import_file.write_text(
-        (
-            "N900|New Item|92.5|WT|10.0\n"
-            "N900|New Item Updated|93.0|WT|12.0\n"
-        ),
+        ("N900|New Item|92.5|WT|10.0\nN900|New Item Updated|93.0|WT|12.0\n"),
         encoding="utf-8",
     )
 

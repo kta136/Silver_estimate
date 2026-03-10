@@ -26,13 +26,13 @@ SCRAPE_HEADERS = {
 }
 
 # Broadcast endpoints used by site UI for exact on-screen numbers.
-# The vendor recently migrated the live feed to a new host (13.235.208.189)
-# but left the previous endpoint running with stale data. Probe the new host
-# first and fall back to the legacy endpoint to remain compatible.
-# Verified on 2026-03-07: strict HTTPS does not work for these hosts because
+# Probe the homepage-advertised feed first and retain older known hosts as
+# fallbacks because DDASilver rotates infrastructure without stable redirects.
+# Verified on 2026-03-10: strict HTTPS does not work for these hosts because
 # certificate validation fails (self-signed cert / hostname mismatch). Keep
 # the broadcast endpoints on HTTP unless the vendor publishes valid TLS.
 BROADCAST_URLS = (
+    "http://3.108.128.67/lmxtrade/winbullliteapi/api/v1/broadcastrates",
     "http://13.235.208.189/lmxtrade/winbullliteapi/api/v1/broadcastrates",
     "http://3.109.80.6/lmxtrade/winbullliteapi/api/v1/broadcastrates",
 )
@@ -42,6 +42,7 @@ _ALLOWED_URL_SCHEMES = frozenset({"http", "https"})
 _TLS_RETRY_ALLOWED_HOSTS = frozenset(
     filter(None, (urlparse(url).hostname for url in BROADCAST_URLS))
 )
+_HOMEPAGE_BROADCAST_URL: str | None = None
 
 RateValue = int | float
 RateMetadata = dict[str, Any]
@@ -186,6 +187,59 @@ def _lookup_com_id_for_target(base_url: str = DEFAULT_BASE_URL, timeout: int = 1
         return None
 
 
+def _lookup_homepage_broadcast_url(
+    base_url: str = DEFAULT_BASE_URL, timeout: int = 10
+) -> str | None:
+    """Return the broadcast endpoint currently advertised by the DDASilver homepage."""
+    global _HOMEPAGE_BROADCAST_URL
+
+    if _HOMEPAGE_BROADCAST_URL:
+        return _HOMEPAGE_BROADCAST_URL
+
+    homepage_url = base_url.rstrip("/") + "/"
+    try:
+        html = _fetch_url_text(homepage_url, timeout=timeout, headers=SCRAPE_HEADERS)
+    except Exception:
+        return None
+
+    match = re.search(r'var\s+bcurl\s*=\s*"([^"]+)"', html, re.IGNORECASE)
+    if not match:
+        return None
+
+    endpoint = match.group(1).strip()
+    if not endpoint:
+        return None
+
+    try:
+        _validate_request_url(endpoint)
+    except ValueError:
+        return None
+
+    _HOMEPAGE_BROADCAST_URL = endpoint
+    return endpoint
+
+
+def _candidate_broadcast_urls(
+    base_url: str = DEFAULT_BASE_URL, timeout: int = 10
+) -> tuple[str, ...]:
+    """Build the ordered set of broadcast endpoints to probe."""
+    candidate_urls: list[str] = []
+
+    homepage_endpoint = _lookup_homepage_broadcast_url(
+        base_url=base_url, timeout=timeout
+    )
+    if homepage_endpoint:
+        candidate_urls.append(homepage_endpoint)
+
+    candidate_urls.extend(BROADCAST_URLS)
+
+    deduped: list[str] = []
+    for endpoint in candidate_urls:
+        if endpoint and endpoint not in deduped:
+            deduped.append(endpoint)
+    return tuple(deduped)
+
+
 def fetch_broadcast_rate_exact(
     timeout: int = 10,
     client: str = BROADCAST_CLIENT,
@@ -215,7 +269,9 @@ def fetch_broadcast_rate_exact(
     rate_val = None
     market_open = True
 
-    for endpoint in BROADCAST_URLS:
+    endpoints = _candidate_broadcast_urls(base_url=base_url, timeout=timeout)
+
+    for endpoint in endpoints:
         try:
             text = _fetch_broadcast_payload(endpoint, payload, timeout=timeout)
         except Exception as exc:  # pragma: no cover - network errors vary
@@ -234,7 +290,7 @@ def fetch_broadcast_rate_exact(
     if rate_val is None and prefer_static_id:
         dyn_id = _lookup_com_id_for_target(base_url=base_url, timeout=timeout)
         if dyn_id and dyn_id != com_id:
-            for endpoint in BROADCAST_URLS:
+            for endpoint in endpoints:
                 retry_text: str | None = None
                 try:
                     retry_text = _fetch_broadcast_payload(

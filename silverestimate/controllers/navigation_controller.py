@@ -158,13 +158,19 @@ class NavigationController:
         view_group.setExclusive(True)
 
         view_estimate_action = QAction("&Estimate Entry", self._main_window)
-        view_estimate_action.setIcon(get_icon("estimate_entry", widget=self._main_window))
+        view_estimate_action.setIcon(
+            get_icon("estimate_entry", widget=self._main_window)
+        )
         view_estimate_action.setCheckable(True)
         view_item_master_action = QAction("&Item Master", self._main_window)
-        view_item_master_action.setIcon(get_icon("item_master", widget=self._main_window))
+        view_item_master_action.setIcon(
+            get_icon("item_master", widget=self._main_window)
+        )
         view_item_master_action.setCheckable(True)
         view_silver_bars_action = QAction("Open &Silver Bars Dialog", self._main_window)
-        view_silver_bars_action.setIcon(get_icon("silver_bars", widget=self._main_window))
+        view_silver_bars_action.setIcon(
+            get_icon("silver_bars", widget=self._main_window)
+        )
         view_silver_bars_action.setCheckable(True)
 
         view_group.addAction(view_estimate_action)

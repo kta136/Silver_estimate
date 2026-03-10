@@ -474,7 +474,9 @@ class TotalsPanel(QWidget):
         self.net_wage_label.setObjectName("MetricValue")
         self.net_wage_label.setProperty("sectionKind", self._FINAL_SECTION_KEY)
         self.net_wage_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        final_layout.addRow(self._create_metric_header("Net Wage:"), self.net_wage_label)
+        final_layout.addRow(
+            self._create_metric_header("Net Wage:"), self.net_wage_label
+        )
 
         line_before_grand = QFrame()
         line_before_grand.setFrameShape(QFrame.HLine)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import logging
-from functools import partial
 import time
+from functools import partial
 
 from PyQt5.QtCore import QDate, QObject, Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import (
@@ -21,8 +21,8 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from silverestimate.ui.models import EstimateHistoryRow, EstimateHistoryTableModel
 from silverestimate.persistence.estimates_repository import fetch_estimate_history_rows
+from silverestimate.ui.models import EstimateHistoryRow, EstimateHistoryTableModel
 
 from .icons import get_icon
 from .print_manager import PrintManager, PrintPreviewBuildWorker
@@ -269,7 +269,11 @@ class EstimateHistoryDialog(QDialog):
             self.logger.debug("Failed to disable history action buttons: %s", exc)
 
         temp_db_path = getattr(self.db_manager, "temp_db_path", None)
-        if not isinstance(temp_db_path, str) or not temp_db_path or temp_db_path == ":memory:":
+        if (
+            not isinstance(temp_db_path, str)
+            or not temp_db_path
+            or temp_db_path == ":memory:"
+        ):
             try:
                 rows = self._load_estimates_sync()
                 self._populate_table(rows, request_id=request_id, started_at=started_at)
@@ -317,7 +321,9 @@ class EstimateHistoryDialog(QDialog):
             return
         QMessageBox.warning(self, "Load Error", message)
 
-    def _populate_table(self, history_rows, request_id=None, started_at=None, *_) -> None:
+    def _populate_table(
+        self, history_rows, request_id=None, started_at=None, *_
+    ) -> None:
         if request_id is not None and request_id != self._load_request_id:
             return
         table = self.estimates_table
@@ -381,9 +387,7 @@ class EstimateHistoryDialog(QDialog):
             try:
                 worker.deleteLater()
             except Exception as exc:
-                self.logger.debug(
-                    "Failed to schedule history worker deletion: %s", exc
-                )
+                self.logger.debug("Failed to schedule history worker deletion: %s", exc)
         if request_id is not None and request_id != self._load_request_id:
             return
         try:

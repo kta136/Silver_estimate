@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.3] - 2026-03-10
+
+### Changed
+- Bumped application/package version to `2.8.3`
+- Updated project README version header and badge to `v2.8.3`
+- Darkened and boldened the estimate summary typography for gross, net, fine, and related totals for better readability
+- Updated the perf-validation CI tranche to exercise an existing UI path that emits `[perf]` telemetry, keeping the local/CI perf gate meaningful
+- Re-ran and stabilized the local `nox -s ci` pipeline under the project Python 3.13 virtualenv
+
+### Fixed
+- Corrected the DDASilver `Silver Agra Local Mohar` live-rate fetch to prefer the homepage-advertised broadcast endpoint
+- Resolved pre-existing `ruff` import-order drift and `mypy` typing mismatches that were blocking local CI
+
 ## [2.8.1] - 2026-03-08
 
 ### Changed

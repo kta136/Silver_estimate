@@ -123,7 +123,7 @@ class ItemsRepository:
             self._logger.error("DB Error get_item_by_code: %s", exc, exc_info=True)
             return None
 
-    def search_items(self, search_term: str) -> list[dict[str, Any]]:
+    def search_items(self, search_term: str) -> list[sqlite3.Row]:
         cursor = self._cursor
         if not cursor:
             return []
@@ -206,7 +206,7 @@ class ItemsRepository:
             rows = rows[:limit_i]
         return list(rows), truncated
 
-    def get_all_items(self) -> list[tuple[Any, ...]]:
+    def get_all_items(self) -> list[sqlite3.Row]:
         cursor = self._cursor
         if not cursor:
             return []

@@ -206,7 +206,9 @@ class SecondaryActionsBar(QWidget):
         self.refresh_rate_button.setIcon(
             get_icon("refresh", widget=self, color="#0f766e")
         )
-        self._configure_icon_button(self.refresh_rate_button, label="Refresh Silver Rate")
+        self._configure_icon_button(
+            self.refresh_rate_button, label="Refresh Silver Rate"
+        )
         self.refresh_rate_button.setAutoRaise(True)
         self.refresh_rate_button.setCursor(Qt.PointingHandCursor)
         self.refresh_rate_button.setAccessibleName("Refresh Silver Rate")

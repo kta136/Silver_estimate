@@ -59,7 +59,9 @@ class _DialogDbStub:
     def get_first_estimate_date(self):
         return "2026-01-01"
 
-    def get_estimate_history_rows(self, date_from=None, date_to=None, voucher_search=None):
+    def get_estimate_history_rows(
+        self, date_from=None, date_to=None, voucher_search=None
+    ):
         del date_from, date_to, voucher_search
         return []
 
@@ -171,7 +173,9 @@ def test_populate_table_uses_model_rows_and_selection_lookup(qtbot, monkeypatch)
         )
 
         assert dialog.estimates_model.rowCount() == 2
-        assert dialog.results_summary_label.text() == "2 estimates in current date range"
+        assert (
+            dialog.results_summary_label.text() == "2 estimates in current date range"
+        )
 
         target_row = next(
             row

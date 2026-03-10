@@ -89,6 +89,7 @@ def tests_full(session: nox.Session) -> None:
         "-m",
         "pytest",
         "tests/ui/test_estimate_entry_widget.py",
+        "tests/ui/test_item_master.py",
         "tests/integration/test_repositories.py",
         "-q",
         "--log-file",

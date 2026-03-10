@@ -110,14 +110,11 @@ def test_estimate_facade_clears_last_error_before_delegating():
 def test_estimate_facade_delegates_history_rows_lookup():
     facade = _FacadeHarness()
 
-    assert (
-        facade.get_estimate_history_rows(
-            date_from="2025-01-01",
-            date_to="2025-01-31",
-            voucher_search="10",
-        )
-        == [{"voucher_no": "100"}]
-    )
+    assert facade.get_estimate_history_rows(
+        date_from="2025-01-01",
+        date_to="2025-01-31",
+        voucher_search="10",
+    ) == [{"voucher_no": "100"}]
     assert facade.estimates_repo.calls == [
         (
             "get_estimate_history_rows",

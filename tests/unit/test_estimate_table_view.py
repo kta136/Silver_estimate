@@ -246,7 +246,9 @@ def test_context_menu_actions_have_icons(table_view, monkeypatch):
     captured = {}
 
     def _fake_exec(menu, *_args, **_kwargs):
-        captured["actions"] = [(action.text(), action.icon()) for action in menu.actions()]
+        captured["actions"] = [
+            (action.text(), action.icon()) for action in menu.actions()
+        ]
 
     monkeypatch.setattr("PyQt5.QtWidgets.QMenu.exec_", _fake_exec)
 
@@ -274,6 +276,5 @@ def test_selection_palette_matches_active_and_inactive_states(table_view):
     assert palette.color(QPalette.HighlightedText).name() == "#0f172a"
     assert palette.color(QPalette.Inactive, QPalette.Highlight).name() == "#dbeafe"
     assert (
-        palette.color(QPalette.Inactive, QPalette.HighlightedText).name()
-        == "#0f172a"
+        palette.color(QPalette.Inactive, QPalette.HighlightedText).name() == "#0f172a"
     )

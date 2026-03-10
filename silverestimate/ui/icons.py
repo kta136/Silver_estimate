@@ -184,11 +184,7 @@ def get_icon(
 
     spec = _ICON_SPECS.get(name)
     mdi6_name = (
-        spec.mdi6_name
-        if spec is not None
-        else name
-        if "." in name
-        else f"mdi6.{name}"
+        spec.mdi6_name if spec is not None else name if "." in name else f"mdi6.{name}"
     )
 
     if _qtawesome is not None:

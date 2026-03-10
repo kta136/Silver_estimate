@@ -454,9 +454,7 @@ class ItemImportManager(QObject):
 
         existing_codes: set[str] = set()
         for start in range(0, len(normalized_codes), self._EXISTING_CODE_CHUNK_SIZE):
-            chunk = normalized_codes[
-                start : start + self._EXISTING_CODE_CHUNK_SIZE
-            ]
+            chunk = normalized_codes[start : start + self._EXISTING_CODE_CHUNK_SIZE]
             placeholders = ",".join("?" for _ in chunk)
             cursor.execute(
                 f"SELECT code FROM items WHERE UPPER(code) IN ({placeholders})",  # nosec B608

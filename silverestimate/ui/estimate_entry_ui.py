@@ -34,11 +34,7 @@ class NumericDelegate(QStyledItemDelegate):
             table_cols.COL_PURITY,
             table_cols.COL_WAGE_RATE,
         ):
-            decimals = (
-                3
-                if col in (table_cols.COL_GROSS, table_cols.COL_POLY)
-                else 2
-            )
+            decimals = 3 if col in (table_cols.COL_GROSS, table_cols.COL_POLY) else 2
             validator = QDoubleValidator(0.0, 999999.999, decimals, editor)
             validator.setNotation(QDoubleValidator.StandardNotation)
             validator.setLocale(locale)
@@ -122,10 +118,14 @@ class NumericDelegate(QStyledItemDelegate):
                 col = index.column()
                 key = event.key()
                 if key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Tab):
-                    if col in (
-                        table_cols.COL_GROSS,
-                        table_cols.COL_POLY,
-                    ) and editor.text() == "":
+                    if (
+                        col
+                        in (
+                            table_cols.COL_GROSS,
+                            table_cols.COL_POLY,
+                        )
+                        and editor.text() == ""
+                    ):
                         index.model().setData(index, 0.0, Qt.EditRole)
                         self.closeEditor.emit(
                             editor, QStyledItemDelegate.SubmitModelCache

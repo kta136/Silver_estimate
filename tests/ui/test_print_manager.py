@@ -96,8 +96,8 @@ def test_show_preview_delegates_to_preview_dialog(qt_app, settings_stub):
     manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
     calls = []
 
-    manager._preview_controller.open_preview = (
-        lambda payload, parent_widget=None: calls.append((payload, parent_widget))
+    manager._preview_controller.open_preview = lambda payload, parent_widget=None: (
+        calls.append((payload, parent_widget))
     )
 
     payload = manager.build_estimate_preview_payload(
@@ -196,9 +196,7 @@ def test_print_manager_migrates_legacy_portrait_default_to_landscape(
     assert settings.value("print/orientation") == "Landscape"
 
 
-def test_print_manager_preserves_explicit_portrait_orientation(
-    qt_app, settings_stub
-):
+def test_print_manager_preserves_explicit_portrait_orientation(qt_app, settings_stub):
     del qt_app, settings_stub
     settings = get_app_settings()
     settings.setValue("print/orientation", "Portrait")

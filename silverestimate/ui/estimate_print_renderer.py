@@ -644,9 +644,7 @@ class EstimatePrintRenderer:
         silver_cost = net_fine_display * silver_rate
         total_cost = net_wage_display + silver_cost
 
-        fine_display = (
-            f"{self._format_indian_grouped_integer(net_fine_display)} gm"
-        )
+        fine_display = f"{self._format_indian_grouped_integer(net_fine_display)} gm"
         fine_str = fine_display.rjust(max(W_FINE, len(fine_display)))
         wage_str = f"{int(round(net_wage_display)):{W_LBR}.0f}"
         scost_pad = (

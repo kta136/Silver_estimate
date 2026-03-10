@@ -1,5 +1,5 @@
 APP_NAME = "Silver Estimation App"
-APP_VERSION = "2.8.2"
+APP_VERSION = "2.8.3"
 APP_TITLE = f"{APP_NAME} v{APP_VERSION}"
 
 # Keep a stable organization identifier for all new installs.

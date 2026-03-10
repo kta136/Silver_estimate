@@ -292,7 +292,7 @@ QTableView#EstimateTableView:focus {
 
 QHeaderView::section {
     background-color: __HEADER_BG__;
-    color: __HEADER_TEXT__;
+    color: __TEXT_STRONG__;
     border: none;
     border-right: 1px solid #e2e8f0;
     border-bottom: 1px solid #e2e8f0;
@@ -357,15 +357,15 @@ QLabel#SectionTitle {
 }
 
 QLabel#SectionTitle[sectionKind="totals"] {
-    color: #1d4ed8;
+    color: #1e3a8a;
 }
 
 QLabel#SectionTitle[sectionKind="return"] {
-    color: #991b1b;
+    color: #881337;
 }
 
 QLabel#SectionTitle[sectionKind="silver_bar"] {
-    color: #166534;
+    color: #14532d;
 }
 
 QLabel#SectionTitle[sectionKind="final_calc"] {
@@ -374,7 +374,8 @@ QLabel#SectionTitle[sectionKind="final_calc"] {
 }
 
 QLabel#MetricLabel {
-    color: __FIELD_TEXT__;
+    color: __TEXT_STRONG__;
+    font-weight: 700;
 }
 
 QLabel#MetricLabel[sectionKind="totals"] {
@@ -382,11 +383,11 @@ QLabel#MetricLabel[sectionKind="totals"] {
 }
 
 QLabel#MetricLabel[sectionKind="return"] {
-    color: #9f1239;
+    color: #881337;
 }
 
 QLabel#MetricLabel[sectionKind="silver_bar"] {
-    color: #166534;
+    color: #14532d;
 }
 
 QLabel#SectionDragHandle {
@@ -398,33 +399,33 @@ QLabel#SectionDragHandle {
 
 QLabel#MetricValue {
     color: __TEXT_STRONG__;
-    font-weight: 600;
+    font-weight: 700;
 }
 
 QLabel#MetricValue[sectionKind="totals"] {
-    color: #1e40af;
+    color: #1e3a8a;
 }
 
 QLabel#MetricValue[sectionKind="return"] {
-    color: #b91c1c;
+    color: #991b1b;
 }
 
 QLabel#MetricValue[sectionKind="silver_bar"] {
-    color: #15803d;
+    color: #166534;
 }
 
 QLabel#MetricValue[sectionKind="final_calc"] {
     color: #0f172a;
-    font-weight: 700;
+    font-weight: 800;
 }
 
 QLabel#GrandTotalValue {
-    color: #065f46;
+    color: #064e3b;
     font-weight: 800;
 }
 
 QLabel#FinalMetricLabel {
-    color: __HEADER_TEXT__;
+    color: __TEXT_STRONG__;
     font-weight: 700;
 }
 

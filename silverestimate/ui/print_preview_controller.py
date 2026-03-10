@@ -7,6 +7,7 @@ import os
 from typing import Callable
 
 from PyQt5.QtCore import QEvent, QObject, QSize, Qt
+from PyQt5.QtGui import QPageLayout, QPageSize
 from PyQt5.QtPrintSupport import (
     QPageSetupDialog,
     QPrintDialog,
@@ -32,6 +33,7 @@ from PyQt5.QtWidgets import (
 from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.ui.icons import get_icon
 from silverestimate.ui.print_payload_builder import PrintPreviewPayload
+from silverestimate.ui.settings_print_controller import PRINT_ORIENTATION_MIGRATION_KEY
 
 LOGGER = logging.getLogger(__name__)
 
@@ -39,6 +41,12 @@ _LAYOUT_LABELS = {
     "old": "Classic",
     "new": "Modern",
     "thermal": "Thermal",
+}
+_PAGE_SIZE_LABELS_BY_ID = {
+    QPageSize.A4: "A4",
+    QPageSize.A5: "A5",
+    QPageSize.Letter: "Letter",
+    QPageSize.Legal: "Legal",
 }
 
 
@@ -84,9 +92,11 @@ class PrintPreviewController:
         *,
         printer: QPrinter,
         render_document: Callable[[QPrinter, str, bool], None],
+        persist_estimate_layout: Callable[[str], None] | None = None,
     ) -> None:
         self._printer = printer
         self._render_document = render_document
+        self._persist_estimate_layout = persist_estimate_layout
 
     def open_preview(
         self,
@@ -123,6 +133,7 @@ class PrintPreviewController:
         preview.showMaximized()
         preview.exec_()
         self._save_preview_zoom(preview_widget)
+        self._save_preview_defaults(state["payload"])
 
     def _apply_initial_zoom(self, preview_widget: QPrintPreviewWidget | None) -> None:
         if not preview_widget:
@@ -159,6 +170,73 @@ class PrintPreviewController:
             LOGGER.debug("Saved preview zoom: %s", zoom_factor)
         except Exception as exc:
             LOGGER.warning("Could not save preview zoom: %s", exc)
+
+    def _save_preview_defaults(self, payload: PrintPreviewPayload) -> None:
+        try:
+            settings = get_app_settings()
+            self._save_printer_defaults(settings)
+            self._save_payload_defaults(settings, payload)
+            settings.sync()
+        except Exception as exc:
+            LOGGER.warning("Could not persist preview defaults: %s", exc)
+
+    def _save_printer_defaults(self, settings) -> None:
+        printer_name = self._printer.printerName().strip()
+        if printer_name:
+            settings.setValue("print/default_printer", printer_name)
+
+        orientation = self._printer.orientation()
+        settings.setValue(
+            "print/orientation",
+            "Landscape" if orientation == QPrinter.Landscape else "Portrait",
+        )
+        settings.setValue(PRINT_ORIENTATION_MIGRATION_KEY, True)
+
+        page_size = self._printer.pageLayout().pageSize()
+        page_size_name = self._page_size_label(page_size)
+        size_mm = page_size.size(QPageSize.Millimeter)
+        settings.setValue("print/page_size", page_size_name)
+        settings.setValue("print/page_size_name", page_size.name() or page_size_name)
+        settings.setValue("print/page_width_mm", float(size_mm.width()))
+        settings.setValue("print/page_height_mm", float(size_mm.height()))
+
+        margins = self._printer.pageLayout().margins(QPageLayout.Millimeter)
+        margin_values = (
+            max(0, int(round(margins.left()))),
+            max(0, int(round(margins.top()))),
+            max(0, int(round(margins.right()))),
+            max(0, int(round(margins.bottom()))),
+        )
+        settings.setValue(
+            "print/margins",
+            ",".join(str(value) for value in margin_values),
+        )
+
+    def _save_payload_defaults(self, settings, payload: PrintPreviewPayload) -> None:
+        if payload.document_kind != "estimate":
+            return
+        layout_mode = (payload.layout_mode or "").strip().lower()
+        if layout_mode not in _LAYOUT_LABELS:
+            return
+        settings.setValue("print/estimate_layout", layout_mode)
+        if self._persist_estimate_layout is not None:
+            self._persist_estimate_layout(layout_mode)
+
+    @staticmethod
+    def _page_size_label(page_size: QPageSize) -> str:
+        try:
+            page_id = page_size.id()
+        except Exception:
+            page_id = None
+        if page_id in _PAGE_SIZE_LABELS_BY_ID:
+            return _PAGE_SIZE_LABELS_BY_ID[page_id]
+        raw_name = (page_size.name() or "").strip()
+        lowered = raw_name.lower()
+        if lowered.startswith("letter"):
+            return "Letter"
+        if "thermal" in lowered and "80" in lowered:
+            return "Thermal 80mm"
+        return raw_name or "A4"
 
     def _augment_preview_toolbar(
         self,

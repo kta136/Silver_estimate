@@ -84,22 +84,7 @@ class PrintManager:
             LOGGER.debug("Failed to load default printer preference: %s", exc)
         # Page size
         try:
-            page_size_name = settings.value("print/page_size", "A4", type=str)
-            if page_size_name == "Thermal 80mm":
-                thermal_size = QPageSize(
-                    QSizeF(79.5, 200), QPageSize.Millimeter, "Thermal 80mm"
-                )
-                self.printer.setPageSize(thermal_size)
-            else:
-                size_map = {
-                    "A4": QPageSize.A4,
-                    "A5": QPageSize.A5,
-                    "Letter": QPageSize.Letter,
-                    "Legal": QPageSize.Legal,
-                }
-                self.printer.setPageSize(
-                    QPageSize(size_map.get(page_size_name, QPageSize.A4))
-                )
+            self._apply_page_size_preference(settings)
         except Exception as exc:
             LOGGER.debug("Failed to load page size preference: %s", exc)
             self.printer.setPageSize(QPageSize(QPageSize.A4))
@@ -160,6 +145,7 @@ class PrintManager:
         self._preview_controller = PrintPreviewController(
             printer=self.printer,
             render_document=self._print_html,
+            persist_estimate_layout=self._set_estimate_layout_mode,
         )
         self._silver_bar_renderer = SilverBarPrintRenderer()
 
@@ -179,6 +165,46 @@ class PrintManager:
                 return "Landscape"
             return str(orientation_name)
         return "Landscape"
+
+    def _apply_page_size_preference(self, settings) -> None:
+        page_size_name = settings.value("print/page_size", "A4", type=str)
+        if page_size_name == "Thermal 80mm":
+            thermal_size = QPageSize(
+                QSizeF(79.5, 200), QPageSize.Millimeter, "Thermal 80mm"
+            )
+            self.printer.setPageSize(thermal_size)
+            return
+
+        size_map = {
+            "A4": QPageSize.A4,
+            "A5": QPageSize.A5,
+            "Letter": QPageSize.Letter,
+            "Letter / ANSI A": QPageSize.Letter,
+            "Legal": QPageSize.Legal,
+        }
+        if page_size_name in size_map:
+            self.printer.setPageSize(QPageSize(size_map[page_size_name]))
+            return
+
+        width_mm = settings.value("print/page_width_mm", 0.0, type=float)
+        height_mm = settings.value("print/page_height_mm", 0.0, type=float)
+        custom_name = settings.value("print/page_size_name", page_size_name, type=str)
+        if float(width_mm) > 0 and float(height_mm) > 0:
+            self.printer.setPageSize(
+                QPageSize(
+                    QSizeF(float(width_mm), float(height_mm)),
+                    QPageSize.Millimeter,
+                    custom_name or page_size_name or "Custom",
+                )
+            )
+            return
+
+        self.printer.setPageSize(QPageSize(QPageSize.A4))
+
+    def _set_estimate_layout_mode(self, layout_mode: str) -> None:
+        normalized = (layout_mode or "").strip().lower()
+        if normalized in {"old", "new", "thermal"}:
+            self.estimate_layout_mode = normalized
 
     def format_indian_rupees(self, number):
         """Formats a number into Indian Rupees notation (Lakhs, Crores)."""

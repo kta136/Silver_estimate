@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.4] - 2026-03-10
+
+### Changed
+- Bumped application/package version to `2.8.4`
+- Updated project README version header and badge to `v2.8.4`
+- Persisted print-preview changes for orientation, margins, page size, printer choice, and estimate layout so the next print uses the same defaults
+- Reduced CI runtime by collapsing duplicated pytest passes and moving non-build validation jobs to `ubuntu-latest`
+
+### Fixed
+- Restored print-preview behavior so user-adjusted preview preferences now become the default for subsequent print sessions
+
 ## [2.8.3] - 2026-03-10
 
 ### Changed

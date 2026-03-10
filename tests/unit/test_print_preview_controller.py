@@ -1,6 +1,9 @@
+from PyQt5.QtCore import QSizeF
+from PyQt5.QtGui import QPageSize
 from PyQt5.QtPrintSupport import QPrinter, QPrintPreviewDialog, QPrintPreviewWidget
 from PyQt5.QtWidgets import QToolBar
 
+from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.ui.print_payload_builder import PrintPreviewPayload
 from silverestimate.ui.print_preview_controller import PrintPreviewController
 
@@ -71,3 +74,67 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
     for action in toolbar.actions():
         if action.text() in set(expected_action_order):
             assert not action.icon().isNull()
+
+
+def test_preview_defaults_persist_updated_print_preferences(
+    qt_app, monkeypatch, settings_stub
+):
+    del qt_app, settings_stub
+    saved_layouts = []
+    controller = PrintPreviewController(
+        printer=QPrinter(),
+        render_document=lambda *args: None,
+        persist_estimate_layout=saved_layouts.append,
+    )
+    monkeypatch.setattr(controller._printer, "printerName", lambda: "Warehouse Printer")
+    controller._printer.setOrientation(QPrinter.Portrait)
+    controller._printer.setPageSize(QPageSize(QPageSize.Legal))
+    controller._printer.setPageMargins(12, 3, 14, 4, QPrinter.Millimeter)
+    payload = PrintPreviewPayload(
+        html_content="<html><body><p>Preview</p></body></html>",
+        title="Print Preview",
+        document_kind="estimate",
+        identifier="V-002",
+        suggested_filename="Estimate-V-002.pdf",
+        layout_mode="thermal",
+        available_layouts=("old", "new", "thermal"),
+    )
+
+    controller._save_preview_defaults(payload)
+
+    settings = get_app_settings()
+    assert settings.value("print/default_printer") == "Warehouse Printer"
+    assert settings.value("print/orientation") == "Portrait"
+    assert settings.value("print/orientation_explicit") is True
+    assert settings.value("print/page_size") == "Legal"
+    assert settings.value("print/page_size_name") == "Legal"
+    assert settings.value("print/page_width_mm") == 215.9
+    assert settings.value("print/page_height_mm") == 355.6
+    assert settings.value("print/margins") == "12,3,14,4"
+    assert settings.value("print/estimate_layout") == "thermal"
+    assert saved_layouts == ["thermal"]
+
+
+def test_preview_defaults_store_custom_page_size_dimensions(qt_app, settings_stub):
+    del qt_app, settings_stub
+    controller = PrintPreviewController(
+        printer=QPrinter(),
+        render_document=lambda *args: None,
+    )
+    custom_page = QPageSize(QSizeF(120.0, 190.0), QPageSize.Millimeter, "Counter Slip")
+    controller._printer.setPageSize(custom_page)
+    payload = PrintPreviewPayload(
+        html_content="<html><body><p>Preview</p></body></html>",
+        title="Print Preview",
+        document_kind="silver_bar_list",
+        identifier="LIST-001",
+        suggested_filename="List.pdf",
+    )
+
+    controller._save_preview_defaults(payload)
+
+    settings = get_app_settings()
+    assert settings.value("print/page_size") == "Counter Slip"
+    assert settings.value("print/page_size_name") == "Counter Slip"
+    assert settings.value("print/page_width_mm") == 120.0
+    assert settings.value("print/page_height_mm") == 190.0

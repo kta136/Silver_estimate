@@ -58,8 +58,14 @@ def mypy(session: nox.Session) -> None:
 
 @nox.session(python=False)
 def tests_fast(session: nox.Session) -> None:
-    session.run("python", "-m", "pytest", "-m", "unit and not slow", "-v")
-    session.run("python", "-m", "pytest", "-m", "integration", "-v")
+    session.run(
+        "python",
+        "-m",
+        "pytest",
+        "-m",
+        "(unit and not slow) or integration",
+        "-v",
+    )
 
 
 @nox.session(python=False)
@@ -69,9 +75,6 @@ def tests_full(session: nox.Session) -> None:
     clean_artifact(perf_log)
     clean_artifact(coverage_xml)
 
-    session.run("python", "-m", "pytest", "-m", "unit and not slow", "-v")
-    session.run("python", "-m", "pytest", "-m", "integration", "-v")
-    session.run("python", "-m", "pytest", "-m", "slow", "-v")
     session.run(
         "python",
         "-m",
@@ -81,7 +84,11 @@ def tests_full(session: nox.Session) -> None:
         "-W",
         "ignore:'crypt' is deprecated and slated for removal in Python 3.13:DeprecationWarning",
         "-m",
-        "unit or integration",
+        "unit or integration or slow",
+        "--cov=silverestimate",
+        "--cov-report=xml",
+        "--cov-report=term-missing",
+        "--cov-fail-under=50",
         "-v",
     )
     session.run(
@@ -98,16 +105,6 @@ def tests_full(session: nox.Session) -> None:
         "DEBUG",
     )
     session.run("python", "scripts/check_perf_budgets.py", "--log-file", str(perf_log))
-    session.run(
-        "python",
-        "-m",
-        "pytest",
-        "--cov=silverestimate",
-        "--cov-report=xml",
-        "--cov-report=term-missing",
-        "--cov-fail-under=50",
-        "-v",
-    )
 
 
 @nox.session(python=False)

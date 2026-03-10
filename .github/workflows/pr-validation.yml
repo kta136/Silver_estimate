@@ -19,7 +19,7 @@ concurrency:
 jobs:
   lint-and-format:
     name: Code Quality Checks
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
@@ -41,7 +41,7 @@ jobs:
 
   type-check:
     name: Type Checking
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
@@ -63,7 +63,7 @@ jobs:
 
   test-fast:
     name: Fast Tests (Python 3.13)
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
@@ -85,7 +85,7 @@ jobs:
 
   security:
     name: Security Checks
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code

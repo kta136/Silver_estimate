@@ -3,6 +3,7 @@ from PyQt5.QtPrintSupport import QPrinter
 
 from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.ui.print_manager import PrintManager
+from silverestimate.ui.print_payload_builder import PrintPreviewPayload
 
 
 class _DbStub:
@@ -205,3 +206,57 @@ def test_print_manager_preserves_explicit_portrait_orientation(qt_app, settings_
     manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
 
     assert manager.printer.orientation() == QPrinter.Portrait
+
+
+def test_print_manager_uses_persisted_custom_page_size(qt_app, settings_stub):
+    del qt_app, settings_stub
+    settings = get_app_settings()
+    settings.setValue("print/page_size", "Counter Slip")
+    settings.setValue("print/page_size_name", "Counter Slip")
+    settings.setValue("print/page_width_mm", 120.0)
+    settings.setValue("print/page_height_mm", 190.0)
+
+    manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
+    page_size = manager.printer.pageLayout().pageSize()
+
+    assert page_size.name() == "Counter Slip"
+    assert page_size.size(page_size.Millimeter).width() == 120.0
+    assert page_size.size(page_size.Millimeter).height() == 190.0
+
+
+def test_preview_layout_changes_become_default_for_next_estimate_preview(
+    qt_app, settings_stub
+):
+    del qt_app, settings_stub
+    manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
+    estimate_data = {
+        "header": {
+            "voucher_no": "V-004",
+            "date": "2026-02-13",
+            "silver_rate": 0.0,
+            "note": "",
+            "last_balance_silver": 0.0,
+            "last_balance_amount": 0.0,
+        },
+        "items": [],
+    }
+
+    manager._preview_controller._save_preview_defaults(
+        PrintPreviewPayload(
+            html_content="THERMAL",
+            title="Print Preview - Estimate V-004",
+            document_kind="estimate",
+            identifier="V-004",
+            suggested_filename="Estimate-V-004.pdf",
+            layout_mode="thermal",
+            available_layouts=("old", "new", "thermal"),
+        )
+    )
+    payload = manager.build_estimate_preview_payload(
+        "V-004",
+        estimate_data=estimate_data,
+    )
+
+    assert payload is not None
+    assert manager.estimate_layout_mode == "thermal"
+    assert payload.layout_mode == "thermal"

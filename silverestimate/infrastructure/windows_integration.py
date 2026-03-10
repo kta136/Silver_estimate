@@ -155,9 +155,40 @@ def hide_console_window(logger=None) -> None:
             logger.debug("Failed to hide console window: %s", exc)
 
 
+def bring_window_to_front(hwnd: Optional[int], logger=None) -> None:
+    """
+    Ask Windows to foreground an existing top-level window.
+
+    This is best-effort only. Windows focus-stealing rules still apply, but
+    explicitly restoring/raising the startup dialog makes it much less likely
+    to appear behind another window when launched from Explorer or a shortcut.
+    """
+    if not _is_windows() or not hwnd:
+        return
+
+    try:  # pragma: no cover - Windows API
+        windll = getattr(ctypes, "windll", None)
+        user32 = getattr(windll, "user32", None)
+        if user32 is None:
+            return
+
+        SW_SHOW = 5
+        SW_RESTORE = 9
+
+        user32.ShowWindow(hwnd, SW_RESTORE)
+        user32.ShowWindow(hwnd, SW_SHOW)
+        user32.BringWindowToTop(hwnd)
+        user32.SetForegroundWindow(hwnd)
+        user32.SetActiveWindow(hwnd)
+    except Exception as exc:  # pragma: no cover - defensive logging only
+        if logger:
+            logger.debug("Failed to bring window to front: %s", exc)
+
+
 __all__ = [
     "set_app_user_model_id",
     "apply_taskbar_icon",
     "destroy_icon_handle",
     "hide_console_window",
+    "bring_window_to_front",
 ]

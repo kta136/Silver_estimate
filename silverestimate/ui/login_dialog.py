@@ -1,6 +1,8 @@
+from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtWidgets import (
+    QApplication,
+    QCheckBox,
     QDialog,
-    QFormLayout,
     QFrame,
     QHBoxLayout,
     QInputDialog,
@@ -10,6 +12,8 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QVBoxLayout,
 )
+
+from silverestimate.infrastructure.windows_integration import bring_window_to_front
 
 from .shared_screen_theme import build_management_screen_stylesheet
 
@@ -41,11 +45,12 @@ class LoginDialog(QDialog):
         )
         self.setModal(True)  # Ensure user interacts with this dialog first
         self.setObjectName("LoginDialog")
-        self.setMinimumWidth(460 if not self.is_setup else 420)
+        self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
+        self.setMinimumWidth(420 if not self.is_setup else 440)
         self.setStyleSheet(
             build_management_screen_stylesheet(
                 root_selector="QDialog#LoginDialog",
-                card_names=["LoginHeaderCard", "LoginFormCard", "LoginDangerCard"],
+                card_names=["LoginPanelFrame", "LoginDangerCard"],
                 title_label="LoginTitleLabel",
                 subtitle_label="LoginSubtitleLabel",
                 field_label="LoginFieldLabel",
@@ -54,18 +59,55 @@ class LoginDialog(QDialog):
                 danger_button="LoginDangerButton",
                 input_selectors=["QLineEdit"],
                 extra_rules="""
-                QLabel#LoginBodyText {
-                    color: #475569;
+                QFrame#LoginPanelFrame {
+                    background-color: #ffffff;
+                    border: 1px solid #d9e2ec;
+                    border-radius: 18px;
+                }
+                QLabel#LoginSubtitleLabel {
                     font-size: 9pt;
+                }
+                QCheckBox#LoginShowPasswords {
+                    color: #475569;
+                    font-size: 8.6pt;
+                    spacing: 8px;
+                }
+                QCheckBox#LoginShowPasswords::indicator {
+                    width: 14px;
+                    height: 14px;
+                    border-radius: 4px;
+                    border: 1px solid #94a3b8;
+                    background-color: #ffffff;
+                }
+                QCheckBox#LoginShowPasswords::indicator:checked {
+                    background-color: #0f766e;
+                    border: 1px solid #0f766e;
+                }
+                QPushButton#LoginPrimaryButton,
+                QPushButton#LoginSecondaryButton,
+                QPushButton#LoginDangerButton {
+                    min-height: 30px;
+                    padding: 6px 12px;
+                }
+                QPushButton#LoginPrimaryButton {
+                    min-width: 112px;
+                }
+                QPushButton#LoginSecondaryButton {
+                    min-width: 84px;
                 }
                 QLabel#LoginDangerTitle {
                     color: #991b1b;
-                    font-size: 9pt;
+                    font-size: 8.9pt;
                     font-weight: 700;
                 }
                 QLabel#LoginDangerBody {
                     color: #7f1d1d;
-                    font-size: 8.5pt;
+                    font-size: 8.3pt;
+                }
+                QFrame#LoginDangerCard {
+                    background-color: #fff7f7;
+                    border: 1px solid #f2c6ce;
+                    border-radius: 12px;
                 }
                 """,
             )
@@ -74,6 +116,7 @@ class LoginDialog(QDialog):
         self._password = str()
         self._backup_password = str()  # Only used in setup mode
         self.reset_requested = False  # Add flag to track reset request
+        self._startup_activation_pending = True
 
         self._setup_ui()
         self._connect_signals()
@@ -83,53 +126,40 @@ class LoginDialog(QDialog):
     def _setup_ui(self):
         """Create the UI elements for the dialog."""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(10)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(0)
 
-        header_card = QFrame(self)
-        header_card.setObjectName("LoginHeaderCard")
-        header_layout = QVBoxLayout(header_card)
-        header_layout.setContentsMargins(12, 12, 12, 12)
-        header_layout.setSpacing(2)
+        panel = QFrame(self)
+        panel.setObjectName("LoginPanelFrame")
+        panel_layout = QVBoxLayout(panel)
+        panel_layout.setContentsMargins(20, 20, 20, 20)
+        panel_layout.setSpacing(12)
+        layout.addWidget(panel)
 
         title_label = QLabel(
             "Create Passwords" if self.is_setup else "Authentication Required"
         )
         title_label.setObjectName("LoginTitleLabel")
-        header_layout.addWidget(title_label)
+        panel_layout.addWidget(title_label)
 
         subtitle_label = QLabel(
-            "Set your main and secondary passwords to initialize secure access."
+            "Set a main password and a secondary recovery password."
             if self.is_setup
-            else "Enter your password to open the application."
+            else "Enter your password to continue."
         )
         subtitle_label.setObjectName("LoginSubtitleLabel")
         subtitle_label.setWordWrap(True)
-        header_layout.addWidget(subtitle_label)
-        layout.addWidget(header_card)
-
-        form_card = QFrame(self)
-        form_card.setObjectName("LoginFormCard")
-        form_card_layout = QVBoxLayout(form_card)
-        form_card_layout.setContentsMargins(12, 12, 12, 12)
-        form_card_layout.setSpacing(10)
-
-        intro_label = QLabel(
-            "Choose strong passwords and keep them memorized. The main password protects day-to-day access."
-            if self.is_setup
-            else "Use your main password for normal access. Data reset is kept separate below because it is irreversible."
-        )
-        intro_label.setObjectName("LoginBodyText")
-        intro_label.setWordWrap(True)
-        form_card_layout.addWidget(intro_label)
-
-        form_layout = QFormLayout()
-        form_layout.setSpacing(10)
+        panel_layout.addWidget(subtitle_label)
 
         self.password_label = QLabel("Password:")
         self.password_label.setObjectName("LoginFieldLabel")
         self.password_input = QLineEdit()
         self.password_input.setEchoMode(QLineEdit.Password)
+        self.password_input.setPlaceholderText(
+            "Enter your main password"
+            if not self.is_setup
+            else "Create a strong main password"
+        )
         if self.is_setup:
             self.password_input.setToolTip(
                 "Enter your main password for database access\nThis password encrypts your data\nChoose a strong, memorable password"
@@ -138,38 +168,48 @@ class LoginDialog(QDialog):
             self.password_input.setToolTip(
                 "Enter your password to access the application\nPress Enter to login\nUse Reset button if password is forgotten"
             )
-        form_layout.addRow(self.password_label, self.password_input)
+        panel_layout.addWidget(self.password_label)
+        panel_layout.addWidget(self.password_input)
 
         if self.is_setup:
-            # Renamed label to be less descriptive of function
             self.backup_password_label = QLabel("Secondary Password:")
             self.backup_password_label.setObjectName("LoginFieldLabel")
             self.backup_password_input = QLineEdit()
             self.backup_password_input.setEchoMode(QLineEdit.Password)
+            self.backup_password_input.setPlaceholderText(
+                "Create a separate secondary password"
+            )
             self.backup_password_input.setToolTip(
                 "Enter a different secondary password\nMust be different from main password\nUsed for emergency access and data management"
             )
-            form_layout.addRow(self.backup_password_label, self.backup_password_input)
+            panel_layout.addWidget(self.backup_password_label)
+            panel_layout.addWidget(self.backup_password_input)
 
-            # Renamed label
             self.confirm_password_label = QLabel("Confirm Secondary Password:")
             self.confirm_password_label.setObjectName("LoginFieldLabel")
             self.confirm_password_input = QLineEdit()
             self.confirm_password_input.setEchoMode(QLineEdit.Password)
+            self.confirm_password_input.setPlaceholderText(
+                "Re-enter the secondary password"
+            )
             self.confirm_password_input.setToolTip(
                 "Re-enter the secondary password to confirm\nMust match exactly\nEnsures password was typed correctly"
             )
-            form_layout.addRow(self.confirm_password_label, self.confirm_password_input)
+            panel_layout.addWidget(self.confirm_password_label)
+            panel_layout.addWidget(self.confirm_password_input)
 
-        form_card_layout.addLayout(form_layout)
-        layout.addWidget(form_card)
+        self.show_passwords_checkbox = QCheckBox("Show passwords")
+        self.show_passwords_checkbox.setObjectName("LoginShowPasswords")
+        panel_layout.addWidget(self.show_passwords_checkbox)
 
-        # Buttons
         button_layout = QHBoxLayout()
+        button_layout.setSpacing(10)
         self.ok_button = QPushButton(
             "Login" if not self.is_setup else "Create Passwords"
         )
         self.ok_button.setObjectName("LoginPrimaryButton")
+        self.ok_button.setDefault(True)
+        self.ok_button.setAutoDefault(True)
         if self.is_setup:
             self.ok_button.setToolTip(
                 "Create passwords and initialize the application\nBoth passwords will be saved securely\nApplication will start after setup"
@@ -185,32 +225,31 @@ class LoginDialog(QDialog):
             "Exit without logging in\nApplication will close\nNo data will be accessed or modified"
         )
 
-        button_layout.addStretch()
-
-        button_layout.addWidget(self.cancel_button)
         button_layout.addWidget(self.ok_button)
-        layout.addLayout(button_layout)
+        button_layout.addStretch()
+        button_layout.addWidget(self.cancel_button)
+        panel_layout.addLayout(button_layout)
 
         if not self.is_setup:
-            danger_card = QFrame(self)
+            danger_card = QFrame(panel)
             danger_card.setObjectName("LoginDangerCard")
             danger_layout = QVBoxLayout(danger_card)
-            danger_layout.setContentsMargins(12, 12, 12, 12)
-            danger_layout.setSpacing(6)
+            danger_layout.setContentsMargins(18, 16, 18, 16)
+            danger_layout.setSpacing(8)
 
             danger_title = QLabel("Trouble signing in?")
             danger_title.setObjectName("LoginDangerTitle")
             danger_layout.addWidget(danger_title)
 
             danger_body = QLabel(
-                "Full data wipe is permanent. Use it only when you intentionally want to reset the application."
+                "Wipes all stored data and passwords. This cannot be undone."
             )
             danger_body.setObjectName("LoginDangerBody")
             danger_body.setWordWrap(True)
             danger_layout.addWidget(danger_body)
 
             danger_action_layout = QHBoxLayout()
-            danger_action_layout.addStretch()
+            danger_action_layout.setSpacing(10)
             self.reset_button = QPushButton("Wipe All Data...")
             self.reset_button.setObjectName("LoginDangerButton")
             self.reset_button.setToolTip(
@@ -219,13 +258,15 @@ class LoginDialog(QDialog):
                 "Requires typing DELETE to confirm"
             )
             danger_action_layout.addWidget(self.reset_button)
+            danger_action_layout.addStretch()
             danger_layout.addLayout(danger_action_layout)
-            layout.addWidget(danger_card)
+            panel_layout.addWidget(danger_card)
 
     def _connect_signals(self):
         """Connect UI signals to slots."""
         self.ok_button.clicked.connect(self._handle_ok)
         self.cancel_button.clicked.connect(self.reject)
+        self.show_passwords_checkbox.toggled.connect(self._toggle_password_visibility)
         # Connect reset button if it exists
         if hasattr(self, "reset_button"):
             self.reset_button.clicked.connect(self._handle_reset_request)
@@ -235,6 +276,38 @@ class LoginDialog(QDialog):
         if self.is_setup:
             self.backup_password_input.returnPressed.connect(self._handle_ok)
             self.confirm_password_input.returnPressed.connect(self._handle_ok)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self._startup_activation_pending:
+            self._startup_activation_pending = False
+            QTimer.singleShot(0, self._request_startup_foreground)
+            QTimer.singleShot(150, self._request_startup_foreground)
+
+    def _request_startup_foreground(self):
+        """Raise the startup dialog so it does not open behind other windows."""
+        if not self.isVisible():
+            return
+
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+        QApplication.alert(self, 0)
+        self.password_input.setFocus(Qt.ActiveWindowFocusReason)
+
+        try:
+            bring_window_to_front(int(self.winId()))
+        except Exception:
+            # Keep startup resilient even if native focus promotion is unavailable.
+            pass
+
+    def _toggle_password_visibility(self, checked):
+        mode = QLineEdit.Normal if checked else QLineEdit.Password
+        fields = [self.password_input]
+        if self.is_setup:
+            fields.extend([self.backup_password_input, self.confirm_password_input])
+        for field in fields:
+            field.setEchoMode(mode)
 
     def _handle_ok(self):
         """Handle the OK/Login/Create button click."""

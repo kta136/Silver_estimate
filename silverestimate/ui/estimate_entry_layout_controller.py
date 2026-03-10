@@ -188,16 +188,10 @@ class EstimateEntryLayoutController(HostProxy):
         self.item_table.setItemDelegateForColumn(COL_WAGE_RATE, numeric_delegate)
         self.item_table.setItemDelegateForColumn(COL_PIECES, numeric_delegate)
 
-        self.item_table.setColumnWidth(COL_CODE, 82)
-        self.item_table.setColumnWidth(COL_GROSS, 80)
-        self.item_table.setColumnWidth(COL_POLY, 80)
-        self.item_table.setColumnWidth(4, 82)
-        self.item_table.setColumnWidth(COL_PURITY, 80)
-        self.item_table.setColumnWidth(COL_WAGE_RATE, 82)
-        self.item_table.setColumnWidth(COL_PIECES, 60)
-        self.item_table.setColumnWidth(8, 82)
-        self.item_table.setColumnWidth(9, 82)
-        self.item_table.setColumnWidth(10, 78)
+        for column, width in self._default_column_widths().items():
+            self.item_table.setColumnWidth(
+                column, self._bounded_column_width(column, width)
+            )
 
         header = self.item_table.horizontalHeader()
         header.sectionResized.connect(self._on_item_table_section_resized)
@@ -418,32 +412,36 @@ class EstimateEntryLayoutController(HostProxy):
 
     def _column_width_limits(self) -> dict[int, tuple[int, int]]:
         return {
-            COL_CODE: (72, 260),
-            COL_ITEM_NAME: (120, 900),
-            COL_GROSS: (72, 220),
-            COL_POLY: (72, 220),
-            COL_NET_WT: (78, 220),
-            COL_PURITY: (72, 220),
-            COL_WAGE_RATE: (78, 220),
-            COL_PIECES: (56, 150),
-            COL_WAGE_AMT: (78, 220),
-            COL_FINE_WT: (78, 220),
-            COL_TYPE: (74, 220),
+            COL_CODE: (72, 220),
+            COL_ITEM_NAME: (180, 1200),
+            COL_GROSS: (88, 220),
+            COL_POLY: (88, 220),
+            COL_NET_WT: (96, 240),
+            COL_PURITY: (72, 160),
+            COL_WAGE_RATE: (64, 92),
+            COL_PIECES: (48, 64),
+            COL_WAGE_AMT: (72, 120),
+            COL_FINE_WT: (96, 240),
+            COL_TYPE: (74, 180),
         }
 
     def _default_column_widths(self) -> dict[int, int]:
         return {
             COL_CODE: 82,
-            COL_GROSS: 80,
-            COL_POLY: 80,
-            COL_NET_WT: 82,
+            COL_GROSS: 88,
+            COL_POLY: 88,
+            COL_NET_WT: 96,
             COL_PURITY: 80,
-            COL_WAGE_RATE: 82,
-            COL_PIECES: 60,
-            COL_WAGE_AMT: 82,
-            COL_FINE_WT: 82,
+            COL_WAGE_RATE: 64,
+            COL_PIECES: 50,
+            COL_WAGE_AMT: 78,
+            COL_FINE_WT: 96,
             COL_TYPE: 78,
         }
+
+    def _bounded_column_width(self, column: int, width: int) -> int:
+        min_width, max_width = self._column_width_limits().get(column, (60, 700))
+        return max(min_width, min(max_width, int(width)))
 
     def _apply_non_autofit_column_layout(
         self, saved_widths: dict[int, int] | None = None
@@ -458,7 +456,7 @@ class EstimateEntryLayoutController(HostProxy):
                 if col == COL_ITEM_NAME:
                     continue
                 if isinstance(col, int) and isinstance(width, int):
-                    widths[col] = width
+                    widths[col] = self._bounded_column_width(col, width)
 
         self._programmatic_resizing = True
         try:
@@ -466,7 +464,9 @@ class EstimateEntryLayoutController(HostProxy):
                 stretch = col == COL_ITEM_NAME
                 table.set_column_stretch(col, stretch=stretch)
                 if not stretch and col in widths:
-                    table.setColumnWidth(col, widths[col])
+                    table.setColumnWidth(
+                        col, self._bounded_column_width(col, widths[col])
+                    )
         except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
             self.logger.debug("Failed to apply non-autofit column layout: %s", exc)
         finally:
@@ -619,9 +619,20 @@ class EstimateEntryLayoutController(HostProxy):
         self._apply_non_autofit_column_layout(saved_widths)
 
     def _on_item_table_section_resized(self, idx, old, new):
-        del old, new
-        if not self._programmatic_resizing and idx != COL_ITEM_NAME:
-            self._column_save_timer.start()
+        del old
+        if self._programmatic_resizing or idx == COL_ITEM_NAME:
+            return
+
+        bounded_width = self._bounded_column_width(idx, new)
+        if bounded_width != new:
+            self._programmatic_resizing = True
+            try:
+                self.item_table.setColumnWidth(idx, bounded_width)
+            finally:
+                self._programmatic_resizing = False
+            return
+
+        self._column_save_timer.start()
 
     def _auto_stretch_item_name(self):
         if self._auto_fit_columns_by_content:

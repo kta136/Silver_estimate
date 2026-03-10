@@ -872,6 +872,17 @@ def test_non_autofit_uses_native_stretch_for_item_name(qt_app, fake_db):
         widget.deleteLater()
 
 
+def test_non_autofit_prioritizes_item_weights_over_wage_and_pieces(qt_app, fake_db):
+    widget = _make_widget(fake_db)
+    try:
+        table = widget.item_table
+        assert table.columnWidth(COL_PIECES) < table.columnWidth(COL_GROSS)
+        assert table.columnWidth(COL_WAGE_RATE) < table.columnWidth(COL_NET_WT)
+        assert table.columnWidth(COL_WAGE_AMT) < table.columnWidth(COL_FINE_WT)
+    finally:
+        widget.deleteLater()
+
+
 def test_non_autofit_persists_fixed_column_widths_only(qt_app, fake_db, settings_stub):
     widget = _make_widget(fake_db)
     try:
@@ -890,6 +901,29 @@ def test_non_autofit_persists_fixed_column_widths_only(qt_app, fake_db, settings
             assert widget_reloaded.item_table.columnWidth(COL_CODE) == 137
         finally:
             widget_reloaded.deleteLater()
+    finally:
+        widget.deleteLater()
+
+
+def test_non_autofit_clamps_restored_widths_to_column_limits(
+    qt_app, fake_db, settings_stub
+):
+    saved_widths = ["-1"] * 11
+    saved_widths[COL_WAGE_RATE] = "500"
+    saved_widths[COL_PIECES] = "500"
+    saved_widths[COL_NET_WT] = "10"
+    saved_widths[COL_FINE_WT] = "10"
+    settings = settings_stub("SilverEstimate", "SilverEstimateApp")
+    settings.setValue("ui/estimate_table_column_widths", ",".join(saved_widths))
+
+    widget = _make_widget(fake_db)
+    try:
+        table = widget.item_table
+        limits = widget._column_width_limits()
+        assert table.columnWidth(COL_WAGE_RATE) == limits[COL_WAGE_RATE][1]
+        assert table.columnWidth(COL_PIECES) == limits[COL_PIECES][1]
+        assert table.columnWidth(COL_NET_WT) == limits[COL_NET_WT][0]
+        assert table.columnWidth(COL_FINE_WT) == limits[COL_FINE_WT][0]
     finally:
         widget.deleteLater()
 

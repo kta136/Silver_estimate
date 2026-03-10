@@ -196,7 +196,7 @@ def perform_data_wipe(
 ### 1. Password Hashing
 ```python
 # Using passlib for Argon2
-pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 def hash_password(password):
     return pwd_context.hash(password)

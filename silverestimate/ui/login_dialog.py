@@ -21,7 +21,7 @@ def _get_pwd_context():
     if _pwd_context is None:
         from passlib.context import CryptContext
 
-        _pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
+        _pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
     return _pwd_context
 
 
@@ -347,8 +347,7 @@ class LoginDialog(QDialog):
         if not stored_hash or not provided_password:
             return False
         try:
-            # pwd_context.verify handles identifying the hash type (e.g., argon2, bcrypt)
-            # and performs the comparison.
+            # pwd_context.verify handles hash validation and comparison.
             return _get_pwd_context().verify(provided_password, stored_hash)
         except ValueError:  # Catches potential issues like malformed hash string
             import logging

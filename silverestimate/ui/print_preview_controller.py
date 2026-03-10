@@ -785,11 +785,10 @@ class PrintPreviewController:
                 payload.html_content,
                 payload.table_mode,
             )
-            QMessageBox.information(
-                parent_widget or preview,
-                "Printing",
-                "Document sent to printer.",
-            )
+            try:
+                preview.accept()
+            except Exception as exc:
+                LOGGER.debug("Failed to close preview after printing: %s", exc)
         except Exception as exc:
             LOGGER.warning("Quick print failed: %s", exc, exc_info=True)
             QMessageBox.critical(

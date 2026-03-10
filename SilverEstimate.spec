@@ -105,7 +105,6 @@ a = Analysis(
     datas=qtawesome_datas,
     hiddenimports=[
         "passlib.handlers.argon2",
-        "passlib.handlers.bcrypt",
         "keyring.backends.Windows",
         "keyring.backends.fail",
         "keyring.backends.null",

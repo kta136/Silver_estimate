@@ -1,7 +1,7 @@
 from PyQt5.QtCore import QSizeF
 from PyQt5.QtGui import QPageSize
 from PyQt5.QtPrintSupport import QPrinter, QPrintPreviewDialog, QPrintPreviewWidget
-from PyQt5.QtWidgets import QToolBar
+from PyQt5.QtWidgets import QMessageBox, QToolBar
 
 from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.ui.print_payload_builder import PrintPreviewPayload
@@ -138,3 +138,71 @@ def test_preview_defaults_store_custom_page_size_dimensions(qt_app, settings_stu
     assert settings.value("print/page_size_name") == "Counter Slip"
     assert settings.value("print/page_width_mm") == 120.0
     assert settings.value("print/page_height_mm") == 190.0
+
+
+def test_quick_print_closes_preview_without_success_popup(monkeypatch):
+    render_calls = []
+    controller = PrintPreviewController(
+        printer=QPrinter(),
+        render_document=lambda *args: render_calls.append(args),
+    )
+    payload = PrintPreviewPayload(
+        html_content="<html><body><p>Preview</p></body></html>",
+        title="Print Preview",
+        document_kind="estimate",
+        identifier="V-003",
+        suggested_filename="Estimate-V-003.pdf",
+    )
+
+    class _PreviewStub:
+        def __init__(self):
+            self.accept_calls = 0
+
+        def accept(self):
+            self.accept_calls += 1
+
+    preview = _PreviewStub()
+
+    def _unexpected_information(*args, **kwargs):
+        raise AssertionError("Success popup should not be shown after quick print")
+
+    monkeypatch.setattr(QMessageBox, "information", _unexpected_information)
+
+    controller._quick_print_current(preview, payload, parent_widget=None)
+
+    assert len(render_calls) == 1
+    assert preview.accept_calls == 1
+
+
+def test_quick_print_failure_keeps_preview_open_and_shows_error(monkeypatch):
+    controller = PrintPreviewController(
+        printer=QPrinter(),
+        render_document=lambda *args: (_ for _ in ()).throw(RuntimeError("offline")),
+    )
+    payload = PrintPreviewPayload(
+        html_content="<html><body><p>Preview</p></body></html>",
+        title="Print Preview",
+        document_kind="estimate",
+        identifier="V-004",
+        suggested_filename="Estimate-V-004.pdf",
+    )
+
+    class _PreviewStub:
+        def __init__(self):
+            self.accept_calls = 0
+
+        def accept(self):
+            self.accept_calls += 1
+
+    preview = _PreviewStub()
+    critical_calls = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "critical",
+        lambda *args: critical_calls.append(args),
+    )
+
+    controller._quick_print_current(preview, payload, parent_widget=None)
+
+    assert preview.accept_calls == 0
+    assert len(critical_calls) == 1

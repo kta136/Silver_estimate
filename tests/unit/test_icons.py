@@ -104,7 +104,9 @@ def test_resolve_qtawesome_fonts_dir_prefers_bundled_assets(monkeypatch, tmp_pat
     bundled_fonts_dir = tmp_path / "qtawesome" / "fonts"
     bundled_fonts_dir.mkdir(parents=True)
 
-    monkeypatch.setattr(icons, "get_asset_path", lambda *parts: tmp_path.joinpath(*parts))
+    monkeypatch.setattr(
+        icons, "get_asset_path", lambda *parts: tmp_path.joinpath(*parts)
+    )
 
     resolved = icons._resolve_qtawesome_fonts_dir()
 

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.5] - 2026-03-10
+
+### Changed
+- Bumped application/package version to `2.8.5`
+- Updated project README version header and badge to `v2.8.5`
+- Removed legacy `bcrypt` support from the authentication and packaging flow so password hashing is now Argon2-only
+- Rebalanced the estimate-entry table layout so item names and weight columns retain space while wage and piece columns stay compact
+
+### Fixed
+- Closed the print-preview dialog immediately after a successful quick print instead of leaving the preview open
+- Removed the post-print success popup shown after printing from print preview
+
 ## [2.8.4] - 2026-03-10
 
 ### Changed

@@ -204,9 +204,10 @@ uv run pre-commit run --all-files
 
 ### Build Locally (Windows)
 - Prereqs: Python 3.13+, PowerShell
-- Run: `python -m PyInstaller --clean --noconfirm SilverEstimate.spec`
+- Fast iteration: `uv run nox -s build`
+- Clean rebuild: `python -m PyInstaller --clean --noconfirm SilverEstimate.spec` or `uv run nox -s build_clean`
 - Output: `dist/SilverEstimate.exe` on Windows
-- This is the same spec-based packaging path used by local `nox -s build` and the release workflow
+- Release/CI builds use the clean spec-based path; local `nox -s build` reuses PyInstaller caches for faster iteration
 
 ### GitHub Release (Windows CI)
 - Update version in `silverestimate/infrastructure/app_constants.py` (`APP_VERSION`)

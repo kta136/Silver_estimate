@@ -14,7 +14,9 @@
    - `python -m pip install --upgrade pip`
    - `python -m pip install -e ".[dev]"`
 3. Build with the canonical spec:
-   - `python -m PyInstaller --clean --noconfirm SilverEstimate.spec`
+   - Fast local iteration: `uv run nox -s build`
+   - Clean rebuild: `python -m PyInstaller --clean --noconfirm SilverEstimate.spec`
+   - Clean rebuild through nox: `uv run nox -s build_clean`
 4. Output artifact:
    - `dist/SilverEstimate.exe`
 5. Optionally zip the executable manually for distribution.
@@ -23,6 +25,7 @@
 - Spec file: `SilverEstimate.spec` (canonical and required for builds).
 - Hidden imports and other packaging settings live in the spec file.
 - Add datas or icons by editing the spec file if new resources are introduced.
+- Use `--clean` for release builds or after packaging changes; omit it for faster repeat local builds when you want PyInstaller to reuse cached analysis results.
 
 ## Continuous Delivery (GitHub Actions)
 Workflow: `.github/workflows/release-windows.yml`.

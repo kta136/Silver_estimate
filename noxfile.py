@@ -23,7 +23,7 @@ def clean_artifact(path: Path) -> None:
         return
 
 
-def run_pyinstaller_build(session: nox.Session) -> Path:
+def run_pyinstaller_build(session: nox.Session, *, clean: bool = False) -> Path:
     artifact = (
         PROJECT_ROOT
         / "dist"
@@ -32,14 +32,16 @@ def run_pyinstaller_build(session: nox.Session) -> Path:
     clean_artifact(artifact)
 
     session.run("python", "-m", "PyInstaller", "--version")
-    session.run(
+    pyinstaller_args = [
         "python",
         "-m",
         "PyInstaller",
-        "--clean",
         "--noconfirm",
-        str(PYINSTALLER_SPEC),
-    )
+    ]
+    if clean:
+        pyinstaller_args.append("--clean")
+    pyinstaller_args.append(str(PYINSTALLER_SPEC))
+    session.run(*pyinstaller_args)
     return artifact
 
 
@@ -127,6 +129,14 @@ def build(session: nox.Session) -> None:
     session.log(f"Build artifact created at {artifact}")
 
 
+@nox.session(python=False, name="build_clean")
+def build_clean(session: nox.Session) -> None:
+    artifact = run_pyinstaller_build(session, clean=True)
+    if not artifact.exists():
+        session.error(f"Build artifact was not created: {artifact}")
+    session.log(f"Build artifact created at {artifact}")
+
+
 @nox.session(python=False, name="pr")
 def pr(session: nox.Session) -> None:
     for session_name in ("ruff", "mypy", "tests_fast"):
@@ -135,7 +145,7 @@ def pr(session: nox.Session) -> None:
 
 @nox.session(python=False, name="ci")
 def ci(session: nox.Session) -> None:
-    for session_name in ("ruff", "mypy", "tests_full", "build"):
+    for session_name in ("ruff", "mypy", "tests_full", "build_clean"):
         session.notify(session_name)
 
 

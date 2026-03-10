@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Final, cast
 
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QStyle, QWidget
+
+from silverestimate.infrastructure.paths import get_asset_path
 
 LOGGER = logging.getLogger(__name__)
 
@@ -15,6 +18,49 @@ try:
     import qtawesome as _qtawesome
 except Exception:  # pragma: no cover - dependency availability varies by env
     _qtawesome = None
+
+
+def _resolve_qtawesome_fonts_dir() -> Path | None:
+    try:
+        bundled_fonts_dir = get_asset_path("qtawesome", "fonts")
+    except Exception:
+        bundled_fonts_dir = None
+    if bundled_fonts_dir is not None and bundled_fonts_dir.is_dir():
+        return bundled_fonts_dir
+
+    if _qtawesome is None:
+        return None
+
+    package_fonts_dir = Path(_qtawesome.__file__).resolve().parent / "fonts"
+    if package_fonts_dir.is_dir():
+        return package_fonts_dir
+    return None
+
+
+def _configure_qtawesome_font_lookup() -> None:
+    if _qtawesome is None:
+        return
+
+    fonts_dir = _resolve_qtawesome_fonts_dir()
+    if fonts_dir is None:
+        return
+
+    try:
+        from qtawesome import iconic_font as _iconic_font
+    except Exception:
+        return
+
+    if getattr(_iconic_font.IconicFont, "_silverestimate_font_patch", False):
+        return
+
+    def _patched_get_fonts_directory(self):
+        return self._install_fonts(str(fonts_dir))
+
+    _iconic_font.IconicFont._get_fonts_directory = _patched_get_fonts_directory
+    _iconic_font.IconicFont._silverestimate_font_patch = True
+
+
+_configure_qtawesome_font_lookup()
 
 
 @dataclass(frozen=True)
@@ -30,8 +76,14 @@ _DEFAULT_COLOR = "#334155"
 _DISABLED_COLOR = "#94a3b8"
 
 _ICON_SPECS: Final[dict[str, IconSpec]] = {
-    "estimate_entry": IconSpec("mdi6.calculator-variant-outline"),
-    "item_master": IconSpec("mdi6.clipboard-list-outline"),
+    "estimate_entry": IconSpec(
+        "mdi6.calculator-variant-outline",
+        fallback=QStyle.SP_FileDialogDetailedView,
+    ),
+    "item_master": IconSpec(
+        "mdi6.clipboard-list-outline",
+        fallback=QStyle.SP_FileDialogContentsView,
+    ),
     "save": IconSpec(
         "mdi6.content-save-outline",
         fallback=QStyle.SP_DialogSaveButton,
@@ -61,8 +113,11 @@ _ICON_SPECS: Final[dict[str, IconSpec]] = {
         theme_name="edit-delete",
         fallback=QStyle.SP_TrashIcon,
     ),
-    "delete_row": IconSpec("mdi6.table-row-remove"),
-    "delete_estimate": IconSpec("mdi6.trash-can-outline"),
+    "delete_row": IconSpec("mdi6.table-row-remove", fallback=QStyle.SP_TrashIcon),
+    "delete_estimate": IconSpec(
+        "mdi6.trash-can-outline",
+        fallback=QStyle.SP_TrashIcon,
+    ),
     "close": IconSpec(
         "mdi6.close",
         theme_name="window-close",
@@ -83,7 +138,7 @@ _ICON_SPECS: Final[dict[str, IconSpec]] = {
         theme_name="document-properties",
         fallback=QStyle.SP_FileDialogDetailedView,
     ),
-    "new": IconSpec("mdi6.file-plus-outline"),
+    "new": IconSpec("mdi6.file-plus-outline", fallback=QStyle.SP_FileDialogNewFolder),
     "zoom_in": IconSpec(
         "mdi6.magnify-plus-outline",
         theme_name="zoom-in",
@@ -104,9 +159,15 @@ _ICON_SPECS: Final[dict[str, IconSpec]] = {
         theme_name="zoom-fit-best",
         fallback=QStyle.SP_TitleBarUnshadeButton,
     ),
-    "view_single_page": IconSpec("mdi6.file-outline"),
-    "view_facing_pages": IconSpec("mdi6.book-open-page-variant-outline"),
-    "view_overview": IconSpec("mdi6.view-grid-outline"),
+    "view_single_page": IconSpec("mdi6.file-outline", fallback=QStyle.SP_FileIcon),
+    "view_facing_pages": IconSpec(
+        "mdi6.book-open-page-variant-outline",
+        fallback=QStyle.SP_DirOpenIcon,
+    ),
+    "view_overview": IconSpec(
+        "mdi6.view-grid-outline",
+        fallback=QStyle.SP_FileDialogListView,
+    ),
     "page_first": IconSpec(
         "mdi6.page-first",
         theme_name="go-first",
@@ -132,16 +193,25 @@ _ICON_SPECS: Final[dict[str, IconSpec]] = {
         theme_name="printer",
         fallback=QStyle.SP_ComputerIcon,
     ),
-    "exit": IconSpec("mdi6.logout-variant"),
-    "silver_bars": IconSpec("mdi6.gold"),
-    "silver_history": IconSpec("mdi6.history"),
-    "settings": IconSpec("mdi6.cog-outline"),
-    "about": IconSpec("mdi6.information-outline"),
-    "balance": IconSpec("mdi6.bank-outline"),
-    "history": IconSpec("mdi6.history"),
-    "return_mode": IconSpec("mdi6.cash-refund"),
-    "bar_mode": IconSpec("mdi6.weight"),
-    "reset_layout": IconSpec("mdi6.table-column-width"),
+    "exit": IconSpec("mdi6.logout-variant", fallback=QStyle.SP_DialogCloseButton),
+    "silver_bars": IconSpec("mdi6.gold", fallback=QStyle.SP_DriveHDIcon),
+    "silver_history": IconSpec(
+        "mdi6.history",
+        fallback=QStyle.SP_FileDialogDetailedView,
+    ),
+    "settings": IconSpec("mdi6.cog-outline", fallback=QStyle.SP_FileDialogDetailedView),
+    "about": IconSpec(
+        "mdi6.information-outline",
+        fallback=QStyle.SP_MessageBoxInformation,
+    ),
+    "balance": IconSpec("mdi6.bank-outline", fallback=QStyle.SP_DialogApplyButton),
+    "history": IconSpec("mdi6.history", fallback=QStyle.SP_FileDialogDetailedView),
+    "return_mode": IconSpec("mdi6.cash-refund", fallback=QStyle.SP_ArrowBack),
+    "bar_mode": IconSpec("mdi6.weight", fallback=QStyle.SP_DriveHDIcon),
+    "reset_layout": IconSpec(
+        "mdi6.table-column-width",
+        fallback=QStyle.SP_DialogResetButton,
+    ),
     "user_interface": IconSpec(
         "mdi6.monitor-dashboard",
         fallback=QStyle.SP_DesktopIcon,

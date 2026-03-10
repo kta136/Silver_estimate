@@ -1,4 +1,5 @@
 import sqlite3
+import time
 import types
 
 from PyQt5.QtCore import QItemSelectionModel
@@ -182,5 +183,29 @@ def test_item_master_ignores_stale_async_results(qtbot):
             widget.items_model.row_payload(row)["code"]
             for row in range(widget.items_model.rowCount())
         ] == original_codes
+    finally:
+        widget.deleteLater()
+
+
+def test_item_master_logs_perf_metric_even_for_fast_loads(qtbot, monkeypatch):
+    db = _StubDbManager()
+    widget = ItemMasterWidget(db)
+    qtbot.addWidget(widget)
+    debug_calls = []
+    monkeypatch.setattr(
+        widget.logger,
+        "debug",
+        lambda message, *args: debug_calls.append((message, args)),
+    )
+    try:
+        widget._apply_loaded_items(
+            list(db.get_all_items()),
+            search_term="",
+            started_at=time.perf_counter(),
+        )
+        assert any(
+            str(message).startswith("[perf] item_master.load_items=")
+            for message, _args in debug_calls
+        )
     finally:
         widget.deleteLater()

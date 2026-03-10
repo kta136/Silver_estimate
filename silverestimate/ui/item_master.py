@@ -382,13 +382,12 @@ class ItemMasterWidget(QWidget):
 
         self.show_status(f"Loaded {len(items)} items.", 2000)
         elapsed_ms = (time.perf_counter() - started_at) * 1000.0
-        if elapsed_ms >= 20.0:
-            self.logger.debug(
-                "[perf] item_master.load_items=%.2fms search_term=%r rows=%s",
-                elapsed_ms,
-                search_term,
-                len(items),
-            )
+        self.logger.debug(
+            "[perf] item_master.load_items=%.2fms search_term=%r rows=%s",
+            elapsed_ms,
+            search_term,
+            len(items),
+        )
 
     def _cancel_active_loads(self, timeout_ms: int = 3000) -> None:
         self._load_request_id += 1

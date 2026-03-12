@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.6] - 2026-03-12
+
+### Changed
+- Bumped application/package version to `2.8.6`
+- Updated project README version header and badge to `v2.8.6`
+- Always emitted item-master performance telemetry in CI so perf-budget validation exercises the expected path consistently
+- Refined login dialog startup behavior for a smoother initial authentication flow
+- Improved silver bar management and syncing behavior across the latest inventory workflow updates
+
 ## [2.8.5] - 2026-03-10
 
 ### Changed

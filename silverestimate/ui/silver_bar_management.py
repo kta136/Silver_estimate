@@ -322,8 +322,6 @@ for _method_name in ("init_ui",):
 
 for _method_name in (
     "_schedule_available_reload",
-    "_save_available_limit_setting",
-    "_table_result_limit",
     "_next_load_request_id",
     "_is_latest_load",
     "_start_bars_load",
@@ -406,7 +404,6 @@ for _method_name in (
     "_get_table_column_widths",
     "_apply_table_column_widths",
     "_restore_table_column_widths",
-    "_toggle_auto_refresh",
     "_current_date_range",
     "_find_main_window",
     "_is_embedded",

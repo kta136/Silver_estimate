@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any, Optional
+from uuid import uuid4
 
 from PyQt5.QtCore import QAbstractTableModel, QModelIndex, Qt, pyqtSignal
 from PyQt5.QtGui import QBrush, QColor
@@ -198,11 +200,14 @@ class EstimateTableModel(QAbstractTableModel):
         old_row = self._rows[row_idx]
 
         # Create a new row with the updated value using dataclass replace
-        from dataclasses import replace
-
         try:
             if col == COL_CODE:
-                new_row = replace(old_row, code=str(value) if value is not None else "")
+                new_code = str(value) if value is not None else ""
+                new_row = replace(
+                    old_row,
+                    code=new_code,
+                    line_key=old_row.line_key if new_code.strip() else "",
+                )
             elif col == COL_ITEM_NAME:
                 new_row = replace(old_row, name=str(value) if value is not None else "")
             elif col == COL_GROSS:
@@ -316,8 +321,6 @@ class EstimateTableModel(QAbstractTableModel):
         if not (0 <= row_idx < len(self._rows)):
             return False
 
-        from dataclasses import replace
-
         normalized = self._normalize_wage_type(wage_type)
         row_data = self._rows[row_idx]
         if row_data.wage_type == normalized:
@@ -427,6 +430,20 @@ class EstimateTableModel(QAbstractTableModel):
             A list of all rows
         """
         return list(self._rows)
+
+    def ensure_line_keys(self) -> None:
+        """Assign stable line keys to active rows missing one."""
+        changed_rows: list[int] = []
+        for row_idx, row_data in enumerate(self._rows):
+            if row_data.is_empty() or str(row_data.line_key or "").strip():
+                continue
+            self._rows[row_idx] = replace(row_data, line_key=uuid4().hex)
+            changed_rows.append(row_idx)
+
+        for row_idx in changed_rows:
+            left_index = self.index(row_idx, 0)
+            right_index = self.index(row_idx, self.columnCount() - 1)
+            self.dataChanged.emit(left_index, right_index, [Qt.DisplayRole, Qt.EditRole])
 
     def set_all_rows(self, rows: list[EstimateEntryRowState]) -> None:
         """Set all rows at once.

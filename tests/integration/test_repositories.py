@@ -87,12 +87,14 @@ def test_items_repository_roundtrip(fake_db):
     assert fake_db._flush_requested
 
 
-def test_schema_setup_upgrades_to_v4_and_adds_estimate_item_wage_type(fake_db):
+def test_schema_setup_upgrades_to_v5_and_adds_line_key_columns(fake_db):
     fake_db.cursor.execute("SELECT MAX(version) AS v FROM schema_version")
     row = fake_db.cursor.fetchone()
-    assert row["v"] == 4
+    assert row["v"] == 5
     assert fake_db._column_exists("estimates", "voucher_no_int")
     assert fake_db._column_exists("estimate_items", "wage_type")
+    assert fake_db._column_exists("estimate_items", "line_key")
+    assert fake_db._column_exists("silver_bars", "source_line_key")
 
 
 def test_migration_v3_backfills_numeric_vouchers_from_legacy_schema():
@@ -146,7 +148,7 @@ def test_migration_v3_backfills_numeric_vouchers_from_legacy_schema():
         assert rows["AB-1"] is None
 
         db.cursor.execute("SELECT MAX(version) AS v FROM schema_version")
-        assert db.cursor.fetchone()["v"] == 4
+        assert db.cursor.fetchone()["v"] == 5
     finally:
         db.conn.close()
 
@@ -207,6 +209,8 @@ def test_migration_v4_adds_estimate_item_wage_type_without_backfill():
         migrations.run_schema_setup(db)
 
         assert db._column_exists("estimate_items", "wage_type")
+        assert db._column_exists("estimate_items", "line_key")
+        assert db._column_exists("silver_bars", "source_line_key")
         db.cursor.execute("SELECT wage_type FROM estimate_items")
         assert db.cursor.fetchone()["wage_type"] is None
     finally:
@@ -675,6 +679,66 @@ def test_silver_bar_sync_for_estimate_updates_and_inserts_in_one_call(fake_db):
     assert float(rows[0]["purity"]) == pytest.approx(99.5)
     assert float(rows[2]["weight"]) == pytest.approx(7.0)
     assert float(rows[2]["purity"]) == pytest.approx(98.0)
+
+
+def test_silver_bar_sync_for_estimate_uses_line_key_instead_of_row_order(fake_db):
+    repo = SilverBarsRepository(fake_db)
+
+    added, failed = repo.sync_silver_bars_for_estimate(
+        "SYNCKEY",
+        [
+            {"line_key": "line-one", "weight": 5.0, "purity": 99.0},
+            {"line_key": "line-two", "weight": 6.0, "purity": 98.0},
+        ],
+    )
+    assert added == 2
+    assert failed == 0
+
+    added, failed = repo.sync_silver_bars_for_estimate(
+        "SYNCKEY",
+        [
+            {"line_key": "line-two", "weight": 6.5, "purity": 98.5},
+            {"line_key": "line-one", "weight": 5.0, "purity": 99.0},
+        ],
+    )
+
+    assert added == 0
+    assert failed == 0
+    rows = {
+        row["source_line_key"]: row for row in repo.get_silver_bars_for_estimate("SYNCKEY")
+    }
+    assert float(rows["line-one"]["weight"]) == pytest.approx(5.0)
+    assert float(rows["line-one"]["purity"]) == pytest.approx(99.0)
+    assert float(rows["line-two"]["weight"]) == pytest.approx(6.5)
+    assert float(rows["line-two"]["purity"]) == pytest.approx(98.5)
+
+
+def test_silver_bar_sync_for_estimate_does_not_mutate_assigned_bar_values(fake_db):
+    repo = SilverBarsRepository(fake_db)
+    added, failed = repo.sync_silver_bars_for_estimate(
+        "SYNCASSIGN",
+        [{"line_key": "line-a", "weight": 7.0, "purity": 99.0}],
+    )
+    assert added == 1
+    assert failed == 0
+
+    rows = repo.get_silver_bars_for_estimate("SYNCASSIGN")
+    assert len(rows) == 1
+    bar_id = int(rows[0]["bar_id"])
+    list_id = repo.create_list("Assigned list")
+    assert list_id is not None
+    assert repo.assign_bar_to_list(bar_id, list_id)
+
+    added, failed = repo.sync_silver_bars_for_estimate(
+        "SYNCASSIGN",
+        [{"line_key": "line-a", "weight": 7.5, "purity": 98.0}],
+    )
+
+    assert added == 0
+    assert failed == 1
+    row = repo.get_silver_bars_for_estimate("SYNCASSIGN")[0]
+    assert float(row["weight"]) == pytest.approx(7.0)
+    assert float(row["purity"]) == pytest.approx(99.0)
 
 
 def test_silver_bar_list_query_limit_and_offset(fake_db):

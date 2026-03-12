@@ -1,6 +1,7 @@
 import logging
 
-from PyQt5.QtWidgets import QApplication, QMessageBox
+from PyQt5.QtCore import QItemSelectionModel
+from PyQt5.QtWidgets import QApplication, QFrame, QMessageBox
 
 from silverestimate.ui.silver_bar_list_print_controller import (
     SilverBarListPrintController,
@@ -213,6 +214,50 @@ def test_management_dialog_uses_model_ids_for_add_and_copy(
     assert dialog.list_bars_model.rowCount() == 2
 
 
+def test_management_dialog_disables_list_actions_when_no_list_selected(
+    qtbot, settings_stub
+):
+    del settings_stub
+    dialog = SilverBarDialog(_FakeSilverBarManagementDb())
+    qtbot.addWidget(dialog)
+    dialog.show()
+    qtbot.waitUntil(lambda: dialog.isVisible(), timeout=1000)
+    qtbot.waitUntil(lambda: dialog.available_bars_model.rowCount() == 2, timeout=1000)
+
+    assert dialog.current_list_id is None
+    assert dialog.list_info_label.text() == "No list selected"
+    assert dialog.add_to_list_button.isEnabled() is False
+    assert dialog.add_all_button.isEnabled() is False
+    assert dialog.remove_from_list_button.isEnabled() is False
+    assert dialog.remove_all_button.isEnabled() is False
+    assert dialog.edit_note_button.isEnabled() is False
+    assert dialog.delete_list_button.isEnabled() is False
+    assert dialog.mark_issued_button.isEnabled() is False
+    assert dialog.print_list_button.isEnabled() is False
+    assert dialog.export_list_button.isEnabled() is False
+    assert dialog.list_bars_table.isEnabled() is False
+    assert dialog.list_bars_table.property("listState") == "inactive"
+    assert dialog.list_bars_table.horizontalHeader().property("listState") == "inactive"
+
+
+def test_management_dialog_activates_list_table_visual_state_when_list_selected(
+    qtbot, settings_stub
+):
+    del settings_stub
+    dialog = SilverBarDialog(_FakeSilverBarManagementDb())
+    qtbot.addWidget(dialog)
+    dialog.show()
+    qtbot.waitUntil(lambda: dialog.isVisible(), timeout=1000)
+    qtbot.waitUntil(lambda: dialog.available_bars_model.rowCount() == 2, timeout=1000)
+
+    dialog.list_combo.setCurrentIndex(1)
+    qtbot.waitUntil(lambda: dialog.current_list_id == 10, timeout=1000)
+    qtbot.waitUntil(lambda: dialog.list_bars_table.isEnabled() is True, timeout=1000)
+
+    assert dialog.list_bars_table.property("listState") == "active"
+    assert dialog.list_bars_table.horizontalHeader().property("listState") == "active"
+
+
 def test_management_dialog_marks_selected_list_as_issued(
     qtbot, settings_stub, monkeypatch
 ):
@@ -238,6 +283,73 @@ def test_management_dialog_marks_selected_list_as_issued(
 
     assert db.marked_calls == [10]
     assert dialog.list_combo.count() == 1
+
+
+def test_management_dialog_preserves_multi_selection_across_reload_and_adds_bars(
+    qtbot, settings_stub, monkeypatch
+):
+    del settings_stub
+    db = _FakeSilverBarManagementDb()
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *args, **kwargs: QMessageBox.Yes
+    )
+    monkeypatch.setattr(
+        QMessageBox, "information", lambda *args, **kwargs: QMessageBox.Ok
+    )
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args, **kwargs: QMessageBox.Ok)
+
+    dialog = SilverBarDialog(db)
+    qtbot.addWidget(dialog)
+    dialog.show()
+    qtbot.waitUntil(lambda: dialog.isVisible(), timeout=1000)
+    qtbot.waitUntil(lambda: dialog.available_bars_model.rowCount() == 2, timeout=1000)
+
+    dialog.list_combo.setCurrentIndex(1)
+    qtbot.waitUntil(lambda: dialog.current_list_id == 10, timeout=1000)
+
+    selection_model = dialog.available_bars_table.selectionModel()
+    first_row = _row_for_bar_id(dialog.available_bars_model, 1)
+    second_row = _row_for_bar_id(dialog.available_bars_model, 2)
+    selection_model.select(
+        dialog.available_bars_model.index(first_row, 0),
+        QItemSelectionModel.Select | QItemSelectionModel.Rows,
+    )
+    selection_model.select(
+        dialog.available_bars_model.index(second_row, 0),
+        QItemSelectionModel.Select | QItemSelectionModel.Rows,
+    )
+    qtbot.waitUntil(
+        lambda: len(dialog.available_bars_table.selectionModel().selectedRows()) == 2,
+        timeout=1000,
+    )
+
+    dialog.load_available_bars()
+
+    qtbot.waitUntil(
+        lambda: len(dialog.available_bars_table.selectionModel().selectedRows()) == 2,
+        timeout=1000,
+    )
+    qtbot.waitUntil(lambda: dialog.add_to_list_button.isEnabled() is True, timeout=1000)
+
+    dialog.add_selected_to_list()
+
+    assert db.assigned_calls == [(1, 10), (2, 10)]
+    assert dialog.available_bars_model.rowCount() == 0
+    assert dialog.list_bars_model.rowCount() == 3
+
+
+def test_management_dialog_omits_purity_range_filters(qtbot, settings_stub):
+    del settings_stub
+    dialog = SilverBarDialog(_FakeSilverBarManagementDb())
+    qtbot.addWidget(dialog)
+
+    assert dialog.findChild(QFrame, "SilverBarManagementHeaderCard") is None
+    assert hasattr(dialog, "purity_min_spin") is False
+    assert hasattr(dialog, "purity_max_spin") is False
+    assert hasattr(dialog, "weight_tol_spin") is False
+    assert hasattr(dialog, "available_limit_spin") is False
+    assert hasattr(dialog, "refresh_available_button") is False
+    assert hasattr(dialog, "auto_refresh_checkbox") is False
 
 
 def test_list_print_preview_cleanup_removes_worker():

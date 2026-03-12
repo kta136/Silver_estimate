@@ -50,6 +50,18 @@ def test_build_available_bars_queries_applies_filters_and_limit():
     )
 
 
+def test_build_available_bars_queries_supports_exact_weight_matching():
+    statements = build_available_bars_queries(
+        weight_query="10",
+        weight_tolerance=0.0,
+        limit=250,
+    )
+
+    assert "sb.weight BETWEEN ? AND ?" in statements.query.query
+    assert statements.query.params == (10.0, 10.0, 250)
+    assert statements.count_query.params == (10.0, 10.0)
+
+
 def test_build_bars_in_list_queries_only_adds_offset_when_limited():
     statements = build_bars_in_list_queries(12, limit=50, offset=25)
     assert statements.query.query.endswith(

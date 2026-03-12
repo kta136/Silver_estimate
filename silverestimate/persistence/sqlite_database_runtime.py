@@ -14,8 +14,8 @@ _GET_ITEM_BY_CODE_SQL = "SELECT * FROM items WHERE code = ? COLLATE NOCASE"
 _INSERT_ESTIMATE_ITEM_SQL = (
     "INSERT INTO estimate_items "
     "(voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, "
-    "pieces, wage_type, wage, fine, is_return, is_silver_bar) "
-    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    "pieces, wage_type, wage, fine, is_return, is_silver_bar, line_key) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 )
 
 

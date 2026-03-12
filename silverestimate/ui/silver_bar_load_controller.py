@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 from PyQt5.QtCore import QObject, QThread, pyqtSignal
 from PyQt5.QtWidgets import QMessageBox
 
-from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.persistence.silver_bars_snapshot_repository import (
     SilverBarsSnapshotRepository,
 )
@@ -82,18 +81,38 @@ class SilverBarLoadController(HostProxy):
             self.logger.debug("Failed to start available reload timer: %s", exc)
             self.load_available_bars()
 
-    def _save_available_limit_setting(self, value):
+    @staticmethod
+    def _refresh_widget_style(widget) -> None:
+        if widget is None:
+            return
         try:
-            get_app_settings().setValue("silver_bar/available_max_rows", int(value))
-        except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
-            self.logger.debug("Could not persist available row limit: %s", exc)
+            style = widget.style()
+            style.unpolish(widget)
+            style.polish(widget)
+            widget.update()
+        except (AttributeError, RuntimeError, TypeError):
+            return
 
-    def _table_result_limit(self) -> int:
+    def _set_list_table_active_state(self, is_active: bool) -> None:
+        list_table = getattr(self, "list_bars_table", None)
+        if list_table is None:
+            return
+        state = "active" if is_active else "inactive"
         try:
-            return max(100, int(self.available_limit_spin.value()))
-        except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
-            self.logger.debug("Invalid available table row limit value: %s", exc)
-            return 1500
+            header = list_table.horizontalHeader()
+        except (AttributeError, RuntimeError, TypeError):
+            header = None
+        list_table.setProperty("listState", state)
+        if header is not None:
+            header.setProperty("listState", state)
+        list_table.setEnabled(is_active)
+        self._refresh_widget_style(list_table)
+        if header is not None:
+            self._refresh_widget_style(header)
+        try:
+            self._refresh_widget_style(list_table.viewport())
+        except (AttributeError, RuntimeError, TypeError):
+            pass
 
     def _next_load_request_id(self, target: str) -> int:
         if target == "available":
@@ -247,27 +266,12 @@ class SilverBarLoadController(HostProxy):
 
     def load_available_bars(self):
         weight_query = self.weight_search_edit.text().strip()
-        try:
-            tol = float(self.weight_tol_spin.value())
-        except (AttributeError, RuntimeError, TypeError, ValueError):
-            tol = 0.001
-        try:
-            min_purity = float(self.purity_min_spin.value())
-        except (AttributeError, RuntimeError, TypeError, ValueError):
-            min_purity = None
-        try:
-            max_purity = float(self.purity_max_spin.value())
-        except (AttributeError, RuntimeError, TypeError, ValueError):
-            max_purity = None
         self._start_bars_load(
             "available",
             {
                 "weight_query": weight_query if weight_query else None,
-                "weight_tolerance": tol,
-                "min_purity": min_purity,
-                "max_purity": max_purity,
+                "weight_tolerance": 0.0,
                 "date_range": self._current_date_range(),
-                "limit": self._table_result_limit(),
             },
         )
 
@@ -315,6 +319,7 @@ class SilverBarLoadController(HostProxy):
         export_button = getattr(self, "export_list_button", None)
         if export_button is not None:
             export_button.setEnabled(is_list_selected)
+        self._set_list_table_active_state(is_list_selected)
         print_bottom_button = getattr(self, "print_bottom_button", None)
         if print_bottom_button is not None:
             print_bottom_button.setEnabled(is_list_selected)
@@ -351,7 +356,6 @@ class SilverBarLoadController(HostProxy):
             "list",
             {
                 "list_id": self.current_list_id,
-                "limit": self._table_result_limit(),
                 "offset": 0,
             },
         )

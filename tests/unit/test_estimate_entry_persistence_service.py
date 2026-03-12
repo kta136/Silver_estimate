@@ -113,6 +113,7 @@ def test_prepare_save_payload_aggregates_rows():
     assert payload.totals["total_net"] == pytest.approx(13.8)
     assert payload.totals["net_fine"] == pytest.approx(3.978)
     assert payload.totals["net_wage"] == pytest.approx(90.0)
+    assert all(item.line_key for item in payload.items)
 
 
 def test_prepare_save_payload_skips_invalid_rows():
@@ -228,6 +229,7 @@ def test_build_row_states_from_items_roundtrip():
             fine=4.05,
             is_return=False,
             is_silver_bar=False,
+            line_key="line-r1",
         ),
         SaveItem(
             code="RET",
@@ -244,6 +246,7 @@ def test_build_row_states_from_items_roundtrip():
             is_return=True,
             is_silver_bar=False,
             wage_type="PC",
+            line_key="line-ret",
         ),
     ]
 
@@ -253,3 +256,5 @@ def test_build_row_states_from_items_roundtrip():
     assert rows[1].category.is_return()
     assert rows[1].row_index == 2
     assert rows[1].wage_type == "PC"
+    assert rows[0].line_key == "line-r1"
+    assert rows[1].line_key == "line-ret"

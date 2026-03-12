@@ -85,6 +85,7 @@ def _ensure_core_tables(db: "DatabaseManager", current_version: int) -> None:
             fine REAL DEFAULT 0,
             is_return INTEGER DEFAULT 0,
             is_silver_bar INTEGER DEFAULT 0,
+            line_key TEXT,
             FOREIGN KEY (voucher_no) REFERENCES estimates (voucher_no) ON DELETE CASCADE,
             FOREIGN KEY (item_code) REFERENCES items (code) ON DELETE SET NULL
         )
@@ -123,6 +124,7 @@ def _ensure_core_tables(db: "DatabaseManager", current_version: int) -> None:
             date_added TEXT,
             status TEXT DEFAULT 'In Stock',
             list_id INTEGER,
+            source_line_key TEXT,
             FOREIGN KEY (estimate_voucher_no) REFERENCES estimates (voucher_no) ON DELETE CASCADE,
             FOREIGN KEY (list_id) REFERENCES silver_bar_lists (list_id) ON DELETE SET NULL
         )
@@ -149,8 +151,8 @@ def _apply_versioned_migrations(db: "DatabaseManager", current_version: int) -> 
     assert cursor is not None
     assert logger is not None
 
-    if current_version >= 4:
-        logger.debug("Schema version >= 4 detected; skipping legacy migration checks.")
+    if current_version >= 5:
+        logger.debug("Schema version >= 5 detected; skipping legacy migration checks.")
         return
 
     if current_version < 1:
@@ -223,6 +225,16 @@ def _apply_versioned_migrations(db: "DatabaseManager", current_version: int) -> 
             cursor.execute("ALTER TABLE estimate_items ADD COLUMN wage_type TEXT")
         db._update_schema_version(4)
 
+    if current_version < 5:
+        logger.info(
+            "Performing schema migration to version 5: Adding stable estimate/bar line keys..."
+        )
+        if not db._column_exists("estimate_items", "line_key"):
+            cursor.execute("ALTER TABLE estimate_items ADD COLUMN line_key TEXT")
+        if not db._column_exists("silver_bars", "source_line_key"):
+            cursor.execute("ALTER TABLE silver_bars ADD COLUMN source_line_key TEXT")
+        db._update_schema_version(5)
+
 
 def _ensure_indexes(db: "DatabaseManager") -> None:
     cursor = db.cursor
@@ -263,6 +275,10 @@ def _ensure_indexes(db: "DatabaseManager") -> None:
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_estimate_items_code ON estimate_items(item_code)"
         )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_estimate_items_voucher_line_key "
+            "ON estimate_items(voucher_no, line_key)"
+        )
 
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_sbars_voucher ON silver_bars(estimate_voucher_no)"
@@ -279,6 +295,10 @@ def _ensure_indexes(db: "DatabaseManager") -> None:
         )
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_sbars_date_added ON silver_bars(date_added)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sbars_voucher_line_key "
+            "ON silver_bars(estimate_voucher_no, source_line_key)"
         )
 
         cursor.execute(

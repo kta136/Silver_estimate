@@ -58,7 +58,7 @@ def build_available_bars_queries(
     if weight_query not in (None, ""):
         try:
             target = float(weight_query)
-            tolerance = float(weight_tolerance or 0.001)
+            tolerance = 0.001 if weight_tolerance is None else float(weight_tolerance)
             bounds = [target - tolerance, target + tolerance]
             query += " AND sb.weight BETWEEN ? AND ?"
             count_query += " AND sb.weight BETWEEN ? AND ?"

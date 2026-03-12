@@ -180,6 +180,7 @@ class EstimateTableView(QTableView):
         return self._table_model.columnCount()
 
     def get_all_rows(self) -> list[EstimateEntryRowState]:
+        self._table_model.ensure_line_keys()
         return self._table_model.get_all_rows()
 
     def set_all_rows(self, rows: list[EstimateEntryRowState]) -> None:

@@ -74,6 +74,7 @@ class SaveItem:
     is_return: bool
     is_silver_bar: bool
     wage_type: str = "WT"
+    line_key: str = ""
 
 
 @dataclass(frozen=True)
@@ -180,6 +181,7 @@ class EstimateEntryPresenter:
                     fine=float(raw.get("fine", 0.0) or 0.0),
                     is_return=bool(raw.get("is_return", 0)),
                     is_silver_bar=bool(raw.get("is_silver_bar", 0)),
+                    line_key=str(raw.get("line_key", "") or ""),
                 )
             except (AttributeError, TypeError, ValueError):
                 item = None
@@ -305,7 +307,11 @@ class EstimateEntryPresenter:
         self, voucher_no: str, items: Sequence[SaveItem]
     ) -> tuple[int, int]:
         bars_payload = [
-            {"weight": float(item.net_wt or 0.0), "purity": float(item.purity or 0.0)}
+            {
+                "weight": float(item.net_wt or 0.0),
+                "purity": float(item.purity or 0.0),
+                "line_key": str(item.line_key or ""),
+            }
             for item in items
         ]
         added, failed = self._repository.sync_silver_bars_for_estimate(
@@ -331,6 +337,7 @@ class EstimateEntryPresenter:
             "fine": float(item.fine),
             "is_return": bool(item.is_return),
             "is_silver_bar": bool(item.is_silver_bar),
+            "line_key": str(item.line_key or ""),
         }
 
     @staticmethod

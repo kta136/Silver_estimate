@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from uuid import uuid4
 from typing import Iterable, Iterator, Sequence
 
 from silverestimate.domain.estimate_models import (
@@ -29,6 +30,7 @@ class EstimateEntryRowState:
     fine_weight: float = 0.0
     category: EstimateLineCategory = EstimateLineCategory.REGULAR
     row_index: int = 0
+    line_key: str = ""
 
     def __post_init__(self) -> None:
         normalized = (self.wage_type or "").strip().upper()
@@ -107,6 +109,13 @@ class EstimateEntryViewModel:
     def active_rows(self) -> Sequence[EstimateEntryRowState]:
         """Return only rows that have an assigned code."""
         return tuple(row for row in self._rows if not row.is_empty())
+
+    def ensure_line_keys(self) -> None:
+        """Assign stable line keys for active rows that do not yet have one."""
+        for idx, row in enumerate(self._rows):
+            if row.is_empty() or str(row.line_key or "").strip():
+                continue
+            self._rows[idx] = replace(row, line_key=uuid4().hex)
 
     def iter_lines(self) -> Iterator[EstimateLine]:
         """Yield `EstimateLine` objects for active rows."""

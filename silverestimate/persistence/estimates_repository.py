@@ -433,6 +433,7 @@ class EstimatesRepository:
                         float(item.get("fine", 0.0)),
                         0,
                         0,
+                        str(item.get("line_key", "") or ""),
                     )
                 )
             for item in return_items_list:
@@ -452,6 +453,7 @@ class EstimatesRepository:
                         float(item.get("fine", 0.0)),
                         1 if item.get("is_return", False) else 0,
                         1 if item.get("is_silver_bar", False) else 0,
+                        str(item.get("line_key", "") or ""),
                     )
                 )
             if params:
@@ -462,12 +464,12 @@ class EstimatesRepository:
                         prepared.executemany(stmt, params)
                     else:
                         cursor.executemany(
-                            "INSERT INTO estimate_items (voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage_type, wage, fine, is_return, is_silver_bar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            "INSERT INTO estimate_items (voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage_type, wage, fine, is_return, is_silver_bar, line_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                             params,
                         )
                 except sqlite3.Error:
                     cursor.executemany(
-                        "INSERT INTO estimate_items (voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage_type, wage, fine, is_return, is_silver_bar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        "INSERT INTO estimate_items (voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage_type, wage, fine, is_return, is_silver_bar, line_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         params,
                     )
 

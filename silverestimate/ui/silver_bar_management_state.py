@@ -53,20 +53,7 @@ class SilverBarManagementStateStore(HostProxy):
             )
             settings.setValue("ui/silver_bars/current_list_id", self.current_list_id)
             settings.setValue(
-                "ui/silver_bars/weight_tol", float(self.weight_tol_spin.value())
-            )
-            settings.setValue(
-                "ui/silver_bars/purity_min", float(self.purity_min_spin.value())
-            )
-            settings.setValue(
-                "ui/silver_bars/purity_max", float(self.purity_max_spin.value())
-            )
-            settings.setValue(
                 "ui/silver_bars/date_range", self.date_range_combo.currentText()
-            )
-            settings.setValue(
-                "ui/silver_bars/auto_refresh",
-                bool(self.auto_refresh_checkbox.isChecked()),
             )
             settings.sync()
         except Exception as exc:
@@ -87,28 +74,11 @@ class SilverBarManagementStateStore(HostProxy):
             if hasattr(self, "_splitter"):
                 self._splitter.setOrientation(Qt.Horizontal)
 
-            tol = settings.value("ui/silver_bars/weight_tol")
-            if tol is not None:
-                self.weight_tol_spin.setValue(float(tol))
-
-            pmin = settings.value("ui/silver_bars/purity_min")
-            pmax = settings.value("ui/silver_bars/purity_max")
-            if pmin is not None:
-                self.purity_min_spin.setValue(float(pmin))
-            if pmax is not None:
-                self.purity_max_spin.setValue(float(pmax))
-
             dr = settings.value("ui/silver_bars/date_range")
             if isinstance(dr, str):
                 idx = self.date_range_combo.findText(dr)
                 if idx >= 0:
                     self.date_range_combo.setCurrentIndex(idx)
-
-            auto_refresh = settings.value("ui/silver_bars/auto_refresh")
-            if isinstance(auto_refresh, bool):
-                self.auto_refresh_checkbox.setChecked(auto_refresh)
-            elif isinstance(auto_refresh, str):
-                self.auto_refresh_checkbox.setChecked(auto_refresh.lower() == "true")
 
             weight_query = settings.value("ui/silver_bars/weight_query")
             if isinstance(weight_query, str):
@@ -179,15 +149,6 @@ class SilverBarManagementStateStore(HostProxy):
             self._apply_table_column_widths(self.list_bars_table, list_cols)
         except Exception as exc:
             self.logger.debug("Could not restore table column widths: %s", exc)
-
-    def _toggle_auto_refresh(self, checked: bool):
-        try:
-            if checked:
-                self._auto_refresh_timer.start()
-            else:
-                self._auto_refresh_timer.stop()
-        except Exception as exc:
-            self.logger.debug("Failed to toggle auto refresh: %s", exc)
 
     def _current_date_range(self):
         try:

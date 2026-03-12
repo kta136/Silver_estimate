@@ -8,9 +8,7 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
     QAbstractItemView,
-    QCheckBox,
     QComboBox,
-    QDoubleSpinBox,
     QFrame,
     QHBoxLayout,
     QHeaderView,
@@ -18,14 +16,11 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QPushButton,
     QShortcut,
-    QSpinBox,
     QSplitter,
     QTableView,
     QVBoxLayout,
     QWidget,
 )
-
-from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.ui.models import (
     AvailableSilverBarsTableModel,
     SelectedListSilverBarsTableModel,
@@ -46,7 +41,7 @@ class SilverBarManagementUiBuilder(HostProxy):
         host_widget.setStyleSheet(
             build_management_screen_stylesheet(
                 root_selector="QDialog#SilverBarManagementDialog",
-                card_names=["SilverBarManagementHeaderCard"],
+                card_names=[],
                 title_label="SilverBarManagementTitleLabel",
                 subtitle_label="SilverBarManagementSubtitleLabel",
                 primary_button="SilverBarPrimaryButton",
@@ -84,6 +79,27 @@ class SilverBarManagementUiBuilder(HostProxy):
                     background-color: #e2e8f0;
                     width: 6px;
                 }
+                QPushButton#SilverBarPrimaryButton:disabled,
+                QPushButton#SilverBarSecondaryButton:disabled,
+                QPushButton#SilverBarDangerButton:disabled {
+                    background-color: #e5e7eb;
+                    border: 1px solid #cbd5e1;
+                    color: #94a3b8;
+                }
+                QTableView#SilverBarListTable[listState="inactive"] {
+                    background-color: #f1f5f9;
+                    border: 1px solid #cbd5e1;
+                    color: #94a3b8;
+                    gridline-color: #e2e8f0;
+                    selection-background-color: #e2e8f0;
+                    selection-color: #94a3b8;
+                }
+                QHeaderView#SilverBarListHeader[listState="inactive"]::section {
+                    background-color: #e2e8f0;
+                    color: #94a3b8;
+                    border-right: 1px solid #d8e1ec;
+                    border-bottom: 1px solid #d8e1ec;
+                }
                 """,
             )
         )
@@ -91,22 +107,6 @@ class SilverBarManagementUiBuilder(HostProxy):
         main_layout = QVBoxLayout(self.host)
         main_layout.setContentsMargins(16, 16, 16, 16)
         main_layout.setSpacing(12)
-
-        header_card = QFrame(self.host)
-        header_card.setObjectName("SilverBarManagementHeaderCard")
-        header_layout = QVBoxLayout(header_card)
-        header_layout.setContentsMargins(12, 12, 12, 12)
-        header_layout.setSpacing(2)
-        title = QLabel("Silver Bar Management")
-        title.setObjectName("SilverBarManagementTitleLabel")
-        header_layout.addWidget(title)
-        subtitle = QLabel(
-            "Move bars into lists, manage issuance, and generate optimal lists without leaving the workflow."
-        )
-        subtitle.setObjectName("SilverBarManagementSubtitleLabel")
-        subtitle.setWordWrap(True)
-        header_layout.addWidget(subtitle)
-        main_layout.addWidget(header_card)
 
         self._splitter = QSplitter(Qt.Horizontal, self.host)
         self._splitter.setChildrenCollapsible(False)
@@ -131,51 +131,15 @@ class SilverBarManagementUiBuilder(HostProxy):
         self.weight_search_edit = QLineEdit()
         self.weight_search_edit.setPlaceholderText("Weight")
         filter_row.addWidget(self.weight_search_edit, 2)
-
-        self.weight_tol_spin = QDoubleSpinBox()
-        self.weight_tol_spin.setDecimals(3)
-        self.weight_tol_spin.setRange(0.001, 999999.0)
-        self.weight_tol_spin.setSingleStep(0.001)
-        self.weight_tol_spin.setValue(0.001)
-        filter_row.addWidget(self.weight_tol_spin)
-
-        self.purity_min_spin = QDoubleSpinBox()
-        self.purity_min_spin.setDecimals(2)
-        self.purity_min_spin.setRange(0.0, 100.0)
-        self.purity_min_spin.setValue(0.0)
-        filter_row.addWidget(self.purity_min_spin)
-
-        self.purity_max_spin = QDoubleSpinBox()
-        self.purity_max_spin.setDecimals(2)
-        self.purity_max_spin.setRange(0.0, 100.0)
-        self.purity_max_spin.setValue(100.0)
-        filter_row.addWidget(self.purity_max_spin)
-        left_layout.addLayout(filter_row)
-
-        controls_row = QHBoxLayout()
         self.date_range_combo = QComboBox()
         self.date_range_combo.addItems(
             ["Any", "Today", "Last 7 days", "Last 30 days", "This Month"]
         )
-        controls_row.addWidget(self.date_range_combo)
-
-        self.available_limit_spin = QSpinBox()
-        self.available_limit_spin.setRange(100, 10000)
-        saved_limit = get_app_settings().value(
-            "silver_bar/available_max_rows", defaultValue=1500, type=int
-        )
-        self.available_limit_spin.setValue(max(100, int(saved_limit or 1500)))
-        controls_row.addWidget(self.available_limit_spin)
-
-        self.refresh_available_button = QPushButton("Refresh")
-        controls_row.addWidget(self.refresh_available_button)
+        filter_row.addWidget(self.date_range_combo)
 
         self.clear_filters_button = QPushButton("Clear Filters")
-        controls_row.addWidget(self.clear_filters_button)
-
-        self.auto_refresh_checkbox = QCheckBox("Auto-refresh")
-        controls_row.addWidget(self.auto_refresh_checkbox)
-        left_layout.addLayout(controls_row)
+        filter_row.addWidget(self.clear_filters_button)
+        left_layout.addLayout(filter_row)
 
         self.available_bars_table = QTableView(self.host)
         self.available_bars_model = AvailableSilverBarsTableModel(
@@ -211,9 +175,11 @@ class SilverBarManagementUiBuilder(HostProxy):
         self.remove_all_button = QPushButton("<< Remove All")
         for button in (self.add_to_list_button, self.add_all_button):
             button.setObjectName("SilverBarPrimaryButton")
+            button.setEnabled(False)
             center_layout.addWidget(button)
         for button in (self.remove_from_list_button, self.remove_all_button):
             button.setObjectName("SilverBarDangerButton")
+            button.setEnabled(False)
             center_layout.addWidget(button)
         center_layout.addStretch()
 
@@ -244,10 +210,13 @@ class SilverBarManagementUiBuilder(HostProxy):
         action_row = QHBoxLayout()
         self.edit_note_button = QPushButton("Edit Note")
         self.edit_note_button.setObjectName("SilverBarSecondaryButton")
+        self.edit_note_button.setEnabled(False)
         self.delete_list_button = QPushButton("Delete List")
         self.delete_list_button.setObjectName("SilverBarDangerButton")
+        self.delete_list_button.setEnabled(False)
         self.mark_issued_button = QPushButton("Mark Issued")
         self.mark_issued_button.setObjectName("SilverBarPrimaryButton")
+        self.mark_issued_button.setEnabled(False)
         action_row.addWidget(self.edit_note_button)
         action_row.addWidget(self.delete_list_button)
         action_row.addWidget(self.mark_issued_button)
@@ -256,8 +225,10 @@ class SilverBarManagementUiBuilder(HostProxy):
         print_row = QHBoxLayout()
         self.print_list_button = QPushButton("Print")
         self.print_list_button.setObjectName("SilverBarSecondaryButton")
+        self.print_list_button.setEnabled(False)
         self.export_list_button = QPushButton("Export CSV")
         self.export_list_button.setObjectName("SilverBarSecondaryButton")
+        self.export_list_button.setEnabled(False)
         self.generate_optimal_button = QPushButton("Generate Optimal")
         self.generate_optimal_button.setObjectName("SilverBarPrimaryButton")
         print_row.addWidget(self.print_list_button)
@@ -270,6 +241,7 @@ class SilverBarManagementUiBuilder(HostProxy):
         right_layout.addWidget(self.list_info_label)
 
         self.list_bars_table = QTableView(self.host)
+        self.list_bars_table.setObjectName("SilverBarListTable")
         self.list_bars_model = SelectedListSilverBarsTableModel(self.list_bars_table)
         self.list_bars_table.setModel(self.list_bars_model)
         self.list_bars_table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -279,6 +251,10 @@ class SilverBarManagementUiBuilder(HostProxy):
         self.list_bars_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.Stretch
         )
+        self.list_bars_table.horizontalHeader().setObjectName("SilverBarListHeader")
+        self.list_bars_table.setProperty("listState", "inactive")
+        self.list_bars_table.horizontalHeader().setProperty("listState", "inactive")
+        self.list_bars_table.setEnabled(False)
         right_layout.addWidget(self.list_bars_table, 1)
 
         self.list_totals_label = QLabel("List Bars: 0")
@@ -296,44 +272,16 @@ class SilverBarManagementUiBuilder(HostProxy):
         self._splitter.setSizes([520, 120, 520])
         main_layout.addWidget(self._splitter, 1)
 
-        bottom_row = QHBoxLayout()
-        bottom_row.addStretch()
-        self.print_bottom_button = QPushButton("Print")
-        self.print_bottom_button.setObjectName("SilverBarSecondaryButton")
-        bottom_row.addWidget(self.print_bottom_button)
-        self.close_button = QPushButton("Close")
-        self.close_button.setObjectName("SilverBarSecondaryButton")
-        bottom_row.addWidget(self.close_button)
-        main_layout.addLayout(bottom_row)
-
-        self._auto_refresh_timer = QTimer(self.host)
-        self._auto_refresh_timer.setInterval(5000)
-        self._auto_refresh_timer.timeout.connect(self.load_available_bars)
-
         self._filter_reload_timer = QTimer(self.host)
         self._filter_reload_timer.setSingleShot(True)
         self._filter_reload_timer.setInterval(180)
         self._filter_reload_timer.timeout.connect(self.load_available_bars)
 
-        self.refresh_available_button.clicked.connect(
-            lambda *_: self.load_available_bars()
-        )
-        self.refresh_available_button.setObjectName("SilverBarSecondaryButton")
         self.clear_filters_button.setObjectName("SilverBarSecondaryButton")
         self.clear_filters_button.clicked.connect(lambda *_: self._clear_filters())
-        self.auto_refresh_checkbox.toggled.connect(self._toggle_auto_refresh)
         self.weight_search_edit.textChanged.connect(self._schedule_available_reload)
-        self.weight_tol_spin.valueChanged.connect(self._schedule_available_reload)
-        self.purity_min_spin.valueChanged.connect(self._schedule_available_reload)
-        self.purity_max_spin.valueChanged.connect(self._schedule_available_reload)
         self.date_range_combo.currentIndexChanged.connect(
             self._schedule_available_reload
-        )
-        self.available_limit_spin.valueChanged.connect(
-            self._save_available_limit_setting
-        )
-        self.available_limit_spin.valueChanged.connect(
-            lambda *_: self.load_available_bars()
         )
 
         self.list_combo.currentIndexChanged.connect(
@@ -344,7 +292,6 @@ class SilverBarManagementUiBuilder(HostProxy):
         self.delete_list_button.clicked.connect(lambda *_: self.delete_selected_list())
         self.mark_issued_button.clicked.connect(lambda *_: self.mark_list_as_issued())
         self.print_list_button.clicked.connect(lambda *_: self.print_selected_list())
-        self.print_bottom_button.clicked.connect(lambda *_: self.print_selected_list())
         self.export_list_button.clicked.connect(
             lambda *_: self.export_current_list_to_csv()
         )
@@ -358,7 +305,6 @@ class SilverBarManagementUiBuilder(HostProxy):
             lambda *_: self.remove_selected_from_list()
         )
         self.remove_all_button.clicked.connect(lambda *_: self.remove_all_from_list())
-        self.close_button.clicked.connect(lambda *_: self.accept())
 
         self.available_bars_table.customContextMenuRequested.connect(
             self._show_available_context_menu
@@ -393,8 +339,6 @@ class SilverBarManagementUiBuilder(HostProxy):
         )
 
         try:
-            refresh_shortcut = QShortcut(QKeySequence.Refresh, host_widget)
-            refresh_shortcut.activated.connect(self.load_available_bars)
             new_list_shortcut = QShortcut(QKeySequence("Ctrl+N"), host_widget)
             new_list_shortcut.activated.connect(self.create_new_list)
             print_shortcut = QShortcut(QKeySequence.Print, host_widget)
@@ -411,5 +355,4 @@ class SilverBarManagementUiBuilder(HostProxy):
             self.logger.debug("Failed to configure silver bar shortcuts: %s", exc)
 
         self._restore_ui_state()
-        self._toggle_auto_refresh(self.auto_refresh_checkbox.isChecked())
         self._update_transfer_buttons_state()

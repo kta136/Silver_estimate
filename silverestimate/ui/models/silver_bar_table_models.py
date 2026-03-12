@@ -159,6 +159,23 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
             return f"{0.0:.{places}f}"
 
     @staticmethod
+    def _bar_id_sort_value(row: dict[str, Any]) -> int:
+        try:
+            return int(row.get("bar_id") or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
+    def _voucher_sort_value(row: dict[str, Any]) -> tuple[int, Any, str]:
+        voucher_no = str(row.get("estimate_voucher_no") or "").strip()
+        if not voucher_no:
+            return (2, "", "")
+        try:
+            return (0, int(voucher_no), voucher_no.casefold())
+        except (TypeError, ValueError):
+            return (1, voucher_no.casefold(), voucher_no.casefold())
+
+    @staticmethod
     def _status_brush(status: str | None) -> Optional[QBrush]:
         normalized = str(status or "").strip()
         if normalized == "In Stock":
@@ -224,7 +241,7 @@ class _ManagementSilverBarsTableModel(_BaseSilverBarTableModel):
 
     def sort_key_value(self, row: dict[str, Any], column: int) -> Any:
         if column == 0:
-            return self.display_value_from_row(row, column).casefold()
+            return self._voucher_sort_value(row)
         if column in (1, 2, 3):
             try:
                 return float(row.get(self.value_key(column)) or 0.0)
@@ -237,9 +254,11 @@ class _ManagementSilverBarsTableModel(_BaseSilverBarTableModel):
         return super().sort_key_value(row, column)
 
     def sort_key_for_row(self, row: dict[str, Any], column: int) -> tuple[Any, ...]:
+        if column == 0:
+            return (*self._voucher_sort_value(row), self._bar_id_sort_value(row))
         primary = self.sort_key_value(row, column)
         if column == 4:
-            return (primary is None, primary, int(row.get("bar_id") or 0))
+            return (primary is None, primary, self._bar_id_sort_value(row))
         return (primary is None, primary)
 
     def text_alignment(self, column: int) -> Optional[int]:
@@ -344,6 +363,8 @@ class HistorySilverBarsTableModel(_BaseSilverBarTableModel):
                 return int(row.get("bar_id") or 0)
             except (TypeError, ValueError):
                 return 0
+        if column == 1:
+            return self._voucher_sort_value(row)
         if column in (2, 3, 4):
             try:
                 return float(row.get(self.value_key(column)) or 0.0)
@@ -352,9 +373,11 @@ class HistorySilverBarsTableModel(_BaseSilverBarTableModel):
         return self.display_value_from_row(row, column).casefold()
 
     def sort_key_for_row(self, row: dict[str, Any], column: int) -> tuple[Any, ...]:
+        if column == 1:
+            return (*self._voucher_sort_value(row), self._bar_id_sort_value(row))
         primary = self.sort_key_value(row, column)
         if column == 7:
-            return (primary is None, primary, int(row.get("bar_id") or 0))
+            return (primary is None, primary, self._bar_id_sort_value(row))
         return (primary is None, primary)
 
     def text_alignment(self, column: int) -> Optional[int]:
@@ -485,12 +508,22 @@ class HistoryListBarsTableModel(_BaseSilverBarTableModel):
                 return int(row.get("bar_id") or 0)
             except (TypeError, ValueError):
                 return 0
+        if column == 1:
+            return self._voucher_sort_value(row)
         if column in (2, 3, 4):
             try:
                 return float(row.get(self.value_key(column)) or 0.0)
             except (TypeError, ValueError):
                 return 0.0
         return self.display_value_from_row(row, column).casefold()
+
+    def sort_key_for_row(self, row: dict[str, Any], column: int) -> tuple[Any, ...]:
+        if column == 1:
+            return (*self._voucher_sort_value(row), self._bar_id_sort_value(row))
+        primary = self.sort_key_value(row, column)
+        if column == 6:
+            return (primary is None, primary, self._bar_id_sort_value(row))
+        return (primary is None, primary)
 
     def text_alignment(self, column: int) -> Optional[int]:
         if column in (0, 2, 3, 4):

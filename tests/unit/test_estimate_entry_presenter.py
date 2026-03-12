@@ -181,6 +181,7 @@ def _make_sample_payload() -> SavePayload:
         fine=1.98,
         is_return=False,
         is_silver_bar=True,
+        line_key="line-bar",
     )
     totals = {
         "total_gross": 12.0,
@@ -334,6 +335,9 @@ def test_save_estimate_prefers_bulk_bar_sync_when_available(presenter_fixtures):
     assert outcome.success
     assert outcome.bars_added == 1
     assert len(repo.sync_calls) == 1
+    assert repo.sync_calls[0]["bars"] == [
+        {"weight": 2.0, "purity": 99.0, "line_key": "line-bar"}
+    ]
 
 
 def test_save_estimate_failure_returns_error(presenter_fixtures):
@@ -382,6 +386,7 @@ def test_load_estimate_transforms_repository_response(presenter_fixtures):
                 "fine": 4.095,
                 "is_return": 1,
                 "is_silver_bar": 0,
+                "line_key": "loaded-line",
             }
         ],
     }
@@ -393,6 +398,7 @@ def test_load_estimate_transforms_repository_response(presenter_fixtures):
     assert len(loaded.items) == 1
     assert loaded.items[0].is_return is True
     assert loaded.items[0].wage_type == "PC"
+    assert loaded.items[0].line_key == "loaded-line"
     assert repo.fetch_items_calls == []
 
 

@@ -35,6 +35,7 @@ class EstimateEntryPersistenceService:
         note: str,
     ) -> SavePreparation:
         """Create a SavePayload from the current view-model rows."""
+        self._view_model.ensure_line_keys()
         rows = self._view_model.rows()
         save_items: List[SaveItem] = []
         skipped_rows: List[int] = []
@@ -149,6 +150,7 @@ class EstimateEntryPersistenceService:
                     fine_weight=item.fine,
                     category=category,
                     row_index=item.row_number if item.row_number else idx + 1,
+                    line_key=str(item.line_key or ""),
                 )
             )
         return rows
@@ -183,4 +185,5 @@ class EstimateEntryPersistenceService:
             fine=row.fine_weight,
             is_return=is_return,
             is_silver_bar=is_silver_bar,
+            line_key=str(row.line_key or ""),
         )

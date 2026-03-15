@@ -414,7 +414,9 @@ class ItemsRepository:
 
             conn.commit()
         except sqlite3.Error as exc:
-            self._logger.error("DB Error upserting item catalog: %s", exc, exc_info=True)
+            self._logger.error(
+                "DB Error upserting item catalog: %s", exc, exc_info=True
+            )
             conn.rollback()
             return None
 

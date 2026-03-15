@@ -51,7 +51,7 @@ This guide documents the primary controller, service, and persistence APIs expos
 ## Service Layer
 
 ### Authentication (silverestimate/services/auth_service.py)
-- **run_authentication(logger: Optional[logging.Logger] = None, *, parent: Optional[QWidget] = None) -> Optional[AuthenticationResult]** - drives setup/login with retry-on-invalid-password behavior; returns `None` only when the dialog is cancelled, otherwise returns an `AuthenticationResult` describing the password provided or a wipe request (with silent flag when triggered by the secondary password).
+- **run_authentication(logger: Optional[logging.Logger] = None, *, parent: Optional[QWidget] = None) -> Optional[AuthenticationResult]** - drives setup/login with retry-on-invalid-password behavior; returns `None` only when the dialog is cancelled, otherwise returns an `AuthenticationResult` describing the password provided or a wipe request (with silent flag when triggered by the recovery password).
 - **perform_data_wipe(db_path: str = DB_PATH, logger: Optional[logging.Logger] = None, *, silent: bool = False) -> bool** - deletes the encrypted DB, removes temporary plaintext, clears credentials, and, when `silent=True`, purges application log files without emitting wipe-related log entries.
 - Uses `silverestimate/security/credential_store.py` to persist Argon2 hashes in the OS keyring (automatically migrating legacy QSettings values).
 

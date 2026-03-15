@@ -9,7 +9,6 @@ from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QComboBox,
-    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -21,6 +20,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
 from silverestimate.ui.models import (
     AvailableSilverBarsTableModel,
     SelectedListSilverBarsTableModel,

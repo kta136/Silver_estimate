@@ -72,11 +72,6 @@ _ENTRIES = {
 }
 
 
-def is_available() -> bool:
-    """Return True when the runtime has access to a keyring backend."""
-    return get_backend_status().available
-
-
 def get_backend_status() -> CredentialBackendStatus:
     """Report whether a secure keyring backend is usable."""
     global _backend_status_cache, _backend_status_cache_keyring_id

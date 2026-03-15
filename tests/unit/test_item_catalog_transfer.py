@@ -162,11 +162,15 @@ def test_import_item_catalog_rejects_duplicate_codes_in_file(tmp_path):
 def test_load_item_catalog_file_rejects_wrong_format(tmp_path):
     path = tmp_path / "catalog.seitems.json"
     path.write_text(
-        json.dumps({"format": "wrong.format", "version": ITEM_CATALOG_VERSION, "items": []}),
+        json.dumps(
+            {"format": "wrong.format", "version": ITEM_CATALOG_VERSION, "items": []}
+        ),
         encoding="utf-8",
     )
 
-    with pytest.raises(ItemCatalogTransferError, match="Unsupported catalog file format"):
+    with pytest.raises(
+        ItemCatalogTransferError, match="Unsupported catalog file format"
+    ):
         load_item_catalog_file(str(path))
 
 
@@ -177,7 +181,9 @@ def test_load_item_catalog_file_rejects_wrong_version(tmp_path):
         encoding="utf-8",
     )
 
-    with pytest.raises(ItemCatalogTransferError, match="Unsupported catalog file version"):
+    with pytest.raises(
+        ItemCatalogTransferError, match="Unsupported catalog file version"
+    ):
         load_item_catalog_file(str(path))
 
 
@@ -222,14 +228,8 @@ def test_load_item_catalog_file_rejects_missing_file(tmp_path):
 
 
 def test_ensure_catalog_file_suffix_appends_native_suffix_for_plain_json_name():
-    assert (
-        ensure_catalog_file_suffix("backup.json")
-        == "backup.json.seitems.json"
-    )
+    assert ensure_catalog_file_suffix("backup.json") == "backup.json.seitems.json"
 
 
 def test_ensure_catalog_file_suffix_preserves_native_suffix():
-    assert (
-        ensure_catalog_file_suffix("backup.seitems.json")
-        == "backup.seitems.json"
-    )
+    assert ensure_catalog_file_suffix("backup.seitems.json") == "backup.seitems.json"

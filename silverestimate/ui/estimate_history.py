@@ -441,6 +441,12 @@ class EstimateHistoryDialog(QDialog):
                     exc,
                 )
 
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self.reject()
+        else:
+            super().keyPressEvent(event)
+
     def reject(self):
         self._cancel_active_loads()
         self._cancel_active_print_previews()

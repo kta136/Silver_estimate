@@ -134,7 +134,6 @@ module = [
     "silverestimate.security.credential_store",
     "silverestimate.services.estimate_calculator",
     "silverestimate.services.estimate_repository",
-    "silverestimate.services.item_import_parser",
     "silverestimate.persistence.flush_scheduler",
     "silverestimate.persistence.migrations",
     "silverestimate.persistence.database_lifecycle",

@@ -42,7 +42,7 @@ class SilverBarHistoryDialog(QDialog):
         self.db_manager = db_manager
         self.logger = logging.getLogger(__name__)
         self.setWindowTitle("Silver Bar History")
-        self.setMinimumSize(1200, 800)
+        self.setMinimumSize(900, 600)
         self.setObjectName("SilverBarHistoryDialog")
         self.setStyleSheet(
             build_management_screen_stylesheet(
@@ -155,66 +155,44 @@ class SilverBarHistoryDialog(QDialog):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
 
-        # Search filters
-        filters_group = QWidget()
-        filters_layout = QVBoxLayout(filters_group)
-        filters_layout.setSpacing(8)
+        # Search filters — single row
+        filters_row = QHBoxLayout()
+        filters_row.setSpacing(10)
 
-        # Search row 1
-        search_row1 = QHBoxLayout()
-        search_row1.setSpacing(12)
-
-        # Voucher search
         voucher_label = QLabel("Voucher/Note")
         voucher_label.setObjectName("SilverBarHistoryFieldLabel")
-        voucher_label.setMinimumWidth(100)
-        search_row1.addWidget(voucher_label)
-
+        filters_row.addWidget(voucher_label)
         self.voucher_edit = QLineEdit()
         self.voucher_edit.setPlaceholderText("Search voucher or note")
         self.voucher_edit.textChanged.connect(self._schedule_search)
-        search_row1.addWidget(self.voucher_edit)
+        filters_row.addWidget(self.voucher_edit, 2)
 
-        # Weight search
         weight_label = QLabel("Weight (g)")
         weight_label.setObjectName("SilverBarHistoryFieldLabel")
-        weight_label.setMinimumWidth(80)
-        search_row1.addWidget(weight_label)
-
+        filters_row.addWidget(weight_label)
         self.weight_edit = QLineEdit()
         self.weight_edit.setPlaceholderText("Enter weight")
+        self.weight_edit.setMaximumWidth(110)
         self.weight_edit.textChanged.connect(self._schedule_search)
-        search_row1.addWidget(self.weight_edit)
+        filters_row.addWidget(self.weight_edit)
 
-        search_row1.addStretch()
-        filters_layout.addLayout(search_row1)
-
-        # Search row 2
-        search_row2 = QHBoxLayout()
-        search_row2.setSpacing(12)
-
-        # Status filter
         status_label = QLabel("Status")
         status_label.setObjectName("SilverBarHistoryFieldLabel")
-        status_label.setMinimumWidth(100)
-        search_row2.addWidget(status_label)
-
+        filters_row.addWidget(status_label)
         self.status_combo = QComboBox()
         self.status_combo.addItems(
             ["All Statuses", "In Stock", "Assigned", "Issued", "Sold"]
         )
         self.status_combo.currentTextChanged.connect(self._schedule_search)
-        search_row2.addWidget(self.status_combo)
+        filters_row.addWidget(self.status_combo)
 
-        # Max rows limit
-        limit_label = QLabel("Max Rows")
+        limit_label = QLabel("Max")
         limit_label.setObjectName("SilverBarHistoryFieldLabel")
-        limit_label.setMinimumWidth(80)
-        search_row2.addWidget(limit_label)
-
+        filters_row.addWidget(limit_label)
         self.max_rows_spin = QSpinBox()
         self.max_rows_spin.setRange(100, 50000)
         self.max_rows_spin.setSingleStep(100)
+        self.max_rows_spin.setMaximumWidth(90)
         default_limit = 2000
         try:
             default_limit = get_app_settings().value(
@@ -230,18 +208,15 @@ class SilverBarHistoryDialog(QDialog):
             "Limit maximum rows loaded in history tables to keep UI responsive."
         )
         self.max_rows_spin.valueChanged.connect(self._on_row_limit_changed)
-        search_row2.addWidget(self.max_rows_spin)
+        filters_row.addWidget(self.max_rows_spin)
 
-        search_row2.addStretch()
-
-        # Clear filters button
-        clear_button = QPushButton("Clear Filters")
+        clear_button = QPushButton("Clear")
         clear_button.setObjectName("SilverBarHistorySecondaryButton")
+        clear_button.setToolTip("Clear all filters")
         clear_button.clicked.connect(self.clear_filters)
-        search_row2.addWidget(clear_button)
+        filters_row.addWidget(clear_button)
 
-        filters_layout.addLayout(search_row2)
-        layout.addWidget(filters_group)
+        layout.addLayout(filters_row)
 
         # Results table
         self.bars_model = HistorySilverBarsTableModel(self)
@@ -734,6 +709,12 @@ class SilverBarHistoryDialog(QDialog):
                     "Failed to stop silver bar history worker thread during cancel: %s",
                     exc,
                 )
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self.reject()
+        else:
+            super().keyPressEvent(event)
 
     def reject(self):
         self._cancel_active_loads()

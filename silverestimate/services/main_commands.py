@@ -42,8 +42,8 @@ class MainCommands:
         self.main_window = main_window
         self.db = db_manager
         self.logger = logger or logging.getLogger(__name__)
-        self._catalog_export_thread = None
-        self._catalog_export_worker = None
+        self._catalog_export_thread: QThread | None = None
+        self._catalog_export_worker: _ItemCatalogExportWorker | None = None
 
     def update_db(self, db_manager) -> None:
         self.db = db_manager
@@ -282,7 +282,9 @@ class MainCommands:
                 f"An unexpected error occurred: {exc}",
             )
 
-    def _start_item_catalog_export_worker(self, *, db_path: str, file_path: str) -> None:
+    def _start_item_catalog_export_worker(
+        self, *, db_path: str, file_path: str
+    ) -> None:
         if getattr(self, "_catalog_export_thread", None) is not None:
             QMessageBox.information(
                 self.main_window,

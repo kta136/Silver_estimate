@@ -78,10 +78,10 @@ class SilverBarTableController(HostProxy):
 
             selection_model.clearSelection()
             for bar_id in selected_bar_ids:
-                row = row_by_bar_id.get(int(bar_id))
-                if row is None:
+                target_row = row_by_bar_id.get(int(bar_id))
+                if target_row is None:
                     continue
-                index = model.index(row, 0)
+                index = model.index(target_row, 0)
                 if index.isValid():
                     selection_model.select(
                         index,

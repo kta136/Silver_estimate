@@ -9,7 +9,6 @@ from PyQt5.QtWidgets import (
     QAbstractItemView,
     QComboBox,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -83,8 +82,6 @@ class ItemMasterWidget(QWidget):
         if self.main_window:
             self.main_window.show_status_message(message, timeout)
         else:
-            import logging
-
             logging.getLogger(__name__).info(f"Status: {message}")
 
     # ------------------------------------
@@ -95,11 +92,7 @@ class ItemMasterWidget(QWidget):
         self.setStyleSheet(
             build_management_screen_stylesheet(
                 root_selector="QWidget#ItemMasterWidget",
-                card_names=[
-                    "ItemMasterHeaderCard",
-                    "ItemMasterFormCard",
-                    "ItemMasterSearchCard",
-                ],
+                card_names=["ItemMasterFormPanel"],
                 title_label="ItemMasterTitleLabel",
                 subtitle_label="ItemMasterSubtitleLabel",
                 field_label="ItemMasterFieldLabel",
@@ -108,157 +101,196 @@ class ItemMasterWidget(QWidget):
                 danger_button="ItemMasterDangerButton",
                 input_selectors=["QLineEdit", "QComboBox"],
                 include_table=True,
+                extra_rules="""
+                QLabel#ItemMasterFormHeading {
+                    font-size: 11pt;
+                    font-weight: 700;
+                    color: #0f172a;
+                    padding-bottom: 2px;
+                }
+                QTableView {
+                    border-radius: 10px;
+                }
+                QTableView::item {
+                    padding: 4px 8px;
+                }
+                QTableView::item:selected {
+                    border-radius: 0px;
+                }
+                """,
             )
         )
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(10)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(12, 12, 12, 12)
+        outer.setSpacing(10)
 
-        header_card = QFrame(self)
-        header_card.setObjectName("ItemMasterHeaderCard")
-        header_layout = QVBoxLayout(header_card)
-        header_layout.setContentsMargins(12, 12, 12, 12)
-        header_layout.setSpacing(2)
-
+        # ── Page header ─────────────────────────────────────────
+        header_row = QHBoxLayout()
+        header_row.setSpacing(10)
         header_label = QLabel("Item Master")
         header_label.setObjectName("ItemMasterTitleLabel")
-        header_layout.addWidget(header_label)
-
+        header_row.addWidget(header_label)
         subtitle_label = QLabel(
             "Maintain catalog codes, purity defaults, and wage settings."
         )
         subtitle_label.setObjectName("ItemMasterSubtitleLabel")
-        header_layout.addWidget(subtitle_label)
-        layout.addWidget(header_card)
+        subtitle_label.setAlignment(Qt.AlignVCenter)
+        header_row.addWidget(subtitle_label)
+        header_row.addStretch()
+        outer.addLayout(header_row)
 
-        form_card = QFrame(self)
-        form_card.setObjectName("ItemMasterFormCard")
-        form_layout = QGridLayout(form_card)
-        form_layout.setContentsMargins(12, 12, 12, 12)
-        form_layout.setHorizontalSpacing(10)
-        form_layout.setVerticalSpacing(6)
+        # ── Horizontal split ────────────────────────────────────
+        split = QHBoxLayout()
+        split.setSpacing(12)
 
-        code_label = QLabel("Code")
-        code_label.setObjectName("ItemMasterFieldLabel")
-        form_layout.addWidget(code_label, 0, 0)
+        # ── LEFT: Form panel ────────────────────────────────────
+        self._form_panel = QFrame(self)
+        self._form_panel.setObjectName("ItemMasterFormPanel")
+        self._form_panel.setFixedWidth(280)
+        form_vbox = QVBoxLayout(self._form_panel)
+        form_vbox.setContentsMargins(16, 16, 16, 16)
+        form_vbox.setSpacing(10)
+
+        self._form_heading = QLabel("New Item")
+        self._form_heading.setObjectName("ItemMasterFormHeading")
+        form_vbox.addWidget(self._form_heading)
+
+        # Code
+        code_lbl = QLabel("Code")
+        code_lbl.setObjectName("ItemMasterFieldLabel")
         self.code_edit = QLineEdit()
-        self.code_edit.setMaximumWidth(100)
+        self.code_edit.setPlaceholderText("e.g. CH001")
         self.code_edit.setToolTip(
-            "Unique code for the item (e.g., CH001, SB999). Cannot be changed after adding."
+            "Unique code for the item (e.g., CH001). Cannot be changed after adding."
         )
-        form_layout.addWidget(self.code_edit, 1, 0)
+        form_vbox.addWidget(code_lbl)
+        form_vbox.addWidget(self.code_edit)
 
-        name_label = QLabel("Name")
-        name_label.setObjectName("ItemMasterFieldLabel")
-        form_layout.addWidget(name_label, 0, 1)
+        # Name
+        name_lbl = QLabel("Name")
+        name_lbl.setObjectName("ItemMasterFieldLabel")
         self.name_edit = QLineEdit()
-        self.name_edit.setMinimumWidth(200)
+        self.name_edit.setPlaceholderText("Item description")
         self.name_edit.setToolTip("Descriptive name of the item.")
-        form_layout.addWidget(self.name_edit, 1, 1)
+        form_vbox.addWidget(name_lbl)
+        form_vbox.addWidget(self.name_edit)
 
-        purity_label = QLabel("Purity (%)")
-        purity_label.setObjectName("ItemMasterFieldLabel")
-        form_layout.addWidget(purity_label, 0, 2)
+        # Purity
+        purity_lbl = QLabel("Purity (%)")
+        purity_lbl.setObjectName("ItemMasterFieldLabel")
         self.purity_edit = QLineEdit()
-        self.purity_edit.setMaximumWidth(90)
+        self.purity_edit.setPlaceholderText("0.00 – 100.00")
         self.purity_edit.setToolTip("Default silver purity percentage.")
         purity_validator = QDoubleValidator(0.00, 100.00, 2, self.purity_edit)
         purity_validator.setNotation(QDoubleValidator.StandardNotation)
         purity_validator.setLocale(QLocale.system())
         self.purity_edit.setValidator(purity_validator)
-        form_layout.addWidget(self.purity_edit, 1, 2)
+        form_vbox.addWidget(purity_lbl)
+        form_vbox.addWidget(self.purity_edit)
 
-        wage_type_label = QLabel("Wage Type")
-        wage_type_label.setObjectName("ItemMasterFieldLabel")
-        form_layout.addWidget(wage_type_label, 0, 3)
+        # Wage type + rate side by side
+        wage_row = QHBoxLayout()
+        wage_row.setSpacing(8)
+
+        wt_col = QVBoxLayout()
+        wt_col.setSpacing(4)
+        wt_lbl = QLabel("Wage Type")
+        wt_lbl.setObjectName("ItemMasterFieldLabel")
         self.wage_type_combo = QComboBox()
         self.wage_type_combo.addItems(["PC", "WT"])
-        self.wage_type_combo.setToolTip(
-            "Select wage calculation method: PC (Per Piece) or WT (Per Weight/Gram)."
-        )
-        form_layout.addWidget(self.wage_type_combo, 1, 3)
+        self.wage_type_combo.setToolTip("PC = Per Piece  |  WT = Per Weight (gram)")
+        wt_col.addWidget(wt_lbl)
+        wt_col.addWidget(self.wage_type_combo)
+        wage_row.addLayout(wt_col)
 
-        wage_rate_label = QLabel("Wage Rate")
-        wage_rate_label.setObjectName("ItemMasterFieldLabel")
-        form_layout.addWidget(wage_rate_label, 0, 4)
+        wr_col = QVBoxLayout()
+        wr_col.setSpacing(4)
+        wr_lbl = QLabel("Wage Rate")
+        wr_lbl.setObjectName("ItemMasterFieldLabel")
         self.wage_rate_edit = QLineEdit()
-        self.wage_rate_edit.setMaximumWidth(110)
-        self.wage_rate_edit.setToolTip(
-            "Wage rate corresponding to the selected Wage Type."
-        )
+        self.wage_rate_edit.setPlaceholderText("0.00")
+        self.wage_rate_edit.setToolTip("Wage rate for the selected wage type.")
         rate_validator = QDoubleValidator(0.00, 100000.00, 2, self.wage_rate_edit)
         rate_validator.setNotation(QDoubleValidator.StandardNotation)
         rate_validator.setLocale(QLocale.system())
         self.wage_rate_edit.setValidator(rate_validator)
-        form_layout.addWidget(self.wage_rate_edit, 1, 4)
+        wr_col.addWidget(wr_lbl)
+        wr_col.addWidget(self.wage_rate_edit)
+        wage_row.addLayout(wr_col, 1)
 
-        button_layout = QHBoxLayout()
-        button_layout.setSpacing(8)
-        self.add_button = QPushButton("Add New Item")
+        form_vbox.addLayout(wage_row)
+        form_vbox.addSpacing(4)
+
+        # Primary action — swaps between Add and Save depending on mode
+        self.add_button = QPushButton("Add Item")
         self.add_button.setObjectName("ItemMasterPrimaryButton")
-        self.add_button.setToolTip("Add the details entered above as a new item.")
+        self.add_button.setToolTip("Add these details as a new item.")
         self.add_button.clicked.connect(self.add_item)
-        button_layout.addWidget(self.add_button)
+        form_vbox.addWidget(self.add_button)
 
-        self.update_button = QPushButton("Update Selected")
-        self.update_button.setObjectName("ItemMasterSecondaryButton")
-        self.update_button.setToolTip(
-            "Update the currently selected item in the table with the details entered above."
-        )
+        self.update_button = QPushButton("Save Changes")
+        self.update_button.setObjectName("ItemMasterPrimaryButton")
+        self.update_button.setToolTip("Save changes to the selected item.")
         self.update_button.clicked.connect(self.update_item)
-        self.update_button.setEnabled(False)
-        button_layout.addWidget(self.update_button)
+        self.update_button.setVisible(False)
+        form_vbox.addWidget(self.update_button)
 
-        self.delete_button = QPushButton("Delete Selected")
+        self.clear_button = QPushButton("Clear")
+        self.clear_button.setObjectName("ItemMasterSecondaryButton")
+        self.clear_button.setToolTip("Clear fields and deselect the current item.")
+        self.clear_button.clicked.connect(self.clear_form)
+        form_vbox.addWidget(self.clear_button)
+
+        form_vbox.addStretch()
+
+        # Separator
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setStyleSheet("background-color: #e2e8f0; border: none; max-height: 1px;")
+        form_vbox.addWidget(sep)
+
+        self.delete_button = QPushButton("Delete Item")
         self.delete_button.setObjectName("ItemMasterDangerButton")
-        self.delete_button.setToolTip(
-            "Delete the currently selected item from the table (use with caution!)."
-        )
+        self.delete_button.setToolTip("Permanently delete this item. Cannot be undone.")
         self.delete_button.clicked.connect(self.delete_item)
         self.delete_button.setEnabled(False)
-        button_layout.addWidget(self.delete_button)
+        form_vbox.addWidget(self.delete_button)
 
-        self.clear_button = QPushButton("Clear Form")
-        self.clear_button.setObjectName("ItemMasterSecondaryButton")
-        self.clear_button.setToolTip(
-            "Clear the input fields above and deselect the table."
-        )
-        self.clear_button.clicked.connect(self.clear_form)
-        button_layout.addWidget(self.clear_button)
+        split.addWidget(self._form_panel)
 
-        button_layout.addStretch()
-        form_layout.addLayout(button_layout, 2, 0, 1, 5)
-        layout.addWidget(form_card)
+        # ── RIGHT: Search + table ───────────────────────────────
+        right_col = QVBoxLayout()
+        right_col.setSpacing(8)
 
-        search_card = QFrame(self)
-        search_card.setObjectName("ItemMasterSearchCard")
-        search_layout = QHBoxLayout(search_card)
-        search_layout.setContentsMargins(12, 10, 12, 10)
-        search_layout.setSpacing(8)
-
-        search_label = QLabel("Search")
-        search_label.setObjectName("ItemMasterFieldLabel")
-        search_layout.addWidget(search_label)
+        search_row = QHBoxLayout()
+        search_row.setSpacing(8)
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText("Search by code or name...")
-        self.search_edit.setToolTip("Type here to filter the item list below.")
+        self.search_edit.setToolTip("Filter items by code or name.")
+        self.search_edit.setClearButtonEnabled(True)
         self.search_edit.textChanged.connect(self._schedule_search)
-        search_layout.addWidget(self.search_edit)
-        layout.addWidget(search_card)
+        search_row.addWidget(self.search_edit)
+        self._item_count_label = QLabel("")
+        self._item_count_label.setObjectName("ItemMasterFieldLabel")
+        self._item_count_label.setStyleSheet("color: #94a3b8; font-size: 8.5pt;")
+        search_row.addWidget(self._item_count_label)
+        right_col.addLayout(search_row)
 
         self.items_table = QTableView(self)
         self.items_model = ItemMasterTableModel(self.items_table)
         self.items_table.setModel(self.items_model)
-        header = self.items_table.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.Interactive)
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        hdr = self.items_table.horizontalHeader()
+        hdr.setSectionResizeMode(QHeaderView.Interactive)
+        hdr.setSectionResizeMode(1, QHeaderView.Stretch)
         self.items_table.verticalHeader().setVisible(False)
+        self.items_table.verticalHeader().setDefaultSectionSize(30)
         self.items_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.items_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.items_table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.items_table.setSortingEnabled(True)
         self.items_table.setAlternatingRowColors(True)
+        self.items_table.setShowGrid(False)
         self.items_table.setColumnWidth(0, 110)
         self.items_table.setColumnWidth(2, 95)
         self.items_table.setColumnWidth(3, 90)
@@ -266,7 +298,10 @@ class ItemMasterWidget(QWidget):
         selection_model = self.items_table.selectionModel()
         if selection_model:
             selection_model.selectionChanged.connect(lambda *_: self.on_item_selected())
-        layout.addWidget(self.items_table)
+        right_col.addWidget(self.items_table)
+
+        split.addLayout(right_col, 1)
+        outer.addLayout(split, 1)
 
     def load_items(self, search_term=None):
         """Load items from the database into the table."""
@@ -380,7 +415,10 @@ class ItemMasterWidget(QWidget):
             table.setUpdatesEnabled(True)
             table.viewport().update()
 
-        self.show_status(f"Loaded {len(items)} items.", 2000)
+        count = len(items)
+        noun = "item" if count == 1 else "items"
+        self._item_count_label.setText(f"{count} {noun}")
+        self.show_status(f"Loaded {count} items.", 2000)
         elapsed_ms = (time.perf_counter() - started_at) * 1000.0
         self.logger.debug(
             "[perf] item_master.load_items=%.2fms search_term=%r rows=%s",
@@ -437,10 +475,18 @@ class ItemMasterWidget(QWidget):
         index = self.wage_type_combo.findText(wage_type, Qt.MatchFixedString)
         self.wage_type_combo.setCurrentIndex(index if index >= 0 else 0)
 
-        self.update_button.setEnabled(True)
-        self.delete_button.setEnabled(True)
-        self.add_button.setEnabled(False)
+        # Switch form panel to edit mode
+        self._form_heading.setText(f"Editing: {code}")
+        self._form_heading.setStyleSheet(
+            "font-size: 11pt; font-weight: 700; color: #0f766e; padding-bottom: 2px;"
+        )
         self.code_edit.setReadOnly(True)
+        self.code_edit.setStyleSheet(
+            "background-color: #f1f5f9; color: #475569; border: 1px solid #d8e1ec;"
+        )
+        self.add_button.setVisible(False)
+        self.update_button.setVisible(True)
+        self.delete_button.setEnabled(True)
         self.show_status(f"Selected item: {code}", 2000)
 
     def clear_form(self):
@@ -450,14 +496,20 @@ class ItemMasterWidget(QWidget):
     def _set_form_cleared(self, *, clear_selection: bool) -> None:
         self.code_edit.clear()
         self.code_edit.setReadOnly(False)
+        self.code_edit.setStyleSheet("")
         self.name_edit.clear()
         self.purity_edit.clear()
         self.wage_type_combo.setCurrentIndex(0)
         self.wage_rate_edit.clear()
 
-        self.update_button.setEnabled(False)
+        # Switch form panel back to add mode
+        self._form_heading.setText("New Item")
+        self._form_heading.setStyleSheet(
+            "font-size: 11pt; font-weight: 700; color: #0f172a; padding-bottom: 2px;"
+        )
+        self.add_button.setVisible(True)
+        self.update_button.setVisible(False)
         self.delete_button.setEnabled(False)
-        self.add_button.setEnabled(True)
 
         if clear_selection:
             self.items_table.clearSelection()

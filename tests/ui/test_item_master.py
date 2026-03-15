@@ -83,15 +83,15 @@ def test_item_master_selection_populates_form_and_clear_resets(qtbot):
         assert widget.purity_edit.text() == "80.0"
         assert widget.wage_type_combo.currentText() == "PC"
         assert widget.wage_rate_edit.text() == "5.0"
-        assert widget.update_button.isEnabled() is True
-        assert widget.add_button.isEnabled() is False
+        assert widget.update_button.isHidden() is False
+        assert widget.add_button.isHidden() is True
 
         widget.clear_form()
 
         assert widget.code_edit.text() == ""
-        assert widget.update_button.isEnabled() is False
+        assert widget.update_button.isHidden() is True
         assert widget.delete_button.isEnabled() is False
-        assert widget.add_button.isEnabled() is True
+        assert widget.add_button.isHidden() is False
         assert widget.items_table.selectionModel().hasSelection() is False
     finally:
         widget.deleteLater()

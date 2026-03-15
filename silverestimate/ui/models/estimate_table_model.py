@@ -443,7 +443,9 @@ class EstimateTableModel(QAbstractTableModel):
         for row_idx in changed_rows:
             left_index = self.index(row_idx, 0)
             right_index = self.index(row_idx, self.columnCount() - 1)
-            self.dataChanged.emit(left_index, right_index, [Qt.DisplayRole, Qt.EditRole])
+            self.dataChanged.emit(
+                left_index, right_index, [Qt.DisplayRole, Qt.EditRole]
+            )
 
     def set_all_rows(self, rows: list[EstimateEntryRowState]) -> None:
         """Set all rows at once.

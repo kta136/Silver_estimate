@@ -7,8 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.7] - 2026-03-15
+
 ### Changed
+- Bumped application/package version to `2.8.7`
+- Updated project README version header and badge to `v2.8.7`
 - Replaced the legacy item import/export workflow with a native `.seitems.json` catalog backup format and renamed the settings workflow around create/restore backup actions
+- Removed dead code and stale compatibility scaffolding left behind by recent UI and settings refactors
+- Aligned user-facing and documentation terminology around the recovery-password flow
 
 ## [2.8.6] - 2026-03-12
 

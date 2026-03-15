@@ -70,9 +70,7 @@ def test_item_facade_delegates_and_preload_uses_temp_db_path():
     facade = _FacadeHarness()
 
     assert facade.add_item("ITM001", "Sample", 92.5, "WT", 10.0) == "added"
-    assert facade.upsert_item_catalog(
-        [{"code": "ITM001"}], replace_existing=True
-    ) == {
+    assert facade.upsert_item_catalog([{"code": "ITM001"}], replace_existing=True) == {
         "inserted": 1,
         "updated": 1,
         "deleted": 0,

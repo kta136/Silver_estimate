@@ -910,7 +910,9 @@ class SilverBarsRepository:
                             if cursor.rowcount <= 0:
                                 failed += 1
 
-                        if self._synced_bar_values_match(existing, new_weight, new_purity):
+                        if self._synced_bar_values_match(
+                            existing, new_weight, new_purity
+                        ):
                             continue
 
                         if not self._bar_row_is_mutable(existing):

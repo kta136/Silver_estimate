@@ -10,7 +10,7 @@ The application implements a multi-layered security approach combining password 
 
 #### Dual Password System
 - **Primary Password**: Application access and database decryption
-- **Secondary Password**: Data wipe trigger (emergency recovery). When used, the wipe runs in silent mode—no wipe-related logs are emitted and existing log files are purged alongside the encrypted database.
+- **Recovery Password**: Data wipe trigger (emergency recovery). When used, the wipe runs in silent mode—no wipe-related logs are emitted and existing log files are purged alongside the encrypted database.
 
 #### Password Storage
 - Passwords never stored in plaintext
@@ -25,7 +25,7 @@ User Input → Argon2 Hash → Compare with Stored Hash → Grant/Deny Access
 ```
 
 ### 2. First-Run Setup
-1. Prompt for primary and secondary passwords
+1. Prompt for primary and recovery passwords
 2. Validate passwords are different
 3. Generate hashes using Argon2
 4. Persist hashed credentials via the credential store (Python `keyring` backend)

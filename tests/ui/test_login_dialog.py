@@ -22,8 +22,8 @@ def test_setup_dialog_omits_reset_action_and_keeps_secondary_fields(qtbot):
     try:
         assert dialog.ok_button.text() == "Create Passwords"
         assert not hasattr(dialog, "reset_button")
-        assert dialog.backup_password_label.text() == "Secondary Password:"
-        assert dialog.confirm_password_label.text() == "Confirm Secondary Password:"
+        assert dialog.backup_password_label.text() == "Recovery Password:"
+        assert dialog.confirm_password_label.text() == "Confirm Recovery Password:"
     finally:
         dialog.deleteLater()
 

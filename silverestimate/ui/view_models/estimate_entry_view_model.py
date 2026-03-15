@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from uuid import uuid4
 from typing import Iterable, Iterator, Sequence
+from uuid import uuid4
 
 from silverestimate.domain.estimate_models import (
     EstimateLine,

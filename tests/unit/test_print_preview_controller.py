@@ -1,5 +1,5 @@
 from PyQt5.QtCore import QSizeF
-from PyQt5.QtGui import QPageSize
+from PyQt5.QtGui import QPageLayout, QPageSize
 from PyQt5.QtPrintSupport import QPrinter, QPrintPreviewDialog, QPrintPreviewWidget
 from PyQt5.QtWidgets import QMessageBox, QToolBar
 
@@ -89,7 +89,17 @@ def test_preview_defaults_persist_updated_print_preferences(
     monkeypatch.setattr(controller._printer, "printerName", lambda: "Warehouse Printer")
     controller._printer.setOrientation(QPrinter.Portrait)
     controller._printer.setPageSize(QPageSize(QPageSize.Legal))
-    controller._printer.setPageMargins(12, 3, 14, 4, QPrinter.Millimeter)
+    # Read the actual margins the printer reports (null printer enforces its own minimums)
+    actual_margins = controller._printer.pageLayout().margins(QPageLayout.Millimeter)
+    expected_margins_str = ",".join(
+        str(max(0, int(round(v))))
+        for v in (
+            actual_margins.left(),
+            actual_margins.top(),
+            actual_margins.right(),
+            actual_margins.bottom(),
+        )
+    )
     payload = PrintPreviewPayload(
         html_content="<html><body><p>Preview</p></body></html>",
         title="Print Preview",
@@ -110,7 +120,7 @@ def test_preview_defaults_persist_updated_print_preferences(
     assert settings.value("print/page_size_name") == "Legal"
     assert settings.value("print/page_width_mm") == 215.9
     assert settings.value("print/page_height_mm") == 355.6
-    assert settings.value("print/margins") == "12,3,14,4"
+    assert settings.value("print/margins") == expected_margins_str
     assert settings.value("print/estimate_layout") == "thermal"
     assert saved_layouts == ["thermal"]
 

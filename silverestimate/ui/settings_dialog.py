@@ -178,11 +178,6 @@ class SettingsDialog(QDialog):
                 self._create_security_tab(),
             ),
             (
-                "Catalog Backup",
-                get_icon("import_export", widget=self),
-                self._create_catalog_backup_tab(),
-            ),
-            (
                 "Logging",
                 get_icon("logging", widget=self),
                 self._create_logging_tab(),
@@ -271,8 +266,6 @@ class SettingsDialog(QDialog):
         layout.addWidget(self.buttonBox)  # Use self.buttonBox here
         self.setLayout(layout)
 
-        # Wire change signals to enable Apply
-        self._connect_change_signals()
         # If changes fired during construction, reflect pending dirty state
         if getattr(self, "_dirty", False):
             self.buttonBox.button(QDialogButtonBox.Apply).setEnabled(True)
@@ -556,21 +549,14 @@ class SettingsDialog(QDialog):
         button_layout.addWidget(self.delete_all_data_button)
 
         layout.addLayout(button_layout)
-        layout.addStretch()  # Push buttons up
-        widget.setLayout(layout)
-        return widget
 
-    def _create_catalog_backup_tab(self):
-        """Create the item catalog backup tab."""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setSpacing(15)
+        # --- Item Backup section ---
+        from PyQt5.QtWidgets import QGroupBox
 
-        # Import Section
-        restore_group = QGroupBox("Restore Catalog Backup")
-        restore_layout = QVBoxLayout(restore_group)
+        backup_group = QGroupBox("Item Master Backup")
+        backup_layout = QVBoxLayout(backup_group)
 
-        restore_button = QPushButton("Restore Catalog Backup...")
+        restore_button = QPushButton("Restore Item Backup...")
         restore_button.setToolTip(
             "Restore a native Silver Estimate item catalog backup\n"
             "Format: .seitems.json\n"
@@ -578,25 +564,21 @@ class SettingsDialog(QDialog):
             "Does not remove items that are not in the file"
         )
         restore_button.clicked.connect(self.main_window.show_catalog_restore_dialog)
-        restore_layout.addWidget(restore_button)
-        restore_layout.addStretch()
-        layout.addWidget(restore_group)
+        backup_layout.addWidget(restore_button)
 
-        # Export Section
-        export_group = QGroupBox("Create Catalog Backup")
-        export_layout = QVBoxLayout(export_group)
-        export_button = QPushButton("Create Catalog Backup...")
+        export_button = QPushButton("Create Item Backup...")
         export_button.setToolTip(
             "Create a native Silver Estimate item catalog backup file\n"
             "Format: .seitems.json\n"
             "Round-trip safe for future imports"
         )
         export_button.clicked.connect(self.main_window.show_catalog_backup_dialog)
-        export_layout.addWidget(export_button)
-        export_layout.addStretch()
-        layout.addWidget(export_group)
+        backup_layout.addWidget(export_button)
 
-        layout.addStretch()
+        layout.addWidget(backup_group)
+
+        layout.addStretch()  # Push content up
+        widget.setLayout(layout)
         return widget
 
     def _create_logging_tab(self):
@@ -778,19 +760,17 @@ class SettingsDialog(QDialog):
         self.new_secondary_password_input = QLineEdit()
         self.new_secondary_password_input.setEchoMode(QLineEdit.Password)
         self.new_secondary_password_input.setPlaceholderText(
-            "Enter new secondary password"
+            "Enter new recovery password"
         )
-        group_layout.addRow(
-            "New Secondary Password:", self.new_secondary_password_input
-        )
+        group_layout.addRow("New Recovery Password:", self.new_secondary_password_input)
 
         self.confirm_new_secondary_password_input = QLineEdit()
         self.confirm_new_secondary_password_input.setEchoMode(QLineEdit.Password)
         self.confirm_new_secondary_password_input.setPlaceholderText(
-            "Confirm new secondary password"
+            "Confirm new recovery password"
         )
         group_layout.addRow(
-            "Confirm New Secondary:", self.confirm_new_secondary_password_input
+            "Confirm New Recovery:", self.confirm_new_secondary_password_input
         )
 
         self.change_password_button = QPushButton("Change Passwords")
@@ -1109,29 +1089,29 @@ class SettingsDialog(QDialog):
             self.confirm_new_password_input.setFocus()
             return
 
-        # 3. Validate New Secondary Password
+        # 3. Validate New Recovery Password
         if not new_secondary_pw:
             QMessageBox.warning(
                 self,
                 "Password Change Failed",
-                "New secondary password cannot be empty.",
+                "New recovery password cannot be empty.",
             )
             self.new_secondary_password_input.setFocus()
             return
         if new_secondary_pw != confirm_secondary_pw:
             QMessageBox.warning(
-                self, "Password Change Failed", "New secondary passwords do not match."
+                self, "Password Change Failed", "New recovery passwords do not match."
             )
             self.confirm_new_secondary_password_input.clear()
             self.confirm_new_secondary_password_input.setFocus()
             return
 
-        # 4. Validate Main vs Secondary
+        # 4. Validate Main vs Recovery
         if new_main_pw == new_secondary_pw:
             QMessageBox.warning(
                 self,
                 "Password Change Failed",
-                "New main and secondary passwords must be different.",
+                "New main and recovery passwords must be different.",
             )
             self.new_secondary_password_input.setFocus()
             return
@@ -1219,8 +1199,6 @@ class SettingsDialog(QDialog):
 
     def _handle_manual_log_cleanup(self):
         """Handle manual log cleanup button click."""
-        import logging
-
         from silverestimate.infrastructure.logger import cleanup_old_logs
 
         # Get logger for this operation
@@ -1300,12 +1278,6 @@ class SettingsDialog(QDialog):
         except AttributeError:
             # buttonBox not available yet during early construction; will enable later
             pass
-
-    def _connect_change_signals(self):
-        """Connect common change signals to mark the dialog dirty."""
-        # Called after widgets are created; many controls already connected individually.
-        # This is a placeholder for future additions.
-        pass
 
     def _refresh_printer_list(self):
         """Populate the default printer combo with available printers."""

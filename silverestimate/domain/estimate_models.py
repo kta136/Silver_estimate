@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable, Iterator
 
 
 class EstimateLineCategory(Enum):
@@ -96,18 +95,3 @@ class TotalsResult:
     silver_rate: float
     last_balance_silver: float
     last_balance_amount: float
-
-
-def iter_regular(lines: Iterable[EstimateLine]) -> Iterator[EstimateLine]:
-    """Yield only the regular line items."""
-    return (line for line in lines if line.category.is_regular())
-
-
-def iter_returns(lines: Iterable[EstimateLine]) -> Iterator[EstimateLine]:
-    """Yield only the return line items."""
-    return (line for line in lines if line.category.is_return())
-
-
-def iter_silver_bars(lines: Iterable[EstimateLine]) -> Iterator[EstimateLine]:
-    """Yield only the silver-bar line items."""
-    return (line for line in lines if line.category.is_silver_bar())

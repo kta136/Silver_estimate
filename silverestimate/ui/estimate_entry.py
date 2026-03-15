@@ -175,8 +175,6 @@ class EstimateEntryWidget(QWidget):
         self._totals_timer.setInterval(100)
         self._totals_timer.timeout.connect(self.calculate_totals)
 
-        self._setup_keyboard_shortcuts()
-
         self._on_unsaved_state_changed(False)
         self._update_mode_tooltip()
 
@@ -187,9 +185,6 @@ class EstimateEntryWidget(QWidget):
         self.initializing = False
         QTimer.singleShot(100, self.force_focus_to_first_cell)
         QTimer.singleShot(100, self.reconnect_load_estimate)
-
-    def _setup_keyboard_shortcuts(self):
-        pass
 
     def show_status(self, message, timeout=3000, level="info"):
         self._status_helper.show(message, timeout=timeout, level=level)

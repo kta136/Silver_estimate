@@ -10,8 +10,8 @@ Use this checklist after changes to the item catalog backup/restore workflow.
 
 ## Scenario 1: Create Backup
 
-- [ ] Open `Settings` > `Catalog Backup`
-- [ ] Click `Create Catalog Backup...`
+- [ ] Open `Settings` > `Data Management`
+- [ ] In `Item Master Backup`, click `Create Item Backup...`
 - [ ] Save the file as `item_catalog_backup.seitems.json`
 - [ ] Verify the success dialog shows the expected record count
 - [ ] Open the saved file in a text editor
@@ -21,8 +21,8 @@ Use this checklist after changes to the item catalog backup/restore workflow.
 ## Scenario 2: Restore Into Empty Catalog
 
 - [ ] Start with a fresh test database or clear the `items` table only
-- [ ] Open `Settings` > `Catalog Backup`
-- [ ] Click `Restore Catalog Backup...`
+- [ ] Open `Settings` > `Data Management`
+- [ ] In `Item Master Backup`, click `Restore Item Backup...`
 - [ ] Choose the previously exported `.seitems.json` file
 - [ ] Confirm the restore
 - [ ] Verify the completion dialog shows inserted records and zero unexpected errors
@@ -33,7 +33,7 @@ Use this checklist after changes to the item catalog backup/restore workflow.
 
 - [ ] In `Item Master`, edit one existing exported item so its values differ from the backup
 - [ ] Add one extra item code that does not exist in the backup file
-- [ ] Run `Restore Catalog Backup...` again using the same file
+- [ ] Run `Restore Item Backup...` again using the same file
 - [ ] Verify the completion dialog reports both inserted and updated counts as expected
 - [ ] Verify the edited existing item is restored to the values from the backup file
 - [ ] Verify item codes from the backup that were missing locally are inserted
@@ -42,7 +42,7 @@ Use this checklist after changes to the item catalog backup/restore workflow.
 ## Scenario 4: Full Replace Toggle
 
 - [ ] In `Item Master`, keep one extra local-only item code that is not present in the backup file
-- [ ] Run `Restore Catalog Backup...` again using the same file
+- [ ] Run `Restore Item Backup...` again using the same file
 - [ ] Enable `Replace the entire current item master with this backup`
 - [ ] Confirm the restore
 - [ ] Verify the completion dialog reports a non-zero `Deleted` count
@@ -53,6 +53,6 @@ Use this checklist after changes to the item catalog backup/restore workflow.
 ## Scenario 5: Invalid File Handling
 
 - [ ] Copy the backup file and change `format` or `version` to an invalid value
-- [ ] Run `Restore Catalog Backup...` with the modified file
+- [ ] Run `Restore Item Backup...` with the modified file
 - [ ] Verify the restore is rejected with a clear error dialog
 - [ ] Verify `Item Master` data remains unchanged after the failed restore

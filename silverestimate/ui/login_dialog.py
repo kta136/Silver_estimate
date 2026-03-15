@@ -1,4 +1,6 @@
-from PyQt5.QtCore import QTimer, Qt
+import logging
+
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -40,9 +42,7 @@ class LoginDialog(QDialog):
     def __init__(self, is_setup=False, parent=None):
         super().__init__(parent)
         self.is_setup = is_setup
-        self.setWindowTitle(
-            "Authentication Required" if not is_setup else "Create Passwords"
-        )
+        self.setWindowTitle("Sign In" if not is_setup else "Create Passwords")
         self.setModal(True)  # Ensure user interacts with this dialog first
         self.setObjectName("LoginDialog")
         self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
@@ -136,9 +136,7 @@ class LoginDialog(QDialog):
         panel_layout.setSpacing(12)
         layout.addWidget(panel)
 
-        title_label = QLabel(
-            "Create Passwords" if self.is_setup else "Authentication Required"
-        )
+        title_label = QLabel("Create Passwords" if self.is_setup else "Sign In")
         title_label.setObjectName("LoginTitleLabel")
         panel_layout.addWidget(title_label)
 
@@ -172,28 +170,26 @@ class LoginDialog(QDialog):
         panel_layout.addWidget(self.password_input)
 
         if self.is_setup:
-            self.backup_password_label = QLabel("Secondary Password:")
+            self.backup_password_label = QLabel("Recovery Password:")
             self.backup_password_label.setObjectName("LoginFieldLabel")
             self.backup_password_input = QLineEdit()
             self.backup_password_input.setEchoMode(QLineEdit.Password)
-            self.backup_password_input.setPlaceholderText(
-                "Create a separate secondary password"
-            )
+            self.backup_password_input.setPlaceholderText("Create a recovery password")
             self.backup_password_input.setToolTip(
-                "Enter a different secondary password\nMust be different from main password\nUsed for emergency access and data management"
+                "Enter a different recovery password\nMust be different from main password\nUsed for emergency access and data management"
             )
             panel_layout.addWidget(self.backup_password_label)
             panel_layout.addWidget(self.backup_password_input)
 
-            self.confirm_password_label = QLabel("Confirm Secondary Password:")
+            self.confirm_password_label = QLabel("Confirm Recovery Password:")
             self.confirm_password_label.setObjectName("LoginFieldLabel")
             self.confirm_password_input = QLineEdit()
             self.confirm_password_input.setEchoMode(QLineEdit.Password)
             self.confirm_password_input.setPlaceholderText(
-                "Re-enter the secondary password"
+                "Re-enter the recovery password"
             )
             self.confirm_password_input.setToolTip(
-                "Re-enter the secondary password to confirm\nMust match exactly\nEnsures password was typed correctly"
+                "Re-enter the recovery password to confirm\nMust match exactly\nEnsures password was typed correctly"
             )
             panel_layout.addWidget(self.confirm_password_label)
             panel_layout.addWidget(self.confirm_password_input)
@@ -231,8 +227,19 @@ class LoginDialog(QDialog):
         panel_layout.addLayout(button_layout)
 
         if not self.is_setup:
+            forgot_link = QPushButton("Forgot password?")
+            forgot_link.setObjectName("LoginSecondaryButton")
+            forgot_link.setFlat(True)
+            forgot_link.setStyleSheet(
+                "QPushButton { color: #64748b; font-size: 8.3pt; text-align: left;"
+                " border: none; padding: 0; background: transparent; }"
+                " QPushButton:hover { color: #0f766e; text-decoration: underline; }"
+            )
+            panel_layout.addWidget(forgot_link)
+
             danger_card = QFrame(panel)
             danger_card.setObjectName("LoginDangerCard")
+            danger_card.setVisible(False)
             danger_layout = QVBoxLayout(danger_card)
             danger_layout.setContentsMargins(18, 16, 18, 16)
             danger_layout.setSpacing(8)
@@ -261,6 +268,10 @@ class LoginDialog(QDialog):
             danger_action_layout.addStretch()
             danger_layout.addLayout(danger_action_layout)
             panel_layout.addWidget(danger_card)
+
+            forgot_link.clicked.connect(
+                lambda: danger_card.setVisible(not danger_card.isVisible())
+            )
 
     def _connect_signals(self):
         """Connect UI signals to slots."""
@@ -325,21 +336,19 @@ class LoginDialog(QDialog):
 
             if not backup_password:
                 QMessageBox.warning(
-                    self, "Input Error", "Backup password cannot be empty."
+                    self, "Input Error", "Recovery password cannot be empty."
                 )
                 return
             if password == backup_password:
-                # Updated error message
                 QMessageBox.warning(
                     self,
                     "Input Error",
-                    "Main and Secondary Passwords must be different.",
+                    "Main and Recovery Passwords must be different.",
                 )
                 return
             if backup_password != confirm_backup:
-                # Updated error message
                 QMessageBox.warning(
-                    self, "Input Error", "Secondary passwords do not match."
+                    self, "Input Error", "Recovery passwords do not match."
                 )
                 return
 
@@ -409,8 +418,6 @@ class LoginDialog(QDialog):
             hashed = _get_pwd_context().hash(password)
             return hashed
         except Exception:
-            import logging
-
             logging.getLogger(__name__).error("Error hashing password:", exc_info=True)
             return None
 
@@ -423,15 +430,11 @@ class LoginDialog(QDialog):
             # pwd_context.verify handles hash validation and comparison.
             return _get_pwd_context().verify(provided_password, stored_hash)
         except ValueError:  # Catches potential issues like malformed hash string
-            import logging
-
             logging.getLogger(__name__).warning(
                 "Error comparing password hash (invalid format?)", exc_info=True
             )
             return False
         except Exception as exc:
-            import logging
-
             try:
                 from passlib.exc import UnknownHashError
 

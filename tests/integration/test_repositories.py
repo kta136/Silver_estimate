@@ -705,7 +705,8 @@ def test_silver_bar_sync_for_estimate_uses_line_key_instead_of_row_order(fake_db
     assert added == 0
     assert failed == 0
     rows = {
-        row["source_line_key"]: row for row in repo.get_silver_bars_for_estimate("SYNCKEY")
+        row["source_line_key"]: row
+        for row in repo.get_silver_bars_for_estimate("SYNCKEY")
     }
     assert float(rows["line-one"]["weight"]) == pytest.approx(5.0)
     assert float(rows["line-one"]["purity"]) == pytest.approx(99.0)

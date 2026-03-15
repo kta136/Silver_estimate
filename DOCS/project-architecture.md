@@ -24,7 +24,7 @@ A PyQt5 desktop application for silver shops that combines encrypted persistence
 - **AuthService (`services/auth_service.py`)**: password setup/verification, secondary wipe flow, secure credential storage via `security/credential_store.py` (OS keyring with legacy migration support).
 - **SettingsService (`services/settings_service.py`)**: applies persisted preferences (fonts, printers, logging toggles) and reconfigures logging/live-rate behaviour.
 - **NavigationService (`services/navigation_service.py`)**: central navigation registry and helpers consumed by controllers and MainWindow.
-- **MainCommands (`services/main_commands.py`)**: high-level verbs (new estimate, import/export, printing, history) invoked from controllers/UI.
+- **MainCommands (`services/main_commands.py`)**: high-level verbs (new estimate, restore catalog backup, printing, history) invoked from controllers/UI.
 - **LiveRateService (`services/live_rate_service.py` + `services/dda_rate_fetcher.py`)**: broadcast/API polling, fallback logic, signal emission for UI refresh.
 - **Repository adapters (`services/estimate_repository.py`)**: protocol + concrete adapter that wrap `DatabaseManager` repository calls for presenter use.
 

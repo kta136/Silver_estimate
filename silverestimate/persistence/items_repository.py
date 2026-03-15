@@ -339,6 +339,98 @@ class ItemsRepository:
             conn.rollback()
             return False
 
+    def upsert_item_catalog(
+        self,
+        items: Iterable[dict[str, Any]],
+        *,
+        replace_existing: bool = False,
+    ) -> Optional[dict[str, int]]:
+        """Synchronize item catalog rows in one transaction."""
+        conn, cursor = self._conn, self._cursor
+        if not conn or not cursor:
+            return None
+
+        normalized_items = []
+        seen_codes: set[str] = set()
+        try:
+            for raw_item in items or []:
+                payload = raw_item if isinstance(raw_item, dict) else dict(raw_item)
+                validated = validate_item(
+                    code=str(payload.get("code", "") or ""),
+                    name=str(payload.get("name", "") or ""),
+                    purity=float(payload.get("purity", 0.0)),
+                    wage_type=str(payload.get("wage_type", "") or ""),
+                    wage_rate=float(payload.get("wage_rate", 0.0)),
+                )
+                if validated.code in seen_codes:
+                    self._logger.warning(
+                        "Rejected item catalog payload with duplicate code %s",
+                        validated.code,
+                    )
+                    return None
+                seen_codes.add(validated.code)
+                normalized_items.append(validated)
+        except (ItemValidationError, TypeError, ValueError) as exc:
+            self._logger.warning("Rejected invalid item catalog payload: %s", exc)
+            return None
+
+        existing_codes = self._load_all_item_codes()
+        inserted = 0
+        updated = 0
+        deleted = 0
+        try:
+            conn.execute("BEGIN")
+            for item in normalized_items:
+                if item.code in existing_codes:
+                    cursor.execute(
+                        "UPDATE items SET name = ?, purity = ?, wage_type = ?, wage_rate = ? WHERE code = ?",
+                        (
+                            item.name,
+                            item.purity,
+                            item.wage_type,
+                            item.wage_rate,
+                            item.code,
+                        ),
+                    )
+                    updated += 1
+                    continue
+
+                cursor.execute(
+                    "INSERT INTO items (code, name, purity, wage_type, wage_rate) VALUES (?, ?, ?, ?, ?)",
+                    (
+                        item.code,
+                        item.name,
+                        item.purity,
+                        item.wage_type,
+                        item.wage_rate,
+                    ),
+                )
+                existing_codes.add(item.code)
+                inserted += 1
+
+            if replace_existing:
+                obsolete_codes = existing_codes - seen_codes
+                deleted = self._delete_codes(cursor, obsolete_codes)
+
+            conn.commit()
+        except sqlite3.Error as exc:
+            self._logger.error("DB Error upserting item catalog: %s", exc, exc_info=True)
+            conn.rollback()
+            return None
+
+        self._request_flush()
+        for code in seen_codes:
+            self._invalidate_cache(code)
+        if replace_existing:
+            for code in existing_codes - seen_codes:
+                self._invalidate_cache(code)
+        return {
+            "inserted": inserted,
+            "updated": updated,
+            "deleted": deleted,
+            "total": len(normalized_items),
+        }
+
     def delete_item(self, code: str) -> bool:
         conn, cursor = self._conn, self._cursor
         if not conn or not cursor:
@@ -388,3 +480,35 @@ class ItemsRepository:
             return dict(row)
         except Exception:
             return None
+
+    def _load_all_item_codes(self) -> set[str]:
+        cursor = self._cursor
+        if not cursor:
+            return set()
+        try:
+            cursor.execute("SELECT code FROM items")
+            return {
+                str(row[0] or "").strip().upper()
+                for row in cursor.fetchall()
+                if row and str(row[0] or "").strip()
+            }
+        except sqlite3.Error as exc:
+            self._logger.error("DB Error loading item codes: %s", exc, exc_info=True)
+            return set()
+
+    def _delete_codes(self, cursor: sqlite3.Cursor, codes: set[str]) -> int:
+        if not codes:
+            return 0
+
+        deleted = 0
+        chunk = 900
+        normalized_codes = sorted(codes)
+        for start in range(0, len(normalized_codes), chunk):
+            code_chunk = normalized_codes[start : start + chunk]
+            placeholders = ",".join("?" for _ in code_chunk)
+            cursor.execute(
+                f"DELETE FROM items WHERE UPPER(code) IN ({placeholders})",  # nosec B608
+                code_chunk,
+            )
+            deleted += max(cursor.rowcount, 0)
+        return deleted

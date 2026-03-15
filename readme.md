@@ -48,7 +48,7 @@ The app helps silver shops to:
 - Manage silver bar inventory and returns
 - Print formatted estimate slips with Indian rupee formatting
 - Store all data locally with file-level encryption
-- Import/export item catalogs
+- Back up and restore item catalogs
 
 ## Architecture
 
@@ -91,10 +91,10 @@ See also: `DOCS/project-architecture.md`.
 - Print-ready estimate layouts with INR formatting
 - Print preview and configurable fonts/sizes
 
-### Import/Export
-- Import items from delimited files
-- Export item catalogs for backup
-- Duplicate handling with safe merges
+### Catalog Backup
+- Export item catalogs to a native `.seitems.json` backup file
+- Import the same backup format without legacy parsing rules
+- Update existing item codes and add missing ones safely
 
 ## Installation
 

@@ -72,20 +72,19 @@ Creation → In Stock → Assigned to List → [Sold/Melted/Returned to Stock]
 3. Secure key derivation with PBKDF2
 4. Salt stored in QSettings
 
-### 5. Import/Export Processes
+### 5. Catalog Backup Processes
 
 #### Item Import
-1. Parse file with configurable delimiter
-2. Map columns to data fields
-3. Handle Q-type rate conversion
-4. Apply adjustment factors
-5. Manage duplicates (skip/update)
+1. Read native `.seitems.json` catalog backup
+2. Validate the file signature and schema version
+3. Validate every item record before applying any changes
+4. Update existing item codes and insert missing ones atomically
 
 #### Item Export
-1. Generate pipe-delimited file
-2. Include standard header
+1. Generate native `.seitems.json` catalog backup
+2. Include format/version metadata
 3. Export all items in catalog
-4. Maintain import compatibility
+4. Preserve round-trip import compatibility
 
 ## Business Rules
 

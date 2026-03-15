@@ -16,6 +16,11 @@ class _StubItemRepo:
         self.calls.append(("get_items_by_codes", values))
         return {code: {"code": code} for code in values}
 
+    def upsert_item_catalog(self, items, *, replace_existing=False):
+        values = tuple(items)
+        self.calls.append(("upsert_item_catalog", values, replace_existing))
+        return {"inserted": 1, "updated": 1, "deleted": 0, "total": len(values)}
+
 
 class _StubEstimateRepo:
     def __init__(self):
@@ -65,6 +70,14 @@ def test_item_facade_delegates_and_preload_uses_temp_db_path():
     facade = _FacadeHarness()
 
     assert facade.add_item("ITM001", "Sample", 92.5, "WT", 10.0) == "added"
+    assert facade.upsert_item_catalog(
+        [{"code": "ITM001"}], replace_existing=True
+    ) == {
+        "inserted": 1,
+        "updated": 1,
+        "deleted": 0,
+        "total": 1,
+    }
     assert facade.get_items_by_codes(["ITM001", "ITM002"]) == {
         "ITM001": {"code": "ITM001"},
         "ITM002": {"code": "ITM002"},
@@ -73,6 +86,7 @@ def test_item_facade_delegates_and_preload_uses_temp_db_path():
 
     assert facade.items_repo.calls == [
         ("add_item", ("ITM001", "Sample", 92.5, "WT", 10.0)),
+        ("upsert_item_catalog", ({"code": "ITM001"},), True),
         ("get_items_by_codes", ("ITM001", "ITM002")),
     ]
     assert facade._item_cache_controller.calls == ["/tmp/db.sqlite"]

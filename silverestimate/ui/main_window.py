@@ -362,8 +362,11 @@ class MainWindow(QMainWindow):
         dialog = SettingsDialog(main_window_ref=self, parent=self)
         dialog.exec_()
 
-    def show_import_dialog(self):
-        return self.commands.import_items()
+    def show_catalog_restore_dialog(self):
+        return self.commands.restore_item_catalog()
+
+    def show_catalog_backup_dialog(self):
+        return self.commands.create_item_catalog_backup()
 
 
 __all__ = ["MainWindow"]

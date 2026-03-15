@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Replaced the legacy item import/export workflow with a native `.seitems.json` catalog backup format and renamed the settings workflow around create/restore backup actions
+
 ## [2.8.6] - 2026-03-12
 
 ### Changed

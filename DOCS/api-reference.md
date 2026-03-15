@@ -77,7 +77,8 @@ This guide documents the primary controller, service, and persistence APIs expos
 - **update_db(db_manager)** – synchronise command targets after DB reconnects.
 - **save_estimate() / print_estimate()** – forward actions to EstimateEntryWidget.
 - **delete_all_data() / delete_all_estimates()** – handle confirmation flows, drop/reseed tables, and refresh views.
-- **import_items()** – launch the async item import workflow and refresh tables on completion.
+- **create_item_catalog_backup()** – create a native `.seitems.json` item catalog backup via an asynchronous worker.
+- **restore_item_catalog()** – restore a native `.seitems.json` item catalog backup and refresh visible item tables after completion.
 
 ### LiveRateService (silverestimate/services/live_rate_service.py)
     LiveRateService(parent: Optional[QObject] = None, logger: Optional[logging.Logger] = None)

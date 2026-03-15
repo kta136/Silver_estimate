@@ -23,7 +23,8 @@ def _make_main_window(estimate_widget):
     return types.SimpleNamespace(
         print_font=QFont("Arial", 10),
         estimate_widget=estimate_widget,
-        show_import_dialog=lambda: None,
+        show_catalog_restore_dialog=lambda: None,
+        show_catalog_backup_dialog=lambda: None,
         delete_all_estimates=lambda: None,
         delete_all_data=lambda: None,
         reconfigure_rate_visibility_from_settings=lambda: True,

@@ -44,6 +44,11 @@ class DatabaseRepositoryFacadeMixin:
     def update_item(self, code, name, purity, wage_type, wage_rate):
         return self.items_repo.update_item(code, name, purity, wage_type, wage_rate)
 
+    def upsert_item_catalog(self, items, *, replace_existing=False):
+        return self.items_repo.upsert_item_catalog(
+            items, replace_existing=replace_existing
+        )
+
     def delete_item(self, code):
         return self.items_repo.delete_item(code)
 

@@ -36,6 +36,14 @@ class _MessageBoxStub:
         return cls.return_warning
 
 
+class _FileDialogStub:
+    next_save_result = ("", "")
+
+    @classmethod
+    def getSaveFileName(cls, *args, **kwargs):  # noqa: D401 - mimic Qt signature
+        return cls.next_save_result
+
+
 class _InputDialogStub:
     next_result = ("", False)
 
@@ -46,8 +54,10 @@ class _InputDialogStub:
 
 def _install_stubs(monkeypatch):
     _MessageBoxStub.reset()
+    _FileDialogStub.next_save_result = ("", "")
     _InputDialogStub.next_result = ("", False)
     monkeypatch.setattr(main_commands, "QMessageBox", _MessageBoxStub)
+    monkeypatch.setattr(main_commands, "QFileDialog", _FileDialogStub)
     monkeypatch.setattr(main_commands, "QInputDialog", _InputDialogStub)
 
 
@@ -204,3 +214,49 @@ def test_delete_all_estimates_clears_form(monkeypatch):
 
     assert clear_calls == [False]
     assert any(args[1] == "Success" for args in _MessageBoxStub.information_calls)
+
+
+def test_create_item_catalog_backup_starts_worker(monkeypatch):
+    _install_stubs(monkeypatch)
+    _FileDialogStub.next_save_result = ("backup.json", "JSON Files (*.json)")
+
+    started = []
+
+    class _DB:
+        temp_db_path = "/tmp/catalog.sqlite"
+
+    main_window = types.SimpleNamespace()
+    commands = main_commands.MainCommands(
+        main_window, db_manager=_DB(), logger=logging.getLogger("test")
+    )
+    monkeypatch.setattr(
+        commands,
+        "_start_item_catalog_export_worker",
+        lambda **kwargs: started.append(kwargs),
+    )
+
+    commands.create_item_catalog_backup()
+
+    assert started == [
+        {
+            "db_path": "/tmp/catalog.sqlite",
+            "file_path": "backup.json.seitems.json",
+        }
+    ]
+
+
+def test_create_item_catalog_backup_requires_temp_db_path(monkeypatch):
+    _install_stubs(monkeypatch)
+    _FileDialogStub.next_save_result = ("backup", "Silver Estimate Item Catalog")
+
+    class _DB:
+        temp_db_path = None
+
+    main_window = types.SimpleNamespace()
+    commands = main_commands.MainCommands(
+        main_window, db_manager=_DB(), logger=logging.getLogger("test")
+    )
+
+    commands.create_item_catalog_backup()
+
+    assert _MessageBoxStub.critical_calls

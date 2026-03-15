@@ -9,7 +9,6 @@ from PyQt5.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
-    QFileDialog,
     QFormLayout,
     QFrame,
     QGridLayout,
@@ -35,7 +34,6 @@ from silverestimate.security.credential_store import CredentialStoreError
 # Import dependent dialogs and modules
 from .custom_font_dialog import CustomFontDialog
 from .icons import get_icon
-from .item_export_manager import ItemExportManager  # Import the new export manager
 from .login_dialog import LoginDialog  # Needed for password verification/hashing
 from .settings_print_controller import PrintSettingsWidgets, SettingsPrintController
 from .shared_screen_theme import build_management_screen_stylesheet
@@ -180,9 +178,9 @@ class SettingsDialog(QDialog):
                 self._create_security_tab(),
             ),
             (
-                "Import/Export",
+                "Catalog Backup",
                 get_icon("import_export", widget=self),
-                self._create_import_export_tab(),
+                self._create_catalog_backup_tab(),
             ),
             (
                 "Logging",
@@ -562,41 +560,43 @@ class SettingsDialog(QDialog):
         widget.setLayout(layout)
         return widget
 
-    def _create_import_export_tab(self):
-        """Create the Import/Export tab."""
+    def _create_catalog_backup_tab(self):
+        """Create the item catalog backup tab."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setSpacing(15)
 
         # Import Section
-        import_group = QGroupBox("Import Data")
-        import_layout = QVBoxLayout(import_group)
+        restore_group = QGroupBox("Restore Catalog Backup")
+        restore_layout = QVBoxLayout(restore_group)
 
-        import_button = QPushButton("Import Item List...")
-        import_button.setToolTip(
-            "Import items from a text or CSV file\nSupported formats: TXT, CSV\nRequires specific column format\nWill merge with existing items"
+        restore_button = QPushButton("Restore Catalog Backup...")
+        restore_button.setToolTip(
+            "Restore a native Silver Estimate item catalog backup\n"
+            "Format: .seitems.json\n"
+            "Updates existing item codes and adds missing ones\n"
+            "Does not remove items that are not in the file"
         )
-        # Connect directly to the method already defined in MainWindow
-        import_button.clicked.connect(self.main_window.show_import_dialog)
-        import_layout.addWidget(import_button)
-        import_layout.addStretch()  # Push button to top if more controls are added later
-        layout.addWidget(import_group)
+        restore_button.clicked.connect(self.main_window.show_catalog_restore_dialog)
+        restore_layout.addWidget(restore_button)
+        restore_layout.addStretch()
+        layout.addWidget(restore_group)
 
         # Export Section
-        export_group = QGroupBox("Export Data")
+        export_group = QGroupBox("Create Catalog Backup")
         export_layout = QVBoxLayout(export_group)
-        export_button = QPushButton("Export Item List...")
+        export_button = QPushButton("Create Catalog Backup...")
         export_button.setToolTip(
-            "Export all items to a pipe-delimited text file\nCreates backup of item master data\nFormat: Code|Name|Purity|Type|Rate\nCan be imported later if needed"
+            "Create a native Silver Estimate item catalog backup file\n"
+            "Format: .seitems.json\n"
+            "Round-trip safe for future imports"
         )
-        export_button.clicked.connect(
-            self._handle_export_items
-        )  # Connect to new handler
+        export_button.clicked.connect(self.main_window.show_catalog_backup_dialog)
         export_layout.addWidget(export_button)
         export_layout.addStretch()
         layout.addWidget(export_group)
 
-        layout.addStretch()  # Push groups to the top
+        layout.addStretch()
         return widget
 
     def _create_logging_tab(self):
@@ -1217,42 +1217,6 @@ class SettingsDialog(QDialog):
                 "Error saving new password hashes:", exc_info=True
             )
 
-    def _handle_export_items(self):
-        """Handle the Export Item List button click."""
-        if (
-            not self.main_window
-            or not hasattr(self.main_window, "db")
-            or not self.main_window.db
-        ):
-            QMessageBox.warning(self, "Error", "Database connection not available.")
-            return
-
-        # Suggest a filename
-        default_filename = "item_list_export.txt"
-        file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Export Item List As",
-            default_filename,
-            "Text Files (*.txt);;CSV Files (*.csv);;All Files (*)",
-        )
-
-        if not file_path:
-            return  # User cancelled
-
-        # Create and run the exporter
-        exporter = ItemExportManager(self.main_window.db)
-        # Connect the finished signal to show feedback
-        exporter.export_finished.connect(self._on_export_finished)
-        # Disable button during export? Maybe not necessary for quick operation.
-        exporter.export_to_file(file_path)
-
-    def _on_export_finished(self, success, message):
-        """Show feedback message after export attempt."""
-        if success:
-            QMessageBox.information(self, "Export Successful", message)
-        else:
-            QMessageBox.critical(self, "Export Failed", message)
-
     def _handle_manual_log_cleanup(self):
         """Handle manual log cleanup button click."""
         import logging
@@ -1444,7 +1408,12 @@ if __name__ == "__main__":
 
             self.estimate_widget = _DummyEstimateWidget()
             # Add dummy methods needed by the dialog
-            self.show_import_dialog = lambda: print("Dummy Show Import Dialog")
+            self.show_catalog_restore_dialog = lambda: print(
+                "Dummy Show Catalog Restore Dialog"
+            )
+            self.show_catalog_backup_dialog = lambda: print(
+                "Dummy Show Catalog Backup Dialog"
+            )
             self.delete_all_estimates = lambda: print("Dummy Delete All Estimates")
             self.delete_all_data = lambda: print("Dummy Delete All Data")
             # Dummy db object for export handler check

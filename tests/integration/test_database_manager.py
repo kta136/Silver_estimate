@@ -1,6 +1,10 @@
 import pytest
 
 from silverestimate.persistence.database_manager import DatabaseManager
+from silverestimate.services.item_catalog_transfer import (
+    export_item_catalog,
+    import_item_catalog,
+)
 from tests.factories import estimate_totals, regular_item, return_item, silver_bar_item
 
 
@@ -135,3 +139,98 @@ def test_database_manager_does_not_retain_plaintext_password(tmp_path, settings_
         assert reopened is not None
     finally:
         reopened.close()
+
+
+def test_database_manager_item_catalog_backup_roundtrip(tmp_path, settings_stub):
+    db_path = tmp_path / "storage" / "catalog-source.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    backup_path = tmp_path / "catalog.seitems.json"
+
+    source = DatabaseManager(str(db_path), "test-password")
+    try:
+        assert source.items_repo.add_item("ITM001", "Original", 92.5, "WT", 10.0)
+        assert source.items_repo.add_item("ITM002", "Second", 80.0, "P", 5.0)
+        exported = export_item_catalog(source, str(backup_path))
+        assert exported == 2
+    finally:
+        source.close()
+
+    target_path = tmp_path / "storage" / "catalog-target.db"
+    target = DatabaseManager(str(target_path), "test-password")
+    try:
+        assert target.items_repo.add_item("ITM001", "Old Name", 70.0, "WT", 1.0)
+        assert target.items_repo.add_item("KEEP01", "Keep", 75.0, "WT", 3.0)
+
+        summary = import_item_catalog(target, str(backup_path))
+
+        assert summary == {"inserted": 1, "updated": 1, "deleted": 0, "total": 2}
+        assert target.items_repo.get_item_by_code("ITM001") == {
+            "code": "ITM001",
+            "name": "Original",
+            "purity": 92.5,
+            "wage_type": "WT",
+            "wage_rate": 10.0,
+        }
+        assert target.items_repo.get_item_by_code("ITM002") == {
+            "code": "ITM002",
+            "name": "Second",
+            "purity": 80.0,
+            "wage_type": "PC",
+            "wage_rate": 5.0,
+        }
+        assert target.items_repo.get_item_by_code("KEEP01") == {
+            "code": "KEEP01",
+            "name": "Keep",
+            "purity": 75.0,
+            "wage_type": "WT",
+            "wage_rate": 3.0,
+        }
+    finally:
+        target.close()
+
+
+def test_database_manager_item_catalog_restore_can_replace_existing_catalog(
+    tmp_path, settings_stub
+):
+    db_path = tmp_path / "storage" / "catalog-replace-source.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    backup_path = tmp_path / "catalog-replace.seitems.json"
+
+    source = DatabaseManager(str(db_path), "test-password")
+    try:
+        assert source.items_repo.add_item("ITM001", "Original", 92.5, "WT", 10.0)
+        assert source.items_repo.add_item("ITM002", "Second", 80.0, "P", 5.0)
+        assert export_item_catalog(source, str(backup_path)) == 2
+    finally:
+        source.close()
+
+    target_path = tmp_path / "storage" / "catalog-replace-target.db"
+    target = DatabaseManager(str(target_path), "test-password")
+    try:
+        assert target.items_repo.add_item("ITM001", "Old Name", 70.0, "WT", 1.0)
+        assert target.items_repo.add_item("DROP01", "Drop Me", 75.0, "WT", 3.0)
+
+        summary = import_item_catalog(
+            target,
+            str(backup_path),
+            replace_existing=True,
+        )
+
+        assert summary == {"inserted": 1, "updated": 1, "deleted": 1, "total": 2}
+        assert target.items_repo.get_item_by_code("ITM001") == {
+            "code": "ITM001",
+            "name": "Original",
+            "purity": 92.5,
+            "wage_type": "WT",
+            "wage_rate": 10.0,
+        }
+        assert target.items_repo.get_item_by_code("ITM002") == {
+            "code": "ITM002",
+            "name": "Second",
+            "purity": 80.0,
+            "wage_type": "PC",
+            "wage_rate": 5.0,
+        }
+        assert target.items_repo.get_item_by_code("DROP01") is None
+    finally:
+        target.close()

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Bumped application/package version to `2.8.8`
+- Updated project README version header and badge to `v2.8.8`
+
+### Fixed
+- Kept the modern estimate print layout final totals at one decimal place instead of rounding them to whole rupees
+
 ## [2.8.7] - 2026-03-15
 
 ### Changed

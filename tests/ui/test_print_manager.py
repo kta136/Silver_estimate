@@ -53,6 +53,42 @@ def test_generate_estimate_thermal_escapes_note_html(qt_app, settings_stub):
     assert "&lt;b&gt;unsafe-note&lt;/b&gt;" in rendered
 
 
+def test_generate_estimate_new_format_keeps_final_totals_to_one_decimal(
+    qt_app, settings_stub
+):
+    manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
+    estimate_data = {
+        "header": {
+            "voucher_no": "V-001",
+            "date": "2026-02-13",
+            "silver_rate": 10.1,
+            "note": "",
+            "last_balance_silver": 0.0,
+            "last_balance_amount": 0.0,
+        },
+        "items": [
+            {
+                "item_name": "Chain",
+                "gross": 1.5,
+                "poly": 0.0,
+                "net_wt": 1.5,
+                "purity": 92.5,
+                "wage_rate": 0.0,
+                "pieces": 1,
+                "fine": 1.23,
+                "wage": 100.2,
+                "is_return": 0,
+                "is_silver_bar": 0,
+            }
+        ],
+    }
+
+    rendered = manager._generate_estimate_new_format(estimate_data)
+
+    assert "S.Cost : Rs. 12.4" in rendered
+    assert "Total: Rs. 112.6" in rendered
+
+
 def test_build_estimate_preview_payload_uses_selected_layout(qt_app, settings_stub):
     manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
     estimate_data = {

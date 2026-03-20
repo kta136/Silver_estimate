@@ -69,6 +69,27 @@ class EstimatePrintRenderer:
             grouped.append(remaining)
         return f"{sign}{','.join(reversed(grouped))},{last_three}"
 
+    @staticmethod
+    def _format_indian_grouped_decimal(
+        value: float | int,
+        *,
+        decimals: int = 1,
+    ) -> str:
+        numeric_value = float(value)
+        sign = "-" if numeric_value < 0 else ""
+        absolute_value = abs(numeric_value)
+        rounded_value = f"{absolute_value:.{decimals}f}"
+        if "." in rounded_value:
+            integer_text, fraction = rounded_value.split(".", 1)
+        else:
+            integer_text, fraction = rounded_value, ""
+        grouped_integer = EstimatePrintRenderer._format_indian_grouped_integer(
+            int(integer_text)
+        )
+        if decimals <= 0:
+            return f"{sign}{grouped_integer}"
+        return f"{sign}{grouped_integer}.{fraction}"
+
     def generate_old_format(self, estimate_data):
         """Generate manually formatted text using spaces, matching preview image."""
         header = estimate_data["header"]
@@ -646,11 +667,17 @@ class EstimatePrintRenderer:
 
         fine_display = f"{self._format_indian_grouped_integer(net_fine_display)} gm"
         fine_str = fine_display.rjust(max(W_FINE, len(fine_display)))
-        wage_str = f"{int(round(net_wage_display)):{W_LBR}.0f}"
-        scost_pad = (
-            "S.Cost : " + self._format_currency_locale(int(round(silver_cost)))
-        ).rjust(22)
-        total_display = f"Total: Rs. {self._format_indian_grouped_integer(total_cost)}"
+        wage_display = self._format_indian_grouped_decimal(net_wage_display, decimals=1)
+        wage_str = wage_display.rjust(max(W_LBR, len(wage_display)))
+        scost_display = (
+            "S.Cost : Rs. "
+            + self._format_indian_grouped_decimal(silver_cost, decimals=1)
+        )
+        scost_pad = scost_display.rjust(max(22, len(scost_display)))
+        total_display = (
+            "Total: Rs. "
+            + self._format_indian_grouped_decimal(total_cost, decimals=1)
+        )
         total_pad = total_display.rjust(max(18, len(total_display)))
 
         if silver_rate > 0:

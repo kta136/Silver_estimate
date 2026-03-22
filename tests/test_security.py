@@ -54,12 +54,36 @@ def test_derive_key_roundtrip():
     assert len(key) == 32
 
 
+def test_derive_key_supports_argon2id_and_legacy_pbkdf2():
+    salt = os.urandom(encryption.DEFAULT_SALT_BYTES)
+    argon2_key = encryption.derive_key(
+        "password",
+        salt,
+        algorithm=encryption.PREFERRED_KDF_ALGORITHM,
+    )
+    legacy_key = encryption.derive_key(
+        "password",
+        salt,
+        algorithm=encryption.LEGACY_KDF_ALGORITHM,
+        iterations=1_000,
+    )
+    assert len(argon2_key) == 32
+    assert len(legacy_key) == 32
+    assert argon2_key != legacy_key
+
+
 def test_derive_key_requires_password_and_salt():
     salt = os.urandom(encryption.DEFAULT_SALT_BYTES)
     with pytest.raises(ValueError):
         encryption.derive_key("", salt)
     with pytest.raises(ValueError):
         encryption.derive_key("password", b"")
+
+
+def test_derive_key_rejects_unknown_algorithm():
+    salt = os.urandom(encryption.DEFAULT_SALT_BYTES)
+    with pytest.raises(ValueError, match="Unsupported key-derivation algorithm"):
+        encryption.derive_key("password", salt, algorithm="unknown")
 
 
 def test_encrypt_decrypt_roundtrip():

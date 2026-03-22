@@ -6,7 +6,7 @@ import logging
 import os
 import sys
 import time
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Optional, Protocol
 
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QIcon
@@ -24,9 +24,25 @@ from silverestimate.infrastructure.main_window_runtime import (
 )
 
 if TYPE_CHECKING:
+    from silverestimate.controllers.live_rate_controller import LiveRateController
+    from silverestimate.services.settings_service import SettingsService
+
     MainWindowRuntimeBuilder = Callable[..., MainWindowRuntime]
 else:
     MainWindowRuntimeBuilder = Callable[..., Any]
+
+
+class MainWindowDatabase(Protocol):
+    """Narrow database surface used by the main window shell."""
+
+    def close(self) -> None: ...
+
+    def set_flush_status_callbacks(
+        self,
+        *,
+        on_queued: Optional[Callable[[], None]] = None,
+        on_done: Optional[Callable[[], None]] = None,
+    ) -> None: ...
 
 
 class MainWindow(QMainWindow):
@@ -34,10 +50,10 @@ class MainWindow(QMainWindow):
 
     def __init__(
         self,
-        db_manager,
+        db_manager: MainWindowDatabase,
         logger=None,
         *,
-        settings_service=None,
+        settings_service: Optional["SettingsService"] = None,
         runtime_builder: MainWindowRuntimeBuilder = build_main_window_runtime,
     ):
         super().__init__()
@@ -58,13 +74,14 @@ class MainWindow(QMainWindow):
             self._startup_started_unix,
         )
 
-        self.db = db_manager
+        self.db: MainWindowDatabase = db_manager
         self.settings_service = settings_service
         self._runtime_builder = runtime_builder
         self._taskbar_icon_handle = None
-        self._pending_status_message = None
+        self._pending_status_message: Optional[tuple[str, int, str]] = None
         self.item_master_widget = None
         self.silver_bar_widget = None
+        self.live_rate_controller: Optional["LiveRateController"] = None
 
         self._configure_window_shell()
 
@@ -159,27 +176,12 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentWidget(self.estimate_widget)
 
         try:
-            if hasattr(self.db, "on_flush_queued"):
-
-                def _on_flush_q():
-                    QTimer.singleShot(
-                        0,
-                        lambda: self.estimate_widget.show_inline_status(
-                            "Saving.", 1000, "info"
-                        ),
-                    )
-
-                def _on_flush_done():
-                    QTimer.singleShot(
-                        0, lambda: self.estimate_widget.show_inline_status("", 0)
-                    )
-
-                self.db.on_flush_queued = _on_flush_q
-                self.db.on_flush_done = _on_flush_done
+            self.db.set_flush_status_callbacks(
+                on_queued=self._handle_flush_queued,
+                on_done=self._handle_flush_done,
+            )
         except Exception as callback_error:
             self.logger.debug("Could not hook flush callbacks: %s", callback_error)
-
-        QTimer.singleShot(250, self._start_item_cache_preload)
 
         self.logger.info("Widgets initialized successfully")
         self.logger.debug(
@@ -193,8 +195,11 @@ class MainWindow(QMainWindow):
             self.logger.debug("Failed to show initial status message: %s", exc)
 
     def _initialize_live_rate(self) -> None:
+        controller = self.live_rate_controller
+        if controller is None:
+            return
         try:
-            self.live_rate_controller.initialize()
+            controller.initialize()
         except Exception as rate_error:
             self.logger.debug(
                 "Live rate initialization failed: %s",
@@ -238,12 +243,14 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             self.logger.debug("Failed to record first idle tick metric: %s", exc)
 
-    def _start_item_cache_preload(self) -> None:
-        try:
-            if hasattr(self.db, "start_preload_item_cache"):
-                self.db.start_preload_item_cache()
-        except Exception as preload_error:
-            self.logger.debug("Item cache preload failed: %s", preload_error)
+    def _handle_flush_queued(self) -> None:
+        QTimer.singleShot(
+            0,
+            lambda: self.estimate_widget.show_inline_status("Saving.", 1000, "info"),
+        )
+
+    def _handle_flush_done(self) -> None:
+        QTimer.singleShot(0, lambda: self.estimate_widget.show_inline_status("", 0))
 
     def show_status_message(
         self, message: str, timeout: int = 3000, level: str = "info"
@@ -264,19 +271,19 @@ class MainWindow(QMainWindow):
             self.logger.debug("Failed to log status message: %s", exc)
 
     def refresh_live_rate_now(self):
-        controller = getattr(self, "live_rate_controller", None)
+        controller = self.live_rate_controller
         if controller:
             return controller.refresh_now()
         return None
 
     def reconfigure_rate_visibility_from_settings(self):
-        controller = getattr(self, "live_rate_controller", None)
+        controller = self.live_rate_controller
         if not controller:
             return True
         return controller.apply_visibility_settings()
 
     def reconfigure_rate_timer_from_settings(self):
-        controller = getattr(self, "live_rate_controller", None)
+        controller = self.live_rate_controller
         if controller:
             controller.apply_timer_settings()
 
@@ -319,10 +326,12 @@ class MainWindow(QMainWindow):
 
         self.logger.info("Application closing")
         try:
-            self.settings_service.save_geometry(self)
+            settings_service = self.settings_service
+            if settings_service is not None:
+                settings_service.save_geometry(self)
         except Exception as exc:
             self.logger.debug("Failed to save window geometry: %s", exc)
-        controller = getattr(self, "live_rate_controller", None)
+        controller = self.live_rate_controller
         if controller:
             try:
                 controller.shutdown()

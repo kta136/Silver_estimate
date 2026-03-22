@@ -90,7 +90,7 @@ def tests_full(session: nox.Session) -> None:
         "--cov=silverestimate",
         "--cov-report=xml",
         "--cov-report=term-missing",
-        "--cov-fail-under=50",
+        "--cov-fail-under=70",
         "-v",
     )
     session.run(

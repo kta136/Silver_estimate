@@ -184,6 +184,7 @@ class StartupController:
 
         try:
             db_manager = db_cls(DB_PATH, password=password)
+            self._start_background_preload(db_manager)
             self._logger.info("Database connection established")
             self._logger.debug(
                 "[perf] startup.db_ready_ms=%.2f t_unix=%.6f",
@@ -205,3 +206,10 @@ class StartupController:
             )
             QMessageBox.critical(self._parent, "Database Error", error_details)
             return None
+
+    def _start_background_preload(self, db_manager: Any) -> None:
+        """Warm caches during startup so MainWindow stays UI-focused."""
+        try:
+            db_manager.start_preload_item_cache()
+        except Exception as exc:
+            self._logger.debug("Item cache preload failed during startup: %s", exc)

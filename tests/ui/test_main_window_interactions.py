@@ -37,8 +37,8 @@ class FakeDbManager:
     saved_estimates: List[Dict[str, Any]] = field(default_factory=list)
     preload_started: bool = False
     closed: bool = False
-    on_flush_queued: Optional[Any] = None
-    on_flush_done: Optional[Any] = None
+    flush_on_queued: Optional[Any] = None
+    flush_on_done: Optional[Any] = None
 
     def __post_init__(self) -> None:
         self.item_cache_controller = None
@@ -46,6 +46,18 @@ class FakeDbManager:
     # --- Lifecycle -------------------------------------------------
     def start_preload_item_cache(self) -> None:
         self.preload_started = True
+
+    def set_flush_status_callbacks(self, *, on_queued=None, on_done=None) -> None:
+        self.flush_on_queued = on_queued
+        self.flush_on_done = on_done
+
+    def emit_flush_queued(self) -> None:
+        if self.flush_on_queued:
+            self.flush_on_queued()
+
+    def emit_flush_done(self) -> None:
+        if self.flush_on_done:
+            self.flush_on_done()
 
     def close(self) -> None:
         self.closed = True
@@ -190,7 +202,7 @@ def test_main_window_startup_sets_up_estimate_view(main_window_fixture, qt_app, 
 
     # Startup side effects.
     assert db.generate_calls == 1  # Voucher generated for initial form.
-    qtbot.waitUntil(lambda: db.preload_started is True, timeout=1500)
+    assert db.preload_started is False
     assert live_rate.initialize_called is True
 
     # Main navigation wired (menu action created by controller).
@@ -245,6 +257,20 @@ def test_main_window_startup_sets_up_estimate_view(main_window_fixture, qt_app, 
 
     window.reconfigure_rate_timer_from_settings()
     assert live_rate.timer_calls == 1
+
+    status_calls = []
+    original_show_inline_status = widget.show_inline_status
+
+    def _capture_status(message, timeout=3000, level="info"):
+        status_calls.append((message, timeout, level))
+        return original_show_inline_status(message, timeout=timeout, level=level)
+
+    widget.show_inline_status = _capture_status
+    db.emit_flush_queued()
+    qtbot.waitUntil(lambda: status_calls != [], timeout=1000)
+    assert status_calls[-1] == ("Saving.", 1000, "info")
+    db.emit_flush_done()
+    qtbot.waitUntil(lambda: status_calls[-1] == ("", 0, "info"), timeout=1000)
 
     # Closing should invoke live-rate shutdown and database close.
     window.close()

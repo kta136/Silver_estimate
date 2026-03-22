@@ -89,6 +89,47 @@ def test_generate_estimate_new_format_keeps_final_totals_to_one_decimal(
     assert "Total: Rs. 112.6" in rendered
 
 
+def test_generate_estimate_new_format_uses_one_decimal_everywhere(
+    qt_app, settings_stub
+):
+    manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
+    estimate_data = {
+        "header": {
+            "voucher_no": "V-005",
+            "date": "2026-02-13",
+            "silver_rate": 10.1,
+            "note": "",
+            "last_balance_silver": 0.27,
+            "last_balance_amount": 50.54,
+        },
+        "items": [
+            {
+                "item_name": "Chain",
+                "gross": 1.54,
+                "poly": 0.04,
+                "net_wt": 1.5,
+                "purity": 92.54,
+                "wage_rate": 10.04,
+                "pieces": 1,
+                "fine": 1.23,
+                "wage": 100.24,
+                "is_return": 0,
+                "is_silver_bar": 0,
+            }
+        ],
+    }
+
+    rendered = manager._generate_estimate_new_format(estimate_data)
+
+    assert "1.54" not in rendered
+    assert "92.54" not in rendered
+    assert "50.54" not in rendered
+    assert "Silver: 0.3 g   Amount: Rs. 50.5" in rendered
+    assert "1.5 gm" in rendered
+    assert "S.Cost : Rs. 15.1" in rendered
+    assert "Total: Rs. 165.9" in rendered
+
+
 def test_build_estimate_preview_payload_uses_selected_layout(qt_app, settings_stub):
     manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
     estimate_data = {

@@ -55,7 +55,15 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
 
         self.encrypted_db_path = db_path
         self.salt = self._get_or_create_salt()  # Get or create salt using QSettings
-        self.key = self._derive_key(password, self.salt)
+        self._preferred_key = self._derive_key(password, self.salt)
+        self._legacy_key = self._derive_key(
+            password,
+            self.salt,
+            algorithm=crypto_utils.LEGACY_KDF_ALGORITHM,
+        )
+        self.key = self._preferred_key
+        self._pending_kdf_migration = False
+        self._active_kdf_algorithm = crypto_utils.PREFERRED_KDF_ALGORITHM
         self._encrypted_store = EncryptedDatabaseStore(
             self.encrypted_db_path,
             key=self.key,
@@ -70,9 +78,9 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
             logger=self.logger,
             session=self._session,
         )
-        # Optional UI callbacks (set by UI layer)
-        self.on_flush_queued = None
-        self.on_flush_done = None
+        # Optional status callbacks registered by the application shell.
+        self._on_flush_queued = None
+        self._on_flush_done = None
         self._lifecycle = DatabaseLifecycleCoordinator(
             encrypted_store=self._encrypted_store,
             connection_getter=lambda: self.conn,
@@ -82,8 +90,8 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
             commit=lambda: self._session.commit_if_owner(self.conn),
             checkpoint=self._checkpoint_wal,
             logger=self.logger,
-            on_queued_getter=lambda: getattr(self, "on_flush_queued", None),
-            on_done_getter=lambda: getattr(self, "on_flush_done", None),
+            on_queued_getter=lambda: self._on_flush_queued,
+            on_done_getter=lambda: self._on_flush_done,
         )
         self._item_cache_controller = ItemCacheController(logger=self.logger)
 
@@ -111,6 +119,7 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
             logger=self.logger,
         )
         self._startup.initialize()
+        self._migrate_legacy_kdf_if_needed()
 
     @property
     def items_repo(self):
@@ -165,11 +174,26 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
             settings_factory=get_app_settings,
         )
 
-    def _derive_key(self, password, salt):
-        """Derives a 32-byte AES key from the password and salt using PBKDF2."""
+    def _derive_key(
+        self,
+        password,
+        salt,
+        *,
+        algorithm=crypto_utils.PREFERRED_KDF_ALGORITHM,
+    ):
+        """Derive a 32-byte AES key from the password and salt."""
         return crypto_utils.derive_key(
-            password, salt, iterations=KDF_ITERATIONS, logger=self.logger
+            password,
+            salt,
+            algorithm=algorithm,
+            iterations=KDF_ITERATIONS,
+            logger=self.logger,
         )
+
+    def set_flush_status_callbacks(self, *, on_queued=None, on_done=None) -> None:
+        """Register application-shell callbacks for debounced flush status."""
+        self._on_flush_queued = on_queued
+        self._on_flush_done = on_done
 
     def _encrypt_db(self):
         """Encrypt the temporary DB file and atomically save it to the encrypted path."""
@@ -189,9 +213,71 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         )
 
     def _decrypt_db(self):
-        """Decrypts the database file to the temporary path. Returns status."""
-        return self._lifecycle.decrypt_current_temp(
-            on_error=lambda: self._cleanup_temp_db(keep_file=False)
+        """Decrypt the database, falling back to the legacy KDF when needed."""
+        preferred_status = self._decrypt_db_with_key(
+            self._preferred_key,
+            crypto_utils.PREFERRED_KDF_ALGORITHM,
+        )
+        if preferred_status != "error":
+            return preferred_status
+
+        self.logger.warning(
+            "Preferred KDF decryption failed; trying legacy %s for migration",
+            crypto_utils.LEGACY_KDF_ALGORITHM,
+        )
+        legacy_status = self._decrypt_db_with_key(
+            self._legacy_key,
+            crypto_utils.LEGACY_KDF_ALGORITHM,
+        )
+        if legacy_status == "success":
+            self.key = self._legacy_key
+            self._active_kdf_algorithm = crypto_utils.LEGACY_KDF_ALGORITHM
+            self._pending_kdf_migration = True
+            self.logger.warning(
+                "Database opened using legacy %s; migration to %s is pending.",
+                crypto_utils.LEGACY_KDF_ALGORITHM,
+                crypto_utils.PREFERRED_KDF_ALGORITHM,
+            )
+            return legacy_status
+
+        self._cleanup_temp_db(keep_file=False)
+        return legacy_status
+
+    def _decrypt_db_with_key(self, key: bytes, algorithm: str) -> str:
+        """Attempt a database decrypt using a specific derived key."""
+        self.key = key
+        self._active_kdf_algorithm = algorithm
+        self._encrypted_store.set_key(key)
+        return self._encrypted_store.decrypt_to_path(self.temp_db_path)
+
+    def _migrate_legacy_kdf_if_needed(self) -> None:
+        """Rewrite a legacy PBKDF2-encrypted database using Argon2id."""
+        if not self._pending_kdf_migration:
+            return
+
+        self.logger.info(
+            "Migrating encrypted database from %s to %s",
+            crypto_utils.LEGACY_KDF_ALGORITHM,
+            crypto_utils.PREFERRED_KDF_ALGORITHM,
+        )
+        original_key = self.key
+        original_algorithm = self._active_kdf_algorithm
+        self.key = self._preferred_key
+        self._active_kdf_algorithm = crypto_utils.PREFERRED_KDF_ALGORITHM
+
+        if self._encrypt_db():
+            self._pending_kdf_migration = False
+            self.logger.info(
+                "Encrypted database migrated successfully to %s",
+                crypto_utils.PREFERRED_KDF_ALGORITHM,
+            )
+            return
+
+        self.key = original_key
+        self._active_kdf_algorithm = original_algorithm
+        self.logger.warning(
+            "Encrypted database KDF migration failed; continuing with legacy %s for this session.",
+            crypto_utils.LEGACY_KDF_ALGORITHM,
         )
 
     def _cleanup_temp_db(self, keep_file=False):

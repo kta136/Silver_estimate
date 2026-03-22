@@ -55,6 +55,7 @@ import os
 import time
 from typing import Optional
 
+from argon2.low_level import Type, hash_secret_raw
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
@@ -65,7 +66,12 @@ from silverestimate.infrastructure.settings import SettingsStore
 
 SALT_SETTINGS_KEY = "security/db_salt"
 DEFAULT_SALT_BYTES = 16  # 128 bits
+LEGACY_KDF_ALGORITHM = "pbkdf2-sha256"
+PREFERRED_KDF_ALGORITHM = "argon2id"
 DEFAULT_KDF_ITERATIONS = 100_000  # See security documentation above
+DEFAULT_ARGON2_TIME_COST = 3
+DEFAULT_ARGON2_MEMORY_COST_KIB = 64 * 1024
+DEFAULT_ARGON2_PARALLELISM = 4
 NONCE_BYTES = 12  # 96 bits (GCM standard)
 
 
@@ -100,28 +106,49 @@ def derive_key(
     password: str,
     salt: bytes,
     *,
+    algorithm: str = PREFERRED_KDF_ALGORITHM,
     iterations: int = DEFAULT_KDF_ITERATIONS,
+    time_cost: int = DEFAULT_ARGON2_TIME_COST,
+    memory_cost_kib: int = DEFAULT_ARGON2_MEMORY_COST_KIB,
+    parallelism: int = DEFAULT_ARGON2_PARALLELISM,
     logger: Optional[logging.Logger] = None,
 ) -> bytes:
-    """Derive a 32-byte AES key using PBKDF2."""
+    """Derive a 32-byte AES key using the selected KDF."""
     if not password:
         raise ValueError("Password cannot be empty for key derivation.")
     if not salt:
         raise ValueError("Salt cannot be empty for key derivation.")
 
     if logger:
-        logger.debug("Deriving encryption key")
+        logger.debug("Deriving encryption key using %s", algorithm)
     start = time.time()
-    kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=salt,
-        iterations=iterations,
-        backend=default_backend(),
-    )
-    key = kdf.derive(password.encode("utf-8"))
+    if algorithm == LEGACY_KDF_ALGORITHM:
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=iterations,
+            backend=default_backend(),
+        )
+        key = kdf.derive(password.encode("utf-8"))
+    elif algorithm == PREFERRED_KDF_ALGORITHM:
+        key = hash_secret_raw(
+            secret=password.encode("utf-8"),
+            salt=salt,
+            time_cost=time_cost,
+            memory_cost=memory_cost_kib,
+            parallelism=parallelism,
+            hash_len=32,
+            type=Type.ID,
+        )
+    else:
+        raise ValueError(f"Unsupported key-derivation algorithm: {algorithm}")
     if logger:
-        logger.debug("Encryption key derived in %.2f seconds", time.time() - start)
+        logger.debug(
+            "Encryption key derived using %s in %.2f seconds",
+            algorithm,
+            time.time() - start,
+        )
     return key
 
 

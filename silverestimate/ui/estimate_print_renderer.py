@@ -451,11 +451,17 @@ class EstimatePrintRenderer:
             + W_LBR
         )
 
+        new_layout_decimals = 1
+
         def fmt_num(value, width):
             if value is None:
                 return " " * width
             try:
-                return f"{float(value):<{width}.2f}"[:width].ljust(width)
+                return (
+                    f"{float(value):<{width}.{new_layout_decimals}f}"[:width].ljust(
+                        width
+                    )
+                )
             except Exception:
                 return " " * width
 
@@ -506,7 +512,7 @@ class EstimatePrintRenderer:
             output.append(" " * ((TOTAL_WIDTH - len(title)) // 2) + title)
 
         voucher_str = str(voucher_no).ljust(15)
-        rate_str = f"S.Rate :{silver_rate:10.2f}"
+        rate_str = f"S.Rate :{silver_rate:10.{new_layout_decimals}f}"
         pad = max(1, TOTAL_WIDTH - len(voucher_str) - len(rate_str))
         output.append(f"{voucher_str}" + " " * pad + rate_str)
         sep_eq = "=" * TOTAL_WIDTH
@@ -644,8 +650,16 @@ class EstimatePrintRenderer:
             output.append(" " * ((TOTAL_WIDTH - len(lb_title)) // 2) + lb_title)
             output.append(sep_dash)
             lb_str = (
-                f"Silver: {last_balance_silver:.2f} g   Amount: "
-                f"{self._format_currency_locale(last_balance_amount)}"
+                "Silver: "
+                + self._format_indian_grouped_decimal(
+                    last_balance_silver,
+                    decimals=new_layout_decimals,
+                )
+                + " g   Amount: Rs. "
+                + self._format_indian_grouped_decimal(
+                    last_balance_amount,
+                    decimals=new_layout_decimals,
+                )
             )
             output.append(" " * ((TOTAL_WIDTH - len(lb_str)) // 2) + lb_str)
             output.append(sep_dash)
@@ -665,18 +679,33 @@ class EstimatePrintRenderer:
         silver_cost = net_fine_display * silver_rate
         total_cost = net_wage_display + silver_cost
 
-        fine_display = f"{self._format_indian_grouped_integer(net_fine_display)} gm"
+        fine_display = (
+            self._format_indian_grouped_decimal(
+                net_fine_display,
+                decimals=new_layout_decimals,
+            )
+            + " gm"
+        )
         fine_str = fine_display.rjust(max(W_FINE, len(fine_display)))
-        wage_display = self._format_indian_grouped_decimal(net_wage_display, decimals=1)
+        wage_display = self._format_indian_grouped_decimal(
+            net_wage_display,
+            decimals=new_layout_decimals,
+        )
         wage_str = wage_display.rjust(max(W_LBR, len(wage_display)))
         scost_display = (
             "S.Cost : Rs. "
-            + self._format_indian_grouped_decimal(silver_cost, decimals=1)
+            + self._format_indian_grouped_decimal(
+                silver_cost,
+                decimals=new_layout_decimals,
+            )
         )
         scost_pad = scost_display.rjust(max(22, len(scost_display)))
         total_display = (
             "Total: Rs. "
-            + self._format_indian_grouped_decimal(total_cost, decimals=1)
+            + self._format_indian_grouped_decimal(
+                total_cost,
+                decimals=new_layout_decimals,
+            )
         )
         total_pad = total_display.rjust(max(18, len(total_display)))
 
@@ -692,7 +721,13 @@ class EstimatePrintRenderer:
                 + total_pad
             )
         else:
-            amount_display = f"Rs. {self._format_indian_grouped_integer(total_cost)}"
+            amount_display = (
+                "Rs. "
+                + self._format_indian_grouped_decimal(
+                    total_cost,
+                    decimals=new_layout_decimals,
+                )
+            )
             amount_pad = amount_display.rjust(max(W_LBR, len(amount_display)))
             final_line = f"{' ' * (W_SNO + S)}{fine_str} {amount_pad}"
 

@@ -41,6 +41,10 @@ def test_initialize_database_recovers_candidate_before_connect(monkeypatch, tmp_
 
         def __init__(self, db_path, password):
             calls["init"] = (db_path, password)
+            self.preload_started = False
+
+        def start_preload_item_cache(self):
+            calls["preload_started"] = True
 
     monkeypatch.setattr(startup_module, "QMessageBox", StubMessageBox)
     monkeypatch.setattr(startup_module, "DatabaseManager", StubDatabaseManager)
@@ -57,6 +61,7 @@ def test_initialize_database_recovers_candidate_before_connect(monkeypatch, tmp_
         "secret-pass",
     )
     assert calls["init"] == (str(db_path), "secret-pass")
+    assert calls["preload_started"] is True
 
 
 def test_authenticate_cancelled_skips_database_initialization(monkeypatch):

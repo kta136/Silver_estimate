@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import os
 import shutil
+import zipfile
 from pathlib import Path
 
 import nox  # type: ignore[import-not-found]
+
+from silverestimate.infrastructure.app_constants import APP_VERSION
 
 nox.options.sessions = ["pr"]
 
@@ -21,6 +24,42 @@ def clean_artifact(path: Path) -> None:
         path.unlink()
     except FileNotFoundError:
         return
+
+
+def _artifact_extension() -> str:
+    return ".exe" if os.name == "nt" else ""
+
+
+def _local_build_label() -> str:
+    return "win64" if os.name == "nt" else "linux64"
+
+
+def _versioned_artifact_path() -> Path:
+    return (
+        PROJECT_ROOT
+        / "dist"
+        / f"SilverEstimate-v{APP_VERSION}{_artifact_extension()}"
+    )
+
+
+def _versioned_archive_path() -> Path:
+    return PROJECT_ROOT / "dist" / f"SilverEstimate-v{APP_VERSION}-{_local_build_label()}.zip"
+
+
+def package_local_artifact(base_artifact: Path) -> tuple[Path, Path]:
+    versioned_artifact = _versioned_artifact_path()
+    versioned_archive = _versioned_archive_path()
+    clean_artifact(versioned_artifact)
+    clean_artifact(versioned_archive)
+
+    shutil.copy2(base_artifact, versioned_artifact)
+    with zipfile.ZipFile(
+        versioned_archive,
+        mode="w",
+        compression=zipfile.ZIP_DEFLATED,
+    ) as archive:
+        archive.write(versioned_artifact, arcname=versioned_artifact.name)
+    return versioned_artifact, versioned_archive
 
 
 def run_pyinstaller_build(session: nox.Session, *, clean: bool = False) -> Path:
@@ -42,7 +81,10 @@ def run_pyinstaller_build(session: nox.Session, *, clean: bool = False) -> Path:
         pyinstaller_args.append("--clean")
     pyinstaller_args.append(str(PYINSTALLER_SPEC))
     session.run(*pyinstaller_args)
-    return artifact
+    versioned_artifact, versioned_archive = package_local_artifact(artifact)
+    session.log(f"Versioned artifact created at {versioned_artifact}")
+    session.log(f"Packaged archive created at {versioned_archive}")
+    return versioned_artifact
 
 
 @nox.session(python=False)

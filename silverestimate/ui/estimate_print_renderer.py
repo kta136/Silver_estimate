@@ -453,15 +453,16 @@ class EstimatePrintRenderer:
 
         new_layout_decimals = 1
 
-        def fmt_num(value, width):
+        def fmt_num(value, width, *, decimals):
             if value is None:
                 return " " * width
             try:
-                return (
-                    f"{float(value):<{width}.{new_layout_decimals}f}"[:width].ljust(
-                        width
-                    )
-                )
+                numeric_value = float(value)
+                if decimals <= 0:
+                    formatted = str(int(round(numeric_value)))
+                else:
+                    formatted = f"{numeric_value:.{decimals}f}"
+                return formatted[:width].ljust(width)
             except Exception:
                 return " " * width
 
@@ -473,14 +474,18 @@ class EstimatePrintRenderer:
                 line_parts = [
                     sno_str[:W_SNO].ljust(W_SNO),
                     (str(name or "")[:W_NAME]).ljust(W_NAME),
-                    fmt_num(gross, W_GROSS),
-                    fmt_num(poly, W_POLY),
-                    fmt_num(net, W_NET),
-                    fmt_num(sper, W_SPER),
-                    fmt_num(wrate, W_WRATE),
-                    fmt_num(pcs, W_PCS) if pcs not in (None, "") else " " * W_PCS,
-                    fmt_num(fine, W_FINE),
-                    fmt_num(labour_amt, W_LBR),
+                    fmt_num(gross, W_GROSS, decimals=2),
+                    fmt_num(poly, W_POLY, decimals=0),
+                    fmt_num(net, W_NET, decimals=2),
+                    fmt_num(sper, W_SPER, decimals=2),
+                    fmt_num(wrate, W_WRATE, decimals=2),
+                    (
+                        fmt_num(pcs, W_PCS, decimals=0)
+                        if pcs not in (None, "")
+                        else " " * W_PCS
+                    ),
+                    fmt_num(fine, W_FINE, decimals=2),
+                    fmt_num(labour_amt, W_LBR, decimals=0),
                 ]
                 return f"{' '.join(line_parts):<{TOTAL_WIDTH}}"[:TOTAL_WIDTH]
             except Exception as err:
@@ -682,14 +687,14 @@ class EstimatePrintRenderer:
         fine_display = (
             self._format_indian_grouped_decimal(
                 net_fine_display,
-                decimals=new_layout_decimals,
+                decimals=2,
             )
             + " gm"
         )
         fine_str = fine_display.rjust(max(W_FINE, len(fine_display)))
         wage_display = self._format_indian_grouped_decimal(
             net_wage_display,
-            decimals=new_layout_decimals,
+            decimals=0,
         )
         wage_str = wage_display.rjust(max(W_LBR, len(wage_display)))
         scost_display = (

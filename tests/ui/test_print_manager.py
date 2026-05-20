@@ -1,3 +1,6 @@
+import html
+import re
+
 from PyQt5.QtGui import QFont
 from PyQt5.QtPrintSupport import QPrinter
 
@@ -8,6 +11,12 @@ from silverestimate.ui.print_payload_builder import PrintPreviewPayload
 
 class _DbStub:
     pass
+
+
+def _extract_pre_lines(rendered: str) -> list[str]:
+    match = re.search(r"<pre>(.*)</pre>", rendered, re.DOTALL)
+    assert match is not None
+    return html.unescape(match.group(1)).splitlines()
 
 
 def test_generate_silver_bars_html_escapes_dynamic_text(qt_app, settings_stub):
@@ -53,7 +62,7 @@ def test_generate_estimate_thermal_escapes_note_html(qt_app, settings_stub):
     assert "&lt;b&gt;unsafe-note&lt;/b&gt;" in rendered
 
 
-def test_generate_estimate_new_format_keeps_final_totals_to_one_decimal(
+def test_generate_estimate_new_format_uses_requested_column_precision(
     qt_app, settings_stub
 ):
     manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
@@ -69,12 +78,12 @@ def test_generate_estimate_new_format_keeps_final_totals_to_one_decimal(
         "items": [
             {
                 "item_name": "Chain",
-                "gross": 1.5,
-                "poly": 0.0,
-                "net_wt": 1.5,
+                "gross": 12.34,
+                "poly": 5.0,
+                "net_wt": 7.34,
                 "purity": 92.5,
                 "wage_rate": 0.0,
-                "pieces": 1,
+                "pieces": 11,
                 "fine": 1.23,
                 "wage": 100.2,
                 "is_return": 0,
@@ -84,12 +93,32 @@ def test_generate_estimate_new_format_keeps_final_totals_to_one_decimal(
     }
 
     rendered = manager._generate_estimate_new_format(estimate_data)
+    lines = _extract_pre_lines(rendered)
+    item_line = next(line for line in lines if "Chain" in line)
+    total_line = next(line for line in lines if "TOTAL" in line)
+    final_line = next(line for line in lines if "S.Cost : Rs." in line)
 
+    assert "12.34" in item_line
+    assert " 5 " in item_line
+    assert "7.34" in item_line
+    assert "92.50" in item_line
+    assert "11" in item_line
+    assert "1.23" in item_line
+    assert item_line.rstrip().endswith("100")
+
+    assert "12.34" in total_line
+    assert " 5 " in total_line
+    assert "7.34" in total_line
+    assert "1.23" in total_line
+    assert total_line.rstrip().endswith("100")
+
+    assert "1.23 gm" in final_line
+    assert "100" in final_line
     assert "S.Cost : Rs. 12.4" in rendered
     assert "Total: Rs. 112.6" in rendered
 
 
-def test_generate_estimate_new_format_uses_one_decimal_everywhere(
+def test_generate_estimate_new_format_keeps_amount_totals_at_one_decimal(
     qt_app, settings_stub
 ):
     manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
@@ -120,12 +149,26 @@ def test_generate_estimate_new_format_uses_one_decimal_everywhere(
     }
 
     rendered = manager._generate_estimate_new_format(estimate_data)
+    lines = _extract_pre_lines(rendered)
+    item_line = next(line for line in lines if "Chain" in line)
+    total_line = next(line for line in lines if "TOTAL" in line)
+    final_line = next(line for line in lines if "S.Cost : Rs." in line)
 
-    assert "1.54" not in rendered
-    assert "92.54" not in rendered
-    assert "50.54" not in rendered
+    assert "1.54" in item_line
+    assert "0" in item_line
+    assert "1.50" in item_line
+    assert "92.54" in item_line
+    assert "1" in item_line
+    assert "1.23" in item_line
+    assert item_line.rstrip().endswith("100")
+
+    assert "1.54" in total_line
+    assert "1.50" in total_line
+    assert "1.23" in total_line
+    assert total_line.rstrip().endswith("100")
+
     assert "Silver: 0.3 g   Amount: Rs. 50.5" in rendered
-    assert "1.5 gm" in rendered
+    assert "1.50 gm" in final_line
     assert "S.Cost : Rs. 15.1" in rendered
     assert "Total: Rs. 165.9" in rendered
 

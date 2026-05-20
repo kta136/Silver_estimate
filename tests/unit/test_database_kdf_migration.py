@@ -102,4 +102,6 @@ def test_database_manager_migrates_legacy_pbkdf2_database_to_argon2(
     assert row == ("kept",)
 
     legacy_store = EncryptedDatabaseStore(str(encrypted_db_path), key=legacy_key)
-    assert legacy_store.decrypt_to_path(str(tmp_path / "legacy-decrypt.sqlite")) == "error"
+    assert (
+        legacy_store.decrypt_to_path(str(tmp_path / "legacy-decrypt.sqlite")) == "error"
+    )

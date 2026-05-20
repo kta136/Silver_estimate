@@ -3,9 +3,9 @@ from __future__ import annotations
 import weakref
 from typing import Any, Mapping
 
-from PyQt5 import sip
-from PyQt5.QtCore import QTimer
-from PyQt5.QtWidgets import QMessageBox
+from PyQt6 import sip
+from PyQt6.QtCore import QTimer
+from PyQt6.QtWidgets import QMessageBox
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
 

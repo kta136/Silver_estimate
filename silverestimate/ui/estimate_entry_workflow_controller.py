@@ -7,7 +7,7 @@ import time
 from dataclasses import replace
 from typing import TYPE_CHECKING, Callable, Dict, Optional, cast
 
-from PyQt5.QtCore import (
+from PyQt6.QtCore import (
     QDate,
     QLocale,
     QObject,
@@ -17,10 +17,9 @@ from PyQt5.QtCore import (
     QTimer,
     pyqtSignal,
 )
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
-    QDoubleSpinBox,
     QFormLayout,
     QMessageBox,
     QProgressDialog,
@@ -36,6 +35,7 @@ from ._host_proxy import HostProxy
 from .estimate_entry_logic.constants import COL_CODE, COL_GROSS
 from .estimate_entry_theme import refresh_widget_style
 from .item_selection_dialog import ItemSelectionDialog
+from .themed_controls import ThemedDoubleSpinBox
 
 
 class _EstimatePreviewBuildWorker(QObject):
@@ -147,10 +147,10 @@ class EstimateEntryWorkflowController(HostProxy):
                 self._parent_widget(),
                 "Discard Unsaved Changes?",
                 "You have unsaved changes. Loading another estimate will discard them.\n\nContinue?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
             )
-            if reply != QMessageBox.Yes:
+            if reply != QMessageBox.StandardButton.Yes:
                 return
 
         self._loading_estimate = True
@@ -216,10 +216,10 @@ class EstimateEntryWorkflowController(HostProxy):
             self._parent_widget(),
             "Confirm Delete",
             f"Are you sure you want to delete estimate '{voucher_no}'?",
-            QMessageBox.Yes | QMessageBox.Cancel,
-            QMessageBox.Cancel,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
         )
-        if reply == QMessageBox.Yes and self.presenter:
+        if reply == QMessageBox.StandardButton.Yes and self.presenter:
             if self.presenter.delete_estimate(voucher_no):
                 self._status(f"Estimate {voucher_no} deleted.", 3000)
                 self.clear_form(confirm=False)
@@ -292,7 +292,7 @@ class EstimateEntryWorkflowController(HostProxy):
         )
         progress.setCancelButton(None)
         progress.setWindowTitle("Print Preview")
-        progress.setWindowModality(Qt.WindowModal)
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
         progress.setMinimumDuration(0)
         progress.setAutoClose(False)
         progress.setAutoReset(False)
@@ -426,10 +426,10 @@ class EstimateEntryWorkflowController(HostProxy):
                 self._parent_widget(),
                 "Confirm New Estimate",
                 "Start a new estimate? Unsaved changes will be lost.",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
             )
-            if reply != QMessageBox.Yes:
+            if reply != QMessageBox.StandardButton.Yes:
                 return
 
         self._push_unsaved_block()
@@ -473,10 +473,10 @@ class EstimateEntryWorkflowController(HostProxy):
             self._parent_widget(),
             "Discard Changes?",
             "You have unsaved changes. Exit anyway?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
-        return reply == QMessageBox.Yes
+        return reply == QMessageBox.StandardButton.Yes
 
     def show_history(self):
         if self.presenter:
@@ -552,10 +552,10 @@ class EstimateEntryWorkflowController(HostProxy):
             self._parent_widget(),
             "Delete Row",
             f"Delete row {row + 1}?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
-        if reply == QMessageBox.Yes:
+        if reply == QMessageBox.StandardButton.Yes:
             self.item_table.delete_row(row)
             if self._totals_incremental_is_active():
                 try:
@@ -576,7 +576,7 @@ class EstimateEntryWorkflowController(HostProxy):
         dialog = ItemSelectionDialog(
             self.db_manager, code, parent=self._parent_widget()
         )
-        if dialog.exec_() == QDialog.Accepted:
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             return cast(Optional[Dict], dialog.get_selected_item())
         return None
 
@@ -591,7 +591,7 @@ class EstimateEntryWorkflowController(HostProxy):
             main_window_ref=self.main_window,
             parent=self._parent_widget(),
         )
-        if dialog.exec_() == QDialog.Accepted:
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             return dialog.selected_voucher
         return None
 
@@ -712,7 +712,7 @@ class EstimateEntryWorkflowController(HostProxy):
         if rate:
             try:
                 gram_rate = float(rate) / 1000.0
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 gram_rate = None
             if gram_rate is None:
                 if hasattr(self, "live_rate_value_label"):
@@ -815,23 +815,25 @@ class EstimateEntryWorkflowController(HostProxy):
         layout = QVBoxLayout(dialog)
         form = QFormLayout()
 
-        lb_silver = QDoubleSpinBox()
+        lb_silver = ThemedDoubleSpinBox()
         lb_silver.setRange(0, 1000000)
         lb_silver.setValue(self.last_balance_silver)
         form.addRow("Silver Weight (g):", lb_silver)
 
-        lb_amount = QDoubleSpinBox()
+        lb_amount = ThemedDoubleSpinBox()
         lb_amount.setRange(0, 10000000)
         lb_amount.setValue(self.last_balance_amount)
         form.addRow("Amount:", lb_amount)
 
         layout.addLayout(form)
-        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
         btns.accepted.connect(dialog.accept)
         btns.rejected.connect(dialog.reject)
         layout.addWidget(btns)
 
-        if dialog.exec_():
+        if dialog.exec():
             self.last_balance_silver = lb_silver.value()
             self.last_balance_amount = lb_amount.value()
             self.calculate_totals()

@@ -148,7 +148,7 @@ class ItemsRepository:
 
         try:
             limit_i = int(limit)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             limit_i = 500
         if limit_i < 1:
             limit_i = 1

@@ -1,7 +1,7 @@
 import logging
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
     QDialog,
@@ -41,8 +41,12 @@ class _LifecycleHost(QDialog):
             self.available_bars_table
         )
         self.available_bars_table.setModel(self.available_bars_model)
-        self.available_bars_table.setSelectionBehavior(QTableView.SelectRows)
-        self.available_bars_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.available_bars_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
+        self.available_bars_table.setSelectionMode(
+            QAbstractItemView.SelectionMode.ExtendedSelection
+        )
         self.available_bars_model.set_rows(
             [
                 {
@@ -94,7 +98,7 @@ class _LifecycleHost(QDialog):
 def test_lifecycle_controller_creates_list_from_selection_and_assigns_bars(
     qtbot, monkeypatch
 ):
-    from PyQt5.QtWidgets import QInputDialog, QMessageBox
+    from PyQt6.QtWidgets import QInputDialog, QMessageBox
 
     host = _LifecycleHost()
     controller = SilverBarListLifecycleController(host)
@@ -117,12 +121,12 @@ def test_lifecycle_controller_creates_list_from_selection_and_assigns_bars(
     monkeypatch.setattr(
         QMessageBox,
         "information",
-        lambda *args, **kwargs: QMessageBox.Ok,
+        lambda *args, **kwargs: QMessageBox.StandardButton.Ok,
     )
     monkeypatch.setattr(
         QMessageBox,
         "warning",
-        lambda *args, **kwargs: QMessageBox.Ok,
+        lambda *args, **kwargs: QMessageBox.StandardButton.Ok,
     )
 
     controller._create_list_from_selection()
@@ -131,4 +135,4 @@ def test_lifecycle_controller_creates_list_from_selection_and_assigns_bars(
     assert host.assigned_payloads == [([1, 2], 11)]
     assert host.available_loads == 1
     assert host.list_loads == 1
-    assert host.list_combo.currentData(Qt.UserRole) == 11
+    assert host.list_combo.currentData(Qt.ItemDataRole.UserRole) == 11

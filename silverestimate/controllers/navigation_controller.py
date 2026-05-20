@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QKeySequence
-from PyQt5.QtWidgets import QAction, QActionGroup, QMenuBar, QMessageBox
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
+from PyQt6.QtWidgets import QMenuBar, QMessageBox
 
 from silverestimate.infrastructure.app_constants import APP_VERSION
 from silverestimate.ui.icons import get_icon
@@ -94,15 +94,15 @@ class NavigationController:
 
         save_action = QAction("&Save", self._main_window)
         save_action.setIcon(get_icon("save", widget=self._main_window))
-        save_action.setShortcut(QKeySequence.Save)
-        save_action.setShortcutContext(Qt.ApplicationShortcut)
+        save_action.setShortcut(QKeySequence.StandardKey.Save)
+        save_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         save_action.triggered.connect(self._main_window.commands.save_estimate)
         file_menu.addAction(save_action)
 
         print_action = QAction("&Print", self._main_window)
         print_action.setIcon(get_icon("print", widget=self._main_window))
-        print_action.setShortcut(QKeySequence.Print)
-        print_action.setShortcutContext(Qt.ApplicationShortcut)
+        print_action.setShortcut(QKeySequence.StandardKey.Print)
+        print_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         print_action.triggered.connect(self._main_window.commands.print_estimate)
         file_menu.addAction(print_action)
 
@@ -110,7 +110,7 @@ class NavigationController:
 
         exit_action = QAction("E&xit", self._main_window)
         exit_action.setIcon(get_icon("exit", widget=self._main_window))
-        exit_action.setShortcut(QKeySequence.Quit)
+        exit_action.setShortcut(QKeySequence.StandardKey.Quit)
         exit_action.triggered.connect(self._main_window.close)
         file_menu.addAction(exit_action)
 

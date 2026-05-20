@@ -2,7 +2,7 @@
 
 ## Overview
 
-A PyQt5 desktop application for silver shops that combines encrypted persistence, rich desktop UI, and operational tooling for estimates, inventory, and silver bar management.
+A PyQt6 desktop application for silver shops that combines encrypted persistence, rich desktop UI, and operational tooling for estimates, inventory, and silver bar management.
 
 ## Core Architecture
 
@@ -84,12 +84,12 @@ MainWindow
 
 ## Technical Stack
 - Python 3.14+
-- PyQt5 5.15+
+- PyQt6 6.11
 - SQLite 3 with WAL mode for concurrency-friendly access
 - `cryptography` for AES-GCM payload encryption
 - `passlib[argon2]` and `argon2_cffi` for password hashing
 - PyInstaller 6.x for packaging
-- Optional dev tooling: `pytest`, `pytest-qt`, `hypothesis`
+- Optional dev tooling: `pytest`, `pytest-qt` configured for PyQt6, `hypothesis`
 
 ## Architectural Notes
 - UI and presenter separation keeps heavy logic outside Qt widgets and simplifies unit testing.

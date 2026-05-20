@@ -7,8 +7,8 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, cast
 
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-from PyQt5.QtWidgets import QApplication, QWidget
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtWidgets import QApplication, QWidget
 
 from silverestimate.domain.estimate_models import EstimateLineCategory, TotalsResult
 from silverestimate.presenter import (
@@ -271,12 +271,12 @@ class EstimateEntryWidget(QWidget):
         key = event.key()
         modifiers = event.modifiers()
 
-        if modifiers & Qt.ControlModifier:
-            if key == Qt.Key_R:
+        if modifiers & Qt.KeyboardModifier.ControlModifier:
+            if key == Qt.Key.Key_R:
                 self.toggle_return_mode()
                 event.accept()
                 return
-            if key == Qt.Key_B:
+            if key == Qt.Key.Key_B:
                 self.toggle_silver_bar_mode()
                 event.accept()
                 return
@@ -286,16 +286,20 @@ class EstimateEntryWidget(QWidget):
             focus_widget is not None and self.item_table.isAncestorOf(focus_widget)
         )
 
-        if table_has_focus and key in [Qt.Key_Return, Qt.Key_Enter, Qt.Key_Tab]:
+        if table_has_focus and key in [
+            Qt.Key.Key_Return,
+            Qt.Key.Key_Enter,
+            Qt.Key.Key_Tab,
+        ]:
             self.move_to_next_cell()
             event.accept()
-        elif table_has_focus and key == Qt.Key_Backtab:
+        elif table_has_focus and key == Qt.Key.Key_Backtab:
             self.move_to_previous_cell()
             event.accept()
-        elif table_has_focus and key in [Qt.Key_Up, Qt.Key_Down]:
+        elif table_has_focus and key in [Qt.Key.Key_Up, Qt.Key.Key_Down]:
             self._mark_manual_row_navigation()
             super().keyPressEvent(event)
-        elif table_has_focus and key == Qt.Key_Escape:
+        elif table_has_focus and key == Qt.Key.Key_Escape:
             self.confirm_exit()
             event.accept()
         else:
@@ -475,6 +479,4 @@ for _method_name in (
     )
 
 
-EstimateEntryWidget.table_adapter = property(  # type: ignore[attr-defined]
-    lambda self: self._get_table_adapter()
-)
+EstimateEntryWidget.table_adapter = property(lambda self: self._get_table_adapter())

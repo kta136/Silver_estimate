@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Callable, Optional, Tuple
 
-from PyQt5.QtCore import QDateTime, QLocale, QObject, QTimer
+from PyQt6.QtCore import QDateTime, QLocale, QObject, QTimer
 
 from silverestimate.infrastructure.settings import SettingsReader, get_app_settings
 from silverestimate.services.live_rate_service import LiveRateService

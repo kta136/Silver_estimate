@@ -1,7 +1,7 @@
 """Tests for EstimateTableView component."""
 
 import pytest
-from PyQt5.QtGui import QPalette
+from PyQt6.QtGui import QPalette
 
 from silverestimate.ui.estimate_entry_components.estimate_table_view import (
     EstimateTableView,
@@ -218,7 +218,7 @@ def test_cell_edited_signal(table_view):
     # Edit a cell through the model
     model = table_view.get_model()
     index = model.index(0, 0)
-    model.setData(index, "TEST", 2)  # Qt.EditRole = 2
+    model.setData(index, "TEST", 2)  # Qt.ItemDataRole.EditRole = 2
 
     assert len(edits) > 0
     assert edits[0] == (0, 0)
@@ -250,7 +250,7 @@ def test_context_menu_actions_have_icons(table_view, monkeypatch):
             (action.text(), action.icon()) for action in menu.actions()
         ]
 
-    monkeypatch.setattr("PyQt5.QtWidgets.QMenu.exec_", _fake_exec)
+    monkeypatch.setattr("PyQt6.QtWidgets.QMenu.exec", _fake_exec)
 
     table_view._show_context_menu(table_view.rect().center())
 
@@ -272,9 +272,15 @@ def test_item_lookup_requested_signal(table_view):
 def test_selection_palette_matches_active_and_inactive_states(table_view):
     palette = table_view.palette()
 
-    assert palette.color(QPalette.Highlight).name() == "#dbeafe"
-    assert palette.color(QPalette.HighlightedText).name() == "#0f172a"
-    assert palette.color(QPalette.Inactive, QPalette.Highlight).name() == "#dbeafe"
+    assert palette.color(QPalette.ColorRole.Highlight).name() == "#dbeafe"
+    assert palette.color(QPalette.ColorRole.HighlightedText).name() == "#0f172a"
     assert (
-        palette.color(QPalette.Inactive, QPalette.HighlightedText).name() == "#0f172a"
+        palette.color(QPalette.ColorGroup.Inactive, QPalette.ColorRole.Highlight).name()
+        == "#dbeafe"
+    )
+    assert (
+        palette.color(
+            QPalette.ColorGroup.Inactive, QPalette.ColorRole.HighlightedText
+        ).name()
+        == "#0f172a"
     )

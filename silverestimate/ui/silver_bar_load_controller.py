@@ -6,8 +6,8 @@ import logging
 import time
 from typing import TYPE_CHECKING
 
-from PyQt5.QtCore import QObject, QThread, pyqtSignal
-from PyQt5.QtWidgets import QMessageBox
+from PyQt6.QtCore import QObject, QThread, pyqtSignal
+from PyQt6.QtWidgets import QMessageBox
 
 from silverestimate.persistence.silver_bars_snapshot_repository import (
     SilverBarsSnapshotRepository,
@@ -90,7 +90,7 @@ class SilverBarLoadController(HostProxy):
             style.unpolish(widget)
             style.polish(widget)
             widget.update()
-        except (AttributeError, RuntimeError, TypeError):
+        except AttributeError, RuntimeError, TypeError:
             return
 
     def _set_list_table_active_state(self, is_active: bool) -> None:
@@ -100,7 +100,7 @@ class SilverBarLoadController(HostProxy):
         state = "active" if is_active else "inactive"
         try:
             header = list_table.horizontalHeader()
-        except (AttributeError, RuntimeError, TypeError):
+        except AttributeError, RuntimeError, TypeError:
             header = None
         list_table.setProperty("listState", state)
         if header is not None:
@@ -111,7 +111,7 @@ class SilverBarLoadController(HostProxy):
             self._refresh_widget_style(header)
         try:
             self._refresh_widget_style(list_table.viewport())
-        except (AttributeError, RuntimeError, TypeError):
+        except AttributeError, RuntimeError, TypeError:
             pass
 
     def _next_load_request_id(self, target: str) -> int:
@@ -335,7 +335,7 @@ class SilverBarLoadController(HostProxy):
                     note_val = (
                         details["list_note"] if "list_note" in details.keys() else None
                     )
-                except (AttributeError, KeyError, TypeError):
+                except AttributeError, KeyError, TypeError:
                     note_val = getattr(details, "list_note", None)
                 if note_val:
                     info += f"  –  {note_val}"

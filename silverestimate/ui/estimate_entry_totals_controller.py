@@ -5,8 +5,8 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Optional
 
-from PyQt5 import sip
-from PyQt5.QtWidgets import QDoubleSpinBox
+from PyQt6 import sip
+from PyQt6.QtWidgets import QDoubleSpinBox
 
 from silverestimate.domain.estimate_models import (
     CategoryTotals,
@@ -77,7 +77,7 @@ class EstimateEntryTotalsController(HostProxy):
                     return (
                         "PC" if str(wage_type or "").strip().upper() == "PC" else "WT"
                     )
-        except (AttributeError, TypeError, RuntimeError, ValueError):
+        except AttributeError, TypeError, RuntimeError, ValueError:
             pass
         return "WT"
 

@@ -1,16 +1,16 @@
 # Graph Report - Silver Estimate  (2026-05-20)
 
 ## Corpus Check
-- 196 files · ~126,162 words
+- 206 files · ~131,569 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3563 nodes · 6838 edges · 244 communities (186 shown, 58 thin omitted)
-- Extraction: 84% EXTRACTED · 16% INFERRED · 0% AMBIGUOUS · INFERRED: 1128 edges (avg confidence: 0.68)
+- 4037 nodes · 7523 edges · 269 communities (223 shown, 46 thin omitted)
+- Extraction: 84% EXTRACTED · 16% INFERRED · 0% AMBIGUOUS · INFERRED: 1219 edges (avg confidence: 0.68)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `211663b3`
+- Built from commit: `6a40b266`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -132,6 +132,7 @@
 - [[_COMMUNITY_Community 114|Community 114]]
 - [[_COMMUNITY_Community 115|Community 115]]
 - [[_COMMUNITY_Community 116|Community 116]]
+- [[_COMMUNITY_Community 117|Community 117]]
 - [[_COMMUNITY_Community 118|Community 118]]
 - [[_COMMUNITY_Community 119|Community 119]]
 - [[_COMMUNITY_Community 120|Community 120]]
@@ -141,7 +142,6 @@
 - [[_COMMUNITY_Community 124|Community 124]]
 - [[_COMMUNITY_Community 125|Community 125]]
 - [[_COMMUNITY_Community 126|Community 126]]
-- [[_COMMUNITY_Community 128|Community 128]]
 - [[_COMMUNITY_Community 129|Community 129]]
 - [[_COMMUNITY_Community 130|Community 130]]
 - [[_COMMUNITY_Community 131|Community 131]]
@@ -150,6 +150,7 @@
 - [[_COMMUNITY_Community 134|Community 134]]
 - [[_COMMUNITY_Community 135|Community 135]]
 - [[_COMMUNITY_Community 136|Community 136]]
+- [[_COMMUNITY_Community 137|Community 137]]
 - [[_COMMUNITY_Community 138|Community 138]]
 - [[_COMMUNITY_Community 139|Community 139]]
 - [[_COMMUNITY_Community 140|Community 140]]
@@ -246,183 +247,216 @@
 - [[_COMMUNITY_Community 241|Community 241]]
 - [[_COMMUNITY_Community 242|Community 242]]
 - [[_COMMUNITY_Community 243|Community 243]]
+- [[_COMMUNITY_Community 244|Community 244]]
+- [[_COMMUNITY_Community 245|Community 245]]
+- [[_COMMUNITY_Community 246|Community 246]]
+- [[_COMMUNITY_Community 247|Community 247]]
+- [[_COMMUNITY_Community 248|Community 248]]
+- [[_COMMUNITY_Community 249|Community 249]]
+- [[_COMMUNITY_Community 250|Community 250]]
+- [[_COMMUNITY_Community 251|Community 251]]
+- [[_COMMUNITY_Community 252|Community 252]]
+- [[_COMMUNITY_Community 253|Community 253]]
+- [[_COMMUNITY_Community 254|Community 254]]
+- [[_COMMUNITY_Community 255|Community 255]]
+- [[_COMMUNITY_Community 256|Community 256]]
+- [[_COMMUNITY_Community 257|Community 257]]
+- [[_COMMUNITY_Community 260|Community 260]]
+- [[_COMMUNITY_Community 261|Community 261]]
+- [[_COMMUNITY_Community 262|Community 262]]
+- [[_COMMUNITY_Community 263|Community 263]]
+- [[_COMMUNITY_Community 264|Community 264]]
+- [[_COMMUNITY_Community 266|Community 266]]
+- [[_COMMUNITY_Community 267|Community 267]]
+- [[_COMMUNITY_Community 269|Community 269]]
+- [[_COMMUNITY_Community 271|Community 271]]
+- [[_COMMUNITY_Community 272|Community 272]]
+- [[_COMMUNITY_Community 275|Community 275]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `DatabaseManager` - 65 edges
-2. `EstimateEntryWorkflowController` - 58 edges
-3. `PrintManager` - 58 edges
-4. `EstimateTableView` - 56 edges
-5. `SettingsDialog` - 54 edges
+2. `SettingsDialog` - 61 edges
+3. `EstimateEntryWorkflowController` - 60 edges
+4. `PrintManager` - 60 edges
+5. `EstimateTableView` - 56 edges
 6. `TotalsPanel` - 54 edges
 7. `DatabaseRepositoryFacadeMixin` - 47 edges
-8. `EstimateEntryLayoutController` - 46 edges
+8. `EstimateEntryLayoutController` - 47 edges
 9. `SilverBarsRepository` - 45 edges
-10. `EstimateEntryRowState` - 45 edges
+10. `PrintPreviewController` - 45 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `test_compute_totals_groups_categories_and_balances()` --calls--> `EstimateLine`  [INFERRED]
   tests/unit/test_estimate_logic.py → silverestimate/domain/estimate_models.py
 - `test_build_row_states_from_items_roundtrip()` --calls--> `SaveItem`  [INFERRED]
   tests/unit/test_estimate_entry_persistence_service.py → silverestimate/presenter/estimate_entry_presenter.py
+- `StandardButton` --uses--> `EstimateEntryWorkflowController`  [INFERRED]
+  tests/unit/test_estimate_entry_workflow_controller.py → silverestimate/ui/estimate_entry_workflow_controller.py
 - `test_display_and_edit_accessors_use_different_roles()` --calls--> `EstimateEntryRowState`  [INFERRED]
   tests/unit/test_estimate_table_view.py → silverestimate/ui/view_models/estimate_entry_view_model.py
 - `main()` --calls--> `ApplicationBuilder`  [INFERRED]
   main.py → silverestimate/infrastructure/application.py
-- `_Signal` --uses--> `LiveRateController`  [INFERRED]
-  tests/controllers/test_live_rate_controller.py → silverestimate/controllers/live_rate_controller.py
 
-## Communities (244 total, 58 thin omitted)
+## Communities (269 total, 46 thin omitted)
 
 ### Community 0 - "Community 0"
-Cohesion: 0.20
-Nodes (4): Dialog for viewing silver bar history and searching all bars in the database., Populate the bars table with data., Search bars based on current filter criteria., SilverBarHistoryDialog
+Cohesion: 0.15
+Nodes (8): Dialog for viewing silver bar history and searching all bars in the database., Dialog for viewing silver bar history and searching all bars in the database., Populate the bars table with data., Populate the bars table with data., Populate the bars table with data., Search bars based on current filter criteria., Search bars based on current filter criteria., SilverBarHistoryDialog
 
 ### Community 1 - "Community 1"
-Cohesion: 0.14
-Nodes (12): _BackgroundThread, LiveRateService, Live rate polling and scheduling services., _HoldingThread, _ImmediateThread, _SettingsStub, test_live_rate_service_emits_broadcast(), test_live_rate_service_handles_fallback_failure() (+4 more)
+Cohesion: 0.05
+Nodes (39): _coerce_bool(), LiveRateController, Controller coordinating live-rate service with the main window UI., Restart the periodic refresh timer based on settings., Trigger an immediate live-rate fetch., Keep live-rate related concerns out of :class:`MainWindow`., Instantiate the service, apply settings, and optionally refresh., Stop timers before the main window closes. (+31 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.06
-Nodes (37): _CheckBoxStub, _FileDialogStub, _InputDialogStub, _install_stubs(), _make_commands(), _MessageBoxInstanceStub, _MessageBoxStub, reset() (+29 more)
+Nodes (39): _CheckBoxStub, _FileDialogStub, Icon, _InputDialogStub, _install_stubs(), _make_commands(), _MessageBoxInstanceStub, _MessageBoxStub (+31 more)
 
 ### Community 3 - "Community 3"
-Cohesion: 0.10
-Nodes (10): QStyledItemDelegate, EstimateEntryLayoutController, Layout and settings controller for estimate entry., Own layout wiring, totals placement, and persisted UI preferences., CodeDelegate, _normalize_code(), NumericDelegate, Delegate that validates and normalizes numeric table cell input. (+2 more)
+Cohesion: 0.06
+Nodes (32): column_uses_blank_zero_editor(), column_width_limits(), columns_for_editor_type(), default_column_widths(), EstimateColumnSpec, get_column_spec(), header_for_column(), is_row_recalculation_column() (+24 more)
 
 ### Community 5 - "Community 5"
-Cohesion: 0.12
-Nodes (16): _build_controller(), _LabelStub, _ServiceStub, _SettingsStub, _Signal, test_apply_timer_settings_only_stops_service_when_auto_refresh_disabled(), test_apply_visibility_settings_hides_rate_widgets_when_disabled(), test_apply_visibility_settings_shows_placeholder_when_enabled() (+8 more)
+Cohesion: 0.13
+Nodes (7): EstimateHistoryDialog, Resolve the earliest estimate date, falling back to today., Resolve the earliest estimate date, falling back to today., Dialog for browsing and selecting past estimates., Print the selected estimate., Print the selected estimate., Set up the user interface.
 
 ### Community 6 - "Community 6"
-Cohesion: 0.11
-Nodes (10): _ItemMasterLoadWorker, ItemMasterWidget, Load items from the database into the table., Search for items based on the search term., Handle item selection in the table., Clear the form fields and reset button states., Widget for managing silver item catalog., Delete an item from the database. (+2 more)
+Cohesion: 0.12
+Nodes (11): ItemMasterWidget, Load items from the database into the table., Load items from the database into the table., Load items from the database into the table., Search for items based on the search term., Search for items based on the search term., Search for items based on the search term., Widget for managing silver item catalog. (+3 more)
 
 ### Community 7 - "Community 7"
-Cohesion: 0.06
-Nodes (44): Tests for EstimateTableModel., Test clearing all rows., Test retrieving all rows., Test setting all rows at once., Test header data retrieval., Test that data changed signal is emitted., Unchanged code edits should not emit change signals., Unchanged non-code edits should still emit signals for navigation flows. (+36 more)
+Cohesion: 0.04
+Nodes (61): Tests for EstimateTableModel., Test retrieving row data., Test setting data in a cell., Test clearing all rows., Test retrieving all rows., Test clearing all rows., Test setting all rows at once., Test retrieving all rows. (+53 more)
 
 ### Community 8 - "Community 8"
-Cohesion: 0.11
-Nodes (23): Pure helpers for assembling estimate totals from category aggregates., estimate_totals(), Factory for estimate totals payload., test_estimate_delete_cleans_silver_bars(), test_estimates_repository_generate_voucher_falls_back_when_only_non_numeric(), test_estimates_repository_history_rows_include_regular_item_aggregates(), test_estimates_repository_numeric_voucher_order_and_next_value(), test_estimates_repository_returns_first_estimate_date() (+15 more)
+Cohesion: 0.12
+Nodes (21): Pure helpers for assembling estimate totals from category aggregates., estimate_totals(), Factory for estimate totals payload., test_estimate_repository_load_preserves_item_types(), test_estimates_repository_generate_voucher_falls_back_when_only_non_numeric(), test_estimates_repository_history_rows_include_regular_item_aggregates(), test_estimates_repository_numeric_voucher_order_and_next_value(), test_estimates_repository_returns_first_estimate_date() (+13 more)
 
 ### Community 9 - "Community 9"
-Cohesion: 0.04
-Nodes (34): test_database_manager_does_not_retain_plaintext_password(), test_database_manager_item_catalog_backup_roundtrip(), test_database_manager_roundtrip(), check_recovery_candidate(), DatabaseManager, estimates_repo(), items_repo(), Connects sqlite3 to the temporary database file. (+26 more)
+Cohesion: 0.05
+Nodes (30): test_database_manager_does_not_retain_plaintext_password(), test_database_manager_item_catalog_backup_roundtrip(), test_database_manager_roundtrip(), check_recovery_candidate(), DatabaseManager, estimates_repo(), items_repo(), Connects sqlite3 to the temporary database file. (+22 more)
 
 ### Community 10 - "Community 10"
 Cohesion: 0.16
 Nodes (12): DatabaseLifecycleCoordinator, Coordination helpers for encrypted database flush and shutdown., Decrypt the encrypted DB into the current temp path and report status., Debounce a background flush of the encrypted database., Coordinate encryption flushes, key rotation, and shutdown cleanup., _StubEncryptedStore, test_close_deletes_temp_db_when_encryption_fails_by_default(), test_close_preserves_temp_db_when_encryption_fails_and_recovery_enabled() (+4 more)
 
 ### Community 11 - "Community 11"
-Cohesion: 0.09
-Nodes (14): Voucher toolbar component for estimate entry., Connect internal widget signals., Set the voucher number.          Args:             number: The voucher number, Get the current voucher number.          Returns:             The voucher num, Set the estimate date.          Args:             date: The date to set, Get the current estimate date.          Returns:             The selected dat, Set the note text.          Args:             note: The note text to display, Get the current note text.          Returns:             The note text (+6 more)
+Cohesion: 0.07
+Nodes (20): Voucher toolbar component for estimate entry., Connect internal widget signals., Connect internal widget signals., Set the voucher number.          Args:             number: The voucher number to, Set the voucher number.          Args:             number: The voucher number to, Get the current voucher number.          Returns:             The voucher number, Get the current voucher number.          Returns:             The voucher number, Set the estimate date.          Args:             date: The date to set (+12 more)
 
 ### Community 12 - "Community 12"
-Cohesion: 0.13
-Nodes (14): test_items_repository_returns_plain_dicts(), test_items_repository_roundtrip(), test_items_repository_search_uses_prefix_then_contains_fallback(), test_items_repository_selection_search_ranking_and_limit(), _cache_controller(), _conn(), _cursor(), fetch_item_catalog_rows() (+6 more)
+Cohesion: 0.10
+Nodes (21): ItemValidationError, Domain-level validation rules for item master records., Raised when item domain constraints are violated., validate_item(), ValidatedItem, test_items_repository_returns_plain_dicts(), test_items_repository_roundtrip(), test_items_repository_search_uses_prefix_then_contains_fallback() (+13 more)
 
 ### Community 13 - "Community 13"
 Cohesion: 0.07
-Nodes (20): RuntimeError, test_fetch_broadcast_rate_exact_returns_errors_when_all_endpoints_fail(), _MessageBoxStub, test_apply_loaded_estimate_returns_false_on_error(), test_apply_refreshed_live_rate_updates_label_and_status(), test_clear_form_resets_modes_and_focuses_first_row(), test_delete_current_estimate_failure_shows_warning(), test_delete_current_estimate_success_clears_form() (+12 more)
+Nodes (18): _MessageBoxStub, StandardButton, test_apply_refreshed_live_rate_updates_label_and_status(), test_clear_form_resets_modes_and_focuses_first_row(), test_delete_current_estimate_failure_shows_warning(), test_delete_current_estimate_success_clears_form(), test_load_estimate_not_found_starts_new_entry(), test_load_estimate_reports_error_status() (+10 more)
 
 ### Community 14 - "Community 14"
-Cohesion: 0.11
-Nodes (15): get_app_settings(), Return QSettings, preferring new org identifiers with legacy fallback., _friendly_export_error_message(), _friendly_print_error_message(), _page_size_label(), _PreviewWheelZoomFilter, PrintPreviewController, Preview dialog helpers extracted from PrintManager. (+7 more)
+Cohesion: 0.08
+Nodes (32): PrintPreviewPayload, Serialized preview payload that can be prepared before opening the dialog., _friendly_export_error_message(), _page_size_label(), _PreviewWheelZoomFilter, PrintPreviewController, Preview dialog helpers extracted from PrintManager., Open QPrintPreviewDialog with custom toolbar actions and persistent zoom. (+24 more)
 
 ### Community 15 - "Community 15"
 Cohesion: 0.05
 Nodes (38): Tests for EstimateTableView component., Test retrieving all rows., Test setting all rows at once., Test focusing on a specific cell., Test getting current row when no row is selected., Test getting current column when no column is selected., Test saving and restoring column widths., Create a fresh EstimateTableView for testing. (+30 more)
 
 ### Community 16 - "Community 16"
-Cohesion: 0.12
-Nodes (18): QDialog, _coerce_item_record(), ItemSelectionDialog, Dialog for selecting an item when code is invalid or ambiguous., _FakeDb, _make_dialog(), _select_row(), test_double_click_accepts_and_returns_payload() (+10 more)
+Cohesion: 0.08
+Nodes (25): ItemSelectionRecord, ItemSelectionTableModel, Table model for the item selection dialog., Expose ranked item-selection results through a Qt table model., QAbstractTableModel, _coerce_item_record(), ItemSelectionDialog, Dialog for selecting an item when code is invalid or ambiguous. (+17 more)
 
 ### Community 17 - "Community 17"
-Cohesion: 0.08
-Nodes (21): _coerce_row(), EstimateEntryViewModel, Reset the stored rows., Return an immutable view of the row data., Return only rows that have an assigned code., Assign stable line keys for active rows that do not yet have one., Yield `EstimateLine` objects for active rows., Update the numeric inputs that influence totals. (+13 more)
+Cohesion: 0.07
+Nodes (25): _make_row(), test_compute_totals_with_balances(), test_iter_lines_skips_blank_rows(), test_update_row_extends_and_modes_sync(), _coerce_row(), EstimateEntryViewModel, Reset the stored rows., Return an immutable view of the row data. (+17 more)
 
 ### Community 18 - "Community 18"
-Cohesion: 0.13
-Nodes (15): test_items_repository_batch_fetch_returns_normalized_codes(), test_silver_bar_assignment_cycle(), test_silver_bar_bulk_assignment_and_removal(), test_silver_bar_bulk_assignment_reports_failures(), test_silver_bar_list_query_limit_and_offset(), test_silver_bar_query_limit_and_offset(), test_silver_bar_query_unassigned_only_filter(), test_silver_bar_repository_available_page_and_history_search() (+7 more)
+Cohesion: 0.11
+Nodes (16): test_estimate_delete_cleans_silver_bars(), test_silver_bar_assignment_cycle(), test_silver_bar_bulk_assignment_and_removal(), test_silver_bar_bulk_assignment_reports_failures(), test_silver_bar_list_query_limit_and_offset(), test_silver_bar_query_limit_and_offset(), test_silver_bar_query_unassigned_only_filter(), test_silver_bar_repository_available_page_and_history_search() (+8 more)
 
 ### Community 19 - "Community 19"
-Cohesion: 0.14
-Nodes (27): _find_named_widget(), _make_widget(), _pump_events(), test_apply_loaded_estimate_normalizes_pc_pieces_to_one(), test_apply_loaded_estimate_normalizes_wt_pieces_to_zero(), test_calculate_wage_uses_row_wage_type_without_repository_lookup(), test_column_autofit_defaults_to_explicit_mode(), test_column_width_auto_fits_content_expand_and_shrink() (+19 more)
+Cohesion: 0.12
+Nodes (37): Factory for a regular estimate item., regular_item(), _find_named_widget(), _make_widget(), _pump_events(), _set_row(), test_apply_loaded_estimate_normalizes_pc_pieces_to_one(), test_apply_loaded_estimate_normalizes_wt_pieces_to_zero() (+29 more)
 
 ### Community 20 - "Community 20"
 Cohesion: 0.15
 Nodes (3): EstimateEntryWorkflowController, Workflow controller for estimate entry actions and state transitions., Handle estimate-entry workflow actions outside table/totals mechanics.
 
 ### Community 21 - "Community 21"
-Cohesion: 0.09
-Nodes (18): Initialize the database manager. Decrypts the database to a temporary         fi, EncryptedDatabaseStore, get_or_create_salt(), Encrypted file I/O helpers for the SQLite payload., Decrypt the encrypted DB into ``temp_db_path`` and report the outcome., Create a consistent snapshot copy using SQLite backup API., Force a WAL checkpoint using a short-lived side connection., Persist and recover the encrypted SQLite payload on disk. (+10 more)
+Cohesion: 0.10
+Nodes (17): EncryptedDatabaseStore, get_or_create_salt(), Encrypted file I/O helpers for the SQLite payload., Decrypt the encrypted DB into ``temp_db_path`` and report the outcome., Create a consistent snapshot copy using SQLite backup API., Force a WAL checkpoint using a short-lived side connection., Persist and recover the encrypted SQLite payload on disk., Encrypt the temp DB file and atomically save it to the encrypted path. (+9 more)
 
 ### Community 22 - "Community 22"
-Cohesion: 0.11
-Nodes (29): test_database_manager_item_catalog_restore_can_replace_existing_catalog(), ensure_catalog_file_suffix(), export_item_catalog(), export_item_catalog_rows(), import_item_catalog(), ItemCatalogTransferError, load_item_catalog_file(), load_item_catalog_rows_from_db_path() (+21 more)
+Cohesion: 0.06
+Nodes (36): test_database_manager_item_catalog_restore_can_replace_existing_catalog(), ensure_catalog_file_suffix(), export_item_catalog(), export_item_catalog_rows(), import_item_catalog(), ItemCatalogTransferError, load_item_catalog_file(), load_item_catalog_rows_from_db_path() (+28 more)
 
 ### Community 23 - "Community 23"
 Cohesion: 0.08
-Nodes (9): create_main_window(), Create a fully wired main window for application startup., MainWindow, MainWindowDatabase, Main application window shell and runtime bootstrap., Display a transient status message inline within the estimate view., Narrow database surface used by the main window shell., Show the centralized settings dialog. (+1 more)
+Nodes (5): MainWindow, Main application window shell and runtime bootstrap., Display a transient status message inline within the estimate view., Show the centralized settings dialog., Main application window for the SilverEstimate app.
 
 ### Community 24 - "Community 24"
-Cohesion: 0.10
-Nodes (16): _configure_icon_button(), Secondary actions bar component for estimate entry., Complete secondary actions bar with all estimate entry controls.      This com, Ensure live-rate card is attached in the header action strip., Create a vertical divider line.          Returns:             QFrame configur, Set up keyboard shortcuts.          Uses WindowShortcut context so shortcuts w, Connect internal signals.          Note: Return and Silver Bar mode toggle but, # NOTE: return_toggle_button and silver_bar_toggle_button are connected external (+8 more)
+Cohesion: 0.16
+Nodes (14): _configure_icon_button(), Secondary actions bar component for estimate entry., Complete secondary actions bar with all estimate entry controls.      This compo, Complete secondary actions bar with all estimate entry controls.      This com, Create a vertical divider line.          Returns:             QFrame configured, Create a vertical divider line.          Returns:             QFrame configur, Create a vertical divider line.          Returns:             QFrame configured, # NOTE: return_toggle_button and silver_bar_toggle_button are connected external (+6 more)
+
+### Community 25 - "Community 25"
+Cohesion: 0.19
+Nodes (4): Apply font size to breakdown totals labels.          Args:             size: Fon, Apply font size to final calculation labels.          Args:             size: Fo, Apply font size to breakdown totals labels.          Args:             size: Fon, Apply font size to final calculation labels.          Args:             size: Fo
 
 ### Community 26 - "Community 26"
 Cohesion: 0.07
-Nodes (4): EstimateTableView, Table view component for estimate entry., Table view for displaying and editing estimate entries.      This component disp, Get all row data.          Returns:             A list of all rows
+Nodes (3): EstimateTableView, Table view component for estimate entry., Table view for displaying and editing estimate entries.      This component disp
 
 ### Community 27 - "Community 27"
-Cohesion: 0.12
-Nodes (8): QMainWindow, DummyMainWindow, Create the Live Rates settings tab (DDASilver auto-refresh)., Create the Data Management settings tab., Create the Logging settings tab., Create the Security settings tab (Password Management)., Loads the print font from QSettings., Loads the table font size from QSettings.
+Cohesion: 0.08
+Nodes (22): QSpinBox, Update the live sample label to reflect current print font., Update the live sample label to reflect current print font., Update the live sample label to reflect current print font., Create the User Interface settings tab., Create the User Interface settings tab., Create the User Interface settings tab., Create the Live Rates settings tab (DDASilver auto-refresh). (+14 more)
 
 ### Community 28 - "Community 28"
-Cohesion: 0.09
-Nodes (17): EstimateTableModel, _normalize_wage_type(), QAbstractTableModel implementation for estimate entry table., Return data for the given index and role.          Args:             index: T, Set data for the given index.          Args:             index: The model ind, Return header data for the given section.          Args:             section:, Update a row's wage type and refresh pieces editability., Add a new row to the model.          Args:             row_data: Optional row (+9 more)
+Cohesion: 0.07
+Nodes (26): EstimateTableModel, _normalize_wage_type(), QAbstractTableModel implementation for estimate entry table., Return data for the given index and role.          Args:             index: The, Return data for the given index and role.          Args:             index: The, Set data for the given index.          Args:             index: The model index, Set data for the given index.          Args:             index: The model index, Set data for the given index.          Args:             index: The model index (+18 more)
 
 ### Community 29 - "Community 29"
-Cohesion: 0.26
-Nodes (9): _ActionStub, _MessageBoxRecorder, _StackStub, test_show_estimate_history_loads_selected_voucher(), test_show_estimate_switches_widget(), test_show_item_master_failure_shows_message(), test_show_item_master_lazy_creation(), test_show_silver_bars_lazy_creation() (+1 more)
+Cohesion: 0.18
+Nodes (12): NavigationService, Navigation service to manage view switching and history dialogs., Handle main-window navigation, lazy view creation, and dialogs., _ActionStub, _MessageBoxRecorder, _StackStub, test_show_estimate_history_loads_selected_voucher(), test_show_estimate_switches_widget() (+4 more)
 
 ### Community 30 - "Community 30"
-Cohesion: 0.17
-Nodes (8): Transfer and export workflows for silver-bar management., Handle moving bars between lists and exporting list contents., SilverBarTransferController, _management_row(), test_transfer_controller_adds_all_filtered_rows_and_refreshes(), test_transfer_controller_exports_current_list_to_csv(), _TransferDbStub, _TransferHost
+Cohesion: 0.19
+Nodes (8): QDialog, Transfer and export workflows for silver-bar management., Handle moving bars between lists and exporting list contents., SilverBarTransferController, _management_row(), test_transfer_controller_adds_all_filtered_rows_and_refreshes(), test_transfer_controller_exports_current_list_to_csv(), _TransferHost
+
+### Community 31 - "Community 31"
+Cohesion: 0.07
+Nodes (3): _FakeResponse, test_fetch_broadcast_rate_exact_returns_errors_when_all_endpoints_fail(), test_fetch_url_text_returns_body_without_tls_retry()
 
 ### Community 32 - "Community 32"
-Cohesion: 0.08
-Nodes (17): EstimateEntryView, Generate a voucher number via the repository and push it to the view., Recompute totals based on the current view state., Let the user pick a historic estimate and load it into the view., Resolve an item code for the specified row, populating the view., Interface implemented by the Qt widget so the presenter can talk to it., Return the current state needed for calculations., Update UI totals and related labels. (+9 more)
+Cohesion: 0.11
+Nodes (19): CategoryTotals, Aggregated totals for a line category., build_totals_result(), Build the final totals payload from pre-aggregated category totals., compute_category_totals(), compute_totals(), Aggregate totals for the specified category., Compute aggregate totals across all line items. (+11 more)
 
 ### Community 33 - "Community 33"
-Cohesion: 0.13
-Nodes (20): PrintManager, Formats a number into Indian Rupees notation (Lakhs, Crores)., Format currency using system locale; fallback to Indian format with ÃƒÆ’Ã‚Â¢ÃƒÂ¢, Renders the HTML text (containing PRE or TABLE) to the printer., Class to handle print functionality using manual formatting., _DbStub, _extract_pre_lines(), test_build_estimate_preview_payload_uses_selected_layout() (+12 more)
+Cohesion: 0.16
+Nodes (18): PrintManager, Class to handle print functionality using manual formatting., Class to handle print functionality using manual formatting., _DbStub, _extract_pre_lines(), test_build_estimate_preview_payload_uses_selected_layout(), test_build_silver_bar_inventory_preview_payload_marks_table_mode(), test_build_silver_bar_list_preview_payload_marks_table_mode() (+10 more)
 
 ### Community 34 - "Community 34"
 Cohesion: 0.11
-Nodes (9): FakeRepository, _make_sample_payload(), presenter_fixtures(), test_delete_estimate_delegates_to_repository(), test_load_estimate_transforms_repository_response(), test_load_estimate_uses_batched_fallback_for_missing_wage_type(), test_save_estimate_failure_returns_error(), test_save_estimate_prefers_bulk_bar_sync_when_available() (+1 more)
+Nodes (8): FakeRepository, _make_sample_payload(), test_delete_estimate_delegates_to_repository(), test_load_estimate_transforms_repository_response(), test_load_estimate_uses_batched_fallback_for_missing_wage_type(), test_save_estimate_failure_returns_error(), test_save_estimate_prefers_bulk_bar_sync_when_available(), test_save_estimate_success_adds_new_bar()
 
 ### Community 35 - "Community 35"
-Cohesion: 0.13
-Nodes (5): EstimateEntryTableController, _qt_object_available(), Table and navigation controller for estimate entry., Handle row management, focus, editing, and cell navigation., Own totals recompute and incremental aggregation behavior.
+Cohesion: 0.14
+Nodes (7): first_navigation_column(), is_auto_edit_column(), EstimateEntryTableController, _qt_object_available(), Table and navigation controller for estimate entry., Handle row management, focus, editing, and cell navigation., Handle row management, focus, editing, and cell navigation.
 
 ### Community 36 - "Community 36"
 Cohesion: 0.15
 Nodes (10): Async loading controller for silver-bar management., Coordinate async available/list loads and stale-response handling., _refresh_widget_style(), SilverBarLoadController, _bar_id_from_table(), Table and context-menu helpers for silver-bar management., Own table utilities, totals refresh, and context menus., SilverBarTableController (+2 more)
 
 ### Community 37 - "Community 37"
-Cohesion: 0.24
-Nodes (17): _build(), Factory for a regular estimate item., Factory for a return item., Factory for a silver bar item., regular_item(), return_item(), silver_bar_item(), test_database_manager_persists_estimates() (+9 more)
+Cohesion: 0.10
+Nodes (32): apply_print_page_settings_to_printer(), available_printer_names(), _clean_text(), _coerce_positive_float(), copy_printer_page_layout(), default_printer_name(), load_margins(), load_orientation() (+24 more)
 
 ### Community 38 - "Community 38"
 Cohesion: 0.12
-Nodes (19): build_available_bars_queries(), build_bars_in_list_queries(), build_history_bars_query(), normalize_row_limit(), PagedSqlStatements, Shared SQL builders for silver-bar repository queries., A parametrized SQL statement., Build paired queries for bars assigned to a specific list. (+11 more)
+Nodes (16): EstimateEntryPresenter, _item_to_dict(), _normalize_wage_type(), Presenter for the estimate entry experience., Orchestrates estimate-entry workflows independent of the Qt widget., Recompute totals based on the current view state., Retrieve an estimate and convert it into presenter-friendly objects., Let the user pick a historic estimate and load it into the view. (+8 more)
 
 ### Community 39 - "Community 39"
-Cohesion: 0.09
-Nodes (20): ConnectionThreadGuard, Helpers for tracking the thread that owns a SQLite connection., Keep track of which thread is allowed to mutate the SQLite connection., Remember the current thread as the connection owner., Forget the previously recorded owner thread., Return `True` when called from the owning thread., Commit on the owning thread and skip politely on others., SQLite connection/bootstrap helpers for the persistence layer. (+12 more)
+Cohesion: 0.16
+Nodes (13): SQLite connection/bootstrap helpers for the persistence layer., Check if a column exists in a table., Check if a column has a UNIQUE constraint via PK or unique index., Ensure the schema_version table exists and return the current version., Append a schema version entry., Manage SQLite connection setup and schema metadata helpers., Connect to the temp DB and prepare cursors used by repositories., Check if a table exists in the database. (+5 more)
 
 ### Community 40 - "Community 40"
-Cohesion: 0.13
+Cohesion: 0.12
 Nodes (17): _coerce_bool_setting(), get_log_config(), LogCleanupScheduler, qt_message_handler(), Handle Qt debug/warning/critical messages and redirect to Python logging., Scheduler for automatic log cleanup., Initialize the log cleanup scheduler.          Args:             log_dir (str, Start the scheduled cleanup. (+9 more)
 
 ### Community 41 - "Community 41"
@@ -433,53 +467,49 @@ Nodes (11): _MessageBoxStub, reset(), test_perform_data_wipe_failure_notifies_us
 Cohesion: 0.12
 Nodes (16): apply_taskbar_icon(), bring_window_to_front(), destroy_icon_handle(), hide_console_window(), _is_windows(), Windows-specific helpers for taskbar behaviour and AppUserModelID management., Hide the attached Windows console window if the app was launched via python.exe., Ask Windows to foreground an existing top-level window.      This is best-effo (+8 more)
 
-### Community 43 - "Community 43"
-Cohesion: 0.11
-Nodes (3): EstimateEntryWidget, Widget for silver estimate entry and management., _RunningCategoryTotals
-
 ### Community 44 - "Community 44"
-Cohesion: 0.10
-Nodes (13): LoginDialog, Create the UI elements for the dialog., Connect UI signals to slots., Raise the startup dialog so it does not open behind other windows., Handle the OK/Login/Create button click., Return the entered secondary password (only valid in setup mode)., Check if the reset button was clicked and confirmed., Dialog for user authentication (login) and initial password setup. (+5 more)
+Cohesion: 0.11
+Nodes (14): LoginDialog, Handle the OK/Login/Create button click., Handle the OK/Login/Create button click., Return the entered secondary password (only valid in setup mode)., Check if the reset button was clicked and confirmed., Return the entered secondary password (only valid in setup mode)., Dialog for user authentication (login) and initial password setup., Handle the Reset / Wipe All Data button click. (+6 more)
 
 ### Community 45 - "Community 45"
-Cohesion: 0.18
-Nodes (11): expected_fine(), fine_calculation_cases(), FineCalculationCase, net_weight(), Representative data for fine-weight calculations., Representative data for wage calculations., Hypothesis strategy producing realistic fine-weight scenarios., Hypothesis strategy producing realistic wage scenarios. (+3 more)
+Cohesion: 0.22
+Nodes (6): Get the selected voucher number., Get the selected voucher number., Handle dialog acceptance and return the selected voucher., Handle dialog acceptance and return the selected voucher., Handle deletion of the selected estimate., Handle deletion of the selected estimate.
 
 ### Community 46 - "Community 46"
-Cohesion: 0.11
-Nodes (9): ItemCacheController, Item cache utilities shared across database/persistence layers., Coordinate background warming and simple invalidation for item lookups., Warm the cache using a dedicated SQLite connection in the background., fake_db(), FakeDB, test_migration_v3_backfills_numeric_vouchers_from_legacy_schema(), test_migration_v4_adds_estimate_item_wage_type_without_backfill() (+1 more)
+Cohesion: 0.17
+Nodes (4): ItemCacheController, Item cache utilities shared across database/persistence layers., Coordinate background warming and simple invalidation for item lookups., Warm the cache using a dedicated SQLite connection in the background.
 
 ### Community 47 - "Community 47"
 Cohesion: 0.11
 Nodes (5): FakeDbManager, main_window_fixture(), Create a MainWindow instance with test doubles injected., In-memory stand-in for the real database manager., test_main_window_startup_sets_up_estimate_view()
 
 ### Community 48 - "Community 48"
-Cohesion: 0.16
-Nodes (11): Dialog for managing silver bars and grouping them into lists., SilverBarDialog, _clone_rows(), _FakeSilverBarManagementDb, _row_for_bar_id(), test_management_dialog_activates_list_table_visual_state_when_list_selected(), test_management_dialog_disables_list_actions_when_no_list_selected(), test_management_dialog_marks_selected_list_as_issued() (+3 more)
+Cohesion: 0.09
+Nodes (19): Print-preview workflow for silver-bar lists., Handle list preview preparation and cleanup for silver-bar management., SilverBarListPrintController, Dialog for managing silver bars and grouping them into lists., SilverBarDialog, _bar(), _clone_rows(), _FakeSilverBarManagementDb (+11 more)
 
 ### Community 49 - "Community 49"
-Cohesion: 0.13
-Nodes (18): CategoryTotals, Domain models supporting estimate calculations., Aggregated totals for a line category., Breakdown of overall, categorical, and derived totals., TotalsResult, build_totals_result(), Build the final totals payload from pre-aggregated category totals., test_build_totals_result_preserves_core_invariants() (+10 more)
+Cohesion: 0.09
+Nodes (15): EstimateEntryView, Generate a voucher number via the repository and push it to the view., Resolve an item code for the specified row, populating the view., Interface implemented by the Qt widget so the presenter can talk to it., Return the current state needed for calculations., Update UI totals and related labels., Display a voucher number in the UI., Display a status message to the user. (+7 more)
 
 ### Community 50 - "Community 50"
-Cohesion: 0.06
-Nodes (23): Retrieve an estimate and convert it into presenter-friendly objects., EstimateHistoryDialog, _HistoryLoadWorker, Resolve the earliest estimate date, falling back to today., Load estimates based on search criteria (runs queries in a background thread)., Dialog for browsing and selecting past estimates., Get the selected voucher number., Handle dialog acceptance and return the selected voucher. (+15 more)
+Cohesion: 0.15
+Nodes (12): _build_harness(), _ButtonStub, _DialogDbStub, _HistoryHarness, _ProgressStub, test_estimate_history_uses_compact_top_controls(), test_finish_print_preview_build_cleans_up_worker(), test_loading_done_does_not_touch_buttons_for_stale_request() (+4 more)
 
 ### Community 51 - "Community 51"
-Cohesion: 0.15
-Nodes (13): Compatibility wrapper keeping tests and call sites stable., _TempDatabaseStore, path(), Lifecycle helpers for the plaintext temporary SQLite database., Manage lifecycle and optional recovery metadata for a plaintext temp DB., Securely delete the temp file and clear recovery breadcrumbs., _restrict_path_permissions(), secure_delete_path() (+5 more)
+Cohesion: 0.22
+Nodes (9): Compatibility wrapper keeping tests and call sites stable., _TempDatabaseStore, path(), Lifecycle helpers for the plaintext temporary SQLite database., Manage lifecycle and optional recovery metadata for a plaintext temp DB., Securely delete the temp file and clear recovery breadcrumbs., _restrict_path_permissions(), secure_delete_path() (+1 more)
 
 ### Community 52 - "Community 52"
-Cohesion: 0.14
-Nodes (6): _ItemCatalogExportWorker, MainCommands, Main window command helpers., Restore a native Silver Estimate item catalog backup., Create a native Silver Estimate item catalog backup., Encapsulate high-level commands triggered from the main window.
+Cohesion: 0.17
+Nodes (7): ConnectionThreadGuard, Helpers for tracking the thread that owns a SQLite connection., Keep track of which thread is allowed to mutate the SQLite connection., Remember the current thread as the connection owner., Forget the previously recorded owner thread., Return `True` when called from the owning thread., Commit on the owning thread and skip politely on others.
 
 ### Community 54 - "Community 54"
-Cohesion: 0.15
-Nodes (6): Lifecycle workflows for silver-bar management lists., Handle create/edit/delete/issue flows for silver-bar lists., SilverBarListLifecycleController, _LifecycleDbStub, _LifecycleHost, test_lifecycle_controller_creates_list_from_selection_and_assigns_bars()
+Cohesion: 0.09
+Nodes (15): HostProxy, host(), HostProxy, Helpers for controller objects bound to a widget/dialog host., Forward most attribute access and state mutation to a bound host object., Lifecycle workflows for silver-bar management lists., Handle create/edit/delete/issue flows for silver-bar lists., SilverBarListLifecycleController (+7 more)
 
 ### Community 55 - "Community 55"
-Cohesion: 0.13
-Nodes (19): compute_category_totals(), compute_fine_weight(), compute_net_weight(), compute_totals(), compute_wage_amount(), Pure calculation helpers for estimate entry., Return the non-negative net weight for a line item., Return the fine weight based on net weight and purity percentage. (+11 more)
+Cohesion: 0.16
+Nodes (15): compute_fine_weight(), compute_net_weight(), compute_wage_amount(), Pure calculation helpers for estimate entry., Return the non-negative net weight for a line item., Return the fine weight based on net weight and purity percentage., Return the wage amount using either per-piece or weight basis., Calculator-focused tests replacing legacy EstimateLogic mixin coverage. (+7 more)
 
 ### Community 56 - "Community 56"
 Cohesion: 0.04
@@ -490,8 +520,8 @@ Cohesion: 0.05
 Nodes (38): 1. Database Access, 1. Estimate Creation Workflow, 1. Estimate Rules, 1. Input Validation, 1. Mode Management, 2. Database Operations, 2. Item Management Workflow, 2. Item Master Rules (+30 more)
 
 ### Community 58 - "Community 58"
-Cohesion: 0.23
-Nodes (6): _column_key(), ItemMasterTableModel, Table model for the item master catalog., Expose catalog items to the item-master table view., test_item_master_table_model_exposes_headers_and_tooltips(), test_item_master_table_model_loads_rows_and_sorts_numeric_columns()
+Cohesion: 0.13
+Nodes (17): _build(), expected_fine(), fine_calculation_cases(), FineCalculationCase, net_weight(), Representative data for fine-weight calculations., Representative data for wage calculations., Hypothesis strategy producing realistic fine-weight scenarios. (+9 more)
 
 ### Community 59 - "Community 59"
 Cohesion: 0.19
@@ -500,10 +530,6 @@ Nodes (8): OptimalListDialog, Collect target weight inputs for optimal list gene
 ### Community 60 - "Community 60"
 Cohesion: 0.19
 Nodes (18): _candidate_broadcast_urls(), _fetch_broadcast_payload(), fetch_broadcast_rate_exact(), fetch_silver_agra_local_mohar_rate(), _fetch_url_text(), _is_tls_cert_error(), _lookup_com_id_for_target(), _lookup_homepage_broadcast_url() (+10 more)
-
-### Community 61 - "Community 61"
-Cohesion: 0.18
-Nodes (12): EstimateEntryPresenter, _item_to_dict(), _normalize_wage_type(), Presenter for the estimate entry experience., Orchestrates estimate-entry workflows independent of the Qt widget., Persist the estimate and synchronize related silver bar metadata., Delete an estimate by voucher number., Result of attempting to save an estimate. (+4 more)
 
 ### Community 62 - "Community 62"
 Cohesion: 0.16
@@ -514,20 +540,20 @@ Cohesion: 0.26
 Nodes (6): State persistence helpers for silver-bar management., Persist and restore dialog state, filters, and navigation context., SilverBarManagementStateStore, _StateHost, test_state_store_round_trips_filters_and_selected_list(), test_state_store_tolerates_invalid_sort_values_after_restoring_filters()
 
 ### Community 64 - "Community 64"
-Cohesion: 0.15
-Nodes (8): Print-preview workflow for silver-bar lists., Handle list preview preparation and cleanup for silver-bar management., SilverBarListPrintController, _bar(), _ProgressStub, test_list_print_preview_cleanup_removes_worker(), _ThreadStub, _WorkerStub
+Cohesion: 0.14
+Nodes (16): _apply_light_application_theme(), _available_application_attributes(), _build_light_palette(), _configure_light_qt_environment(), Application bootstrap utilities for SilverEstimate., Disable Qt's Windows dark-mode integration before QApplication exists., Keep unstyled Qt surfaces light even when Windows is in dark mode., Raised when the main window cannot complete initialization. (+8 more)
 
 ### Community 65 - "Community 65"
-Cohesion: 0.16
-Nodes (17): Application startup orchestration for authentication and database initialization, Create the encrypted database connection, handling recovery prompts., Warm caches during startup so MainWindow stays UI-focused., Possible outcomes when preparing the application., Coordinate authentication, optional wipes, and database setup., Authenticate the operator and return a initialized database manager., _resolve_database_manager(), StartupController (+9 more)
+Cohesion: 0.18
+Nodes (15): Application startup orchestration for authentication and database initialization, Create the encrypted database connection, handling recovery prompts., Warm caches during startup so MainWindow stays UI-focused., Possible outcomes when preparing the application., Coordinate authentication, optional wipes, and database setup., Authenticate the operator and return a initialized database manager., _resolve_database_manager(), StartupController (+7 more)
 
 ### Community 66 - "Community 66"
-Cohesion: 0.17
-Nodes (8): ApplicationBuilder, ApplicationContext, Application bootstrap utilities for SilverEstimate., Build and execute the application, returning an exit code., Internal orchestration for startup., Aggregate of resources created during application bootstrap., Release resources created during startup., Coordinate logging, Qt bootstrapping, authentication, and window creation.
+Cohesion: 0.13
+Nodes (13): ApplicationBuilder, Build and execute the application, returning an exit code., Build and execute the application, returning an exit code., Build and execute the application, returning an exit code., Internal orchestration for startup., Internal orchestration for startup., Internal orchestration for startup., Coordinate logging, Qt bootstrapping, authentication, and window creation. (+5 more)
 
 ### Community 67 - "Community 67"
-Cohesion: 0.07
-Nodes (19): AvailableSilverBarsTableModel, _bar_id_sort_value(), _BaseSilverBarTableModel, _format_float(), HistoryListBarsTableModel, HistorySilverBarsTableModel, IssuedSilverBarListsTableModel, _ManagementSilverBarsTableModel (+11 more)
+Cohesion: 0.06
+Nodes (25): AvailableSilverBarsTableModel, _bar_id_sort_value(), _BaseSilverBarTableModel, _format_float(), HistoryListBarsTableModel, HistorySilverBarsTableModel, IssuedSilverBarListsTableModel, _ManagementSilverBarsTableModel (+17 more)
 
 ### Community 68 - "Community 68"
 Cohesion: 0.07
@@ -538,24 +564,24 @@ Cohesion: 0.12
 Nodes (11): _ProgressStub, reset(), test_finalize_print_preview_build_disposes_resources(), test_print_preview_error_ignores_stale_request(), test_print_preview_error_shows_message(), test_print_preview_ready_closes_progress_and_shows_preview(), test_print_preview_ready_ignores_stale_request(), test_print_preview_ready_none_payload_routes_to_error() (+3 more)
 
 ### Community 70 - "Community 70"
-Cohesion: 0.12
-Nodes (19): Handle the logic for changing both passwords., Close the dialog without applying changes since last Apply/Load., Populate the default printer combo with available printers., Open the logs directory in the system file manager., Toggle password echo mode for all password fields., Centralized dialog for application settings., SettingsDialog, _make_main_window() (+11 more)
+Cohesion: 0.09
+Nodes (32): get_app_settings(), Return QSettings, preferring new org identifiers with legacy fallback., Centralized dialog for application settings., Create the Data Management settings tab., Create the Data Management settings tab., Centralized dialog for application settings., Create the Data Management settings tab., Centralized dialog for application settings. (+24 more)
 
 ### Community 71 - "Community 71"
-Cohesion: 0.25
-Nodes (7): ItemSelectionRecord, ItemSelectionTableModel, Table model for the item selection dialog., Expose ranked item-selection results through a Qt table model., QAbstractTableModel, test_item_selection_table_model_displays_rows_and_alignment(), test_item_selection_table_model_highlights_matching_code_and_name()
+Cohesion: 0.14
+Nodes (19): ApplicationThemeTarget, apply_light_application_theme(), build_light_application_stylesheet(), build_light_palette(), Application-level light theme helpers for PyQt widgets., Build QSS that keeps common Qt popup and dialog surfaces light., Subset of QApplication used by the theme helper., Apply the strict light palette and QSS to a QApplication-like object. (+11 more)
 
 ### Community 72 - "Community 72"
 Cohesion: 0.29
 Nodes (6): _category_for_mode(), EstimateTableAdapter, _normalize_wage_type(), _qt_object_available(), Encapsulate table manipulation for EstimateEntryWidget., _safe_focus_owner_code()
 
 ### Community 73 - "Community 73"
-Cohesion: 0.29
-Nodes (9): _format_weight(), format_estimate_table_number(), format_indian_number(), get_estimate_table_locale(), _group_indian_digits(), Formatting helpers for estimate-entry numeric table columns., Return the locale used for estimate-entry numeric formatting., Format a number using Indian digit grouping. (+1 more)
+Cohesion: 0.25
+Nodes (6): Print an estimate using manual formatting and preview., Build the estimate preview HTML without opening UI widgets., Print an estimate using manual formatting and preview., Print an estimate using manual formatting and preview., Build the estimate preview HTML without opening UI widgets., Build the estimate preview HTML without opening UI widgets.
 
 ### Community 74 - "Community 74"
-Cohesion: 0.16
-Nodes (10): clear(), _coerce_bool(), _CredentialStoreStub, delete_password_hash(), get_password_hash(), _legacy_key(), In-memory stand-in for secure credential storage., reset() (+2 more)
+Cohesion: 0.15
+Nodes (11): clear(), _coerce_bool(), _CredentialStoreStub, delete_password_hash(), get_password_hash(), _legacy_key(), In-memory stand-in for secure credential storage., reset() (+3 more)
 
 ### Community 75 - "Community 75"
 Cohesion: 0.19
@@ -570,28 +596,28 @@ Cohesion: 0.21
 Nodes (10): _make_widget(), Tests for mode toggle button functionality (Ctrl+R and Ctrl+B)., _RepositoryStub, test_ctrl_b_keyboard_shortcut_toggles_silver_bar_mode(), test_ctrl_r_keyboard_shortcut_toggles_return_mode(), test_keyboard_shortcuts_respect_mutual_exclusion(), test_mode_toggles_are_mutually_exclusive(), test_return_mode_button_updates_row_type() (+2 more)
 
 ### Community 78 - "Community 78"
-Cohesion: 0.22
-Nodes (8): HostProxy, host(), HostProxy, Helpers for controller objects bound to a widget/dialog host., Forward most attribute access and state mutation to a bound host object., UI builder for silver-bar management., Build the management dialog widget tree and connect signals., SilverBarManagementUiBuilder
+Cohesion: 0.29
+Nodes (3): EstimateLineCategory, Enumeration of line item categories used in totals breakdown., Return the user-friendly display name for this category.
 
 ### Community 79 - "Community 79"
-Cohesion: 0.13
-Nodes (16): Panel for displaying estimate totals and calculations.      This component dis, Attach a widget above the sidebar summary cards., TotalsPanel, panel(), Tests for TotalsPanel component., Create a fresh TotalsPanel for testing., Test that panel initializes with zero values., test_initial_state() (+8 more)
+Cohesion: 0.11
+Nodes (16): _create_metric_header(), Panel for displaying estimate totals and calculations.      This component displ, TotalsPanel, panel(), Tests for TotalsPanel component., Create a fresh TotalsPanel for testing., Test that panel initializes with zero values., test_initial_state() (+8 more)
 
 ### Community 80 - "Community 80"
 Cohesion: 0.24
 Nodes (6): EstimateHistoryRow, EstimateHistoryTableModel, Table model for the estimate history dialog., Expose estimate-history rows through a sortable Qt table model., test_estimate_history_table_model_formats_display_values(), test_estimate_history_table_model_sorts_numeric_columns()
 
 ### Community 81 - "Community 81"
-Cohesion: 0.22
-Nodes (11): PrintPayloadBuilder, PrintPreviewPayload, Preview payload construction helpers extracted from PrintManager., Serialized preview payload that can be prepared before opening the dialog., Build preview payloads without owning preview or rendering UI behavior., _sanitize_filename_stem(), test_preview_defaults_persist_updated_print_preferences(), test_preview_defaults_store_custom_page_size_dimensions() (+3 more)
+Cohesion: 0.12
+Nodes (19): build_available_bars_queries(), build_bars_in_list_queries(), build_history_bars_query(), normalize_row_limit(), PagedSqlStatements, Shared SQL builders for silver-bar repository queries., A parametrized SQL statement., Build paired queries for bars assigned to a specific list. (+11 more)
 
 ### Community 82 - "Community 82"
-Cohesion: 0.21
+Cohesion: 0.23
 Nodes (3): NavigationController, Controller responsible for building menus and navigation actions., Encapsulate MainWindow menu wiring.
 
 ### Community 83 - "Community 83"
-Cohesion: 0.31
-Nodes (5): PrintSettingsState, Owns print-settings persistence and widget synchronization., serialize_margins(), SettingsPrintController, _validated_value()
+Cohesion: 0.25
+Nodes (7): PrintSettingsState, Owns print-settings persistence and widget synchronization., Owns print-settings persistence and widget synchronization., Owns print-settings persistence and widget synchronization., serialize_margins(), SettingsPrintController, _validated_value()
 
 ### Community 84 - "Community 84"
 Cohesion: 0.19
@@ -601,29 +627,37 @@ Nodes (7): Optimal-list generation workflow for silver-bar management., Generate
 Cohesion: 0.21
 Nodes (12): dp_combination_range(), find_max_bars_combination(), find_min_bars_combination(), find_optimal_combination(), Pure optimization helpers for silver-bar list generation., Prefer the smallest number of bars within the target range., Prefer the largest number of bars while staying in the range., Find a minimum-bar solution using a DP range search. (+4 more)
 
+### Community 86 - "Community 86"
+Cohesion: 0.15
+Nodes (17): _build_preformatted_html(), EstimatePrintRenderer, _format_indian_grouped_decimal(), _format_indian_grouped_integer(), Estimate print rendering helpers extracted from PrintManager., Generate manually formatted text using spaces, matching preview image., Generate manually formatted text using spaces, matching preview image., Render estimate payloads into the supported print HTML layouts. (+9 more)
+
 ### Community 87 - "Community 87"
 Cohesion: 0.27
 Nodes (9): Read-only silver-bar repository backed by an independent SQLite connection., Execute read-only silver-bar queries against a standalone DB snapshot., SilverBarsSnapshotRepository, _seed_snapshot_db(), test_snapshot_repository_available_page_applies_date_range_filter(), test_snapshot_repository_available_page_returns_total_and_rows(), test_snapshot_repository_closes_connections_after_queries(), test_snapshot_repository_history_search_filters_by_note_and_status() (+1 more)
 
 ### Community 88 - "Community 88"
-Cohesion: 0.12
-Nodes (18): _build_preformatted_html(), EstimatePrintRenderer, _format_indian_grouped_decimal(), _format_indian_grouped_integer(), Estimate print rendering helpers extracted from PrintManager., Render estimate payloads into the supported print HTML layouts., Generate the new layout variant for estimates., Generate thermal slip layout sized for ~80mm paper. (+10 more)
+Cohesion: 0.13
+Nodes (14): _build_preformatted_html(), _load_orientation_preference(), PrintPreviewBuildWorker, Background worker that prepares preview payloads off the UI thread., Background worker that prepares preview payloads off the UI thread., Initialize the print manager, accepting an optional print font., Initialize the print manager, accepting an optional print font., PrintPayloadBuilder (+6 more)
 
 ### Community 89 - "Community 89"
-Cohesion: 0.14
-Nodes (7): Print an estimate using manual formatting and preview., Build the estimate preview HTML without opening UI widgets., Open a prepared preview payload on the GUI thread., Prints the INVENTORY list of silver bars using preview., Build the inventory payload for silver bars without opening UI widgets., Generates and previews/prints details of a specific silver bar list., Build the print payload for a silver-bar list without opening UI widgets.
+Cohesion: 0.11
+Nodes (14): Formats a number into Indian Rupees notation (Lakhs, Crores)., Format currency using system locale with an ASCII rupee fallback., Open a prepared preview payload on the GUI thread., Formats a number into Indian Rupees notation (Lakhs, Crores)., Formats a number into Indian Rupees notation (Lakhs, Crores)., Generates and previews/prints details of a specific silver bar list., Format currency using system locale; fallback to Indian format with ÃƒÆ’Ã‚Â¢ÃƒÂ¢, Build the print payload for a silver-bar list without opening UI widgets. (+6 more)
 
 ### Community 90 - "Community 90"
-Cohesion: 0.19
-Nodes (4): FontSettings, from_qfont(), Application settings service built on QSettings., SettingsService
+Cohesion: 0.11
+Nodes (13): build_main_window_runtime(), create_main_window(), MainWindowRuntime, Factory helpers for composing the main window runtime., Concrete services, controllers, and widgets attached to the main window., Construct the main-window collaborators using the current app wiring., Create a fully wired main window for application startup., FontSettings (+5 more)
+
+### Community 91 - "Community 91"
+Cohesion: 0.18
+Nodes (8): Set up keyboard shortcuts.          Uses WindowShortcut context so shortcuts wor, Set up keyboard shortcuts.          Uses WindowShortcut context so shortcuts w, Set up keyboard shortcuts.          Uses WindowShortcut context so shortcuts wor, Connect internal signals.          Note: Return and Silver Bar mode toggle butto, Connect internal signals.          Note: Return and Silver Bar mode toggle but, Connect internal signals.          Note: Return and Silver Bar mode toggle butto, Initialize the secondary actions bar.          Args:             parent: Optiona, Initialize the secondary actions bar.          Args:             parent: Opti
 
 ### Community 92 - "Community 92"
 Cohesion: 0.22
-Nodes (8): UI components for the estimate entry widget., _configure_icon_button(), PrimaryActionsBar, Primary actions bar component for estimate entry., Connect internal signals., Primary action buttons styled to match the classic estimate form., Set up the user interface with compact spacing., Set up keyboard shortcuts.          NOTE: Ctrl+S and Ctrl+P shortcuts are NOT
+Nodes (8): UI components for the estimate entry widget., _configure_icon_button(), PrimaryActionsBar, Primary actions bar component for estimate entry., Connect internal signals., Primary action buttons styled to match the classic estimate form., Set up the user interface with compact spacing., Set up keyboard shortcuts.          NOTE: Ctrl+S and Ctrl+P shortcuts are NOT re
 
 ### Community 93 - "Community 93"
-Cohesion: 0.15
-Nodes (12): fake_db(), Integration tests for EstimateEntryWidget real user workflows., Test that the initial empty row has all cells properly initialized., Create a fake database manager for testing., Test that widget initialization completes including timer-delayed operations., Test deferred focus timer does not crash when widget is deleted quickly., Model-first begin_cell_edit helper should select and edit a cell., test_add_empty_row_deferred_focus_is_safe_after_delete() (+4 more)
+Cohesion: 0.12
+Nodes (16): fake_db(), Integration tests for EstimateEntryWidget real user workflows., Test that adapter doesn't create duplicate empty rows.      If there's already a, Test that adapter creates new row when last row has code., Test that adapter.populate_row writes through model-first helpers., Create a fake database manager for testing., Setting cell text should propagate to the underlying model., Adding rows should not disturb existing row values. (+8 more)
 
 ### Community 94 - "Community 94"
 Cohesion: 0.10
@@ -634,88 +668,100 @@ Cohesion: 0.24
 Nodes (8): _clear_log_artifacts(), perform_data_wipe(), Authentication and data-wipe services for SilverEstimate., Delete encrypted DB and clear credentials from settings., Remove application log files and directories without emitting logs., Handle authentication flow using the LoginDialog., _resolve_login_dialog(), run_authentication()
 
 ### Community 96 - "Community 96"
-Cohesion: 0.23
-Nodes (7): Shared styling helpers for the estimate-entry workflow., Re-polish a widget after changing dynamic properties used by QSS., refresh_widget_style(), InlineStatusController, _qt_object_available(), Inline status message helper for UI widgets., Manage transient inline status messages on a QLabel.
+Cohesion: 0.29
+Nodes (4): Create the UI elements for the dialog., Create the UI elements for the dialog., Connect UI signals to slots., Connect UI signals to slots.
 
 ### Community 97 - "Community 97"
-Cohesion: 0.23
+Cohesion: 0.26
 Nodes (6): _build_service(), _SettingsStub, test_restore_geometry_returns_false_when_qt_restore_fails(), test_restore_geometry_returns_true_when_geometry_restores(), test_restore_geometry_returns_true_when_state_restores(), _WindowStub
 
 ### Community 98 - "Community 98"
-Cohesion: 0.14
-Nodes (14): _make_widget(), Create a widget instance for testing., Test that adapter doesn't create duplicate empty rows.      If there's already a, Test that adapter.refresh_empty_row_type() updates all empty rows., Test cursor navigation mapping helpers for deterministic movement., Queued auto-advance must not override a user arrow-row navigation., Unchanged code commit must not reapply item-master defaults., test_adapter_populate_row_pc_restores_one_after_wt_zero() (+6 more)
+Cohesion: 0.12
+Nodes (16): _make_widget(), Create a widget instance for testing., Test that the initial empty row has all cells properly initialized., Test that clicking 'Add Row' button uses adapter.add_empty_row().      This is t, Test that populating a row via adapter triggers calculations.      The adapter s, Test adapter.focus_on_empty_row() finds or creates empty row., Test that adapter.refresh_empty_row_type() updates all empty rows., Test that widget initialization completes including timer-delayed operations. (+8 more)
 
 ### Community 99 - "Community 99"
 Cohesion: 0.09
 Nodes (22): 1. Estimates → Estimate Items, 1. items, 2. estimates, 2. Items → Estimate Items, 3. estimate_items, 3. Estimates → Silver Bars, 4. Silver Bar Lists → Silver Bars, 4. silver_bars (+14 more)
 
 ### Community 100 - "Community 100"
-Cohesion: 0.12
-Nodes (11): Apply settings and close the dialog., Enable Apply button when any setting changes., Restore sensible default settings for this dialog and update the UI., Update the live sample label to reflect current print font., Create the User Interface settings tab., Create the Printing settings tab., Generate display text for a QFont object., Load current printing settings into the UI controls. (+3 more)
+Cohesion: 0.08
+Nodes (22): Apply settings and close the dialog., Apply settings and close the dialog., Enable Apply button when any setting changes., Enable Apply button when any setting changes., Restore sensible default settings for this dialog and update the UI., Restore sensible default settings for this dialog and update the UI., Apply settings and close the dialog., Enable Apply button when any setting changes. (+14 more)
 
 ### Community 101 - "Community 101"
 Cohesion: 0.20
-Nodes (5): Initialize the totals panel.          Args:             parent: Optional pare, Set up the user interface., List widget that swaps cards when dropped onto another card., _SummarySectionsListWidget, QListWidget
+Nodes (5): Initialize the totals panel.          Args:             parent: Optional parent, Set up the user interface., List widget that swaps cards when dropped onto another card., _SummarySectionsListWidget, QListWidget
 
 ### Community 102 - "Community 102"
-Cohesion: 0.15
-Nodes (10): CustomFontDialog, Update the preview label font based on current selections., Return the QFont object based on the dialog's settings., Emit the signal and accept the dialog., A custom dialog for selecting font properties with decimal sizes and min size 5., _get_pwd_context(), hash_password(), verify_password() (+2 more)
+Cohesion: 0.07
+Nodes (27): QFontComboBox, QMainWindow, CustomFontDialog, Update the preview label font based on current selections., Update the preview label font based on current selections., Return the QFont object based on the dialog's settings., Return the QFont object based on the dialog's settings., Emit the signal and accept the dialog. (+19 more)
 
 ### Community 103 - "Community 103"
-Cohesion: 0.40
+Cohesion: 0.27
 Nodes (8): Structured result returned by :class:`StartupController`., StartupResult, _make_builder(), test_run_handles_startup_error_from_main_window(), test_run_initialises_main_window_and_enters_event_loop(), test_run_returns_error_when_auth_fails(), test_run_returns_zero_when_auth_cancelled(), test_run_returns_zero_when_data_wiped()
 
 ### Community 104 - "Community 104"
-Cohesion: 0.21
-Nodes (13): EstimateLine, Represents a single row in the estimate grid., EstimateEntryViewState, LoadedEstimate, Representation of a fully loaded estimate., Snapshot of the data required to run presenter computations., Representation of a row prepared for persistence., Aggregate data required to persist an estimate. (+5 more)
+Cohesion: 0.20
+Nodes (4): _apply_signed_contribution(), _category_bucket_for(), _frozen_category_totals(), Totals and row-calculation controller for estimate entry.
 
 ### Community 105 - "Community 105"
-Cohesion: 0.21
-Nodes (7): _RowContribution, _apply_signed_contribution(), _category_bucket_for(), EstimateEntryTotalsController, _frozen_category_totals(), _inactive_row_contribution(), Totals and row-calculation controller for estimate entry.
+Cohesion: 0.20
+Nodes (5): _RowContribution, _RunningCategoryTotals, EstimateEntryTotalsController, _inactive_row_contribution(), Own totals recompute and incremental aggregation behavior.
 
 ### Community 107 - "Community 107"
-Cohesion: 0.19
-Nodes (9): _coerce_bool(), LiveRateController, Controller coordinating live-rate service with the main window UI., Restart the periodic refresh timer based on settings., Trigger an immediate live-rate fetch., Keep live-rate related concerns out of :class:`MainWindow`., Instantiate the service, apply settings, and optionally refresh., Stop timers before the main window closes. (+1 more)
+Cohesion: 0.14
+Nodes (17): default_section_order(), _format_currency(), _format_weight(), _format_whole(), Totals panel component for estimate entry., Update all totals from a TotalsResult.          Args:             totals: The to, Update all totals from a TotalsResult.          Args:             totals: The to, Reset all totals to zero. (+9 more)
 
 ### Community 108 - "Community 108"
 Cohesion: 0.09
 Nodes (21): API Reference – Silver Estimation App, Authentication (silverestimate/services/auth_service.py), Controller Layer, DatabaseManager (silverestimate/persistence/database_manager.py), EstimateEntryPresenter (silverestimate/presenter/estimate_entry_presenter.py), EstimatesRepository (silverestimate/persistence/estimates_repository.py), ItemsRepository (silverestimate/persistence/items_repository.py), LiveRateController (silverestimate/controllers/live_rate_controller.py) (+13 more)
 
 ### Community 109 - "Community 109"
-Cohesion: 0.15
-Nodes (13): get_app_root(), get_asset_path(), Utilities for resolving file system paths within the application.  These helpe, Return the base directory where application resources are located.      When r, Build an absolute path to an asset located beneath the repository root.      A, _configure_qtawesome_font_lookup(), get_icon(), IconSpec (+5 more)
+Cohesion: 0.22
+Nodes (9): _configure_qtawesome_font_lookup(), get_icon(), IconSpec, Shared application icon helpers., Resolve a semantic icon using mdi6 with Qt/theme fallbacks., Resolve a semantic icon using mdi6 with Qt/theme fallbacks., Description of an app icon with fallback metadata., _resolve_qtawesome_fonts_dir() (+1 more)
 
 ### Community 110 - "Community 110"
 Cohesion: 0.10
 Nodes (19): Tests for VoucherToolbar component., Test that date changes emit signal., Create a fresh VoucherToolbar for testing., Test that note changes emit signal., Test that toolbar initializes with default values., Test setting voucher number., Test showing/hiding unsaved badge., Test clearing all metadata. (+11 more)
 
 ### Community 111 - "Community 111"
-Cohesion: 0.21
-Nodes (9): build_row_states_from_items(), EstimateEntryPersistenceService, Run save using the presenter and return the outcome plus preparation info., Container for save payload and any row-level validation issues., Translate between the view-model state and presenter persistence calls., Create a SavePayload from the current view-model rows., _row_to_estimate_line(), _row_to_save_item() (+1 more)
+Cohesion: 0.15
+Nodes (16): build_row_states_from_items(), EstimateEntryPersistenceService, Run save using the presenter and return the outcome plus preparation info., Container for save payload and any row-level validation issues., Translate between the view-model state and presenter persistence calls., Create a SavePayload from the current view-model rows., _row_to_estimate_line(), _row_to_save_item() (+8 more)
+
+### Community 112 - "Community 112"
+Cohesion: 0.15
+Nodes (7): LoadedEstimate, Representation of a fully loaded estimate., Representation of a row prepared for persistence., SaveItem, _RepositoryStub, test_incremental_rebuild_after_apply_loaded_estimate(), test_apply_loaded_estimate_populates_rows_and_normalizes_values()
 
 ### Community 113 - "Community 113"
 Cohesion: 0.22
 Nodes (5): _EstimatePreviewBuildWorker, Background worker that prepares print-preview HTML off the UI thread., _ReturnSignalStub, test_preview_worker_emits_error_and_finished(), test_preview_worker_emits_payload_and_finished()
 
 ### Community 114 - "Community 114"
-Cohesion: 0.13
-Nodes (11): build_management_screen_stylesheet(), Build a consistent stylesheet for secondary management screens., Set up the user interface., Create the all bars search tab., Load all silver bars with their current status and list information., Load all issued lists., Clear all search filters., Reactivate the selected issued list. (+3 more)
+Cohesion: 0.12
+Nodes (13): build_management_screen_stylesheet(), Build a consistent stylesheet for secondary management screens., Build a consistent stylesheet for secondary management screens., Set up the user interface., Set up the user interface., Create the all bars search tab., Create the all bars search tab., Load all silver bars with their current status and list information. (+5 more)
 
 ### Community 115 - "Community 115"
 Cohesion: 0.28
 Nodes (3): _QtAwesomeStub, test_get_icon_supports_extended_action_mappings(), test_get_icon_uses_mdi6_mapping()
 
-### Community 118 - "Community 118"
-Cohesion: 0.17
-Nodes (9): ItemValidationError, Domain-level validation rules for item master records., Raised when item domain constraints are violated., validate_item(), ValidatedItem, Synchronize item catalog rows in one transaction., Add a new item to the database., Update an existing item in the database. (+1 more)
-
-### Community 119 - "Community 119"
-Cohesion: 0.25
-Nodes (9): _begin_inline_edit(), Pressing Enter on an unchanged code should still advance the cursor., Pressing Tab on an unchanged code should keep the same no-relookup behavior., Enter on an empty gross editor should still preserve row progression., Backspace on an empty gross editor should navigate back to code., test_empty_gross_backspace_moves_to_code_column(), test_empty_gross_enter_commits_zero_and_advances_to_poly(), test_unchanged_code_enter_advances_to_gross_without_relookup() (+1 more)
-
-### Community 120 - "Community 120"
+### Community 116 - "Community 116"
 Cohesion: 0.36
 Nodes (6): QObject, _BarsLoadWorker, Background loader for available/list bars to keep UI responsive., _seed_worker_db(), test_available_worker_filters_unassigned_stock_only(), test_list_worker_returns_limited_rows_and_total_count()
+
+### Community 117 - "Community 117"
+Cohesion: 0.15
+Nodes (15): available_application_attributes(), configure_qt_before_application(), disable_windows_dark_mode(), Qt bootstrap helpers that must run before creating QApplication., Run pre-QApplication Qt bootstrap tweaks and report high-DPI policy support., Run pre-QApplication Qt bootstrap tweaks and report high-DPI policy support., Return a Windows QPA platform string with Qt dark mode disabled., Disable Qt's Windows dark-mode integration without changing other plugins. (+7 more)
+
+### Community 118 - "Community 118"
+Cohesion: 0.12
+Nodes (12): Clear the form fields and reset button states., Clear the form fields and reset button states., Clear the form fields and reset button states., Add a new item to the database., Add a new item to the database., Add a new item to the database., Update an existing item in the database., Update an existing item in the database. (+4 more)
+
+### Community 119 - "Community 119"
+Cohesion: 0.17
+Nodes (13): _begin_inline_edit(), Pressing Enter on an unchanged code should still advance the cursor., Pressing Tab on an unchanged code should keep the same no-relookup behavior., Pressing Enter on an unchanged code should still advance the cursor., Enter on an empty gross editor should still preserve row progression., Pressing Tab on an unchanged code should keep the same no-relookup behavior., Backspace on an empty gross editor should navigate back to code., Enter on an empty gross editor should still preserve row progression. (+5 more)
+
+### Community 120 - "Community 120"
+Cohesion: 0.25
+Nodes (8): ApplicationContext, Aggregate of resources created during application bootstrap., Release resources created during startup., Aggregate of resources created during application bootstrap., Aggregate of resources created during application bootstrap., Aggregate of resources created during application bootstrap., Release resources created during startup., Release resources created during startup.
 
 ### Community 121 - "Community 121"
 Cohesion: 0.18
@@ -725,9 +771,13 @@ Nodes (7): FlushScheduler, Async flush scheduling for database encryption writes
 Cohesion: 0.13
 Nodes (3): _ItemTableStub, _SignalStub, _VoucherEditStub
 
+### Community 123 - "Community 123"
+Cohesion: 0.18
+Nodes (6): _ItemMasterLoadWorker, Handle item selection in the table., Handle item selection in the table., Handle item selection in the table., Initialize the user interface., _refresh_widget_style()
+
 ### Community 124 - "Community 124"
-Cohesion: 0.25
-Nodes (4): Return the number of rows in the model., Return the number of columns in the model., Set the row data at the given index.          Args:             row_idx: The, Assign stable line keys to active rows missing one.
+Cohesion: 0.13
+Nodes (12): column_count(), Return the number of rows in the model., Return the number of rows in the model., Return the number of columns in the model., Return the number of columns in the model., Set the row data at the given index.          Args:             row_idx: The row, Set the row data at the given index.          Args:             row_idx: The row, Set the row data at the given index.          Args:             row_idx: The row (+4 more)
 
 ### Community 125 - "Community 125"
 Cohesion: 0.43
@@ -737,53 +787,53 @@ Nodes (6): _apply_versioned_migrations(), _ensure_core_tables(), _ensure_indexes
 Cohesion: 0.52
 Nodes (6): _run_script(), test_perf_gate_fails_when_budget_is_exceeded(), test_perf_gate_fails_when_log_file_is_missing(), test_perf_gate_fails_when_no_perf_lines_are_present(), test_perf_gate_fails_when_required_metric_is_missing(), test_perf_gate_parses_startup_and_ms_suffixed_metrics()
 
-### Community 128 - "Community 128"
-Cohesion: 0.47
-Nodes (5): build_main_window_runtime(), MainWindowRuntime, Factory helpers for composing the main window runtime., Concrete services, controllers, and widgets attached to the main window., Construct the main-window collaborators using the current app wiring.
-
 ### Community 129 - "Community 129"
-Cohesion: 0.29
-Nodes (3): EstimateLineCategory, Enumeration of line item categories used in totals breakdown., Return the user-friendly display name for this category.
+Cohesion: 0.23
+Nodes (7): Shared styling helpers for the estimate-entry workflow., Re-polish a widget after changing dynamic properties used by QSS., refresh_widget_style(), InlineStatusController, _qt_object_available(), Inline status message helper for UI widgets., Manage transient inline status messages on a QLabel.
 
 ### Community 130 - "Community 130"
 Cohesion: 0.11
-Nodes (17): [1.72.2] - 2025-09-13, [2.0.0] - 2025-09-15, [2.6.1] - 2026-02-13, [2.6.3] - 2026-02-14, [2.6.8] - 2026-02-22, [2.8.6] - 2026-03-12, [2.8.7] - 2026-03-15, Changed (+9 more)
+Nodes (17): [1.72.2] - 2025-09-13, [2.0.0] - 2025-09-15, [2.6.1] - 2026-02-13, [2.6] - 2026-02-13, [2.6.3] - 2026-02-14, [2.6.8] - 2026-02-22, [2.8.6] - 2026-03-12, Changed (+9 more)
 
 ### Community 131 - "Community 131"
 Cohesion: 0.11
 Nodes (17): 1. Application Shell, 2. Controller Layer, 3. Presenter Layer, 4. Service Layer, 5. UI Layer, 6. Persistence Layer, 7. Infrastructure & Security, Architectural Notes (+9 more)
 
 ### Community 132 - "Community 132"
-Cohesion: 0.40
-Nodes (4): cleanup_old_logs(), Remove log files older than max_age_days.      Args:         log_dir (str): D, Run the cleanup operation., Handle manual log cleanup button click.
+Cohesion: 0.29
+Nodes (6): cleanup_old_logs(), Remove log files older than max_age_days.      Args:         log_dir (str): D, Run the cleanup operation., Handle manual log cleanup button click., Handle manual log cleanup button click., Handle manual log cleanup button click.
 
 ### Community 134 - "Community 134"
-Cohesion: 0.70
-Nodes (4): _make_row(), test_compute_totals_with_balances(), test_iter_lines_skips_blank_rows(), test_update_row_extends_and_modes_sync()
+Cohesion: 0.22
+Nodes (7): Get all row data.          Returns:             A list of all rows, Assign stable line keys to active rows missing one., Get all row data.          Returns:             A list of all rows, Get all row data.          Returns:             A list of all rows, Assign stable line keys to active rows missing one., Assign stable line keys to active rows missing one., Assign stable line keys to active rows missing one.
 
 ### Community 135 - "Community 135"
 Cohesion: 0.19
 Nodes (7): _FacadeHarness, _StubEstimateRepo, _StubItemCacheController, _StubSilverBarsRepo, test_estimate_facade_clears_last_error_before_delegating(), test_estimate_facade_delegates_history_rows_lookup(), test_silver_bar_facade_delegates_keyword_arguments()
 
+### Community 136 - "Community 136"
+Cohesion: 0.18
+Nodes (9): is_editable_column(), Return the item flags for the given index.          Args:             index: The, Return the item flags for the given index.          Args:             index: The, Return the item flags for the given index.          Args:             index: The, Return the item flags for the given index.          Args:             index: The, Get the row data at the given index.          Args:             row_idx: The row, Get the row data at the given index.          Args:             row_idx: The row, Get the row data at the given index.          Args:             row_idx: The row (+1 more)
+
+### Community 137 - "Community 137"
+Cohesion: 0.42
+Nodes (6): Find-WindowsPython(), Get-Python314FromLauncher(), Get-Python314FromRegistry(), Get-PythonVersion(), Sync-ProjectDependencies(), Test-PythonForBuild()
+
 ### Community 138 - "Community 138"
-Cohesion: 0.16
-Nodes (8): Utility helpers for application QSettings access., Subset of QSettings used by read-only call sites., Subset of QSettings used by writable call sites., SettingsReader, SettingsStore, In-memory replacement for QSettings during tests., _SettingsStub, test_non_autofit_clamps_restored_widths_to_column_limits()
+Cohesion: 0.18
+Nodes (8): Utility helpers for application QSettings access., Subset of QSettings used by read-only call sites., Subset of QSettings used by writable call sites., SettingsReader, SettingsStore, Protocol, In-memory replacement for QSettings during tests., _SettingsStub
 
 ### Community 139 - "Community 139"
 Cohesion: 0.21
 Nodes (7): _ImmediateThread, _make_counters(), _ManualTimer, test_flush_scheduler_debounces_multiple_requests(), test_flush_scheduler_runs_after_delay(), test_flush_scheduler_shutdown_cancels_timer(), test_flush_scheduler_skips_without_connection()
-
-### Community 140 - "Community 140"
-Cohesion: 0.34
-Nodes (3): NavigationService, Navigation service to manage view switching and history dialogs., Handle main-window navigation, lazy view creation, and dialogs.
 
 ### Community 143 - "Community 143"
 Cohesion: 0.22
 Nodes (6): _StubDbManager, test_item_master_async_snapshot_load_populates_rows(), test_item_master_ignores_stale_async_results(), test_item_master_logs_perf_metric_even_for_fast_loads(), test_item_master_search_reloads_table_model(), test_item_master_selection_populates_form_and_clear_resets()
 
 ### Community 144 - "Community 144"
-Cohesion: 0.50
-Nodes (4): Test adding a row to the model., test_add_row(), Test adding a row to the table., test_add_row()
+Cohesion: 0.60
+Nodes (4): _BarsHistoryLoadWorker, _seed_history_worker_db(), test_history_worker_emits_error_for_missing_snapshot_db(), test_history_worker_filters_rows_from_snapshot_repository()
 
 ### Community 145 - "Community 145"
 Cohesion: 0.17
@@ -797,33 +847,61 @@ Nodes (5): _clone_rows(), _FakeSilverBarHistoryDb, _history_bar(), _row_for_bar_
 Cohesion: 0.18
 Nodes (10): Common Troubleshooting, Continuous Delivery (GitHub Actions), Dependency Management, Deployment & Packaging Guide, Future Enhancements, Local Windows Packaging, Manual PyInstaller Invocation, Overview (+2 more)
 
+### Community 149 - "Community 149"
+Cohesion: 0.50
+Nodes (3): Renders the HTML text (containing PRE or TABLE) to the printer., Renders the HTML text (containing PRE or TABLE) to the printer., Renders the HTML text (containing PRE or TABLE) to the printer.
+
+### Community 150 - "Community 150"
+Cohesion: 0.50
+Nodes (4): Delegates should request navigation through explicit signals., Test deferred focus timer does not crash when widget is deleted quickly., test_add_empty_row_deferred_focus_is_safe_after_delete(), test_table_delegates_signal_navigation_requests()
+
+### Community 151 - "Community 151"
+Cohesion: 0.67
+Nodes (3): Model-first begin_cell_edit helper should select and edit a cell., Model-first begin_cell_edit helper should select and edit a cell., test_begin_cell_edit_model_first_helper()
+
 ### Community 153 - "Community 153"
 Cohesion: 0.18
 Nodes (10): Additional Context, Alternative Solutions, Feature Description, Mockups/Examples, Priority, Problem Statement, Proposed Solution, Technical Considerations (+2 more)
+
+### Community 154 - "Community 154"
+Cohesion: 0.67
+Nodes (3): Queued auto-advance must not override a user arrow-row navigation., Queued auto-advance must not override a user arrow-row navigation., test_manual_arrow_navigation_intent_blocks_queued_auto_advance()
+
+### Community 155 - "Community 155"
+Cohesion: 0.67
+Nodes (3): Unchanged code commit must not reapply item-master defaults., Unchanged code commit must not reapply item-master defaults., test_revisiting_row_with_same_code_preserves_manual_overrides()
 
 ### Community 156 - "Community 156"
 Cohesion: 0.18
 Nodes (6): Rotate the current password-derived key and rewrite the encrypted DB., Persist the current temp DB state into the encrypted store., Flush on shutdown, close the connection, and clean temp artifacts., Encrypt the active temp DB using the current key., derive_key(), Derive a 32-byte AES key using the selected KDF.
 
 ### Community 157 - "Community 157"
-Cohesion: 0.24
-Nodes (6): _clear_history_table(), MockDBManager, Handle selection change in issued lists table., Load bars for the selected list., _table_cell_text(), _table_cell_value()
+Cohesion: 0.16
+Nodes (10): _clear_history_table(), MockDBManager, Handle selection change in issued lists table., Handle selection change in issued lists table., Handle selection change in issued lists table., Load bars for the selected list., Load bars for the selected list., Load bars for the selected list. (+2 more)
+
+### Community 158 - "Community 158"
+Cohesion: 0.25
+Nodes (6): Prints the INVENTORY list of silver bars using preview., Build the inventory payload for silver bars without opening UI widgets., Prints the INVENTORY list of silver bars using preview., Prints the INVENTORY list of silver bars using preview., Build the inventory payload for silver bars without opening UI widgets., Build the inventory payload for silver bars without opening UI widgets.
+
+### Community 159 - "Community 159"
+Cohesion: 0.67
+Nodes (3): Manual row selection should win over delayed auto-advance from prior edit., Manual row selection should win over delayed auto-advance from prior edit., test_manual_row_selection_not_overridden_by_queued_auto_advance()
+
+### Community 161 - "Community 161"
+Cohesion: 0.67
+Nodes (3): Committing unchanged purity should still advance to wage-rate column., Committing unchanged purity should still advance to wage-rate column., test_unchanged_purity_commit_still_advances_cursor()
 
 ### Community 188 - "Community 188"
 Cohesion: 0.20
 Nodes (9): Additional Notes, Breaking Changes, Checklist, Description, How Has This Been Tested?, Performance Impact, Screenshots (if applicable), Security Considerations (+1 more)
-
-### Community 189 - "Community 189"
-Cohesion: 0.31
-Nodes (7): _PresenterStub, _row(), test_build_row_states_from_items_roundtrip(), test_execute_save_invokes_presenter(), test_prepare_save_payload_aggregates_rows(), test_prepare_save_payload_raises_when_no_valid_rows(), test_prepare_save_payload_skips_invalid_rows()
 
 ### Community 191 - "Community 191"
 Cohesion: 0.22
 Nodes (9): 1. Password Management, 2. First-Run Setup, 3. Authentication Process, Authentication System, code:block1 (User Input → Argon2 Hash → Compare with Stored Hash → Grant/), code:python (from silverestimate.security import credential_store), Dual Password System, Password Flow (+1 more)
 
 ### Community 192 - "Community 192"
-Cohesion: 0.31
-Nodes (6): default_section_order(), _format_currency(), _format_whole(), Totals panel component for estimate entry., Update all totals from a TotalsResult.          Args:             totals: The, Reset all totals to zero.
+Cohesion: 0.29
+Nodes (5): Toggle return mode state (called by keyboard shortcut)., Toggle return mode state (called by keyboard shortcut)., Toggle return mode state (called by keyboard shortcut)., Toggle silver bar mode state (called by keyboard shortcut)., Toggle silver bar mode state (called by keyboard shortcut).
 
 ### Community 193 - "Community 193"
 Cohesion: 0.25
@@ -838,8 +916,12 @@ Cohesion: 0.29
 Nodes (7): 1. Password Hashing, 2. Database Encryption, 3. Key Derivation, code:python (# Using passlib for Argon2), code:python (class DatabaseManager:), code:python (def _derive_key(self, password, salt):), Implementation Details
 
 ### Community 196 - "Community 196"
-Cohesion: 0.43
-Nodes (4): _bar_row_is_mutable(), _normalize_sync_bar_payload(), _row_value(), _synced_bar_values_match()
+Cohesion: 0.23
+Nodes (6): _column_key(), ItemMasterTableModel, Table model for the item master catalog., Expose catalog items to the item-master table view., test_item_master_table_model_exposes_headers_and_tooltips(), test_item_master_table_model_loads_rows_and_sorts_numeric_columns()
+
+### Community 197 - "Community 197"
+Cohesion: 0.33
+Nodes (4): Show or hide the unsaved changes badge.          Args:             show: True to, Show or hide the unsaved changes badge.          Args:             show: True to, Clear all voucher metadata fields., Clear all voucher metadata fields.
 
 ### Community 198 - "Community 198"
 Cohesion: 0.48
@@ -865,6 +947,10 @@ Nodes (5): 1. Data Wipe Feature, 2. Temporary File Security, 3. Error Handling, 
 Cohesion: 0.40
 Nodes (5): 1. Salt Generation and Storage, 2. Key Lifecycle, 3. Session Management, code:block4 (Password + Salt → PBKDF2 → Encryption Key → [Session Use] → ), Key Management
 
+### Community 204 - "Community 204"
+Cohesion: 0.40
+Nodes (4): Add a new row to the model.          Args:             row_data: Optional row da, Add a new row to the model.          Args:             row_data: Optional row da, Add a new row to the model.          Args:             row_data: Optional row da, Add a new row to the model.          Args:             row_data: Optional row da
+
 ### Community 205 - "Community 205"
 Cohesion: 0.40
 Nodes (4): Additional Information, Context, Environment (if relevant), Question
@@ -874,8 +960,8 @@ Cohesion: 0.40
 Nodes (5): [2.6.9] - 2026-03-07, Added, Changed, Fixed, Removed
 
 ### Community 207 - "Community 207"
-Cohesion: 0.60
-Nodes (4): _BarsHistoryLoadWorker, _seed_history_worker_db(), test_history_worker_emits_error_for_missing_snapshot_db(), test_history_worker_filters_rows_from_snapshot_repository()
+Cohesion: 0.50
+Nodes (3): fetch_estimate_history_rows(), Return estimate-history rows with regular-item aggregates in one query., _HistoryLoadWorker
 
 ### Community 209 - "Community 209"
 Cohesion: 0.50
@@ -893,6 +979,18 @@ Nodes (4): 1. Protected Against, 2. Current Limitations, 3. Future Enhancements,
 Cohesion: 0.50
 Nodes (4): 1. Regular Tasks, 2. Incident Response, 3. Upgrades, Security Maintenance
 
+### Community 213 - "Community 213"
+Cohesion: 0.25
+Nodes (6): Set the return mode state.          Args:             enabled: True to enable re, Set the return mode state.          Args:             enabled: True to enable, Set the return mode state.          Args:             enabled: True to enable re, Get the return mode state.          Returns:             True if return mode is, Get the return mode state.          Returns:             True if return mode, Get the return mode state.          Returns:             True if return mode is
+
+### Community 214 - "Community 214"
+Cohesion: 0.25
+Nodes (6): Set the silver bar mode state.          Args:             enabled: True to enabl, Set the silver bar mode state.          Args:             enabled: True to en, Set the silver bar mode state.          Args:             enabled: True to enabl, Get the silver bar mode state.          Returns:             True if silver bar, Get the silver bar mode state.          Returns:             True if silver b, Get the silver bar mode state.          Returns:             True if silver bar
+
+### Community 215 - "Community 215"
+Cohesion: 0.33
+Nodes (5): Open page setup dialog and refresh preview if accepted., Open page setup dialog and refresh preview if accepted., Open page setup dialog and refresh preview if accepted., Open page setup dialog and refresh preview if accepted., Open page setup dialog and refresh preview if accepted.
+
 ### Community 216 - "Community 216"
 Cohesion: 0.50
 Nodes (4): [1.72.4] - 2025-09-14, Added, Changed, Fixed
@@ -906,12 +1004,8 @@ Cohesion: 0.50
 Nodes (4): [2.6.10] - 2026-03-07, Added, Changed, Fixed
 
 ### Community 219 - "Community 219"
-Cohesion: 0.50
-Nodes (3): numeric_table_font(), Shared helpers for rendering numeric values with stable column alignment., Return a numeric-friendly font derived from the current table font.
-
-### Community 221 - "Community 221"
-Cohesion: 0.67
-Nodes (3): [1.72.3] - 2025-09-13, Added, Performance
+Cohesion: 0.18
+Nodes (5): Retrieves the salt from QSettings or creates and saves a new one., Derive a 32-byte AES key from the password and salt., Encrypt the temporary DB file and atomically save it to the encrypted path., Rewrite a legacy PBKDF2-encrypted database using Argon2id., Initialize the database manager. Decrypts the database to a temporary         fi
 
 ### Community 222 - "Community 222"
 Cohesion: 0.67
@@ -965,25 +1059,109 @@ Nodes (3): [2.8.5] - 2026-03-10, Changed, Fixed
 Cohesion: 0.67
 Nodes (3): Changed, Fixed, [Unreleased]
 
+### Community 236 - "Community 236"
+Cohesion: 0.50
+Nodes (4): Test header data retrieval., Test header data retrieval., Test header data retrieval., test_header_data()
+
+### Community 238 - "Community 238"
+Cohesion: 0.11
+Nodes (15): Load all issued lists., Load all issued lists., Load all issued lists., Reactivate the selected issued list., Reactivate the selected issued list., Reactivate the selected issued list., Show context menu for bars table., Show context menu for bars table. (+7 more)
+
+### Community 239 - "Community 239"
+Cohesion: 0.29
+Nodes (5): fake_db(), FakeDB, test_migration_v3_backfills_numeric_vouchers_from_legacy_schema(), test_migration_v4_adds_estimate_item_wage_type_without_backfill(), test_schema_setup_upgrades_to_v5_and_adds_line_key_columns()
+
+### Community 240 - "Community 240"
+Cohesion: 0.33
+Nodes (5): get_app_root(), get_asset_path(), Utilities for resolving file system paths within the application.  These helpe, Return the base directory where application resources are located.      When r, Build an absolute path to an asset located beneath the repository root.      A
+
+### Community 242 - "Community 242"
+Cohesion: 0.67
+Nodes (3): Row switch via current-cell change should suppress queued auto-advance., Row switch via current-cell change should suppress queued auto-advance., test_row_change_marks_manual_nav_and_blocks_old_auto_advance()
+
+### Community 243 - "Community 243"
+Cohesion: 0.67
+Nodes (3): Clicking an upper row should not trigger edit-loop churn., Clicking an upper row should not trigger edit-loop churn., test_click_row_above_during_queued_advance_remains_stable()
+
+### Community 245 - "Community 245"
+Cohesion: 0.29
+Nodes (5): Reset both modes to disabled state., Reset both modes to disabled state., Enable or disable the delete estimate button., Reset both modes to disabled state., Enable or disable the delete estimate button.
+
+### Community 247 - "Community 247"
+Cohesion: 0.24
+Nodes (5): test_items_repository_batch_fetch_returns_normalized_codes(), _bar_row_is_mutable(), _normalize_sync_bar_payload(), _row_value(), _synced_bar_values_match()
+
+### Community 249 - "Community 249"
+Cohesion: 0.70
+Nodes (4): find_missing_metrics(), main(), parse_metrics(), percentile()
+
+### Community 250 - "Community 250"
+Cohesion: 0.29
+Nodes (5): Open the logs directory in the system file manager., Open the logs directory in the system file manager., Toggle password echo mode for all password fields., Open the logs directory in the system file manager., Toggle password echo mode for all password fields.
+
+### Community 251 - "Community 251"
+Cohesion: 0.50
+Nodes (3): Ensure live-rate card is attached in the header action strip., Ensure live-rate card is attached in the header action strip., Ensure live-rate card is attached in the header action strip.
+
+### Community 252 - "Community 252"
+Cohesion: 0.29
+Nodes (7): model(), Create a fresh EstimateTableModel for testing., Create a fresh EstimateTableModel for testing., Test adding a row to the model., test_add_row(), Test adding a row to the table., test_add_row()
+
+### Community 254 - "Community 254"
+Cohesion: 0.67
+Nodes (3): [1.72.3] - 2025-09-13, Added, Performance
+
+### Community 256 - "Community 256"
+Cohesion: 0.50
+Nodes (3): Close the dialog without applying changes since last Apply/Load., Close the dialog without applying changes since last Apply/Load., Close the dialog without applying changes since last Apply/Load.
+
+### Community 257 - "Community 257"
+Cohesion: 0.29
+Nodes (6): _friendly_print_error_message(), Send the document directly to the currently configured/default printer., Send the document directly to the currently configured/default printer., Send the document directly to the currently configured/default printer., Send the document directly to the currently configured/default printer., Send the document directly to the currently configured/default printer.
+
+### Community 260 - "Community 260"
+Cohesion: 0.40
+Nodes (4): Remove all rows from the model., Remove all rows from the model., Remove all rows from the model., Remove all rows from the model.
+
+### Community 266 - "Community 266"
+Cohesion: 0.40
+Nodes (4): Set all rows at once.          Args:             rows: The new list of rows, Set all rows at once.          Args:             rows: The new list of rows, Set all rows at once.          Args:             rows: The new list of rows, Set all rows at once.          Args:             rows: The new list of rows
+
+### Community 269 - "Community 269"
+Cohesion: 0.50
+Nodes (4): Test that data changed signal is emitted., Test that data changed signal is emitted., Test that data changed signal is emitted., test_data_changed_signal()
+
+### Community 271 - "Community 271"
+Cohesion: 0.50
+Nodes (3): Handle the logic for changing both passwords., Handle the logic for changing both passwords., Handle the logic for changing both passwords.
+
+### Community 272 - "Community 272"
+Cohesion: 0.50
+Nodes (3): Populate the default printer combo with available printers., Populate the default printer combo with available printers., Populate the default printer combo with available printers.
+
+### Community 275 - "Community 275"
+Cohesion: 0.15
+Nodes (13): EstimateLine, Domain models supporting estimate calculations., Represents a single row in the estimate grid., Breakdown of overall, categorical, and derived totals., TotalsResult, EstimateEntryViewState, Snapshot of the data required to run presenter computations., Aggregate data required to persist an estimate. (+5 more)
+
 ## Knowledge Gaps
-- **271 isolated node(s):** `allow`, `_MessageBoxStub`, `_FileDialogStub`, `_InputDialogStub`, `Changed` (+266 more)
+- **276 isolated node(s):** `allow`, `PreToolUse`, `EstimateColumnSpec`, `_MessageBoxStub`, `StandardButton` (+271 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **58 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **46 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `DatabaseManager` connect `Community 9` to `Community 65`, `Community 66`, `Community 4`, `Community 37`, `Community 103`, `Community 39`, `Community 8`, `Community 10`, `Community 75`, `Community 12`, `Community 46`, `Community 112`, `Community 18`, `Community 51`, `Community 21`, `Community 22`, `Community 220`?**
-  _High betweenness centrality (0.126) - this node is a cross-community bridge._
-- **Why does `EstimateEntryWidget` connect `Community 43` to `Community 32`, `Community 129`, `Community 128`, `Community 3`, `Community 35`, `Community 96`, `Community 98`, `Community 105`, `Community 106`, `Community 77`, `Community 112`, `Community 49`, `Community 19`, `Community 20`, `Community 117`, `Community 24`?**
-  _High betweenness centrality (0.122) - this node is a cross-community bridge._
-- **Why does `_RepositoryStub` connect `Community 112` to `Community 129`, `Community 196`, `Community 104`, `Community 9`, `Community 43`, `Community 79`, `Community 19`?**
-  _High betweenness centrality (0.068) - this node is a cross-community bridge._
+- **Why does `EstimateEntryWidget` connect `Community 43` to `Community 129`, `Community 98`, `Community 3`, `Community 35`, `Community 104`, `Community 105`, `Community 106`, `Community 77`, `Community 78`, `Community 112`, `Community 49`, `Community 275`, `Community 20`, `Community 19`, `Community 24`, `Community 90`?**
+  _High betweenness centrality (0.140) - this node is a cross-community bridge._
+- **Why does `DatabaseManager` connect `Community 9` to `Community 4`, `Community 8`, `Community 10`, `Community 12`, `Community 18`, `Community 19`, `Community 21`, `Community 22`, `Community 39`, `Community 46`, `Community 51`, `Community 52`, `Community 58`, `Community 64`, `Community 65`, `Community 66`, `Community 75`, `Community 219`, `Community 220`, `Community 103`, `Community 112`, `Community 120`?**
+  _High betweenness centrality (0.127) - this node is a cross-community bridge._
+- **Why does `_RepositoryStub` connect `Community 112` to `Community 9`, `Community 43`, `Community 78`, `Community 79`, `Community 19`, `Community 247`?**
+  _High betweenness centrality (0.065) - this node is a cross-community bridge._
 - **Are the 31 inferred relationships involving `DatabaseManager` (e.g. with `StartupStatus` and `StartupResult`) actually correct?**
   _`DatabaseManager` has 31 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 19 inferred relationships involving `EstimateEntryWorkflowController` (e.g. with `_RowContribution` and `_RunningCategoryTotals`) actually correct?**
-  _`EstimateEntryWorkflowController` has 19 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 32 inferred relationships involving `PrintManager` (e.g. with `_EstimatePreviewBuildWorker` and `EstimateEntryWorkflowController`) actually correct?**
-  _`PrintManager` has 32 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 5 inferred relationships involving `EstimateTableView` (e.g. with `EstimateLineCategory` and `EstimateTableModel`) actually correct?**
-  _`EstimateTableView` has 5 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 23 inferred relationships involving `SettingsDialog` (e.g. with `MainWindowDatabase` and `MainWindow`) actually correct?**
+  _`SettingsDialog` has 23 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 21 inferred relationships involving `EstimateEntryWorkflowController` (e.g. with `_RowContribution` and `_RunningCategoryTotals`) actually correct?**
+  _`EstimateEntryWorkflowController` has 21 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 33 inferred relationships involving `PrintManager` (e.g. with `_EstimatePreviewBuildWorker` and `EstimateEntryWorkflowController`) actually correct?**
+  _`PrintManager` has 33 INFERRED edges - model-reasoned connections that need verification._

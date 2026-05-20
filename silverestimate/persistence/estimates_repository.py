@@ -124,7 +124,7 @@ class EstimatesRepository:
                 if result and result[0] is not None:
                     return str(int(result[0]) + 1)
                 return "1"
-            except (sqlite3.Error, ValueError, TypeError):
+            except sqlite3.Error, ValueError, TypeError:
                 self._logger.error(
                     "DB error generating voucher number: %s", exc, exc_info=True
                 )
@@ -503,7 +503,7 @@ class EstimatesRepository:
             return None
         try:
             return int(raw)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return None
 
     def delete_all_estimates(self) -> bool:
@@ -639,10 +639,10 @@ class EstimatesRepository:
                 continue
             try:
                 row_map[code] = int(row_number)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 try:
                     row_map[code] = int(float(row_number))
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     continue
         return row_map
 

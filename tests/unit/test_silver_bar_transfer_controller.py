@@ -1,8 +1,8 @@
 import csv
 import logging
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QComboBox, QDialog, QTableView
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QComboBox, QDialog, QTableView
 
 from silverestimate.ui.models import (
     AvailableSilverBarsTableModel,
@@ -66,7 +66,9 @@ class _TransferHost(QDialog):
         if model is None:
             return ""
         index = model.index(row, column)
-        value = model.data(index, Qt.DisplayRole) if index.isValid() else None
+        value = (
+            model.data(index, Qt.ItemDataRole.DisplayRole) if index.isValid() else None
+        )
         return "" if value is None else str(value)
 
 
@@ -94,22 +96,22 @@ def test_transfer_controller_adds_all_filtered_rows_and_refreshes(qtbot, monkeyp
     controller = SilverBarTransferController(host)
     qtbot.addWidget(host)
 
-    from PyQt5.QtWidgets import QMessageBox
+    from PyQt6.QtWidgets import QMessageBox
 
     monkeypatch.setattr(
         QMessageBox,
         "question",
-        lambda *args, **kwargs: QMessageBox.Yes,
+        lambda *args, **kwargs: QMessageBox.StandardButton.Yes,
     )
     monkeypatch.setattr(
         QMessageBox,
         "information",
-        lambda *args, **kwargs: QMessageBox.Ok,
+        lambda *args, **kwargs: QMessageBox.StandardButton.Ok,
     )
     monkeypatch.setattr(
         QMessageBox,
         "warning",
-        lambda *args, **kwargs: QMessageBox.Ok,
+        lambda *args, **kwargs: QMessageBox.StandardButton.Ok,
     )
 
     controller.add_all_filtered_to_list()
@@ -132,7 +134,7 @@ def test_transfer_controller_exports_current_list_to_csv(qtbot, monkeypatch, tmp
 
     export_path = tmp_path / "bars.csv"
 
-    from PyQt5.QtWidgets import QFileDialog, QMessageBox
+    from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
     monkeypatch.setattr(
         QFileDialog,
@@ -142,7 +144,7 @@ def test_transfer_controller_exports_current_list_to_csv(qtbot, monkeypatch, tmp
     monkeypatch.setattr(
         QMessageBox,
         "information",
-        lambda *args, **kwargs: QMessageBox.Ok,
+        lambda *args, **kwargs: QMessageBox.StandardButton.Ok,
     )
 
     controller.export_current_list_to_csv()

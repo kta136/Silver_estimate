@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt5.QtCore import QSize, Qt, pyqtSignal
-from PyQt5.QtGui import QKeySequence
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import QSize, Qt, pyqtSignal
+from PyQt6.QtGui import QKeySequence, QShortcut
+from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QShortcut,
     QSizePolicy,
     QToolButton,
     QVBoxLayout,
@@ -67,7 +66,7 @@ class SecondaryActionsBar(QWidget):
     def _setup_ui(self) -> None:
         """Set up the user interface with compact spacing."""
         self.setObjectName("SecondaryActionStrip")
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         layout = QHBoxLayout(self)
         layout.setSpacing(0)
@@ -181,7 +180,9 @@ class SecondaryActionsBar(QWidget):
         # Live rate value and meta info in vertical layout
         self.live_rate_container = QWidget()
         self.live_rate_container.setObjectName("LiveRateCard")
-        self.live_rate_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.live_rate_container.setSizePolicy(
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
+        )
 
         rate_layout = QHBoxLayout(self.live_rate_container)
         rate_layout.setContentsMargins(6, 5, 6, 5)
@@ -198,7 +199,9 @@ class SecondaryActionsBar(QWidget):
         self.live_rate_value_label = QLabel("…")
         self.live_rate_value_label.setObjectName("LiveRateValue")
         self.live_rate_value_label.setMinimumWidth(96)
-        self.live_rate_value_label.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
+        self.live_rate_value_label.setAlignment(
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
+        )
         rate_layout.addWidget(self.live_rate_value_label)
 
         self.refresh_rate_button = QToolButton()
@@ -210,7 +213,7 @@ class SecondaryActionsBar(QWidget):
             self.refresh_rate_button, label="Refresh Silver Rate"
         )
         self.refresh_rate_button.setAutoRaise(True)
-        self.refresh_rate_button.setCursor(Qt.PointingHandCursor)
+        self.refresh_rate_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.refresh_rate_button.setAccessibleName("Refresh Silver Rate")
         value_row.addWidget(self.refresh_rate_button)
 
@@ -219,7 +222,9 @@ class SecondaryActionsBar(QWidget):
         self.live_rate_meta_label = QLabel("")
         self.live_rate_meta_label.setObjectName("LiveRateMeta")
         self.live_rate_meta_label.setAccessibleName("Live Rate Status")
-        self.live_rate_meta_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.live_rate_meta_label.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
         left_stack.addWidget(self.live_rate_meta_label)
 
         rate_layout.addLayout(left_stack)
@@ -279,8 +284,8 @@ class SecondaryActionsBar(QWidget):
             QFrame configured as a vertical line divider
         """
         divider = QFrame()
-        divider.setFrameShape(QFrame.VLine)
-        divider.setFrameShadow(QFrame.Sunken)
+        divider.setFrameShape(QFrame.Shape.VLine)
+        divider.setFrameShadow(QFrame.Shadow.Sunken)
         divider.setFixedHeight(18)
         return divider
 
@@ -314,22 +319,22 @@ class SecondaryActionsBar(QWidget):
         self._shortcuts: list[QShortcut] = []
 
         delete_row_shortcut = QShortcut(QKeySequence("Ctrl+D"), target)
-        delete_row_shortcut.setContext(Qt.WindowShortcut)
+        delete_row_shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
         delete_row_shortcut.activated.connect(self.delete_row_clicked.emit)
         self._shortcuts.append(delete_row_shortcut)
 
         return_shortcut = QShortcut(QKeySequence("Ctrl+R"), target)
-        return_shortcut.setContext(Qt.WindowShortcut)
+        return_shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
         return_shortcut.activated.connect(self._toggle_return_mode)
         self._shortcuts.append(return_shortcut)
 
         silver_bar_shortcut = QShortcut(QKeySequence("Ctrl+B"), target)
-        silver_bar_shortcut.setContext(Qt.WindowShortcut)
+        silver_bar_shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
         silver_bar_shortcut.activated.connect(self._toggle_silver_bar_mode)
         self._shortcuts.append(silver_bar_shortcut)
 
         history_shortcut = QShortcut(QKeySequence("Ctrl+H"), target)
-        history_shortcut.setContext(Qt.WindowShortcut)
+        history_shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
         history_shortcut.activated.connect(self.history_clicked.emit)
         self._shortcuts.append(history_shortcut)
 

@@ -2,6 +2,7 @@
 
 from .theme_tokens import (
     CARD_BORDER,
+    CARD_BORDER_SOFT,
     DANGER_BG,
     DANGER_BORDER,
     FIELD_TEXT,
@@ -16,6 +17,7 @@ from .theme_tokens import (
     SURFACE_BG,
     TEXT_MUTED,
     TEXT_STRONG,
+    apply_theme_tokens,
 )
 
 
@@ -39,6 +41,7 @@ def build_management_screen_stylesheet(
         f"""
         {root_selector} {{
             background-color: {PAGE_BG};
+            color: {TEXT_STRONG};
         }}
         """,
     ]
@@ -51,12 +54,16 @@ def build_management_screen_stylesheet(
                 background-color: {SURFACE_BG};
                 border: 1px solid {CARD_BORDER};
                 border-radius: 12px;
+                color: {TEXT_STRONG};
             }}
             """
         )
 
     rules.append(
         f"""
+        QLabel {{
+            color: {TEXT_STRONG};
+        }}
         QLabel#{title_label} {{
             color: {TEXT_STRONG};
             font-size: 16pt;
@@ -90,6 +97,7 @@ def build_management_screen_stylesheet(
             f"""
             {",\n".join(button_selectors)} {{
                 border-radius: 8px;
+                color: {TEXT_STRONG};
                 padding: 5px 10px;
                 min-height: 20px;
                 font-weight: 600;
@@ -150,49 +158,167 @@ def build_management_screen_stylesheet(
                 background-color: {SURFACE_BG};
                 border: 1px solid {INPUT_BORDER};
                 border-radius: 8px;
+                color: {FIELD_TEXT};
                 padding: 4px 8px;
                 min-height: 18px;
+                selection-background-color: {SELECTION_BG};
+                selection-color: {TEXT_STRONG};
             }}
             {input_selector}:focus {{
                 border: 2px solid {FOCUS_RING};
             }}
+            {input_selector}:disabled {{
+                background-color: {HEADER_BG};
+                border-color: {CARD_BORDER_SOFT};
+                color: {TEXT_MUTED};
+            }}
+            {input_selector}:read-only {{
+                background-color: {HEADER_BG};
+                border-color: {CARD_BORDER_SOFT};
+                color: {FIELD_TEXT};
+            }}
+            QComboBox {{
+                padding-right: 34px;
+            }}
+            QComboBox::drop-down {{
+                background-color: {HEADER_BG};
+                border-left: 1px solid {INPUT_BORDER};
+                border-top-right-radius: 8px;
+                border-bottom-right-radius: 8px;
+                subcontrol-origin: border;
+                subcontrol-position: top right;
+                width: 30px;
+            }}
+            QSpinBox,
+            QDoubleSpinBox {{
+                padding-right: 30px;
+            }}
+            QSpinBox::up-button,
+            QDoubleSpinBox::up-button {{
+                background-color: {HEADER_BG};
+                border-left: 1px solid {INPUT_BORDER};
+                border-top-right-radius: 8px;
+                subcontrol-origin: border;
+                subcontrol-position: top right;
+                width: 26px;
+            }}
+            QSpinBox::down-button,
+            QDoubleSpinBox::down-button {{
+                background-color: {HEADER_BG};
+                border-left: 1px solid {INPUT_BORDER};
+                border-bottom-right-radius: 8px;
+                subcontrol-origin: border;
+                subcontrol-position: bottom right;
+                width: 26px;
+            }}
             """
         )
 
+    rules.append(
+        f"""
+        QGroupBox {{
+            background-color: {SURFACE_BG};
+            border: 1px solid {CARD_BORDER};
+            border-radius: 10px;
+            color: {TEXT_STRONG};
+            font-weight: 700;
+            margin-top: 12px;
+            padding: 12px 12px 10px 12px;
+        }}
+        QGroupBox::title {{
+            subcontrol-origin: margin;
+            left: 10px;
+            padding: 0 4px;
+        }}
+        QCheckBox,
+        QRadioButton {{
+            color: {TEXT_STRONG};
+            spacing: 8px;
+        }}
+        QCheckBox:disabled,
+        QRadioButton:disabled {{
+            color: {TEXT_MUTED};
+        }}
+        QCheckBox::indicator,
+        QRadioButton::indicator {{
+            background-color: {SURFACE_BG};
+            border: 1px solid {INPUT_BORDER};
+            height: 14px;
+            width: 14px;
+        }}
+        QCheckBox::indicator {{
+            border-radius: 4px;
+        }}
+        QRadioButton::indicator {{
+            border-radius: 7px;
+        }}
+        QCheckBox::indicator:checked,
+        QRadioButton::indicator:checked {{
+            background-color: {PRIMARY_BG};
+            border-color: {PRIMARY_BG};
+        }}
+        QScrollArea,
+        QStackedWidget {{
+            background-color: transparent;
+            color: {TEXT_STRONG};
+        }}
+        QScrollBar:vertical,
+        QScrollBar:horizontal {{
+            background-color: {HEADER_BG};
+            border: none;
+            margin: 0;
+        }}
+        QScrollBar:vertical {{
+            width: 12px;
+        }}
+        QScrollBar:horizontal {{
+            height: 12px;
+        }}
+        QScrollBar::handle:vertical,
+        QScrollBar::handle:horizontal {{
+            background-color: {INPUT_BORDER};
+            border-radius: 6px;
+            min-height: 24px;
+            min-width: 24px;
+        }}
+        QScrollBar::handle:vertical:hover,
+        QScrollBar::handle:horizontal:hover {{
+            background-color: {TEXT_MUTED};
+        }}
+        QScrollBar::add-line,
+        QScrollBar::sub-line,
+        QScrollBar::add-page,
+        QScrollBar::sub-page {{
+            background: transparent;
+            border: none;
+        }}
+        """
+    )
+
     if include_table:
         rules.append(
-            """
-            QTableView {
-                background-color: """
-            + SURFACE_BG
-            + """;
-                border: 1px solid #d6dee8;
+            f"""
+            QTableView {{
+                background-color: {SURFACE_BG};
+                border: 1px solid {CARD_BORDER_SOFT};
                 border-radius: 12px;
-                gridline-color: #d9e2ec;
-                selection-background-color: """
-            + SELECTION_BG
-            + """;
-                selection-color: """
-            + TEXT_STRONG
-            + """;
-            }
-            QHeaderView::section {
-                background-color: """
-            + HEADER_BG
-            + """;
-                color: """
-            + HEADER_TEXT
-            + """;
+                gridline-color: {CARD_BORDER};
+                selection-background-color: {SELECTION_BG};
+                selection-color: {TEXT_STRONG};
+            }}
+            QHeaderView::section {{
+                background-color: {HEADER_BG};
+                color: {HEADER_TEXT};
                 border: none;
-                border-right: 1px solid #e2e8f0;
-                border-bottom: 1px solid #e2e8f0;
+                border-right: 1px solid {CARD_BORDER_SOFT};
+                border-bottom: 1px solid {CARD_BORDER_SOFT};
                 padding: 6px 8px;
                 font-weight: 700;
-            }
+            }}
             """
         )
 
     if extra_rules.strip():
-        rules.append(extra_rules.strip())
+        rules.append(apply_theme_tokens(extra_rules.strip()))
 
     return "\n".join(rule.strip() for rule in rules if rule.strip())

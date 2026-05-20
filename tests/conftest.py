@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from PyQt5.QtCore import QLocale
+from PyQt6.QtCore import QLocale
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -111,7 +111,7 @@ class _CredentialStoreStub:
 @pytest.fixture(scope="session")
 def qt_app():
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    from PyQt5.QtWidgets import QApplication
+    from PyQt6.QtWidgets import QApplication
 
     app = QApplication.instance()
     if app is None:
@@ -187,5 +187,5 @@ def pytest_collection_modifyitems(items):
 def estimate_table_locale(monkeypatch):
     monkeypatch.setattr(
         "silverestimate.ui.estimate_table_formatting.get_estimate_table_locale",
-        lambda: QLocale(QLocale.English, QLocale.India),
+        lambda: QLocale(QLocale.Language.English, QLocale.Country.India),
     )

@@ -6,7 +6,7 @@ import logging
 import threading
 from typing import Callable, Optional, Protocol, Tuple
 
-from PyQt5.QtCore import QObject, QTimer, pyqtSignal
+from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
 from silverestimate.infrastructure.settings import SettingsReader, get_app_settings
 from silverestimate.services.dda_rate_fetcher import (

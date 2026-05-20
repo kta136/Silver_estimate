@@ -1,7 +1,7 @@
 """Tests for VoucherToolbar component."""
 
 import pytest
-from PyQt5.QtCore import QDate
+from PyQt6.QtCore import QDate
 
 from silverestimate.ui.estimate_entry_components.voucher_toolbar import VoucherToolbar
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtGui import QFont, QFontDatabase, QFontInfo
+from PyQt6.QtGui import QFont, QFontDatabase, QFontInfo
 
 
 def numeric_table_font(base_font: QFont | None = None) -> QFont:
@@ -10,14 +10,17 @@ def numeric_table_font(base_font: QFont | None = None) -> QFont:
 
     resolved_base = QFont(base_font) if base_font is not None else QFont()
     candidate = QFont(resolved_base)
-    candidate.setStyleHint(QFont.TypeWriter, QFont.PreferDefault)
+    candidate.setStyleHint(
+        QFont.StyleHint.TypeWriter,
+        QFont.StyleStrategy.PreferDefault,
+    )
     candidate.setFixedPitch(True)
     candidate.setKerning(False)
 
     if QFontInfo(candidate).fixedPitch():
         return candidate
 
-    fallback = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+    fallback = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
     if fallback.family():
         if resolved_base.pixelSize() > 0:
             fallback.setPixelSize(resolved_base.pixelSize())

@@ -1,4 +1,4 @@
-from PyQt5.QtCore import Qt
+from PyQt6.QtCore import Qt
 
 from silverestimate.ui.models import EstimateHistoryRow, EstimateHistoryTableModel
 
@@ -22,13 +22,16 @@ def test_estimate_history_table_model_formats_display_values():
     )
 
     assert model.rowCount() == 1
-    assert model.headerData(0, Qt.Horizontal, Qt.DisplayRole) == "Voucher No"
-    assert model.data(model.index(0, 0), Qt.DisplayRole) == "V001"
-    assert model.data(model.index(0, 3), Qt.DisplayRole) == "95.50"
-    assert model.data(model.index(0, 4), Qt.DisplayRole) == "2.750"
-    assert model.data(model.index(0, 8), Qt.DisplayRole) == "325.12"
-    assert model.data(model.index(0, 8), Qt.TextAlignmentRole) == (
-        Qt.AlignRight | Qt.AlignVCenter
+    assert (
+        model.headerData(0, Qt.Orientation.Horizontal, Qt.ItemDataRole.DisplayRole)
+        == "Voucher No"
+    )
+    assert model.data(model.index(0, 0), Qt.ItemDataRole.DisplayRole) == "V001"
+    assert model.data(model.index(0, 3), Qt.ItemDataRole.DisplayRole) == "95.50"
+    assert model.data(model.index(0, 4), Qt.ItemDataRole.DisplayRole) == "2.750"
+    assert model.data(model.index(0, 8), Qt.ItemDataRole.DisplayRole) == "325.12"
+    assert model.data(model.index(0, 8), Qt.ItemDataRole.TextAlignmentRole) == (
+        Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
     )
 
 
@@ -61,10 +64,10 @@ def test_estimate_history_table_model_sorts_numeric_columns():
         ]
     )
 
-    model.sort(8, Qt.DescendingOrder)
+    model.sort(8, Qt.SortOrder.DescendingOrder)
     assert model.row_payload(0).voucher_no == "V001"
     assert model.row_payload(1).voucher_no == "V002"
 
-    model.sort(0, Qt.AscendingOrder)
+    model.sort(0, Qt.SortOrder.AscendingOrder)
     assert model.row_payload(0).voucher_no == "V001"
     assert model.row_payload(1).voucher_no == "V002"

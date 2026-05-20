@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any, Optional
 
-from PyQt5.QtCore import QItemSelection, QModelIndex, Qt, pyqtSignal
-from PyQt5.QtGui import QColor, QPalette
-from PyQt5.QtWidgets import QAction, QHeaderView, QMenu, QTableView
+from PyQt6.QtCore import QItemSelection, QModelIndex, Qt, pyqtSignal
+from PyQt6.QtGui import QAction, QColor, QPalette
+from PyQt6.QtWidgets import QAbstractItemView, QHeaderView, QMenu, QTableView
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.ui.icons import get_icon
@@ -54,32 +54,40 @@ class EstimateTableView(QTableView):
         self.setModel(self._table_model)
 
         self.setAlternatingRowColors(True)
-        self.setSelectionBehavior(QTableView.SelectRows)
-        self.setSelectionMode(QTableView.SingleSelection)
+        self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.setShowGrid(True)
         self.setCornerButtonEnabled(False)
         self.setSortingEnabled(False)
 
         horizontal_header = self.horizontalHeader()
         horizontal_header.setStretchLastSection(False)
-        horizontal_header.setSectionResizeMode(QHeaderView.Interactive)
-        horizontal_header.setDefaultAlignment(Qt.AlignLeft)
+        horizontal_header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        horizontal_header.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft)
 
         vertical_header = self.verticalHeader()
         vertical_header.setVisible(True)
         vertical_header.setDefaultSectionSize(30)
         vertical_header.setMinimumSectionSize(28)
 
-        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_context_menu)
 
         palette = self.palette()
-        palette.setColor(QPalette.Base, QColor("#ffffff"))
-        palette.setColor(QPalette.AlternateBase, QColor("#f8fbff"))
-        palette.setColor(QPalette.Highlight, QColor("#dbeafe"))
-        palette.setColor(QPalette.HighlightedText, QColor("#0f172a"))
-        palette.setColor(QPalette.Inactive, QPalette.Highlight, QColor("#dbeafe"))
-        palette.setColor(QPalette.Inactive, QPalette.HighlightedText, QColor("#0f172a"))
+        palette.setColor(QPalette.ColorRole.Base, QColor("#ffffff"))
+        palette.setColor(QPalette.ColorRole.AlternateBase, QColor("#f8fbff"))
+        palette.setColor(QPalette.ColorRole.Highlight, QColor("#dbeafe"))
+        palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#0f172a"))
+        palette.setColor(
+            QPalette.ColorGroup.Inactive,
+            QPalette.ColorRole.Highlight,
+            QColor("#dbeafe"),
+        )
+        palette.setColor(
+            QPalette.ColorGroup.Inactive,
+            QPalette.ColorRole.HighlightedText,
+            QColor("#0f172a"),
+        )
         self.setPalette(palette)
 
     def _connect_signals(self) -> None:
@@ -134,7 +142,7 @@ class EstimateTableView(QTableView):
         history_action.triggered.connect(self.history_requested.emit)
         menu.addAction(history_action)
 
-        menu.exec_(self.viewport().mapToGlobal(position))
+        menu.exec(self.viewport().mapToGlobal(position))
 
     def _delete_current_row(self) -> None:
         current_index = self.currentIndex()
@@ -192,7 +200,9 @@ class EstimateTableView(QTableView):
     def get_model(self) -> EstimateTableModel:
         return self._table_model
 
-    def get_cell_value(self, row: int, column: int, role: int = Qt.DisplayRole) -> Any:
+    def get_cell_value(
+        self, row: int, column: int, role: int = Qt.ItemDataRole.DisplayRole
+    ) -> Any:
         if not (0 <= row < self._table_model.rowCount()):
             return None
         if not (0 <= column < self._table_model.columnCount()):
@@ -203,13 +213,13 @@ class EstimateTableView(QTableView):
         return self._table_model.data(index, role)
 
     def get_cell_display_text(self, row: int, column: int) -> str:
-        value = self.get_cell_value(row, column, Qt.DisplayRole)
+        value = self.get_cell_value(row, column, Qt.ItemDataRole.DisplayRole)
         if value is None:
             return ""
         return str(value)
 
     def get_cell_edit_value(self, row: int, column: int) -> Any:
-        return self.get_cell_value(row, column, Qt.EditRole)
+        return self.get_cell_value(row, column, Qt.ItemDataRole.EditRole)
 
     def get_cell_edit_text(self, row: int, column: int) -> str:
         value = self.get_cell_edit_value(row, column)
@@ -228,7 +238,7 @@ class EstimateTableView(QTableView):
         index = self._table_model.index(row, column)
         if not index.isValid():
             return False
-        return bool(self._table_model.setData(index, value, Qt.EditRole))
+        return bool(self._table_model.setData(index, value, Qt.ItemDataRole.EditRole))
 
     def set_cell_text(self, row: int, column: int, value: str) -> bool:
         return self.set_cell_value(row, column, str(value))
@@ -250,7 +260,7 @@ class EstimateTableView(QTableView):
         index = self._table_model.index(row, column)
         if not index.isValid():
             return False
-        return bool(self._table_model.flags(index) & Qt.ItemIsEditable)
+        return bool(self._table_model.flags(index) & Qt.ItemFlag.ItemIsEditable)
 
     def focus_cell(self, row: int, column: int, *, start_edit: bool = False) -> None:
         if not (0 <= row < self._table_model.rowCount()):
@@ -259,7 +269,7 @@ class EstimateTableView(QTableView):
         if not index.isValid():
             return
         self.setCurrentIndex(index)
-        if start_edit and (self._table_model.flags(index) & Qt.ItemIsEditable):
+        if start_edit and (self._table_model.flags(index) & Qt.ItemFlag.ItemIsEditable):
             self.edit(index)
 
     def begin_cell_edit(self, row: int, column: int) -> bool:
@@ -320,6 +330,6 @@ class EstimateTableView(QTableView):
     def set_column_stretch(self, column: int, stretch: bool = True) -> None:
         header = self.horizontalHeader()
         if stretch:
-            header.setSectionResizeMode(column, QHeaderView.Stretch)
+            header.setSectionResizeMode(column, QHeaderView.ResizeMode.Stretch)
         else:
-            header.setSectionResizeMode(column, QHeaderView.Interactive)
+            header.setSectionResizeMode(column, QHeaderView.ResizeMode.Interactive)

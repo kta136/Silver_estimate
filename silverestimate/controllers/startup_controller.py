@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any, Optional
 
-from PyQt5.QtWidgets import QMessageBox, QWidget
+from PyQt6.QtWidgets import QMessageBox, QWidget
 
 from silverestimate.infrastructure.app_constants import DB_PATH
 from silverestimate.services.auth_service import (
@@ -161,10 +161,10 @@ class StartupController:
                 self._parent,
                 "Recover Unsaved Data",
                 message,
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.Yes,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
             )
-            if reply == QMessageBox.Yes:
+            if reply == QMessageBox.StandardButton.Yes:
                 try:
                     if db_cls.recover_encrypt_plain_to_encrypted(
                         candidate,

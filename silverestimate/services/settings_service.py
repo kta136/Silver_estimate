@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from PyQt5.QtGui import QFont
+from PyQt6.QtGui import QFont
 
 from silverestimate.infrastructure.settings import QSettings, get_app_settings
 
@@ -55,7 +55,7 @@ class SettingsService:
         )
         try:
             return int(size)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return int(default_size)
 
     def save_table_font_size(self, size: int) -> None:

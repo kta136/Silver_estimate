@@ -3,11 +3,10 @@ import logging
 import sqlite3
 import time
 
-from PyQt5.QtCore import QLocale, QModelIndex, QObject, Qt, QThread, QTimer, pyqtSignal
-from PyQt5.QtGui import QDoubleValidator
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import QLocale, QModelIndex, QObject, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtGui import QDoubleValidator
+from PyQt6.QtWidgets import (
     QAbstractItemView,
-    QComboBox,
     QFrame,
     QHBoxLayout,
     QHeaderView,
@@ -24,6 +23,7 @@ from silverestimate.domain.item_validation import ItemValidationError, validate_
 from silverestimate.persistence.items_repository import fetch_item_catalog_rows
 from silverestimate.ui.models import ItemMasterTableModel
 from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
+from silverestimate.ui.themed_controls import ThemedComboBox
 
 
 class _ItemMasterLoadWorker(QObject):
@@ -105,8 +105,20 @@ class ItemMasterWidget(QWidget):
                 QLabel#ItemMasterFormHeading {
                     font-size: 11pt;
                     font-weight: 700;
-                    color: #0f172a;
+                    color: __TEXT_STRONG__;
                     padding-bottom: 2px;
+                }
+                QLabel#ItemMasterFormHeading[formMode="edit"] {
+                    color: __PRIMARY_BG__;
+                }
+                QLabel#ItemMasterCountLabel {
+                    color: __TEXT_MUTED__;
+                    font-size: 8.5pt;
+                }
+                QFrame#ItemMasterSeparator {
+                    background-color: __CARD_BORDER_SOFT__;
+                    border: none;
+                    max-height: 1px;
                 }
                 QTableView {
                     border-radius: 10px;
@@ -135,7 +147,7 @@ class ItemMasterWidget(QWidget):
             "Maintain catalog codes, purity defaults, and wage settings."
         )
         subtitle_label.setObjectName("ItemMasterSubtitleLabel")
-        subtitle_label.setAlignment(Qt.AlignVCenter)
+        subtitle_label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         header_row.addWidget(subtitle_label)
         header_row.addStretch()
         outer.addLayout(header_row)
@@ -154,6 +166,7 @@ class ItemMasterWidget(QWidget):
 
         self._form_heading = QLabel("New Item")
         self._form_heading.setObjectName("ItemMasterFormHeading")
+        self._form_heading.setProperty("formMode", "new")
         form_vbox.addWidget(self._form_heading)
 
         # Code
@@ -183,7 +196,7 @@ class ItemMasterWidget(QWidget):
         self.purity_edit.setPlaceholderText("0.00 – 100.00")
         self.purity_edit.setToolTip("Default silver purity percentage.")
         purity_validator = QDoubleValidator(0.00, 100.00, 2, self.purity_edit)
-        purity_validator.setNotation(QDoubleValidator.StandardNotation)
+        purity_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
         purity_validator.setLocale(QLocale.system())
         self.purity_edit.setValidator(purity_validator)
         form_vbox.addWidget(purity_lbl)
@@ -197,7 +210,7 @@ class ItemMasterWidget(QWidget):
         wt_col.setSpacing(4)
         wt_lbl = QLabel("Wage Type")
         wt_lbl.setObjectName("ItemMasterFieldLabel")
-        self.wage_type_combo = QComboBox()
+        self.wage_type_combo = ThemedComboBox()
         self.wage_type_combo.addItems(["PC", "WT"])
         self.wage_type_combo.setToolTip("PC = Per Piece  |  WT = Per Weight (gram)")
         wt_col.addWidget(wt_lbl)
@@ -212,7 +225,7 @@ class ItemMasterWidget(QWidget):
         self.wage_rate_edit.setPlaceholderText("0.00")
         self.wage_rate_edit.setToolTip("Wage rate for the selected wage type.")
         rate_validator = QDoubleValidator(0.00, 100000.00, 2, self.wage_rate_edit)
-        rate_validator.setNotation(QDoubleValidator.StandardNotation)
+        rate_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
         rate_validator.setLocale(QLocale.system())
         self.wage_rate_edit.setValidator(rate_validator)
         wr_col.addWidget(wr_lbl)
@@ -246,8 +259,8 @@ class ItemMasterWidget(QWidget):
 
         # Separator
         sep = QFrame()
-        sep.setFrameShape(QFrame.HLine)
-        sep.setStyleSheet("background-color: #e2e8f0; border: none; max-height: 1px;")
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setObjectName("ItemMasterSeparator")
         form_vbox.addWidget(sep)
 
         self.delete_button = QPushButton("Delete Item")
@@ -272,8 +285,7 @@ class ItemMasterWidget(QWidget):
         self.search_edit.textChanged.connect(self._schedule_search)
         search_row.addWidget(self.search_edit)
         self._item_count_label = QLabel("")
-        self._item_count_label.setObjectName("ItemMasterFieldLabel")
-        self._item_count_label.setStyleSheet("color: #94a3b8; font-size: 8.5pt;")
+        self._item_count_label.setObjectName("ItemMasterCountLabel")
         search_row.addWidget(self._item_count_label)
         right_col.addLayout(search_row)
 
@@ -281,13 +293,17 @@ class ItemMasterWidget(QWidget):
         self.items_model = ItemMasterTableModel(self.items_table)
         self.items_table.setModel(self.items_model)
         hdr = self.items_table.horizontalHeader()
-        hdr.setSectionResizeMode(QHeaderView.Interactive)
-        hdr.setSectionResizeMode(1, QHeaderView.Stretch)
+        hdr.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.items_table.verticalHeader().setVisible(False)
         self.items_table.verticalHeader().setDefaultSectionSize(30)
-        self.items_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.items_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.items_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.items_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.items_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
+        self.items_table.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection
+        )
         self.items_table.setSortingEnabled(True)
         self.items_table.setAlternatingRowColors(True)
         self.items_table.setShowGrid(False)
@@ -472,18 +488,13 @@ class ItemMasterWidget(QWidget):
         self.purity_edit.setText(purity_str)
         self.wage_rate_edit.setText(wage_rate_str)
 
-        index = self.wage_type_combo.findText(wage_type, Qt.MatchFixedString)
+        index = self.wage_type_combo.findText(wage_type, Qt.MatchFlag.MatchFixedString)
         self.wage_type_combo.setCurrentIndex(index if index >= 0 else 0)
 
         # Switch form panel to edit mode
         self._form_heading.setText(f"Editing: {code}")
-        self._form_heading.setStyleSheet(
-            "font-size: 11pt; font-weight: 700; color: #0f766e; padding-bottom: 2px;"
-        )
+        self._set_form_heading_mode("edit")
         self.code_edit.setReadOnly(True)
-        self.code_edit.setStyleSheet(
-            "background-color: #f1f5f9; color: #475569; border: 1px solid #d8e1ec;"
-        )
         self.add_button.setVisible(False)
         self.update_button.setVisible(True)
         self.delete_button.setEnabled(True)
@@ -504,9 +515,7 @@ class ItemMasterWidget(QWidget):
 
         # Switch form panel back to add mode
         self._form_heading.setText("New Item")
-        self._form_heading.setStyleSheet(
-            "font-size: 11pt; font-weight: 700; color: #0f172a; padding-bottom: 2px;"
-        )
+        self._set_form_heading_mode("new")
         self.add_button.setVisible(True)
         self.update_button.setVisible(False)
         self.delete_button.setEnabled(False)
@@ -515,6 +524,17 @@ class ItemMasterWidget(QWidget):
             self.items_table.clearSelection()
             self.items_table.setCurrentIndex(QModelIndex())
         self.show_status("Form cleared.", 1500)
+
+    def _set_form_heading_mode(self, mode: str) -> None:
+        self._form_heading.setProperty("formMode", mode)
+        self._refresh_widget_style(self._form_heading)
+
+    @staticmethod
+    def _refresh_widget_style(widget: QWidget) -> None:
+        style = widget.style()
+        style.unpolish(widget)
+        style.polish(widget)
+        widget.update()
 
     def _selected_item_payload(self):
         selection_model = self.items_table.selectionModel()
@@ -640,11 +660,11 @@ class ItemMasterWidget(QWidget):
             f"Are you sure you want to delete item '{code}'?\n"
             f"WARNING: This may affect past estimates using this item code.\n"
             f"This action cannot be undone.",
-            QMessageBox.Yes | QMessageBox.Cancel,
-            QMessageBox.Cancel,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
         )
 
-        if reply == QMessageBox.Yes:
+        if reply == QMessageBox.StandardButton.Yes:
             success = self.db_manager.delete_item(code)
             if success:
                 self.show_status(f"Item '{code}' deleted successfully.", 3000)
@@ -662,7 +682,7 @@ class ItemMasterWidget(QWidget):
 
     def keyPressEvent(self, event):
         """Handle key press events."""
-        if event.key() == Qt.Key_Escape:
+        if event.key() == Qt.Key.Key_Escape:
             selection_model = self.items_table.selectionModel()
             if selection_model and selection_model.hasSelection():
                 self.clear_form()

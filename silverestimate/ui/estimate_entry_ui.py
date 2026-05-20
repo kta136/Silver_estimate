@@ -1,22 +1,28 @@
 #!/usr/bin/env python
 """Estimate entry table delegates."""
 
-from PyQt5.QtCore import QEvent, Qt, QTimer
-from PyQt5.QtGui import QDoubleValidator, QIntValidator
-from PyQt5.QtWidgets import QLineEdit, QStyledItemDelegate
+from PyQt6.QtCore import QEvent, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QDoubleValidator, QIntValidator
+from PyQt6.QtWidgets import QLineEdit, QStyledItemDelegate
 
 from silverestimate.ui import estimate_table_formatting
 from silverestimate.ui.numeric_font import numeric_table_font
 
-from .estimate_entry_logic import constants as table_cols
+from .estimate_entry_logic.column_specs import (
+    column_uses_blank_zero_editor,
+    get_column_spec,
+)
 
 
 class NumericDelegate(QStyledItemDelegate):
     """Delegate that validates and normalizes numeric table cell input."""
 
+    reverse_requested = pyqtSignal()
+    manual_row_navigation_requested = pyqtSignal()
+
     @staticmethod
     def _style_editor(editor: QLineEdit) -> None:
-        editor.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        editor.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         editor.setClearButtonEnabled(False)
         editor.setFont(numeric_table_font(editor.font()))
 
@@ -26,21 +32,15 @@ class NumericDelegate(QStyledItemDelegate):
         self._style_editor(editor)
         col = index.column()
         locale = estimate_table_formatting.get_estimate_table_locale()
-        validator: QDoubleValidator | QIntValidator
+        spec = get_column_spec(col)
 
-        if col in (
-            table_cols.COL_GROSS,
-            table_cols.COL_POLY,
-            table_cols.COL_PURITY,
-            table_cols.COL_WAGE_RATE,
-        ):
-            decimals = 3 if col in (table_cols.COL_GROSS, table_cols.COL_POLY) else 2
-            validator = QDoubleValidator(0.0, 999999.999, decimals, editor)
-            validator.setNotation(QDoubleValidator.StandardNotation)
-            validator.setLocale(locale)
-            editor.setValidator(validator)
-        elif col == table_cols.COL_PIECES:
+        if spec is not None and spec.precision == 0:
             validator = QIntValidator(0, 999999, editor)
+            editor.setValidator(validator)
+        elif spec is not None and spec.precision is not None:
+            validator = QDoubleValidator(0.0, 999999.999, spec.precision, editor)
+            validator.setNotation(QDoubleValidator.Notation.StandardNotation)
+            validator.setLocale(locale)
             editor.setValidator(validator)
         else:
             return editor
@@ -53,15 +53,15 @@ class NumericDelegate(QStyledItemDelegate):
             super().setEditorData(editor, index)
             return
 
-        value = index.model().data(index, Qt.EditRole)
+        value = index.model().data(index, Qt.ItemDataRole.EditRole)
         col = index.column()
-        if col in (table_cols.COL_GROSS, table_cols.COL_POLY):
+        if column_uses_blank_zero_editor(col):
             try:
                 if value is not None and float(value) == 0.0:
                     display_text = ""
                 else:
                     display_text = str(value) if value is not None else ""
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 display_text = str(value) if value is not None else ""
         else:
             display_text = str(value) if value is not None else ""
@@ -77,33 +77,38 @@ class NumericDelegate(QStyledItemDelegate):
         col = index.column()
         value = editor.text().strip()
         locale = estimate_table_formatting.get_estimate_table_locale()
+        spec = get_column_spec(col)
 
-        if col in (table_cols.COL_GROSS, table_cols.COL_POLY):
+        if column_uses_blank_zero_editor(col):
             if not value:
-                model.setData(index, 0.0, Qt.EditRole)
+                model.setData(index, 0.0, Qt.ItemDataRole.EditRole)
             else:
                 double_val, ok = locale.toDouble(value)
                 if ok and double_val == 0.0:
-                    model.setData(index, 0.0, Qt.EditRole)
+                    model.setData(index, 0.0, Qt.ItemDataRole.EditRole)
                 elif ok:
-                    model.setData(index, double_val, Qt.EditRole)
+                    model.setData(index, double_val, Qt.ItemDataRole.EditRole)
                 else:
-                    model.setData(index, 0.0, Qt.EditRole)
+                    model.setData(index, 0.0, Qt.ItemDataRole.EditRole)
             return
 
         try:
-            if col in (table_cols.COL_PURITY, table_cols.COL_WAGE_RATE):
+            if spec is not None and spec.precision == 0:
+                model.setData(
+                    index, int(value) if value else 0, Qt.ItemDataRole.EditRole
+                )
+            elif spec is not None and spec.precision is not None:
                 double_val, ok = locale.toDouble(value)
-                model.setData(index, double_val if ok else 0.0, Qt.EditRole)
-            elif col == table_cols.COL_PIECES:
-                model.setData(index, int(value) if value else 0, Qt.EditRole)
+                model.setData(
+                    index, double_val if ok else 0.0, Qt.ItemDataRole.EditRole
+                )
             else:
-                model.setData(index, value, Qt.EditRole)
+                model.setData(index, value, Qt.ItemDataRole.EditRole)
         except ValueError:
-            if col == table_cols.COL_PIECES:
-                model.setData(index, 0, Qt.EditRole)
+            if spec is not None and spec.precision == 0:
+                model.setData(index, 0, Qt.ItemDataRole.EditRole)
             else:
-                model.setData(index, value, Qt.EditRole)
+                model.setData(index, value, Qt.ItemDataRole.EditRole)
 
     def updateEditorGeometry(self, editor, option, index):
         if isinstance(editor, QLineEdit):
@@ -112,57 +117,34 @@ class NumericDelegate(QStyledItemDelegate):
             super().updateEditorGeometry(editor, option, index)
 
     def eventFilter(self, editor, event):
-        if event.type() == QEvent.KeyPress and isinstance(editor, QLineEdit):
+        if event.type() == QEvent.Type.KeyPress and isinstance(editor, QLineEdit):
             index = editor.property("modelIndex")
             if index and index.isValid():
                 col = index.column()
                 key = event.key()
-                if key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Tab):
-                    if (
-                        col
-                        in (
-                            table_cols.COL_GROSS,
-                            table_cols.COL_POLY,
-                        )
-                        and editor.text() == ""
-                    ):
-                        index.model().setData(index, 0.0, Qt.EditRole)
+                if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Tab):
+                    if column_uses_blank_zero_editor(col) and editor.text() == "":
+                        index.model().setData(index, 0.0, Qt.ItemDataRole.EditRole)
                         self.closeEditor.emit(
-                            editor, QStyledItemDelegate.SubmitModelCache
+                            editor, QStyledItemDelegate.EndEditHint.SubmitModelCache
                         )
                         return True
-                elif key == Qt.Key_Backspace and editor.text() == "":
-                    self.closeEditor.emit(editor, QStyledItemDelegate.NoHint)
-                    table_widget = self.parent()
-                    if table_widget:
-                        estimate_widget = (
-                            getattr(table_widget, "host_widget", None)
-                            or table_widget.parent()
-                        )
-                        if estimate_widget and hasattr(
-                            estimate_widget, "move_to_previous_cell"
-                        ):
-                            from PyQt5.QtCore import QTimer
-
-                            QTimer.singleShot(0, estimate_widget.move_to_previous_cell)
+                elif key == Qt.Key.Key_Backspace and editor.text() == "":
+                    self.closeEditor.emit(
+                        editor, QStyledItemDelegate.EndEditHint.NoHint
+                    )
+                    QTimer.singleShot(0, self.reverse_requested.emit)
                     return True
-                elif key in (Qt.Key_Up, Qt.Key_Down):
-                    table_widget = self.parent()
-                    if table_widget:
-                        estimate_widget = (
-                            getattr(table_widget, "host_widget", None)
-                            or table_widget.parent()
-                        )
-                        if estimate_widget and hasattr(
-                            estimate_widget, "_mark_manual_row_navigation"
-                        ):
-                            estimate_widget._mark_manual_row_navigation()
+                elif key in (Qt.Key.Key_Up, Qt.Key.Key_Down):
+                    self.manual_row_navigation_requested.emit()
 
         return super().eventFilter(editor, event)
 
 
 class CodeDelegate(QStyledItemDelegate):
     """Delegate that normalizes code edits and preserves Enter navigation."""
+
+    advance_requested = pyqtSignal()
 
     @staticmethod
     def _normalize_code(value) -> str:
@@ -171,7 +153,7 @@ class CodeDelegate(QStyledItemDelegate):
     def createEditor(self, parent, option, index):
         editor = QLineEdit(parent)
         editor.setProperty("modelIndex", index)
-        editor.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        editor.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         editor.installEventFilter(self)
         return editor
 
@@ -180,7 +162,7 @@ class CodeDelegate(QStyledItemDelegate):
             super().setEditorData(editor, index)
             return
 
-        value = index.model().data(index, Qt.EditRole)
+        value = index.model().data(index, Qt.ItemDataRole.EditRole)
         text = str(value) if value is not None else ""
         editor.setText(text)
         editor.setProperty("originalCode", self._normalize_code(text))
@@ -191,32 +173,27 @@ class CodeDelegate(QStyledItemDelegate):
             super().setModelData(editor, model, index)
             return
 
-        model.setData(index, self._normalize_code(editor.text()), Qt.EditRole)
+        model.setData(
+            index, self._normalize_code(editor.text()), Qt.ItemDataRole.EditRole
+        )
 
     def eventFilter(self, editor, event):
-        if event.type() == QEvent.KeyPress and isinstance(editor, QLineEdit):
+        if event.type() == QEvent.Type.KeyPress and isinstance(editor, QLineEdit):
             index = editor.property("modelIndex")
             if index and index.isValid():
                 key = event.key()
-                if key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Tab):
+                if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Tab):
                     original_code = str(editor.property("originalCode") or "")
                     unchanged_code = (
                         self._normalize_code(editor.text()) == original_code
                     )
                     self.commitData.emit(editor)
-                    self.closeEditor.emit(editor, QStyledItemDelegate.NoHint)
+                    self.closeEditor.emit(
+                        editor, QStyledItemDelegate.EndEditHint.NoHint
+                    )
 
                     if unchanged_code:
-                        table_widget = self.parent()
-                        if table_widget:
-                            estimate_widget = (
-                                getattr(table_widget, "host_widget", None)
-                                or table_widget.parent()
-                            )
-                            if estimate_widget and hasattr(
-                                estimate_widget, "move_to_next_cell"
-                            ):
-                                QTimer.singleShot(0, estimate_widget.move_to_next_cell)
+                        QTimer.singleShot(0, self.advance_requested.emit)
                     return True
 
         return super().eventFilter(editor, event)

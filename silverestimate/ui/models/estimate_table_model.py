@@ -6,11 +6,18 @@ from dataclasses import replace
 from typing import Any, Optional
 from uuid import uuid4
 
-from PyQt5.QtCore import QAbstractTableModel, QModelIndex, Qt, pyqtSignal
-from PyQt5.QtGui import QBrush, QColor
+from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt, pyqtSignal
+from PyQt6.QtGui import QBrush, QColor
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
-from silverestimate.ui import estimate_table_formatting
+from silverestimate.ui.estimate_entry_logic.column_specs import (
+    NUMERIC_COLUMNS,
+    column_count,
+    header_for_column,
+    is_editable_column,
+    precision_for_column,
+    table_headers,
+)
 from silverestimate.ui.estimate_entry_logic.constants import (
     COL_CODE,
     COL_FINE_WT,
@@ -24,6 +31,7 @@ from silverestimate.ui.estimate_entry_logic.constants import (
     COL_WAGE_AMT,
     COL_WAGE_RATE,
 )
+from silverestimate.ui.estimate_table_formatting import format_indian_number
 from silverestimate.ui.numeric_font import numeric_table_font
 from silverestimate.ui.view_models.estimate_entry_view_model import (
     EstimateEntryRowState,
@@ -40,21 +48,9 @@ class EstimateTableModel(QAbstractTableModel):
     # Signal emitted when data changes (row, column, old_value, new_value)
     data_changed_detailed = pyqtSignal(int, int, object, object)
 
-    # Column headers
-    HEADERS = [
-        "Code",
-        "Item Name",
-        "Gross",
-        "Poly",
-        "Net Wt",
-        "Purity",
-        "Wage Rate",
-        "Pieces",
-        "Wage Amt",
-        "Fine Wt",
-        "Type",
-    ]
-    _NUMERIC_COLUMNS = estimate_table_formatting.NUMERIC_COLUMNS
+    # Compatibility shim for older tests and callers that read the class attr.
+    HEADERS = list(table_headers())
+    _NUMERIC_COLUMNS = NUMERIC_COLUMNS
 
     def __init__(self, parent=None):
         """Initialize the table model.
@@ -100,10 +96,9 @@ class EstimateTableModel(QAbstractTableModel):
 
     def _display_cell_value(self, row_data: EstimateEntryRowState, col: int) -> Any:
         raw_value = self._raw_cell_value(row_data, col)
-        if col in self._NUMERIC_COLUMNS:
-            return estimate_table_formatting.format_estimate_table_number(
-                col, raw_value
-            )
+        precision = precision_for_column(col)
+        if precision is not None:
+            return format_indian_number(raw_value, precision)
         return raw_value
 
     @staticmethod
@@ -121,9 +116,9 @@ class EstimateTableModel(QAbstractTableModel):
         """Return the number of columns in the model."""
         if parent.isValid():
             return 0
-        return len(self.HEADERS)
+        return column_count()
 
-    def data(self, index: QModelIndex, role: int = Qt.DisplayRole) -> Any:
+    def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
         """Return data for the given index and role.
 
         Args:
@@ -139,16 +134,16 @@ class EstimateTableModel(QAbstractTableModel):
         row_data = self._rows[index.row()]
         col = index.column()
 
-        if role == Qt.DisplayRole:
+        if role == Qt.ItemDataRole.DisplayRole:
             return self._display_cell_value(row_data, col)
 
-        if role == Qt.EditRole:
+        if role == Qt.ItemDataRole.EditRole:
             return self._raw_cell_value(row_data, col)
 
-        if role == Qt.FontRole and col in self._NUMERIC_COLUMNS:
+        if role == Qt.ItemDataRole.FontRole and col in self._NUMERIC_COLUMNS:
             return self._numeric_display_font()
 
-        if role == Qt.BackgroundRole and col == COL_TYPE:
+        if role == Qt.ItemDataRole.BackgroundRole and col == COL_TYPE:
             category = row_data.category
             if category is EstimateLineCategory.RETURN:
                 return QBrush(QColor("#dbeafe"))
@@ -156,7 +151,7 @@ class EstimateTableModel(QAbstractTableModel):
                 return QBrush(QColor("#fff7ed"))
             return QBrush(QColor("#f8fafc"))
 
-        if role == Qt.ForegroundRole and col == COL_TYPE:
+        if role == Qt.ItemDataRole.ForegroundRole and col == COL_TYPE:
             category = row_data.category
             if category is EstimateLineCategory.RETURN:
                 return QBrush(QColor("#1d4ed8"))
@@ -164,21 +159,31 @@ class EstimateTableModel(QAbstractTableModel):
                 return QBrush(QColor("#b45309"))
             return QBrush(QColor("#334155"))
 
-        if role == Qt.BackgroundRole and col in (COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT):
+        if role == Qt.ItemDataRole.BackgroundRole and col in (
+            COL_NET_WT,
+            COL_WAGE_AMT,
+            COL_FINE_WT,
+        ):
             return QBrush(QColor("#f1f5f9"))
 
-        if role == Qt.ForegroundRole and col in (COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT):
+        if role == Qt.ItemDataRole.ForegroundRole and col in (
+            COL_NET_WT,
+            COL_WAGE_AMT,
+            COL_FINE_WT,
+        ):
             return QBrush(QColor("#0f172a"))
 
-        if role == Qt.TextAlignmentRole:
+        if role == Qt.ItemDataRole.TextAlignmentRole:
             if col in self._NUMERIC_COLUMNS:
-                return Qt.AlignRight | Qt.AlignVCenter
+                return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
             if col == COL_TYPE:
-                return Qt.AlignCenter | Qt.AlignVCenter
+                return Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter
 
         return None
 
-    def setData(self, index: QModelIndex, value: Any, role: int = Qt.EditRole) -> bool:
+    def setData(
+        self, index: QModelIndex, value: Any, role: int = Qt.ItemDataRole.EditRole
+    ) -> bool:
         """Set data for the given index.
 
         Args:
@@ -192,7 +197,7 @@ class EstimateTableModel(QAbstractTableModel):
         if not index.isValid() or not (0 <= index.row() < len(self._rows)):
             return False
 
-        if role != Qt.EditRole:
+        if role != Qt.ItemDataRole.EditRole:
             return False
 
         row_idx = index.row()
@@ -253,24 +258,29 @@ class EstimateTableModel(QAbstractTableModel):
                 return True
 
             # Store old value for detailed signal
-            old_value = self.data(index, Qt.DisplayRole)
+            old_value = self.data(index, Qt.ItemDataRole.DisplayRole)
 
             # Update the row
             self._rows[row_idx] = new_row
 
             # Emit standard signal
-            self.dataChanged.emit(index, index, [Qt.DisplayRole, Qt.EditRole])
+            self.dataChanged.emit(
+                index, index, [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole]
+            )
 
             # Emit detailed signal with row, column, old and new values
             self.data_changed_detailed.emit(row_idx, col, old_value, value)
 
             return True
 
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return False
 
     def headerData(
-        self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole
+        self,
+        section: int,
+        orientation: Qt.Orientation,
+        role: int = Qt.ItemDataRole.DisplayRole,
     ) -> Any:
         """Return header data for the given section.
 
@@ -282,17 +292,15 @@ class EstimateTableModel(QAbstractTableModel):
         Returns:
             The header data, or None if not available
         """
-        if role != Qt.DisplayRole:
+        if role != Qt.ItemDataRole.DisplayRole:
             return None
 
-        if orientation == Qt.Horizontal and 0 <= section < len(self.HEADERS):
-            return self.HEADERS[section]
-        elif orientation == Qt.Vertical:
+        if orientation == Qt.Orientation.Horizontal:
+            return header_for_column(section)
+        elif orientation == Qt.Orientation.Vertical:
             return section + 1  # Row numbers starting from 1
 
-        return None
-
-    def flags(self, index: QModelIndex) -> Qt.ItemFlags:
+    def flags(self, index: QModelIndex) -> Qt.ItemFlag:
         """Return the item flags for the given index.
 
         Args:
@@ -302,19 +310,24 @@ class EstimateTableModel(QAbstractTableModel):
             The item flags
         """
         if not index.isValid():
-            return Qt.ItemFlags(Qt.NoItemFlags)
+            return Qt.ItemFlag(Qt.ItemFlag.NoItemFlags)
 
-        # Calculated columns are read-only
         col = index.column()
-        if col in (COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT, COL_TYPE):
-            return Qt.ItemFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+        if not is_editable_column(col):
+            return Qt.ItemFlag(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
         if col == COL_PIECES:
             row_data = self.get_row(index.row())
             if row_data and row_data.wage_type != "PC":
-                return Qt.ItemFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+                return Qt.ItemFlag(
+                    Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
+                )
 
         # All other columns are editable
-        return Qt.ItemFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable)
+        return Qt.ItemFlag(
+            Qt.ItemFlag.ItemIsEnabled
+            | Qt.ItemFlag.ItemIsSelectable
+            | Qt.ItemFlag.ItemIsEditable
+        )
 
     def set_row_wage_type(self, row_idx: int, wage_type: str) -> bool:
         """Update a row's wage type and refresh pieces editability."""
@@ -328,7 +341,11 @@ class EstimateTableModel(QAbstractTableModel):
 
         self._rows[row_idx] = replace(row_data, wage_type=normalized)
         pieces_index = self.index(row_idx, COL_PIECES)
-        self.dataChanged.emit(pieces_index, pieces_index, [Qt.DisplayRole, Qt.EditRole])
+        self.dataChanged.emit(
+            pieces_index,
+            pieces_index,
+            [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole],
+        )
         return True
 
     # Custom methods for managing rows
@@ -419,7 +436,11 @@ class EstimateTableModel(QAbstractTableModel):
         # Emit dataChanged for the entire row
         left_index = self.index(row_idx, 0)
         right_index = self.index(row_idx, self.columnCount() - 1)
-        self.dataChanged.emit(left_index, right_index, [Qt.DisplayRole, Qt.EditRole])
+        self.dataChanged.emit(
+            left_index,
+            right_index,
+            [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole],
+        )
 
         return True
 
@@ -444,7 +465,9 @@ class EstimateTableModel(QAbstractTableModel):
             left_index = self.index(row_idx, 0)
             right_index = self.index(row_idx, self.columnCount() - 1)
             self.dataChanged.emit(
-                left_index, right_index, [Qt.DisplayRole, Qt.EditRole]
+                left_index,
+                right_index,
+                [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole],
             )
 
     def set_all_rows(self, rows: list[EstimateEntryRowState]) -> None:

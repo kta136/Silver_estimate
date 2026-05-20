@@ -1,7 +1,9 @@
-from PyQt5.QtCore import QSizeF
-from PyQt5.QtGui import QPageLayout, QPageSize
-from PyQt5.QtPrintSupport import QPrinter, QPrintPreviewDialog, QPrintPreviewWidget
-from PyQt5.QtWidgets import QMessageBox, QToolBar
+from pathlib import Path
+
+from PyQt6.QtCore import QSizeF
+from PyQt6.QtGui import QPageLayout, QPageSize
+from PyQt6.QtPrintSupport import QPrinter, QPrintPreviewDialog, QPrintPreviewWidget
+from PyQt6.QtWidgets import QFileDialog, QMessageBox, QToolBar
 
 from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.ui.print_payload_builder import PrintPreviewPayload
@@ -87,10 +89,12 @@ def test_preview_defaults_persist_updated_print_preferences(
         persist_estimate_layout=saved_layouts.append,
     )
     monkeypatch.setattr(controller._printer, "printerName", lambda: "Warehouse Printer")
-    controller._printer.setOrientation(QPrinter.Portrait)
-    controller._printer.setPageSize(QPageSize(QPageSize.Legal))
+    controller._printer.setPageOrientation(QPageLayout.Orientation.Portrait)
+    controller._printer.setPageSize(QPageSize(QPageSize.PageSizeId.Legal))
     # Read the actual margins the printer reports (null printer enforces its own minimums)
-    actual_margins = controller._printer.pageLayout().margins(QPageLayout.Millimeter)
+    actual_margins = controller._printer.pageLayout().margins(
+        QPageLayout.Unit.Millimeter
+    )
     expected_margins_str = ",".join(
         str(max(0, int(round(v))))
         for v in (
@@ -131,7 +135,9 @@ def test_preview_defaults_store_custom_page_size_dimensions(qt_app, settings_stu
         printer=QPrinter(),
         render_document=lambda *args: None,
     )
-    custom_page = QPageSize(QSizeF(120.0, 190.0), QPageSize.Millimeter, "Counter Slip")
+    custom_page = QPageSize(
+        QSizeF(120.0, 190.0), QPageSize.Unit.Millimeter, "Counter Slip"
+    )
     controller._printer.setPageSize(custom_page)
     payload = PrintPreviewPayload(
         html_content="<html><body><p>Preview</p></body></html>",
@@ -177,6 +183,10 @@ def test_quick_print_closes_preview_without_success_popup(monkeypatch):
         raise AssertionError("Success popup should not be shown after quick print")
 
     monkeypatch.setattr(QMessageBox, "information", _unexpected_information)
+    monkeypatch.setattr(
+        "silverestimate.ui.print_preview_controller.validate_quick_print_printer",
+        lambda printer: (True, ""),
+    )
 
     controller._quick_print_current(preview, payload, parent_widget=None)
 
@@ -211,8 +221,140 @@ def test_quick_print_failure_keeps_preview_open_and_shows_error(monkeypatch):
         "critical",
         lambda *args: critical_calls.append(args),
     )
+    monkeypatch.setattr(
+        "silverestimate.ui.print_preview_controller.validate_quick_print_printer",
+        lambda printer: (True, ""),
+    )
 
     controller._quick_print_current(preview, payload, parent_widget=None)
 
     assert preview.accept_calls == 0
+    assert len(critical_calls) == 1
+
+
+def test_quick_print_blocks_missing_printer_before_render(monkeypatch):
+    render_calls = []
+    controller = PrintPreviewController(
+        printer=QPrinter(),
+        render_document=lambda *args: render_calls.append(args),
+    )
+    payload = PrintPreviewPayload(
+        html_content="<html><body><p>Preview</p></body></html>",
+        title="Print Preview",
+        document_kind="estimate",
+        identifier="V-005",
+        suggested_filename="Estimate-V-005.pdf",
+    )
+
+    class _PreviewStub:
+        def __init__(self):
+            self.accept_calls = 0
+
+        def accept(self):
+            self.accept_calls += 1
+
+    preview = _PreviewStub()
+    critical_calls = []
+    monkeypatch.setattr(
+        "silverestimate.ui.print_preview_controller.validate_quick_print_printer",
+        lambda printer: (False, "The selected printer is no longer available."),
+    )
+    monkeypatch.setattr(
+        QMessageBox,
+        "critical",
+        lambda *args: critical_calls.append(args),
+    )
+
+    controller._quick_print_current(preview, payload, parent_widget=None)
+
+    assert render_calls == []
+    assert preview.accept_calls == 0
+    assert len(critical_calls) == 1
+    assert "no longer available" in critical_calls[0][2]
+
+
+def test_export_pdf_writes_temp_then_replaces_target(
+    qt_app, settings_stub, tmp_path, monkeypatch
+):
+    del qt_app, settings_stub
+    target = tmp_path / "estimate.pdf"
+    target.write_bytes(b"old-pdf")
+    render_targets = []
+
+    def _render_pdf(printer, html_content, table_mode):
+        del html_content, table_mode
+        output_path = Path(printer.outputFileName())
+        render_targets.append(output_path)
+        output_path.write_bytes(b"%PDF-1.4\nok\n")
+
+    controller = PrintPreviewController(
+        printer=QPrinter(),
+        render_document=_render_pdf,
+    )
+    payload = PrintPreviewPayload(
+        html_content="<html><body><p>Preview</p></body></html>",
+        title="Print Preview",
+        document_kind="estimate",
+        identifier="V-006",
+        suggested_filename="Estimate-V-006.pdf",
+    )
+    info_calls = []
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        lambda *args, **kwargs: (str(target), "PDF Files (*.pdf)"),
+    )
+    monkeypatch.setattr(
+        QMessageBox,
+        "information",
+        lambda *args: info_calls.append(args),
+    )
+
+    controller._export_pdf_via_dialog(payload, parent_widget=None)
+
+    assert target.read_bytes() == b"%PDF-1.4\nok\n"
+    assert render_targets
+    assert render_targets[0] != target
+    assert not list(tmp_path.glob(".silverestimate-*.pdf"))
+    assert len(info_calls) == 1
+
+
+def test_export_pdf_empty_temp_keeps_existing_file(
+    qt_app, settings_stub, tmp_path, monkeypatch
+):
+    del qt_app, settings_stub
+    target = tmp_path / "estimate.pdf"
+    target.write_bytes(b"old-pdf")
+
+    def _render_empty_pdf(printer, html_content, table_mode):
+        del html_content, table_mode
+        Path(printer.outputFileName()).write_bytes(b"")
+
+    controller = PrintPreviewController(
+        printer=QPrinter(),
+        render_document=_render_empty_pdf,
+    )
+    payload = PrintPreviewPayload(
+        html_content="<html><body><p>Preview</p></body></html>",
+        title="Print Preview",
+        document_kind="estimate",
+        identifier="V-007",
+        suggested_filename="Estimate-V-007.pdf",
+    )
+    critical_calls = []
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        lambda *args, **kwargs: (str(target), "PDF Files (*.pdf)"),
+    )
+    monkeypatch.setattr(
+        QMessageBox,
+        "critical",
+        lambda *args: critical_calls.append(args),
+    )
+
+    controller._export_pdf_via_dialog(payload, parent_widget=None)
+
+    assert target.read_bytes() == b"old-pdf"
+    assert not list(tmp_path.glob(".silverestimate-*.pdf"))
     assert len(critical_calls) == 1

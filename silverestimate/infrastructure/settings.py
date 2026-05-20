@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from PyQt5.QtCore import QSettings
+from PyQt6.QtCore import QSettings
 
 from .app_constants import LEGACY_SETTINGS_ORG, SETTINGS_APP, SETTINGS_ORG
 

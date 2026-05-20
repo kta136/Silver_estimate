@@ -1,6 +1,6 @@
 import logging
 
-from PyQt5.QtWidgets import QComboBox, QDialog
+from PyQt6.QtWidgets import QComboBox, QDialog
 
 from silverestimate.ui.silver_bar_optimization_controller import (
     SilverBarOptimizationController,
@@ -56,7 +56,7 @@ class _AcceptedDialog:
         self.list_name = "Optimal-List"
         self.optimization_type = "min_bars"
 
-    def exec_(self):
+    def exec(self):
         return self.Accepted
 
 
@@ -64,14 +64,14 @@ def test_optimization_controller_creates_and_selects_generated_list(
     qt_app, monkeypatch
 ):
     del qt_app
-    from PyQt5.QtWidgets import QMessageBox
+    from PyQt6.QtWidgets import QMessageBox
 
     host = _OptimizationHost()
     controller = SilverBarOptimizationController(host)
     monkeypatch.setattr(
         QMessageBox,
         "information",
-        lambda *args, **kwargs: QMessageBox.Ok,
+        lambda *args, **kwargs: QMessageBox.StandardButton.Ok,
     )
 
     controller.generate_optimal_list(_AcceptedDialog)

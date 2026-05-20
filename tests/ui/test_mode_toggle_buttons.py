@@ -3,8 +3,8 @@
 import types
 
 import pytest
-from PyQt5.QtCore import Qt
-from PyQt5.QtTest import QTest
+from PyQt6.QtCore import Qt
+from PyQt6.QtTest import QTest
 
 from silverestimate.ui.estimate_entry import EstimateEntryWidget
 from silverestimate.ui.estimate_entry_logic import COL_TYPE
@@ -57,7 +57,7 @@ def _make_widget(db_manager):
     widget.presenter.handle_item_code = lambda row, code: False
     try:
         widget.item_table.cellChanged.disconnect(widget.handle_cell_changed)
-    except (TypeError, AttributeError):
+    except TypeError, AttributeError:
         pass
     return widget
 
@@ -201,7 +201,7 @@ def test_ctrl_r_keyboard_shortcut_toggles_return_mode(qtbot, fake_db):
         _wait_for_initialized(qtbot, widget)
         assert not widget.return_mode
 
-        QTest.keyClick(widget, Qt.Key_R, Qt.ControlModifier)
+        QTest.keyClick(widget, Qt.Key.Key_R, Qt.KeyboardModifier.ControlModifier)
         qtbot.waitUntil(
             lambda: (
                 widget.return_mode
@@ -214,7 +214,7 @@ def test_ctrl_r_keyboard_shortcut_toggles_return_mode(qtbot, fake_db):
             timeout=1000,
         )
 
-        QTest.keyClick(widget, Qt.Key_R, Qt.ControlModifier)
+        QTest.keyClick(widget, Qt.Key.Key_R, Qt.KeyboardModifier.ControlModifier)
         qtbot.waitUntil(
             lambda: (
                 (not widget.return_mode)
@@ -236,7 +236,7 @@ def test_ctrl_b_keyboard_shortcut_toggles_silver_bar_mode(qtbot, fake_db):
         _wait_for_initialized(qtbot, widget)
         assert not widget.silver_bar_mode
 
-        QTest.keyClick(widget, Qt.Key_B, Qt.ControlModifier)
+        QTest.keyClick(widget, Qt.Key.Key_B, Qt.KeyboardModifier.ControlModifier)
         qtbot.waitUntil(
             lambda: (
                 widget.silver_bar_mode
@@ -249,7 +249,7 @@ def test_ctrl_b_keyboard_shortcut_toggles_silver_bar_mode(qtbot, fake_db):
             timeout=1000,
         )
 
-        QTest.keyClick(widget, Qt.Key_B, Qt.ControlModifier)
+        QTest.keyClick(widget, Qt.Key.Key_B, Qt.KeyboardModifier.ControlModifier)
         qtbot.waitUntil(
             lambda: (
                 (not widget.silver_bar_mode)
@@ -270,12 +270,12 @@ def test_keyboard_shortcuts_respect_mutual_exclusion(qtbot, fake_db):
     try:
         _wait_for_initialized(qtbot, widget)
 
-        QTest.keyClick(widget, Qt.Key_R, Qt.ControlModifier)
+        QTest.keyClick(widget, Qt.Key.Key_R, Qt.KeyboardModifier.ControlModifier)
         qtbot.waitUntil(
             lambda: widget.return_mode and (not widget.silver_bar_mode), timeout=1000
         )
 
-        QTest.keyClick(widget, Qt.Key_B, Qt.ControlModifier)
+        QTest.keyClick(widget, Qt.Key.Key_B, Qt.KeyboardModifier.ControlModifier)
         qtbot.waitUntil(
             lambda: (
                 (not widget.return_mode)

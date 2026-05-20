@@ -2,7 +2,7 @@ import sqlite3
 import time
 import types
 
-from PyQt5.QtCore import QItemSelectionModel
+from PyQt6.QtCore import QItemSelectionModel
 
 from silverestimate.ui.item_master import ItemMasterWidget
 
@@ -75,7 +75,8 @@ def test_item_master_selection_populates_form_and_clear_resets(qtbot):
         widget.items_table.setCurrentIndex(index)
         widget.items_table.selectionModel().select(
             index,
-            QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Rows,
+            QItemSelectionModel.SelectionFlag.ClearAndSelect
+            | QItemSelectionModel.SelectionFlag.Rows,
         )
         widget.on_item_selected()
 

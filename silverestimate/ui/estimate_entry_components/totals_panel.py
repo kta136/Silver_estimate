@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from PyQt5.QtCore import QSize, Qt, QTimer, pyqtSignal
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtWidgets import (
     QAbstractItemView,
     QFormLayout,
     QFrame,
@@ -283,15 +283,17 @@ class TotalsPanel(QWidget):
             value_label = QLabel(default_value)
             value_label.setObjectName("MetricValue")
             value_label.setProperty("sectionKind", section_key)
-            value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            value_label.setAlignment(
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            )
             setattr(self, attr_name, value_label)
             form.addRow(row_label, value_label)
         return form
 
     def _create_separator(self):
         sep = QFrame()
-        sep.setFrameShape(QFrame.VLine)
-        sep.setFrameShadow(QFrame.Sunken)
+        sep.setFrameShape(QFrame.Shape.VLine)
+        sep.setFrameShadow(QFrame.Shadow.Sunken)
         return sep
 
     @staticmethod
@@ -307,7 +309,7 @@ class TotalsPanel(QWidget):
 
     def _setup_horizontal_ui(self) -> None:
         self.setObjectName("TotalsContainer")
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
 
         self._horizontal_main_layout = QHBoxLayout(self)
         self._horizontal_main_layout.setSpacing(8)
@@ -319,8 +321,10 @@ class TotalsPanel(QWidget):
         final_calc_form.setSpacing(4)
         final_calc_form.setHorizontalSpacing(8)
         final_calc_form.setVerticalSpacing(2)
-        final_calc_form.setRowWrapPolicy(QFormLayout.DontWrapRows)
-        final_calc_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        final_calc_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+        final_calc_form.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
+        )
 
         final_title_label = QLabel("Final Calculation")
         final_title_label.setObjectName("SectionTitle")
@@ -334,9 +338,11 @@ class TotalsPanel(QWidget):
         self.net_fine_label = QLabel("0.0")
         self.net_fine_label.setObjectName("MetricValue")
         self.net_fine_label.setProperty("sectionKind", self._FINAL_SECTION_KEY)
-        self.net_fine_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.net_fine_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
         self.net_fine_label.setSizePolicy(
-            QSizePolicy.MinimumExpanding, QSizePolicy.Preferred
+            QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Preferred
         )
         self.net_fine_label.setMinimumWidth(84)
         net_fine_header = self._create_metric_header("Net Fine Wt:")
@@ -345,24 +351,28 @@ class TotalsPanel(QWidget):
         self.net_wage_label = QLabel("0")
         self.net_wage_label.setObjectName("MetricValue")
         self.net_wage_label.setProperty("sectionKind", self._FINAL_SECTION_KEY)
-        self.net_wage_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.net_wage_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
         self.net_wage_label.setSizePolicy(
-            QSizePolicy.MinimumExpanding, QSizePolicy.Preferred
+            QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Preferred
         )
         self.net_wage_label.setMinimumWidth(84)
         net_wage_header = self._create_metric_header("Net Wage:")
         final_calc_form.addRow(net_wage_header, self.net_wage_label)
 
         line_before_grand = QFrame()
-        line_before_grand.setFrameShape(QFrame.HLine)
-        line_before_grand.setFrameShadow(QFrame.Sunken)
+        line_before_grand.setFrameShape(QFrame.Shape.HLine)
+        line_before_grand.setFrameShadow(QFrame.Shadow.Sunken)
         final_calc_form.addRow(line_before_grand)
 
         self.grand_total_label = QLabel("0")
         self.grand_total_label.setObjectName("GrandTotalValue")
-        self.grand_total_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.grand_total_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
         self.grand_total_label.setSizePolicy(
-            QSizePolicy.MinimumExpanding, QSizePolicy.Preferred
+            QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Preferred
         )
         self.grand_total_label.setMinimumWidth(96)
         grand_total_header = self._create_metric_header(
@@ -401,7 +411,7 @@ class TotalsPanel(QWidget):
         card = QFrame()
         card.setObjectName("TotalsCard")
         card.setProperty("sectionKind", section_key)
-        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(8, 6, 8, 6)
         card_layout.setSpacing(4)
@@ -424,7 +434,7 @@ class TotalsPanel(QWidget):
         form = QFormLayout()
         form.setHorizontalSpacing(8)
         form.setVerticalSpacing(2)
-        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         for label_text, attr_name, default_value in labels_attrs:
             label_widget = QLabel(label_text)
             label_widget.setObjectName("MetricLabel")
@@ -433,7 +443,9 @@ class TotalsPanel(QWidget):
             value_label = QLabel(default_value)
             value_label.setObjectName("MetricValue")
             value_label.setProperty("sectionKind", section_key)
-            value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            value_label.setAlignment(
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            )
             setattr(self, attr_name, value_label)
             form.addRow(label_widget, value_label)
 
@@ -444,13 +456,15 @@ class TotalsPanel(QWidget):
         card = QFrame()
         card.setObjectName("FinalCalcCard")
         card.setProperty("sectionKind", self._FINAL_SECTION_KEY)
-        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         final_layout = QFormLayout(card)
         final_layout.setContentsMargins(8, 8, 8, 8)
         final_layout.setHorizontalSpacing(8)
         final_layout.setVerticalSpacing(4)
-        final_layout.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        final_layout.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow
+        )
 
         final_title = QLabel("Final Calculation")
         final_title.setObjectName("SectionTitle")
@@ -465,7 +479,9 @@ class TotalsPanel(QWidget):
         self.net_fine_label = QLabel("0.0")
         self.net_fine_label.setObjectName("MetricValue")
         self.net_fine_label.setProperty("sectionKind", self._FINAL_SECTION_KEY)
-        self.net_fine_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.net_fine_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
         final_layout.addRow(
             self._create_metric_header("Net Fine Wt:"), self.net_fine_label
         )
@@ -473,19 +489,23 @@ class TotalsPanel(QWidget):
         self.net_wage_label = QLabel("0")
         self.net_wage_label.setObjectName("MetricValue")
         self.net_wage_label.setProperty("sectionKind", self._FINAL_SECTION_KEY)
-        self.net_wage_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.net_wage_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
         final_layout.addRow(
             self._create_metric_header("Net Wage:"), self.net_wage_label
         )
 
         line_before_grand = QFrame()
-        line_before_grand.setFrameShape(QFrame.HLine)
-        line_before_grand.setFrameShadow(QFrame.Sunken)
+        line_before_grand.setFrameShape(QFrame.Shape.HLine)
+        line_before_grand.setFrameShadow(QFrame.Shadow.Sunken)
         final_layout.addRow(line_before_grand)
 
         self.grand_total_label = QLabel("0")
         self.grand_total_label.setObjectName("GrandTotalValue")
-        self.grand_total_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.grand_total_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
         final_layout.addRow(
             self._create_metric_header("Grand Total:", object_name="GrandTotalLabel"),
             self.grand_total_label,
@@ -501,7 +521,7 @@ class TotalsPanel(QWidget):
         order: list[str] = []
         for idx in range(self._summary_sections_list.count()):
             item = self._summary_sections_list.item(idx)
-            key = item.data(Qt.UserRole) if item is not None else None
+            key = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
             key = str(key).strip().lower() if key is not None else ""
             if key not in valid_keys and item is not None:
                 card = self._summary_sections_list.itemWidget(item)
@@ -595,10 +615,10 @@ class TotalsPanel(QWidget):
                         title, labels_attrs, section_key
                     )
                 item = QListWidgetItem()
-                item.setData(Qt.UserRole, section_key)
-                item_flags = Qt.ItemIsEnabled | Qt.ItemIsSelectable
+                item.setData(Qt.ItemDataRole.UserRole, section_key)
+                item_flags = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
                 if section_key != self._FINAL_SECTION_KEY:
-                    item_flags |= Qt.ItemIsDragEnabled
+                    item_flags |= Qt.ItemFlag.ItemIsDragEnabled
                 item.setFlags(item_flags)
                 self._summary_sections_list.addItem(item)
                 self._summary_sections_list.setItemWidget(item, card)
@@ -609,7 +629,7 @@ class TotalsPanel(QWidget):
 
     def _setup_sidebar_ui(self) -> None:
         self.setObjectName("TotalsSidebar")
-        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(8, 8, 8, 8)
@@ -636,16 +656,22 @@ class TotalsPanel(QWidget):
         self._summary_sections_list = _SummarySectionsListWidget()
         self._summary_sections_list.setObjectName("SummarySectionsList")
         self._summary_sections_list.setSpacing(6)
-        self._summary_sections_list.setDragDropMode(QAbstractItemView.InternalMove)
-        self._summary_sections_list.setDefaultDropAction(Qt.MoveAction)
+        self._summary_sections_list.setDragDropMode(
+            QAbstractItemView.DragDropMode.InternalMove
+        )
+        self._summary_sections_list.setDefaultDropAction(Qt.DropAction.MoveAction)
         self._summary_sections_list.setDragDropOverwriteMode(False)
         self._summary_sections_list.setDropIndicatorShown(True)
-        self._summary_sections_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self._summary_sections_list.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection
+        )
         self._summary_sections_list.setUniformItemSizes(False)
         self._summary_sections_list.setVerticalScrollMode(
-            QAbstractItemView.ScrollPerPixel
+            QAbstractItemView.ScrollMode.ScrollPerPixel
         )
-        self._summary_sections_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._summary_sections_list.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
         self._summary_sections_list.swap_requested.connect(
             self._on_sidebar_section_swap_requested
         )

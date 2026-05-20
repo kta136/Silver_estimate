@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import traceback
 
-from PyQt5.QtWidgets import QMessageBox
+from PyQt6.QtWidgets import QMessageBox
 
 from ._host_proxy import HostProxy
 from .silver_bar_optimization import find_optimal_combination
@@ -15,7 +15,7 @@ class SilverBarOptimizationController(HostProxy):
 
     def generate_optimal_list(self, dialog_cls):
         dialog = dialog_cls(self.host)
-        if dialog.exec_() != dialog_cls.Accepted:
+        if dialog.exec() != dialog_cls.Accepted:
             return
 
         min_target = dialog.min_target

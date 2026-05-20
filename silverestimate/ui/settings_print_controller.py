@@ -3,21 +3,33 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from PyQt5.QtPrintSupport import QPrinterInfo
-from PyQt5.QtWidgets import QComboBox, QDoubleSpinBox, QSpinBox
+from PyQt6.QtPrintSupport import QPrinterInfo
+from PyQt6.QtWidgets import QComboBox, QDoubleSpinBox, QSpinBox
 
 from silverestimate.infrastructure.settings import SettingsStore
+from silverestimate.ui.print_page_settings import (
+    DEFAULT_ORIENTATION,
+    DEFAULT_PAGE_SIZE,
+    DEFAULT_PRINT_MARGINS,
+    PrintPageSettings,
+    load_print_page_settings,
+    save_print_page_settings,
+    serialize_margins,
+)
+from silverestimate.ui.print_page_settings import (
+    PRINT_ORIENTATION_MIGRATION_KEY as PRINT_ORIENTATION_MIGRATION_KEY,
+)
+from silverestimate.ui.print_page_settings import (
+    SUPPORTED_ORIENTATIONS as SUPPORTED_ORIENTATIONS,
+)
+from silverestimate.ui.print_page_settings import (
+    SUPPORTED_PAGE_SIZES as SUPPORTED_PAGE_SIZES,
+)
 
 LOGGER = logging.getLogger(__name__)
 
-DEFAULT_PRINT_MARGINS = (10, 2, 10, 2)
 DEFAULT_PREVIEW_ZOOM = 1.25
-DEFAULT_PAGE_SIZE = "A4"
-DEFAULT_ORIENTATION = "Landscape"
 DEFAULT_ESTIMATE_LAYOUT = "old"
-PRINT_ORIENTATION_MIGRATION_KEY = "print/orientation_explicit"
-SUPPORTED_PAGE_SIZES = ("A4", "A5", "Letter", "Legal", "Thermal 80mm")
-SUPPORTED_ORIENTATIONS = ("Portrait", "Landscape")
 SUPPORTED_ESTIMATE_LAYOUTS = ("old", "new", "thermal")
 
 
@@ -27,6 +39,9 @@ class PrintSettingsState:
     preview_zoom: float = DEFAULT_PREVIEW_ZOOM
     default_printer: str = ""
     page_size: str = DEFAULT_PAGE_SIZE
+    page_size_name: str = DEFAULT_PAGE_SIZE
+    page_width_mm: float = 0.0
+    page_height_mm: float = 0.0
     orientation: str = DEFAULT_ORIENTATION
     estimate_layout: str = DEFAULT_ESTIMATE_LAYOUT
 
@@ -51,18 +66,8 @@ class SettingsPrintController:
         self._settings = settings
 
     def load_state(self) -> PrintSettingsState:
-        margins = self._load_margins()
+        page_settings = load_print_page_settings(self._settings)
         preview_zoom = self._load_preview_zoom()
-        default_printer = (
-            self._settings.value("print/default_printer", "", type=str) or ""
-        )
-        page_size = self._validated_value(
-            self._settings.value("print/page_size", DEFAULT_PAGE_SIZE, type=str),
-            supported=SUPPORTED_PAGE_SIZES,
-            default=DEFAULT_PAGE_SIZE,
-            setting_name="print/page_size",
-        )
-        orientation = self._load_orientation()
         estimate_layout = self._validated_value(
             self._settings.value(
                 "print/estimate_layout",
@@ -74,11 +79,14 @@ class SettingsPrintController:
             setting_name="print/estimate_layout",
         )
         return PrintSettingsState(
-            margins=margins,
+            margins=page_settings.margins,
             preview_zoom=preview_zoom,
-            default_printer=default_printer,
-            page_size=page_size,
-            orientation=orientation,
+            default_printer=page_settings.default_printer,
+            page_size=page_settings.page_size,
+            page_size_name=page_settings.page_size_name,
+            page_width_mm=page_settings.page_width_mm,
+            page_height_mm=page_settings.page_height_mm,
+            orientation=page_settings.orientation,
             estimate_layout=estimate_layout,
         )
 
@@ -90,12 +98,23 @@ class SettingsPrintController:
         widgets.margin_bottom_spin.setValue(state.margins[3])
         widgets.preview_zoom_spin.setValue(state.preview_zoom)
 
-        if state.default_printer:
-            idx = widgets.printer_combo.findText(state.default_printer)
-            if idx >= 0:
-                widgets.printer_combo.setCurrentIndex(idx)
+        idx_printer = widgets.printer_combo.findData(state.default_printer)
+        if idx_printer >= 0:
+            widgets.printer_combo.setCurrentIndex(idx_printer)
+        elif widgets.printer_combo.count() > 0:
+            widgets.printer_combo.setCurrentIndex(0)
 
         idx_page_size = widgets.page_size_combo.findText(state.page_size)
+        if idx_page_size < 0 and state.page_width_mm > 0 and state.page_height_mm > 0:
+            widgets.page_size_combo.addItem(
+                state.page_size,
+                {
+                    "page_size_name": state.page_size_name,
+                    "page_width_mm": state.page_width_mm,
+                    "page_height_mm": state.page_height_mm,
+                },
+            )
+            idx_page_size = widgets.page_size_combo.findText(state.page_size)
         if idx_page_size >= 0:
             widgets.page_size_combo.setCurrentIndex(idx_page_size)
 
@@ -109,6 +128,24 @@ class SettingsPrintController:
         return state
 
     def save_from_ui(self, widgets: PrintSettingsWidgets) -> PrintSettingsState:
+        printer_data = widgets.printer_combo.currentData()
+        if printer_data is None:
+            default_printer = widgets.printer_combo.currentText().strip()
+            if default_printer == "System default":
+                default_printer = ""
+        else:
+            default_printer = str(printer_data).strip()
+
+        page_size = widgets.page_size_combo.currentText() or DEFAULT_PAGE_SIZE
+        page_size_data = widgets.page_size_combo.currentData()
+        page_size_name = page_size
+        page_width_mm = 0.0
+        page_height_mm = 0.0
+        if isinstance(page_size_data, dict):
+            page_size_name = str(page_size_data.get("page_size_name") or page_size)
+            page_width_mm = float(page_size_data.get("page_width_mm") or 0.0)
+            page_height_mm = float(page_size_data.get("page_height_mm") or 0.0)
+
         state = PrintSettingsState(
             margins=(
                 widgets.margin_left_spin.value(),
@@ -117,8 +154,11 @@ class SettingsPrintController:
                 widgets.margin_bottom_spin.value(),
             ),
             preview_zoom=float(widgets.preview_zoom_spin.value()),
-            default_printer=widgets.printer_combo.currentText().strip(),
-            page_size=widgets.page_size_combo.currentText() or DEFAULT_PAGE_SIZE,
+            default_printer=default_printer,
+            page_size=page_size,
+            page_size_name=page_size_name,
+            page_width_mm=page_width_mm,
+            page_height_mm=page_height_mm,
             orientation=widgets.orientation_combo.currentText() or DEFAULT_ORIENTATION,
             estimate_layout=widgets.estimate_layout_combo.currentData()
             or DEFAULT_ESTIMATE_LAYOUT,
@@ -127,16 +167,19 @@ class SettingsPrintController:
         return state
 
     def save_state(self, state: PrintSettingsState) -> None:
-        self._settings.setValue(
-            "print/margins",
-            self.serialize_margins(state.margins),
+        save_print_page_settings(
+            self._settings,
+            PrintPageSettings(
+                margins=state.margins,
+                default_printer=state.default_printer,
+                page_size=state.page_size,
+                page_size_name=state.page_size_name,
+                page_width_mm=state.page_width_mm,
+                page_height_mm=state.page_height_mm,
+                orientation=state.orientation,
+            ),
         )
         self._settings.setValue("print/preview_zoom", float(state.preview_zoom))
-        if state.default_printer:
-            self._settings.setValue("print/default_printer", state.default_printer)
-        self._settings.setValue("print/page_size", state.page_size)
-        self._settings.setValue("print/orientation", state.orientation)
-        self._settings.setValue(PRINT_ORIENTATION_MIGRATION_KEY, True)
         self._settings.setValue("print/estimate_layout", state.estimate_layout)
 
     def apply_defaults_to_ui(self, widgets: PrintSettingsWidgets) -> PrintSettingsState:
@@ -146,6 +189,9 @@ class SettingsPrintController:
         widgets.margin_right_spin.setValue(state.margins[2])
         widgets.margin_bottom_spin.setValue(state.margins[3])
         widgets.preview_zoom_spin.setValue(state.preview_zoom)
+        idx_printer = widgets.printer_combo.findData("")
+        if idx_printer >= 0:
+            widgets.printer_combo.setCurrentIndex(idx_printer)
 
         idx_page_size = widgets.page_size_combo.findText(state.page_size)
         if idx_page_size >= 0:
@@ -163,36 +209,17 @@ class SettingsPrintController:
     def refresh_printer_list(self, combo: QComboBox) -> None:
         try:
             combo.clear()
+            combo.addItem("System default", "")
             printers = QPrinterInfo.availablePrinters()
             names = [printer.printerName() for printer in printers] if printers else []
-            combo.addItems(sorted(names, key=lambda value: value.lower()))
+            for name in sorted(names, key=lambda value: value.lower()):
+                combo.addItem(name, name)
         except Exception as exc:
             LOGGER.warning("Failed to read printers: %s", exc)
 
     @staticmethod
     def serialize_margins(margins: tuple[int, int, int, int]) -> str:
-        return ",".join(str(value) for value in margins)
-
-    def _load_margins(self) -> tuple[int, int, int, int]:
-        raw_value = self._settings.value(
-            "print/margins",
-            self.serialize_margins(DEFAULT_PRINT_MARGINS),
-            type=str,
-        )
-        try:
-            margins = tuple(int(part.strip()) for part in str(raw_value).split(","))
-        except (TypeError, ValueError):
-            LOGGER.warning("Invalid margin format in settings: %r", raw_value)
-            return DEFAULT_PRINT_MARGINS
-        if len(margins) != 4:
-            LOGGER.warning("Margin setting not found or invalid format: %r", raw_value)
-            return DEFAULT_PRINT_MARGINS
-        return (
-            max(0, margins[0]),
-            max(0, margins[1]),
-            max(0, margins[2]),
-            max(0, margins[3]),
-        )
+        return serialize_margins(margins)
 
     def _load_preview_zoom(self) -> float:
         raw_value = self._settings.value(
@@ -202,36 +229,9 @@ class SettingsPrintController:
         )
         try:
             return float(raw_value)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             LOGGER.warning("Invalid preview zoom in settings: %r", raw_value)
             return DEFAULT_PREVIEW_ZOOM
-
-    def _load_orientation(self) -> str:
-        raw_value = self._settings.value("print/orientation", None, type=str)
-        explicit = bool(
-            self._settings.value(
-                PRINT_ORIENTATION_MIGRATION_KEY,
-                False,
-                type=bool,
-            )
-        )
-        if raw_value in SUPPORTED_ORIENTATIONS:
-            if raw_value == "Portrait" and not explicit:
-                LOGGER.info(
-                    "Migrating legacy default print orientation from Portrait to Landscape."
-                )
-                self._settings.setValue("print/orientation", DEFAULT_ORIENTATION)
-                return DEFAULT_ORIENTATION
-            return str(raw_value)
-        if raw_value is None:
-            return DEFAULT_ORIENTATION
-        LOGGER.warning(
-            "Invalid %s setting value %r; using %s",
-            "print/orientation",
-            raw_value,
-            DEFAULT_ORIENTATION,
-        )
-        return DEFAULT_ORIENTATION
 
     @staticmethod
     def _validated_value(

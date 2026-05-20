@@ -8,13 +8,14 @@ import time
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, cast
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
-import PyQt5.QtCore as QtCore
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QMessageBox, QWidget
+import PyQt6.QtCore as QtCore
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon
+from PyQt6.QtWidgets import QApplication, QMessageBox, QWidget
 
+from silverestimate.infrastructure import qt_bootstrap
 from silverestimate.infrastructure.app_constants import APP_TITLE
 from silverestimate.infrastructure.logger import (
     LogCleanupScheduler,
@@ -24,9 +25,10 @@ from silverestimate.infrastructure.logger import (
 )
 from silverestimate.infrastructure.paths import get_asset_path
 from silverestimate.infrastructure.windows_integration import set_app_user_model_id
+from silverestimate.ui.application_theme import apply_light_application_theme
 
 if TYPE_CHECKING:
-    from PyQt5.QtWidgets import QMainWindow
+    from PyQt6.QtWidgets import QMainWindow
 
     from silverestimate.persistence.database_manager import DatabaseManager
 
@@ -88,10 +90,9 @@ class ApplicationBuilder:
         asset_resolver: Callable[..., Path] = get_asset_path,
         icon_factory: Callable[[str], QIcon] = QIcon,
         qt_handler: Callable[..., None] = qt_message_handler,
-        qt_attributes: Tuple[int | Qt.ApplicationAttribute, ...] = (
-            Qt.AA_EnableHighDpiScaling,
-            Qt.AA_UseHighDpiPixmaps,
-        ),
+        qt_attributes: tuple[
+            Any, ...
+        ] = qt_bootstrap.available_application_attributes(),
         user_model_id: str = "com.silverestimate.app",
         app_name: str = "silver_app",
     ) -> None:
@@ -192,13 +193,14 @@ class ApplicationBuilder:
                 )
 
     def _configure_qt(self, context: ApplicationContext) -> None:
+        qt_bootstrap.configure_qt_before_application()
         QtCore.qInstallMessageHandler(self._qt_handler)
         if context.logger:
             context.logger.debug("Qt message handler installed")
 
         for attr in self._qt_attributes:
             try:
-                QApplication.setAttribute(cast(Qt.ApplicationAttribute, attr))
+                QApplication.setAttribute(attr)
             except Exception as exc:
                 if context.logger:
                     context.logger.warning(
@@ -215,12 +217,16 @@ class ApplicationBuilder:
             else QApplication(sys.argv)
         )
         context.app = app
+        apply_light_application_theme(app, context.logger)
         # Hidden parent widget for dialogs shown before the main window exists.
         # Some tests monkeypatch QApplication with a lightweight stub; skip
         # QWidget creation there to avoid requiring a real Qt app instance.
-        if type(app).__module__.startswith("PyQt5."):
+        if type(app).__module__.startswith("PyQt6."):
             dialog_parent = QWidget()
-            dialog_parent.setAttribute(Qt.WA_DontShowOnScreen, True)
+            dialog_parent.setAttribute(
+                Qt.WidgetAttribute.WA_DontShowOnScreen,
+                True,
+            )
             context.dialog_parent = dialog_parent
         else:
             context.dialog_parent = None
@@ -237,7 +243,7 @@ class ApplicationBuilder:
 
     def _authenticate(
         self, context: ApplicationContext
-    ) -> Tuple[Optional["DatabaseManager"], Optional[int]]:
+    ) -> tuple[Optional["DatabaseManager"], Optional[int]]:
         status_enum: Any | None = None
         factory = self._startup_controller_factory
         if factory is None:
@@ -323,7 +329,7 @@ class ApplicationBuilder:
         context.main_window.show()
         if context.logger:
             context.logger.debug("Entering Qt main event loop")
-        exit_code = context.app.exec_()
+        exit_code = context.app.exec()
         if context.logger:
             context.logger.info("Application exiting with code %s", exit_code)
         return exit_code

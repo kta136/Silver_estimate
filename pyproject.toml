@@ -12,7 +12,7 @@ license = {text = "Proprietary"}
 authors = [
     {name = "Silver Estimation App", email = "noreply@silverestimate.app"}
 ]
-keywords = ["silver", "estimation", "inventory", "pyqt5", "encryption"]
+keywords = ["silver", "estimation", "inventory", "pyqt6", "encryption"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: End Users/Desktop",
@@ -22,13 +22,13 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Operating System :: MacOS",
     "Operating System :: POSIX :: Linux",
-    "Framework :: PyQt5",
+    "Framework :: PyQt6",
     "Topic :: Office/Business",
 ]
 
 dependencies = [
-    "PyQt5>=5.15.10",
-    "PyQt5-Qt5==5.15.2; sys_platform == 'win32'",
+    "PyQt6>=6.11,<6.12",
+    "PyQt6-Qt6==6.11.1; sys_platform == 'win32'",
     "qtawesome>=1.4.1",
     "cryptography>=42.0.0",
     "passlib[argon2]>=1.7.4",
@@ -50,7 +50,7 @@ dev = [
     # Pre-commit hooks
     "pre-commit>=3.3.0",
     # Type stubs
-    "PyQt5-stubs>=5.15.6",
+    "PyQt6-stubs>=20250824",
     # Development tools
     "pyinstaller>=6.0.0",
     "bandit[toml]>=1.7.9",
@@ -104,6 +104,7 @@ warn_no_return = true
 warn_unreachable = true
 strict_equality = true
 show_error_codes = true
+disable_error_code = ["union-attr"]
 exclude = [
     "^build/",
     "^dist/",
@@ -112,12 +113,13 @@ exclude = [
 
 [[tool.mypy.overrides]]
 module = [
-    "PyQt5.*",
+    "PyQt6.*",
     "qtawesome.*",
     "keyring.*",
     "passlib.*",
 ]
 ignore_missing_imports = true
+follow_imports = "skip"
 
 [[tool.mypy.overrides]]
 module = [
@@ -156,6 +158,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+qt_api = "pyqt6"
 addopts = [
     "--verbose",
     "--capture=no",

@@ -6,8 +6,8 @@ import logging
 import traceback
 from typing import TYPE_CHECKING
 
-from PyQt5.QtCore import QThread
-from PyQt5.QtWidgets import QMessageBox, QProgressDialog
+from PyQt6.QtCore import QThread
+from PyQt6.QtWidgets import QMessageBox, QProgressDialog
 
 from ._host_proxy import HostProxy
 

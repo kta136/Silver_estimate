@@ -151,7 +151,7 @@ def main_window_fixture(qt_app, settings_stub, monkeypatch):
     previous_quit_on_close = qt_app.quitOnLastWindowClosed()
     qt_app.setQuitOnLastWindowClosed(False)
     StubLiveRateController.instances.clear()
-    monkeypatch.setattr("PyQt5.QtWidgets.QApplication.quit", lambda self=None: None)
+    monkeypatch.setattr("PyQt6.QtWidgets.QApplication.quit", lambda self=None: None)
     monkeypatch.setattr(
         "silverestimate.controllers.live_rate_controller.LiveRateController",
         StubLiveRateController,

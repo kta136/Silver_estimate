@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from PyQt5.QtWidgets import QMessageBox
+from PyQt6.QtWidgets import QMessageBox
 
 
 class NavigationService:
@@ -76,7 +76,7 @@ class NavigationService:
 
             self._logger.info("Opening Silver Bar Management dialog")
             dialog = SilverBarDialog(self.db, self.main_window)
-            dialog.exec_()
+            dialog.exec()
         except Exception as exc:
             self._logger.error(
                 "Failed to open Silver Bar Management: %s", exc, exc_info=True
@@ -95,7 +95,7 @@ class NavigationService:
 
             self._logger.info("Opening Silver Bar History dialog")
             dialog = SilverBarHistoryDialog(self.db, self.main_window)
-            dialog.exec_()
+            dialog.exec()
         except Exception as exc:
             self._logger.error(
                 "Error opening Silver Bar History: %s", exc, exc_info=True

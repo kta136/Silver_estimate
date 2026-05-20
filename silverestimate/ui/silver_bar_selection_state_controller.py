@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt
+from PyQt6.QtCore import Qt
 
 from ._host_proxy import HostProxy
 
@@ -75,10 +75,14 @@ class SilverBarSelectionStateController(HostProxy):
         for index in selected:
             row = index.row()
             try:
-                weight_val = self._table_cell_value(table, row, 1, Qt.EditRole)
-                fine_val = self._table_cell_value(table, row, 3, Qt.EditRole)
+                weight_val = self._table_cell_value(
+                    table, row, 1, Qt.ItemDataRole.EditRole
+                )
+                fine_val = self._table_cell_value(
+                    table, row, 3, Qt.ItemDataRole.EditRole
+                )
                 weight_sum += float(weight_val or 0.0)
                 fine_sum += float(fine_val or 0.0)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 continue
         return count, weight_sum, fine_sum

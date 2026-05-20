@@ -1,7 +1,7 @@
 import logging
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
     QLineEdit,
@@ -24,7 +24,7 @@ class _StateHost(QDialog):
         self.logger = logging.getLogger("test-silver-bar-state")
         self.current_list_id = None
 
-        self._splitter = QSplitter(Qt.Horizontal, self)
+        self._splitter = QSplitter(Qt.Orientation.Horizontal, self)
 
         self.available_bars_table = QTableView(self)
         self.available_bars_model = AvailableSilverBarsTableModel(

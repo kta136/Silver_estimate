@@ -8,9 +8,9 @@ import sys
 import time
 from typing import TYPE_CHECKING, Any, Callable, Optional, Protocol
 
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QIcon
+from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
     QStackedWidget,
@@ -225,7 +225,7 @@ class MainWindow(QMainWindow):
         if self._geometry_restored:
             return
         try:
-            self.setWindowState(self.windowState() | Qt.WindowMaximized)
+            self.setWindowState(self.windowState() | Qt.WindowState.WindowMaximized)
         except Exception as exc:
             self.logger.debug(
                 "Failed to apply maximized window state: %s",
@@ -369,7 +369,7 @@ class MainWindow(QMainWindow):
         from silverestimate.ui.settings_dialog import SettingsDialog
 
         dialog = SettingsDialog(main_window_ref=self, parent=self)
-        dialog.exec_()
+        dialog.exec()
 
     def show_catalog_restore_dialog(self):
         return self.commands.restore_item_catalog()

@@ -3,9 +3,9 @@
 import types
 
 import pytest
-from PyQt5.QtCore import Qt
-from PyQt5.QtTest import QTest
-from PyQt5.QtWidgets import QLineEdit
+from PyQt6.QtCore import Qt
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QLineEdit
 
 from silverestimate.ui.estimate_entry import EstimateEntryWidget
 from silverestimate.ui.estimate_entry_logic import (
@@ -177,13 +177,13 @@ def test_initial_empty_row_has_correct_structure(qt_app, fake_db):
         net_index = model.index(last_row, COL_NET_WT)
         wage_index = model.index(last_row, COL_WAGE_AMT)
         fine_index = model.index(last_row, COL_FINE_WT)
-        assert not (model.flags(net_index) & Qt.ItemIsEditable), (
+        assert not (model.flags(net_index) & Qt.ItemFlag.ItemIsEditable), (
             "Net weight should be read-only"
         )
-        assert not (model.flags(wage_index) & Qt.ItemIsEditable), (
+        assert not (model.flags(wage_index) & Qt.ItemFlag.ItemIsEditable), (
             "Wage amount should be read-only"
         )
-        assert not (model.flags(fine_index) & Qt.ItemIsEditable), (
+        assert not (model.flags(fine_index) & Qt.ItemFlag.ItemIsEditable), (
             "Fine weight should be read-only"
         )
     finally:
@@ -312,7 +312,7 @@ def test_adapter_populate_row_wt_forces_zero_and_disables_pieces(qt_app, fake_db
         table = widget.item_table
         assert table.get_cell_text(0, COL_PIECES) == "0"
         index = table.model().index(0, COL_PIECES)
-        assert not bool(table.model().flags(index) & Qt.ItemIsEditable)
+        assert not bool(table.model().flags(index) & Qt.ItemFlag.ItemIsEditable)
     finally:
         widget.deleteLater()
 
@@ -345,7 +345,7 @@ def test_adapter_populate_row_pc_restores_one_after_wt_zero(qt_app, fake_db):
         table = widget.item_table
         assert table.get_cell_text(0, COL_PIECES) == "1"
         index = table.model().index(0, COL_PIECES)
-        assert bool(table.model().flags(index) & Qt.ItemIsEditable)
+        assert bool(table.model().flags(index) & Qt.ItemFlag.ItemIsEditable)
     finally:
         widget.deleteLater()
 
@@ -411,7 +411,7 @@ def test_set_cell_text_syncs_with_model(qt_app, fake_db):
         # Verify model was updated
         model = table.get_model()
         index = model.index(0, COL_CODE)
-        model_data = model.data(index, Qt.DisplayRole)
+        model_data = model.data(index, Qt.ItemDataRole.DisplayRole)
 
         assert model_data == "SYNC123", "Model should be updated"
     finally:
@@ -430,7 +430,7 @@ def test_model_updates_reflect_in_get_cell_text(qt_app, fake_db):
 
         # Update model directly
         index = model.index(0, COL_CODE)
-        model.setData(index, "DIRECT123", Qt.EditRole)
+        model.setData(index, "DIRECT123", Qt.ItemDataRole.EditRole)
 
         assert table.get_cell_text(0, COL_CODE) == "DIRECT123"
     finally:
@@ -611,6 +611,45 @@ def test_navigation_target_mapping_is_consistent(qt_app, fake_db):
         assert widget._previous_edit_target(row, COL_GROSS) == (row, COL_CODE)
         assert widget._previous_edit_target(row, COL_CODE) == (row - 1, COL_WAGE_RATE)
         assert widget._previous_edit_target(0, COL_CODE) == (0, COL_CODE)
+    finally:
+        widget.deleteLater()
+
+
+def test_table_delegates_signal_navigation_requests(qtbot, fake_db):
+    """Delegates should request navigation through explicit signals."""
+    widget = _make_widget(fake_db)
+    widget.show()
+    try:
+        table = widget.item_table
+        table.set_cell_text(0, COL_CODE, "ROW1")
+
+        table.setCurrentCell(0, COL_GROSS)
+        widget.current_row = 0
+        widget.current_column = COL_GROSS
+        numeric_delegate = table.itemDelegateForColumn(COL_GROSS)
+        numeric_delegate.reverse_requested.emit()
+        qtbot.waitUntil(
+            lambda: (
+                table.currentIndex().isValid()
+                and table.currentIndex().row() == 0
+                and table.currentIndex().column() == COL_CODE
+            ),
+            timeout=1000,
+        )
+
+        table.setCurrentCell(0, COL_CODE)
+        widget.current_row = 0
+        widget.current_column = COL_CODE
+        code_delegate = table.itemDelegateForColumn(COL_CODE)
+        code_delegate.advance_requested.emit()
+        qtbot.waitUntil(
+            lambda: (
+                table.currentIndex().isValid()
+                and table.currentIndex().row() == 0
+                and table.currentIndex().column() == COL_GROSS
+            ),
+            timeout=1000,
+        )
     finally:
         widget.deleteLater()
 
@@ -801,7 +840,7 @@ def test_revisiting_row_with_same_code_preserves_manual_overrides(qtbot, fake_db
 
         # Revisit/commit same code value. Should be treated as no-op.
         code_index = table.get_model().index(0, COL_CODE)
-        assert table.get_model().setData(code_index, "ITM1", Qt.EditRole)
+        assert table.get_model().setData(code_index, "ITM1", Qt.ItemDataRole.EditRole)
         qtbot.wait(40)
 
         assert len(lookup_calls) == initial_lookup_count
@@ -832,7 +871,7 @@ def test_unchanged_purity_commit_still_advances_cursor(qtbot, fake_db):
         widget.current_column = COL_PURITY
 
         purity_index = table.get_model().index(0, COL_PURITY)
-        assert table.get_model().setData(purity_index, 91.6, Qt.EditRole)
+        assert table.get_model().setData(purity_index, 91.6, Qt.ItemDataRole.EditRole)
 
         qtbot.waitUntil(
             lambda: (
@@ -865,7 +904,7 @@ def test_unchanged_code_enter_advances_to_gross_without_relookup(qtbot, fake_db)
         initial_lookup_count = len(lookup_calls)
 
         editor = _begin_inline_edit(qtbot, widget, 0, COL_CODE)
-        QTest.keyClick(editor, Qt.Key_Return)
+        QTest.keyClick(editor, Qt.Key.Key_Return)
 
         qtbot.waitUntil(
             lambda: (
@@ -899,7 +938,7 @@ def test_unchanged_code_tab_advances_to_gross_without_relookup(qtbot, fake_db):
         initial_lookup_count = len(lookup_calls)
 
         editor = _begin_inline_edit(qtbot, widget, 0, COL_CODE)
-        QTest.keyClick(editor, Qt.Key_Tab)
+        QTest.keyClick(editor, Qt.Key.Key_Tab)
 
         qtbot.waitUntil(
             lambda: (
@@ -926,7 +965,7 @@ def test_empty_gross_enter_commits_zero_and_advances_to_poly(qtbot, fake_db):
 
         editor = _begin_inline_edit(qtbot, widget, 0, COL_GROSS)
         editor.clear()
-        QTest.keyClick(editor, Qt.Key_Return)
+        QTest.keyClick(editor, Qt.Key.Key_Return)
 
         qtbot.waitUntil(
             lambda: (
@@ -953,7 +992,7 @@ def test_empty_gross_backspace_moves_to_code_column(qtbot, fake_db):
 
         editor = _begin_inline_edit(qtbot, widget, 0, COL_GROSS)
         editor.clear()
-        QTest.keyClick(editor, Qt.Key_Backspace)
+        QTest.keyClick(editor, Qt.Key.Key_Backspace)
 
         qtbot.waitUntil(
             lambda: (

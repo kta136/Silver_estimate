@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from PyQt5.QtCore import QAbstractTableModel, QModelIndex, Qt
+from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
 
 
 @dataclass(frozen=True)
@@ -41,7 +41,7 @@ class EstimateHistoryTableModel(QAbstractTableModel):
         super().__init__(parent)
         self._rows: list[EstimateHistoryRow] = []
         self._sort_column: int | None = None
-        self._sort_order = Qt.AscendingOrder
+        self._sort_order = Qt.SortOrder.AscendingOrder
 
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
         if parent.isValid():
@@ -57,30 +57,37 @@ class EstimateHistoryTableModel(QAbstractTableModel):
         self,
         section: int,
         orientation: Qt.Orientation,
-        role: int = Qt.DisplayRole,
+        role: int = Qt.ItemDataRole.DisplayRole,
     ) -> Any:
-        if role != Qt.DisplayRole:
+        if role != Qt.ItemDataRole.DisplayRole:
             return None
-        if orientation == Qt.Horizontal and 0 <= section < len(self.HEADERS):
+        if orientation == Qt.Orientation.Horizontal and 0 <= section < len(
+            self.HEADERS
+        ):
             return self.HEADERS[section]
         return None
 
-    def data(self, index: QModelIndex, role: int = Qt.DisplayRole) -> Any:
+    def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
         if not index.isValid():
             return None
         row = self.row_payload(index.row())
         if row is None:
             return None
 
-        if role == Qt.DisplayRole:
+        if role == Qt.ItemDataRole.DisplayRole:
             return self._display_value(row, index.column())
-        if role == Qt.EditRole:
+        if role == Qt.ItemDataRole.EditRole:
             return self._sort_value(row, index.column())
-        if role == Qt.TextAlignmentRole and index.column() in self._RIGHT_ALIGN_COLUMNS:
-            return Qt.AlignRight | Qt.AlignVCenter
+        if (
+            role == Qt.ItemDataRole.TextAlignmentRole
+            and index.column() in self._RIGHT_ALIGN_COLUMNS
+        ):
+            return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         return None
 
-    def sort(self, column: int, order: Qt.SortOrder = Qt.AscendingOrder) -> None:
+    def sort(
+        self, column: int, order: Qt.SortOrder = Qt.SortOrder.AscendingOrder
+    ) -> None:
         if not (0 <= column < self.columnCount()):
             return
         self.layoutAboutToBeChanged.emit()
@@ -146,7 +153,7 @@ class EstimateHistoryTableModel(QAbstractTableModel):
     def _sort_rows(self) -> None:
         if self._sort_column is None:
             return
-        reverse = self._sort_order == Qt.DescendingOrder
+        reverse = self._sort_order == Qt.SortOrder.DescendingOrder
         self._rows.sort(
             key=lambda row: self._sort_key_for_row(row, self._sort_column or 0),
             reverse=reverse,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from PyQt5.QtCore import Qt
+from PyQt6.QtCore import Qt
 
 from silverestimate.infrastructure.settings import get_app_settings
 
@@ -72,7 +72,7 @@ class SilverBarManagementStateStore(HostProxy):
             if state and hasattr(self, "_splitter"):
                 self._splitter.restoreState(state)
             if hasattr(self, "_splitter"):
-                self._splitter.setOrientation(Qt.Horizontal)
+                self._splitter.setOrientation(Qt.Orientation.Horizontal)
 
             dr = settings.value("ui/silver_bars/date_range")
             if isinstance(dr, str):
@@ -109,7 +109,7 @@ class SilverBarManagementStateStore(HostProxy):
                 return
             try:
                 saved_id_int = int(saved_id)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 saved_id_int = saved_id
             idx = self.list_combo.findData(saved_id_int)
             if idx >= 0:

@@ -1,4 +1,4 @@
-from PyQt5.QtCore import Qt
+from PyQt6.QtCore import Qt
 
 from silverestimate.ui.models import (
     AvailableSilverBarsTableModel,
@@ -101,7 +101,7 @@ def test_management_silver_bar_model_sorts_by_voucher_only(qt_app):
         ]
     )
 
-    model.sort(0, Qt.AscendingOrder)
+    model.sort(0, Qt.SortOrder.AscendingOrder)
 
     assert [model.bar_id_at(row) for row in range(model.rowCount())] == [1, 2, 3]
 
@@ -150,6 +150,6 @@ def test_history_silver_bar_model_sorts_by_voucher_only(qt_app):
         ]
     )
 
-    model.sort(1, Qt.AscendingOrder)
+    model.sort(1, Qt.SortOrder.AscendingOrder)
 
     assert [model.bar_id_at(row) for row in range(model.rowCount())] == [1, 2, 3]

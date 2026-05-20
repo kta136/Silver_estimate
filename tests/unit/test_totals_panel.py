@@ -1,7 +1,7 @@
 """Tests for TotalsPanel component."""
 
 import pytest
-from PyQt5.QtCore import Qt
+from PyQt6.QtCore import Qt
 
 from silverestimate.domain.estimate_models import CategoryTotals, TotalsResult
 from silverestimate.ui.estimate_entry_components.totals_panel import TotalsPanel
@@ -191,7 +191,7 @@ def test_sidebar_section_order_can_be_reordered(qt_app):
         "regular",
     ]
     ui_order = [
-        panel._summary_sections_list.item(i).data(Qt.UserRole)
+        panel._summary_sections_list.item(i).data(Qt.ItemDataRole.UserRole)
         for i in range(panel._summary_sections_list.count())
     ]
     assert ui_order == ["final_calc", "silver_bar", "return", "totals", "regular"]
@@ -228,7 +228,7 @@ def test_sidebar_swap_requested_swaps_card_positions(qt_app):
         "silver_bar",
     ]
     ui_order = [
-        panel._summary_sections_list.item(i).data(Qt.UserRole)
+        panel._summary_sections_list.item(i).data(Qt.ItemDataRole.UserRole)
         for i in range(panel._summary_sections_list.count())
     ]
     assert ui_order == ["final_calc", "return", "regular", "totals", "silver_bar"]
@@ -271,15 +271,15 @@ def test_sidebar_items_are_not_drop_targets(qt_app):
     for idx in range(panel._summary_sections_list.count()):
         item = panel._summary_sections_list.item(idx)
         assert item is not None
-        assert not bool(item.flags() & Qt.ItemIsDropEnabled)
+        assert not bool(item.flags() & Qt.ItemFlag.ItemIsDropEnabled)
 
 
 def test_sidebar_final_calc_item_is_not_draggable(qt_app):
     panel = TotalsPanel(layout_mode="sidebar")
     first_item = panel._summary_sections_list.item(0)
     assert first_item is not None
-    assert first_item.data(Qt.UserRole) == "final_calc"
-    assert not bool(first_item.flags() & Qt.ItemIsDragEnabled)
+    assert first_item.data(Qt.ItemDataRole.UserRole) == "final_calc"
+    assert not bool(first_item.flags() & Qt.ItemFlag.ItemIsDragEnabled)
 
 
 def test_sidebar_cards_resize_with_available_width(qt_app):

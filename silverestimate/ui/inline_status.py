@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Optional
 
-from PyQt5 import sip
-from PyQt5.QtCore import QTimer
-from PyQt5.QtWidgets import QLabel
+from PyQt6 import sip
+from PyQt6.QtCore import QTimer
+from PyQt6.QtWidgets import QLabel
 
 from .estimate_entry_theme import refresh_widget_style
 

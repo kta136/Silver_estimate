@@ -1,7 +1,8 @@
 import logging
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
+    QAbstractItemView,
     QDialog,
     QLabel,
     QPushButton,
@@ -28,12 +29,16 @@ class _SelectionHost(QDialog):
             self.available_bars_table
         )
         self.available_bars_table.setModel(self.available_bars_model)
-        self.available_bars_table.setSelectionBehavior(QTableView.SelectRows)
+        self.available_bars_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
 
         self.list_bars_table = QTableView(self)
         self.list_bars_model = SelectedListSilverBarsTableModel(self.list_bars_table)
         self.list_bars_table.setModel(self.list_bars_model)
-        self.list_bars_table.setSelectionBehavior(QTableView.SelectRows)
+        self.list_bars_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
 
         self.add_to_list_button = QPushButton(self)
         self.remove_from_list_button = QPushButton(self)
@@ -44,7 +49,9 @@ class _SelectionHost(QDialog):
         self.list_selection_label = QLabel(self)
 
     @staticmethod
-    def _table_cell_value(table, row: int, column: int, role: int = Qt.DisplayRole):
+    def _table_cell_value(
+        table, row: int, column: int, role: int = Qt.ItemDataRole.DisplayRole
+    ):
         model = table.model()
         if model is None:
             return None

@@ -3,8 +3,8 @@ import logging
 import time
 from functools import partial
 
-from PyQt5.QtCore import QDate, QObject, Qt, QThread, pyqtSignal
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import QDate, QObject, Qt, QThread, pyqtSignal
+from PyQt6.QtWidgets import (
     QAbstractItemView,
     QDateEdit,
     QDialog,
@@ -69,28 +69,28 @@ class EstimateHistoryDialog(QDialog):
                 include_table=True,
                 extra_rules="""
                 QLabel#HistorySummaryLabel {
-                    background-color: #f8fafc;
-                    border: 1px solid #d8e1ec;
+                    background-color: __HEADER_BG__;
+                    border: 1px solid __CARD_BORDER__;
                     border-radius: 8px;
-                    color: #475569;
+                    color: __FIELD_TEXT__;
                     font-weight: 600;
                     padding: 5px 10px;
                 }
                 QLabel#HistoryTitleLabel {
                     font-size: 13pt;
-                    color: #1e3a5f;
+                    color: __HEADER_TEXT__;
                 }
                 QTableView {
-                    color: #1e293b;
+                    color: __TEXT_STRONG__;
                     font-size: 8.8pt;
-                    alternate-background-color: #fbfdff;
+                    alternate-background-color: __SURFACE_BG__;
                 }
                 QTableView::item {
                     padding: 4px 6px;
                 }
                 QHeaderView::section {
-                    background-color: #f8fafc;
-                    color: #475569;
+                    background-color: __HEADER_BG__;
+                    color: __FIELD_TEXT__;
                     padding: 5px 7px;
                 }
                 """,
@@ -110,7 +110,7 @@ class EstimateHistoryDialog(QDialog):
 
         header_label = QLabel("Estimate History")
         header_label.setObjectName("HistoryTitleLabel")
-        header_layout.addWidget(header_label, 0, Qt.AlignLeft)
+        header_layout.addWidget(header_label, 0, Qt.AlignmentFlag.AlignLeft)
         header_layout.addStretch(1)
         layout.addWidget(header_card)
 
@@ -146,7 +146,9 @@ class EstimateHistoryDialog(QDialog):
         self.voucher_search.setPlaceholderText("Search voucher...")
         self.voucher_search.setClearButtonEnabled(True)
         self.voucher_search.setMinimumWidth(160)
-        self.voucher_search.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.voucher_search.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         self.voucher_search.returnPressed.connect(self.load_estimates)
         filter_layout.addWidget(self.voucher_search, 1)
 
@@ -158,7 +160,7 @@ class EstimateHistoryDialog(QDialog):
 
         self.results_summary_label = QLabel("Loading estimates...")
         self.results_summary_label.setObjectName("HistorySummaryLabel")
-        self.results_summary_label.setAlignment(Qt.AlignCenter)
+        self.results_summary_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         filter_layout.addWidget(self.results_summary_label)
 
         layout.addWidget(filter_card)
@@ -169,8 +171,8 @@ class EstimateHistoryDialog(QDialog):
         self.estimates_model = EstimateHistoryTableModel(self.estimates_table)
         self.estimates_table.setModel(self.estimates_model)
         header = self.estimates_table.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.Interactive)
-        header.setSectionResizeMode(2, QHeaderView.Stretch)
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         header.setStretchLastSection(False)
         self.estimates_table.setColumnWidth(0, 110)
         self.estimates_table.setColumnWidth(1, 110)
@@ -182,9 +184,15 @@ class EstimateHistoryDialog(QDialog):
         self.estimates_table.setColumnWidth(8, 130)
 
         # Table properties
-        self.estimates_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.estimates_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.estimates_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.estimates_table.setEditTriggers(
+            QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        self.estimates_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
+        self.estimates_table.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection
+        )
         self.estimates_table.setSortingEnabled(True)
         self.estimates_table.setAlternatingRowColors(True)
         self.estimates_table.setShowGrid(False)
@@ -442,7 +450,7 @@ class EstimateHistoryDialog(QDialog):
                 )
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Escape:
+        if event.key() == Qt.Key.Key_Escape:
             self.reject()
         else:
             super().keyPressEvent(event)
@@ -676,11 +684,11 @@ class EstimateHistoryDialog(QDialog):
             "Confirm Delete Estimate",
             f"Are you sure you want to permanently delete estimate '{voucher_no}'?\n"
             "This action cannot be undone.",
-            QMessageBox.Yes | QMessageBox.Cancel,
-            QMessageBox.Cancel,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
         )
 
-        if reply == QMessageBox.Yes:
+        if reply == QMessageBox.StandardButton.Yes:
             try:
                 success = self.db_manager.delete_single_estimate(voucher_no)
                 if success:

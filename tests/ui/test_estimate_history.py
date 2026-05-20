@@ -1,5 +1,5 @@
-from PyQt5.QtCore import QItemSelectionModel
-from PyQt5.QtWidgets import QFrame
+from PyQt6.QtCore import QItemSelectionModel
+from PyQt6.QtWidgets import QFrame
 
 from silverestimate.ui.estimate_history import EstimateHistoryDialog
 
@@ -186,7 +186,8 @@ def test_populate_table_uses_model_rows_and_selection_lookup(qtbot, monkeypatch)
         dialog.estimates_table.setCurrentIndex(index)
         dialog.estimates_table.selectionModel().select(
             index,
-            QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Rows,
+            QItemSelectionModel.SelectionFlag.ClearAndSelect
+            | QItemSelectionModel.SelectionFlag.Rows,
         )
 
         assert dialog.get_selected_voucher() == "V002"

@@ -1,7 +1,7 @@
 import pytest
-from PyQt5.QtCore import QItemSelectionModel, Qt
-from PyQt5.QtTest import QTest
-from PyQt5.QtWidgets import QDialog
+from PyQt6.QtCore import QItemSelectionModel, Qt
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QDialog
 
 from silverestimate.ui.item_selection_dialog import ItemSelectionDialog
 
@@ -82,7 +82,9 @@ def _make_dialog(qtbot, items, term="AD"):
 
 def _visible_codes(dialog):
     return [
-        dialog.items_model.data(dialog.items_model.index(row, 0), Qt.DisplayRole)
+        dialog.items_model.data(
+            dialog.items_model.index(row, 0), Qt.ItemDataRole.DisplayRole
+        )
         for row in range(dialog.items_model.rowCount())
     ]
 
@@ -92,7 +94,8 @@ def _select_row(dialog, row):
     dialog.items_table.setCurrentIndex(index)
     dialog.items_table.selectionModel().select(
         index,
-        QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Rows,
+        QItemSelectionModel.SelectionFlag.ClearAndSelect
+        | QItemSelectionModel.SelectionFlag.Rows,
     )
 
 
@@ -126,9 +129,11 @@ def test_no_match_state_is_visible_and_select_disabled(qtbot, sample_items):
 def test_enter_in_search_accepts_first_visible_match(qtbot, sample_items):
     dialog = _make_dialog(qtbot, sample_items, term="AD")
     dialog.search_edit.setFocus()
-    QTest.keyClick(dialog.search_edit, Qt.Key_Return)
+    QTest.keyClick(dialog.search_edit, Qt.Key.Key_Return)
 
-    qtbot.waitUntil(lambda: dialog.result() == QDialog.Accepted, timeout=1000)
+    qtbot.waitUntil(
+        lambda: dialog.result() == QDialog.DialogCode.Accepted, timeout=1000
+    )
     picked = dialog.get_selected_item()
     assert picked is not None
     assert picked["code"] == "AD01"
@@ -139,7 +144,9 @@ def test_double_click_accepts_and_returns_payload(qtbot, sample_items):
     _select_row(dialog, 1)
     dialog.items_table.doubleClicked.emit(dialog.items_model.index(1, 0))
 
-    qtbot.waitUntil(lambda: dialog.result() == QDialog.Accepted, timeout=1000)
+    qtbot.waitUntil(
+        lambda: dialog.result() == QDialog.DialogCode.Accepted, timeout=1000
+    )
     picked = dialog.get_selected_item()
     assert picked is not None
     assert set(picked.keys()) == {
@@ -169,7 +176,7 @@ def test_selection_updates_detail_panel(qtbot, sample_items):
 def test_down_arrow_in_search_moves_focus_to_results(qtbot, sample_items):
     dialog = _make_dialog(qtbot, sample_items, term="AD")
     dialog.search_edit.setFocus()
-    QTest.keyClick(dialog.search_edit, Qt.Key_Down)
+    QTest.keyClick(dialog.search_edit, Qt.Key.Key_Down)
 
     qtbot.waitUntil(
         lambda: dialog.items_table.currentIndex().row() >= 0,

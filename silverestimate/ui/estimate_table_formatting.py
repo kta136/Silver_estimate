@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QLocale
+from PyQt6.QtCore import QLocale
 
 from silverestimate.ui.estimate_entry_logic.constants import (
     COL_FINE_WT,
@@ -30,7 +30,7 @@ NUMERIC_COLUMNS = frozenset(_DECIMAL_PLACES_BY_COLUMN) | _INTEGER_COLUMNS
 def get_estimate_table_locale() -> QLocale:
     """Return the locale used for estimate-entry numeric formatting."""
 
-    return QLocale(QLocale.English, QLocale.India)
+    return QLocale(QLocale.Language.English, QLocale.Country.India)
 
 
 def _group_indian_digits(number_text: str, separator: str) -> str:

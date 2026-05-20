@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from PyQt5.QtCore import QAbstractTableModel, QModelIndex, Qt
+from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
 
 
 class ItemMasterTableModel(QAbstractTableModel):
@@ -24,7 +24,7 @@ class ItemMasterTableModel(QAbstractTableModel):
         super().__init__(parent)
         self._rows: list[dict[str, Any]] = []
         self._sort_column: int | None = None
-        self._sort_order = Qt.AscendingOrder
+        self._sort_order = Qt.SortOrder.AscendingOrder
 
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
         if parent.isValid():
@@ -40,34 +40,39 @@ class ItemMasterTableModel(QAbstractTableModel):
         self,
         section: int,
         orientation: Qt.Orientation,
-        role: int = Qt.DisplayRole,
+        role: int = Qt.ItemDataRole.DisplayRole,
     ) -> Any:
-        if orientation != Qt.Horizontal:
+        if orientation != Qt.Orientation.Horizontal:
             return None
         if not (0 <= section < len(self.HEADERS)):
             return None
-        if role == Qt.DisplayRole:
+        if role == Qt.ItemDataRole.DisplayRole:
             return self.HEADERS[section]
-        if role == Qt.ToolTipRole:
+        if role == Qt.ItemDataRole.ToolTipRole:
             return self.HEADER_TOOLTIPS[section]
         return None
 
-    def data(self, index: QModelIndex, role: int = Qt.DisplayRole) -> Any:
+    def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
         if not index.isValid():
             return None
         payload = self.row_payload(index.row())
         if payload is None:
             return None
 
-        if role == Qt.DisplayRole:
+        if role == Qt.ItemDataRole.DisplayRole:
             return self.display_value(payload, index.column())
-        if role == Qt.EditRole:
+        if role == Qt.ItemDataRole.EditRole:
             return self.sort_key_value(payload, index.column())
-        if role == Qt.TextAlignmentRole and index.column() in self._NUMERIC_COLUMNS:
-            return Qt.AlignRight | Qt.AlignVCenter
+        if (
+            role == Qt.ItemDataRole.TextAlignmentRole
+            and index.column() in self._NUMERIC_COLUMNS
+        ):
+            return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         return None
 
-    def sort(self, column: int, order: Qt.SortOrder = Qt.AscendingOrder) -> None:
+    def sort(
+        self, column: int, order: Qt.SortOrder = Qt.SortOrder.AscendingOrder
+    ) -> None:
         if not (0 <= column < self.columnCount()):
             return
         self.layoutAboutToBeChanged.emit()
@@ -101,7 +106,7 @@ class ItemMasterTableModel(QAbstractTableModel):
         if column in self._NUMERIC_COLUMNS:
             try:
                 return float(value or 0.0)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 return 0.0
         if isinstance(value, str):
             return value.casefold()
@@ -110,7 +115,7 @@ class ItemMasterTableModel(QAbstractTableModel):
     def _sort_rows(self) -> None:
         if self._sort_column is None:
             return
-        reverse = self._sort_order == Qt.DescendingOrder
+        reverse = self._sort_order == Qt.SortOrder.DescendingOrder
         self._rows.sort(
             key=lambda row: self._sort_key_for_row(row, self._sort_column or 0),
             reverse=reverse,

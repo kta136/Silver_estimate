@@ -22,8 +22,8 @@ Please describe the tests that you ran to verify your changes. Provide instructi
 
 **Test Configuration**:
 - OS: [e.g., Windows 11]
-- Python version: [e.g., 3.11.5]
-- PyQt5 version: [e.g., 5.15.10]
+- Python version: [e.g., 3.14.4]
+- PyQt6 version: [e.g., 6.11.1]
 
 ## Checklist
 - [ ] My code follows the style guidelines of this project

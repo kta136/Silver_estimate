@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import html as html_lib
 
-from PyQt5.QtCore import QDate
+from PyQt6.QtCore import QDate
 
 
 class SilverBarPrintRenderer:

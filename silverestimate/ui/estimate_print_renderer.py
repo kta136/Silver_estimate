@@ -40,17 +40,27 @@ class EstimatePrintRenderer:
 
     @staticmethod
     def _build_preformatted_html(content: str, *, line_height: float = 1.0) -> str:
-        escaped_content = html_lib.escape(content or "")
+        pages = str(content or "").split("\f")
+        if pages and pages[-1] == "":
+            pages = pages[:-1]
+        if not pages:
+            pages = [""]
+        body = "".join(f"<pre>{html_lib.escape(page)}</pre>" for page in pages)
         return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
                     pre {{
                         line-height: {line_height};
                         white-space: pre;
                         margin: 0;
                         padding: 0;
-                        page-break-inside: avoid;
+                        page-break-inside: auto;
+                        break-inside: auto;
+                    }}
+                    pre:not(:last-child) {{
+                        page-break-after: always;
+                        break-after: page;
                     }}
                     body {{ margin: 0; }}
-                    </style></head><body><pre>{escaped_content}</pre></body></html>"""
+                    </style></head><body>{body}</body></html>"""
 
     @staticmethod
     def _format_indian_grouped_integer(value: float | int) -> str:
@@ -697,20 +707,14 @@ class EstimatePrintRenderer:
             decimals=0,
         )
         wage_str = wage_display.rjust(max(W_LBR, len(wage_display)))
-        scost_display = (
-            "S.Cost : Rs. "
-            + self._format_indian_grouped_decimal(
-                silver_cost,
-                decimals=new_layout_decimals,
-            )
+        scost_display = "S.Cost : Rs. " + self._format_indian_grouped_decimal(
+            silver_cost,
+            decimals=new_layout_decimals,
         )
         scost_pad = scost_display.rjust(max(22, len(scost_display)))
-        total_display = (
-            "Total: Rs. "
-            + self._format_indian_grouped_decimal(
-                total_cost,
-                decimals=new_layout_decimals,
-            )
+        total_display = "Total: Rs. " + self._format_indian_grouped_decimal(
+            total_cost,
+            decimals=new_layout_decimals,
         )
         total_pad = total_display.rjust(max(18, len(total_display)))
 
@@ -726,12 +730,9 @@ class EstimatePrintRenderer:
                 + total_pad
             )
         else:
-            amount_display = (
-                "Rs. "
-                + self._format_indian_grouped_decimal(
-                    total_cost,
-                    decimals=new_layout_decimals,
-                )
+            amount_display = "Rs. " + self._format_indian_grouped_decimal(
+                total_cost,
+                decimals=new_layout_decimals,
             )
             amount_pad = amount_display.rjust(max(W_LBR, len(amount_display)))
             final_line = f"{' ' * (W_SNO + S)}{fine_str} {amount_pad}"

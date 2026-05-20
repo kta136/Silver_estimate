@@ -7,10 +7,9 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QButtonGroup,
     QDialog,
-    QDoubleSpinBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -31,6 +30,7 @@ from .silver_bar_optimization_controller import SilverBarOptimizationController
 from .silver_bar_selection_state_controller import SilverBarSelectionStateController
 from .silver_bar_table_controller import SilverBarTableController
 from .silver_bar_transfer_controller import SilverBarTransferController
+from .themed_controls import ThemedDoubleSpinBox
 
 
 class SilverBarDialog(QDialog):
@@ -140,7 +140,7 @@ class OptimalListDialog(QDialog):
                 input_selectors=["QLineEdit", "QDoubleSpinBox"],
                 extra_rules="""
                 QLabel#OptimalListBodyLabel {
-                    color: #475569;
+                    color: __FIELD_TEXT__;
                     font-size: 9pt;
                 }
                 """,
@@ -189,7 +189,7 @@ class OptimalListDialog(QDialog):
 
         min_group = QVBoxLayout()
         min_group.addWidget(QLabel("Minimum:"))
-        self.min_weight_spin = QDoubleSpinBox()
+        self.min_weight_spin = ThemedDoubleSpinBox()
         self.min_weight_spin.setDecimals(1)
         self.min_weight_spin.setRange(0.1, 999999.9)
         self.min_weight_spin.setSingleStep(1.0)
@@ -199,7 +199,7 @@ class OptimalListDialog(QDialog):
 
         max_group = QVBoxLayout()
         max_group.addWidget(QLabel("Maximum:"))
-        self.max_weight_spin = QDoubleSpinBox()
+        self.max_weight_spin = ThemedDoubleSpinBox()
         self.max_weight_spin.setDecimals(1)
         self.max_weight_spin.setRange(0.1, 999999.9)
         self.max_weight_spin.setSingleStep(1.0)
@@ -425,7 +425,7 @@ for _method_name in (
 
 def show_silver_bar_management(db_manager, parent=None):
     dialog = SilverBarDialog(db_manager, parent)
-    return dialog.exec_()
+    return dialog.exec()
 
 
 def show_silver_bars(db_manager, parent=None):

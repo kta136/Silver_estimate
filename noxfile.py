@@ -36,14 +36,16 @@ def _local_build_label() -> str:
 
 def _versioned_artifact_path() -> Path:
     return (
-        PROJECT_ROOT
-        / "dist"
-        / f"SilverEstimate-v{APP_VERSION}{_artifact_extension()}"
+        PROJECT_ROOT / "dist" / f"SilverEstimate-v{APP_VERSION}{_artifact_extension()}"
     )
 
 
 def _versioned_archive_path() -> Path:
-    return PROJECT_ROOT / "dist" / f"SilverEstimate-v{APP_VERSION}-{_local_build_label()}.zip"
+    return (
+        PROJECT_ROOT
+        / "dist"
+        / f"SilverEstimate-v{APP_VERSION}-{_local_build_label()}.zip"
+    )
 
 
 def package_local_artifact(base_artifact: Path) -> tuple[Path, Path]:

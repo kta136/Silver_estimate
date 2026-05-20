@@ -1,7 +1,7 @@
 import logging
 
-from PyQt5.QtCore import QItemSelectionModel
-from PyQt5.QtWidgets import QApplication, QFrame, QMessageBox
+from PyQt6.QtCore import QItemSelectionModel
+from PyQt6.QtWidgets import QApplication, QFrame, QMessageBox
 
 from silverestimate.ui.silver_bar_list_print_controller import (
     SilverBarListPrintController,
@@ -179,12 +179,16 @@ def test_management_dialog_uses_model_ids_for_add_and_copy(
     del settings_stub
     db = _FakeSilverBarManagementDb()
     monkeypatch.setattr(
-        QMessageBox, "question", lambda *args, **kwargs: QMessageBox.Yes
+        QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.Yes
     )
     monkeypatch.setattr(
-        QMessageBox, "information", lambda *args, **kwargs: QMessageBox.Ok
+        QMessageBox,
+        "information",
+        lambda *args, **kwargs: QMessageBox.StandardButton.Ok,
     )
-    monkeypatch.setattr(QMessageBox, "warning", lambda *args, **kwargs: QMessageBox.Ok)
+    monkeypatch.setattr(
+        QMessageBox, "warning", lambda *args, **kwargs: QMessageBox.StandardButton.Ok
+    )
 
     dialog = SilverBarDialog(db)
     qtbot.addWidget(dialog)
@@ -264,12 +268,16 @@ def test_management_dialog_marks_selected_list_as_issued(
     del settings_stub
     db = _FakeSilverBarManagementDb()
     monkeypatch.setattr(
-        QMessageBox, "question", lambda *args, **kwargs: QMessageBox.Yes
+        QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.Yes
     )
     monkeypatch.setattr(
-        QMessageBox, "information", lambda *args, **kwargs: QMessageBox.Ok
+        QMessageBox,
+        "information",
+        lambda *args, **kwargs: QMessageBox.StandardButton.Ok,
     )
-    monkeypatch.setattr(QMessageBox, "warning", lambda *args, **kwargs: QMessageBox.Ok)
+    monkeypatch.setattr(
+        QMessageBox, "warning", lambda *args, **kwargs: QMessageBox.StandardButton.Ok
+    )
 
     dialog = SilverBarDialog(db)
     qtbot.addWidget(dialog)
@@ -291,12 +299,16 @@ def test_management_dialog_preserves_multi_selection_across_reload_and_adds_bars
     del settings_stub
     db = _FakeSilverBarManagementDb()
     monkeypatch.setattr(
-        QMessageBox, "question", lambda *args, **kwargs: QMessageBox.Yes
+        QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.Yes
     )
     monkeypatch.setattr(
-        QMessageBox, "information", lambda *args, **kwargs: QMessageBox.Ok
+        QMessageBox,
+        "information",
+        lambda *args, **kwargs: QMessageBox.StandardButton.Ok,
     )
-    monkeypatch.setattr(QMessageBox, "warning", lambda *args, **kwargs: QMessageBox.Ok)
+    monkeypatch.setattr(
+        QMessageBox, "warning", lambda *args, **kwargs: QMessageBox.StandardButton.Ok
+    )
 
     dialog = SilverBarDialog(db)
     qtbot.addWidget(dialog)
@@ -312,11 +324,13 @@ def test_management_dialog_preserves_multi_selection_across_reload_and_adds_bars
     second_row = _row_for_bar_id(dialog.available_bars_model, 2)
     selection_model.select(
         dialog.available_bars_model.index(first_row, 0),
-        QItemSelectionModel.Select | QItemSelectionModel.Rows,
+        QItemSelectionModel.SelectionFlag.Select
+        | QItemSelectionModel.SelectionFlag.Rows,
     )
     selection_model.select(
         dialog.available_bars_model.index(second_row, 0),
-        QItemSelectionModel.Select | QItemSelectionModel.Rows,
+        QItemSelectionModel.SelectionFlag.Select
+        | QItemSelectionModel.SelectionFlag.Rows,
     )
     qtbot.waitUntil(
         lambda: len(dialog.available_bars_table.selectionModel().selectedRows()) == 2,

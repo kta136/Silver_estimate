@@ -66,7 +66,7 @@ def fetch_silver_agra_local_mohar_rate(
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310
             html = resp.read().decode("utf-8", errors="replace")
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError):
+    except urllib.error.URLError, urllib.error.HTTPError, TimeoutError:
         return None, {}
 
     return _parse_scraped_rate(html, TARGET_NAME)
@@ -402,7 +402,7 @@ def _parse_broadcast_payload(text: str, target_com_id: int):
             status_flags: tuple[bool, bool] | None = None
             try:
                 status_flags = (int(parts[3]) == 0, int(parts[4]) == 1)
-            except (IndexError, TypeError, ValueError):
+            except IndexError, TypeError, ValueError:
                 status_flags = None
             if status_flags is not None:
                 closed_flag, message_flag = status_flags
@@ -412,7 +412,7 @@ def _parse_broadcast_payload(text: str, target_com_id: int):
             cid: int | None = None
             try:
                 cid = int(parts[1])
-            except (IndexError, TypeError, ValueError):
+            except IndexError, TypeError, ValueError:
                 cid = None
             if cid is None:
                 continue

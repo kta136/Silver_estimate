@@ -1,8 +1,7 @@
 import html
 import re
 
-from PyQt5.QtGui import QFont
-from PyQt5.QtPrintSupport import QPrinter
+from PyQt6.QtGui import QFont, QPageLayout, QPageSize
 
 from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.ui.print_manager import PrintManager
@@ -60,6 +59,17 @@ def test_generate_estimate_thermal_escapes_note_html(qt_app, settings_stub):
 
     assert "<b>unsafe-note</b>" not in rendered
     assert "&lt;b&gt;unsafe-note&lt;/b&gt;" in rendered
+
+
+def test_preformatted_print_html_allows_long_content_to_paginate(qt_app, settings_stub):
+    del qt_app, settings_stub
+
+    rendered = PrintManager._build_preformatted_html("first page\fsecond page")
+
+    assert "page-break-inside: auto" in rendered
+    assert "page-break-inside: avoid" not in rendered
+    assert rendered.count("<pre>") == 2
+    assert "page-break-after: always" in rendered
 
 
 def test_generate_estimate_new_format_uses_requested_column_precision(
@@ -313,7 +323,9 @@ def test_print_manager_migrates_legacy_portrait_default_to_landscape(
 
     manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
 
-    assert manager.printer.orientation() == QPrinter.Landscape
+    assert (
+        manager.printer.pageLayout().orientation() == QPageLayout.Orientation.Landscape
+    )
     assert settings.value("print/orientation") == "Landscape"
 
 
@@ -325,7 +337,9 @@ def test_print_manager_preserves_explicit_portrait_orientation(qt_app, settings_
 
     manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
 
-    assert manager.printer.orientation() == QPrinter.Portrait
+    assert (
+        manager.printer.pageLayout().orientation() == QPageLayout.Orientation.Portrait
+    )
 
 
 def test_print_manager_uses_persisted_custom_page_size(qt_app, settings_stub):
@@ -340,8 +354,8 @@ def test_print_manager_uses_persisted_custom_page_size(qt_app, settings_stub):
     page_size = manager.printer.pageLayout().pageSize()
 
     assert page_size.name() == "Counter Slip"
-    assert page_size.size(page_size.Millimeter).width() == 120.0
-    assert page_size.size(page_size.Millimeter).height() == 190.0
+    assert page_size.size(QPageSize.Unit.Millimeter).width() == 120.0
+    assert page_size.size(QPageSize.Unit.Millimeter).height() == 190.0
 
 
 def test_preview_layout_changes_become_default_for_next_estimate_preview(

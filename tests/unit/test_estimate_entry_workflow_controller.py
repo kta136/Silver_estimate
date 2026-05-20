@@ -5,8 +5,8 @@ import types
 from typing import Any
 
 import pytest
-from PyQt5.QtCore import QDate, QObject, pyqtSignal
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import QDate, QObject, pyqtSignal
+from PyQt6.QtWidgets import (
     QDateEdit,
     QDialog,
     QDoubleSpinBox,
@@ -26,9 +26,14 @@ from silverestimate.ui.view_models import EstimateEntryRowState, EstimateEntryVi
 
 
 class _MessageBoxStub:
-    Yes = 1
-    No = 2
-    Cancel = 3
+    class StandardButton:
+        Yes = 1
+        No = 2
+        Cancel = 3
+
+    Yes = StandardButton.Yes
+    No = StandardButton.No
+    Cancel = StandardButton.Cancel
 
     question_return = Yes
     warning_calls: list[tuple[Any, ...]] = []
@@ -822,8 +827,8 @@ def test_prompt_item_selection_and_open_history_dialog(workflow_host, monkeypatc
             self.code = code
             self.parent = parent
 
-        def exec_(self):
-            return workflow_module.QDialog.Accepted
+        def exec(self):
+            return workflow_module.QDialog.DialogCode.Accepted
 
         def get_selected_item(self):
             return {"code": "SEL001"}
@@ -835,8 +840,8 @@ def test_prompt_item_selection_and_open_history_dialog(workflow_host, monkeypatc
             self.parent = parent
             self.selected_voucher = "H001"
 
-        def exec_(self):
-            return workflow_module.QDialog.Accepted
+        def exec(self):
+            return workflow_module.QDialog.DialogCode.Accepted
 
     monkeypatch.setattr(workflow_module, "ItemSelectionDialog", _SelectionDialog)
     monkeypatch.setitem(
@@ -1050,7 +1055,7 @@ def test_get_cell_helpers_and_last_balance_dialog(workflow_host, monkeypatch):
     host, controller = workflow_host
     host.item_table.text_cells[(0, workflow_module.COL_CODE)] = "AB01"
     host.item_table.text_cells[(0, 99)] = "x"
-    monkeypatch.setattr(QDialog, "exec_", lambda self: True)
+    monkeypatch.setattr(QDialog, "exec", lambda self: True)
 
     controller.show_last_balance_dialog()
 

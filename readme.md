@@ -1,9 +1,9 @@
 # Silver Estimation App - v2.8.8
 
-A desktop application built with PyQt5 and an encrypted SQLite database for managing silver sales estimates - item-wise entries, silver bar inventory, returns, and print-ready outputs.
+A desktop application built with PyQt6 and an encrypted SQLite database for managing silver sales estimates - item-wise entries, silver bar inventory, returns, and print-ready outputs.
 
 [![Python](https://img.shields.io/badge/Python-3.14+-blue.svg)](https://www.python.org/)
-[![PyQt5](https://img.shields.io/badge/PyQt5-5.15+-green.svg)](https://www.riverbankcomputing.com/software/pyqt/)
+[![PyQt6](https://img.shields.io/badge/PyQt6-6.11-green.svg)](https://www.riverbankcomputing.com/software/pyqt/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-v2.8.8-orange.svg)](CHANGELOG.md)
 [![PR Validation](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml)
@@ -52,7 +52,7 @@ The app helps silver shops to:
 
 ## Architecture
 
-- **UI layer**: PyQt5 widgets in `silverestimate/ui/` handle estimate entry, item master, silver bar management, history, and supporting dialogs.
+- **UI layer**: PyQt6 widgets in `silverestimate/ui/` handle estimate entry, item master, silver bar management, history, and supporting dialogs.
 - **Presenter**: `silverestimate/presenter/estimate_entry_presenter.py` coordinates estimate workflows, keeping UI widgets thin and testable.
 - **Controllers**: Startup, navigation, and live-rate controllers bootstrap the app, wire menus/toolbars, and manage background refresh cadence.
 - **Services**: `MainCommands`, `SettingsService`, `LiveRateService`, and `AuthService` encapsulate reusable logic; authentication relies on the secure credential store.
@@ -187,7 +187,7 @@ uv run pre-commit run --all-files
 
 ## Testing
 
-- Tests live under `tests/` and use pytest (with `pytest-qt` for UI hooks).
+- Tests live under `tests/` and use pytest (with `pytest-qt` pinned to PyQt6 for UI hooks).
 - Local smoke command: `pytest -v tests/test_security.py tests/services/test_auth_service.py`
 - Full local run: `pytest -v`
 - Shared validation entrypoints:

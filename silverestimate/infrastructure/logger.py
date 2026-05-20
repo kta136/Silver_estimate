@@ -5,8 +5,8 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import PyQt5.QtCore as QtCore
-from PyQt5.QtCore import QtMsgType
+import PyQt6.QtCore as QtCore
+from PyQt6.QtCore import QtMsgType
 
 from silverestimate.infrastructure.settings import get_app_settings
 

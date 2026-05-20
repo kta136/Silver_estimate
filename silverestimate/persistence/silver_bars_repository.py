@@ -47,7 +47,7 @@ class SilverBarsRepository:
             if result:
                 try:
                     seq = int(result["list_identifier"].split("-")[-1]) + 1
-                except (IndexError, ValueError):
+                except IndexError, ValueError:
                     self._logger.warning("Format issue when parsing list identifier")
         except sqlite3.Error as exc:
             self._logger.error(
@@ -1076,13 +1076,13 @@ class SilverBarsRepository:
             try:
                 query += " AND sb.purity >= ?"
                 params.append(float(min_purity))
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 pass
         if max_purity is not None:
             try:
                 query += " AND sb.purity <= ?"
                 params.append(float(max_purity))
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 pass
         if (
             date_range
@@ -1168,7 +1168,7 @@ class SilverBarsRepository:
         for raw_bar_id in list(bar_ids or []):
             try:
                 bar_id = int(raw_bar_id)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 continue
             if bar_id <= 0 or bar_id in seen:
                 continue

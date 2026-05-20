@@ -58,14 +58,21 @@ class _MessageBoxInstanceStub:
     def setDefaultButton(self, button):
         self.default_button = button
 
-    def exec_(self):
+    def exec(self):
         return type(self).return_value
 
 
 class _MessageBoxStub:
-    Yes = 1
-    Cancel = 0
-    Question = 3
+    class StandardButton:
+        Yes = 1
+        Cancel = 0
+
+    class Icon:
+        Question = 3
+
+    Yes = StandardButton.Yes
+    Cancel = StandardButton.Cancel
+    Question = Icon.Question
 
     return_warning = Yes
     information_calls: list[tuple[Any, ...]] = []
@@ -402,7 +409,9 @@ def test_restore_item_catalog_returns_when_confirmation_cancelled(monkeypatch):
         "silverestimate.services.item_catalog_transfer",
         types.SimpleNamespace(
             ITEM_CATALOG_FILE_FILTER="filter",
-            import_item_catalog=lambda *args, **kwargs: import_calls.append((args, kwargs)),
+            import_item_catalog=lambda *args, **kwargs: import_calls.append(
+                (args, kwargs)
+            ),
         ),
     )
 
@@ -450,7 +459,9 @@ def test_restore_item_catalog_success_refreshes_visible_item_master(monkeypatch)
 
     assert import_calls == [(db, "backup.seitems.json", True)]
     assert load_calls == ["load"]
-    assert any(args[1] == "Restore Complete" for args in _MessageBoxStub.information_calls)
+    assert any(
+        args[1] == "Restore Complete" for args in _MessageBoxStub.information_calls
+    )
 
 
 def test_restore_item_catalog_handles_import_failure(monkeypatch):
@@ -586,7 +597,9 @@ def test_start_item_catalog_export_worker_rejects_duplicate(monkeypatch):
         file_path="backup.seitems.json",
     )
 
-    assert any(args[1] == "Catalog Backup" for args in _MessageBoxStub.information_calls)
+    assert any(
+        args[1] == "Catalog Backup" for args in _MessageBoxStub.information_calls
+    )
 
 
 def test_start_item_catalog_export_worker_wires_thread_and_cleanup(monkeypatch):
@@ -606,7 +619,9 @@ def test_start_item_catalog_export_worker_wires_thread_and_cleanup(monkeypatch):
     assert thread.started_flag is True
 
     worker.finished.emit(7)
-    assert any(args[1] == "Export Successful" for args in _MessageBoxStub.information_calls)
+    assert any(
+        args[1] == "Export Successful" for args in _MessageBoxStub.information_calls
+    )
     assert thread.quit_called is True
 
     thread.finished.emit()

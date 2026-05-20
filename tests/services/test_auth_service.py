@@ -1,7 +1,7 @@
 import logging
 import types
 
-from PyQt5.QtWidgets import QDialog
+from PyQt6.QtWidgets import QDialog
 
 from silverestimate.security import credential_store
 from silverestimate.services import auth_service
@@ -41,8 +41,8 @@ def test_run_authentication_first_time(monkeypatch, settings_stub):
         def __init__(self, is_setup=False, parent=None):
             assert is_setup is True
 
-        def exec_(self):
-            return QDialog.Accepted
+        def exec(self):
+            return QDialog.DialogCode.Accepted
 
         def get_password(self):
             return "primary-pass"
@@ -79,8 +79,8 @@ def test_run_authentication_existing_password(monkeypatch, settings_stub):
         def __init__(self, is_setup=False, parent=None):
             assert is_setup is False
 
-        def exec_(self):
-            return QDialog.Accepted
+        def exec(self):
+            return QDialog.DialogCode.Accepted
 
         def was_reset_requested(self):
             return False
@@ -119,8 +119,8 @@ def test_run_authentication_uses_lazy_login_dialog_resolver(monkeypatch, setting
         def __init__(self, is_setup=False, parent=None):
             assert is_setup is False
 
-        def exec_(self):
-            return QDialog.Accepted
+        def exec(self):
+            return QDialog.DialogCode.Accepted
 
         def was_reset_requested(self):
             return False
@@ -158,8 +158,8 @@ def test_run_authentication_secondary_password_triggers_silent_wipe(
         def __init__(self, is_setup=False, parent=None):
             assert is_setup is False
 
-        def exec_(self):
-            return QDialog.Accepted
+        def exec(self):
+            return QDialog.DialogCode.Accepted
 
         def was_reset_requested(self):
             return False
@@ -201,8 +201,8 @@ def test_run_authentication_retries_after_incorrect_password(
             attempts["count"] += 1
             self._attempt = attempts["count"]
 
-        def exec_(self):
-            return QDialog.Accepted
+        def exec(self):
+            return QDialog.DialogCode.Accepted
 
         def was_reset_requested(self):
             return False

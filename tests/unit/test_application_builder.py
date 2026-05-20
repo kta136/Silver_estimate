@@ -40,6 +40,8 @@ class StubLogger:
 
 @pytest.fixture
 def stub_qt(monkeypatch):
+    bootstrap_calls: list[str] = []
+
     class StubQtCore:
         handler = None
 
@@ -57,6 +59,9 @@ def stub_qt(monkeypatch):
             self.args = list(args)
             self.icon = None
             self.exec_calls = 0
+            self.style = None
+            self.palette = None
+            self.stylesheet = ""
 
         @classmethod
         def instance(cls):
@@ -69,7 +74,16 @@ def stub_qt(monkeypatch):
         def setWindowIcon(self, icon):
             self.icon = icon
 
-        def exec_(self):
+        def setStyle(self, style):
+            self.style = style
+
+        def setPalette(self, palette):
+            self.palette = palette
+
+        def setStyleSheet(self, stylesheet):
+            self.stylesheet = stylesheet
+
+        def exec(self):
             self.exec_calls += 1
             return type(self).exec_result
 
@@ -80,10 +94,19 @@ def stub_qt(monkeypatch):
         def critical(parent, title, message):
             StubMessageBox.last_call = (parent, title, message)
 
+    def configure_qt_before_application():
+        bootstrap_calls.append("configured")
+
     monkeypatch.setattr(application_module, "QtCore", StubQtCore)
     monkeypatch.setattr(application_module, "QApplication", StubQApplication)
     monkeypatch.setattr(application_module, "QMessageBox", StubMessageBox)
+    monkeypatch.setattr(
+        application_module.qt_bootstrap,
+        "configure_qt_before_application",
+        configure_qt_before_application,
+    )
     monkeypatch.setattr(application_module, "set_app_user_model_id", lambda *_: None)
+    StubQApplication.bootstrap_calls = bootstrap_calls
     return StubQApplication, StubMessageBox
 
 
@@ -222,6 +245,10 @@ def test_run_initialises_main_window_and_enters_event_loop(tmp_path, stub_qt):
     assert window.db is db_manager
     assert db_manager.closed is True
     assert stub_app.instance_ref.exec_calls == 1
+    assert stub_app.bootstrap_calls == ["configured"]
+    assert stub_app.instance_ref.style == "Fusion"
+    assert stub_app.instance_ref.palette is not None
+    assert "QMenuBar" in stub_app.instance_ref.stylesheet
     assert message_box.last_call is None
 
 

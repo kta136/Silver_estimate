@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from PyQt5.QtCore import QAbstractTableModel, QModelIndex, Qt
-from PyQt5.QtGui import QColor
+from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
+from PyQt6.QtGui import QColor
 
 
 @dataclass(frozen=True)
@@ -45,22 +45,24 @@ class ItemSelectionTableModel(QAbstractTableModel):
         self,
         section: int,
         orientation: Qt.Orientation,
-        role: int = Qt.DisplayRole,
+        role: int = Qt.ItemDataRole.DisplayRole,
     ) -> Any:
-        if role != Qt.DisplayRole:
+        if role != Qt.ItemDataRole.DisplayRole:
             return None
-        if orientation == Qt.Horizontal and 0 <= section < len(self.HEADERS):
+        if orientation == Qt.Orientation.Horizontal and 0 <= section < len(
+            self.HEADERS
+        ):
             return self.HEADERS[section]
         return None
 
-    def data(self, index: QModelIndex, role: int = Qt.DisplayRole) -> Any:
+    def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
         if not index.isValid():
             return None
         record = self.row_payload(index.row())
         if record is None:
             return None
 
-        if role == Qt.DisplayRole:
+        if role == Qt.ItemDataRole.DisplayRole:
             if index.column() == 0:
                 return record.code
             if index.column() == 1:
@@ -69,10 +71,10 @@ class ItemSelectionTableModel(QAbstractTableModel):
                 return f"{record.purity:.2f}"
             return None
 
-        if role == Qt.TextAlignmentRole and index.column() == 2:
-            return Qt.AlignRight | Qt.AlignVCenter
+        if role == Qt.ItemDataRole.TextAlignmentRole and index.column() == 2:
+            return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
 
-        if role == Qt.BackgroundRole and self._query_upper:
+        if role == Qt.ItemDataRole.BackgroundRole and self._query_upper:
             if index.column() == 0 and self._query_upper in record.code_upper:
                 return self._highlight
             if index.column() == 1 and self._query_upper in record.name_upper:

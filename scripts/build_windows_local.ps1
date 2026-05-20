@@ -5,6 +5,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $appConstants = Join-Path $repoRoot "silverestimate\infrastructure\app_constants.py"
 $specPath = Join-Path $repoRoot "SilverEstimate.spec"
 $distDir = Join-Path $repoRoot "dist"
+$requiredPython = [version]"3.14"
 
 function Get-AppVersion {
     $match = Select-String -Path $appConstants -Pattern 'APP_VERSION = "([^"]+)"'
@@ -14,18 +15,82 @@ function Get-AppVersion {
     return $match.Matches[0].Groups[1].Value
 }
 
-function Find-WindowsPython {
-    $registryExe = $null
+function Get-PythonVersion([string]$pythonExe) {
     try {
-        $registryExe = (Get-ItemProperty `
-            'HKCU:\SOFTWARE\Python\PythonCore\3.13\InstallPath' `
-            -ErrorAction SilentlyContinue).ExecutablePath
+        $versionText = & $pythonExe -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')" 2>$null |
+            Select-Object -First 1
+        if ($LASTEXITCODE -ne 0 -or -not $versionText) {
+            return $null
+        }
+        return [version]$versionText
     }
     catch {
-        $registryExe = $null
+        return $null
     }
-    if ($registryExe -and (Test-Path $registryExe)) {
-        return $registryExe
+}
+
+function Test-PythonForBuild([string]$pythonExe) {
+    if (-not $pythonExe -or -not (Test-Path $pythonExe)) {
+        return $false
+    }
+    $version = Get-PythonVersion -pythonExe $pythonExe
+    return $version -and $version -ge $requiredPython
+}
+
+function Get-Python314FromLauncher {
+    $launcher = Get-Command py -ErrorAction SilentlyContinue
+    if (-not $launcher) {
+        return $null
+    }
+
+    $pythonExe = & $launcher.Source -3.14 -c "import sys; print(sys.executable)" 2>$null |
+        Select-Object -First 1
+    if ($LASTEXITCODE -eq 0 -and (Test-PythonForBuild -pythonExe $pythonExe)) {
+        return $pythonExe
+    }
+    return $null
+}
+
+function Get-Python314FromRegistry {
+    $registryPaths = @(
+        'HKCU:\SOFTWARE\Python\PythonCore\3.14\InstallPath',
+        'HKLM:\SOFTWARE\Python\PythonCore\3.14\InstallPath',
+        'HKCU:\SOFTWARE\WOW6432Node\Python\PythonCore\3.14\InstallPath',
+        'HKLM:\SOFTWARE\WOW6432Node\Python\PythonCore\3.14\InstallPath'
+    )
+
+    foreach ($path in $registryPaths) {
+        $properties = Get-ItemProperty $path -ErrorAction SilentlyContinue
+        if (-not $properties) {
+            continue
+        }
+
+        $executableProperty = $properties.PSObject.Properties["ExecutablePath"]
+        $pythonExe = if ($executableProperty) { $executableProperty.Value } else { $null }
+
+        $defaultProperty = $properties.PSObject.Properties["(default)"]
+        if (-not $pythonExe -and $defaultProperty -and $defaultProperty.Value) {
+            $pythonExe = Join-Path $defaultProperty.Value "python.exe"
+        }
+
+        if (Test-PythonForBuild -pythonExe $pythonExe) {
+            return $pythonExe
+        }
+    }
+    return $null
+}
+
+function Find-WindowsPython {
+    $preferred = @(
+        (Get-Python314FromLauncher),
+        (Get-Python314FromRegistry),
+        (Join-Path $repoRoot ".venv\Scripts\python.exe")
+    )
+
+    foreach ($pythonExe in $preferred) {
+        if (Test-PythonForBuild -pythonExe $pythonExe) {
+            return $pythonExe
+        }
     }
 
     $candidates = @(
@@ -36,31 +101,56 @@ function Find-WindowsPython {
     )
 
     foreach ($pattern in $candidates) {
-        Get-ChildItem -Path $pattern -Directory -ErrorAction SilentlyContinue |
-            Sort-Object FullName -Descending |
-            ForEach-Object {
-                $pythonExe = Join-Path $_.FullName "python.exe"
-                if (Test-Path $pythonExe) {
-                    return $pythonExe
-                }
+        $directories = Get-ChildItem -Path $pattern -Directory -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending
+        foreach ($directory in $directories) {
+            $pythonExe = Join-Path $directory.FullName "python.exe"
+            if (Test-PythonForBuild -pythonExe $pythonExe) {
+                return $pythonExe
             }
+        }
     }
 
-    throw "Windows python.exe was not found in common install locations."
+    throw "Python 3.14 or newer was not found in common Windows install locations."
+}
+
+function Sync-ProjectDependencies([string]$pythonExe) {
+    $uv = Get-Command uv -ErrorAction SilentlyContinue
+    if ($uv) {
+        & $uv.Source sync --extra dev --python $pythonExe --locked
+        if ($LASTEXITCODE -ne 0) {
+            throw "uv dependency sync failed."
+        }
+
+        $venvPython = Join-Path $repoRoot ".venv\Scripts\python.exe"
+        if (Test-PythonForBuild -pythonExe $venvPython) {
+            return $venvPython
+        }
+    }
+
+    & $pythonExe -m pip install --upgrade pip
+    if ($LASTEXITCODE -ne 0) {
+        throw "pip upgrade failed."
+    }
+    & $pythonExe -m pip install -e ".[dev]"
+    if ($LASTEXITCODE -ne 0) {
+        throw "project dependency install failed."
+    }
+    return $pythonExe
 }
 
 function Ensure-PyInstaller([string]$pythonExe) {
-    try {
-        & $pythonExe -m PyInstaller --version | Out-Null
+    & $pythonExe -m PyInstaller --version | Out-Null
+    if ($LASTEXITCODE -eq 0) {
         return
     }
-    catch {
-        & $pythonExe -m pip install pyinstaller
+    & $pythonExe -m pip install pyinstaller
+    if ($LASTEXITCODE -ne 0) {
+        throw "PyInstaller installation failed."
     }
 }
 
 $pythonExe = Find-WindowsPython
-Ensure-PyInstaller -pythonExe $pythonExe
 
 $version = Get-AppVersion
 $versionedExe = Join-Path $distDir "SilverEstimate-v$version.exe"
@@ -69,7 +159,13 @@ $baseExe = Join-Path $distDir "SilverEstimate.exe"
 
 Push-Location $repoRoot
 try {
-    & $pythonExe -m PyInstaller --clean --noconfirm $specPath
+    $buildPython = Sync-ProjectDependencies -pythonExe $pythonExe
+    Ensure-PyInstaller -pythonExe $buildPython
+
+    & $buildPython -m PyInstaller --clean --noconfirm $specPath
+    if ($LASTEXITCODE -ne 0) {
+        throw "PyInstaller build failed."
+    }
 
     if (-not (Test-Path $baseExe)) {
         throw "Build did not produce $baseExe"

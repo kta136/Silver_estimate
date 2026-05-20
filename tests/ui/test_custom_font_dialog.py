@@ -1,4 +1,4 @@
-from PyQt5.QtGui import QFont
+from PyQt6.QtGui import QFont
 
 from silverestimate.ui.custom_font_dialog import CustomFontDialog
 

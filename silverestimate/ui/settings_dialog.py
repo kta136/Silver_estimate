@@ -1,14 +1,12 @@
 #!/usr/bin/env python
 import logging  # Ensure logging is available for getLogger calls
 
-from PyQt5.QtCore import QSize, Qt, QUrl, pyqtSignal
-from PyQt5.QtGui import QDesktopServices, QFont
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import QSize, Qt, QUrl, pyqtSignal
+from PyQt6.QtGui import QDesktopServices, QFont
+from PyQt6.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QDialog,
     QDialogButtonBox,
-    QDoubleSpinBox,
     QFormLayout,
     QFrame,
     QGridLayout,
@@ -21,7 +19,6 @@ from PyQt5.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
-    QSpinBox,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -37,6 +34,21 @@ from .icons import get_icon
 from .login_dialog import LoginDialog  # Needed for password verification/hashing
 from .settings_print_controller import PrintSettingsWidgets, SettingsPrintController
 from .shared_screen_theme import build_management_screen_stylesheet
+from .theme_tokens import (
+    CARD_BORDER,
+    CARD_BORDER_SOFT,
+    DANGER_BG,
+    DANGER_BORDER,
+    FIELD_TEXT,
+    HEADER_BG,
+    HEADER_TEXT,
+    INPUT_BORDER,
+    SELECTION_BG,
+    SURFACE_BG,
+    TEXT_MUTED,
+    TEXT_STRONG,
+)
+from .themed_controls import ThemedComboBox, ThemedDoubleSpinBox, ThemedSpinBox
 
 
 class SettingsDialog(QDialog):
@@ -68,61 +80,81 @@ class SettingsDialog(QDialog):
                     "QListWidget",
                     "QListView",
                 ],
-                extra_rules="""
-                QListWidget#SettingsSidebar {
-                    background-color: #ffffff;
-                    border: 1px solid #d8e1ec;
+                extra_rules=f"""
+                QFrame#SettingsPageCard QWidget {{
+                    color: {TEXT_STRONG};
+                }}
+                QFrame#SettingsPageCard {{
+                    background-color: {SURFACE_BG};
+                }}
+                QListWidget#SettingsSidebar {{
+                    background-color: {SURFACE_BG};
+                    border: 1px solid {CARD_BORDER};
                     border-radius: 12px;
                     outline: none;
                     padding: 8px;
-                }
-                QListWidget#SettingsSidebar::item {
+                }}
+                QListWidget#SettingsSidebar::item {{
                     border-radius: 8px;
-                    color: #334155;
+                    color: {HEADER_TEXT};
                     margin: 2px 0;
                     padding: 8px 10px;
-                }
-                QListWidget#SettingsSidebar::item:selected {
-                    background-color: #dbeafe;
-                    color: #0f172a;
+                }}
+                QListWidget#SettingsSidebar::item:selected,
+                QListWidget#SettingsSidebar::item:selected:!active {{
+                    background-color: {SELECTION_BG};
+                    color: {TEXT_STRONG};
                     font-weight: 700;
-                }
-                QListWidget#SettingsSidebar::item:hover:!selected {
-                    background-color: #eef2ff;
-                }
-                QGroupBox {
-                    background-color: #ffffff;
-                    border: 1px solid #d8e1ec;
-                    border-radius: 10px;
-                    color: #0f172a;
-                    font-weight: 700;
-                    margin-top: 12px;
-                    padding: 12px 12px 10px 12px;
-                }
-                QGroupBox::title {
-                    subcontrol-origin: margin;
-                    left: 10px;
-                    padding: 0 4px;
-                }
-                QLabel {
-                    color: #334155;
-                }
-                QPushButton {
-                    background-color: #f8fafc;
-                    border: 1px solid #cbd5e1;
+                }}
+                QListWidget#SettingsSidebar::item:hover:!selected {{
+                    background-color: {HEADER_BG};
+                    color: {TEXT_STRONG};
+                }}
+                QLabel {{
+                    color: {FIELD_TEXT};
+                }}
+                QLabel#SettingsWarningLabel {{
+                    background-color: {DANGER_BG};
+                    border: 1px solid {DANGER_BORDER};
                     border-radius: 8px;
-                    color: #0f172a;
+                    color: #991b1b;
+                    font-weight: 600;
+                    padding: 8px 10px;
+                }}
+                QLabel#SettingsMutedDescription {{
+                    color: {TEXT_MUTED};
+                    font-size: 9pt;
+                }}
+                QPushButton {{
+                    background-color: {HEADER_BG};
+                    border: 1px solid {INPUT_BORDER};
+                    border-radius: 8px;
+                    color: {TEXT_STRONG};
                     font-weight: 600;
                     min-height: 24px;
                     padding: 5px 10px;
-                }
-                QPushButton:hover {
-                    background-color: #eef2f7;
-                    border-color: #94a3b8;
-                }
-                QDialogButtonBox {
+                }}
+                QPushButton:hover {{
+                    background-color: {SELECTION_BG};
+                    border-color: {HEADER_TEXT};
+                }}
+                QPushButton:disabled {{
+                    background-color: {CARD_BORDER_SOFT};
+                    border-color: {CARD_BORDER};
+                    color: {TEXT_MUTED};
+                }}
+                QPushButton#SettingsDangerButton {{
+                    background-color: {DANGER_BG};
+                    border-color: {DANGER_BORDER};
+                    color: #991b1b;
+                }}
+                QPushButton#SettingsDangerButton:hover {{
+                    background-color: #ffe4e6;
+                    border-color: #fb7185;
+                }}
+                QDialogButtonBox {{
                     padding-top: 4px;
-                }
+                }}
                 """,
             )
         )
@@ -142,10 +174,12 @@ class SettingsDialog(QDialog):
         # Sidebar + pages (cleaner than rotated west tabs)
         self.sidebar = QListWidget()
         self.sidebar.setObjectName("SettingsSidebar")
-        self.sidebar.setViewMode(QListView.ListMode)
+        self.sidebar.setViewMode(QListView.ViewMode.ListMode)
         self.sidebar.setIconSize(QSize(20, 20))
         self.sidebar.setSpacing(4)
-        self.sidebar.setFrameShape(QFrame.NoFrame)
+        self.sidebar.setFrameShape(QFrame.Shape.NoFrame)
+        self.sidebar.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.sidebar.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.sidebar.setFixedWidth(180)
 
         self.pages = QStackedWidget()
@@ -203,19 +237,21 @@ class SettingsDialog(QDialog):
         # Buttons
         # Add Help button later if needed
         self.buttonBox = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel | QDialogButtonBox.Apply
+            QDialogButtonBox.StandardButton.Ok
+            | QDialogButtonBox.StandardButton.Cancel
+            | QDialogButtonBox.StandardButton.Apply
         )  # Store as self.buttonBox
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
-        self.buttonBox.button(QDialogButtonBox.Apply).clicked.connect(
+        self.buttonBox.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(
             self.apply_settings
         )
         # Disable Apply until change
-        self.buttonBox.button(QDialogButtonBox.Apply).setEnabled(False)
-        self.buttonBox.button(QDialogButtonBox.Apply).setObjectName(
+        self.buttonBox.button(QDialogButtonBox.StandardButton.Apply).setEnabled(False)
+        self.buttonBox.button(QDialogButtonBox.StandardButton.Apply).setObjectName(
             "SettingsPrimaryButton"
         )
-        self.buttonBox.button(QDialogButtonBox.Ok).setObjectName(
+        self.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setObjectName(
             "SettingsPrimaryButton"
         )
 
@@ -225,7 +261,7 @@ class SettingsDialog(QDialog):
         restore_btn.setToolTip(
             "Reset all settings to default values\nWill not affect saved estimates or data\nChanges take effect immediately"
         )
-        self.buttonBox.addButton(restore_btn, QDialogButtonBox.ResetRole)
+        self.buttonBox.addButton(restore_btn, QDialogButtonBox.ButtonRole.ResetRole)
         restore_btn.clicked.connect(self._restore_defaults)
 
         # Layout
@@ -268,7 +304,9 @@ class SettingsDialog(QDialog):
 
         # If changes fired during construction, reflect pending dirty state
         if getattr(self, "_dirty", False):
-            self.buttonBox.button(QDialogButtonBox.Apply).setEnabled(True)
+            self.buttonBox.button(QDialogButtonBox.StandardButton.Apply).setEnabled(
+                True
+            )
 
     # --- Tab Creation Methods ---
 
@@ -278,7 +316,7 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(widget)
         form_layout = QFormLayout()
         form_layout.setSpacing(10)
-        form_layout.setLabelAlignment(Qt.AlignRight)
+        form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
         # Print Font
         self.print_font_button = QPushButton("Configure Print Font...")
@@ -304,7 +342,7 @@ class SettingsDialog(QDialog):
         form_layout.addRow("Sample:", self.print_font_sample)
 
         # Table Font Size
-        self.table_font_size_spin = QSpinBox()
+        self.table_font_size_spin = ThemedSpinBox()
         self.table_font_size_spin.setRange(7, 16)  # Keep range consistent
         self.table_font_size_spin.setValue(self._current_table_font_size)
         self.table_font_size_spin.setToolTip(
@@ -316,7 +354,7 @@ class SettingsDialog(QDialog):
         form_layout.addRow("Estimate Table Font Size:", self.table_font_size_spin)
 
         # Breakdown Totals Font Size (Regular/Return/Silver Bar)
-        self.breakdown_font_size_spin = QSpinBox()
+        self.breakdown_font_size_spin = ThemedSpinBox()
         self.breakdown_font_size_spin.setRange(7, 16)
         self.breakdown_font_size_spin.setValue(self._current_breakdown_font_size)
         self.breakdown_font_size_spin.setToolTip(
@@ -328,7 +366,7 @@ class SettingsDialog(QDialog):
         form_layout.addRow("Totals (Left) Font Size:", self.breakdown_font_size_spin)
 
         # Final Calculation Font Size
-        self.final_calc_font_size_spin = QSpinBox()
+        self.final_calc_font_size_spin = ThemedSpinBox()
         self.final_calc_font_size_spin.setRange(8, 20)
         self.final_calc_font_size_spin.setValue(self._current_final_calc_font_size)
         self.final_calc_font_size_spin.setToolTip(
@@ -342,7 +380,7 @@ class SettingsDialog(QDialog):
         )
 
         # Totals/final panel position
-        self.totals_position_combo = QComboBox()
+        self.totals_position_combo = ThemedComboBox()
         self.totals_position_combo.addItem("Right Side", "right")
         self.totals_position_combo.addItem("Left Side", "left")
         self.totals_position_combo.addItem("Bottom", "bottom")
@@ -392,7 +430,7 @@ class SettingsDialog(QDialog):
         form.addRow("Auto Refresh:", self.live_enable_checkbox)
 
         # Refresh interval (seconds)
-        self.live_interval_spin = QSpinBox()
+        self.live_interval_spin = ThemedSpinBox()
         self.live_interval_spin.setRange(5, 3600)
         self.live_interval_spin.setSuffix(" s")
         interval_sec = self.settings.value("rates/refresh_interval_sec", 60, type=int)
@@ -435,15 +473,15 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(widget)
         form_layout = QFormLayout()
         form_layout.setSpacing(10)
-        form_layout.setLabelAlignment(Qt.AlignRight)
+        form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
         # --- Margins ---
         margins_label = QLabel("Page Margins (mm):")
         margins_layout = QGridLayout()
-        self.margin_left_spin = QSpinBox()
-        self.margin_top_spin = QSpinBox()
-        self.margin_right_spin = QSpinBox()
-        self.margin_bottom_spin = QSpinBox()
+        self.margin_left_spin = ThemedSpinBox()
+        self.margin_top_spin = ThemedSpinBox()
+        self.margin_right_spin = ThemedSpinBox()
+        self.margin_bottom_spin = ThemedSpinBox()
         for spin in [
             self.margin_left_spin,
             self.margin_top_spin,
@@ -465,7 +503,7 @@ class SettingsDialog(QDialog):
         form_layout.addRow(margins_label, margins_layout)
 
         # --- Print Preview Zoom ---
-        self.preview_zoom_spin = QDoubleSpinBox()
+        self.preview_zoom_spin = ThemedDoubleSpinBox()
         self.preview_zoom_spin.setRange(0.1, 5.0)  # 10% to 500%
         self.preview_zoom_spin.setSingleStep(0.1)
         self.preview_zoom_spin.setDecimals(2)
@@ -477,28 +515,28 @@ class SettingsDialog(QDialog):
         form_layout.addRow("Preview Default Zoom:", self.preview_zoom_spin)
 
         # --- Default Printer ---
-        self.printer_combo = QComboBox()
+        self.printer_combo = ThemedComboBox()
         self.printer_combo.setToolTip("Default printer for printing and quick print")
         self._print_settings_controller.refresh_printer_list(self.printer_combo)
         self.printer_combo.currentIndexChanged.connect(self._mark_dirty)
         form_layout.addRow("Default Printer:", self.printer_combo)
 
         # --- Page Size ---
-        self.page_size_combo = QComboBox()
+        self.page_size_combo = ThemedComboBox()
         self.page_size_combo.addItems(["A4", "A5", "Letter", "Legal", "Thermal 80mm"])
         self.page_size_combo.setToolTip("Default page size for printing")
         self.page_size_combo.currentIndexChanged.connect(self._mark_dirty)
         form_layout.addRow("Page Size:", self.page_size_combo)
 
         # --- Orientation ---
-        self.orientation_combo = QComboBox()
+        self.orientation_combo = ThemedComboBox()
         self.orientation_combo.addItems(["Portrait", "Landscape"])
         self.orientation_combo.setToolTip("Default page orientation for printing")
         self.orientation_combo.currentIndexChanged.connect(self._mark_dirty)
         form_layout.addRow("Orientation:", self.orientation_combo)
 
         # --- Estimate Layout ---
-        self.estimate_layout_combo = QComboBox()
+        self.estimate_layout_combo = ThemedComboBox()
         self.estimate_layout_combo.addItem("Classic (Old)", "old")
         self.estimate_layout_combo.addItem("Modern (New)", "new")
         self.estimate_layout_combo.addItem("Thermal (80mm)", "thermal")
@@ -525,7 +563,7 @@ class SettingsDialog(QDialog):
             "Ensure you have backups if necessary."
         )
         description.setWordWrap(True)
-        description.setStyleSheet("color: red;")
+        description.setObjectName("SettingsWarningLabel")
         layout.addWidget(description)
 
         button_layout = QHBoxLayout()
@@ -551,7 +589,7 @@ class SettingsDialog(QDialog):
         layout.addLayout(button_layout)
 
         # --- Item Backup section ---
-        from PyQt5.QtWidgets import QGroupBox
+        from PyQt6.QtWidgets import QGroupBox
 
         backup_group = QGroupBox("Item Master Backup")
         backup_layout = QVBoxLayout(backup_group)
@@ -592,7 +630,7 @@ class SettingsDialog(QDialog):
             "Changes to these settings take effect immediately."
         )
         description.setWordWrap(True)
-        description.setStyleSheet("margin-bottom: 10px;")
+        description.setObjectName("SettingsMutedDescription")
         layout.addWidget(description)
 
         # Debug mode section
@@ -615,7 +653,7 @@ class SettingsDialog(QDialog):
             "This is useful for troubleshooting but may affect performance."
         )
         debug_desc.setWordWrap(True)
-        debug_desc.setStyleSheet("color: gray; font-size: 9pt; margin-left: 20px;")
+        debug_desc.setObjectName("SettingsMutedDescription")
         debug_layout.addWidget(debug_desc)
 
         # Log level toggles group
@@ -662,7 +700,7 @@ class SettingsDialog(QDialog):
             "to keep enabled for troubleshooting purposes."
         )
         levels_desc.setWordWrap(True)
-        levels_desc.setStyleSheet("color: gray; font-size: 9pt; margin-top: 5px;")
+        levels_desc.setObjectName("SettingsMutedDescription")
         log_levels_layout.addWidget(levels_desc)
 
         # Auto cleanup group
@@ -681,7 +719,7 @@ class SettingsDialog(QDialog):
         # Cleanup days spinbox
         cleanup_days_layout = QHBoxLayout()
         cleanup_days_layout.addWidget(QLabel("Keep logs for:"))
-        self.cleanup_days_spin = QSpinBox()
+        self.cleanup_days_spin = ThemedSpinBox()
         self.cleanup_days_spin.setRange(1, 365)
         self.cleanup_days_spin.setSuffix(" days")
         cleanup_days = self.settings.value("logging/cleanup_days", 1, type=int)
@@ -698,7 +736,7 @@ class SettingsDialog(QDialog):
             "Cleanup occurs at midnight each day."
         )
         cleanup_desc.setWordWrap(True)
-        cleanup_desc.setStyleSheet("color: gray; font-size: 9pt; margin-top: 5px;")
+        cleanup_desc.setObjectName("SettingsMutedDescription")
         cleanup_layout.addWidget(cleanup_desc)
 
         # Connect auto cleanup checkbox to enable/disable days spinbox
@@ -739,33 +777,35 @@ class SettingsDialog(QDialog):
         group_layout.setSpacing(10)
 
         self.current_password_input = QLineEdit()
-        self.current_password_input.setEchoMode(QLineEdit.Password)
+        self.current_password_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.current_password_input.setPlaceholderText(
             "Enter your current main password"
         )
         group_layout.addRow("Current Password:", self.current_password_input)
 
         self.new_password_input = QLineEdit()
-        self.new_password_input.setEchoMode(QLineEdit.Password)
+        self.new_password_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.new_password_input.setPlaceholderText("Enter new main password")
         group_layout.addRow("New Main Password:", self.new_password_input)
 
         self.confirm_new_password_input = QLineEdit()
-        self.confirm_new_password_input.setEchoMode(QLineEdit.Password)
+        self.confirm_new_password_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.confirm_new_password_input.setPlaceholderText("Confirm new main password")
         group_layout.addRow("Confirm New Main:", self.confirm_new_password_input)
 
         group_layout.addRow(QLabel("-" * 40))  # Separator
 
         self.new_secondary_password_input = QLineEdit()
-        self.new_secondary_password_input.setEchoMode(QLineEdit.Password)
+        self.new_secondary_password_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.new_secondary_password_input.setPlaceholderText(
             "Enter new recovery password"
         )
         group_layout.addRow("New Recovery Password:", self.new_secondary_password_input)
 
         self.confirm_new_secondary_password_input = QLineEdit()
-        self.confirm_new_secondary_password_input.setEchoMode(QLineEdit.Password)
+        self.confirm_new_secondary_password_input.setEchoMode(
+            QLineEdit.EchoMode.Password
+        )
         self.confirm_new_secondary_password_input.setPlaceholderText(
             "Confirm new recovery password"
         )
@@ -879,7 +919,7 @@ class SettingsDialog(QDialog):
         value = self.settings.value(key, defaultValue=default_size, type=int)
         try:
             numeric_value = int(value)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             logging.getLogger(__name__).warning(
                 "Invalid integer setting for %s: %r; using %s",
                 key,
@@ -897,7 +937,7 @@ class SettingsDialog(QDialog):
         """Show the custom print font dialog."""
         # Use the temporary font object for editing
         dialog = CustomFontDialog(self._current_print_font, self)
-        if dialog.exec_() == QDialog.Accepted:
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             self._current_print_font = dialog.get_selected_font()
             self.print_font_label.setText(
                 self._get_font_display_text(self._current_print_font)
@@ -1025,7 +1065,9 @@ class SettingsDialog(QDialog):
             self.settings_applied.emit()
             logger.info("Settings applied and saved.")
 
-            self.buttonBox.button(QDialogButtonBox.Apply).setEnabled(False)
+            self.buttonBox.button(QDialogButtonBox.StandardButton.Apply).setEnabled(
+                False
+            )
             self._dirty = False
             return True
         except Exception as e:
@@ -1034,7 +1076,9 @@ class SettingsDialog(QDialog):
             )
             logger.error("Error applying settings:", exc_info=True)
             self._dirty = True
-            self.buttonBox.button(QDialogButtonBox.Apply).setEnabled(True)
+            self.buttonBox.button(QDialogButtonBox.StandardButton.Apply).setEnabled(
+                True
+            )
             return False
 
     def _handle_password_change(self):
@@ -1210,21 +1254,21 @@ class SettingsDialog(QDialog):
             self,
             "Confirm Log Cleanup",
             f"This will permanently delete log files older than {days} day(s).\n\nContinue?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
 
-        if reply == QMessageBox.Yes:
+        if reply == QMessageBox.StandardButton.Yes:
             try:
                 logger.info(
                     f"Manual log cleanup initiated for files older than {days} days"
                 )
 
                 # Show busy cursor during cleanup
-                from PyQt5.QtCore import Qt
-                from PyQt5.QtGui import QCursor
+                from PyQt6.QtCore import Qt
+                from PyQt6.QtGui import QCursor
 
-                self.setCursor(QCursor(Qt.WaitCursor))
+                self.setCursor(QCursor(Qt.CursorShape.WaitCursor))
 
                 # Run the cleanup
                 removed_count = cleanup_old_logs(max_age_days=days)
@@ -1272,7 +1316,7 @@ class SettingsDialog(QDialog):
         # Record dirty state even if buttonBox not yet constructed
         self._dirty = True
         try:
-            btn = self.buttonBox.button(QDialogButtonBox.Apply)
+            btn = self.buttonBox.button(QDialogButtonBox.StandardButton.Apply)
             if btn:
                 btn.setEnabled(True)
         except AttributeError:
@@ -1327,7 +1371,7 @@ class SettingsDialog(QDialog):
 
     def _toggle_password_visibility(self, checked):
         """Toggle password echo mode for all password fields."""
-        mode = QLineEdit.Normal if checked else QLineEdit.Password
+        mode = QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password
         for fld in [
             getattr(self, "current_password_input", None),
             getattr(self, "new_password_input", None),
@@ -1367,7 +1411,7 @@ class SettingsDialog(QDialog):
 if __name__ == "__main__":
     import sys
 
-    from PyQt5.QtWidgets import QApplication, QMainWindow
+    from PyQt6.QtWidgets import QApplication, QMainWindow
 
     class DummyMainWindow(QMainWindow):
         def __init__(self):
@@ -1394,5 +1438,5 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     dummy_main = DummyMainWindow()
     dialog = SettingsDialog(dummy_main)
-    dialog.exec_()
-    sys.exit(app.exec_())
+    dialog.exec()
+    sys.exit(app.exec())

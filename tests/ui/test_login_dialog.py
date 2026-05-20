@@ -1,4 +1,4 @@
-from PyQt5.QtCore import Qt
+from PyQt6.QtCore import Qt
 
 from silverestimate.ui.login_dialog import LoginDialog
 
@@ -72,7 +72,7 @@ def test_login_dialog_foreground_request_raises_and_focuses(qtbot, monkeypatch):
     monkeypatch.setattr(
         dialog.password_input,
         "setFocus",
-        lambda reason=Qt.OtherFocusReason: calls.append(("focus", reason)),
+        lambda reason=Qt.FocusReason.OtherFocusReason: calls.append(("focus", reason)),
     )
     monkeypatch.setattr(
         "silverestimate.ui.login_dialog.bring_window_to_front",
@@ -85,5 +85,5 @@ def test_login_dialog_foreground_request_raises_and_focuses(qtbot, monkeypatch):
     assert "raise" in calls
     assert "activate" in calls
     assert ("alert", True, 0) in calls
-    assert ("focus", Qt.ActiveWindowFocusReason) in calls
+    assert ("focus", Qt.FocusReason.ActiveWindowFocusReason) in calls
     assert ("native-front", 123) in calls

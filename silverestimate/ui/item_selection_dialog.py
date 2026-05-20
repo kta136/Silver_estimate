@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 from __future__ import annotations
 
-from PyQt5.QtCore import QEvent, QItemSelectionModel, Qt, QTimer
-from PyQt5.QtGui import QKeySequence
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import QEvent, QItemSelectionModel, Qt, QTimer
+from PyQt6.QtGui import QKeySequence, QShortcut
+from PyQt6.QtWidgets import (
     QAbstractItemView,
     QDialog,
     QFrame,
@@ -13,7 +13,6 @@ from PyQt5.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
-    QShortcut,
     QTableView,
     QVBoxLayout,
 )
@@ -46,7 +45,7 @@ class ItemSelectionDialog(QDialog):
         self.setWindowTitle("Select Item")
         self.setMinimumSize(780, 460)
         self.resize(860, 520)
-        self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint)
         self.setObjectName("ItemSelectionDialog")
         self.setStyleSheet(
             build_management_screen_stylesheet(
@@ -61,15 +60,15 @@ class ItemSelectionDialog(QDialog):
                 include_table=True,
                 extra_rules="""
                 QLabel#ItemSelectionBodyLabel {
-                    color: #475569;
+                    color: __FIELD_TEXT__;
                     font-size: 9pt;
                 }
                 QLabel#ItemSelectionMutedLabel {
-                    color: #64748b;
+                    color: __TEXT_MUTED__;
                     font-size: 9pt;
                 }
                 QLabel#ItemSelectionEmptyLabel {
-                    color: #64748b;
+                    color: __TEXT_MUTED__;
                     font-style: italic;
                 }
                 """,
@@ -118,7 +117,9 @@ class ItemSelectionDialog(QDialog):
 
         self.result_count_label = QLabel("0 matches")
         self.result_count_label.setObjectName("ItemSelectionMutedLabel")
-        self.result_count_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.result_count_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
         self.result_count_label.setMinimumWidth(120)
         search_layout.addWidget(self.result_count_label)
         root.addLayout(search_layout)
@@ -129,17 +130,23 @@ class ItemSelectionDialog(QDialog):
         self.items_table = QTableView(self)
         self.items_model = ItemSelectionTableModel(self.items_table)
         self.items_table.setModel(self.items_model)
-        self.items_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.items_table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeToContents
+            1, QHeaderView.ResizeMode.Stretch
         )
         self.items_table.horizontalHeader().setSectionResizeMode(
-            2, QHeaderView.ResizeToContents
+            0, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self.items_table.horizontalHeader().setSectionResizeMode(
+            2, QHeaderView.ResizeMode.ResizeToContents
         )
         self.items_table.setAlternatingRowColors(True)
-        self.items_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.items_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.items_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.items_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.items_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
+        self.items_table.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection
+        )
         self.items_table.verticalHeader().setDefaultSectionSize(26)
         self.items_table.doubleClicked.connect(lambda *_: self.accept())
         selection_model = self.items_table.selectionModel()
@@ -170,7 +177,9 @@ class ItemSelectionDialog(QDialog):
         code_label.setObjectName("ItemSelectionFieldLabel")
         grid.addWidget(code_label, 0, 0)
         self.detail_code = QLabel("-")
-        self.detail_code.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.detail_code.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
         grid.addWidget(self.detail_code, 0, 1)
 
         name_label = QLabel("Name")
@@ -178,7 +187,9 @@ class ItemSelectionDialog(QDialog):
         grid.addWidget(name_label, 1, 0)
         self.detail_name = QLabel("-")
         self.detail_name.setWordWrap(True)
-        self.detail_name.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.detail_name.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
         grid.addWidget(self.detail_name, 1, 1)
 
         purity_label = QLabel("Purity")
@@ -208,7 +219,7 @@ class ItemSelectionDialog(QDialog):
         self.empty_label = QLabel(
             "No matches found. Try fewer letters or check code spelling."
         )
-        self.empty_label.setAlignment(Qt.AlignCenter)
+        self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.empty_label.setObjectName("ItemSelectionEmptyLabel")
         self.empty_label.hide()
         root.addWidget(self.empty_label)
@@ -230,9 +241,9 @@ class ItemSelectionDialog(QDialog):
         footer.addWidget(cancel_button)
         root.addLayout(footer)
 
-        QShortcut(QKeySequence.Find, self, self._focus_search)
-        QShortcut(QKeySequence(Qt.Key_Return), self, self._accept_top_result)
-        QShortcut(QKeySequence(Qt.Key_Enter), self, self._accept_top_result)
+        QShortcut(QKeySequence.StandardKey.Find, self, self._focus_search)
+        QShortcut(QKeySequence(Qt.Key.Key_Return), self, self._accept_top_result)
+        QShortcut(QKeySequence(Qt.Key.Key_Enter), self, self._accept_top_result)
 
         self.search_edit.setText(self.search_term)
         QTimer.singleShot(0, self._focus_search)
@@ -242,8 +253,8 @@ class ItemSelectionDialog(QDialog):
         self.search_edit.selectAll()
 
     def eventFilter(self, watched, event):
-        if watched is self.search_edit and event.type() == QEvent.KeyPress:
-            if event.key() == Qt.Key_Down:
+        if watched is self.search_edit and event.type() == QEvent.Type.KeyPress:
+            if event.key() == Qt.Key.Key_Down:
                 if self._filtered_items:
                     target_row = self._current_row()
                     if target_row < 0:
@@ -414,7 +425,8 @@ class ItemSelectionDialog(QDialog):
         self.items_table.setCurrentIndex(index)
         selection_model.select(
             index,
-            QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Rows,
+            QItemSelectionModel.SelectionFlag.ClearAndSelect
+            | QItemSelectionModel.SelectionFlag.Rows,
         )
 
     def get_selected_item(self):

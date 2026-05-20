@@ -5,8 +5,8 @@ from __future__ import annotations
 import time
 import traceback
 
-from PyQt5.QtCore import QItemSelectionModel, Qt
-from PyQt5.QtWidgets import QApplication, QMenu, QMessageBox
+from PyQt6.QtCore import QItemSelectionModel, Qt
+from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox
 
 from ._host_proxy import HostProxy
 
@@ -15,7 +15,9 @@ class SilverBarTableController(HostProxy):
     """Own table utilities, totals refresh, and context menus."""
 
     @staticmethod
-    def _table_cell_value(table, row: int, column: int, role: int = Qt.DisplayRole):
+    def _table_cell_value(
+        table, row: int, column: int, role: int = Qt.ItemDataRole.DisplayRole
+    ):
         try:
             model = table.model()
             if model is None:
@@ -24,12 +26,12 @@ class SilverBarTableController(HostProxy):
             if not index.isValid():
                 return None
             return model.data(index, role)
-        except (AttributeError, RuntimeError, TypeError):
+        except AttributeError, RuntimeError, TypeError:
             return None
 
     @classmethod
     def _table_cell_text(cls, table, row: int, column: int) -> str:
-        value = cls._table_cell_value(table, row, column, Qt.DisplayRole)
+        value = cls._table_cell_value(table, row, column, Qt.ItemDataRole.DisplayRole)
         return "" if value is None else str(value)
 
     @staticmethod
@@ -39,7 +41,7 @@ class SilverBarTableController(HostProxy):
             getter = getattr(model, "bar_id_at", None)
             if callable(getter):
                 return getter(row)
-        except (AttributeError, RuntimeError, TypeError, ValueError):
+        except AttributeError, RuntimeError, TypeError, ValueError:
             return None
         return None
 
@@ -85,7 +87,8 @@ class SilverBarTableController(HostProxy):
                 if index.isValid():
                     selection_model.select(
                         index,
-                        QItemSelectionModel.Select | QItemSelectionModel.Rows,
+                        QItemSelectionModel.SelectionFlag.Select
+                        | QItemSelectionModel.SelectionFlag.Rows,
                     )
         except Exception as exc:
             self.logger.debug("Could not restore selected bar IDs: %s", exc)
@@ -185,7 +188,7 @@ class SilverBarTableController(HostProxy):
             add_all_action = menu.addAction("Add All Filtered to List")
             create_list_sel_action = menu.addAction("Create New List from Selection…")
             copy_action = menu.addAction("Copy Selected Rows")
-            action = menu.exec_(self.available_bars_table.viewport().mapToGlobal(pos))
+            action = menu.exec(self.available_bars_table.viewport().mapToGlobal(pos))
             if action == add_action:
                 self.add_selected_to_list()
             elif action == add_all_action:
@@ -205,7 +208,7 @@ class SilverBarTableController(HostProxy):
             print_action = menu.addAction("Print List")
             export_action = menu.addAction("Export List to CSV…")
             copy_action = menu.addAction("Copy Selected Rows")
-            action = menu.exec_(self.list_bars_table.viewport().mapToGlobal(pos))
+            action = menu.exec(self.list_bars_table.viewport().mapToGlobal(pos))
             if action == remove_action:
                 self.remove_selected_from_list()
             elif action == remove_all_action:

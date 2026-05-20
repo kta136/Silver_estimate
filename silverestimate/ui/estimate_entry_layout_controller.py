@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Optional, cast
 
-from PyQt5 import sip
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
+from PyQt6 import sip
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
     QHBoxLayout,
     QSizePolicy,
     QSplitter,
@@ -24,18 +24,13 @@ from .estimate_entry_components import (
     TotalsPanel,
     VoucherToolbar,
 )
-from .estimate_entry_logic.constants import (
-    COL_CODE,
-    COL_FINE_WT,
-    COL_GROSS,
-    COL_ITEM_NAME,
-    COL_NET_WT,
-    COL_PIECES,
-    COL_POLY,
-    COL_PURITY,
-    COL_TYPE,
-    COL_WAGE_AMT,
-    COL_WAGE_RATE,
+from .estimate_entry_logic.column_specs import (
+    EDITOR_CODE,
+    EDITOR_NUMERIC,
+    column_width_limits,
+    columns_for_editor_type,
+    default_column_widths,
+    is_stretch_column,
 )
 from .estimate_entry_theme import ESTIMATE_ENTRY_STYLESHEET
 from .estimate_entry_ui import (
@@ -57,13 +52,17 @@ class EstimateEntryLayoutController(HostProxy):
 
         header_container = QWidget()
         header_container.setObjectName("EstimateHeaderContainer")
-        header_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        header_container.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         header_layout = QHBoxLayout(header_container)
         header_layout.setContentsMargins(6, 6, 6, 6)
         header_layout.setSpacing(6)
 
         self.toolbar = VoucherToolbar()
-        self.toolbar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.toolbar.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         header_layout.addWidget(self.toolbar, 5)
 
         actions_panel = QWidget()
@@ -73,35 +72,41 @@ class EstimateEntryLayoutController(HostProxy):
         actions_panel_layout.setSpacing(4)
 
         self.primary_actions = PrimaryActionsBar(shortcut_parent=self.host)
-        self.primary_actions.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        self.primary_actions.setSizePolicy(
+            QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed
+        )
         actions_panel_layout.addWidget(self.primary_actions)
 
         self.secondary_actions = SecondaryActionsBar(shortcut_parent=self.host)
-        self.secondary_actions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.secondary_actions.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         actions_panel_layout.addWidget(self.secondary_actions)
 
         header_layout.addWidget(actions_panel, 4)
         layout.addWidget(header_container, 0)
 
-        self._content_splitter = QSplitter(Qt.Horizontal)
+        self._content_splitter = QSplitter(Qt.Orientation.Horizontal)
         self._content_splitter.setChildrenCollapsible(False)
         self._content_splitter.setOpaqueResize(True)
 
         self.item_table = EstimateTableView()
         self.item_table.host_widget = self.host
-        self.item_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.item_table.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         self._content_splitter.addWidget(self.item_table)
 
         self._totals_panel_sidebar = TotalsPanel(layout_mode="sidebar")
         self._totals_panel_sidebar.setSizePolicy(
-            QSizePolicy.Preferred, QSizePolicy.Expanding
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding
         )
         self._totals_panel_sidebar.setMinimumWidth(275)
         self._totals_panel_sidebar.setMaximumWidth(420)
 
         self._totals_panel_bottom = TotalsPanel(layout_mode="horizontal")
         self._totals_panel_bottom.setSizePolicy(
-            QSizePolicy.Expanding, QSizePolicy.Maximum
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum
         )
         self._totals_panel_bottom.setMinimumWidth(0)
         self._totals_panel_bottom.setMaximumWidth(16777215)
@@ -170,7 +175,7 @@ class EstimateEntryLayoutController(HostProxy):
         if normalized == "bottom":
             try:
                 sidebar_panel.set_sidebar_top_widget(None)
-            except (AttributeError, RuntimeError, TypeError):
+            except AttributeError, RuntimeError, TypeError:
                 pass
             if hasattr(self.secondary_actions, "show_live_rate_in_header"):
                 self.secondary_actions.show_live_rate_in_header(show_divider=True)
@@ -181,12 +186,16 @@ class EstimateEntryLayoutController(HostProxy):
     def _setup_table_delegates(self):
         code_delegate = CodeDelegate(parent=self.item_table)
         numeric_delegate = NumericDelegate(parent=self.item_table)
-        self.item_table.setItemDelegateForColumn(COL_CODE, code_delegate)
-        self.item_table.setItemDelegateForColumn(COL_GROSS, numeric_delegate)
-        self.item_table.setItemDelegateForColumn(COL_POLY, numeric_delegate)
-        self.item_table.setItemDelegateForColumn(COL_PURITY, numeric_delegate)
-        self.item_table.setItemDelegateForColumn(COL_WAGE_RATE, numeric_delegate)
-        self.item_table.setItemDelegateForColumn(COL_PIECES, numeric_delegate)
+        code_delegate.advance_requested.connect(self.move_to_next_cell)
+        numeric_delegate.reverse_requested.connect(self.move_to_previous_cell)
+        numeric_delegate.manual_row_navigation_requested.connect(
+            self._mark_manual_row_navigation
+        )
+
+        for column in columns_for_editor_type(EDITOR_CODE, editable_only=True):
+            self.item_table.setItemDelegateForColumn(column, code_delegate)
+        for column in columns_for_editor_type(EDITOR_NUMERIC, editable_only=True):
+            self.item_table.setItemDelegateForColumn(column, numeric_delegate)
 
         for column, width in self._default_column_widths().items():
             self.item_table.setColumnWidth(
@@ -285,7 +294,7 @@ class EstimateEntryLayoutController(HostProxy):
                 defaultValue=default_order,
                 type=str,
             )
-        except (AttributeError, RuntimeError, TypeError, ValueError):
+        except AttributeError, RuntimeError, TypeError, ValueError:
             saved = default_order
         self._apply_totals_section_order(saved, persist=False)
 
@@ -310,7 +319,7 @@ class EstimateEntryLayoutController(HostProxy):
             if bottom_panel.parent() is not splitter:
                 splitter.addWidget(bottom_panel)
 
-            splitter.setOrientation(Qt.Vertical)
+            splitter.setOrientation(Qt.Orientation.Vertical)
             splitter.insertWidget(0, self.item_table)
             splitter.insertWidget(1, bottom_panel)
             splitter.setStretchFactor(0, 1)
@@ -323,7 +332,7 @@ class EstimateEntryLayoutController(HostProxy):
             if sidebar_panel.parent() is not splitter:
                 splitter.addWidget(sidebar_panel)
 
-            splitter.setOrientation(Qt.Horizontal)
+            splitter.setOrientation(Qt.Orientation.Horizontal)
             if normalized == "left":
                 splitter.insertWidget(0, sidebar_panel)
                 splitter.insertWidget(1, self.item_table)
@@ -355,7 +364,7 @@ class EstimateEntryLayoutController(HostProxy):
                 defaultValue=default_position,
                 type=str,
             )
-        except (AttributeError, RuntimeError, TypeError, ValueError):
+        except AttributeError, RuntimeError, TypeError, ValueError:
             saved = default_position
         self._apply_totals_position(saved, persist=False)
 
@@ -398,7 +407,7 @@ class EstimateEntryLayoutController(HostProxy):
                 defaultValue="explicit",
                 type=str,
             )
-        except (AttributeError, RuntimeError, TypeError, ValueError):
+        except AttributeError, RuntimeError, TypeError, ValueError:
             raw = "explicit"
         mode = str(raw or "").strip().lower()
         if mode not in {"explicit", "continuous"}:
@@ -412,33 +421,10 @@ class EstimateEntryLayoutController(HostProxy):
         )
 
     def _column_width_limits(self) -> dict[int, tuple[int, int]]:
-        return {
-            COL_CODE: (72, 220),
-            COL_ITEM_NAME: (180, 1200),
-            COL_GROSS: (88, 220),
-            COL_POLY: (88, 220),
-            COL_NET_WT: (96, 240),
-            COL_PURITY: (72, 160),
-            COL_WAGE_RATE: (64, 92),
-            COL_PIECES: (48, 64),
-            COL_WAGE_AMT: (72, 120),
-            COL_FINE_WT: (96, 240),
-            COL_TYPE: (74, 180),
-        }
+        return column_width_limits()
 
     def _default_column_widths(self) -> dict[int, int]:
-        return {
-            COL_CODE: 82,
-            COL_GROSS: 88,
-            COL_POLY: 88,
-            COL_NET_WT: 96,
-            COL_PURITY: 80,
-            COL_WAGE_RATE: 64,
-            COL_PIECES: 50,
-            COL_WAGE_AMT: 78,
-            COL_FINE_WT: 96,
-            COL_TYPE: 78,
-        }
+        return default_column_widths()
 
     def _bounded_column_width(self, column: int, width: int) -> int:
         min_width, max_width = self._column_width_limits().get(column, (60, 700))
@@ -454,7 +440,7 @@ class EstimateEntryLayoutController(HostProxy):
         widths = dict(self._default_column_widths())
         if isinstance(saved_widths, dict):
             for col, width in saved_widths.items():
-                if col == COL_ITEM_NAME:
+                if is_stretch_column(col):
                     continue
                 if isinstance(col, int) and isinstance(width, int):
                     widths[col] = self._bounded_column_width(col, width)
@@ -462,7 +448,7 @@ class EstimateEntryLayoutController(HostProxy):
         self._programmatic_resizing = True
         try:
             for col in range(table.columnCount()):
-                stretch = col == COL_ITEM_NAME
+                stretch = is_stretch_column(col)
                 table.set_column_stretch(col, stretch=stretch)
                 if not stretch and col in widths:
                     table.setColumnWidth(
@@ -476,7 +462,7 @@ class EstimateEntryLayoutController(HostProxy):
     def _ensure_column_can_fit_content(self, column: int) -> None:
         if self._is_continuous_column_autofit_enabled():
             return
-        if column == COL_ITEM_NAME:
+        if is_stretch_column(column):
             return
 
         table = getattr(self, "item_table", None)
@@ -492,7 +478,12 @@ class EstimateEntryLayoutController(HostProxy):
         limits = self._column_width_limits()
         min_width, max_width = limits.get(column, (60, 700))
         metrics = table.fontMetrics()
-        header_text = model.headerData(column, Qt.Horizontal, Qt.DisplayRole) or ""
+        header_text = (
+            model.headerData(
+                column, Qt.Orientation.Horizontal, Qt.ItemDataRole.DisplayRole
+            )
+            or ""
+        )
         header_width = metrics.horizontalAdvance(str(header_text)) + 28
         hint_width = table.sizeHintForColumn(column) + 16
         target_width = max(min_width, min(max_width, max(header_width, hint_width)))
@@ -562,7 +553,12 @@ class EstimateEntryLayoutController(HostProxy):
                 if col < 0 or col >= table.columnCount():
                     continue
 
-                header_text = model.headerData(col, Qt.Horizontal, Qt.DisplayRole) or ""
+                header_text = (
+                    model.headerData(
+                        col, Qt.Orientation.Horizontal, Qt.ItemDataRole.DisplayRole
+                    )
+                    or ""
+                )
                 header_width = metrics.horizontalAdvance(str(header_text)) + 28
                 hint_width = table.sizeHintForColumn(col) + 16
                 target_width = max(header_width, hint_width)
@@ -583,7 +579,7 @@ class EstimateEntryLayoutController(HostProxy):
             return
         try:
             widths = [
-                str(self.item_table.columnWidth(i) if i != COL_ITEM_NAME else -1)
+                str(self.item_table.columnWidth(i) if not is_stretch_column(i) else -1)
                 for i in range(self.item_table.columnCount())
             ]
             self._settings().setValue(
@@ -611,7 +607,7 @@ class EstimateEntryLayoutController(HostProxy):
                 for i, w in enumerate(widths):
                     if (
                         i < self.item_table.columnCount()
-                        and i != COL_ITEM_NAME
+                        and not is_stretch_column(i)
                         and w > 0
                     ):
                         saved_widths[i] = w
@@ -621,7 +617,7 @@ class EstimateEntryLayoutController(HostProxy):
 
     def _on_item_table_section_resized(self, idx, old, new):
         del old
-        if self._programmatic_resizing or idx == COL_ITEM_NAME:
+        if self._programmatic_resizing or is_stretch_column(idx):
             return
 
         bounded_width = self._bounded_column_width(idx, new)
@@ -644,7 +640,7 @@ class EstimateEntryLayoutController(HostProxy):
         current_widths = {
             col: table.columnWidth(col)
             for col in range(table.columnCount())
-            if col != COL_ITEM_NAME
+            if not is_stretch_column(col)
         }
         self._apply_non_autofit_column_layout(current_widths)
 
@@ -674,7 +670,7 @@ class EstimateEntryLayoutController(HostProxy):
     def apply_table_font_size(self, size: int) -> bool:
         try:
             size_i = int(size)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             self.logger.warning("Invalid table font size value: %r", size)
             return False
         size_i = max(7, min(16, size_i))
@@ -697,7 +693,7 @@ class EstimateEntryLayoutController(HostProxy):
     def apply_breakdown_font_size(self, size: int) -> bool:
         try:
             size_i = int(size)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             self.logger.warning("Invalid breakdown font size value: %r", size)
             return False
         size_i = max(7, min(16, size_i))
@@ -716,7 +712,7 @@ class EstimateEntryLayoutController(HostProxy):
     def apply_final_calc_font_size(self, size: int) -> bool:
         try:
             size_i = int(size)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             self.logger.warning("Invalid final calculation font size value: %r", size)
             return False
         size_i = max(8, min(20, size_i))

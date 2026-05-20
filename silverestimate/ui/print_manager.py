@@ -2,22 +2,24 @@
 import logging
 from typing import Callable
 
-from PyQt5.QtCore import QLocale, QObject, QSizeF, pyqtSignal
-from PyQt5.QtGui import QFont, QPageSize, QTextDocument
-from PyQt5.QtPrintSupport import QPrinter
-from PyQt5.QtWidgets import QMessageBox
+from PyQt6.QtCore import QLocale, QObject, pyqtSignal
+from PyQt6.QtGui import QFont, QTextDocument
+from PyQt6.QtPrintSupport import QPrinter
+from PyQt6.QtWidgets import QMessageBox
 
 from silverestimate.infrastructure.settings import get_app_settings
 
 from .estimate_print_renderer import EstimatePrintRenderer
+from .print_page_settings import (
+    PrintPageSettings,
+    apply_print_page_settings_to_printer,
+    load_print_page_settings,
+)
 from .print_payload_builder import PrintPayloadBuilder, PrintPreviewPayload
 from .print_preview_controller import PrintPreviewController
-from .settings_print_controller import PRINT_ORIENTATION_MIGRATION_KEY
 from .silver_bar_print_renderer import SilverBarPrintRenderer
 
 LOGGER = logging.getLogger(__name__)
-
-_SUPPORTED_PRINT_ORIENTATIONS = {"Portrait", "Landscape"}
 
 
 class PrintPreviewBuildWorker(QObject):
@@ -72,33 +74,14 @@ class PrintManager:
                 else print_font.float_size
             )
 
-        self.printer = QPrinter(QPrinter.HighResolution)
-        # Load printer defaults
+        self.printer = QPrinter(QPrinter.PrinterMode.HighResolution)
         settings = get_app_settings()
-        # Default printer
         try:
-            default_printer_name = settings.value("print/default_printer", "", type=str)
-            if default_printer_name:
-                self.printer.setPrinterName(default_printer_name)
+            page_settings = load_print_page_settings(settings)
         except Exception as exc:
-            LOGGER.debug("Failed to load default printer preference: %s", exc)
-        # Page size
-        try:
-            self._apply_page_size_preference(settings)
-        except Exception as exc:
-            LOGGER.debug("Failed to load page size preference: %s", exc)
-            self.printer.setPageSize(QPageSize(QPageSize.A4))
-        # Orientation
-        try:
-            orientation_name = self._load_orientation_preference(settings)
-            self.printer.setOrientation(
-                QPrinter.Landscape
-                if orientation_name == "Landscape"
-                else QPrinter.Portrait
-            )
-        except Exception as exc:
-            LOGGER.debug("Failed to load printer orientation preference: %s", exc)
-            self.printer.setOrientation(QPrinter.Landscape)
+            LOGGER.debug("Failed to load print page preferences: %s", exc)
+            page_settings = PrintPageSettings()
+        apply_print_page_settings_to_printer(self.printer, page_settings)
 
         try:
             layout_mode = settings.value("print/estimate_layout", "old", type=str)
@@ -108,36 +91,6 @@ class PrintManager:
         except Exception as exc:
             LOGGER.debug("Failed to load estimate layout preference: %s", exc)
             self.estimate_layout_mode = "old"
-        # Load margin settings
-        default_margins = "10,5,10,5"  # Default: 10mm L/R, 5mm T/B
-        margins_str = settings.value(
-            "print/margins", defaultValue=default_margins, type=str
-        )
-        try:
-            margins = [int(m.strip()) for m in margins_str.split(",")]
-            if len(margins) != 4:
-                raise ValueError("Invalid margin format")
-            # Ensure margins are non-negative
-            margins = [max(0, m) for m in margins]
-            import logging
-
-            logging.getLogger(__name__).debug(f"Using margins (L,T,R,B): {margins} mm")
-        except (ValueError, TypeError):
-            import logging
-
-            logging.getLogger(__name__).warning(
-                f"Using default margins ({default_margins} mm) due to invalid setting '{margins_str}'"
-            )
-            margins = [10, 5, 10, 5]
-
-        self.printer.setPageMargins(
-            margins[0], margins[1], margins[2], margins[3], QPrinter.Millimeter
-        )  # Left, Top, Right, Bottom
-        import logging
-
-        logging.getLogger(__name__).debug(
-            f"Printer margins set to: L={margins[0]}, T={margins[1]}, R={margins[2]}, B={margins[3]}"
-        )
         self._estimate_renderer = EstimatePrintRenderer(
             currency_formatter=self._format_currency_locale
         )
@@ -148,58 +101,6 @@ class PrintManager:
             persist_estimate_layout=self._set_estimate_layout_mode,
         )
         self._silver_bar_renderer = SilverBarPrintRenderer()
-
-    @staticmethod
-    def _load_orientation_preference(settings) -> str:
-        orientation_name = settings.value("print/orientation", None, type=str)
-        explicit = bool(
-            settings.value(
-                PRINT_ORIENTATION_MIGRATION_KEY,
-                False,
-                type=bool,
-            )
-        )
-        if orientation_name in _SUPPORTED_PRINT_ORIENTATIONS:
-            if orientation_name == "Portrait" and not explicit:
-                settings.setValue("print/orientation", "Landscape")
-                return "Landscape"
-            return str(orientation_name)
-        return "Landscape"
-
-    def _apply_page_size_preference(self, settings) -> None:
-        page_size_name = settings.value("print/page_size", "A4", type=str)
-        if page_size_name == "Thermal 80mm":
-            thermal_size = QPageSize(
-                QSizeF(79.5, 200), QPageSize.Millimeter, "Thermal 80mm"
-            )
-            self.printer.setPageSize(thermal_size)
-            return
-
-        size_map = {
-            "A4": QPageSize.A4,
-            "A5": QPageSize.A5,
-            "Letter": QPageSize.Letter,
-            "Letter / ANSI A": QPageSize.Letter,
-            "Legal": QPageSize.Legal,
-        }
-        if page_size_name in size_map:
-            self.printer.setPageSize(QPageSize(size_map[page_size_name]))
-            return
-
-        width_mm = settings.value("print/page_width_mm", 0.0, type=float)
-        height_mm = settings.value("print/page_height_mm", 0.0, type=float)
-        custom_name = settings.value("print/page_size_name", page_size_name, type=str)
-        if float(width_mm) > 0 and float(height_mm) > 0:
-            self.printer.setPageSize(
-                QPageSize(
-                    QSizeF(float(width_mm), float(height_mm)),
-                    QPageSize.Millimeter,
-                    custom_name or page_size_name or "Custom",
-                )
-            )
-            return
-
-        self.printer.setPageSize(QPageSize(QPageSize.A4))
 
     def _set_estimate_layout_mode(self, layout_mode: str) -> None:
         normalized = (layout_mode or "").strip().lower()
@@ -235,12 +136,12 @@ class PrintManager:
         return formatted_other + "," + last_three
 
     def _format_currency_locale(self, number):
-        """Format currency using system locale; fallback to Indian format with ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¹."""
+        """Format currency using system locale with an ASCII rupee fallback."""
         try:
             locale = QLocale.system()
             return locale.toCurrencyString(float(round(number)))
         except Exception:
-            return f"ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¹ {self.format_indian_rupees(int(round(number)))}"
+            return f"Rs. {self.format_indian_rupees(int(round(number)))}"
 
     def print_estimate(self, voucher_no, parent_widget=None):
         """Print an estimate using manual formatting and preview."""
@@ -388,8 +289,8 @@ class PrintManager:
             document.setDefaultFont(font_to_use)
 
         document.setHtml(html_content)
-        document.setPageSize(printer.pageRect(QPrinter.Point).size())
-        document.print_(printer)
+        document.setPageSize(printer.pageRect(QPrinter.Unit.Point).size())
+        document.print(printer)
 
     @staticmethod
     def _build_preformatted_html(content: str, *, line_height: float = 1.0) -> str:

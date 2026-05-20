@@ -27,7 +27,7 @@ def normalize_row_limit(limit: Any, *, default: int, minimum: int = 100) -> int:
 
     try:
         return max(int(minimum), int(limit))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return max(int(minimum), int(default))
 
 
@@ -64,7 +64,7 @@ def build_available_bars_queries(
             count_query += " AND sb.weight BETWEEN ? AND ?"
             params.extend(bounds)
             count_params.extend(bounds)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             pass
 
     if min_purity is not None:
@@ -74,7 +74,7 @@ def build_available_bars_queries(
             count_query += " AND sb.purity >= ?"
             params.append(purity_floor)
             count_params.append(purity_floor)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             pass
 
     if max_purity is not None:
@@ -84,7 +84,7 @@ def build_available_bars_queries(
             count_query += " AND sb.purity <= ?"
             params.append(purity_ceiling)
             count_params.append(purity_ceiling)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             pass
 
     if date_range and isinstance(date_range, (tuple, list)) and len(date_range) == 2:
@@ -167,7 +167,7 @@ def build_history_bars_query(
             weight_value = float(normalized_weight)
             conditions.append("sb.weight = ?")
             params.append(weight_value)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             pass
 
     normalized_status = str(status_text or "").strip()

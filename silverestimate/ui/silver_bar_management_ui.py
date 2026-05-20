@@ -4,17 +4,15 @@ from __future__ import annotations
 
 from typing import cast
 
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QKeySequence
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QKeySequence, QShortcut
+from PyQt6.QtWidgets import (
     QAbstractItemView,
-    QComboBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
     QPushButton,
-    QShortcut,
     QSplitter,
     QTableView,
     QVBoxLayout,
@@ -26,6 +24,7 @@ from silverestimate.ui.models import (
     SelectedListSilverBarsTableModel,
 )
 from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
+from silverestimate.ui.themed_controls import ThemedComboBox
 
 from ._host_proxy import HostProxy
 
@@ -57,48 +56,48 @@ class SilverBarManagementUiBuilder(HostProxy):
                 extra_rules="""
                 QWidget#SilverBarManagementPane,
                 QWidget#SilverBarTransferPane {
-                    background-color: #ffffff;
-                    border: 1px solid #d8e1ec;
+                    background-color: __SURFACE_BG__;
+                    border: 1px solid __CARD_BORDER__;
                     border-radius: 12px;
                 }
                 QLabel#SilverBarSectionLabel {
-                    color: #0f172a;
+                    color: __TEXT_STRONG__;
                     font-size: 10pt;
                     font-weight: 700;
                 }
                 QLabel#SilverBarBadgeLabel,
                 QLabel#SilverBarSummaryLabel {
-                    background-color: #f8fafc;
-                    border: 1px solid #d8e1ec;
+                    background-color: __HEADER_BG__;
+                    border: 1px solid __CARD_BORDER__;
                     border-radius: 8px;
-                    color: #334155;
+                    color: __HEADER_TEXT__;
                     font-weight: 600;
                     padding: 6px 8px;
                 }
                 QSplitter::handle {
-                    background-color: #e2e8f0;
+                    background-color: __CARD_BORDER_SOFT__;
                     width: 6px;
                 }
                 QPushButton#SilverBarPrimaryButton:disabled,
                 QPushButton#SilverBarSecondaryButton:disabled,
                 QPushButton#SilverBarDangerButton:disabled {
-                    background-color: #e5e7eb;
-                    border: 1px solid #cbd5e1;
-                    color: #94a3b8;
+                    background-color: __HEADER_BG__;
+                    border: 1px solid __INPUT_BORDER__;
+                    color: __TEXT_MUTED__;
                 }
                 QTableView#SilverBarListTable[listState="inactive"] {
-                    background-color: #f1f5f9;
-                    border: 1px solid #cbd5e1;
-                    color: #94a3b8;
-                    gridline-color: #e2e8f0;
-                    selection-background-color: #e2e8f0;
-                    selection-color: #94a3b8;
+                    background-color: __HEADER_BG__;
+                    border: 1px solid __INPUT_BORDER__;
+                    color: __TEXT_MUTED__;
+                    gridline-color: __CARD_BORDER_SOFT__;
+                    selection-background-color: __CARD_BORDER_SOFT__;
+                    selection-color: __TEXT_MUTED__;
                 }
                 QHeaderView#SilverBarListHeader[listState="inactive"]::section {
-                    background-color: #e2e8f0;
-                    color: #94a3b8;
-                    border-right: 1px solid #d8e1ec;
-                    border-bottom: 1px solid #d8e1ec;
+                    background-color: __CARD_BORDER_SOFT__;
+                    color: __TEXT_MUTED__;
+                    border-right: 1px solid __CARD_BORDER__;
+                    border-bottom: 1px solid __CARD_BORDER__;
                 }
                 """,
             )
@@ -108,7 +107,7 @@ class SilverBarManagementUiBuilder(HostProxy):
         main_layout.setContentsMargins(16, 16, 16, 16)
         main_layout.setSpacing(12)
 
-        self._splitter = QSplitter(Qt.Horizontal, self.host)
+        self._splitter = QSplitter(Qt.Orientation.Horizontal, self.host)
         self._splitter.setChildrenCollapsible(False)
 
         left_widget = QWidget(self.host)
@@ -131,7 +130,7 @@ class SilverBarManagementUiBuilder(HostProxy):
         self.weight_search_edit = QLineEdit()
         self.weight_search_edit.setPlaceholderText("Weight")
         filter_row.addWidget(self.weight_search_edit, 2)
-        self.date_range_combo = QComboBox()
+        self.date_range_combo = ThemedComboBox()
         self.date_range_combo.addItems(
             ["Any", "Today", "Last 7 days", "Last 30 days", "This Month"]
         )
@@ -146,12 +145,18 @@ class SilverBarManagementUiBuilder(HostProxy):
             self.available_bars_table
         )
         self.available_bars_table.setModel(self.available_bars_model)
-        self.available_bars_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.available_bars_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.available_bars_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
+        self.available_bars_table.setSelectionMode(
+            QAbstractItemView.SelectionMode.ExtendedSelection
+        )
         self.available_bars_table.setSortingEnabled(True)
-        self.available_bars_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.available_bars_table.setContextMenuPolicy(
+            Qt.ContextMenuPolicy.CustomContextMenu
+        )
         self.available_bars_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.Stretch
+            QHeaderView.ResizeMode.Stretch
         )
         left_layout.addWidget(self.available_bars_table, 1)
 
@@ -200,7 +205,7 @@ class SilverBarManagementUiBuilder(HostProxy):
         right_layout.addLayout(right_header)
 
         list_row = QHBoxLayout()
-        self.list_combo = QComboBox()
+        self.list_combo = ThemedComboBox()
         list_row.addWidget(self.list_combo, 1)
         self.create_list_button = QPushButton("New List")
         self.create_list_button.setObjectName("SilverBarPrimaryButton")
@@ -244,12 +249,18 @@ class SilverBarManagementUiBuilder(HostProxy):
         self.list_bars_table.setObjectName("SilverBarListTable")
         self.list_bars_model = SelectedListSilverBarsTableModel(self.list_bars_table)
         self.list_bars_table.setModel(self.list_bars_model)
-        self.list_bars_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.list_bars_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.list_bars_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
+        self.list_bars_table.setSelectionMode(
+            QAbstractItemView.SelectionMode.ExtendedSelection
+        )
         self.list_bars_table.setSortingEnabled(True)
-        self.list_bars_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.list_bars_table.setContextMenuPolicy(
+            Qt.ContextMenuPolicy.CustomContextMenu
+        )
         self.list_bars_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.Stretch
+            QHeaderView.ResizeMode.Stretch
         )
         self.list_bars_table.horizontalHeader().setObjectName("SilverBarListHeader")
         self.list_bars_table.setProperty("listState", "inactive")
@@ -341,14 +352,16 @@ class SilverBarManagementUiBuilder(HostProxy):
         try:
             new_list_shortcut = QShortcut(QKeySequence("Ctrl+N"), host_widget)
             new_list_shortcut.activated.connect(self.create_new_list)
-            print_shortcut = QShortcut(QKeySequence.Print, host_widget)
+            print_shortcut = QShortcut(QKeySequence.StandardKey.Print, host_widget)
             print_shortcut.activated.connect(self.print_selected_list)
-            cancel_shortcut = QShortcut(QKeySequence.Cancel, host_widget)
+            cancel_shortcut = QShortcut(QKeySequence.StandardKey.Cancel, host_widget)
             cancel_shortcut.activated.connect(self.reject)
-            remove_shortcut = QShortcut(QKeySequence.Delete, self.list_bars_table)
+            remove_shortcut = QShortcut(
+                QKeySequence.StandardKey.Delete, self.list_bars_table
+            )
             remove_shortcut.activated.connect(self.remove_selected_from_list)
             add_shortcut = QShortcut(
-                QKeySequence(Qt.Key_Return), self.available_bars_table
+                QKeySequence(Qt.Key.Key_Return), self.available_bars_table
             )
             add_shortcut.activated.connect(self.add_selected_to_list)
         except (AttributeError, RuntimeError, TypeError) as exc:

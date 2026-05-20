@@ -23,7 +23,7 @@ def _native_platform_plugins():
 
 def _keep_qt_plugin(bundle_path):
     normalized = _normalized_path(bundle_path)
-    plugin_prefix = "PyQt5/Qt5/plugins/"
+    plugin_prefix = "PyQt6/Qt6/plugins/"
     if not normalized.startswith(plugin_prefix):
         return True
 
@@ -45,20 +45,20 @@ def _keep_qt_plugin(bundle_path):
 
 
 _EXCLUDED_QT_MODULES = (
-    "Qt5Quick",
-    "Qt5Qml",
-    "Qt5QmlModels",
-    "Qt5WebSockets",
-    "Qt5Designer",
-    "Qt5Location",
-    "Qt5Multimedia",
-    "Qt5Bluetooth",
-    "Qt5Nfc",
-    "Qt5Positioning",
-    "Qt5RemoteObjects",
-    "Qt5XmlPatterns",
-    "Qt5Wayland",
-    "Qt5EglFS",
+    "Qt6Quick",
+    "Qt6Qml",
+    "Qt6QmlModels",
+    "Qt6WebSockets",
+    "Qt6Designer",
+    "Qt6Location",
+    "Qt6Multimedia",
+    "Qt6Bluetooth",
+    "Qt6Nfc",
+    "Qt6Positioning",
+    "Qt6RemoteObjects",
+    "Qt6XmlPatterns",
+    "Qt6Wayland",
+    "Qt6EglFS",
 )
 
 
@@ -76,15 +76,15 @@ def _is_excluded_qt_binary(bundle_path):
 def _is_excluded_qt_path(bundle_path):
     normalized = _normalized_path(bundle_path)
 
-    if normalized.startswith("PyQt5/Qt5/translations/"):
+    if normalized.startswith("PyQt6/Qt6/translations/"):
         return True
-    if normalized.startswith("PyQt5/Qt5/qml/"):
+    if normalized.startswith("PyQt6/Qt6/qml/"):
         return True
-    if normalized.startswith("PyQt5/Qt5/qsci/"):
+    if normalized.startswith("PyQt6/Qt6/qsci/"):
         return True
-    if normalized.startswith("PyQt5/Qt5/plugins/"):
+    if normalized.startswith("PyQt6/Qt6/plugins/"):
         return not _keep_qt_plugin(normalized)
-    if normalized.startswith(("PyQt5/Qt5/lib/", "PyQt5/Qt5/bin/")):
+    if normalized.startswith(("PyQt6/Qt6/lib/", "PyQt6/Qt6/bin/")):
         return _is_excluded_qt_binary(normalized)
     return False
 

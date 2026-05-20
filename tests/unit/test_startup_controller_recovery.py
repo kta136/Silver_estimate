@@ -14,8 +14,12 @@ def test_initialize_database_recovers_candidate_before_connect(monkeypatch, tmp_
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     class StubMessageBox:
-        Yes = 1
-        No = 2
+        class StandardButton:
+            Yes = 1
+            No = 2
+
+        Yes = StandardButton.Yes
+        No = StandardButton.No
 
         @staticmethod
         def question(parent, title, message, buttons, default):

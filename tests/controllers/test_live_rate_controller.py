@@ -1,7 +1,7 @@
 import logging
 import types
 
-from PyQt5.QtCore import QObject
+from PyQt6.QtCore import QObject
 
 from silverestimate.controllers.live_rate_controller import LiveRateController
 

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from PyQt5.QtCore import QAbstractTableModel, QModelIndex, Qt
-from PyQt5.QtGui import QBrush, QColor
+from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
+from PyQt6.QtGui import QBrush, QColor
 
 
 class _BaseSilverBarTableModel(QAbstractTableModel):
@@ -16,7 +16,7 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
         self._rows: list[dict[str, Any]] = []
         self._total_count = 0
         self._sort_column: Optional[int] = None
-        self._sort_order = Qt.AscendingOrder
+        self._sort_order = Qt.SortOrder.AscendingOrder
 
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
         if parent.isValid():
@@ -32,38 +32,42 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
         self,
         section: int,
         orientation: Qt.Orientation,
-        role: int = Qt.DisplayRole,
+        role: int = Qt.ItemDataRole.DisplayRole,
     ) -> Any:
-        if role != Qt.DisplayRole:
+        if role != Qt.ItemDataRole.DisplayRole:
             return None
-        if orientation == Qt.Horizontal and 0 <= section < len(self.HEADERS):
+        if orientation == Qt.Orientation.Horizontal and 0 <= section < len(
+            self.HEADERS
+        ):
             return self.HEADERS[section]
         return None
 
-    def data(self, index: QModelIndex, role: int = Qt.DisplayRole) -> Any:
+    def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
         if not index.isValid():
             return None
         row = self.row_payload(index.row())
         if row is None:
             return None
 
-        if role == Qt.DisplayRole:
+        if role == Qt.ItemDataRole.DisplayRole:
             return self.display_value(index.row(), index.column())
-        if role == Qt.EditRole:
+        if role == Qt.ItemDataRole.EditRole:
             return self.sort_value(index.row(), index.column())
-        if role == Qt.TextAlignmentRole:
+        if role == Qt.ItemDataRole.TextAlignmentRole:
             return self.text_alignment(index.column())
-        if role == Qt.BackgroundRole:
+        if role == Qt.ItemDataRole.BackgroundRole:
             return self.background_brush(index.row())
         return None
 
-    def sort(self, column: int, order: Qt.SortOrder = Qt.AscendingOrder) -> None:
+    def sort(
+        self, column: int, order: Qt.SortOrder = Qt.SortOrder.AscendingOrder
+    ) -> None:
         if not (0 <= column < self.columnCount()):
             return
         self.layoutAboutToBeChanged.emit()
         self._sort_column = int(column)
         self._sort_order = order
-        reverse = order == Qt.DescendingOrder
+        reverse = order == Qt.SortOrder.DescendingOrder
         self._rows.sort(
             key=lambda row: self.sort_key_for_row(row, column), reverse=reverse
         )
@@ -80,7 +84,7 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
             else len(self._rows)
         )
         if self._sort_column is not None and self._rows:
-            reverse = self._sort_order == Qt.DescendingOrder
+            reverse = self._sort_order == Qt.SortOrder.DescendingOrder
             self._rows.sort(
                 key=lambda row: self.sort_key_for_row(row, self._sort_column or 0),
                 reverse=reverse,
@@ -108,7 +112,7 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
         try:
             value = payload.get("bar_id")
             return int(value) if value is not None else None
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return None
 
     def display_value(self, row: int, column: int) -> str:
@@ -155,14 +159,14 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
     def _format_float(value: Any, places: int) -> str:
         try:
             return f"{float(value or 0.0):.{places}f}"
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return f"{0.0:.{places}f}"
 
     @staticmethod
     def _bar_id_sort_value(row: dict[str, Any]) -> int:
         try:
             return int(row.get("bar_id") or 0)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return 0
 
     @staticmethod
@@ -172,7 +176,7 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
             return (2, "", "")
         try:
             return (0, int(voucher_no), voucher_no.casefold())
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return (1, voucher_no.casefold(), voucher_no.casefold())
 
     @staticmethod
@@ -193,7 +197,7 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
         for row in self._rows:
             try:
                 total += float(row.get(key) or 0.0)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 continue
         return total
 
@@ -245,7 +249,7 @@ class _ManagementSilverBarsTableModel(_BaseSilverBarTableModel):
         if column in (1, 2, 3):
             try:
                 return float(row.get(self.value_key(column)) or 0.0)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 return 0.0
         if column == 4:
             return str(row.get("date_added") or "")
@@ -263,7 +267,7 @@ class _ManagementSilverBarsTableModel(_BaseSilverBarTableModel):
 
     def text_alignment(self, column: int) -> Optional[int]:
         if column in (1, 2, 3):
-            return int(Qt.AlignRight | Qt.AlignVCenter)
+            return int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         return None
 
     def background_brush(self, row: int) -> Optional[QBrush]:
@@ -361,14 +365,14 @@ class HistorySilverBarsTableModel(_BaseSilverBarTableModel):
         if column == 0:
             try:
                 return int(row.get("bar_id") or 0)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 return 0
         if column == 1:
             return self._voucher_sort_value(row)
         if column in (2, 3, 4):
             try:
                 return float(row.get(self.value_key(column)) or 0.0)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 return 0.0
         return self.display_value_from_row(row, column).casefold()
 
@@ -382,7 +386,7 @@ class HistorySilverBarsTableModel(_BaseSilverBarTableModel):
 
     def text_alignment(self, column: int) -> Optional[int]:
         if column in (0, 2, 3, 4):
-            return int(Qt.AlignRight | Qt.AlignVCenter)
+            return int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         return None
 
     def background_brush(self, row: int) -> Optional[QBrush]:
@@ -447,13 +451,13 @@ class IssuedSilverBarListsTableModel(_BaseSilverBarTableModel):
         if column in (0, 5):
             try:
                 return int(row.get(self.value_key(column)) or 0)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 return 0
         return str(row.get(self.value_key(column)) or "").casefold()
 
     def text_alignment(self, column: int) -> Optional[int]:
         if column in (0, 5):
-            return int(Qt.AlignCenter | Qt.AlignVCenter)
+            return int(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter)
         return None
 
 
@@ -506,14 +510,14 @@ class HistoryListBarsTableModel(_BaseSilverBarTableModel):
         if column == 0:
             try:
                 return int(row.get("bar_id") or 0)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 return 0
         if column == 1:
             return self._voucher_sort_value(row)
         if column in (2, 3, 4):
             try:
                 return float(row.get(self.value_key(column)) or 0.0)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 return 0.0
         return self.display_value_from_row(row, column).casefold()
 
@@ -527,7 +531,7 @@ class HistoryListBarsTableModel(_BaseSilverBarTableModel):
 
     def text_alignment(self, column: int) -> Optional[int]:
         if column in (0, 2, 3, 4):
-            return int(Qt.AlignRight | Qt.AlignVCenter)
+            return int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         return None
 
     def background_brush(self, row: int) -> Optional[QBrush]:

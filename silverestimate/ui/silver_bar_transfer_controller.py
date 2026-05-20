@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import csv
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QFileDialog, QMessageBox
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
 from ._host_proxy import HostProxy
 
@@ -77,10 +77,10 @@ class SilverBarTransferController(HostProxy):
             self.host,
             "Confirm Add",
             f"Add {len(bar_ids_to_add)} selected bar(s) to list '{self.list_combo.currentText()}'?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
-        if reply != QMessageBox.Yes:
+        if reply != QMessageBox.StandardButton.Yes:
             return
 
         added_count, failed_ids = self._run_with_wait_cursor(
@@ -125,10 +125,10 @@ class SilverBarTransferController(HostProxy):
             self.host,
             "Confirm Remove",
             f"Remove {len(bar_ids_to_remove)} selected bar(s) from list '{self.list_combo.currentText()}'?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
-        if reply != QMessageBox.Yes:
+        if reply != QMessageBox.StandardButton.Yes:
             return
 
         removed_count, failed_ids = self._run_with_wait_cursor(
@@ -160,10 +160,10 @@ class SilverBarTransferController(HostProxy):
             self.host,
             "Confirm Add All",
             f"Add all {row_count} available bar(s) to list '{self.list_combo.currentText()}'?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
-        if reply != QMessageBox.Yes:
+        if reply != QMessageBox.StandardButton.Yes:
             return
         bar_ids = self._all_bar_ids(self.available_bars_table)
         added, failed = self._run_with_wait_cursor(
@@ -200,10 +200,10 @@ class SilverBarTransferController(HostProxy):
             self.host,
             "Confirm Remove All",
             f"Remove all {row_count} bar(s) from list '{self.list_combo.currentText()}'?\nThis will set their status to 'In Stock'.",
-            QMessageBox.Yes | QMessageBox.Cancel,
-            QMessageBox.Cancel,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
         )
-        if reply != QMessageBox.Yes:
+        if reply != QMessageBox.StandardButton.Yes:
             return
         bar_ids = self._all_bar_ids(self.list_bars_table)
         removed, failed = self._run_with_wait_cursor(
@@ -291,7 +291,7 @@ class SilverBarTransferController(HostProxy):
 
     def _run_with_wait_cursor(self, operation, *, enable_log: str, restore_log: str):
         try:
-            QApplication.setOverrideCursor(Qt.WaitCursor)
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         except Exception as exc:
             self.logger.debug(enable_log, exc)
         try:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from PyQt5.QtWidgets import QInputDialog, QLineEdit, QMessageBox
+from PyQt6.QtWidgets import QInputDialog, QLineEdit, QMessageBox
 
 from ._host_proxy import HostProxy
 
@@ -18,7 +18,7 @@ class SilverBarListLifecycleController(HostProxy):
             self.host,
             "Create New List",
             "Enter a note for the new list:",
-            QLineEdit.Normal,
+            QLineEdit.EchoMode.Normal,
         )
         if not ok:
             return
@@ -45,7 +45,7 @@ class SilverBarListLifecycleController(HostProxy):
             self.host,
             "Create List from Selection",
             "Enter a note for the new list:",
-            QLineEdit.Normal,
+            QLineEdit.EchoMode.Normal,
         )
         if not ok:
             return
@@ -96,7 +96,7 @@ class SilverBarListLifecycleController(HostProxy):
             self.host,
             "Edit List Note",
             f"Enter new note for list '{details['list_identifier']}':",
-            QLineEdit.Normal,
+            QLineEdit.EchoMode.Normal,
             current_note,
         )
 
@@ -143,11 +143,11 @@ class SilverBarListLifecycleController(HostProxy):
             f"Are you sure you want to delete list '{list_name}'?\n"
             "All bars currently assigned to this list will be unassigned (status set to 'In Stock').\n"
             "This action cannot be undone.",
-            QMessageBox.Yes | QMessageBox.Cancel,
-            QMessageBox.Cancel,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
         )
 
-        if reply != QMessageBox.Yes:
+        if reply != QMessageBox.StandardButton.Yes:
             return
 
         success, message = self.db_manager.delete_silver_bar_list(self.current_list_id)
@@ -184,11 +184,11 @@ class SilverBarListLifecycleController(HostProxy):
             "• Move it to Silver Bar History\n"
             "• Set all bars in the list to 'Issued' status\n\n"
             "This action can be reversed from the History window.",
-            QMessageBox.Yes | QMessageBox.Cancel,
-            QMessageBox.Cancel,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
         )
 
-        if reply != QMessageBox.Yes:
+        if reply != QMessageBox.StandardButton.Yes:
             return
 
         try:

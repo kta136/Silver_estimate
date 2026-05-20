@@ -183,7 +183,7 @@ class EstimateEntryPresenter:
                     is_silver_bar=bool(raw.get("is_silver_bar", 0)),
                     line_key=str(raw.get("line_key", "") or ""),
                 )
-            except (AttributeError, TypeError, ValueError):
+            except AttributeError, TypeError, ValueError:
                 item = None
             if item is not None:
                 items.append(item)

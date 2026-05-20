@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from PyQt5.QtCore import QObject, QThread, pyqtSignal
-from PyQt5.QtWidgets import QCheckBox, QFileDialog, QInputDialog, QMessageBox
+from PyQt6.QtCore import QObject, QThread, pyqtSignal
+from PyQt6.QtWidgets import QCheckBox, QFileDialog, QInputDialog, QMessageBox
 
 
 class _ItemCatalogExportWorker(QObject):
@@ -88,10 +88,10 @@ class MainCommands:
             "Are you absolutely sure you want to delete ALL data?\n"
             "This includes all items, estimates, silver bars, and lists.\n"
             "THIS ACTION CANNOT BE UNDONE.",
-            QMessageBox.Yes | QMessageBox.Cancel,
-            QMessageBox.Cancel,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
         )
-        if reply != QMessageBox.Yes:
+        if reply != QMessageBox.StandardButton.Yes:
             return
 
         text, ok = QInputDialog.getText(
@@ -147,7 +147,7 @@ class MainCommands:
             return
 
         message_box = QMessageBox(self.main_window)
-        message_box.setIcon(QMessageBox.Question)
+        message_box.setIcon(QMessageBox.Icon.Question)
         message_box.setWindowTitle("Restore Item Catalog Backup")
         message_box.setText(
             "This restores a native Silver Estimate item catalog backup."
@@ -164,9 +164,11 @@ class MainCommands:
             "Replace the entire current item master with this backup"
         )
         message_box.setCheckBox(replace_checkbox)
-        message_box.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
-        message_box.setDefaultButton(QMessageBox.Cancel)
-        if message_box.exec_() != QMessageBox.Yes:
+        message_box.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel
+        )
+        message_box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        if message_box.exec() != QMessageBox.StandardButton.Yes:
             return
         replace_existing = replace_checkbox.isChecked()
 
@@ -247,10 +249,10 @@ class MainCommands:
             "Confirm Delete All Estimates",
             "Are you absolutely sure you want to delete ALL estimates?\n"
             "This action cannot be undone.",
-            QMessageBox.Yes | QMessageBox.Cancel,
-            QMessageBox.Cancel,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
         )
-        if reply != QMessageBox.Yes:
+        if reply != QMessageBox.StandardButton.Yes:
             return
 
         try:

@@ -1,8 +1,8 @@
 import types
 
 import pytest
-from PyQt5.QtCore import QDate, QEventLoop, Qt, QTimer
-from PyQt5.QtWidgets import QDialog, QHeaderView, QLineEdit, QMessageBox, QWidget
+from PyQt6.QtCore import QDate, QEventLoop, Qt, QTimer
+from PyQt6.QtWidgets import QDialog, QHeaderView, QLineEdit, QMessageBox, QWidget
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.persistence.database_manager import DatabaseManager
@@ -162,7 +162,7 @@ def _make_widget(db_manager):
 def _pump_events(wait_ms: int = 20) -> None:
     loop = QEventLoop()
     QTimer.singleShot(wait_ms, loop.quit)
-    loop.exec_()
+    loop.exec()
 
 
 def _find_named_widget(root: QWidget, object_name: str) -> QWidget | None:
@@ -341,7 +341,7 @@ def test_incremental_rebuild_after_row_delete(qt_app, fake_db, monkeypatch):
 
         monkeypatch.setattr(
             "silverestimate.ui.estimate_entry_workflow_controller.QMessageBox.question",
-            lambda *a, **k: QMessageBox.Yes,
+            lambda *a, **k: QMessageBox.StandardButton.Yes,
             raising=False,
         )
         widget.item_table.setCurrentCell(1, COL_CODE)
@@ -468,7 +468,7 @@ def test_widget_save_and_reload(qt_app, tmp_path, settings_stub, monkeypatch):
     _set_row(widget, 2, silver_bar_item(gross=2.0, poly=0.0, purity=99.9, wage_rate=0))
     widget.toggle_silver_bar_mode()
 
-    from PyQt5.QtWidgets import QMessageBox as _QtMessageBox
+    from PyQt6.QtWidgets import QMessageBox as _QtMessageBox
 
     class _MsgBoxStub:
         Yes = _QtMessageBox.Yes
@@ -619,8 +619,8 @@ def test_prompt_item_selection_uses_widget_parent(qt_app, fake_db, monkeypatch):
             captured["search_term"] = search_term
             captured["parent"] = parent
 
-        def exec_(self):
-            return QDialog.Accepted
+        def exec(self):
+            return QDialog.DialogCode.Accepted
 
         def get_selected_item(self):
             return {
@@ -682,7 +682,9 @@ def test_apply_loaded_estimate_normalizes_wt_pieces_to_zero(qt_app, fake_db):
         table = widget.item_table
         assert table.get_cell_text(0, COL_PIECES) == "0"
         pieces_index = table.get_model().index(0, COL_PIECES)
-        assert not bool(table.get_model().flags(pieces_index) & Qt.ItemIsEditable)
+        assert not bool(
+            table.get_model().flags(pieces_index) & Qt.ItemFlag.ItemIsEditable
+        )
     finally:
         widget.deleteLater()
 
@@ -721,7 +723,7 @@ def test_apply_loaded_estimate_normalizes_pc_pieces_to_one(qt_app, fake_db):
         table = widget.item_table
         assert table.get_cell_text(0, COL_PIECES) == "1"
         pieces_index = table.get_model().index(0, COL_PIECES)
-        assert bool(table.get_model().flags(pieces_index) & Qt.ItemIsEditable)
+        assert bool(table.get_model().flags(pieces_index) & Qt.ItemFlag.ItemIsEditable)
     finally:
         widget.deleteLater()
 
@@ -730,17 +732,17 @@ def test_totals_position_switching_and_persistence(qt_app, fake_db, settings_stu
     widget = _make_widget(fake_db)
     try:
         splitter = widget._content_splitter
-        assert splitter.orientation() == Qt.Horizontal
+        assert splitter.orientation() == Qt.Orientation.Horizontal
 
         widget._apply_totals_position("left")
-        assert splitter.orientation() == Qt.Horizontal
+        assert splitter.orientation() == Qt.Orientation.Horizontal
         assert splitter.widget(0) is widget.totals_panel
         assert (
             widget._settings().value("ui/estimate_totals_position", type=str) == "left"
         )
 
         widget._on_totals_position_requested("bottom")
-        assert splitter.orientation() == Qt.Vertical
+        assert splitter.orientation() == Qt.Orientation.Vertical
         assert splitter.widget(1) is widget.totals_panel
         assert (
             widget._settings().value("ui/estimate_totals_position", type=str)
@@ -748,7 +750,7 @@ def test_totals_position_switching_and_persistence(qt_app, fake_db, settings_stu
         )
 
         widget._on_totals_position_requested("right")
-        assert splitter.orientation() == Qt.Horizontal
+        assert splitter.orientation() == Qt.Orientation.Horizontal
         assert splitter.widget(1) is widget.totals_panel
         assert (
             widget._settings().value("ui/estimate_totals_position", type=str) == "right"
@@ -866,8 +868,8 @@ def test_non_autofit_uses_native_stretch_for_item_name(qt_app, fake_db):
     widget = _make_widget(fake_db)
     try:
         header = widget.item_table.horizontalHeader()
-        assert header.sectionResizeMode(COL_ITEM_NAME) == QHeaderView.Stretch
-        assert header.sectionResizeMode(COL_CODE) == QHeaderView.Interactive
+        assert header.sectionResizeMode(COL_ITEM_NAME) == QHeaderView.ResizeMode.Stretch
+        assert header.sectionResizeMode(COL_CODE) == QHeaderView.ResizeMode.Interactive
     finally:
         widget.deleteLater()
 
@@ -897,7 +899,10 @@ def test_non_autofit_persists_fixed_column_widths_only(qt_app, fake_db, settings
         widget_reloaded = _make_widget(fake_db)
         try:
             header = widget_reloaded.item_table.horizontalHeader()
-            assert header.sectionResizeMode(COL_ITEM_NAME) == QHeaderView.Stretch
+            assert (
+                header.sectionResizeMode(COL_ITEM_NAME)
+                == QHeaderView.ResizeMode.Stretch
+            )
             assert widget_reloaded.item_table.columnWidth(COL_CODE) == 137
         finally:
             widget_reloaded.deleteLater()
@@ -956,10 +961,10 @@ def test_numeric_cell_editor_is_right_aligned_and_selects_text(qtbot, fake_db):
         editor = widget.item_table.findChild(QLineEdit)
         assert editor is not None
         model_font = widget.item_table.get_model().data(
-            widget.item_table.get_model().index(0, COL_GROSS), Qt.FontRole
+            widget.item_table.get_model().index(0, COL_GROSS), Qt.ItemDataRole.FontRole
         )
         assert model_font is not None
-        assert bool(editor.alignment() & Qt.AlignRight)
+        assert bool(editor.alignment() & Qt.AlignmentFlag.AlignRight)
         assert editor.font().key() == model_font.key()
         assert editor.text() == "1234567.5"
         assert editor.selectedText() == "1234567.5"
@@ -989,7 +994,7 @@ def test_table_edit_pipeline_invokes_handle_cell_changed_once(qt_app, fake_db):
         widget.handle_cell_changed = lambda row, col: calls.append((row, col))
         model = widget.item_table.get_model()
         index = model.index(0, COL_GROSS)
-        assert model.setData(index, "12.5", Qt.EditRole)
+        assert model.setData(index, "12.5", Qt.ItemDataRole.EditRole)
         assert calls == [(0, COL_GROSS)]
     finally:
         widget.deleteLater()

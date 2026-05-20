@@ -4,36 +4,39 @@ from __future__ import annotations
 
 import logging
 import os
+import tempfile
 from typing import Callable
 
-from PyQt5.QtCore import QEvent, QObject, QSize, Qt
-from PyQt5.QtGui import QPageLayout, QPageSize
-from PyQt5.QtPrintSupport import (
+from PyQt6.QtCore import QEvent, QObject, QSize, Qt
+from PyQt6.QtGui import QAction, QActionGroup, QPageLayout, QPageSize
+from PyQt6.QtPrintSupport import (
     QPageSetupDialog,
     QPrintDialog,
     QPrinter,
     QPrintPreviewDialog,
     QPrintPreviewWidget,
 )
-from PyQt5.QtWidgets import (
-    QAction,
-    QActionGroup,
-    QComboBox,
+from PyQt6.QtWidgets import (
     QDialog,
     QFileDialog,
     QHBoxLayout,
     QLabel,
     QMessageBox,
     QSizePolicy,
-    QSpinBox,
     QToolBar,
     QWidget,
 )
 
 from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.ui.icons import get_icon
+from silverestimate.ui.print_page_settings import (
+    copy_printer_page_layout,
+    page_size_label,
+    save_printer_page_settings,
+    validate_quick_print_printer,
+)
 from silverestimate.ui.print_payload_builder import PrintPreviewPayload
-from silverestimate.ui.settings_print_controller import PRINT_ORIENTATION_MIGRATION_KEY
+from silverestimate.ui.themed_controls import ThemedComboBox, ThemedSpinBox
 
 LOGGER = logging.getLogger(__name__)
 
@@ -41,12 +44,6 @@ _LAYOUT_LABELS = {
     "old": "Classic",
     "new": "Modern",
     "thermal": "Thermal",
-}
-_PAGE_SIZE_LABELS_BY_ID = {
-    QPageSize.A4: "A4",
-    QPageSize.A5: "A5",
-    QPageSize.Letter: "Letter",
-    QPageSize.Legal: "Legal",
 }
 
 
@@ -65,9 +62,9 @@ class _PreviewWheelZoomFilter(QObject):
         self._zoom_out = zoom_out
 
     def eventFilter(self, watched, event) -> bool:  # noqa: N802 - Qt API
-        if event.type() != QEvent.Wheel:
+        if event.type() != QEvent.Type.Wheel:
             return super().eventFilter(watched, event)
-        if not bool(event.modifiers() & Qt.ControlModifier):
+        if not bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier):
             return super().eventFilter(watched, event)
 
         delta = 0
@@ -131,7 +128,7 @@ class PrintPreviewController:
             LOGGER.warning("Could not augment preview toolbar: %s", exc, exc_info=True)
 
         preview.showMaximized()
-        preview.exec_()
+        preview.exec()
         self._save_preview_zoom(preview_widget)
         self._save_preview_defaults(state["payload"])
 
@@ -150,7 +147,7 @@ class PrintPreviewController:
             zoom_factor = max(0.1, min(zoom_factor, 5.0))
             LOGGER.debug("Applying zoom factor: %s", zoom_factor)
             try:
-                preview_widget.setZoomMode(QPrintPreviewWidget.CustomZoom)
+                preview_widget.setZoomMode(QPrintPreviewWidget.ZoomMode.CustomZoom)
             except Exception as exc:
                 LOGGER.debug(
                     "Failed to switch preview widget to custom zoom: %s",
@@ -181,36 +178,7 @@ class PrintPreviewController:
             LOGGER.warning("Could not persist preview defaults: %s", exc)
 
     def _save_printer_defaults(self, settings) -> None:
-        printer_name = self._printer.printerName().strip()
-        if printer_name:
-            settings.setValue("print/default_printer", printer_name)
-
-        orientation = self._printer.orientation()
-        settings.setValue(
-            "print/orientation",
-            "Landscape" if orientation == QPrinter.Landscape else "Portrait",
-        )
-        settings.setValue(PRINT_ORIENTATION_MIGRATION_KEY, True)
-
-        page_size = self._printer.pageLayout().pageSize()
-        page_size_name = self._page_size_label(page_size)
-        size_mm = page_size.size(QPageSize.Millimeter)
-        settings.setValue("print/page_size", page_size_name)
-        settings.setValue("print/page_size_name", page_size.name() or page_size_name)
-        settings.setValue("print/page_width_mm", float(size_mm.width()))
-        settings.setValue("print/page_height_mm", float(size_mm.height()))
-
-        margins = self._printer.pageLayout().margins(QPageLayout.Millimeter)
-        margin_values = (
-            max(0, int(round(margins.left()))),
-            max(0, int(round(margins.top()))),
-            max(0, int(round(margins.right()))),
-            max(0, int(round(margins.bottom()))),
-        )
-        settings.setValue(
-            "print/margins",
-            ",".join(str(value) for value in margin_values),
-        )
+        save_printer_page_settings(settings, self._printer)
 
     def _save_payload_defaults(self, settings, payload: PrintPreviewPayload) -> None:
         if payload.document_kind != "estimate":
@@ -224,19 +192,7 @@ class PrintPreviewController:
 
     @staticmethod
     def _page_size_label(page_size: QPageSize) -> str:
-        try:
-            page_id = page_size.id()
-        except Exception:
-            page_id = None
-        if page_id in _PAGE_SIZE_LABELS_BY_ID:
-            return _PAGE_SIZE_LABELS_BY_ID[page_id]
-        raw_name = (page_size.name() or "").strip()
-        lowered = raw_name.lower()
-        if lowered.startswith("letter"):
-            return "Letter"
-        if "thermal" in lowered and "80" in lowered:
-            return "Thermal 80mm"
-        return raw_name or "A4"
+        return page_size_label(page_size)
 
     def _augment_preview_toolbar(
         self,
@@ -253,17 +209,15 @@ class PrintPreviewController:
 
         toolbar.clear()
         toolbar.setMovable(False)
-        toolbar.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         toolbar.setIconSize(QSize(24, 24))
-        toolbar.setStyleSheet(
-            """
+        toolbar.setStyleSheet("""
             QToolButton {
                 min-width: 40px;
                 min-height: 40px;
                 padding: 6px;
             }
-            """
-        )
+            """)
 
         payload = state["payload"]
 
@@ -360,7 +314,10 @@ class PrintPreviewController:
             toolbar.addAction(act_zi)
 
         spacer = QWidget(preview)
-        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        spacer.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Preferred,
+        )
         toolbar.addWidget(spacer)
 
         if preview_widget:
@@ -450,17 +407,17 @@ class PrintPreviewController:
             (
                 "view_single_page",
                 "Single Page",
-                QPrintPreviewWidget.SinglePageView,
+                QPrintPreviewWidget.ViewMode.SinglePageView,
             ),
             (
                 "view_facing_pages",
                 "Facing Pages",
-                QPrintPreviewWidget.FacingPagesView,
+                QPrintPreviewWidget.ViewMode.FacingPagesView,
             ),
             (
                 "view_overview",
                 "All Pages",
-                QPrintPreviewWidget.AllPagesView,
+                QPrintPreviewWidget.ViewMode.AllPagesView,
             ),
         ):
             action = QAction(get_icon(icon_name, widget=preview), text, preview)
@@ -479,7 +436,7 @@ class PrintPreviewController:
             try:
                 current_mode = preview_widget.viewMode()
             except Exception:
-                current_mode = QPrintPreviewWidget.SinglePageView
+                current_mode = QPrintPreviewWidget.ViewMode.SinglePageView
             for action, mode in view_actions:
                 action.blockSignals(True)
                 action.setChecked(mode == current_mode)
@@ -491,13 +448,13 @@ class PrintPreviewController:
         except Exception as exc:
             LOGGER.debug("Failed to sync preview view mode actions: %s", exc)
 
-    def _build_orientation_combo(self, preview: QPrintPreviewDialog) -> QComboBox:
-        combo = QComboBox(preview)
+    def _build_orientation_combo(self, preview: QPrintPreviewDialog) -> ThemedComboBox:
+        combo = ThemedComboBox(preview)
         combo.setObjectName("PreviewOrientationCombo")
         combo.setToolTip("Choose paper orientation for this preview")
-        combo.addItem("Portrait", QPrinter.Portrait)
-        combo.addItem("Landscape", QPrinter.Landscape)
-        current = self._printer.orientation()
+        combo.addItem("Portrait", QPageLayout.Orientation.Portrait)
+        combo.addItem("Landscape", QPageLayout.Orientation.Landscape)
+        current = self._printer.pageLayout().orientation()
         index = combo.findData(current)
         combo.setCurrentIndex(index if index >= 0 else 0)
         combo.currentIndexChanged.connect(
@@ -509,8 +466,8 @@ class PrintPreviewController:
         self,
         preview: QPrintPreviewDialog,
         payload: PrintPreviewPayload,
-    ) -> QComboBox:
-        combo = QComboBox(preview)
+    ) -> ThemedComboBox:
+        combo = ThemedComboBox(preview)
         combo.setObjectName("PreviewLayoutCombo")
         combo.setToolTip("Switch the estimate print layout without leaving preview")
         for layout_mode in payload.available_layouts:
@@ -525,7 +482,7 @@ class PrintPreviewController:
         self,
         preview: QPrintPreviewDialog,
         preview_widget: QPrintPreviewWidget,
-    ) -> tuple[QSpinBox, QLabel]:
+    ) -> tuple[ThemedSpinBox, QLabel]:
         container = QWidget(preview)
         container.setObjectName("PreviewPageNavigator")
         layout = QHBoxLayout(container)
@@ -533,10 +490,10 @@ class PrintPreviewController:
         layout.setSpacing(4)
 
         label = QLabel("Page", container)
-        spin = QSpinBox(container)
+        spin = ThemedSpinBox(container)
         spin.setRange(1, 1)
         spin.setMinimumWidth(72)
-        spin.setAlignment(Qt.AlignRight)
+        spin.setAlignment(Qt.AlignmentFlag.AlignRight)
         spin.setToolTip("Jump directly to a page number")
         total_label = QLabel("/ 1", container)
 
@@ -563,7 +520,7 @@ class PrintPreviewController:
         viewport = getattr(preview_widget, "viewport", lambda: None)()
         if viewport is not None:
             viewport.installEventFilter(filter_obj)
-        preview._wheel_zoom_filter = filter_obj  # type: ignore[attr-defined]
+        preview._wheel_zoom_filter = filter_obj
 
     def _switch_layout(
         self,
@@ -587,7 +544,7 @@ class PrintPreviewController:
 
     def _zoom_in(self, preview_widget: QPrintPreviewWidget) -> None:
         try:
-            preview_widget.setZoomMode(QPrintPreviewWidget.CustomZoom)
+            preview_widget.setZoomMode(QPrintPreviewWidget.ZoomMode.CustomZoom)
         except Exception as exc:
             LOGGER.debug("Failed to switch preview widget to custom zoom: %s", exc)
         try:
@@ -598,7 +555,7 @@ class PrintPreviewController:
 
     def _zoom_out(self, preview_widget: QPrintPreviewWidget) -> None:
         try:
-            preview_widget.setZoomMode(QPrintPreviewWidget.CustomZoom)
+            preview_widget.setZoomMode(QPrintPreviewWidget.ZoomMode.CustomZoom)
         except Exception as exc:
             LOGGER.debug("Failed to switch preview widget to custom zoom: %s", exc)
         try:
@@ -644,11 +601,13 @@ class PrintPreviewController:
 
     def _choose_printer(self, preview: QPrintPreviewDialog) -> None:
         dialog = QPrintDialog(self._printer, preview)
-        if dialog.exec_() != QDialog.Accepted:
+        if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         try:
             settings = get_app_settings()
-            settings.setValue("print/default_printer", self._printer.printerName())
+            printer_name = self._printer.printerName().strip()
+            if printer_name:
+                settings.setValue("print/default_printer", printer_name)
         except Exception as exc:
             LOGGER.debug("Failed to persist selected printer name: %s", exc)
         preview_widget = preview.findChild(QPrintPreviewWidget)
@@ -661,66 +620,66 @@ class PrintPreviewController:
         parent_widget,
     ) -> None:
         """Prompt for a PDF path and export current content as PDF."""
-        options = QFileDialog.Options()
         file_path, _ = QFileDialog.getSaveFileName(
             parent_widget,
             "Save as PDF",
             self._default_pdf_path(payload.suggested_filename),
             "PDF Files (*.pdf)",
-            options=options,
         )
         if not file_path:
             return
         if not file_path.lower().endswith(".pdf"):
             file_path = f"{file_path}.pdf"
+        target_path = os.path.abspath(file_path)
+        target_dir = os.path.dirname(target_path) or os.getcwd()
+        temp_path = ""
         try:
-            pdf_printer = QPrinter(QPrinter.HighResolution)
-            pdf_printer.setOutputFormat(QPrinter.PdfFormat)
-            pdf_printer.setOutputFileName(file_path)
-            pdf_printer.setPageSize(self._printer.pageSize())
-            pdf_printer.setOrientation(self._printer.orientation())
-            settings = get_app_settings()
-            margins_str = settings.value(
-                "print/margins",
-                defaultValue="10,5,10,5",
-                type=str,
+            fd, temp_path = tempfile.mkstemp(
+                prefix=".silverestimate-",
+                suffix=".pdf",
+                dir=target_dir,
             )
-            try:
-                margins = [int(m.strip()) for m in margins_str.split(",")]
-                if len(margins) != 4:
-                    margins = [10, 5, 10, 5]
-            except Exception:
-                margins = [10, 5, 10, 5]
-            pdf_printer.setPageMargins(
-                margins[0],
-                margins[1],
-                margins[2],
-                margins[3],
-                QPrinter.Millimeter,
-            )
+            os.close(fd)
+
+            pdf_printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+            pdf_printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+            pdf_printer.setOutputFileName(temp_path)
+            copy_printer_page_layout(self._printer, pdf_printer)
             self._render_document(
                 pdf_printer,
                 payload.html_content,
                 payload.table_mode,
             )
-            settings.setValue("print/last_export_dir", os.path.dirname(file_path))
+            if not os.path.exists(temp_path) or os.path.getsize(temp_path) <= 0:
+                raise RuntimeError("PDF export produced an empty file.")
+            os.replace(temp_path, target_path)
+            temp_path = ""
+
+            settings = get_app_settings()
+            settings.setValue("print/last_export_dir", target_dir)
             QMessageBox.information(
                 parent_widget,
                 "Saved",
-                f"PDF saved to:\n{file_path}",
+                f"PDF saved to:\n{target_path}",
             )
         except Exception as exc:
             LOGGER.warning(
                 "Failed to export PDF '%s': %s",
-                file_path,
+                target_path,
                 exc,
                 exc_info=True,
             )
             QMessageBox.critical(
                 parent_widget,
                 "Export Failed",
-                self._friendly_export_error_message(file_path, exc),
+                self._friendly_export_error_message(target_path, exc),
             )
+        finally:
+            if temp_path:
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    LOGGER.debug("Failed to remove temporary PDF %s", temp_path)
 
     def _default_pdf_path(self, suggested_filename: str) -> str:
         settings = get_app_settings()
@@ -744,12 +703,14 @@ class PrintPreviewController:
             hint = "Close the file in any other program and try again."
         elif any(token in lower for token in ("no such file", "cannot find")):
             hint = "The target folder may no longer exist."
+        elif "empty file" in lower:
+            hint = "The PDF renderer did not produce output. Try printing again."
         return f"Could not save the PDF to:\n{file_path}\n\n{hint}"
 
     def _page_setup_and_refresh(self, preview: QPrintPreviewDialog) -> None:
         """Open page setup dialog and refresh preview if accepted."""
         dialog = QPageSetupDialog(self._printer, preview)
-        if dialog.exec_() == QDialog.Accepted:
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             preview_widget = preview.findChild(QPrintPreviewWidget)
             if preview_widget:
                 preview_widget.updatePreview()
@@ -759,10 +720,10 @@ class PrintPreviewController:
     def _set_orientation_and_refresh(
         self,
         preview: QPrintPreviewDialog,
-        orientation: QPrinter.Orientation,
+        orientation: QPageLayout.Orientation,
     ) -> None:
         try:
-            self._printer.setOrientation(orientation)
+            self._printer.setPageOrientation(orientation)
         except Exception as exc:
             LOGGER.debug("Failed to set preview orientation: %s", exc)
             return
@@ -780,6 +741,16 @@ class PrintPreviewController:
     ) -> None:
         """Send the document directly to the currently configured/default printer."""
         try:
+            valid_printer, validation_message = validate_quick_print_printer(
+                self._printer
+            )
+            if not valid_printer:
+                QMessageBox.critical(
+                    parent_widget or preview,
+                    "Print Failed",
+                    validation_message,
+                )
+                return
             self._render_document(
                 self._printer,
                 payload.html_content,

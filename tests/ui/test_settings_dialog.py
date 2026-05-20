@@ -1,9 +1,15 @@
 import types
 
-from PyQt5.QtGui import QFont
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
 
 from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.ui.settings_dialog import SettingsDialog
+from silverestimate.ui.themed_controls import (
+    ThemedComboBox,
+    ThemedDoubleSpinBox,
+    ThemedSpinBox,
+)
 
 
 class _MessageBoxStub:
@@ -39,6 +45,28 @@ class _PrinterStub:
 
     def printerName(self):
         return self._name
+
+
+def test_settings_dialog_uses_visible_arrow_controls(qt_app, settings_stub):
+    del qt_app, settings_stub
+    estimate_widget = types.SimpleNamespace(
+        apply_table_font_size=lambda size: True,
+        apply_breakdown_font_size=lambda size: True,
+        apply_final_calc_font_size=lambda size: True,
+        apply_totals_position=lambda value: True,
+    )
+    dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
+    try:
+        assert isinstance(dialog.table_font_size_spin, ThemedSpinBox)
+        assert isinstance(dialog.preview_zoom_spin, ThemedDoubleSpinBox)
+        assert isinstance(dialog.totals_position_combo, ThemedComboBox)
+        assert isinstance(dialog.printer_combo, ThemedComboBox)
+        assert (
+            dialog.sidebar.horizontalScrollBarPolicy()
+            == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+    finally:
+        dialog.deleteLater()
 
 
 def test_settings_accept_does_not_close_when_apply_fails(
@@ -134,7 +162,7 @@ def test_settings_dialog_uses_defaults_for_invalid_print_settings(
         assert dialog.page_size_combo.currentText() == "A4"
         assert dialog.orientation_combo.currentText() == "Landscape"
         assert dialog.estimate_layout_combo.currentData() == "old"
-        assert dialog.printer_combo.currentText() == "Counter Printer"
+        assert dialog.printer_combo.currentData() == ""
     finally:
         dialog.deleteLater()
 
@@ -235,6 +263,34 @@ def test_settings_apply_persists_ui_preferences(qt_app, monkeypatch, settings_st
             "final": 18,
             "position": "bottom",
         }
+    finally:
+        dialog.deleteLater()
+
+
+def test_settings_apply_can_clear_default_printer(qt_app, monkeypatch, settings_stub):
+    del qt_app, settings_stub
+    settings = get_app_settings()
+    settings.setValue("print/default_printer", "Warehouse Printer")
+    monkeypatch.setattr(
+        "silverestimate.ui.settings_print_controller.QPrinterInfo.availablePrinters",
+        lambda: [_PrinterStub("Warehouse Printer")],
+    )
+    monkeypatch.setattr(
+        "silverestimate.infrastructure.logger.reconfigure_logging", lambda: None
+    )
+
+    estimate_widget = types.SimpleNamespace(
+        apply_table_font_size=lambda size: True,
+        apply_breakdown_font_size=lambda size: True,
+        apply_final_calc_font_size=lambda size: True,
+        apply_totals_position=lambda value: True,
+    )
+    dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
+    try:
+        dialog.printer_combo.setCurrentIndex(dialog.printer_combo.findData(""))
+
+        assert dialog.apply_settings() is True
+        assert settings.value("print/default_printer") is None
     finally:
         dialog.deleteLater()
 

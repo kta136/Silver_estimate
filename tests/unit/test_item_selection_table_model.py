@@ -1,5 +1,5 @@
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor
 
 from silverestimate.ui.models import ItemSelectionRecord, ItemSelectionTableModel
 
@@ -22,11 +22,14 @@ def test_item_selection_table_model_displays_rows_and_alignment():
     )
 
     assert model.rowCount() == 1
-    assert model.headerData(0, Qt.Horizontal, Qt.DisplayRole) == "Code"
-    assert model.data(model.index(0, 0), Qt.DisplayRole) == "AD01"
-    assert model.data(model.index(0, 2), Qt.DisplayRole) == "91.50"
-    assert model.data(model.index(0, 2), Qt.TextAlignmentRole) == (
-        Qt.AlignRight | Qt.AlignVCenter
+    assert (
+        model.headerData(0, Qt.Orientation.Horizontal, Qt.ItemDataRole.DisplayRole)
+        == "Code"
+    )
+    assert model.data(model.index(0, 0), Qt.ItemDataRole.DisplayRole) == "AD01"
+    assert model.data(model.index(0, 2), Qt.ItemDataRole.DisplayRole) == "91.50"
+    assert model.data(model.index(0, 2), Qt.ItemDataRole.TextAlignmentRole) == (
+        Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
     )
 
 
@@ -47,8 +50,8 @@ def test_item_selection_table_model_highlights_matching_code_and_name():
         query="AD",
     )
 
-    code_brush = model.data(model.index(0, 0), Qt.BackgroundRole)
-    name_brush = model.data(model.index(0, 1), Qt.BackgroundRole)
+    code_brush = model.data(model.index(0, 0), Qt.ItemDataRole.BackgroundRole)
+    name_brush = model.data(model.index(0, 1), Qt.ItemDataRole.BackgroundRole)
 
     assert code_brush == QColor(255, 246, 196)
     assert name_brush == QColor(255, 246, 196)

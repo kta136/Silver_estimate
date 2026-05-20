@@ -2,7 +2,7 @@ import logging
 import sys
 import types
 
-from PyQt5.QtWidgets import QDialog
+from PyQt6.QtWidgets import QDialog
 
 from silverestimate.services.navigation_service import NavigationService
 
@@ -157,9 +157,9 @@ def test_show_silver_bars_lazy_creation(monkeypatch):
             created["db"] = db
             created["main_window"] = main_window
 
-        def exec_(self):
+        def exec(self):
             exec_calls.append("exec")
-            return QDialog.Accepted
+            return QDialog.DialogCode.Accepted
 
     module = types.SimpleNamespace(SilverBarDialog=_SilverBarDialog)
     monkeypatch.setitem(sys.modules, "silverestimate.ui.silver_bar_management", module)

@@ -13,6 +13,7 @@
    - `.\.venv\Scripts\Activate.ps1`
    - `python -m pip install --upgrade pip`
    - `python -m pip install -e ".[dev]"`
+   - Development installs resolve PyQt6 6.11 and configure `pytest-qt` for PyQt6.
 3. Build with the canonical spec:
    - Fast local iteration: `uv run nox -s build`
    - Clean rebuild: `python -m PyInstaller --clean --noconfirm SilverEstimate.spec`
@@ -32,7 +33,7 @@ Workflow: `.github/workflows/release-windows.yml`.
 - Trigger: pushing a tag matching `v*` (e.g., `v1.72.7`).
 - Jobs:
   - Checkout repository.
-  - Install Python 3.14 and project dependencies from `pyproject.toml` (plus `pyinstaller` for packaging).
+  - Install Python 3.14 and project dependencies from `pyproject.toml` (including PyQt6 6.11 and `pyinstaller` for packaging).
   - Build the executable from `SilverEstimate.spec`.
   - Rename artifact to `SilverEstimate-<tag>.exe` and zip as `SilverEstimate-<tag>-win64.zip`.
   - Publish the zip to the GitHub Release using `softprops/action-gh-release`.
@@ -51,7 +52,7 @@ Workflow: `.github/workflows/release-windows.yml`.
 - Fallback local bootstrap: `python -m venv .venv`, activate it, then `python -m pip install -e ".[dev]"`.
 
 ## Testing Before Packaging
-- Run `pytest` from the repo root (requires developer dependencies such as `pytest` and `pytest-qt`).
+- Run `pytest` from the repo root (requires developer dependencies such as `pytest` and `pytest-qt`; pytest is configured to use PyQt6).
 - Ensure the application starts with `python main.py` before freezing.
 - Verify encrypted database handling by launching the packaged build, creating a password (ensure the OS keyring is available), saving a sample estimate, closing, and reopening.
 

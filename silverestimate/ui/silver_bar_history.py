@@ -1,11 +1,10 @@
 #!/usr/bin/env python
 import logging
 
-from PyQt5.QtCore import QObject, Qt, QThread, QTimer, pyqtSignal
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import QObject, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtWidgets import (
     QAbstractItemView,
     QApplication,
-    QComboBox,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -15,7 +14,6 @@ from PyQt5.QtWidgets import (
     QMenu,
     QMessageBox,
     QPushButton,
-    QSpinBox,
     QTableView,
     QTabWidget,
     QVBoxLayout,
@@ -32,6 +30,7 @@ from silverestimate.ui.models import (
     IssuedSilverBarListsTableModel,
 )
 from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
+from silverestimate.ui.themed_controls import ThemedComboBox, ThemedSpinBox
 
 
 class SilverBarHistoryDialog(QDialog):
@@ -57,33 +56,33 @@ class SilverBarHistoryDialog(QDialog):
                 include_table=True,
                 extra_rules="""
                 QTabWidget::pane {
-                    background-color: #ffffff;
-                    border: 1px solid #d8e1ec;
+                    background-color: __SURFACE_BG__;
+                    border: 1px solid __CARD_BORDER__;
                     border-radius: 12px;
                     top: -1px;
                 }
                 QTabBar::tab {
                     padding: 8px 14px;
                     margin-right: 4px;
-                    background-color: #f8fafc;
-                    border: 1px solid #d8e1ec;
+                    background-color: __HEADER_BG__;
+                    border: 1px solid __CARD_BORDER__;
                     border-bottom: none;
                     border-radius: 8px 8px 0 0;
-                    color: #334155;
+                    color: __HEADER_TEXT__;
                 }
                 QTabBar::tab:selected {
-                    background-color: #ffffff;
-                    color: #0f172a;
+                    background-color: __SURFACE_BG__;
+                    color: __TEXT_STRONG__;
                     font-weight: 700;
                 }
                 QTabBar::tab:hover:!selected {
-                    background-color: #eef2ff;
+                    background-color: __SELECTION_BG__;
                 }
                 QLabel#SilverBarHistorySummaryLabel {
-                    background-color: #f8fafc;
-                    border: 1px solid #d8e1ec;
+                    background-color: __HEADER_BG__;
+                    border: 1px solid __CARD_BORDER__;
                     border-radius: 8px;
-                    color: #334155;
+                    color: __HEADER_TEXT__;
                     font-weight: 600;
                     padding: 8px;
                 }
@@ -179,7 +178,7 @@ class SilverBarHistoryDialog(QDialog):
         status_label = QLabel("Status")
         status_label.setObjectName("SilverBarHistoryFieldLabel")
         filters_row.addWidget(status_label)
-        self.status_combo = QComboBox()
+        self.status_combo = ThemedComboBox()
         self.status_combo.addItems(
             ["All Statuses", "In Stock", "Assigned", "Issued", "Sold"]
         )
@@ -189,7 +188,7 @@ class SilverBarHistoryDialog(QDialog):
         limit_label = QLabel("Max")
         limit_label.setObjectName("SilverBarHistoryFieldLabel")
         filters_row.addWidget(limit_label)
-        self.max_rows_spin = QSpinBox()
+        self.max_rows_spin = ThemedSpinBox()
         self.max_rows_spin.setRange(100, 50000)
         self.max_rows_spin.setSingleStep(100)
         self.max_rows_spin.setMaximumWidth(90)
@@ -222,13 +221,17 @@ class SilverBarHistoryDialog(QDialog):
         self.bars_model = HistorySilverBarsTableModel(self)
         self.bars_table = QTableView()
         self.bars_table.setModel(self.bars_model)
-        self.bars_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.bars_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.bars_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.bars_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
         self.bars_table.setAlternatingRowColors(True)
         self.bars_table.setSortingEnabled(True)
         self.bars_table.verticalHeader().setVisible(False)
 
-        self.bars_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.bars_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Interactive
+        )
         self.bars_table.setColumnWidth(0, 80)
         self.bars_table.setColumnWidth(1, 260)
         self.bars_table.setColumnWidth(2, 100)
@@ -241,7 +244,7 @@ class SilverBarHistoryDialog(QDialog):
         self.bars_table.horizontalHeader().setStretchLastSection(True)
 
         # Context menu for bars table
-        self.bars_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.bars_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.bars_table.customContextMenuRequested.connect(self.show_bars_context_menu)
 
         layout.addWidget(self.bars_table)
@@ -268,14 +271,16 @@ class SilverBarHistoryDialog(QDialog):
         self.lists_model = IssuedSilverBarListsTableModel(self)
         self.lists_table = QTableView()
         self.lists_table.setModel(self.lists_model)
-        self.lists_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.lists_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.lists_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.lists_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
         self.lists_table.setAlternatingRowColors(True)
         self.lists_table.setSortingEnabled(True)
         self.lists_table.verticalHeader().setVisible(False)
 
         self.lists_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.Interactive
+            QHeaderView.ResizeMode.Interactive
         )
         self.lists_table.setColumnWidth(0, 80)
         self.lists_table.setColumnWidth(1, 160)
@@ -286,7 +291,7 @@ class SilverBarHistoryDialog(QDialog):
         self.lists_table.horizontalHeader().setStretchLastSection(True)
 
         # Context menu for lists table
-        self.lists_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.lists_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.lists_table.customContextMenuRequested.connect(
             self.show_lists_context_menu
         )
@@ -307,13 +312,17 @@ class SilverBarHistoryDialog(QDialog):
         self.list_bars_model = HistoryListBarsTableModel(self)
         self.list_bars_table = QTableView()
         self.list_bars_table.setModel(self.list_bars_model)
-        self.list_bars_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.list_bars_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.list_bars_table.setEditTriggers(
+            QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        self.list_bars_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
         self.list_bars_table.setAlternatingRowColors(True)
         self.list_bars_table.setSortingEnabled(True)
         self.list_bars_table.verticalHeader().setVisible(False)
         self.list_bars_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.Interactive
+            QHeaderView.ResizeMode.Interactive
         )
         self.list_bars_table.setColumnWidth(0, 80)
         self.list_bars_table.setColumnWidth(1, 260)
@@ -381,7 +390,9 @@ class SilverBarHistoryDialog(QDialog):
         thread.start()
 
     @staticmethod
-    def _table_cell_value(table, row: int, column: int, role: int = Qt.DisplayRole):
+    def _table_cell_value(
+        table, row: int, column: int, role: int = Qt.ItemDataRole.DisplayRole
+    ):
         try:
             model = table.model()
             if model is None:
@@ -395,7 +406,7 @@ class SilverBarHistoryDialog(QDialog):
 
     @classmethod
     def _table_cell_text(cls, table, row: int, column: int) -> str:
-        value = cls._table_cell_value(table, row, column, Qt.DisplayRole)
+        value = cls._table_cell_value(table, row, column, Qt.ItemDataRole.DisplayRole)
         return "" if value is None else str(value)
 
     @staticmethod
@@ -508,7 +519,7 @@ class SilverBarHistoryDialog(QDialog):
                 row = dict(lst) if not isinstance(lst, dict) else dict(lst)
                 try:
                     row["bar_count"] = counts_by_list.get(int(row["list_id"]), 0)
-                except (TypeError, ValueError, KeyError):
+                except TypeError, ValueError, KeyError:
                     row["bar_count"] = 0
                 rows.append(row)
             self.lists_model.set_rows(rows)
@@ -598,11 +609,11 @@ class SilverBarHistoryDialog(QDialog):
             f"• Move the list back to active lists\n"
             f"• Set all bars in the list back to 'Assigned' status\n"
             f"• Remove the issued date",
-            QMessageBox.Yes | QMessageBox.Cancel,
-            QMessageBox.Cancel,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
         )
 
-        if reply == QMessageBox.Yes:
+        if reply == QMessageBox.StandardButton.Yes:
             try:
                 success = self.db_manager.reactivate_silver_bar_list(list_id)
                 if not success:
@@ -626,7 +637,7 @@ class SilverBarHistoryDialog(QDialog):
             refresh_action = menu.addAction("Refresh")
             copy_action = menu.addAction("Copy Selected Rows")
 
-            action = menu.exec_(self.bars_table.viewport().mapToGlobal(pos))
+            action = menu.exec(self.bars_table.viewport().mapToGlobal(pos))
 
             if action == refresh_action:
                 self.load_all_bars()
@@ -651,7 +662,7 @@ class SilverBarHistoryDialog(QDialog):
                 bool(self.lists_table.selectionModel().selectedRows())
             )
 
-            action = menu.exec_(self.lists_table.viewport().mapToGlobal(pos))
+            action = menu.exec(self.lists_table.viewport().mapToGlobal(pos))
 
             if action == reactivate_action:
                 self.reactivate_list()
@@ -711,7 +722,7 @@ class SilverBarHistoryDialog(QDialog):
                 )
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Escape:
+        if event.key() == Qt.Key.Key_Escape:
             self.reject()
         else:
             super().keyPressEvent(event)
@@ -767,4 +778,4 @@ if __name__ == "__main__":
     db_manager = MockDBManager()
     dialog = SilverBarHistoryDialog(db_manager)
     dialog.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

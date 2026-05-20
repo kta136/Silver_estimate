@@ -1,15 +1,13 @@
 #!/usr/bin/env python
 import sys
 
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QFont
+from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
     QDialog,
     QDialogButtonBox,
-    QDoubleSpinBox,
-    QFontComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -17,6 +15,7 @@ from PyQt5.QtWidgets import (
 )
 
 from .shared_screen_theme import build_management_screen_stylesheet
+from .themed_controls import ThemedDoubleSpinBox, ThemedFontComboBox
 
 
 class CustomFontDialog(QDialog):
@@ -45,13 +44,13 @@ class CustomFontDialog(QDialog):
                 input_selectors=["QFontComboBox", "QDoubleSpinBox"],
                 extra_rules="""
                 QLabel#CustomFontPreviewLabel {
-                    color: #0f172a;
+                    color: __TEXT_STRONG__;
                     font-size: 10pt;
                     font-weight: 600;
                 }
                 QFrame#CustomFontSampleFrame {
-                    background-color: #ffffff;
-                    border: 1px solid #d8e1ec;
+                    background-color: __SURFACE_BG__;
+                    border: 1px solid __CARD_BORDER__;
                     border-radius: 10px;
                 }
                 """,
@@ -62,10 +61,10 @@ class CustomFontDialog(QDialog):
             initial_font = QApplication.font()  # Default to application font
 
         # --- Widgets ---
-        self.font_combo = QFontComboBox(self)
+        self.font_combo = ThemedFontComboBox(self)
         self.font_combo.setCurrentFont(initial_font)
 
-        self.size_spinbox = QDoubleSpinBox(self)
+        self.size_spinbox = ThemedDoubleSpinBox(self)
         self.size_spinbox.setRange(5.0, 100.0)  # Minimum size 5.0
         self.size_spinbox.setSingleStep(0.5)
         self.size_spinbox.setDecimals(1)  # Allow one decimal place
@@ -81,15 +80,16 @@ class CustomFontDialog(QDialog):
 
         self.preview_label = QLabel("AaBbYyZz", self)
         self.preview_label.setMinimumHeight(60)
-        self.preview_label.setAlignment(Qt.AlignCenter)
+        self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.button_box = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            self,
         )
-        self.button_box.button(QDialogButtonBox.Ok).setObjectName(
+        self.button_box.button(QDialogButtonBox.StandardButton.Ok).setObjectName(
             "CustomFontPrimaryButton"
         )
-        self.button_box.button(QDialogButtonBox.Cancel).setObjectName(
+        self.button_box.button(QDialogButtonBox.StandardButton.Cancel).setObjectName(
             "CustomFontSecondaryButton"
         )
 
@@ -196,7 +196,7 @@ class CustomFontDialog(QDialog):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     dialog = CustomFontDialog()
-    if dialog.exec_() == QDialog.Accepted:
+    if dialog.exec() == QDialog.DialogCode.Accepted:
         font = dialog.get_selected_font()
         import logging
 

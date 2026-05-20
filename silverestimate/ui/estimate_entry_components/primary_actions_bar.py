@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt5.QtCore import QSize, Qt, pyqtSignal
-from PyQt5.QtGui import QKeySequence
-from PyQt5.QtWidgets import QHBoxLayout, QPushButton, QShortcut, QSizePolicy, QWidget
+from PyQt6.QtCore import QSize, Qt, pyqtSignal
+from PyQt6.QtGui import QKeySequence, QShortcut
+from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QSizePolicy, QWidget
 
 from silverestimate.ui.icons import get_icon
 
@@ -32,7 +32,7 @@ class PrimaryActionsBar(QWidget):
     def _setup_ui(self) -> None:
         """Set up the user interface with compact spacing."""
         self.setObjectName("PrimaryActionStrip")
-        self.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+        self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
 
         layout = QHBoxLayout(self)
         layout.setSpacing(3)
@@ -104,7 +104,7 @@ class PrimaryActionsBar(QWidget):
         # Ctrl+S and Ctrl+P are handled by menu bar (ApplicationShortcut)
         # Only register Ctrl+N here for new estimate
         new_shortcut = QShortcut(QKeySequence("Ctrl+N"), target)
-        new_shortcut.setContext(Qt.WindowShortcut)
+        new_shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
         new_shortcut.activated.connect(self.new_clicked.emit)
         self._shortcuts.append(new_shortcut)
 

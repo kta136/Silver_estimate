@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
-from PyQt5.QtWidgets import QDialog, QMessageBox, QWidget
+from PyQt6.QtWidgets import QDialog, QMessageBox, QWidget
 
 from silverestimate.infrastructure.app_constants import DB_PATH, LOG_DIR
 from silverestimate.infrastructure.settings import get_app_settings
@@ -102,9 +102,9 @@ def run_authentication(
                 attempt,
             )
             login_dialog = login_dialog_cls(is_setup=False, parent=parent)
-            result = login_dialog.exec_()
+            result = login_dialog.exec()
 
-            if result != QDialog.Accepted:
+            if result != QDialog.DialogCode.Accepted:
                 if logger:
                     logger.info("Login cancelled by user")
                 return None
@@ -152,8 +152,8 @@ def run_authentication(
         time.time(),
     )
     setup_dialog = login_dialog_cls(is_setup=True, parent=parent)
-    result = setup_dialog.exec_()
-    if result == QDialog.Accepted:
+    result = setup_dialog.exec()
+    if result == QDialog.DialogCode.Accepted:
         if logger:
             logger.info("First-time setup completed")
         password = setup_dialog.get_password()

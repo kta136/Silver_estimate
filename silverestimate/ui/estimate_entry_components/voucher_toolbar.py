@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QDate, Qt, pyqtSignal
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import QDate, Qt, pyqtSignal
+from PyQt6.QtWidgets import (
     QAbstractSpinBox,
     QDateEdit,
     QDoubleSpinBox,
@@ -37,7 +37,7 @@ class VoucherToolbar(QWidget):
         """
         super().__init__(parent)
         self.setObjectName("VoucherToolbar")
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._setup_ui()
         self._connect_signals()
 
@@ -52,14 +52,16 @@ class VoucherToolbar(QWidget):
         self.unsaved_badge.setAccessibleName("Unsaved Changes Indicator")
         self.unsaved_badge.setVisible(False)
         self.unsaved_badge.setToolTip("Unsaved changes")
-        self.unsaved_badge.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self.unsaved_badge.setAlignment(Qt.AlignCenter)
+        self.unsaved_badge.setSizePolicy(
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
+        )
+        self.unsaved_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.unsaved_badge)
 
         self.mode_indicator_label = QLabel("Mode: Regular")
         self.mode_indicator_label.setObjectName("EstimateModeBadge")
         self.mode_indicator_label.setProperty("modeState", "regular")
-        self.mode_indicator_label.setAlignment(Qt.AlignCenter)
+        self.mode_indicator_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.mode_indicator_label.setToolTip(
             "Current mode: Regular Items\nCtrl+R: Return Items\nCtrl+B: Silver Bars"
         )
@@ -67,9 +69,11 @@ class VoucherToolbar(QWidget):
 
         self.status_message_label = QLabel("")
         self.status_message_label.setObjectName("EstimateStatusLabel")
-        self.status_message_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.status_message_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
         self.status_message_label.setSizePolicy(
-            QSizePolicy.Fixed, QSizePolicy.Preferred
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred
         )
 
         voucher_label = QLabel("Voucher")
@@ -106,7 +110,7 @@ class VoucherToolbar(QWidget):
         self.silver_rate_spin.setRange(0, 1000000)
         self.silver_rate_spin.setDecimals(2)
         self.silver_rate_spin.setValue(0.0)
-        self.silver_rate_spin.setButtonSymbols(QAbstractSpinBox.NoButtons)
+        self.silver_rate_spin.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         self.silver_rate_spin.setMaximumWidth(96)
         self.silver_rate_spin.setToolTip("Silver rate (₹/kg)")
         layout.addWidget(self.silver_rate_spin)

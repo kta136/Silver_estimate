@@ -5,19 +5,22 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
-from PyQt5 import sip
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtWidgets import QAbstractItemView, QApplication
+from PyQt6 import sip
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtWidgets import QAbstractItemView, QApplication
 
 from ._host_proxy import HostProxy
 from .adapters import EstimateTableAdapter
+from .estimate_entry_logic.column_specs import (
+    first_navigation_column,
+    is_auto_edit_column,
+    is_row_recalculation_column,
+    navigation_columns,
+    should_auto_advance_after_edit,
+)
 from .estimate_entry_logic.constants import (
     COL_CODE,
-    COL_GROSS,
     COL_PIECES,
-    COL_POLY,
-    COL_PURITY,
-    COL_WAGE_RATE,
 )
 
 
@@ -119,7 +122,7 @@ class EstimateEntryTableController(HostProxy):
             target_col = COL_CODE
         try:
             self.item_table.setCurrentCell(row, target_col)
-        except (AttributeError, RuntimeError, TypeError, ValueError):
+        except AttributeError, RuntimeError, TypeError, ValueError:
             pass
         self.current_row = row
         self.current_column = target_col
@@ -128,7 +131,7 @@ class EstimateEntryTableController(HostProxy):
     def cell_clicked(self, row, column):
         self.current_row = row
         self.current_column = column
-        if column in self.EDITABLE_ENTRY_COLS:
+        if is_auto_edit_column(column):
             self._request_edit_cell(row, column, delay_ms=0)
 
     def selection_changed(self):
@@ -146,7 +149,7 @@ class EstimateEntryTableController(HostProxy):
     def current_cell_changed(self, currentRow, currentCol, previousRow, previousCol):
         try:
             mouse_pressed = bool(QApplication.mouseButtons())
-        except (AttributeError, RuntimeError):
+        except AttributeError, RuntimeError:
             mouse_pressed = False
         row_changed = (
             previousRow is not None
@@ -163,7 +166,7 @@ class EstimateEntryTableController(HostProxy):
         self.current_row = currentRow
         self.current_column = currentCol
         if (
-            currentCol in self.EDITABLE_ENTRY_COLS
+            is_auto_edit_column(currentCol)
             and 0 <= currentRow < self.item_table.rowCount()
         ):
             if row_changed and self._manual_row_nav_recent():
@@ -186,17 +189,19 @@ class EstimateEntryTableController(HostProxy):
         try:
             if column == COL_CODE:
                 self.process_item_code()
-            elif column in [COL_GROSS, COL_POLY, COL_PURITY, COL_WAGE_RATE]:
+            elif is_row_recalculation_column(column):
                 self._recompute_row_derived_values(row)
-                self._schedule_auto_advance_from(row, column)
-            elif column == COL_PIECES:
-                self._recompute_row_derived_values(row)
-                if row == self.item_table.rowCount() - 1:
-                    code_text = self.item_table.get_cell_text(row, COL_CODE).strip()
-                    if code_text:
-                        QTimer.singleShot(10, self.add_empty_row)
-                else:
-                    self._schedule_focus_code_from(row, column, row + 1, delay_ms=10)
+                if column == COL_PIECES:
+                    if row == self.item_table.rowCount() - 1:
+                        code_text = self.item_table.get_cell_text(row, COL_CODE).strip()
+                        if code_text:
+                            QTimer.singleShot(10, self.add_empty_row)
+                    else:
+                        self._schedule_focus_code_from(
+                            row, column, row + 1, delay_ms=10
+                        )
+                elif should_auto_advance_after_edit(column):
+                    self._schedule_auto_advance_from(row, column)
             else:
                 self._schedule_totals_recalc()
 
@@ -276,7 +281,7 @@ class EstimateEntryTableController(HostProxy):
     def _is_code_empty(self, row):
         try:
             return not self.item_table.get_cell_text(row, COL_CODE).strip()
-        except (AttributeError, RuntimeError, TypeError):
+        except AttributeError, RuntimeError, TypeError:
             return True
 
     def _enforce_code_required(self, target_row, target_col, show_hint=True):
@@ -304,7 +309,7 @@ class EstimateEntryTableController(HostProxy):
                         finally:
                             self._enforcing_code_nav = False
                         return False
-        except (AttributeError, RuntimeError, TypeError, ValueError):
+        except AttributeError, RuntimeError, TypeError, ValueError:
             return True
         return True
 
@@ -342,7 +347,7 @@ class EstimateEntryTableController(HostProxy):
                 self.item_table.setCurrentCell(next_row, next_col)
             finally:
                 self.item_table.blockSignals(False)
-            if next_col in self.EDITABLE_ENTRY_COLS:
+            if is_auto_edit_column(next_col):
                 QTimer.singleShot(10, lambda: self._safe_edit_item(next_row, next_col))
 
     def move_to_previous_cell(self):
@@ -362,41 +367,34 @@ class EstimateEntryTableController(HostProxy):
             QTimer.singleShot(10, lambda: self._safe_edit_item(prev_row, prev_col))
 
     def _next_edit_target(self, row: int, col: int) -> tuple[int, int]:
-        if col == COL_CODE:
-            return row, COL_GROSS
-        if col == COL_GROSS:
-            return row, COL_POLY
-        if col == COL_POLY:
-            return row, COL_PURITY
-        if col == COL_PURITY:
-            return row, COL_WAGE_RATE
-        if col == COL_WAGE_RATE:
-            if self._is_pieces_editable_for_row(row):
-                return row, COL_PIECES
-            return row + 1, COL_CODE
-        if col == COL_PIECES:
-            return row + 1, COL_CODE
-        return row, COL_CODE
+        columns = self._navigation_columns_for_row(row)
+        if col not in columns:
+            return row, first_navigation_column()
+
+        position = columns.index(col)
+        if position + 1 < len(columns):
+            return row, columns[position + 1]
+        return row + 1, first_navigation_column()
 
     def _previous_edit_target(self, row: int, col: int) -> tuple[int, int]:
-        if col == COL_PIECES:
-            return row, COL_WAGE_RATE
-        if col == COL_WAGE_RATE:
-            return row, COL_PURITY
-        if col == COL_PURITY:
-            return row, COL_POLY
-        if col == COL_POLY:
-            return row, COL_GROSS
-        if col == COL_GROSS:
-            return row, COL_CODE
-        if col == COL_CODE:
-            if row > 0:
-                prev_row = row - 1
-                if self._is_pieces_editable_for_row(prev_row):
-                    return prev_row, COL_PIECES
-                return prev_row, COL_WAGE_RATE
-            return 0, COL_CODE
-        return row, COL_CODE
+        columns = self._navigation_columns_for_row(row)
+        if col in columns:
+            position = columns.index(col)
+            if position > 0:
+                return row, columns[position - 1]
+
+        if row > 0 and col in columns and col == columns[0]:
+            prev_row = row - 1
+            previous_columns = self._navigation_columns_for_row(prev_row)
+            return prev_row, previous_columns[-1]
+
+        return max(row, 0), first_navigation_column()
+
+    def _navigation_columns_for_row(self, row: int) -> tuple[int, ...]:
+        columns = list(navigation_columns())
+        if COL_PIECES in columns and not self._is_pieces_editable_for_row(row):
+            columns.remove(COL_PIECES)
+        return tuple(columns) or (COL_CODE,)
 
     def focus_on_code_column(self, row):
         try:
@@ -443,7 +441,7 @@ class EstimateEntryTableController(HostProxy):
                 return
             if self._loading_estimate:
                 return
-            if table.state() == QAbstractItemView.EditingState:
+            if table.state() == QAbstractItemView.State.EditingState:
                 current = table.currentIndex()
                 if (
                     current.isValid()
@@ -455,7 +453,9 @@ class EstimateEntryTableController(HostProxy):
             model = table.model()
             if model and not sip.isdeleted(model):
                 index = model.index(row, col)
-                if index.isValid() and (model.flags(index) & Qt.ItemIsEditable):
+                if index.isValid() and (
+                    model.flags(index) & Qt.ItemFlag.ItemIsEditable
+                ):
                     table.setCurrentIndex(index)
                     table.edit(index)
         except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
@@ -483,8 +483,8 @@ class EstimateEntryTableController(HostProxy):
             index = model.index(row, COL_PIECES)
             if not index.isValid():
                 return True
-            return bool(model.flags(index) & Qt.ItemIsEditable)
-        except (AttributeError, RuntimeError, TypeError):
+            return bool(model.flags(index) & Qt.ItemFlag.ItemIsEditable)
+        except AttributeError, RuntimeError, TypeError:
             return True
 
     def _should_force_code_focus(self) -> bool:
@@ -503,21 +503,21 @@ class EstimateEntryTableController(HostProxy):
             if hasattr(table, "isAncestorOf") and table.isAncestorOf(focus_widget):
                 return True
             return False
-        except (AttributeError, RuntimeError, TypeError):
+        except AttributeError, RuntimeError, TypeError:
             return False
 
     def _get_cell_float(self, row, col, default=0.0):
         value = self.item_table.get_cell_edit_value(row, col)
         try:
             return float(value) if value not in (None, "") else default
-        except (AttributeError, TypeError, ValueError):
+        except AttributeError, TypeError, ValueError:
             return default
 
     def _get_cell_int(self, row, col, default=1):
         value = self.item_table.get_cell_edit_value(row, col)
         try:
             return int(value) if value not in (None, "") else default
-        except (AttributeError, TypeError, ValueError):
+        except AttributeError, TypeError, ValueError:
             return default
 
     def _schedule_cell_edit(self, row, col):
@@ -537,7 +537,7 @@ class EstimateEntryTableController(HostProxy):
             return
         if row < 0 or col < 0 or row >= self.item_table.rowCount():
             return
-        if col not in self.EDITABLE_ENTRY_COLS:
+        if not is_auto_edit_column(col):
             return
         if self.item_table.is_cell_editable(row, col):
             self._safe_edit_item(row, col)

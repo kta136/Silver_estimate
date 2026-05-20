@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from silverestimate.ui.silver_bar_history import SilverBarHistoryDialog
 
@@ -143,12 +143,16 @@ def test_history_dialog_loads_models_and_reactivates_list(
     del settings_stub
     db = _FakeSilverBarHistoryDb()
     monkeypatch.setattr(
-        QMessageBox, "question", lambda *args, **kwargs: QMessageBox.Yes
+        QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.Yes
     )
     monkeypatch.setattr(
-        QMessageBox, "information", lambda *args, **kwargs: QMessageBox.Ok
+        QMessageBox,
+        "information",
+        lambda *args, **kwargs: QMessageBox.StandardButton.Ok,
     )
-    monkeypatch.setattr(QMessageBox, "critical", lambda *args, **kwargs: QMessageBox.Ok)
+    monkeypatch.setattr(
+        QMessageBox, "critical", lambda *args, **kwargs: QMessageBox.StandardButton.Ok
+    )
 
     dialog = SilverBarHistoryDialog(db)
     qtbot.addWidget(dialog)

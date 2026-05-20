@@ -7,12 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.9] - 2026-05-20
+
+### Added
+- Added a Qt6 startup bootstrap that disables Windows dark-mode leakage, keeps pytest-qt on PyQt6, and applies high-DPI rounding policy early.
+- Added shared light-theme infrastructure for application-wide QSS/palette coverage, management-screen tokens, and visible-arrow combo/spinbox controls.
+- Added `print_page_settings.py` to centralize Qt6 page size, orientation, margin, printer, and custom-page helpers.
+- Added an estimate table column-spec registry for headers, editability, precision, widths, editor type, and keyboard navigation order.
+- Added regression tests for the Qt6 bootstrap, application light theme, visible-arrow controls, print/PDF hardening, and table column contract.
+
 ### Changed
-- Bumped application/package version to `2.8.8`
-- Updated project README version header and badge to `v2.8.8`
+- Bumped application/package version to `2.8.9`
+- Updated project README version header and badge to `v2.8.9`
+- Upgraded the desktop runtime to PyQt6-only and removed PyQt5 compatibility, stubs, packaging paths, and Qt5 residue.
+- Updated the PyInstaller spec and local Windows build script for PyQt6/Qt6 resources and Python 3.14 dependency sync.
+- Expanded strict light styling across settings, login, file dialogs, menus, combo popups, message boxes, item views, management screens, and print preview controls.
+- Refactored printing and PDF export to use Qt6 page layout helpers, stale-printer validation, and temp-file replacement before overwriting a target PDF.
+- Refactored estimate table model/delegate/controller paths to consume shared column specs while preserving the existing fast-entry workflow.
+
+### Removed
+- Removed the stale `pyinstaller-windows.err` PyQt5 build log from the repository.
 
 ### Fixed
 - Kept the modern estimate print layout final totals at one decimal place instead of rounding them to whole rupees
+- Restored visible up/down arrows and combo dropdown arrows under the app's Qt stylesheet.
+- Prevented long settings-sidebar labels from creating a horizontal scrollbar.
+- Guarded PDF export so an empty failed render does not replace an existing output file.
 
 ## [2.8.7] - 2026-03-15
 

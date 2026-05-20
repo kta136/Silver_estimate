@@ -7,7 +7,8 @@ A PyQt6 desktop application for silver shops that combines encrypted persistence
 ## Core Architecture
 
 ### 1. Application Shell
-- `silverestimate/infrastructure/application.py` contains the `ApplicationBuilder`, which configures logging, installs the Qt message handler, performs authentication, and owns the QApplication lifecycle before handing off to the main window.
+- `silverestimate/infrastructure/application.py` contains the `ApplicationBuilder`, which configures logging, installs the Qt message handler, performs authentication, applies the app light theme, and owns the QApplication lifecycle before handing off to the main window.
+- `silverestimate/infrastructure/qt_bootstrap.py` applies Qt6 process-level startup options before QApplication creation: Windows dark-mode suppression, non-native dialog handling where needed, and high-DPI scale-factor rounding policy.
 - `main.py` is a thin entry point that constructs the builder and delegates startup/shutdown.
 - Controllers, presenter, and services are still wired inside `MainWindow`, while the builder guarantees graceful shutdown (flush scheduler drain, encryption re-seal, controller teardown).
 
@@ -30,7 +31,12 @@ A PyQt6 desktop application for silver shops that combines encrypted persistence
 
 ### 5. UI Layer
 - **`silverestimate/ui/estimate_entry.py`**: composite widget that wires UI helpers, presenter callbacks, and logic mixins.
-- **`silverestimate/ui/estimate_entry_logic/`**: shared estimate-table column constants consumed by models, formatting helpers, and tests.
+- **`silverestimate/ui/estimate_entry_logic/column_specs.py`**: table contract registry for estimate-entry headers, editable columns, precision, widths, editor type, and navigation order. Models, delegates, controllers, formatting helpers, and tests consume this registry instead of duplicating column rules.
+- **Theme helpers**:
+  - `application_theme.py`: app-level Fusion light palette/QSS for dialogs, menus, popups, item views, buttons, scrollbars, and disabled/inactive palette roles.
+  - `theme_tokens.py` / `shared_screen_theme.py`: shared color tokens and management-screen styles used by settings, history, item master, login, and silver-bar dialogs.
+  - `themed_controls.py`: small PyQt6 combo/spinbox subclasses that repaint visible arrows after stylesheet rendering, preserving control affordances.
+- **Print helpers**: `print_page_settings.py`, `print_manager.py`, `print_preview_controller.py`, and `settings_print_controller.py` share Qt6 `QPageLayout`/`QPageSize`/`QPrinter` helpers for page setup, margins, orientation, quick print, and PDF export.
 - **`silverestimate/ui/item_master.py`**: CRUD console with validation, search, and bulk operations.
 - **`silverestimate/ui/silver_bar_management.py`**: list-based bar inventory manager with print/export and issuance workflows.
 - **`silverestimate/ui/estimate_history.py` / `silverestimate/ui/silver_bar_history.py`**: history browsers with filtering, reactivation, and batch actions.
@@ -84,7 +90,7 @@ MainWindow
 
 ## Technical Stack
 - Python 3.14+
-- PyQt6 6.11
+- PyQt6 6.11 / Qt 6.11 runtime
 - SQLite 3 with WAL mode for concurrency-friendly access
 - `cryptography` for AES-GCM payload encryption
 - `passlib[argon2]` and `argon2_cffi` for password hashing
@@ -93,6 +99,8 @@ MainWindow
 
 ## Architectural Notes
 - UI and presenter separation keeps heavy logic outside Qt widgets and simplifies unit testing.
+- The app is PyQt6-only. Do not reintroduce PyQt5 compatibility shims; `qt_api`/`QT_API` should remain pinned to PyQt6 for tests and packaging.
+- Strict light mode is a product requirement. New screens should use shared tokens/helpers and avoid native dark-mode leakage.
 - Repositories shield the UI from raw SQL and centralise integrity checks.
 - QSettings stores user preferences, salts, and crash recovery hints (temporary DB path).
 - Automatic log cleanup (timer-driven) prevents unbounded growth when retention is enabled.
@@ -101,6 +109,6 @@ MainWindow
 
 ## Extension Points
 - Additional presenters (e.g., for future dialogs) can follow the `EstimateEntryPresenter` pattern with protocol-defined views.
-- New services (reporting, remote sync) should follow the existing service pattern with explicit wiring from `main.py`.
+- New services (reporting, remote sync) should follow the existing service pattern with explicit wiring through `MainWindow`, controllers, or `ApplicationBuilder` depending on ownership.
 - Packaging changes belong in `SilverEstimate.spec` and `.github/workflows/release-windows.yml` so CI and local builds stay aligned.
 - Domain models can expand under `silverestimate/domain/` to keep persistence and presenter layers strongly typed.

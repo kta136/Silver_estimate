@@ -4,6 +4,7 @@
 - Primary target: Windows 10/11 desktops.
 - Build system: PyInstaller 6.x driven from `SilverEstimate.spec`.
 - Runtime Python: 3.14.
+- GUI runtime: PyQt6 6.11 / Qt 6.11. PyQt5 is no longer supported or packaged.
 - Artifacts: a single executable in `dist/`, later zipped for release publishing.
 
 ## Local Windows Packaging
@@ -20,20 +21,23 @@
    - Clean rebuild through nox: `uv run nox -s build_clean`
 4. Output artifact:
    - `dist/SilverEstimate.exe`
-5. Optionally zip the executable manually for distribution.
+   - `dist/SilverEstimate-v<version>.exe`
+   - `dist/SilverEstimate-v<version>-win64.zip`
+5. Optionally zip the executable manually for distribution if not using `nox -s build_clean`.
 
 ### Manual PyInstaller Invocation
 - Spec file: `SilverEstimate.spec` (canonical and required for builds).
-- Hidden imports and other packaging settings live in the spec file.
+- Hidden imports, PyQt6/Qt6 plugin filtering, qtawesome data collection, and other packaging settings live in the spec file.
 - Add datas or icons by editing the spec file if new resources are introduced.
 - Use `--clean` for release builds or after packaging changes; omit it for faster repeat local builds when you want PyInstaller to reuse cached analysis results.
+- Do not add PyQt5/Qt5 bundle paths; the package is PyQt6-only and the spec filters Qt6 resources explicitly.
 
 ## Continuous Delivery (GitHub Actions)
 Workflow: `.github/workflows/release-windows.yml`.
 - Trigger: pushing a tag matching `v*` (e.g., `v1.72.7`).
 - Jobs:
   - Checkout repository.
-  - Install Python 3.14 and project dependencies from `pyproject.toml` (including PyQt6 6.11 and `pyinstaller` for packaging).
+  - Install Python 3.14 and project dependencies from `pyproject.toml` / `uv.lock` (including PyQt6 6.11 and `pyinstaller` for packaging).
   - Build the executable from `SilverEstimate.spec`.
   - Rename artifact to `SilverEstimate-<tag>.exe` and zip as `SilverEstimate-<tag>-win64.zip`.
   - Publish the zip to the GitHub Release using `softprops/action-gh-release`.
@@ -52,14 +56,22 @@ Workflow: `.github/workflows/release-windows.yml`.
 - Fallback local bootstrap: `python -m venv .venv`, activate it, then `python -m pip install -e ".[dev]"`.
 
 ## Testing Before Packaging
-- Run `pytest` from the repo root (requires developer dependencies such as `pytest` and `pytest-qt`; pytest is configured to use PyQt6).
+- Run `uv run --extra dev nox -s ruff` before packaging.
+- Run `uv run --extra dev nox -s tests_fast` for the fast unit/integration gate.
+- For UI/theme regressions, run `uv run --extra dev pytest tests/unit/test_application_theme.py tests/unit/test_themed_controls.py tests/ui/test_settings_dialog.py -q`.
+- Run `pytest` from the repo root for a broader local pass when needed (requires developer dependencies such as `pytest` and `pytest-qt`; pytest is configured to use PyQt6).
 - Ensure the application starts with `python main.py` before freezing.
 - Verify encrypted database handling by launching the packaged build, creating a password (ensure the OS keyring is available), saving a sample estimate, closing, and reopening.
+- With Windows dark mode enabled, open settings, login, item master, silver-bar screens, print preview, combo popups, message boxes, and file dialogs. They should remain light.
+- For print/PDF changes, smoke-test Classic, Modern, Thermal, silver-bar inventory/list exports, quick print with no/stale/valid printer, and PDF export replacement behavior.
 
 ## Common Troubleshooting
 - **Missing DLLs:** Ensure the host machine has the Microsoft Visual C++ redistributables. PyInstaller bundles the interpreter but relies on system runtimes.
 - **Antivirus false positives:** Sign the executable when distributing to customers; CI output is unsigned. Consider submitting the binary to Microsoft Defender for pre-approval.
 - **Stale virtual environment:** Delete `.venv/` if dependency versions are inconsistent, then reinstall with `python -m pip install -e ".[dev]"`.
+- **Wrong Qt binding selected:** Delete `.venv/`, run `uv sync --extra dev`, and confirm `uv run python -c "import PyQt6; print(PyQt6.__file__)"` resolves. The project sets PyQt6 binding defaults for tests and packaging.
+- **Dark native dialogs:** Confirm `silverestimate/infrastructure/qt_bootstrap.py` is called before QApplication creation and the app is not being launched through a wrapper that overrides Qt platform options.
+- **Invisible combo/spinbox arrows:** New dialog controls should use `ThemedComboBox`, `ThemedSpinBox`, or `ThemedDoubleSpinBox` when the shared QSS is applied.
 - **Spec updates ignored:** Remove `build/` and `dist/` folders to force PyInstaller to regenerate caches after editing the spec.
 
 ## Future Enhancements

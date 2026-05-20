@@ -1,11 +1,11 @@
-# Silver Estimation App - v2.8.8
+# Silver Estimation App - v2.8.9
 
 A desktop application built with PyQt6 and an encrypted SQLite database for managing silver sales estimates - item-wise entries, silver bar inventory, returns, and print-ready outputs.
 
 [![Python](https://img.shields.io/badge/Python-3.14+-blue.svg)](https://www.python.org/)
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.11-green.svg)](https://www.riverbankcomputing.com/software/pyqt/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v2.8.8-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v2.8.9-orange.svg)](CHANGELOG.md)
 [![PR Validation](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml)
 [![Main Validation](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml)
 [![Release Windows](https://github.com/kta136/Silver_estimate/actions/workflows/release-windows.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/release-windows.yml)
@@ -47,17 +47,19 @@ The app helps silver shops to:
 - Track gross, net, and fine weights; wages (PC/WT)
 - Manage silver bar inventory and returns
 - Print formatted estimate slips with Indian rupee formatting
+- Keep the desktop UI in a strict light theme across Windows dark mode, dialogs, popups, and print preview controls
 - Store all data locally with file-level encryption
 - Back up and restore item catalogs
 
 ## Architecture
 
 - **UI layer**: PyQt6 widgets in `silverestimate/ui/` handle estimate entry, item master, silver bar management, history, and supporting dialogs.
+- **Theme layer**: `silverestimate/ui/application_theme.py`, `theme_tokens.py`, `shared_screen_theme.py`, and `themed_controls.py` keep the app on a strict light theme and preserve visible combo/spinbox arrows under Qt stylesheets.
 - **Presenter**: `silverestimate/presenter/estimate_entry_presenter.py` coordinates estimate workflows, keeping UI widgets thin and testable.
 - **Controllers**: Startup, navigation, and live-rate controllers bootstrap the app, wire menus/toolbars, and manage background refresh cadence.
 - **Services**: `MainCommands`, `SettingsService`, `LiveRateService`, and `AuthService` encapsulate reusable logic; authentication relies on the secure credential store.
 - **Persistence**: `DatabaseManager` plus repository classes (`items`, `estimates`, `silver_bars`) manage the decrypted working copy, WAL checkpoints, and AES-GCM encryption.
-- **Security & infrastructure**: OS keyring-backed credential storage (`silverestimate/security/credential_store.py`), structured logging with optional cleanup scheduler, and QSettings helpers maintain app state safely.
+- **Security & infrastructure**: OS keyring-backed credential storage (`silverestimate/security/credential_store.py`), Qt6 startup bootstrap (`silverestimate/infrastructure/qt_bootstrap.py`), structured logging with optional cleanup scheduler, and QSettings helpers maintain app state safely.
 
 ### Live Rate Maintainer Notes
 
@@ -90,6 +92,7 @@ See also: `DOCS/project-architecture.md`.
 ### Printing & Reporting
 - Print-ready estimate layouts with INR formatting
 - Print preview and configurable fonts/sizes
+- Shared Qt6 page setup helpers for page size, orientation, margins, printer validation, and safer PDF export
 
 ### Catalog Backup
 - Export item catalogs to a native `.seitems.json` backup file
@@ -158,21 +161,26 @@ First run notes:
 - Settings: Qt QSettings (`SETTINGS_ORG`, `SETTINGS_APP`) in `silverestimate/infrastructure/app_constants.py`
 - Paths: DB path via `DB_PATH` in `silverestimate/infrastructure/app_constants.py`
 - Printing: Fonts and sizes configurable via Settings dialog
+- UI: The app forces Qt's Fusion-style light palette/QSS during startup and uses non-native dialogs where needed so Windows dark mode does not leak into file dialogs
 
 ## Development
 
 Key areas of the codebase:
 
-- `main.py` – application entry point plus main window bootstrapping.
+- `main.py` – thin application entry point.
+- `silverestimate/infrastructure/application.py` – `ApplicationBuilder` and QApplication lifecycle.
+- `silverestimate/infrastructure/qt_bootstrap.py` – Qt6 startup options for Windows dark-mode suppression and high-DPI rounding.
 - `silverestimate/controllers/` – startup, navigation, and live-rate controllers.
 - `silverestimate/presenter/estimate_entry_presenter.py` – presenter coordinating save/load logic and calculations.
 - `silverestimate/ui/estimate_entry.py` – main estimate widget combining UI helpers and presenter.
-- `silverestimate/ui/estimate_entry_logic/` – shared estimate-table column constants used by models, formatting helpers, and tests.
+- `silverestimate/ui/estimate_entry_logic/column_specs.py` – shared estimate-table column registry for headers, editability, precision, widths, and navigation order.
+- `silverestimate/ui/application_theme.py`, `theme_tokens.py`, `shared_screen_theme.py`, and `themed_controls.py` – strict light theme and reusable desktop controls.
+- `silverestimate/ui/print_page_settings.py` – Qt6 print/page helper functions used by settings, preview, quick print, and PDF export paths.
 - `silverestimate/services/` – auth, settings, live-rate, main commands, and repository adapters.
 - `silverestimate/persistence/` – `DatabaseManager`, repositories, migrations, and flush scheduler.
 - `silverestimate/security/` – AES-GCM utilities and keyring-backed credential storage.
 - `silverestimate/infrastructure/` – logging, settings helpers, and app constants.
-- `DOCS/` – deep-dive documentation (architecture, API reference, deployment, security, etc.).
+- `DOCS/` – deep-dive documentation for architecture, deployment, and security.
 
 Recommended development commands with `uv`:
 
@@ -190,6 +198,8 @@ uv run pre-commit run --all-files
 - Tests live under `tests/` and use pytest (with `pytest-qt` pinned to PyQt6 for UI hooks).
 - Local smoke command: `pytest -v tests/test_security.py tests/services/test_auth_service.py`
 - Full local run: `pytest -v`
+- Fast local gate: `uv run --extra dev nox -s tests_fast`
+- Theme/control regression checks: `uv run --extra dev pytest tests/unit/test_application_theme.py tests/unit/test_themed_controls.py tests/ui/test_settings_dialog.py -q`
 - Shared validation entrypoints:
   - `uv run nox -s pr` for the required PR gate set
   - `uv run nox -s ci` for the required main-branch gate set
@@ -206,7 +216,7 @@ uv run pre-commit run --all-files
 - Prereqs: Python 3.14+, PowerShell
 - Fast iteration: `uv run nox -s build`
 - Clean rebuild: `python -m PyInstaller --clean --noconfirm SilverEstimate.spec` or `uv run nox -s build_clean`
-- Output: `dist/SilverEstimate.exe` on Windows
+- Output: `dist/SilverEstimate.exe`, `dist/SilverEstimate-v2.8.9.exe`, and `dist/SilverEstimate-v2.8.9-win64.zip` on Windows
 - Release/CI builds use the clean spec-based path; local `nox -s build` reuses PyInstaller caches for faster iteration
 
 ### GitHub Release (Windows CI)
@@ -245,9 +255,8 @@ For support and troubleshooting:
 - GitHub Issues: report bugs and request features
 - Documentation quick links:
   - [Project architecture](DOCS/project-architecture.md)
-  - [API reference](DOCS/api-reference.md)
   - [Security architecture](DOCS/security-architecture.md)
-  - [Performance baseline thresholds](DOCS/performance-baseline-thresholds.md)
+  - [Deployment guide](DOCS/deployment-guide.md)
 
 ## License
 
@@ -258,6 +267,12 @@ c 2023-2025 Silver Estimation App
 ---
 
 ## Version History (highlights)
+
+### v2.8.9 (2026-05-20)
+- Upgraded the app to PyQt6-only with Python 3.14-oriented dependency and packaging updates
+- Added strict light theme coverage across dialogs, menus, popups, settings, management screens, and print preview controls
+- Hardened Qt6 printing/PDF helpers for page size, margins, orientation, stale printers, temp-file PDF replacement, and quick print validation
+- Introduced the estimate table column registry and visible-arrow themed controls for combo/spinbox widgets
 
 ### v2.8.1 (2026-03-08)
 - Fixed the follow-up lint and type-check issues from the `v2.8` release so `main` validation is green again

@@ -8,6 +8,11 @@ def test_custom_font_dialog_returns_selected_font(qtbot):
     dialog = CustomFontDialog(initial_font=initial)
     qtbot.addWidget(dialog)
     try:
+        assert dialog.minimumWidth() == 420
+        assert dialog.font_combo.objectName() == "CustomFontFamilyCombo"
+        assert dialog.size_spinbox.objectName() == "CustomFontSizeSpin"
+        assert dialog.size_spinbox.maximumWidth() <= 130
+        assert "QDialogButtonBox QPushButton" in dialog.styleSheet()
         dialog.size_spinbox.setValue(11.5)
         dialog.bold_checkbox.setChecked(True)
 

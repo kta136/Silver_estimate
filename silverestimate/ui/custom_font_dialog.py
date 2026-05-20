@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
 
 from .shared_screen_theme import build_management_screen_stylesheet
 from .themed_controls import ThemedDoubleSpinBox, ThemedFontComboBox
+from .window_sizing import resize_to_available_screen
 
 
 class CustomFontDialog(QDialog):
@@ -26,7 +27,7 @@ class CustomFontDialog(QDialog):
     def __init__(self, initial_font=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Font Settings")
-        self.setMinimumWidth(400)
+        self.setMinimumSize(420, 360)
         self.setObjectName("CustomFontDialog")
         self.setStyleSheet(
             build_management_screen_stylesheet(
@@ -53,8 +54,17 @@ class CustomFontDialog(QDialog):
                     border: 1px solid __CARD_BORDER__;
                     border-radius: 10px;
                 }
+                QLabel#CustomFontSampleText {
+                    color: __TEXT_STRONG__;
+                    font-weight: 600;
+                }
                 """,
             )
+        )
+        resize_to_available_screen(
+            self,
+            preferred_width=520,
+            preferred_height=470,
         )
 
         if initial_font is None:
@@ -62,23 +72,30 @@ class CustomFontDialog(QDialog):
 
         # --- Widgets ---
         self.font_combo = ThemedFontComboBox(self)
+        self.font_combo.setObjectName("CustomFontFamilyCombo")
+        self.font_combo.setMinimumWidth(260)
         self.font_combo.setCurrentFont(initial_font)
 
         self.size_spinbox = ThemedDoubleSpinBox(self)
+        self.size_spinbox.setObjectName("CustomFontSizeSpin")
         self.size_spinbox.setRange(5.0, 100.0)  # Minimum size 5.0
         self.size_spinbox.setSingleStep(0.5)
         self.size_spinbox.setDecimals(1)  # Allow one decimal place
+        self.size_spinbox.setMinimumWidth(110)
+        self.size_spinbox.setMaximumWidth(130)
         # Set initial value carefully, QFont.pointSizeF() might be needed if available
         # QFont.pointSize() returns int, so use that for initial setting if pointSizeF isn't reliable
-        initial_size = initial_font.pointSize()
+        initial_size = initial_font.pointSizeF()
         if initial_size < 5:
             initial_size = 5.0
         self.size_spinbox.setValue(float(initial_size))  # Use float for QDoubleSpinBox
 
         self.bold_checkbox = QCheckBox("Bold", self)
+        self.bold_checkbox.setObjectName("CustomFontBoldCheckbox")
         self.bold_checkbox.setChecked(initial_font.bold())
 
-        self.preview_label = QLabel("AaBbYyZz", self)
+        self.preview_label = QLabel("AaBb123", self)
+        self.preview_label.setObjectName("CustomFontSampleText")
         self.preview_label.setMinimumHeight(60)
         self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 

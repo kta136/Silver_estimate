@@ -160,6 +160,11 @@ def test_history_dialog_loads_models_and_reactivates_list(
     qtbot.waitUntil(lambda: dialog.isVisible(), timeout=1000)
     qtbot.waitUntil(lambda: dialog.bars_model.rowCount() == 2, timeout=1000)
 
+    assert dialog.minimumWidth() <= 780
+    assert dialog.minimumHeight() <= 520
+    assert dialog.status_combo.minimumWidth() >= 132
+    assert dialog.max_rows_spin.minimumWidth() >= 96
+    assert "QComboBox QAbstractItemView" in dialog.styleSheet()
     assert dialog.lists_model.rowCount() == 1
     assert dialog._table_cell_text(dialog.lists_table, 0, 5) == "2"
 

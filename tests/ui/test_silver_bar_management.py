@@ -357,6 +357,12 @@ def test_management_dialog_omits_purity_range_filters(qtbot, settings_stub):
     dialog = SilverBarDialog(_FakeSilverBarManagementDb())
     qtbot.addWidget(dialog)
 
+    assert dialog.minimumWidth() <= 900
+    assert dialog.minimumHeight() <= 560
+    assert dialog.available_bars_table.objectName() == "SilverBarAvailableTable"
+    assert dialog.list_info_label.objectName() == "SilverBarListInfoLabel"
+    assert dialog.weight_search_edit.isClearButtonEnabled() is True
+    assert "QToolTip" in dialog.styleSheet()
     assert dialog.findChild(QFrame, "SilverBarManagementHeaderCard") is None
     assert hasattr(dialog, "purity_min_spin") is False
     assert hasattr(dialog, "purity_max_spin") is False

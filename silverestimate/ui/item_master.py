@@ -159,7 +159,8 @@ class ItemMasterWidget(QWidget):
         # ── LEFT: Form panel ────────────────────────────────────
         self._form_panel = QFrame(self)
         self._form_panel.setObjectName("ItemMasterFormPanel")
-        self._form_panel.setFixedWidth(280)
+        self._form_panel.setMinimumWidth(280)
+        self._form_panel.setMaximumWidth(340)
         form_vbox = QVBoxLayout(self._form_panel)
         form_vbox.setContentsMargins(16, 16, 16, 16)
         form_vbox.setSpacing(10)
@@ -212,6 +213,7 @@ class ItemMasterWidget(QWidget):
         wt_lbl.setObjectName("ItemMasterFieldLabel")
         self.wage_type_combo = ThemedComboBox()
         self.wage_type_combo.addItems(["PC", "WT"])
+        self.wage_type_combo.setMinimumWidth(92)
         self.wage_type_combo.setToolTip("PC = Per Piece  |  WT = Per Weight (gram)")
         wt_col.addWidget(wt_lbl)
         wt_col.addWidget(self.wage_type_combo)
@@ -286,6 +288,10 @@ class ItemMasterWidget(QWidget):
         search_row.addWidget(self.search_edit)
         self._item_count_label = QLabel("")
         self._item_count_label.setObjectName("ItemMasterCountLabel")
+        self._item_count_label.setMinimumWidth(96)
+        self._item_count_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
         search_row.addWidget(self._item_count_label)
         right_col.addLayout(search_row)
 

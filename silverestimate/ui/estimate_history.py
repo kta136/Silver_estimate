@@ -6,7 +6,6 @@ from functools import partial
 from PyQt6.QtCore import QDate, QObject, Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QAbstractItemView,
-    QDateEdit,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -27,6 +26,8 @@ from silverestimate.ui.models import EstimateHistoryRow, EstimateHistoryTableMod
 from .icons import get_icon
 from .print_manager import PrintManager, PrintPreviewBuildWorker
 from .shared_screen_theme import build_management_screen_stylesheet
+from .themed_controls import ThemedDateEdit
+from .window_sizing import resize_to_available_screen
 
 
 class EstimateHistoryDialog(QDialog):
@@ -49,7 +50,12 @@ class EstimateHistoryDialog(QDialog):
     def init_ui(self):
         """Set up the user interface."""
         self.setWindowTitle("Estimate History")
-        self.setMinimumSize(960, 540)
+        self.setMinimumSize(820, 500)
+        resize_to_available_screen(
+            self,
+            preferred_width=1040,
+            preferred_height=640,
+        )
         self.setObjectName("EstimateHistoryDialog")
         self.setStyleSheet(
             build_management_screen_stylesheet(
@@ -68,6 +74,9 @@ class EstimateHistoryDialog(QDialog):
                 input_selectors=["QLineEdit", "QDateEdit"],
                 include_table=True,
                 extra_rules="""
+                QLabel#HistorySubtitleLabel {
+                    font-size: 8.7pt;
+                }
                 QLabel#HistorySummaryLabel {
                     background-color: __HEADER_BG__;
                     border: 1px solid __CARD_BORDER__;
@@ -87,6 +96,10 @@ class EstimateHistoryDialog(QDialog):
                 }
                 QTableView::item {
                     padding: 4px 6px;
+                }
+                QDateEdit {
+                    min-width: 120px;
+                    max-width: 138px;
                 }
                 QHeaderView::section {
                     background-color: __HEADER_BG__;
@@ -111,6 +124,10 @@ class EstimateHistoryDialog(QDialog):
         header_label = QLabel("Estimate History")
         header_label.setObjectName("HistoryTitleLabel")
         header_layout.addWidget(header_label, 0, Qt.AlignmentFlag.AlignLeft)
+        subtitle_label = QLabel("Find, open, print, or delete saved estimates.")
+        subtitle_label.setObjectName("HistorySubtitleLabel")
+        subtitle_label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        header_layout.addWidget(subtitle_label, 0, Qt.AlignmentFlag.AlignVCenter)
         header_layout.addStretch(1)
         layout.addWidget(header_card)
 
@@ -123,20 +140,22 @@ class EstimateHistoryDialog(QDialog):
         from_label = QLabel("From")
         from_label.setObjectName("HistoryFieldLabel")
         filter_layout.addWidget(from_label)
-        self.date_from = QDateEdit()
+        self.date_from = ThemedDateEdit()
         self.date_from.setCalendarPopup(True)
         first_estimate_date = self._resolve_first_estimate_date()
         self.date_from.setDate(first_estimate_date)
-        self.date_from.setFixedWidth(118)
+        self.date_from.setMinimumWidth(124)
+        self.date_from.setMaximumWidth(138)
         filter_layout.addWidget(self.date_from)
 
         to_label = QLabel("To")
         to_label.setObjectName("HistoryFieldLabel")
         filter_layout.addWidget(to_label)
-        self.date_to = QDateEdit()
+        self.date_to = ThemedDateEdit()
         self.date_to.setCalendarPopup(True)
         self.date_to.setDate(QDate.currentDate())
-        self.date_to.setFixedWidth(118)
+        self.date_to.setMinimumWidth(124)
+        self.date_to.setMaximumWidth(138)
         filter_layout.addWidget(self.date_to)
 
         voucher_label = QLabel("Voucher No")
@@ -155,12 +174,14 @@ class EstimateHistoryDialog(QDialog):
         self.search_button = QPushButton("Search")
         self.search_button.setObjectName("HistoryPrimaryButton")
         self.search_button.setIcon(get_icon("search", widget=self, color="#ffffff"))
+        self.search_button.setMinimumWidth(88)
         self.search_button.clicked.connect(self.load_estimates)
         filter_layout.addWidget(self.search_button)
 
         self.results_summary_label = QLabel("Loading estimates...")
         self.results_summary_label.setObjectName("HistorySummaryLabel")
         self.results_summary_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.results_summary_label.setMinimumWidth(150)
         filter_layout.addWidget(self.results_summary_label)
 
         layout.addWidget(filter_card)

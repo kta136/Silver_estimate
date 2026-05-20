@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from PyQt6.QtGui import QPalette
 from PyQt6.QtWidgets import (
+    QCalendarWidget,
     QCheckBox,
     QComboBox,
     QDialogButtonBox,
     QGroupBox,
+    QInputDialog,
     QListView,
     QMessageBox,
+    QProgressDialog,
     QRadioButton,
     QScrollArea,
     QTableView,
@@ -84,7 +87,10 @@ def test_build_light_application_stylesheet_covers_popup_dialog_and_view_surface
     for selector in (
         "QDialog",
         "QMessageBox",
+        "QInputDialog",
+        "QProgressDialog",
         "QToolTip",
+        "QCalendarWidget QToolButton",
         "QGroupBox",
         "QTabWidget::pane",
         "QTabBar::tab:selected",
@@ -97,6 +103,8 @@ def test_build_light_application_stylesheet_covers_popup_dialog_and_view_surface
         "QTableView::item:selected:!active",
         "QSpinBox::up-button",
         "QDoubleSpinBox::down-button",
+        "QDateEdit::up-button",
+        "QDateTimeEdit::down-button",
         "QPushButton:disabled",
         "QToolButton:disabled",
         "QCheckBox::indicator:checked",
@@ -163,6 +171,9 @@ def test_apply_light_application_theme_allows_headless_widget_instantiation(qt_a
 
         widgets = [
             QMessageBox(),
+            QInputDialog(),
+            QProgressDialog(),
+            QCalendarWidget(),
             QDialogButtonBox(
                 QDialogButtonBox.StandardButton.Ok
                 | QDialogButtonBox.StandardButton.Cancel

@@ -1,4 +1,5 @@
 from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QLineEdit
 
 from silverestimate.ui.login_dialog import LoginDialog
 
@@ -10,6 +11,10 @@ def test_login_dialog_separates_reset_action_from_primary_actions(qtbot):
         assert dialog.ok_button.text() == "Login"
         assert dialog.ok_button.objectName() == "LoginPrimaryButton"
         assert dialog.cancel_button.objectName() == "LoginSecondaryButton"
+        assert dialog.password_input.isClearButtonEnabled() is True
+        assert dialog.width() >= dialog.minimumWidth()
+        assert "QMenu::item:selected" in dialog.styleSheet()
+        assert "QToolTip" in dialog.styleSheet()
         assert hasattr(dialog, "reset_button")
         assert dialog.reset_button.objectName() == "LoginDangerButton"
     finally:
@@ -24,6 +29,8 @@ def test_setup_dialog_omits_reset_action_and_keeps_secondary_fields(qtbot):
         assert not hasattr(dialog, "reset_button")
         assert dialog.backup_password_label.text() == "Recovery Password:"
         assert dialog.confirm_password_label.text() == "Confirm Recovery Password:"
+        assert dialog.backup_password_input.isClearButtonEnabled() is True
+        assert dialog.confirm_password_input.isClearButtonEnabled() is True
     finally:
         dialog.deleteLater()
 
@@ -32,21 +39,15 @@ def test_login_dialog_show_passwords_toggle_updates_echo_modes(qtbot):
     dialog = LoginDialog(is_setup=True)
     qtbot.addWidget(dialog)
     try:
-        assert dialog.password_input.echoMode() == dialog.password_input.Password
-        assert (
-            dialog.backup_password_input.echoMode()
-            == dialog.backup_password_input.Password
-        )
-        assert (
-            dialog.confirm_password_input.echoMode()
-            == dialog.confirm_password_input.Password
-        )
+        assert dialog.password_input.echoMode() == QLineEdit.EchoMode.Password
+        assert dialog.backup_password_input.echoMode() == QLineEdit.EchoMode.Password
+        assert dialog.confirm_password_input.echoMode() == QLineEdit.EchoMode.Password
 
         dialog.show_passwords_checkbox.setChecked(True)
 
-        assert dialog.password_input.echoMode() == dialog.password_input.Normal
-        assert dialog.backup_password_input.echoMode() == dialog.password_input.Normal
-        assert dialog.confirm_password_input.echoMode() == dialog.password_input.Normal
+        assert dialog.password_input.echoMode() == QLineEdit.EchoMode.Normal
+        assert dialog.backup_password_input.echoMode() == QLineEdit.EchoMode.Normal
+        assert dialog.confirm_password_input.echoMode() == QLineEdit.EchoMode.Normal
     finally:
         dialog.deleteLater()
 

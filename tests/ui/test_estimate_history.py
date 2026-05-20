@@ -2,6 +2,7 @@ from PyQt6.QtCore import QItemSelectionModel
 from PyQt6.QtWidgets import QFrame
 
 from silverestimate.ui.estimate_history import EstimateHistoryDialog
+from silverestimate.ui.themed_controls import ThemedDateEdit
 
 
 class _ButtonStub:
@@ -213,6 +214,11 @@ def test_estimate_history_uses_compact_top_controls(qtbot, monkeypatch):
 
         assert header_card is not None
         assert filter_card is not None
+        assert dialog.minimumWidth() <= 820
+        assert isinstance(dialog.date_from, ThemedDateEdit)
+        assert isinstance(dialog.date_to, ThemedDateEdit)
+        assert dialog.date_from.maximumWidth() <= 180
+        assert "QCalendarWidget QToolButton" in dialog.styleSheet()
         assert header_card.height() <= 54
         assert filter_card.height() <= 56
         assert dialog.estimates_table.viewport().height() >= 560

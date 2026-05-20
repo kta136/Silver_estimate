@@ -36,6 +36,16 @@ from silverestimate.ui.print_page_settings import (
     validate_quick_print_printer,
 )
 from silverestimate.ui.print_payload_builder import PrintPreviewPayload
+from silverestimate.ui.theme_tokens import (
+    CARD_BORDER,
+    CARD_BORDER_SOFT,
+    FIELD_TEXT,
+    HEADER_BG,
+    INPUT_BORDER,
+    SELECTION_BG,
+    SURFACE_BG,
+    TEXT_STRONG,
+)
 from silverestimate.ui.themed_controls import ThemedComboBox, ThemedSpinBox
 
 LOGGER = logging.getLogger(__name__)
@@ -208,15 +218,66 @@ class PrintPreviewController:
             return
 
         toolbar.clear()
+        toolbar.setObjectName("PrintPreviewToolbar")
         toolbar.setMovable(False)
+        toolbar.setFloatable(False)
+        toolbar.setContentsMargins(4, 4, 4, 4)
         toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-        toolbar.setIconSize(QSize(24, 24))
-        toolbar.setStyleSheet("""
-            QToolButton {
-                min-width: 40px;
-                min-height: 40px;
-                padding: 6px;
-            }
+        toolbar.setIconSize(QSize(22, 22))
+        toolbar.setStyleSheet(f"""
+            QToolBar#PrintPreviewToolbar {{
+                background-color: {HEADER_BG};
+                border: 1px solid {CARD_BORDER};
+                spacing: 4px;
+                padding: 4px;
+            }}
+            QToolBar#PrintPreviewToolbar QToolButton {{
+                background-color: {SURFACE_BG};
+                border: 1px solid {INPUT_BORDER};
+                border-radius: 8px;
+                color: {TEXT_STRONG};
+                min-width: 34px;
+                min-height: 34px;
+                padding: 4px;
+            }}
+            QToolBar#PrintPreviewToolbar QToolButton:hover {{
+                background-color: {SELECTION_BG};
+                border-color: {FIELD_TEXT};
+            }}
+            QToolBar#PrintPreviewToolbar QToolButton:checked {{
+                background-color: {SELECTION_BG};
+                border-color: {FIELD_TEXT};
+            }}
+            QToolBar#PrintPreviewToolbar QToolButton:disabled {{
+                background-color: {CARD_BORDER_SOFT};
+                border-color: {CARD_BORDER};
+                color: {FIELD_TEXT};
+            }}
+            QToolBar#PrintPreviewToolbar::separator {{
+                background-color: {CARD_BORDER_SOFT};
+                height: 1px;
+                width: 1px;
+                margin: 6px;
+            }}
+            QWidget#PreviewPageNavigator {{
+                background-color: {SURFACE_BG};
+                border: 1px solid {INPUT_BORDER};
+                border-radius: 8px;
+            }}
+            QWidget#PreviewPageNavigator QLabel {{
+                color: {FIELD_TEXT};
+            }}
+            QComboBox#PreviewOrientationCombo,
+            QComboBox#PreviewLayoutCombo {{
+                min-width: 128px;
+                max-width: 150px;
+                min-height: 28px;
+            }}
+            QSpinBox#PreviewPageSpin {{
+                min-width: 64px;
+                max-width: 80px;
+                min-height: 28px;
+            }}
             """)
 
         payload = state["payload"]
@@ -451,6 +512,9 @@ class PrintPreviewController:
     def _build_orientation_combo(self, preview: QPrintPreviewDialog) -> ThemedComboBox:
         combo = ThemedComboBox(preview)
         combo.setObjectName("PreviewOrientationCombo")
+        combo.setMinimumWidth(128)
+        combo.setMaximumWidth(150)
+        combo.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         combo.setToolTip("Choose paper orientation for this preview")
         combo.addItem("Portrait", QPageLayout.Orientation.Portrait)
         combo.addItem("Landscape", QPageLayout.Orientation.Landscape)
@@ -469,6 +533,9 @@ class PrintPreviewController:
     ) -> ThemedComboBox:
         combo = ThemedComboBox(preview)
         combo.setObjectName("PreviewLayoutCombo")
+        combo.setMinimumWidth(128)
+        combo.setMaximumWidth(150)
+        combo.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         combo.setToolTip("Switch the estimate print layout without leaving preview")
         for layout_mode in payload.available_layouts:
             combo.addItem(
@@ -485,14 +552,18 @@ class PrintPreviewController:
     ) -> tuple[ThemedSpinBox, QLabel]:
         container = QWidget(preview)
         container.setObjectName("PreviewPageNavigator")
+        container.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         layout = QHBoxLayout(container)
-        layout.setContentsMargins(4, 0, 4, 0)
-        layout.setSpacing(4)
+        layout.setContentsMargins(8, 2, 8, 2)
+        layout.setSpacing(6)
 
         label = QLabel("Page", container)
         spin = ThemedSpinBox(container)
+        spin.setObjectName("PreviewPageSpin")
         spin.setRange(1, 1)
-        spin.setMinimumWidth(72)
+        spin.setMinimumWidth(64)
+        spin.setMaximumWidth(80)
+        spin.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         spin.setAlignment(Qt.AlignmentFlag.AlignRight)
         spin.setToolTip("Jump directly to a page number")
         total_label = QLabel("/ 1", container)

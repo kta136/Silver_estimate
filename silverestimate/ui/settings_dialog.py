@@ -2,7 +2,7 @@
 import logging  # Ensure logging is available for getLogger calls
 
 from PyQt6.QtCore import QSize, Qt, QUrl, pyqtSignal
-from PyQt6.QtGui import QDesktopServices, QFont
+from PyQt6.QtGui import QDesktopServices, QFont, QGuiApplication
 from PyQt6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -19,6 +19,8 @@ from PyQt6.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
+    QScrollArea,
+    QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -61,8 +63,7 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.main_window = main_window_ref  # Store reference to main window
         self.setWindowTitle("Application Settings")
-        self.setMinimumWidth(640)
-        self.setMinimumHeight(720)
+        self.setMinimumSize(620, 540)
         self.setObjectName("SettingsDialog")
         self.setStyleSheet(
             build_management_screen_stylesheet(
@@ -85,6 +86,13 @@ class SettingsDialog(QDialog):
                     color: {TEXT_STRONG};
                 }}
                 QFrame#SettingsPageCard {{
+                    background-color: {SURFACE_BG};
+                }}
+                QScrollArea#SettingsPageScroll {{
+                    background-color: {SURFACE_BG};
+                    border: none;
+                }}
+                QScrollArea#SettingsPageScroll > QWidget > QWidget {{
                     background-color: {SURFACE_BG};
                 }}
                 QListWidget#SettingsSidebar {{
@@ -124,6 +132,10 @@ class SettingsDialog(QDialog):
                 QLabel#SettingsMutedDescription {{
                     color: {TEXT_MUTED};
                     font-size: 9pt;
+                }}
+                QLabel#SettingsValueLabel {{
+                    color: {TEXT_STRONG};
+                    font-weight: 600;
                 }}
                 QPushButton {{
                     background-color: {HEADER_BG};
@@ -180,9 +192,10 @@ class SettingsDialog(QDialog):
         self.sidebar.setFrameShape(QFrame.Shape.NoFrame)
         self.sidebar.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.sidebar.setTextElideMode(Qt.TextElideMode.ElideRight)
-        self.sidebar.setFixedWidth(180)
+        self.sidebar.setFixedWidth(205)
 
         self.pages = QStackedWidget()
+        self.pages.setObjectName("SettingsPages")
 
         # Build pages list
         page_defs = [
@@ -295,12 +308,23 @@ class SettingsDialog(QDialog):
         page_card.setObjectName("SettingsPageCard")
         page_card_layout = QVBoxLayout(page_card)
         page_card_layout.setContentsMargins(12, 12, 12, 12)
-        page_card_layout.addWidget(self.pages)
+        page_card_layout.setSpacing(0)
+
+        self.page_scroll = QScrollArea(page_card)
+        self.page_scroll.setObjectName("SettingsPageScroll")
+        self.page_scroll.setWidgetResizable(True)
+        self.page_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.page_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.page_scroll.setWidget(self.pages)
+        page_card_layout.addWidget(self.page_scroll)
         content.addWidget(page_card, 1)
 
         layout.addLayout(content)
         layout.addWidget(self.buttonBox)  # Use self.buttonBox here
         self.setLayout(layout)
+        self._resize_to_available_screen()
 
         # If changes fired during construction, reflect pending dirty state
         if getattr(self, "_dirty", False):
@@ -314,22 +338,35 @@ class SettingsDialog(QDialog):
         """Create the User Interface settings tab."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
         form_layout = QFormLayout()
-        form_layout.setSpacing(10)
-        form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        self._configure_settings_form(form_layout)
 
         # Print Font
         self.print_font_button = QPushButton("Configure Print Font...")
+        self.print_font_button.setMinimumWidth(190)
+        self.print_font_button.setSizePolicy(
+            QSizePolicy.Policy.Fixed,
+            QSizePolicy.Policy.Fixed,
+        )
         self.print_font_button.setToolTip(
             "Set font family, size, and style for printed estimates\nAffects only printed output, not screen display\nRecommended: Monospace fonts like Courier New\nClick to open font selection dialog"
         )
         self.print_font_label = QLabel(
             self._get_font_display_text(self._current_print_font)
         )  # Show current setting
+        self.print_font_label.setObjectName("SettingsValueLabel")
+        self.print_font_label.setWordWrap(True)
+        self.print_font_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        self.print_font_label.setMinimumWidth(150)
         self.print_font_button.clicked.connect(self._show_print_font_dialog)
         self.print_font_button.clicked.connect(self._mark_dirty)
         font_layout = QHBoxLayout()
-        font_layout.addWidget(self.print_font_label)
+        font_layout.setSpacing(10)
+        font_layout.addWidget(self.print_font_label, 1)
         font_layout.addWidget(self.print_font_button)
         form_layout.addRow("Print Font:", font_layout)
 
@@ -349,7 +386,7 @@ class SettingsDialog(QDialog):
             "Set font size for the main estimate entry table\nRange: 7–16 points\nAffects table readability and screen space usage\nRecommended: 9-11 for most users"
         )
         self.table_font_size_spin.setSuffix(" pt")
-        self.table_font_size_spin.setMinimumWidth(80)
+        self._polish_field_control(self.table_font_size_spin, width=160)
         self.table_font_size_spin.valueChanged.connect(self._mark_dirty)
         form_layout.addRow("Estimate Table Font Size:", self.table_font_size_spin)
 
@@ -361,7 +398,7 @@ class SettingsDialog(QDialog):
             "Text size for Regular/Return/Silver Bar totals\nRange: 7–16 points\nControls left-side totals display\nShould match or be smaller than table font"
         )
         self.breakdown_font_size_spin.setSuffix(" pt")
-        self.breakdown_font_size_spin.setMinimumWidth(80)
+        self._polish_field_control(self.breakdown_font_size_spin, width=160)
         self.breakdown_font_size_spin.valueChanged.connect(self._mark_dirty)
         form_layout.addRow("Totals (Left) Font Size:", self.breakdown_font_size_spin)
 
@@ -373,7 +410,7 @@ class SettingsDialog(QDialog):
             "Text size for Final Calculation panel\nRange: 8–20 points\nControls right-side grand totals display\nCan be larger for emphasis"
         )
         self.final_calc_font_size_spin.setSuffix(" pt")
-        self.final_calc_font_size_spin.setMinimumWidth(80)
+        self._polish_field_control(self.final_calc_font_size_spin, width=160)
         self.final_calc_font_size_spin.valueChanged.connect(self._mark_dirty)
         form_layout.addRow(
             "Final Calculation Font Size:", self.final_calc_font_size_spin
@@ -392,6 +429,7 @@ class SettingsDialog(QDialog):
             "Right/Left preserves maximum table height.\n"
             "Bottom uses footer area and can reduce visible rows."
         )
+        self._polish_field_control(self.totals_position_combo, width=260)
         self.totals_position_combo.currentIndexChanged.connect(self._mark_dirty)
         form_layout.addRow("Totals Panel Position:", self.totals_position_combo)
 
@@ -406,11 +444,12 @@ class SettingsDialog(QDialog):
         """Create the Live Rates settings tab (DDASilver auto-refresh)."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(10)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
 
         group = QGroupBox("DDASilver Live Rate")
         form = QFormLayout(group)
-        form.setSpacing(8)
+        self._configure_settings_form(form)
 
         # Enable live rate display and fetching
         live_enabled_default = True
@@ -439,6 +478,7 @@ class SettingsDialog(QDialog):
         except Exception:
             interval_sec = 60
         self.live_interval_spin.setValue(max(5, interval_sec))
+        self._polish_field_control(self.live_interval_spin, width=160)
         self.live_interval_spin.valueChanged.connect(self._mark_dirty)
         form.addRow("Refresh Interval:", self.live_interval_spin)
 
@@ -471,9 +511,10 @@ class SettingsDialog(QDialog):
         """Create the Printing settings tab."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
         form_layout = QFormLayout()
-        form_layout.setSpacing(10)
-        form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        self._configure_settings_form(form_layout)
 
         # --- Margins ---
         margins_label = QLabel("Page Margins (mm):")
@@ -490,8 +531,11 @@ class SettingsDialog(QDialog):
         ]:
             spin.setRange(0, 50)  # Allow 0-50mm margins
             spin.setSuffix(" mm")
+            self._polish_field_control(spin, width=135)
             spin.valueChanged.connect(self._mark_dirty)
 
+        margins_layout.setHorizontalSpacing(10)
+        margins_layout.setVerticalSpacing(8)
         margins_layout.addWidget(QLabel("Left:"), 0, 0)
         margins_layout.addWidget(self.margin_left_spin, 0, 1)
         margins_layout.addWidget(QLabel("Top:"), 0, 2)
@@ -511,12 +555,14 @@ class SettingsDialog(QDialog):
         self.preview_zoom_spin.setToolTip(
             "Default zoom factor for print preview (e.g., 1.0 = 100%, 1.25 = 125%)"
         )
+        self._polish_field_control(self.preview_zoom_spin, width=160)
         self.preview_zoom_spin.valueChanged.connect(self._mark_dirty)
         form_layout.addRow("Preview Default Zoom:", self.preview_zoom_spin)
 
         # --- Default Printer ---
         self.printer_combo = ThemedComboBox()
         self.printer_combo.setToolTip("Default printer for printing and quick print")
+        self._polish_field_control(self.printer_combo, width=320)
         self._print_settings_controller.refresh_printer_list(self.printer_combo)
         self.printer_combo.currentIndexChanged.connect(self._mark_dirty)
         form_layout.addRow("Default Printer:", self.printer_combo)
@@ -525,6 +571,7 @@ class SettingsDialog(QDialog):
         self.page_size_combo = ThemedComboBox()
         self.page_size_combo.addItems(["A4", "A5", "Letter", "Legal", "Thermal 80mm"])
         self.page_size_combo.setToolTip("Default page size for printing")
+        self._polish_field_control(self.page_size_combo, width=240)
         self.page_size_combo.currentIndexChanged.connect(self._mark_dirty)
         form_layout.addRow("Page Size:", self.page_size_combo)
 
@@ -532,6 +579,7 @@ class SettingsDialog(QDialog):
         self.orientation_combo = ThemedComboBox()
         self.orientation_combo.addItems(["Portrait", "Landscape"])
         self.orientation_combo.setToolTip("Default page orientation for printing")
+        self._polish_field_control(self.orientation_combo, width=240)
         self.orientation_combo.currentIndexChanged.connect(self._mark_dirty)
         form_layout.addRow("Orientation:", self.orientation_combo)
 
@@ -541,6 +589,7 @@ class SettingsDialog(QDialog):
         self.estimate_layout_combo.addItem("Modern (New)", "new")
         self.estimate_layout_combo.addItem("Thermal (80mm)", "thermal")
         self.estimate_layout_combo.setToolTip("Choose the estimate print layout")
+        self._polish_field_control(self.estimate_layout_combo, width=260)
         self.estimate_layout_combo.currentIndexChanged.connect(self._mark_dirty)
         form_layout.addRow("Estimate Layout:", self.estimate_layout_combo)
 
@@ -556,7 +605,8 @@ class SettingsDialog(QDialog):
         """Create the Data Management settings tab."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(15)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
 
         description = QLabel(
             "<b>WARNING:</b> These actions permanently delete data and cannot be undone. "
@@ -567,6 +617,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(description)
 
         button_layout = QHBoxLayout()
+        button_layout.setSpacing(10)
 
         self.delete_estimates_button = QPushButton("Delete All Estimates...")
         self.delete_estimates_button.setObjectName("SettingsDangerButton")
@@ -593,6 +644,7 @@ class SettingsDialog(QDialog):
 
         backup_group = QGroupBox("Item Master Backup")
         backup_layout = QVBoxLayout(backup_group)
+        backup_layout.setSpacing(10)
 
         restore_button = QPushButton("Restore Item Backup...")
         restore_button.setToolTip(
@@ -623,6 +675,8 @@ class SettingsDialog(QDialog):
         """Create the Logging settings tab."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
 
         # Description label
         description = QLabel(
@@ -636,6 +690,7 @@ class SettingsDialog(QDialog):
         # Debug mode section
         debug_group = QGroupBox("Debug Settings")
         debug_layout = QVBoxLayout(debug_group)
+        debug_layout.setSpacing(8)
 
         # Debug mode checkbox
         self.debug_mode_checkbox = QCheckBox("Enable Debug Mode")
@@ -659,6 +714,7 @@ class SettingsDialog(QDialog):
         # Log level toggles group
         log_levels_group = QGroupBox("Log Levels")
         log_levels_layout = QVBoxLayout(log_levels_group)
+        log_levels_layout.setSpacing(8)
 
         # Normal logs (INFO)
         self.enable_info_checkbox = QCheckBox("Enable Normal Logs (INFO)")
@@ -706,6 +762,7 @@ class SettingsDialog(QDialog):
         # Auto cleanup group
         cleanup_group = QGroupBox("Automatic Log Cleanup")
         cleanup_layout = QVBoxLayout(cleanup_group)
+        cleanup_layout.setSpacing(8)
 
         # Auto cleanup checkbox
         self.auto_cleanup_checkbox = QCheckBox("Automatically Delete Old Logs")
@@ -725,6 +782,7 @@ class SettingsDialog(QDialog):
         cleanup_days = self.settings.value("logging/cleanup_days", 1, type=int)
         self.cleanup_days_spin.setValue(cleanup_days)
         self.cleanup_days_spin.setEnabled(auto_cleanup)
+        self._polish_field_control(self.cleanup_days_spin, width=150)
         cleanup_days_layout.addWidget(self.cleanup_days_spin)
         self.cleanup_days_spin.valueChanged.connect(self._mark_dirty)
         cleanup_days_layout.addStretch()
@@ -745,6 +803,7 @@ class SettingsDialog(QDialog):
         # Utilities
         utils_group = QGroupBox("Utilities")
         utils_layout = QHBoxLayout(utils_group)
+        utils_layout.setSpacing(10)
         self.manual_cleanup_button = QPushButton("Clean Up Logs Now…")
         self.manual_cleanup_button.setToolTip("Manually delete old log files")
         self.manual_cleanup_button.clicked.connect(self._handle_manual_log_cleanup)
@@ -769,12 +828,13 @@ class SettingsDialog(QDialog):
         """Create the Security settings tab (Password Management)."""
         widget = QWidget()
         main_layout = QVBoxLayout(widget)
-        main_layout.setSpacing(15)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(12)
 
         # --- Change Password Group ---
         password_group = QGroupBox("Change Passwords")
         group_layout = QFormLayout(password_group)
-        group_layout.setSpacing(10)
+        self._configure_settings_form(group_layout)
 
         self.current_password_input = QLineEdit()
         self.current_password_input.setEchoMode(QLineEdit.EchoMode.Password)
@@ -840,6 +900,39 @@ class SettingsDialog(QDialog):
             page_size_combo=self.page_size_combo,
             orientation_combo=self.orientation_combo,
             estimate_layout_combo=self.estimate_layout_combo,
+        )
+
+    def _resize_to_available_screen(self) -> None:
+        """Keep the settings dialog usable at larger Windows scale factors."""
+        screen = self.screen() or QGuiApplication.primaryScreen()
+        if screen is None:
+            self.resize(860, 720)
+            return
+        available = screen.availableGeometry()
+        target_width = min(900, max(self.minimumWidth(), available.width() - 80))
+        target_height = min(760, max(self.minimumHeight(), available.height() - 80))
+        self.resize(target_width, target_height)
+
+    @staticmethod
+    def _configure_settings_form(form_layout: QFormLayout) -> None:
+        form_layout.setContentsMargins(0, 0, 0, 0)
+        form_layout.setHorizontalSpacing(12)
+        form_layout.setVerticalSpacing(12)
+        form_layout.setLabelAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        form_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop)
+        form_layout.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
+        )
+
+    @staticmethod
+    def _polish_field_control(widget: QWidget, *, width: int) -> None:
+        widget.setMinimumWidth(min(width, 180))
+        widget.setMaximumWidth(width)
+        widget.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
         )
 
     def _get_font_display_text(self, font):

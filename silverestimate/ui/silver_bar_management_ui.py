@@ -25,6 +25,7 @@ from silverestimate.ui.models import (
 )
 from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
 from silverestimate.ui.themed_controls import ThemedComboBox
+from silverestimate.ui.window_sizing import resize_to_available_screen
 
 from ._host_proxy import HostProxy
 
@@ -35,7 +36,12 @@ class SilverBarManagementUiBuilder(HostProxy):
     def init_ui(self):
         host_widget = cast(QWidget, self.host)
         self.host.setWindowTitle("Silver Bar Management (v2.0)")
-        self.host.setMinimumSize(1180, 760)
+        self.host.setMinimumSize(900, 560)
+        resize_to_available_screen(
+            host_widget,
+            preferred_width=1180,
+            preferred_height=760,
+        )
         host_widget.setObjectName("SilverBarManagementDialog")
         host_widget.setStyleSheet(
             build_management_screen_stylesheet(
@@ -64,6 +70,11 @@ class SilverBarManagementUiBuilder(HostProxy):
                     color: __TEXT_STRONG__;
                     font-size: 10pt;
                     font-weight: 700;
+                }
+                QLabel#SilverBarListInfoLabel {
+                    color: __FIELD_TEXT__;
+                    font-weight: 600;
+                    padding: 2px 0;
                 }
                 QLabel#SilverBarBadgeLabel,
                 QLabel#SilverBarSummaryLabel {
@@ -128,12 +139,15 @@ class SilverBarManagementUiBuilder(HostProxy):
 
         filter_row = QHBoxLayout()
         self.weight_search_edit = QLineEdit()
+        self.weight_search_edit.setClearButtonEnabled(True)
+        self.weight_search_edit.setMaximumWidth(120)
         self.weight_search_edit.setPlaceholderText("Weight")
         filter_row.addWidget(self.weight_search_edit, 2)
         self.date_range_combo = ThemedComboBox()
         self.date_range_combo.addItems(
             ["Any", "Today", "Last 7 days", "Last 30 days", "This Month"]
         )
+        self.date_range_combo.setMinimumWidth(140)
         filter_row.addWidget(self.date_range_combo)
 
         self.clear_filters_button = QPushButton("Clear Filters")
@@ -141,6 +155,7 @@ class SilverBarManagementUiBuilder(HostProxy):
         left_layout.addLayout(filter_row)
 
         self.available_bars_table = QTableView(self.host)
+        self.available_bars_table.setObjectName("SilverBarAvailableTable")
         self.available_bars_model = AvailableSilverBarsTableModel(
             self.available_bars_table
         )
@@ -206,6 +221,7 @@ class SilverBarManagementUiBuilder(HostProxy):
 
         list_row = QHBoxLayout()
         self.list_combo = ThemedComboBox()
+        self.list_combo.setMinimumWidth(180)
         list_row.addWidget(self.list_combo, 1)
         self.create_list_button = QPushButton("New List")
         self.create_list_button.setObjectName("SilverBarPrimaryButton")
@@ -242,6 +258,8 @@ class SilverBarManagementUiBuilder(HostProxy):
         right_layout.addLayout(print_row)
 
         self.list_info_label = QLabel("No list selected")
+        self.list_info_label.setObjectName("SilverBarListInfoLabel")
+        self.list_info_label.setWordWrap(True)
         self.list_details_label = self.list_info_label
         right_layout.addWidget(self.list_info_label)
 

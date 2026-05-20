@@ -31,6 +31,7 @@ from silverestimate.ui.models import (
 )
 from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
 from silverestimate.ui.themed_controls import ThemedComboBox, ThemedSpinBox
+from silverestimate.ui.window_sizing import resize_to_available_screen
 
 
 class SilverBarHistoryDialog(QDialog):
@@ -41,7 +42,12 @@ class SilverBarHistoryDialog(QDialog):
         self.db_manager = db_manager
         self.logger = logging.getLogger(__name__)
         self.setWindowTitle("Silver Bar History")
-        self.setMinimumSize(900, 600)
+        self.setMinimumSize(780, 520)
+        resize_to_available_screen(
+            self,
+            preferred_width=1000,
+            preferred_height=680,
+        )
         self.setObjectName("SilverBarHistoryDialog")
         self.setStyleSheet(
             build_management_screen_stylesheet(
@@ -182,6 +188,7 @@ class SilverBarHistoryDialog(QDialog):
         self.status_combo.addItems(
             ["All Statuses", "In Stock", "Assigned", "Issued", "Sold"]
         )
+        self.status_combo.setMinimumWidth(132)
         self.status_combo.currentTextChanged.connect(self._schedule_search)
         filters_row.addWidget(self.status_combo)
 
@@ -191,7 +198,8 @@ class SilverBarHistoryDialog(QDialog):
         self.max_rows_spin = ThemedSpinBox()
         self.max_rows_spin.setRange(100, 50000)
         self.max_rows_spin.setSingleStep(100)
-        self.max_rows_spin.setMaximumWidth(90)
+        self.max_rows_spin.setMinimumWidth(96)
+        self.max_rows_spin.setMaximumWidth(116)
         default_limit = 2000
         try:
             default_limit = get_app_settings().value(

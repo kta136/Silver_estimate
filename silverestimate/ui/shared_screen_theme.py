@@ -189,12 +189,36 @@ def build_management_screen_stylesheet(
                 subcontrol-position: top right;
                 width: 30px;
             }}
+            QComboBox QAbstractItemView {{
+                background-color: {SURFACE_BG};
+                border: 1px solid {INPUT_BORDER};
+                color: {TEXT_STRONG};
+                selection-background-color: {SELECTION_BG};
+                selection-color: {TEXT_STRONG};
+                outline: none;
+                padding: 4px;
+            }}
+            QComboBox QAbstractItemView::item {{
+                min-height: 24px;
+                padding: 4px 8px;
+            }}
+            QComboBox QAbstractItemView::item:selected,
+            QComboBox QAbstractItemView::item:selected:!active {{
+                background-color: {SELECTION_BG};
+                color: {TEXT_STRONG};
+            }}
             QSpinBox,
-            QDoubleSpinBox {{
+            QDoubleSpinBox,
+            QDateEdit,
+            QTimeEdit,
+            QDateTimeEdit {{
                 padding-right: 30px;
             }}
             QSpinBox::up-button,
-            QDoubleSpinBox::up-button {{
+            QDoubleSpinBox::up-button,
+            QDateEdit::up-button,
+            QTimeEdit::up-button,
+            QDateTimeEdit::up-button {{
                 background-color: {HEADER_BG};
                 border-left: 1px solid {INPUT_BORDER};
                 border-top-right-radius: 8px;
@@ -203,7 +227,10 @@ def build_management_screen_stylesheet(
                 width: 26px;
             }}
             QSpinBox::down-button,
-            QDoubleSpinBox::down-button {{
+            QDoubleSpinBox::down-button,
+            QDateEdit::down-button,
+            QTimeEdit::down-button,
+            QDateTimeEdit::down-button {{
                 background-color: {HEADER_BG};
                 border-left: 1px solid {INPUT_BORDER};
                 border-bottom-right-radius: 8px;
@@ -256,6 +283,77 @@ def build_management_screen_stylesheet(
         QRadioButton::indicator:checked {{
             background-color: {PRIMARY_BG};
             border-color: {PRIMARY_BG};
+        }}
+        QMenu {{
+            background-color: {SURFACE_BG};
+            border: 1px solid {CARD_BORDER};
+            color: {TEXT_STRONG};
+            padding: 4px;
+        }}
+        QMenu::item {{
+            background-color: transparent;
+            color: {TEXT_STRONG};
+            padding: 6px 24px 6px 18px;
+        }}
+        QMenu::item:selected,
+        QMenu::item:pressed {{
+            background-color: {SELECTION_BG};
+            color: {TEXT_STRONG};
+        }}
+        QMenu::item:disabled {{
+            color: {TEXT_MUTED};
+        }}
+        QMenu::separator {{
+            background-color: {CARD_BORDER_SOFT};
+            height: 1px;
+            margin: 4px 8px;
+        }}
+        QToolTip {{
+            background-color: {SURFACE_BG};
+            border: 1px solid {CARD_BORDER};
+            border-radius: 4px;
+            color: {TEXT_STRONG};
+            padding: 4px 6px;
+        }}
+        QDialogButtonBox QPushButton {{
+            background-color: {HEADER_BG};
+            border: 1px solid {INPUT_BORDER};
+            border-radius: 8px;
+            color: {TEXT_STRONG};
+            font-weight: 600;
+            min-height: 24px;
+            min-width: 78px;
+            padding: 5px 12px;
+        }}
+        QDialogButtonBox QPushButton:hover {{
+            background-color: {SELECTION_BG};
+            border-color: {HEADER_TEXT};
+        }}
+        QDialogButtonBox QPushButton:disabled {{
+            background-color: {CARD_BORDER_SOFT};
+            border-color: {CARD_BORDER};
+            color: {TEXT_MUTED};
+        }}
+        QCalendarWidget {{
+            background-color: {SURFACE_BG};
+            border: 1px solid {CARD_BORDER};
+            color: {TEXT_STRONG};
+        }}
+        QCalendarWidget QWidget {{
+            background-color: {SURFACE_BG};
+            color: {TEXT_STRONG};
+        }}
+        QCalendarWidget QToolButton {{
+            background-color: {HEADER_BG};
+            border: 1px solid {INPUT_BORDER};
+            border-radius: 6px;
+            color: {TEXT_STRONG};
+            margin: 2px;
+            padding: 4px 8px;
+        }}
+        QCalendarWidget QToolButton:hover {{
+            background-color: {SELECTION_BG};
+            border-color: {FOCUS_RING};
         }}
         QScrollArea,
         QStackedWidget {{

@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
 from silverestimate.infrastructure.windows_integration import bring_window_to_front
 
 from .shared_screen_theme import build_management_screen_stylesheet
+from .window_sizing import resize_to_available_screen
 
 _pwd_context = None
 
@@ -131,6 +132,11 @@ class LoginDialog(QDialog):
         self._startup_activation_pending = True
 
         self._setup_ui()
+        resize_to_available_screen(
+            self,
+            preferred_width=500 if self.is_setup else 460,
+            preferred_height=self.sizeHint().height() + 36,
+        )
         self._connect_signals()
 
         # Prevent closing via the 'X' button if desired, force use of buttons
@@ -165,6 +171,7 @@ class LoginDialog(QDialog):
         self.password_label.setObjectName("LoginFieldLabel")
         self.password_input = QLineEdit()
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.password_input.setClearButtonEnabled(True)
         self.password_input.setPlaceholderText(
             "Enter your main password"
             if not self.is_setup
@@ -186,6 +193,7 @@ class LoginDialog(QDialog):
             self.backup_password_label.setObjectName("LoginFieldLabel")
             self.backup_password_input = QLineEdit()
             self.backup_password_input.setEchoMode(QLineEdit.EchoMode.Password)
+            self.backup_password_input.setClearButtonEnabled(True)
             self.backup_password_input.setPlaceholderText("Create a recovery password")
             self.backup_password_input.setToolTip(
                 "Enter a different recovery password\nMust be different from main password\nUsed for emergency access and data management"
@@ -197,6 +205,7 @@ class LoginDialog(QDialog):
             self.confirm_password_label.setObjectName("LoginFieldLabel")
             self.confirm_password_input = QLineEdit()
             self.confirm_password_input.setEchoMode(QLineEdit.EchoMode.Password)
+            self.confirm_password_input.setClearButtonEnabled(True)
             self.confirm_password_input.setPlaceholderText(
                 "Re-enter the recovery password"
             )

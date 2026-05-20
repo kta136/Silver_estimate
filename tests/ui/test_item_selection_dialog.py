@@ -102,6 +102,10 @@ def _select_row(dialog, row):
 def test_opens_prefilled_and_focuses_search(qtbot, sample_items):
     dialog = _make_dialog(qtbot, sample_items, term="ad")
     assert dialog.search_edit.text() == "ad"
+    assert dialog.minimumWidth() <= 700
+    assert dialog.items_table.verticalHeader().isVisible() is False
+    assert dialog.detail_code.objectName() == "ItemSelectionValueLabel"
+    assert "QMenu::item:selected" in dialog.styleSheet()
     dialog._focus_search()
     assert dialog.search_edit.selectedText().lower() == "ad"
 

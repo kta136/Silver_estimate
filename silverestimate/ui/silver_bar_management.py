@@ -31,6 +31,7 @@ from .silver_bar_selection_state_controller import SilverBarSelectionStateContro
 from .silver_bar_table_controller import SilverBarTableController
 from .silver_bar_transfer_controller import SilverBarTransferController
 from .themed_controls import ThemedDoubleSpinBox
+from .window_sizing import resize_to_available_screen
 
 
 class SilverBarDialog(QDialog):
@@ -121,7 +122,12 @@ class OptimalListDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Generate Optimal List")
-        self.setMinimumSize(450, 400)
+        self.setMinimumSize(420, 380)
+        resize_to_available_screen(
+            self,
+            preferred_width=500,
+            preferred_height=560,
+        )
         self.setObjectName("OptimalListDialog")
         self.setStyleSheet(
             build_management_screen_stylesheet(
@@ -194,6 +200,7 @@ class OptimalListDialog(QDialog):
         self.min_weight_spin.setRange(0.1, 999999.9)
         self.min_weight_spin.setSingleStep(1.0)
         self.min_weight_spin.setValue(95.0)
+        self.min_weight_spin.setMinimumWidth(150)
         min_group.addWidget(self.min_weight_spin)
         minmax_layout.addLayout(min_group)
 
@@ -204,6 +211,7 @@ class OptimalListDialog(QDialog):
         self.max_weight_spin.setRange(0.1, 999999.9)
         self.max_weight_spin.setSingleStep(1.0)
         self.max_weight_spin.setValue(105.0)
+        self.max_weight_spin.setMinimumWidth(150)
         max_group.addWidget(self.max_weight_spin)
         minmax_layout.addLayout(max_group)
 

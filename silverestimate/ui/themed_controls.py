@@ -8,6 +8,7 @@ from PyQt6.QtCore import QPointF, QRect, Qt
 from PyQt6.QtGui import QColor, QPainter, QPaintEvent, QPolygonF
 from PyQt6.QtWidgets import (
     QComboBox,
+    QDateEdit,
     QDoubleSpinBox,
     QFontComboBox,
     QSpinBox,
@@ -124,6 +125,14 @@ class ThemedSpinBox(QSpinBox):
 
 class ThemedDoubleSpinBox(QDoubleSpinBox):
     """Double spin box that redraws visible up/down arrows after QSS styling."""
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        super().paintEvent(event)
+        _paint_spinbox_arrows(self)
+
+
+class ThemedDateEdit(QDateEdit):
+    """Date edit that redraws visible up/down arrows after QSS styling."""
 
     def paintEvent(self, event: QPaintEvent) -> None:
         super().paintEvent(event)

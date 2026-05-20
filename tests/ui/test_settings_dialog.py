@@ -65,6 +65,15 @@ def test_settings_dialog_uses_visible_arrow_controls(qt_app, settings_stub):
             dialog.sidebar.horizontalScrollBarPolicy()
             == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
+        assert dialog.minimumHeight() <= 540
+        assert dialog.sidebar.width() >= 200
+        assert dialog.page_scroll.widgetResizable() is True
+        assert (
+            dialog.page_scroll.horizontalScrollBarPolicy()
+            == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        assert dialog.print_font_button.minimumWidth() >= 180
+        assert dialog.table_font_size_spin.maximumWidth() <= 180
     finally:
         dialog.deleteLater()
 

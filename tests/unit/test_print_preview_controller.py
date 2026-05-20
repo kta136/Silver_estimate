@@ -3,7 +3,7 @@ from pathlib import Path
 from PyQt6.QtCore import QSizeF
 from PyQt6.QtGui import QPageLayout, QPageSize
 from PyQt6.QtPrintSupport import QPrinter, QPrintPreviewDialog, QPrintPreviewWidget
-from PyQt6.QtWidgets import QFileDialog, QMessageBox, QToolBar
+from PyQt6.QtWidgets import QFileDialog, QMessageBox, QToolBar, QWidget
 
 from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.ui.print_payload_builder import PrintPreviewPayload
@@ -37,6 +37,11 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
 
     toolbar = preview.findChild(QToolBar)
     assert toolbar is not None
+    assert toolbar.objectName() == "PrintPreviewToolbar"
+    assert not toolbar.isMovable()
+    assert not toolbar.isFloatable()
+    assert toolbar.iconSize().width() == 22
+    assert toolbar.findChild(QWidget, "PreviewPageNavigator") is not None
 
     action_texts = [action.text() for action in toolbar.actions() if action.text()]
 

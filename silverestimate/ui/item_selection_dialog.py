@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 
 from silverestimate.ui.models import ItemSelectionRecord, ItemSelectionTableModel
 from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
+from silverestimate.ui.window_sizing import resize_to_available_screen
 
 
 class ItemSelectionDialog(QDialog):
@@ -43,8 +44,12 @@ class ItemSelectionDialog(QDialog):
 
     def init_ui(self):
         self.setWindowTitle("Select Item")
-        self.setMinimumSize(780, 460)
-        self.resize(860, 520)
+        self.setMinimumSize(700, 420)
+        resize_to_available_screen(
+            self,
+            preferred_width=860,
+            preferred_height=520,
+        )
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint)
         self.setObjectName("ItemSelectionDialog")
         self.setStyleSheet(
@@ -70,6 +75,10 @@ class ItemSelectionDialog(QDialog):
                 QLabel#ItemSelectionEmptyLabel {
                     color: __TEXT_MUTED__;
                     font-style: italic;
+                }
+                QLabel#ItemSelectionValueLabel {
+                    color: __TEXT_STRONG__;
+                    font-weight: 600;
                 }
                 """,
             )
@@ -140,6 +149,7 @@ class ItemSelectionDialog(QDialog):
             2, QHeaderView.ResizeMode.ResizeToContents
         )
         self.items_table.setAlternatingRowColors(True)
+        self.items_table.verticalHeader().setVisible(False)
         self.items_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.items_table.setSelectionBehavior(
             QAbstractItemView.SelectionBehavior.SelectRows
@@ -161,7 +171,8 @@ class ItemSelectionDialog(QDialog):
 
         details_card = QFrame()
         details_card.setObjectName("ItemSelectionDetails")
-        details_card.setMinimumWidth(240)
+        details_card.setMinimumWidth(220)
+        details_card.setMaximumWidth(300)
         details_layout = QVBoxLayout(details_card)
         details_layout.setContentsMargins(10, 10, 10, 10)
         details_layout.setSpacing(8)
@@ -177,6 +188,7 @@ class ItemSelectionDialog(QDialog):
         code_label.setObjectName("ItemSelectionFieldLabel")
         grid.addWidget(code_label, 0, 0)
         self.detail_code = QLabel("-")
+        self.detail_code.setObjectName("ItemSelectionValueLabel")
         self.detail_code.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
@@ -186,6 +198,7 @@ class ItemSelectionDialog(QDialog):
         name_label.setObjectName("ItemSelectionFieldLabel")
         grid.addWidget(name_label, 1, 0)
         self.detail_name = QLabel("-")
+        self.detail_name.setObjectName("ItemSelectionValueLabel")
         self.detail_name.setWordWrap(True)
         self.detail_name.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
@@ -196,18 +209,21 @@ class ItemSelectionDialog(QDialog):
         purity_label.setObjectName("ItemSelectionFieldLabel")
         grid.addWidget(purity_label, 2, 0)
         self.detail_purity = QLabel("-")
+        self.detail_purity.setObjectName("ItemSelectionValueLabel")
         grid.addWidget(self.detail_purity, 2, 1)
 
         type_label = QLabel("Wage Type")
         type_label.setObjectName("ItemSelectionFieldLabel")
         grid.addWidget(type_label, 3, 0)
         self.detail_wage_type = QLabel("-")
+        self.detail_wage_type.setObjectName("ItemSelectionValueLabel")
         grid.addWidget(self.detail_wage_type, 3, 1)
 
         rate_label = QLabel("Wage Rate")
         rate_label.setObjectName("ItemSelectionFieldLabel")
         grid.addWidget(rate_label, 4, 0)
         self.detail_wage_rate = QLabel("-")
+        self.detail_wage_rate.setObjectName("ItemSelectionValueLabel")
         grid.addWidget(self.detail_wage_rate, 4, 1)
 
         details_layout.addLayout(grid)

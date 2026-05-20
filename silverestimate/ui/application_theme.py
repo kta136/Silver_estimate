@@ -138,13 +138,18 @@ def build_light_application_stylesheet() -> str:
     return f"""
 QMainWindow,
 QDialog,
-QMessageBox {{
+QMessageBox,
+QInputDialog,
+QProgressDialog,
+QCalendarWidget {{
     background-color: {PAGE_BG};
     color: {TEXT_STRONG};
 }}
 
 QDialog QLabel,
-QMessageBox QLabel {{
+QMessageBox QLabel,
+QInputDialog QLabel,
+QProgressDialog QLabel {{
     color: {TEXT_STRONG};
 }}
 
@@ -324,6 +329,53 @@ QComboBox QAbstractItemView::item:selected:!active {{
     color: {TEXT_STRONG};
 }}
 
+QCalendarWidget {{
+    background-color: {SURFACE_BG};
+    border: 1px solid {CARD_BORDER};
+    color: {TEXT_STRONG};
+}}
+
+QCalendarWidget QWidget {{
+    background-color: {SURFACE_BG};
+    color: {TEXT_STRONG};
+}}
+
+QCalendarWidget QToolButton {{
+    background-color: {HEADER_BG};
+    border: 1px solid {INPUT_BORDER};
+    border-radius: 6px;
+    color: {TEXT_STRONG};
+    margin: 2px;
+    padding: 4px 8px;
+}}
+
+QCalendarWidget QToolButton:hover {{
+    background-color: {SELECTION_BG};
+    border-color: {FOCUS_RING};
+}}
+
+QCalendarWidget QMenu {{
+    background-color: {SURFACE_BG};
+    border: 1px solid {INPUT_BORDER};
+    color: {TEXT_STRONG};
+}}
+
+QCalendarWidget QSpinBox {{
+    background-color: {SURFACE_BG};
+    border: 1px solid {INPUT_BORDER};
+    border-radius: 6px;
+    color: {TEXT_STRONG};
+    min-width: 72px;
+    padding: 3px 28px 3px 6px;
+}}
+
+QCalendarWidget QAbstractItemView {{
+    background-color: {SURFACE_BG};
+    color: {TEXT_STRONG};
+    selection-background-color: {SELECTION_BG};
+    selection-color: {TEXT_STRONG};
+}}
+
 QAbstractItemView,
 QListView,
 QListWidget,
@@ -455,12 +507,18 @@ QDateTimeEdit {{
 }}
 
 QSpinBox,
-QDoubleSpinBox {{
+QDoubleSpinBox,
+QDateEdit,
+QTimeEdit,
+QDateTimeEdit {{
     padding-right: 30px;
 }}
 
 QSpinBox::up-button,
-QDoubleSpinBox::up-button {{
+QDoubleSpinBox::up-button,
+QDateEdit::up-button,
+QTimeEdit::up-button,
+QDateTimeEdit::up-button {{
     background-color: {HEADER_BG};
     border-left: 1px solid {INPUT_BORDER};
     border-top-right-radius: 8px;
@@ -470,7 +528,10 @@ QDoubleSpinBox::up-button {{
 }}
 
 QSpinBox::down-button,
-QDoubleSpinBox::down-button {{
+QDoubleSpinBox::down-button,
+QDateEdit::down-button,
+QTimeEdit::down-button,
+QDateTimeEdit::down-button {{
     background-color: {HEADER_BG};
     border-left: 1px solid {INPUT_BORDER};
     border-bottom-right-radius: 8px;

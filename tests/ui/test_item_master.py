@@ -65,6 +65,10 @@ def test_item_master_selection_populates_form_and_clear_resets(qtbot):
     qtbot.addWidget(widget)
     try:
         assert widget.items_model.rowCount() == 2
+        assert widget._form_panel.minimumWidth() == 280
+        assert widget._form_panel.maximumWidth() == 340
+        assert widget._item_count_label.minimumWidth() >= 96
+        assert "QComboBox QAbstractItemView" in widget.styleSheet()
 
         target_row = next(
             row

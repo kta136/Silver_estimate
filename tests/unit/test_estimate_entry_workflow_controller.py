@@ -6,7 +6,15 @@ from typing import Any
 
 import pytest
 from PyQt5.QtCore import QDate, QObject, pyqtSignal
-from PyQt5.QtWidgets import QDateEdit, QDialog, QDoubleSpinBox, QLabel, QLineEdit, QPushButton, QWidget
+from PyQt5.QtWidgets import (
+    QDateEdit,
+    QDialog,
+    QDoubleSpinBox,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QWidget,
+)
 
 from silverestimate.presenter import LoadedEstimate, SaveItem, SaveOutcome
 from silverestimate.ui import estimate_entry_workflow_controller as workflow_module
@@ -309,7 +317,9 @@ def test_preview_worker_emits_payload_and_finished():
     ready = []
     finished = []
     worker = _EstimatePreviewBuildWorker(4, lambda: {"ok": True})
-    worker.preview_ready.connect(lambda request_id, payload: ready.append((request_id, payload)))
+    worker.preview_ready.connect(
+        lambda request_id, payload: ready.append((request_id, payload))
+    )
     worker.finished.connect(lambda request_id: finished.append(request_id))
 
     worker.run()
@@ -321,8 +331,12 @@ def test_preview_worker_emits_payload_and_finished():
 def test_preview_worker_emits_error_and_finished():
     errors = []
     finished = []
-    worker = _EstimatePreviewBuildWorker(7, lambda: (_ for _ in ()).throw(RuntimeError("boom")))
-    worker.preview_error.connect(lambda request_id, message: errors.append((request_id, message)))
+    worker = _EstimatePreviewBuildWorker(
+        7, lambda: (_ for _ in ()).throw(RuntimeError("boom"))
+    )
+    worker.preview_error.connect(
+        lambda request_id, message: errors.append((request_id, message))
+    )
     worker.finished.connect(lambda request_id: finished.append(request_id))
 
     worker.run()
@@ -348,7 +362,9 @@ def test_format_currency_falls_back_for_bad_locale(workflow_host, monkeypatch):
 def test_generate_voucher_delegates_and_resets_loaded_state(workflow_host):
     host, controller = workflow_host
     calls = []
-    host.presenter = types.SimpleNamespace(generate_voucher=lambda: calls.append("generate"))
+    host.presenter = types.SimpleNamespace(
+        generate_voucher=lambda: calls.append("generate")
+    )
     host._estimate_loaded = True
     host.delete_estimate_button.setEnabled(True)
 
@@ -359,7 +375,9 @@ def test_generate_voucher_delegates_and_resets_loaded_state(workflow_host):
     assert host.delete_estimate_button.isEnabled() is False
 
 
-def test_load_estimate_success_reports_status_and_enables_delete(workflow_host, monkeypatch):
+def test_load_estimate_success_reports_status_and_enables_delete(
+    workflow_host, monkeypatch
+):
     host, controller = workflow_host
     loaded = object()
     host.voucher_edit.setText("V101")
@@ -387,14 +405,19 @@ def test_load_estimate_not_found_starts_new_entry(workflow_host):
     assert host._estimate_loaded is False
     assert host.delete_estimate_button.isEnabled() is False
     assert host.focus_calls == [0]
-    assert host.status_calls[-1] == ("Estimate MISS1 not found. Starting new entry.", 4000)
+    assert host.status_calls[-1] == (
+        "Estimate MISS1 not found. Starting new entry.",
+        4000,
+    )
 
 
 def test_load_estimate_reports_error_status(workflow_host):
     host, controller = workflow_host
     host.voucher_edit.setText("ERR1")
     host.presenter = types.SimpleNamespace(
-        load_estimate=lambda voucher_no: (_ for _ in ()).throw(RuntimeError("load boom"))
+        load_estimate=lambda voucher_no: (_ for _ in ()).throw(
+            RuntimeError("load boom")
+        )
     )
 
     controller.load_estimate()
@@ -453,7 +476,9 @@ def test_save_estimate_success_invokes_print_and_clear(workflow_host, monkeypatc
             del kwargs
             return SaveOutcome(success=True, message="Saved ok"), object()
 
-    monkeypatch.setattr(workflow_module, "EstimateEntryPersistenceService", _ServiceStub)
+    monkeypatch.setattr(
+        workflow_module, "EstimateEntryPersistenceService", _ServiceStub
+    )
 
     controller.save_estimate()
 
@@ -495,11 +520,16 @@ def test_save_estimate_handles_exception(workflow_host, monkeypatch):
             del kwargs
             raise RuntimeError("save blew up")
 
-    monkeypatch.setattr(workflow_module, "EstimateEntryPersistenceService", _ServiceStub)
+    monkeypatch.setattr(
+        workflow_module, "EstimateEntryPersistenceService", _ServiceStub
+    )
 
     controller.save_estimate()
 
-    assert any(args[1] == "Save Error" and args[2] == "save blew up" for args in _MessageBoxStub.critical_calls)
+    assert any(
+        args[1] == "Save Error" and args[2] == "save blew up"
+        for args in _MessageBoxStub.critical_calls
+    )
 
 
 def test_save_estimate_failure_shows_critical(workflow_host, monkeypatch):
@@ -516,7 +546,9 @@ def test_save_estimate_failure_shows_critical(workflow_host, monkeypatch):
             del kwargs
             return SaveOutcome(success=False, message="No good"), object()
 
-    monkeypatch.setattr(workflow_module, "EstimateEntryPersistenceService", _ServiceStub)
+    monkeypatch.setattr(
+        workflow_module, "EstimateEntryPersistenceService", _ServiceStub
+    )
 
     controller.save_estimate()
 
@@ -579,7 +611,9 @@ def test_print_preview_ready_closes_progress_and_shows_preview(workflow_host):
     progress = _ProgressStub()
     shown = []
     print_manager = types.SimpleNamespace(
-        show_preview=lambda payload, parent_widget=None: shown.append((payload, parent_widget))
+        show_preview=lambda payload, parent_widget=None: shown.append(
+            (payload, parent_widget)
+        )
     )
     controller._print_preview_request_id = 5
 
@@ -600,7 +634,9 @@ def test_print_preview_ready_ignores_stale_request(workflow_host):
     shown = []
     controller._print_preview_request_id = 8
     print_manager = types.SimpleNamespace(
-        show_preview=lambda payload, parent_widget=None: shown.append((payload, parent_widget))
+        show_preview=lambda payload, parent_widget=None: shown.append(
+            (payload, parent_widget)
+        )
     )
 
     controller._on_estimate_print_preview_ready(
@@ -622,7 +658,9 @@ def test_print_preview_ready_none_payload_routes_to_error(workflow_host, monkeyp
     monkeypatch.setattr(
         workflow_module.EstimateEntryWorkflowController,
         "_on_estimate_print_preview_error",
-        lambda self, request_id, message, *, progress: calls.append((request_id, message, progress)),
+        lambda self, request_id, message, *, progress: calls.append(
+            (request_id, message, progress)
+        ),
     )
 
     controller._on_estimate_print_preview_ready(
@@ -689,7 +727,9 @@ def test_clear_form_resets_modes_and_focuses_first_row(workflow_host, monkeypatc
     host.last_balance_amount = 100.0
     host.return_mode = True
     host.silver_bar_mode = True
-    host.presenter = types.SimpleNamespace(generate_voucher=lambda: host.status_calls.append(("generated", 0)))
+    host.presenter = types.SimpleNamespace(
+        generate_voucher=lambda: host.status_calls.append(("generated", 0))
+    )
     monkeypatch.setattr(workflow_module.QTimer, "singleShot", lambda _ms, fn: fn())
     host.toggle_return_mode = lambda: setattr(host, "return_mode", False)
     host.toggle_silver_bar_mode = lambda: setattr(host, "silver_bar_mode", False)
@@ -767,7 +807,10 @@ def test_delete_current_row_rejects_only_row(workflow_host):
 
     controller.delete_current_row()
 
-    assert any("Cannot delete the only row." in args[2] for args in _MessageBoxStub.warning_calls)
+    assert any(
+        "Cannot delete the only row." in args[2]
+        for args in _MessageBoxStub.warning_calls
+    )
 
 
 def test_prompt_item_selection_and_open_history_dialog(workflow_host, monkeypatch):
@@ -812,7 +855,9 @@ def test_prompt_item_selection_and_open_history_dialog(workflow_host, monkeypatc
 def test_show_silver_bar_management_and_alias(workflow_host):
     host, controller = workflow_host
     calls = []
-    host.main_window = types.SimpleNamespace(show_silver_bars=lambda: calls.append("bars"))
+    host.main_window = types.SimpleNamespace(
+        show_silver_bars=lambda: calls.append("bars")
+    )
 
     controller.show_silver_bar_management()
     controller.show_silver_bars()
@@ -883,7 +928,9 @@ def test_apply_loaded_estimate_populates_rows_and_normalizes_values(workflow_hos
 
 def test_apply_loaded_estimate_returns_false_on_error(workflow_host):
     host, controller = workflow_host
-    host.item_table.replace_all_rows = lambda rows: (_ for _ in ()).throw(RuntimeError("replace failed"))
+    host.item_table.replace_all_rows = lambda rows: (_ for _ in ()).throw(
+        RuntimeError("replace failed")
+    )
     loaded = LoadedEstimate(
         voucher_no="FAILLOAD",
         date="bad-date",
@@ -941,7 +988,9 @@ def test_update_view_model_snapshot_copies_widget_state(workflow_host):
     assert host.view_model.return_mode is True
 
 
-def test_build_current_estimate_preview_data_reports_skipped_rows(workflow_host, monkeypatch):
+def test_build_current_estimate_preview_data_reports_skipped_rows(
+    workflow_host, monkeypatch
+):
     host, controller = workflow_host
     host.view_model.set_voucher_metadata(
         voucher_number="PX01",
@@ -984,7 +1033,9 @@ def test_build_current_estimate_preview_data_reports_skipped_rows(workflow_host,
             del kwargs
             return _Preparation()
 
-    monkeypatch.setattr(workflow_module, "EstimateEntryPersistenceService", _ServiceStub)
+    monkeypatch.setattr(
+        workflow_module, "EstimateEntryPersistenceService", _ServiceStub
+    )
 
     preview = controller._build_current_estimate_preview_data("PX01")
 
@@ -1031,7 +1082,11 @@ def test_refresh_silver_rate_emits_none_on_failure(workflow_host, monkeypatch):
         fetch_broadcast_rate_exact=_boom,
         fetch_silver_agra_local_mohar_rate=lambda timeout=7: (None, None),
     )
-    monkeypatch.setitem(__import__("sys").modules, "silverestimate.services.dda_rate_fetcher", fake_module)
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "silverestimate.services.dda_rate_fetcher",
+        fake_module,
+    )
 
     controller.refresh_silver_rate()
 

@@ -2,7 +2,7 @@
 
 A desktop application built with PyQt5 and an encrypted SQLite database for managing silver sales estimates - item-wise entries, silver bar inventory, returns, and print-ready outputs.
 
-[![Python](https://img.shields.io/badge/Python-3.13+-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.14+-blue.svg)](https://www.python.org/)
 [![PyQt5](https://img.shields.io/badge/PyQt5-5.15+-green.svg)](https://www.riverbankcomputing.com/software/pyqt/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-v2.8.8-orange.svg)](CHANGELOG.md)
@@ -98,7 +98,7 @@ See also: `DOCS/project-architecture.md`.
 
 ## Installation
 
-1. Install Python 3.13+
+1. Install Python 3.14+
 2. Clone the repository
 3. Create a virtual environment
 4. Install dependencies
@@ -110,7 +110,7 @@ uv sync --extra dev
 ```
 
 This repository now includes a committed `uv.lock` file so local development and CI can converge on the same resolved dependency set.
-Before running `uv` or any repo command, ensure `python` resolves to Python 3.13 or newer in your shell. This repository includes `.python-version` for `pyenv` users.
+Before running `uv` or any repo command, ensure `python` resolves to Python 3.14 or newer in your shell. This repository includes `.python-version` for `pyenv` users.
 
 Fallback with the standard library `venv` + `pip`:
 
@@ -203,7 +203,7 @@ uv run pre-commit run --all-files
 ## Deployment
 
 ### Build Locally (Windows)
-- Prereqs: Python 3.13+, PowerShell
+- Prereqs: Python 3.14+, PowerShell
 - Fast iteration: `uv run nox -s build`
 - Clean rebuild: `python -m PyInstaller --clean --noconfirm SilverEstimate.spec` or `uv run nox -s build_clean`
 - Output: `dist/SilverEstimate.exe` on Windows

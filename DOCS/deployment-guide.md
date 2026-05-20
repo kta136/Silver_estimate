@@ -3,7 +3,7 @@
 ## Overview
 - Primary target: Windows 10/11 desktops.
 - Build system: PyInstaller 6.x driven from `SilverEstimate.spec`.
-- Runtime Python: 3.13.
+- Runtime Python: 3.14.
 - Artifacts: a single executable in `dist/`, later zipped for release publishing.
 
 ## Local Windows Packaging
@@ -32,7 +32,7 @@ Workflow: `.github/workflows/release-windows.yml`.
 - Trigger: pushing a tag matching `v*` (e.g., `v1.72.7`).
 - Jobs:
   - Checkout repository.
-  - Install Python 3.13 and project dependencies from `pyproject.toml` (plus `pyinstaller` for packaging).
+  - Install Python 3.14 and project dependencies from `pyproject.toml` (plus `pyinstaller` for packaging).
   - Build the executable from `SilverEstimate.spec`.
   - Rename artifact to `SilverEstimate-<tag>.exe` and zip as `SilverEstimate-<tag>-win64.zip`.
   - Publish the zip to the GitHub Release using `softprops/action-gh-release`.
@@ -47,7 +47,7 @@ Workflow: `.github/workflows/release-windows.yml`.
 ## Dependency Management
 - Runtime dependencies are defined in `pyproject.toml` (`[project.dependencies]`).
 - Development dependencies are defined in `pyproject.toml` (`[project.optional-dependencies].dev`).
-- Preferred local bootstrap: `uv sync --extra dev` after `python` resolves to Python 3.13+.
+- Preferred local bootstrap: `uv sync --extra dev` after `python` resolves to Python 3.14+.
 - Fallback local bootstrap: `python -m venv .venv`, activate it, then `python -m pip install -e ".[dev]"`.
 
 ## Testing Before Packaging

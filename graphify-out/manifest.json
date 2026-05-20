@@ -1,0 +1,907 @@
+{
+  "D:\\Projects\\Silver Estimate\\main.py": {
+    "mtime": 1773319514.5163426,
+    "ast_hash": "a99d55edf2bcaf7d50929509731a2b16",
+    "semantic_hash": "a99d55edf2bcaf7d50929509731a2b16"
+  },
+  "D:\\Projects\\Silver Estimate\\noxfile.py": {
+    "mtime": 1774172042.3929684,
+    "ast_hash": "faad27de9e0e246851079c6ee73b441c",
+    "semantic_hash": "faad27de9e0e246851079c6ee73b441c"
+  },
+  "D:\\Projects\\Silver Estimate\\.claude\\settings.local.json": {
+    "mtime": 1773577508.8571985,
+    "ast_hash": "6fddda2b922af0cddfab844cfe96d9dd",
+    "semantic_hash": "6fddda2b922af0cddfab844cfe96d9dd"
+  },
+  "D:\\Projects\\Silver Estimate\\pyinstaller_hooks\\hook-qtawesome.py": {
+    "mtime": 1773319514.5264835,
+    "ast_hash": "e46b12b41222c3274701678c375c6c76",
+    "semantic_hash": "e46b12b41222c3274701678c375c6c76"
+  },
+  "D:\\Projects\\Silver Estimate\\scripts\\build_windows_local.ps1": {
+    "mtime": 1774172260.3050296,
+    "ast_hash": "35785df810434a7dcdffe05f74b98eec",
+    "semantic_hash": "35785df810434a7dcdffe05f74b98eec"
+  },
+  "D:\\Projects\\Silver Estimate\\scripts\\check_perf_budgets.py": {
+    "mtime": 1773319514.5385551,
+    "ast_hash": "e4d1c8f978fc17db126c4a44b2943f37",
+    "semantic_hash": "e4d1c8f978fc17db126c4a44b2943f37"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\__init__.py": {
+    "mtime": 1773319514.5410416,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\controllers\\live_rate_controller.py": {
+    "mtime": 1773319514.5583477,
+    "ast_hash": "b3730181c3a77b13321bcf2ac11e2abe",
+    "semantic_hash": "b3730181c3a77b13321bcf2ac11e2abe"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\controllers\\navigation_controller.py": {
+    "mtime": 1773319514.5675366,
+    "ast_hash": "fb9dd6e4ba8962c52d3f5f9b14c0e573",
+    "semantic_hash": "fb9dd6e4ba8962c52d3f5f9b14c0e573"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\controllers\\startup_controller.py": {
+    "mtime": 1774018216.9026368,
+    "ast_hash": "2ab4dc29896e7d253640d662ee70f4d7",
+    "semantic_hash": "2ab4dc29896e7d253640d662ee70f4d7"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\controllers\\__init__.py": {
+    "mtime": 1773319514.5539727,
+    "ast_hash": "81051bcc2cf1bedf378224b0a93e2877",
+    "semantic_hash": "81051bcc2cf1bedf378224b0a93e2877"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\domain\\estimate_models.py": {
+    "mtime": 1773577753.7459364,
+    "ast_hash": "bfd2faacc70ed1422b76ea3b9aadbac1",
+    "semantic_hash": "bfd2faacc70ed1422b76ea3b9aadbac1"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\domain\\estimate_totals.py": {
+    "mtime": 1773319514.5924947,
+    "ast_hash": "76ecf38955e322721cda0d2bf59b552c",
+    "semantic_hash": "76ecf38955e322721cda0d2bf59b552c"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\domain\\item_validation.py": {
+    "mtime": 1773319514.6012473,
+    "ast_hash": "553dd788a11ed86d8b1390aedcda2cce",
+    "semantic_hash": "553dd788a11ed86d8b1390aedcda2cce"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\domain\\__init__.py": {
+    "mtime": 1773319514.5812995,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\infrastructure\\application.py": {
+    "mtime": 1773319514.6208484,
+    "ast_hash": "41e00baee08b4afef8a8354ee2142b21",
+    "semantic_hash": "41e00baee08b4afef8a8354ee2142b21"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\infrastructure\\app_constants.py": {
+    "mtime": 1774170838.5842,
+    "ast_hash": "480905e513ef542a848d2113e0af347a",
+    "semantic_hash": "480905e513ef542a848d2113e0af347a"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\infrastructure\\db_session.py": {
+    "mtime": 1773319514.626901,
+    "ast_hash": "5229618b43b2ac9360d6745bba279b58",
+    "semantic_hash": "5229618b43b2ac9360d6745bba279b58"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\infrastructure\\item_cache.py": {
+    "mtime": 1773319514.6343114,
+    "ast_hash": "654aa50dfd6d805dcede7a7222794ed8",
+    "semantic_hash": "654aa50dfd6d805dcede7a7222794ed8"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\infrastructure\\logger.py": {
+    "mtime": 1773577753.7514832,
+    "ast_hash": "5e1f38b22f3d74f9c246a14cbe28d4a7",
+    "semantic_hash": "5e1f38b22f3d74f9c246a14cbe28d4a7"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\infrastructure\\main_window_runtime.py": {
+    "mtime": 1773319514.6496816,
+    "ast_hash": "96908196bd1f9b7c4b4f4bb890b6f107",
+    "semantic_hash": "96908196bd1f9b7c4b4f4bb890b6f107"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\infrastructure\\paths.py": {
+    "mtime": 1773319514.6557791,
+    "ast_hash": "e8969e78c220c99c2191b261fa772cc9",
+    "semantic_hash": "e8969e78c220c99c2191b261fa772cc9"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\infrastructure\\settings.py": {
+    "mtime": 1773319514.6648264,
+    "ast_hash": "357ac4db3d2941b7f08a9e86233df76e",
+    "semantic_hash": "357ac4db3d2941b7f08a9e86233df76e"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\infrastructure\\windows_integration.py": {
+    "mtime": 1773577753.7570162,
+    "ast_hash": "37af70421cae6d90ec71a1765852e8a4",
+    "semantic_hash": "37af70421cae6d90ec71a1765852e8a4"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\infrastructure\\__init__.py": {
+    "mtime": 1773319514.6091774,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\persistence\\database_lifecycle.py": {
+    "mtime": 1773319514.687252,
+    "ast_hash": "15e4b2be9911d653d5b63c0a7f912bf4",
+    "semantic_hash": "15e4b2be9911d653d5b63c0a7f912bf4"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\persistence\\database_manager.py": {
+    "mtime": 1774018187.3533883,
+    "ast_hash": "4bf1a97699b5f452ba2012d0994037bf",
+    "semantic_hash": "4bf1a97699b5f452ba2012d0994037bf"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\persistence\\database_repository_facade.py": {
+    "mtime": 1773569300.739907,
+    "ast_hash": "196010b6e1b99c436cee0e9db178dae7",
+    "semantic_hash": "196010b6e1b99c436cee0e9db178dae7"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\persistence\\database_startup.py": {
+    "mtime": 1773319514.6996746,
+    "ast_hash": "e182988c1d232771c6ab2649962a0403",
+    "semantic_hash": "e182988c1d232771c6ab2649962a0403"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\persistence\\encrypted_database_store.py": {
+    "mtime": 1773319514.7129,
+    "ast_hash": "2f8460a9f4d1c820d67fc6873ec51628",
+    "semantic_hash": "2f8460a9f4d1c820d67fc6873ec51628"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\persistence\\estimates_repository.py": {
+    "mtime": 1773324263.303182,
+    "ast_hash": "97a09db0a914aa69b8e4d60230f91219",
+    "semantic_hash": "97a09db0a914aa69b8e4d60230f91219"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\persistence\\flush_scheduler.py": {
+    "mtime": 1773319514.725536,
+    "ast_hash": "e5e8f0d50703d4ce0d455c552feb8a10",
+    "semantic_hash": "e5e8f0d50703d4ce0d455c552feb8a10"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\persistence\\items_repository.py": {
+    "mtime": 1773577753.7549105,
+    "ast_hash": "f77cf3f23bfe8878fe28019e3005ae43",
+    "semantic_hash": "f77cf3f23bfe8878fe28019e3005ae43"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\persistence\\migrations.py": {
+    "mtime": 1773577753.7570162,
+    "ast_hash": "6f5dadd239b20df6968c77cd3784eea4",
+    "semantic_hash": "6f5dadd239b20df6968c77cd3784eea4"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\persistence\\silver_bars_queries.py": {
+    "mtime": 1773325870.8704543,
+    "ast_hash": "abd4d2517a057b558dd75b6296864f51",
+    "semantic_hash": "abd4d2517a057b558dd75b6296864f51"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\persistence\\silver_bars_repository.py": {
+    "mtime": 1773577753.7600071,
+    "ast_hash": "afa14ab06e0fb364c333dd8f4334db20",
+    "semantic_hash": "afa14ab06e0fb364c333dd8f4334db20"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\persistence\\silver_bars_snapshot_repository.py": {
+    "mtime": 1773319514.7603302,
+    "ast_hash": "5cb5f8a0ddd00addac50ce4ea2336b12",
+    "semantic_hash": "5cb5f8a0ddd00addac50ce4ea2336b12"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\persistence\\sqlite_database_runtime.py": {
+    "mtime": 1773324235.1174426,
+    "ast_hash": "e1dcc8e61d6abdfdd80c76246e408aaa",
+    "semantic_hash": "e1dcc8e61d6abdfdd80c76246e408aaa"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\persistence\\temp_database_store.py": {
+    "mtime": 1773319514.771298,
+    "ast_hash": "486623499baddfff0d638b81c6d44c4e",
+    "semantic_hash": "486623499baddfff0d638b81c6d44c4e"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\persistence\\__init__.py": {
+    "mtime": 1773319514.6754384,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\presenter\\estimate_entry_presenter.py": {
+    "mtime": 1773324216.459916,
+    "ast_hash": "a8f80f868f5ab1d8e68fb274cc162e83",
+    "semantic_hash": "a8f80f868f5ab1d8e68fb274cc162e83"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\presenter\\__init__.py": {
+    "mtime": 1773319514.782773,
+    "ast_hash": "585d9cd89fdd102df741686b9d789565",
+    "semantic_hash": "585d9cd89fdd102df741686b9d789565"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\security\\encryption.py": {
+    "mtime": 1774017803.4590006,
+    "ast_hash": "d85464391ea86c7c63b56a40c8f184f2",
+    "semantic_hash": "d85464391ea86c7c63b56a40c8f184f2"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\security\\__init__.py": {
+    "mtime": 1773319514.7988477,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\services\\auth_service.py": {
+    "mtime": 1773319514.8254383,
+    "ast_hash": "5e9df111dd4f8547c0456450f8c1f0d7",
+    "semantic_hash": "5e9df111dd4f8547c0456450f8c1f0d7"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\services\\dda_rate_fetcher.py": {
+    "mtime": 1773319514.8360145,
+    "ast_hash": "1caff63db6ff5bdd8c69008714b57f5e",
+    "semantic_hash": "1caff63db6ff5bdd8c69008714b57f5e"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\services\\estimate_calculator.py": {
+    "mtime": 1773319514.840809,
+    "ast_hash": "c4e439897215cf735a9867959f548488",
+    "semantic_hash": "c4e439897215cf735a9867959f548488"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\services\\estimate_entry_persistence.py": {
+    "mtime": 1773577753.7449367,
+    "ast_hash": "e603ac40cbba1e8d8614a053035b7d35",
+    "semantic_hash": "e603ac40cbba1e8d8614a053035b7d35"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\services\\estimate_repository.py": {
+    "mtime": 1773319514.8532403,
+    "ast_hash": "d19abc845acd0c9c0ba449415dfecca4",
+    "semantic_hash": "d19abc845acd0c9c0ba449415dfecca4"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\services\\item_catalog_transfer.py": {
+    "mtime": 1773570211.8469377,
+    "ast_hash": "e81428428f55964e082b487e0f3937d4",
+    "semantic_hash": "e81428428f55964e082b487e0f3937d4"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\services\\live_rate_service.py": {
+    "mtime": 1773319514.8646932,
+    "ast_hash": "7c844e01426fc5bf43b90642510f5c67",
+    "semantic_hash": "7c844e01426fc5bf43b90642510f5c67"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\services\\main_commands.py": {
+    "mtime": 1773577816.3142543,
+    "ast_hash": "d9bb601bed48a8ed963b39943727ae48",
+    "semantic_hash": "d9bb601bed48a8ed963b39943727ae48"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\services\\navigation_service.py": {
+    "mtime": 1773319514.8756754,
+    "ast_hash": "524cf1399890f00c7dd7859ddc1f6619",
+    "semantic_hash": "524cf1399890f00c7dd7859ddc1f6619"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\services\\settings_service.py": {
+    "mtime": 1773319514.8819242,
+    "ast_hash": "57121a01395622c3df982acfcebfd86e",
+    "semantic_hash": "57121a01395622c3df982acfcebfd86e"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\services\\__init__.py": {
+    "mtime": 1773319514.8216782,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\custom_font_dialog.py": {
+    "mtime": 1773319514.9269555,
+    "ast_hash": "eeb9198c1f920aafc535bc201cb6a160",
+    "semantic_hash": "eeb9198c1f920aafc535bc201cb6a160"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\estimate_entry.py": {
+    "mtime": 1773577191.2841542,
+    "ast_hash": "204a035b3db3294bf25ac80a29e70d01",
+    "semantic_hash": "204a035b3db3294bf25ac80a29e70d01"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\estimate_entry_layout_controller.py": {
+    "mtime": 1773319514.9836695,
+    "ast_hash": "ba0bf3987ef98e59c4318916925f8365",
+    "semantic_hash": "ba0bf3987ef98e59c4318916925f8365"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\estimate_entry_table_controller.py": {
+    "mtime": 1773319515.005602,
+    "ast_hash": "c69d94b8ee627ac2034c081a2d12d37f",
+    "semantic_hash": "c69d94b8ee627ac2034c081a2d12d37f"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\estimate_entry_theme.py": {
+    "mtime": 1773319515.0152059,
+    "ast_hash": "82837fe2da11a84b8b9250280bcd43ad",
+    "semantic_hash": "82837fe2da11a84b8b9250280bcd43ad"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\estimate_entry_totals_controller.py": {
+    "mtime": 1773319515.0225248,
+    "ast_hash": "94f5b7f8eb6d1b6c01866321f75902bd",
+    "semantic_hash": "94f5b7f8eb6d1b6c01866321f75902bd"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\estimate_entry_ui.py": {
+    "mtime": 1773319515.027769,
+    "ast_hash": "7ce6d9c1c60210c91b6a671ad103c473",
+    "semantic_hash": "7ce6d9c1c60210c91b6a671ad103c473"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\estimate_entry_workflow_controller.py": {
+    "mtime": 1773319515.0330298,
+    "ast_hash": "5ae820680262246be74cb019ebe20103",
+    "semantic_hash": "5ae820680262246be74cb019ebe20103"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\estimate_history.py": {
+    "mtime": 1773571067.9711258,
+    "ast_hash": "abc4b7a1d3eb64877bd1089add3465d9",
+    "semantic_hash": "abc4b7a1d3eb64877bd1089add3465d9"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\estimate_print_renderer.py": {
+    "mtime": 1774950587.8432763,
+    "ast_hash": "728951072ad7f7ae4d951ec809d52baf",
+    "semantic_hash": "728951072ad7f7ae4d951ec809d52baf"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\estimate_table_formatting.py": {
+    "mtime": 1773319515.0523787,
+    "ast_hash": "71757ab93659bdfe31789b86c4253113",
+    "semantic_hash": "71757ab93659bdfe31789b86c4253113"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\icons.py": {
+    "mtime": 1773319515.058056,
+    "ast_hash": "0090e462c4e7a65ec8a5c854d9890985",
+    "semantic_hash": "0090e462c4e7a65ec8a5c854d9890985"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\inline_status.py": {
+    "mtime": 1773319515.064392,
+    "ast_hash": "851ac3b98a8ee758e535bdf3a961c568",
+    "semantic_hash": "851ac3b98a8ee758e535bdf3a961c568"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\item_master.py": {
+    "mtime": 1773577753.7449367,
+    "ast_hash": "3950507955d3436feee1dcae2c4a0ba9",
+    "semantic_hash": "3950507955d3436feee1dcae2c4a0ba9"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\item_selection_dialog.py": {
+    "mtime": 1773319515.0938818,
+    "ast_hash": "9ce42d0ea968e2e40e79ea8feb3e75ef",
+    "semantic_hash": "9ce42d0ea968e2e40e79ea8feb3e75ef"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\login_dialog.py": {
+    "mtime": 1773577753.7544026,
+    "ast_hash": "737248faa926a5f3435201bf5d7f22e7",
+    "semantic_hash": "737248faa926a5f3435201bf5d7f22e7"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\main_window.py": {
+    "mtime": 1774018269.8912866,
+    "ast_hash": "9a6d1beb44cbb59f0126400e90a1568a",
+    "semantic_hash": "9a6d1beb44cbb59f0126400e90a1568a"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\numeric_font.py": {
+    "mtime": 1773319515.165972,
+    "ast_hash": "a0821d47ecd68199a728de00c817fd53",
+    "semantic_hash": "a0821d47ecd68199a728de00c817fd53"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\print_manager.py": {
+    "mtime": 1773319515.1735663,
+    "ast_hash": "af48d10f80d896ae3cdf6b6275fd5e65",
+    "semantic_hash": "af48d10f80d896ae3cdf6b6275fd5e65"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\print_payload_builder.py": {
+    "mtime": 1773319515.1794755,
+    "ast_hash": "f8307eb42c2bb1d6bdc2c75c54f62e7b",
+    "semantic_hash": "f8307eb42c2bb1d6bdc2c75c54f62e7b"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\print_preview_controller.py": {
+    "mtime": 1773319515.185264,
+    "ast_hash": "ade01e56e11a822d1fccd054dc57715f",
+    "semantic_hash": "ade01e56e11a822d1fccd054dc57715f"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\settings_dialog.py": {
+    "mtime": 1773577753.7484472,
+    "ast_hash": "70ec53d851d00282575ff93eb816c3af",
+    "semantic_hash": "70ec53d851d00282575ff93eb816c3af"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\settings_print_controller.py": {
+    "mtime": 1773319515.1982253,
+    "ast_hash": "97c93515b8375e02620c04005350cb9e",
+    "semantic_hash": "97c93515b8375e02620c04005350cb9e"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\shared_screen_theme.py": {
+    "mtime": 1773319515.2043104,
+    "ast_hash": "2ea83b4bb3790a645f250529ef472b72",
+    "semantic_hash": "2ea83b4bb3790a645f250529ef472b72"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\silver_bar_history.py": {
+    "mtime": 1773571063.3158405,
+    "ast_hash": "3d26c556f5e7e87498d220e206891b6b",
+    "semantic_hash": "3d26c556f5e7e87498d220e206891b6b"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\silver_bar_list_lifecycle_controller.py": {
+    "mtime": 1773319515.215523,
+    "ast_hash": "e8452ef4fbb36d2bc5cdde1349631da6",
+    "semantic_hash": "e8452ef4fbb36d2bc5cdde1349631da6"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\silver_bar_list_print_controller.py": {
+    "mtime": 1773319515.2228281,
+    "ast_hash": "f83d6d91274599b954f21d7e5b073ce7",
+    "semantic_hash": "f83d6d91274599b954f21d7e5b073ce7"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\silver_bar_load_controller.py": {
+    "mtime": 1773326499.1887772,
+    "ast_hash": "b57ab88d7f5652542c48bdf9497c191d",
+    "semantic_hash": "b57ab88d7f5652542c48bdf9497c191d"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\silver_bar_management.py": {
+    "mtime": 1773325333.3241277,
+    "ast_hash": "bcb63b031d653a466b68e50b17824a21",
+    "semantic_hash": "bcb63b031d653a466b68e50b17824a21"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\silver_bar_management_state.py": {
+    "mtime": 1773325805.209871,
+    "ast_hash": "14ae53e54cf4c2b1de3a14213787f5ca",
+    "semantic_hash": "14ae53e54cf4c2b1de3a14213787f5ca"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\silver_bar_management_ui.py": {
+    "mtime": 1773577753.6542335,
+    "ast_hash": "0d1b60dd0a7a455ca753b2644f6354f4",
+    "semantic_hash": "0d1b60dd0a7a455ca753b2644f6354f4"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\silver_bar_optimization.py": {
+    "mtime": 1773319515.2546005,
+    "ast_hash": "4fb0bb2a6784813b7304bab210185053",
+    "semantic_hash": "4fb0bb2a6784813b7304bab210185053"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\silver_bar_optimization_controller.py": {
+    "mtime": 1773319515.258386,
+    "ast_hash": "16830381c4487d5afac8684661bd7d86",
+    "semantic_hash": "16830381c4487d5afac8684661bd7d86"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\silver_bar_print_renderer.py": {
+    "mtime": 1773319515.258386,
+    "ast_hash": "03b4974f476ee2b6c9b5d45c99d6e9f3",
+    "semantic_hash": "03b4974f476ee2b6c9b5d45c99d6e9f3"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\silver_bar_selection_state_controller.py": {
+    "mtime": 1773319515.2726948,
+    "ast_hash": "4e9b07412ce934e00ab0d41568fe8d03",
+    "semantic_hash": "4e9b07412ce934e00ab0d41568fe8d03"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\silver_bar_table_controller.py": {
+    "mtime": 1773577832.4928856,
+    "ast_hash": "d9fc209a229dd65b132ad2112e2e6aa5",
+    "semantic_hash": "d9fc209a229dd65b132ad2112e2e6aa5"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\silver_bar_transfer_controller.py": {
+    "mtime": 1773319515.2821686,
+    "ast_hash": "227ec1507d654347244ec382f1745d39",
+    "semantic_hash": "227ec1507d654347244ec382f1745d39"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\_host_proxy.py": {
+    "mtime": 1773319514.8981326,
+    "ast_hash": "52777d0da60c9beaba34e695d6e390e6",
+    "semantic_hash": "52777d0da60c9beaba34e695d6e390e6"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\__init__.py": {
+    "mtime": 1773319514.8897226,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\adapters\\estimate_table_adapter.py": {
+    "mtime": 1773319514.9207685,
+    "ast_hash": "a3871ff7c8a28a65ac5a424528636dc2",
+    "semantic_hash": "a3871ff7c8a28a65ac5a424528636dc2"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\adapters\\__init__.py": {
+    "mtime": 1773319514.9062915,
+    "ast_hash": "bd28f0c397b8ac06ff5fb4a41937da19",
+    "semantic_hash": "bd28f0c397b8ac06ff5fb4a41937da19"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\estimate_entry_components\\estimate_table_view.py": {
+    "mtime": 1773324585.0534365,
+    "ast_hash": "f508cec026493d6a3e24636fec3f8975",
+    "semantic_hash": "f508cec026493d6a3e24636fec3f8975"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\estimate_entry_components\\primary_actions_bar.py": {
+    "mtime": 1773319514.9539835,
+    "ast_hash": "acd1c415152af4fcbe5100df0795f50d",
+    "semantic_hash": "acd1c415152af4fcbe5100df0795f50d"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\estimate_entry_components\\secondary_actions_bar.py": {
+    "mtime": 1773319514.9667852,
+    "ast_hash": "b7ca5838f2d22e3b9d2985febd10e15f",
+    "semantic_hash": "b7ca5838f2d22e3b9d2985febd10e15f"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\estimate_entry_components\\totals_panel.py": {
+    "mtime": 1773319514.9720764,
+    "ast_hash": "30189ddaecad1d954817f4a6a23ab2ad",
+    "semantic_hash": "30189ddaecad1d954817f4a6a23ab2ad"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\estimate_entry_components\\voucher_toolbar.py": {
+    "mtime": 1773319514.9786355,
+    "ast_hash": "de6af7768a319c8ed8771a54ed5e4ba2",
+    "semantic_hash": "de6af7768a319c8ed8771a54ed5e4ba2"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\estimate_entry_components\\__init__.py": {
+    "mtime": 1773319514.9439971,
+    "ast_hash": "7163ef1d0d3b727d54d194c8249b7dfe",
+    "semantic_hash": "7163ef1d0d3b727d54d194c8249b7dfe"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\estimate_entry_logic\\constants.py": {
+    "mtime": 1773319515.005602,
+    "ast_hash": "cb2608b30d3313cf47a98fb9346b32a3",
+    "semantic_hash": "cb2608b30d3313cf47a98fb9346b32a3"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\estimate_entry_logic\\__init__.py": {
+    "mtime": 1773319514.9972317,
+    "ast_hash": "177b6099968cfbce08a6bc0dc2b9248d",
+    "semantic_hash": "177b6099968cfbce08a6bc0dc2b9248d"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\models\\estimate_history_table_model.py": {
+    "mtime": 1773319515.1243691,
+    "ast_hash": "aa8b3d7067ed99c2eb88c724fd8070ea",
+    "semantic_hash": "aa8b3d7067ed99c2eb88c724fd8070ea"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\models\\estimate_table_model.py": {
+    "mtime": 1773577753.7449367,
+    "ast_hash": "34ec8a787d83c66f02fb971a69835aa4",
+    "semantic_hash": "34ec8a787d83c66f02fb971a69835aa4"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\models\\item_master_table_model.py": {
+    "mtime": 1773319515.1473303,
+    "ast_hash": "d679714a72d68bbf76dd5b2b413db322",
+    "semantic_hash": "d679714a72d68bbf76dd5b2b413db322"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\models\\item_selection_table_model.py": {
+    "mtime": 1773319515.15475,
+    "ast_hash": "a96bb613b903a5df12fa649d2b24aef6",
+    "semantic_hash": "a96bb613b903a5df12fa649d2b24aef6"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\models\\silver_bar_table_models.py": {
+    "mtime": 1773320795.6420877,
+    "ast_hash": "553f5b735e6707fec17fdf053f65cc90",
+    "semantic_hash": "553f5b735e6707fec17fdf053f65cc90"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\models\\__init__.py": {
+    "mtime": 1773568765.8592155,
+    "ast_hash": "75d206207041c441c3327137834254cb",
+    "semantic_hash": "75d206207041c441c3327137834254cb"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\view_models\\estimate_entry_view_model.py": {
+    "mtime": 1773577753.7549105,
+    "ast_hash": "ac407de8a739d2b9948046aea5ded11e",
+    "semantic_hash": "ac407de8a739d2b9948046aea5ded11e"
+  },
+  "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\view_models\\__init__.py": {
+    "mtime": 1773319515.3011794,
+    "ast_hash": "567140e5e864611c6ef5dd9f82a4a9ef",
+    "semantic_hash": "567140e5e864611c6ef5dd9f82a4a9ef"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\conftest.py": {
+    "mtime": 1773319515.319703,
+    "ast_hash": "776b127e1358ed6aad1de06200226993",
+    "semantic_hash": "776b127e1358ed6aad1de06200226993"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\test_security.py": {
+    "mtime": 1774017853.1741202,
+    "ast_hash": "658f3f5abfe8e74430cc3ef65ec1eaf5",
+    "semantic_hash": "658f3f5abfe8e74430cc3ef65ec1eaf5"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\controllers\\test_live_rate_controller.py": {
+    "mtime": 1773319515.3297749,
+    "ast_hash": "e2a192250ef17447bc2334bdc3b886a5",
+    "semantic_hash": "e2a192250ef17447bc2334bdc3b886a5"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\factories\\estimate_items.py": {
+    "mtime": 1773319515.347782,
+    "ast_hash": "9c8f381f78b672ab4c90751c196a887c",
+    "semantic_hash": "9c8f381f78b672ab4c90751c196a887c"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\factories\\__init__.py": {
+    "mtime": 1773319515.3393865,
+    "ast_hash": "45470d40e0678a839488fdc538f649a9",
+    "semantic_hash": "45470d40e0678a839488fdc538f649a9"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\integration\\test_database_manager.py": {
+    "mtime": 1773577753.746938,
+    "ast_hash": "7104f9cc26c5564919a5e4efbd841cf1",
+    "semantic_hash": "7104f9cc26c5564919a5e4efbd841cf1"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\integration\\test_repositories.py": {
+    "mtime": 1773577753.7494588,
+    "ast_hash": "f9d47ed49237a1d81ff9190bdd944770",
+    "semantic_hash": "f9d47ed49237a1d81ff9190bdd944770"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\services\\test_auth_service.py": {
+    "mtime": 1773319515.381955,
+    "ast_hash": "4e0606dabe54071678bbcf92f4c2ab59",
+    "semantic_hash": "4e0606dabe54071678bbcf92f4c2ab59"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\services\\test_dda_rate_fetcher.py": {
+    "mtime": 1773319515.388095,
+    "ast_hash": "75ca3bd494bbcf5240fac869d702350e",
+    "semantic_hash": "75ca3bd494bbcf5240fac869d702350e"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\services\\test_live_rate_service.py": {
+    "mtime": 1773319515.3950744,
+    "ast_hash": "68b5ad4a0ce9758eec3c7ba499730c31",
+    "semantic_hash": "68b5ad4a0ce9758eec3c7ba499730c31"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\services\\test_main_commands.py": {
+    "mtime": 1774018869.2836177,
+    "ast_hash": "edffc344c65e43586b58f0e0469132c3",
+    "semantic_hash": "edffc344c65e43586b58f0e0469132c3"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\services\\test_navigation_service.py": {
+    "mtime": 1773319515.4064074,
+    "ast_hash": "8152f0e7e28f83eddb869d4bbe49cadc",
+    "semantic_hash": "8152f0e7e28f83eddb869d4bbe49cadc"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\services\\test_settings_service.py": {
+    "mtime": 1773319515.4152107,
+    "ast_hash": "ddb279f06859fd90e9b3946c96d19628",
+    "semantic_hash": "ddb279f06859fd90e9b3946c96d19628"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\ui\\test_custom_font_dialog.py": {
+    "mtime": 1773319515.4279406,
+    "ast_hash": "3b0a5759cf9a81ba119ab168db58672b",
+    "semantic_hash": "3b0a5759cf9a81ba119ab168db58672b"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\ui\\test_estimate_entry_integration.py": {
+    "mtime": 1773319515.4358447,
+    "ast_hash": "3e820402bdde887a7acbca4691e66229",
+    "semantic_hash": "3e820402bdde887a7acbca4691e66229"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\ui\\test_estimate_entry_widget.py": {
+    "mtime": 1773319515.4424,
+    "ast_hash": "15868e8e4a03ca80afbdf0b402fc1daa",
+    "semantic_hash": "15868e8e4a03ca80afbdf0b402fc1daa"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\ui\\test_estimate_history.py": {
+    "mtime": 1773319515.448555,
+    "ast_hash": "5d8c50e3b4d9df853a9af01e19593d8e",
+    "semantic_hash": "5d8c50e3b4d9df853a9af01e19593d8e"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\ui\\test_item_master.py": {
+    "mtime": 1773577212.6061757,
+    "ast_hash": "ea12ceb47ca3dc6628213af512290f61",
+    "semantic_hash": "ea12ceb47ca3dc6628213af512290f61"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\ui\\test_item_selection_dialog.py": {
+    "mtime": 1773319515.4647167,
+    "ast_hash": "e618f7466460aaae169f6800a88153c0",
+    "semantic_hash": "e618f7466460aaae169f6800a88153c0"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\ui\\test_login_dialog.py": {
+    "mtime": 1773577191.3367047,
+    "ast_hash": "865b4a819e0d105ed772b2d12d96ae5f",
+    "semantic_hash": "865b4a819e0d105ed772b2d12d96ae5f"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\ui\\test_main_window_interactions.py": {
+    "mtime": 1774018235.3676515,
+    "ast_hash": "478560e0d12ce5a53a8f19555382b1cf",
+    "semantic_hash": "478560e0d12ce5a53a8f19555382b1cf"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\ui\\test_mode_toggle_buttons.py": {
+    "mtime": 1773319515.4829237,
+    "ast_hash": "09a3fe979cc6cb55131029cfc06979e5",
+    "semantic_hash": "09a3fe979cc6cb55131029cfc06979e5"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\ui\\test_optimal_list_dialog.py": {
+    "mtime": 1773319515.4883223,
+    "ast_hash": "2b291d0288626523f150b8886bb22fa5",
+    "semantic_hash": "2b291d0288626523f150b8886bb22fa5"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\ui\\test_print_manager.py": {
+    "mtime": 1774950609.1690276,
+    "ast_hash": "c3630985da1ae2e96574460b63be834c",
+    "semantic_hash": "c3630985da1ae2e96574460b63be834c"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\ui\\test_settings_dialog.py": {
+    "mtime": 1773570190.84785,
+    "ast_hash": "7bcd4cfa4608d4d9d47bced60a8436d3",
+    "semantic_hash": "7bcd4cfa4608d4d9d47bced60a8436d3"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\ui\\test_silver_bar_history.py": {
+    "mtime": 1773319515.5059,
+    "ast_hash": "67558d94f7ebe0f0ecb2b62ec049c062",
+    "semantic_hash": "67558d94f7ebe0f0ecb2b62ec049c062"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\ui\\test_silver_bar_management.py": {
+    "mtime": 1773326507.6887567,
+    "ast_hash": "95136d21eecb74d821dd10cbe7bc7e47",
+    "semantic_hash": "95136d21eecb74d821dd10cbe7bc7e47"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_application_builder.py": {
+    "mtime": 1773319515.5209296,
+    "ast_hash": "0739e7f3b7589d65c4dbda7e28cad44e",
+    "semantic_hash": "0739e7f3b7589d65c4dbda7e28cad44e"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_check_perf_budgets.py": {
+    "mtime": 1773319515.5287528,
+    "ast_hash": "401088b56847316428df165595276fe1",
+    "semantic_hash": "401088b56847316428df165595276fe1"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_database_kdf_migration.py": {
+    "mtime": 1774017877.6731117,
+    "ast_hash": "f3a764823ffd3adaf1567f6783d593d6",
+    "semantic_hash": "f3a764823ffd3adaf1567f6783d593d6"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_database_lifecycle.py": {
+    "mtime": 1773319515.5410545,
+    "ast_hash": "67a3b1b24b457e8e69312c850f78091b",
+    "semantic_hash": "67a3b1b24b457e8e69312c850f78091b"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_database_repository_facade.py": {
+    "mtime": 1773577753.7549105,
+    "ast_hash": "5aed475c9fbdce57094c1978a2348114",
+    "semantic_hash": "5aed475c9fbdce57094c1978a2348114"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_database_startup.py": {
+    "mtime": 1773319515.5541694,
+    "ast_hash": "84268e7e23ed2babe955eef2dc05239a",
+    "semantic_hash": "84268e7e23ed2babe955eef2dc05239a"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_encrypted_database_store.py": {
+    "mtime": 1773319515.5587068,
+    "ast_hash": "79994102780669881cafedb589db340b",
+    "semantic_hash": "79994102780669881cafedb589db340b"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_estimate_entry_persistence_service.py": {
+    "mtime": 1773577753.7449367,
+    "ast_hash": "3915bab0ae3b52133b5e3d9b6c0df5ee",
+    "semantic_hash": "3915bab0ae3b52133b5e3d9b6c0df5ee"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_estimate_entry_presenter.py": {
+    "mtime": 1773324453.5625443,
+    "ast_hash": "da04484d6f57a5a41a663e0cbc3ccdf1",
+    "semantic_hash": "da04484d6f57a5a41a663e0cbc3ccdf1"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_estimate_entry_theme.py": {
+    "mtime": 1773319515.5781565,
+    "ast_hash": "93c34c1931b513b33a323f7548acde1d",
+    "semantic_hash": "93c34c1931b513b33a323f7548acde1d"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_estimate_entry_view_model.py": {
+    "mtime": 1773319515.5833404,
+    "ast_hash": "cfbb2ab2833ef030cfacc7906bbf05c0",
+    "semantic_hash": "cfbb2ab2833ef030cfacc7906bbf05c0"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_estimate_entry_workflow_controller.py": {
+    "mtime": 1774019607.253213,
+    "ast_hash": "4e082baa0284735416da81a6c8624af9",
+    "semantic_hash": "4e082baa0284735416da81a6c8624af9"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_estimate_history_table_model.py": {
+    "mtime": 1773319515.5914667,
+    "ast_hash": "4663ec4d9ed15657d7b97b15377904ef",
+    "semantic_hash": "4663ec4d9ed15657d7b97b15377904ef"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_estimate_logic.py": {
+    "mtime": 1773319515.5955482,
+    "ast_hash": "84e0ad2796f6db0875bc73d9a4b6da77",
+    "semantic_hash": "84e0ad2796f6db0875bc73d9a4b6da77"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_estimate_table_model.py": {
+    "mtime": 1773319515.6019456,
+    "ast_hash": "512ae5e245a2b1c8b64f1480f34154bf",
+    "semantic_hash": "512ae5e245a2b1c8b64f1480f34154bf"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_estimate_table_view.py": {
+    "mtime": 1773319515.6077976,
+    "ast_hash": "86f457dbbb897f6f349f93110d0400a4",
+    "semantic_hash": "86f457dbbb897f6f349f93110d0400a4"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_estimate_totals.py": {
+    "mtime": 1773319515.6138105,
+    "ast_hash": "31fe98c4e1ce200660538629380b4bbf",
+    "semantic_hash": "31fe98c4e1ce200660538629380b4bbf"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_estimate_totals_properties.py": {
+    "mtime": 1773319515.6207228,
+    "ast_hash": "c6fbe2b220bdcc22fc1059a9fa5c737c",
+    "semantic_hash": "c6fbe2b220bdcc22fc1059a9fa5c737c"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_flush_scheduler.py": {
+    "mtime": 1773319515.6260624,
+    "ast_hash": "4c214a21938e6da04398363ab293f3e2",
+    "semantic_hash": "4c214a21938e6da04398363ab293f3e2"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_icons.py": {
+    "mtime": 1773319515.6320813,
+    "ast_hash": "e5f3b06a17bb21b6365bb2747e247b33",
+    "semantic_hash": "e5f3b06a17bb21b6365bb2747e247b33"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_items_repository_validation.py": {
+    "mtime": 1773319515.673855,
+    "ast_hash": "b0790b50ca0c03bf474f273ca9b86d72",
+    "semantic_hash": "b0790b50ca0c03bf474f273ca9b86d72"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_item_catalog_transfer.py": {
+    "mtime": 1773577753.7459364,
+    "ast_hash": "8a192b276680709e506d24095415ca10",
+    "semantic_hash": "8a192b276680709e506d24095415ca10"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_item_master_table_model.py": {
+    "mtime": 1773319515.6600165,
+    "ast_hash": "b87d6678ff67683df36539ad0786aaab",
+    "semantic_hash": "b87d6678ff67683df36539ad0786aaab"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_item_selection_table_model.py": {
+    "mtime": 1773319515.6650102,
+    "ast_hash": "11b986499292bc8306c99bddb476efd6",
+    "semantic_hash": "11b986499292bc8306c99bddb476efd6"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_logger_config.py": {
+    "mtime": 1773319515.6804962,
+    "ast_hash": "24f3be4bd600a2a828d3165a9d7381f9",
+    "semantic_hash": "24f3be4bd600a2a828d3165a9d7381f9"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_print_preview_controller.py": {
+    "mtime": 1773577703.9769876,
+    "ast_hash": "935a1194d9598ad88b5875f6250b1c96",
+    "semantic_hash": "935a1194d9598ad88b5875f6250b1c96"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_silver_bars_queries.py": {
+    "mtime": 1773325883.3694217,
+    "ast_hash": "3c672dbcbf3dddf4246c3b2603cbbe73",
+    "semantic_hash": "3c672dbcbf3dddf4246c3b2603cbbe73"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_silver_bars_snapshot_repository.py": {
+    "mtime": 1773321162.562708,
+    "ast_hash": "d51cf2bba97e4562639cdd70ce8e0696",
+    "semantic_hash": "d51cf2bba97e4562639cdd70ce8e0696"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_silver_bar_history_worker.py": {
+    "mtime": 1773319515.692319,
+    "ast_hash": "5116f25509a3375a3ae7b7bcfb3f9394",
+    "semantic_hash": "5116f25509a3375a3ae7b7bcfb3f9394"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_silver_bar_list_lifecycle_controller.py": {
+    "mtime": 1773319515.6996243,
+    "ast_hash": "2cd28e5fc637bd7cee771c5d31027f4b",
+    "semantic_hash": "2cd28e5fc637bd7cee771c5d31027f4b"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_silver_bar_management_state.py": {
+    "mtime": 1773325819.187751,
+    "ast_hash": "ae49e28cb7110f88c1d7d9ad7fb8e27a",
+    "semantic_hash": "ae49e28cb7110f88c1d7d9ad7fb8e27a"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_silver_bar_management_worker.py": {
+    "mtime": 1773319515.7127447,
+    "ast_hash": "c5ec175d8e8b1f8c8e376f15aeee592b",
+    "semantic_hash": "c5ec175d8e8b1f8c8e376f15aeee592b"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_silver_bar_optimization.py": {
+    "mtime": 1773319515.7162156,
+    "ast_hash": "b05093ec78a4da03c4889fcd8124f38e",
+    "semantic_hash": "b05093ec78a4da03c4889fcd8124f38e"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_silver_bar_optimization_controller.py": {
+    "mtime": 1773319515.7243311,
+    "ast_hash": "ec80c6c7da00ff0a09e5895c9edd210a",
+    "semantic_hash": "ec80c6c7da00ff0a09e5895c9edd210a"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_silver_bar_selection_state_controller.py": {
+    "mtime": 1773319515.7293794,
+    "ast_hash": "ce9ff812d5bbec676d3d776f5fc640d3",
+    "semantic_hash": "ce9ff812d5bbec676d3d776f5fc640d3"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_silver_bar_table_models.py": {
+    "mtime": 1773320841.4540002,
+    "ast_hash": "1a5f20295f10f53187383c2ed1fa4504",
+    "semantic_hash": "1a5f20295f10f53187383c2ed1fa4504"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_silver_bar_transfer_controller.py": {
+    "mtime": 1773319515.741497,
+    "ast_hash": "85b9cdb91518cc67ec2129c19cb86de2",
+    "semantic_hash": "85b9cdb91518cc67ec2129c19cb86de2"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_sqlite_database_runtime.py": {
+    "mtime": 1773319515.7584026,
+    "ast_hash": "796d64d3c1fa117fbee1ba90be8cedc3",
+    "semantic_hash": "796d64d3c1fa117fbee1ba90be8cedc3"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_startup_controller_recovery.py": {
+    "mtime": 1774018242.391703,
+    "ast_hash": "d7743ebaea1e56b73e53a0674ccad4bc",
+    "semantic_hash": "d7743ebaea1e56b73e53a0674ccad4bc"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_temp_database_store.py": {
+    "mtime": 1773319515.767037,
+    "ast_hash": "b61837bacf9f9fbf8592379f8d488114",
+    "semantic_hash": "b61837bacf9f9fbf8592379f8d488114"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_totals_panel.py": {
+    "mtime": 1773319515.7732885,
+    "ast_hash": "62f6937129b3c07cbadd9c568e978ee5",
+    "semantic_hash": "62f6937129b3c07cbadd9c568e978ee5"
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\unit\\test_voucher_toolbar.py": {
+    "mtime": 1773319515.7786522,
+    "ast_hash": "5cb5fcfd0f9281addb0143ab0e0178c5",
+    "semantic_hash": "5cb5fcfd0f9281addb0143ab0e0178c5"
+  }
+}

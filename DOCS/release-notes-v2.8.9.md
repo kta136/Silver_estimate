@@ -18,12 +18,14 @@ Version 2.8.9 is the PyQt6 migration and UI hardening release. The app is now Py
 
 ## Release Artifacts
 
-Local Windows artifacts built from commit `c7253ed4a6a456912aa5fe7cac2e757b34d781f2`:
+Published Windows artifacts attached to the GitHub Release:
 
-| Artifact | SHA256 |
-| --- | --- |
-| `SilverEstimate-v2.8.9.exe` | `2B9C3C6BE689A41DBD92C92E3EF5BA22AC67E0C2260FEB358237BF130281A001` |
-| `SilverEstimate-v2.8.9-win64.zip` | `1BB9F8AB825239092FC5E04CC4A43487A9B685AD27D7BED7AA4A3519BFFF4294` |
+| Artifact | Source | SHA256 |
+| --- | --- | --- |
+| `SilverEstimate-v2.8.9.exe` | Local clean build from commit `c7253ed4a6a456912aa5fe7cac2e757b34d781f2` | `2B9C3C6BE689A41DBD92C92E3EF5BA22AC67E0C2260FEB358237BF130281A001` |
+| `SilverEstimate-v2.8.9-win64.zip` | GitHub Actions tag build from `v2.8.9` | `008A630404F60C14823A0F7EFFF3FEC2676702329CD4B195019BFD9C8132EFBA` |
+
+The release also includes `.sha256` sidecar files for both download formats.
 
 ## Verification
 

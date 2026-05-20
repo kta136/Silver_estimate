@@ -910,8 +910,8 @@
     "semantic_hash": ""
   },
   "D:\\Projects\\Silver Estimate\\CHANGELOG.md": {
-    "mtime": 1779272575.035841,
-    "ast_hash": "e697b9e839b600ad6f5d364a1a3499ad",
+    "mtime": 1779275142.084648,
+    "ast_hash": "0858a95397d645131c6be9d88303e69e",
     "semantic_hash": ""
   },
   "D:\\Projects\\Silver Estimate\\python-win-check.txt": {
@@ -920,8 +920,8 @@
     "semantic_hash": ""
   },
   "D:\\Projects\\Silver Estimate\\readme.md": {
-    "mtime": 1779272560.2317798,
-    "ast_hash": "bff46193b73ff2b8c235e178aec9899b",
+    "mtime": 1779275185.0132952,
+    "ast_hash": "d579a615ba5681d50d56614addf3e958",
     "semantic_hash": ""
   },
   "D:\\Projects\\Silver Estimate\\win-pyinstaller-info.txt": {
@@ -985,8 +985,8 @@
     "semantic_hash": ""
   },
   "D:\\Projects\\Silver Estimate\\DOCS\\deployment-guide.md": {
-    "mtime": 1779272623.9036565,
-    "ast_hash": "ad5616b468b2bfa8bb54e8fcd3c3c9d7",
+    "mtime": 1779275155.2824054,
+    "ast_hash": "f7fb53c0487ede7fea5acc28f89d0a2a",
     "semantic_hash": ""
   },
   "D:\\Projects\\Silver Estimate\\DOCS\\performance-baseline-thresholds.md": {
@@ -1077,6 +1077,11 @@
   "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\window_sizing.py": {
     "mtime": 1779274040.2820609,
     "ast_hash": "04d2b410faf409d917f039f229d50155",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\DOCS\\release-notes-v2.8.9.md": {
+    "mtime": 1779275133.6434457,
+    "ast_hash": "70a6cdae1beab9b2107e8b50032d8d82",
     "semantic_hash": ""
   }
 }

@@ -52,10 +52,12 @@ Workflow: `.github/workflows/release-windows.yml`.
 ### v2.8.9 Release Readiness
 - Status: ready for stable release publishing after manual visual smoke.
 - Release notes: `DOCS/release-notes-v2.8.9.md`.
-- Verified local artifacts:
-  - `dist/SilverEstimate-v2.8.9.exe`
-  - `dist/SilverEstimate-v2.8.9-win64.zip`
-- Commit: `c7253ed4a6a456912aa5fe7cac2e757b34d781f2`.
+- Published release: `https://github.com/kta136/Silver_estimate/releases/tag/v2.8.9`.
+- Verified artifacts:
+  - Direct EXE: `SilverEstimate-v2.8.9.exe` from local clean build.
+  - ZIP package: `SilverEstimate-v2.8.9-win64.zip` from the GitHub Actions tag build.
+- Tag: `v2.8.9` at `39d08fa13e7f5a4ca814a7072498a0f799218ed5`.
+- App-code commit: `c7253ed4a6a456912aa5fe7cac2e757b34d781f2`.
 - Local release gate completed: `ruff`, focused PyQt6 UI/theme suite, whitespace check, clean PyInstaller build, Graphify refresh, and PyQt5/Qt5 residue scan.
 - This release is PyQt6-only; do not attach PyQt5/Qt5 artifacts or restore PyQt5 fallback packaging.
 

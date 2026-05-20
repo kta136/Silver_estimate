@@ -172,6 +172,8 @@ database/*
 .pylint.d/
 .ruff_cache/
 .pre-commit-cache/
+graphify-out/.graphify_*
+graphify-out/cache/
 
 # Sphinx docs build output (repo uses DOCS/)
 DOCS/_build/

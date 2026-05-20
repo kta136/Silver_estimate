@@ -285,9 +285,9 @@
     "semantic_hash": "204a035b3db3294bf25ac80a29e70d01"
   },
   "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\estimate_entry_layout_controller.py": {
-    "mtime": 1773319514.9836695,
-    "ast_hash": "ba0bf3987ef98e59c4318916925f8365",
-    "semantic_hash": "ba0bf3987ef98e59c4318916925f8365"
+    "mtime": 1779262241.408367,
+    "ast_hash": "3b79ada3780a41b5275637fea86ddaef",
+    "semantic_hash": ""
   },
   "D:\\Projects\\Silver Estimate\\silverestimate\\ui\\estimate_entry_table_controller.py": {
     "mtime": 1773319515.005602,
@@ -750,9 +750,9 @@
     "semantic_hash": "cfbb2ab2833ef030cfacc7906bbf05c0"
   },
   "D:\\Projects\\Silver Estimate\\tests\\unit\\test_estimate_entry_workflow_controller.py": {
-    "mtime": 1774019607.253213,
-    "ast_hash": "4e082baa0284735416da81a6c8624af9",
-    "semantic_hash": "4e082baa0284735416da81a6c8624af9"
+    "mtime": 1779259785.609719,
+    "ast_hash": "b77eab00b68e737fd0e50b0c3d36cc83",
+    "semantic_hash": ""
   },
   "D:\\Projects\\Silver Estimate\\tests\\unit\\test_estimate_history_table_model.py": {
     "mtime": 1773319515.5914667,
@@ -903,5 +903,125 @@
     "mtime": 1773319515.7786522,
     "ast_hash": "5cb5fcfd0f9281addb0143ab0e0178c5",
     "semantic_hash": "5cb5fcfd0f9281addb0143ab0e0178c5"
+  },
+  "D:\\Projects\\Silver Estimate\\.pre-commit-config.yaml": {
+    "mtime": 1773319514.4413152,
+    "ast_hash": "a5818801b8cd24cb5da3b337af2a9f0b",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\CHANGELOG.md": {
+    "mtime": 1774013362.2446096,
+    "ast_hash": "403f71d6dad713aafe48bb6c028df688",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\python-win-check.txt": {
+    "mtime": 1774172300.0758321,
+    "ast_hash": "49050c1af641c9e760dfaf3db15dd1f9",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\readme.md": {
+    "mtime": 1779259659.1702957,
+    "ast_hash": "36b1a5d99ffc8d878ada01078bbf3030",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\win-pyinstaller-info.txt": {
+    "mtime": 1774950941.316707,
+    "ast_hash": "fd67ff0b227285985342af39e6acd6d8",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\winpy-check.txt": {
+    "mtime": 1774950900.0096135,
+    "ast_hash": "179d33639eec050981dada108bb06202",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\.github\\pull_request_template.md": {
+    "mtime": 1773319514.40787,
+    "ast_hash": "3f7e6d2ec6ba458048b6dbbb6c4fe6be",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\.github\\release.yml": {
+    "mtime": 1773319514.40787,
+    "ast_hash": "00e9b1bc8bd293fdfbba70c5d2c91cfa",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\.github\\ISSUE_TEMPLATE\\bug_report.md": {
+    "mtime": 1773319514.3897893,
+    "ast_hash": "b87f44e34193fd60a805a6d0425df8a7",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\.github\\ISSUE_TEMPLATE\\feature_request.md": {
+    "mtime": 1773319514.4003737,
+    "ast_hash": "975c7b18b4300e9336dd0fc8f10f57b4",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\.github\\ISSUE_TEMPLATE\\question.md": {
+    "mtime": 1773319514.4057028,
+    "ast_hash": "202a64c0377397ca23fcf28fa1095cbd",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\.github\\workflows\\main-validation.yml": {
+    "mtime": 1779259649.903777,
+    "ast_hash": "c88d3d099334d5516fa970111d7d3d9b",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\.github\\workflows\\pr-validation.yml": {
+    "mtime": 1779259649.902766,
+    "ast_hash": "c1fdb60973eff1c1e7a01469a2e9163b",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\.github\\workflows\\release-windows.yml": {
+    "mtime": 1779259649.9047763,
+    "ast_hash": "b804ae428e59bc06327a09c9cc3b0bb9",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\DOCS\\api-reference.md": {
+    "mtime": 1773577411.9085345,
+    "ast_hash": "a59ddbdcd678caece2c22e1627a82be1",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\DOCS\\data-model-relationships.md": {
+    "mtime": 1773319514.460826,
+    "ast_hash": "7ea3f56c0328d4f0bfc8e99e50b3bc42",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\DOCS\\deployment-guide.md": {
+    "mtime": 1779259659.173098,
+    "ast_hash": "4a4810174dee6870c6e42eeef93d3137",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\DOCS\\performance-baseline-thresholds.md": {
+    "mtime": 1773319514.4692602,
+    "ast_hash": "95d0f92021899005d7ba36e49b425008",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\DOCS\\project-architecture.md": {
+    "mtime": 1779259659.175464,
+    "ast_hash": "e97f6a0e3e47aff0d6368aa9254ef1ce",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\DOCS\\security-architecture.md": {
+    "mtime": 1773577411.9006279,
+    "ast_hash": "d75481c0611b3373aff040da4e9f7261",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\DOCS\\workflow-business-logic.md": {
+    "mtime": 1773568881.7395847,
+    "ast_hash": "c8ef6e4de183bfa00ce648fdfd165ecb",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\manual\\ESTIMATE_ENTRY_SMOKE_TESTS.md": {
+    "mtime": 1773319515.3726194,
+    "ast_hash": "c9020f49cb705bf7aeb7ff26e92643ed",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\tests\\manual\\ITEM_CATALOG_BACKUP_SMOKE_TESTS.md": {
+    "mtime": 1773577411.91874,
+    "ast_hash": "947ea783e050f507da4979d472c85fb4",
+    "semantic_hash": ""
+  },
+  "D:\\Projects\\Silver Estimate\\assets\\icons\\silverestimate.png": {
+    "mtime": 1773319514.5070715,
+    "ast_hash": "17fcfecc0691afb46ed2c2c09a0b7265",
+    "semantic_hash": ""
   }
 }

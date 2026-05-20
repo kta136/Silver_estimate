@@ -114,7 +114,6 @@ exclude = [
 module = [
     "PyQt5.*",
     "qtawesome.*",
-    "qtpy.*",
     "keyring.*",
     "passlib.*",
 ]

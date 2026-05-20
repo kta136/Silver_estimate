@@ -296,9 +296,10 @@ class EstimateEntryLayoutController(HostProxy):
 
     def _apply_totals_position(self, position: str, *, persist: bool = True) -> None:
         normalized = self._normalize_totals_position(position)
-        splitter = getattr(self, "_content_splitter", None)
-        if splitter is None or sip.isdeleted(splitter):
+        splitter_obj = getattr(self, "_content_splitter", None)
+        if splitter_obj is None or sip.isdeleted(splitter_obj):
             return
+        splitter = cast(QSplitter, splitter_obj)
 
         sidebar_panel = self._totals_panel_sidebar
         bottom_panel = self._totals_panel_bottom

@@ -20,6 +20,7 @@ A desktop application built with PyQt6 and an encrypted SQLite database for mana
 
 - [Download latest release](https://github.com/kta136/Silver_estimate/releases/latest)
 - [Changelog](CHANGELOG.md)
+- [v2.8.9 release notes](DOCS/release-notes-v2.8.9.md)
 - [Deployment guide](DOCS/deployment-guide.md)
 
 ## Table of Contents

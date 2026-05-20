@@ -49,6 +49,16 @@ Workflow: `.github/workflows/release-windows.yml`.
 4. Create and push annotated tag `git tag v<version>` followed by `git push origin v<version>`.
 5. Confirm the GitHub Actions build attaches the new zip to the release entry.
 
+### v2.8.9 Release Readiness
+- Status: ready for stable release publishing after manual visual smoke.
+- Release notes: `DOCS/release-notes-v2.8.9.md`.
+- Verified local artifacts:
+  - `dist/SilverEstimate-v2.8.9.exe`
+  - `dist/SilverEstimate-v2.8.9-win64.zip`
+- Commit: `c7253ed4a6a456912aa5fe7cac2e757b34d781f2`.
+- Local release gate completed: `ruff`, focused PyQt6 UI/theme suite, whitespace check, clean PyInstaller build, Graphify refresh, and PyQt5/Qt5 residue scan.
+- This release is PyQt6-only; do not attach PyQt5/Qt5 artifacts or restore PyQt5 fallback packaging.
+
 ## Dependency Management
 - Runtime dependencies are defined in `pyproject.toml` (`[project.dependencies]`).
 - Development dependencies are defined in `pyproject.toml` (`[project.optional-dependencies].dev`).

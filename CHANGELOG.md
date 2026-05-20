@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Upgraded the desktop runtime to PyQt6-only and removed PyQt5 compatibility, stubs, packaging paths, and Qt5 residue.
 - Updated the PyInstaller spec and local Windows build script for PyQt6/Qt6 resources and Python 3.14 dependency sync.
 - Expanded strict light styling across settings, login, file dialogs, menus, combo popups, message boxes, item views, management screens, and print preview controls.
+- Finished the follow-up light UI polish across item selection, item master, silver-bar management/history, estimate history, custom font, calendar popups, input/progress dialogs, and high-DPI secondary-window sizing.
 - Refactored printing and PDF export to use Qt6 page layout helpers, stale-printer validation, and temp-file replacement before overwriting a target PDF.
 - Refactored estimate table model/delegate/controller paths to consume shared column specs while preserving the existing fast-entry workflow.
 
@@ -31,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Kept the modern estimate print layout final totals at one decimal place instead of rounding them to whole rupees
 - Restored visible up/down arrows and combo dropdown arrows under the app's Qt stylesheet.
+- Restored visible date-edit arrows under shared Qt stylesheets.
 - Prevented long settings-sidebar labels from creating a horizontal scrollbar.
 - Guarded PDF export so an empty failed render does not replace an existing output file.
 

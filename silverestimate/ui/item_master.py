@@ -257,8 +257,6 @@ class ItemMasterWidget(QWidget):
         self.clear_button.clicked.connect(self.clear_form)
         form_vbox.addWidget(self.clear_button)
 
-        form_vbox.addStretch()
-
         # Separator
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
@@ -271,6 +269,8 @@ class ItemMasterWidget(QWidget):
         self.delete_button.clicked.connect(self.delete_item)
         self.delete_button.setEnabled(False)
         form_vbox.addWidget(self.delete_button)
+
+        form_vbox.addStretch()
 
         split.addWidget(self._form_panel)
 

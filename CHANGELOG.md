@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.9.0] - 2026-06-13
+
+### Added
+- Added an opt-in full-startup smoke suite that creates a fresh encrypted test database with fixed smoke passwords and seeded catalog/estimate data.
+- Added `nox -s smoke_ui` to run the smoke suite in Qt offscreen mode and capture screenshots into `artifacts/smoke-ui/`.
+- Added smoke coverage for login setup, existing-password login, main window, estimate entry, item master, estimate history, settings, custom font, item selection, silver-bar management, silver-bar optimization, silver-bar history, and print preview.
+
+### Changed
+- Bumped application/package version to `2.9.0`.
+- Updated project README version header, badge, build-output examples, and version history to `v2.9.0`.
+- Standardized smoke screenshots around a 1366x768 minimum capture size.
+- Improved UI copy and layout on login setup, item selection, item master, estimate history, settings, custom font, silver-bar management, and silver-bar history screens based on smoke screenshot review.
+
+### Fixed
+- Fixed offscreen smoke capture sizing so the main-window screenshot reflects the normal table layout instead of a narrow maximized-state artifact.
+- Fixed silver-bar CSV export to preserve full timestamps while the UI shows shorter date-only values.
+- Fixed print preview to default to fit-width when no saved preview zoom exists.
+
 ## [2.8.9] - 2026-05-20
 
 ### Added

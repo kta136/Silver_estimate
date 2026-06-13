@@ -94,10 +94,17 @@ class CustomFontDialog(QDialog):
         self.bold_checkbox.setObjectName("CustomFontBoldCheckbox")
         self.bold_checkbox.setChecked(initial_font.bold())
 
-        self.preview_label = QLabel("AaBb123", self)
+        self.preview_label = QLabel(
+            "Estimate 100\n"
+            "RING001  Gold Ring      9.500    8.702\n"
+            "Grand Total                         Rs 2,375",
+            self,
+        )
         self.preview_label.setObjectName("CustomFontSampleText")
-        self.preview_label.setMinimumHeight(60)
-        self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.preview_label.setMinimumHeight(96)
+        self.preview_label.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
 
         self.button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,

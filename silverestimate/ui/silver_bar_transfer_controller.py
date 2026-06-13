@@ -251,7 +251,18 @@ class SilverBarTransferController(HostProxy):
                     output_row = [
                         self._bar_id_from_table(self.list_bars_table, row) or ""
                     ]
+                    row_payload = None
+                    payload_getter = getattr(model, "row_payload", None)
+                    if callable(payload_getter):
+                        row_payload = payload_getter(row)
                     for column in range(model.columnCount()):
+                        if (
+                            column == 4
+                            and isinstance(row_payload, dict)
+                            and row_payload.get("date_added") is not None
+                        ):
+                            output_row.append(str(row_payload.get("date_added")))
+                            continue
                         output_row.append(
                             self._table_cell_text(self.list_bars_table, row, column)
                         )

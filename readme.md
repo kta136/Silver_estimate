@@ -1,11 +1,11 @@
-# Silver Estimation App - v2.8.9
+# Silver Estimation App - v2.9.0
 
 A desktop application built with PyQt6 and an encrypted SQLite database for managing silver sales estimates - item-wise entries, silver bar inventory, returns, and print-ready outputs.
 
 [![Python](https://img.shields.io/badge/Python-3.14+-blue.svg)](https://www.python.org/)
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.11-green.svg)](https://www.riverbankcomputing.com/software/pyqt/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v2.8.9-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v2.9.0-orange.svg)](CHANGELOG.md)
 [![PR Validation](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml)
 [![Main Validation](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml)
 [![Release Windows](https://github.com/kta136/Silver_estimate/actions/workflows/release-windows.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/release-windows.yml)
@@ -20,7 +20,7 @@ A desktop application built with PyQt6 and an encrypted SQLite database for mana
 
 - [Download latest release](https://github.com/kta136/Silver_estimate/releases/latest)
 - [Changelog](CHANGELOG.md)
-- [v2.8.9 release notes](DOCS/release-notes-v2.8.9.md)
+- [v2.9.0 changelog](CHANGELOG.md#290---2026-06-13)
 - [Deployment guide](DOCS/deployment-guide.md)
 
 ## Table of Contents
@@ -198,6 +198,9 @@ uv run pre-commit run --all-files
 
 - Tests live under `tests/` and use pytest (with `pytest-qt` pinned to PyQt6 for UI hooks).
 - Local smoke command: `pytest -v tests/test_security.py tests/services/test_auth_service.py`
+- Full startup UI smoke with screenshots: `uv run nox -s smoke_ui`
+  - Creates an isolated encrypted test database with fixed smoke passwords.
+  - Captures opt-in Qt screenshots under `artifacts/smoke-ui/`.
 - Full local run: `pytest -v`
 - Fast local gate: `uv run --extra dev nox -s tests_fast`
 - Theme/control regression checks: `uv run --extra dev pytest tests/unit/test_application_theme.py tests/unit/test_themed_controls.py tests/ui/test_settings_dialog.py -q`
@@ -217,7 +220,7 @@ uv run pre-commit run --all-files
 - Prereqs: Python 3.14+, PowerShell
 - Fast iteration: `uv run nox -s build`
 - Clean rebuild: `python -m PyInstaller --clean --noconfirm SilverEstimate.spec` or `uv run nox -s build_clean`
-- Output: `dist/SilverEstimate.exe`, `dist/SilverEstimate-v2.8.9.exe`, and `dist/SilverEstimate-v2.8.9-win64.zip` on Windows
+- Output: `dist/SilverEstimate.exe`, `dist/SilverEstimate-v2.9.0.exe`, and `dist/SilverEstimate-v2.9.0-win64.zip` on Windows
 - Release/CI builds use the clean spec-based path; local `nox -s build` reuses PyInstaller caches for faster iteration
 
 ### GitHub Release (Windows CI)
@@ -268,6 +271,12 @@ c 2023-2025 Silver Estimation App
 ---
 
 ## Version History (highlights)
+
+### v2.9.0 (2026-06-13)
+- Added the opt-in full-startup smoke harness with encrypted test database setup and automatic Qt screenshots
+- Captured smoke coverage for login, estimate entry, item master, history, settings, custom font, item selection, silver-bar, and print-preview screens
+- Improved screenshot reliability at a 1366x768 baseline and fixed offscreen main-window sizing
+- Polished several UI surfaces found during screenshot review, including history tables, settings previews, item selection copy, and silver-bar layouts
 
 ### v2.8.9 (2026-05-20)
 - Upgraded the app to PyQt6-only with Python 3.14-oriented dependency and packaging updates

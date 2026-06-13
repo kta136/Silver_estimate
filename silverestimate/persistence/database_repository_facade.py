@@ -64,6 +64,9 @@ class DatabaseRepositoryFacadeMixin:
             voucher_search=voucher_search,
         )
 
+    def get_first_estimate_date(self):
+        return self.estimates_repo.get_first_estimate_date()
+
     def generate_voucher_no(self):
         return self.estimates_repo.generate_voucher_no()
 

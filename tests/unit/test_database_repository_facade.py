@@ -34,6 +34,10 @@ class _StubEstimateRepo:
         self.calls.append(("get_estimate_history_rows", kwargs))
         return [{"voucher_no": "100"}]
 
+    def get_first_estimate_date(self):
+        self.calls.append(("get_first_estimate_date", ()))
+        return "2025-01-01"
+
 
 class _StubSilverBarsRepo:
     def __init__(self):
@@ -122,12 +126,14 @@ def test_estimate_facade_clears_last_error_before_delegating():
 def test_estimate_facade_delegates_history_rows_lookup():
     facade = _FacadeHarness()
 
+    assert facade.get_first_estimate_date() == "2025-01-01"
     assert facade.get_estimate_history_rows(
         date_from="2025-01-01",
         date_to="2025-01-31",
         voucher_search="10",
     ) == [{"voucher_no": "100"}]
     assert facade.estimates_repo.calls == [
+        ("get_first_estimate_date", ()),
         (
             "get_estimate_history_rows",
             {
@@ -135,7 +141,7 @@ def test_estimate_facade_delegates_history_rows_lookup():
                 "date_to": "2025-01-31",
                 "voucher_search": "10",
             },
-        )
+        ),
     ]
 
 

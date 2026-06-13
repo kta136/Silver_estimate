@@ -78,6 +78,8 @@ class EstimateHistoryTableModel(QAbstractTableModel):
             return self._display_value(row, index.column())
         if role == Qt.ItemDataRole.EditRole:
             return self._sort_value(row, index.column())
+        if role == Qt.ItemDataRole.ToolTipRole:
+            return self._display_value(row, index.column())
         if (
             role == Qt.ItemDataRole.TextAlignmentRole
             and index.column() in self._RIGHT_ALIGN_COLUMNS
@@ -116,7 +118,7 @@ class EstimateHistoryTableModel(QAbstractTableModel):
         if column == 2:
             return row.note
         if column == 3:
-            return f"{row.silver_rate:.2f}"
+            return f"{row.silver_rate:,.2f}"
         if column == 4:
             return f"{row.total_gross:.3f}"
         if column == 5:
@@ -124,9 +126,9 @@ class EstimateHistoryTableModel(QAbstractTableModel):
         if column == 6:
             return f"{row.net_fine:.3f}"
         if column == 7:
-            return f"{row.net_wage:.2f}"
+            return f"{row.net_wage:,.2f}"
         if column == 8:
-            return f"{row.grand_total:.2f}"
+            return f"{row.grand_total:,.2f}"
         return ""
 
     def _sort_value(self, row: EstimateHistoryRow, column: int) -> Any:

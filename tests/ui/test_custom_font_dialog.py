@@ -12,6 +12,9 @@ def test_custom_font_dialog_returns_selected_font(qtbot):
         assert dialog.font_combo.objectName() == "CustomFontFamilyCombo"
         assert dialog.size_spinbox.objectName() == "CustomFontSizeSpin"
         assert dialog.size_spinbox.maximumWidth() <= 130
+        assert dialog.preview_label.minimumHeight() >= 96
+        assert "RING001" in dialog.preview_label.text()
+        assert "Grand Total" in dialog.preview_label.text()
         assert "QDialogButtonBox QPushButton" in dialog.styleSheet()
         dialog.size_spinbox.setValue(11.5)
         dialog.bold_checkbox.setChecked(True)

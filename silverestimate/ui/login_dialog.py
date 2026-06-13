@@ -68,6 +68,10 @@ class LoginDialog(QDialog):
                 QLabel#LoginSubtitleLabel {
                     font-size: 9pt;
                 }
+                QLabel#LoginHelpLabel {
+                    color: __TEXT_MUTED__;
+                    font-size: 8.3pt;
+                }
                 QCheckBox#LoginShowPasswords {
                     color: __FIELD_TEXT__;
                     font-size: 8.6pt;
@@ -189,6 +193,14 @@ class LoginDialog(QDialog):
         panel_layout.addWidget(self.password_input)
 
         if self.is_setup:
+            self.password_help_label = QLabel(
+                "Use two different passwords. The main password opens the database; "
+                "the recovery password is for emergency access."
+            )
+            self.password_help_label.setObjectName("LoginHelpLabel")
+            self.password_help_label.setWordWrap(True)
+            panel_layout.addWidget(self.password_help_label)
+
             self.backup_password_label = QLabel("Recovery Password:")
             self.backup_password_label.setObjectName("LoginFieldLabel")
             self.backup_password_input = QLineEdit()
@@ -242,9 +254,9 @@ class LoginDialog(QDialog):
             "Exit without logging in\nApplication will close\nNo data will be accessed or modified"
         )
 
-        button_layout.addWidget(self.ok_button)
-        button_layout.addStretch()
         button_layout.addWidget(self.cancel_button)
+        button_layout.addWidget(self.ok_button)
+        button_layout.setAlignment(Qt.AlignmentFlag.AlignRight)
         panel_layout.addLayout(button_layout)
 
         if not self.is_setup:

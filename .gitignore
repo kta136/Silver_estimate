@@ -159,6 +159,9 @@ cython_debug/
 # Logs
 logs/
 
+# Local test and smoke artifacts
+artifacts/
+
 # Project database artifacts
 # Ignore all database files while keeping the folder via .gitkeep
 database/*

@@ -53,7 +53,7 @@ class EstimateHistoryDialog(QDialog):
         self.setMinimumSize(820, 500)
         resize_to_available_screen(
             self,
-            preferred_width=1040,
+            preferred_width=1120,
             preferred_height=640,
         )
         self.setObjectName("EstimateHistoryDialog")
@@ -195,14 +195,14 @@ class EstimateHistoryDialog(QDialog):
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         header.setStretchLastSection(False)
-        self.estimates_table.setColumnWidth(0, 110)
-        self.estimates_table.setColumnWidth(1, 110)
-        self.estimates_table.setColumnWidth(3, 100)
-        self.estimates_table.setColumnWidth(4, 105)
-        self.estimates_table.setColumnWidth(5, 105)
-        self.estimates_table.setColumnWidth(6, 105)
-        self.estimates_table.setColumnWidth(7, 110)
-        self.estimates_table.setColumnWidth(8, 130)
+        self.estimates_table.setColumnWidth(0, 92)
+        self.estimates_table.setColumnWidth(1, 96)
+        self.estimates_table.setColumnWidth(3, 98)
+        self.estimates_table.setColumnWidth(4, 94)
+        self.estimates_table.setColumnWidth(5, 94)
+        self.estimates_table.setColumnWidth(6, 94)
+        self.estimates_table.setColumnWidth(7, 104)
+        self.estimates_table.setColumnWidth(8, 128)
 
         # Table properties
         self.estimates_table.setEditTriggers(

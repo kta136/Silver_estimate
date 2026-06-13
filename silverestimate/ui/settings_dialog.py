@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import logging  # Ensure logging is available for getLogger calls
 
-from PyQt6.QtCore import QSize, Qt, QUrl, pyqtSignal
+from PyQt6.QtCore import QSize, Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices, QFont, QGuiApplication
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -242,10 +242,7 @@ class SettingsDialog(QDialog):
         last_idx = max(0, min(last_idx, len(page_defs) - 1))
         self.sidebar.setCurrentRow(last_idx)
         self.pages.setCurrentIndex(last_idx)
-        self.sidebar.currentRowChanged.connect(self.pages.setCurrentIndex)
-        self.sidebar.currentRowChanged.connect(
-            lambda i: self.settings.setValue("ui/settings_last_tab", i)
-        )
+        self.sidebar.currentRowChanged.connect(self._set_current_settings_page)
 
         # Buttons
         # Add Help button later if needed
@@ -317,6 +314,9 @@ class SettingsDialog(QDialog):
         self.page_scroll.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
+        self.page_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
         self.page_scroll.setWidget(self.pages)
         page_card_layout.addWidget(self.page_scroll)
         content.addWidget(page_card, 1)
@@ -325,6 +325,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(self.buttonBox)  # Use self.buttonBox here
         self.setLayout(layout)
         self._resize_to_available_screen()
+        self._sync_page_scrollbar()
 
         # If changes fired during construction, reflect pending dirty state
         if getattr(self, "_dirty", False):
@@ -333,6 +334,35 @@ class SettingsDialog(QDialog):
             )
 
     # --- Tab Creation Methods ---
+
+    def _set_current_settings_page(self, index: int) -> None:
+        if 0 <= index < self.pages.count():
+            self.pages.setCurrentIndex(index)
+            self.settings.setValue("ui/settings_last_tab", index)
+        QTimer.singleShot(0, self._sync_page_scrollbar)
+
+    def _sync_page_scrollbar(self) -> None:
+        if not hasattr(self, "pages") or not hasattr(self, "page_scroll"):
+            return
+        try:
+            current = self.pages.currentWidget()
+            viewport_height = self.page_scroll.viewport().height()
+            needs_scrollbar = (
+                current is not None
+                and viewport_height > 0
+                and current.sizeHint().height() > viewport_height
+            )
+            self.page_scroll.setVerticalScrollBarPolicy(
+                Qt.ScrollBarPolicy.ScrollBarAsNeeded
+                if needs_scrollbar
+                else Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            )
+        except RuntimeError:
+            return
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        QTimer.singleShot(0, self._sync_page_scrollbar)
 
     def _create_ui_tab(self):
         """Create the User Interface settings tab."""
@@ -371,9 +401,9 @@ class SettingsDialog(QDialog):
         form_layout.addRow("Print Font:", font_layout)
 
         # Live font sample
-        self.print_font_sample = QLabel("AaBb123")
+        self.print_font_sample = QLabel("RING001  Gold Ring    9.500 g    Rs 2,375")
         self.print_font_sample.setToolTip(
-            "Live preview of selected print font\nShows how text will appear on printed estimates\nUpdates automatically when font changes"
+            "Live preview of selected print font\nShows estimate-like text as it will appear in printouts\nUpdates automatically when font changes"
         )
         self._update_font_sample_label()
         form_layout.addRow("Sample:", self.print_font_sample)
@@ -921,7 +951,9 @@ class SettingsDialog(QDialog):
         form_layout.setLabelAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
-        form_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop)
+        form_layout.setFormAlignment(
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
+        )
         form_layout.setFieldGrowthPolicy(
             QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
         )

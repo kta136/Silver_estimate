@@ -148,6 +148,18 @@ class PrintPreviewController:
             return
         try:
             settings = get_app_settings()
+            has_saved_zoom = False
+            contains = getattr(settings, "contains", None)
+            if callable(contains):
+                has_saved_zoom = bool(contains("print/preview_zoom"))
+            if not has_saved_zoom:
+                try:
+                    preview_widget.setZoomMode(QPrintPreviewWidget.ZoomMode.FitToWidth)
+                    LOGGER.debug("Applying default fit-width preview zoom.")
+                    return
+                except Exception as exc:
+                    LOGGER.debug("Failed to apply fit-width preview zoom: %s", exc)
+
             default_zoom = 1.25
             zoom_factor = settings.value(
                 "print/preview_zoom",

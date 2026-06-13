@@ -45,7 +45,7 @@ class SilverBarHistoryDialog(QDialog):
         self.setMinimumSize(780, 520)
         resize_to_available_screen(
             self,
-            preferred_width=1000,
+            preferred_width=1120,
             preferred_height=680,
         )
         self.setObjectName("SilverBarHistoryDialog")
@@ -198,8 +198,8 @@ class SilverBarHistoryDialog(QDialog):
         self.max_rows_spin = ThemedSpinBox()
         self.max_rows_spin.setRange(100, 50000)
         self.max_rows_spin.setSingleStep(100)
-        self.max_rows_spin.setMinimumWidth(96)
-        self.max_rows_spin.setMaximumWidth(116)
+        self.max_rows_spin.setMinimumWidth(116)
+        self.max_rows_spin.setMaximumWidth(132)
         default_limit = 2000
         try:
             default_limit = get_app_settings().value(
@@ -240,15 +240,15 @@ class SilverBarHistoryDialog(QDialog):
         self.bars_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Interactive
         )
-        self.bars_table.setColumnWidth(0, 80)
-        self.bars_table.setColumnWidth(1, 260)
-        self.bars_table.setColumnWidth(2, 100)
-        self.bars_table.setColumnWidth(3, 100)
-        self.bars_table.setColumnWidth(4, 110)
-        self.bars_table.setColumnWidth(5, 110)
-        self.bars_table.setColumnWidth(6, 160)
-        self.bars_table.setColumnWidth(7, 160)
-        self.bars_table.setColumnWidth(8, 110)
+        self.bars_table.setColumnWidth(0, 56)
+        self.bars_table.setColumnWidth(1, 226)
+        self.bars_table.setColumnWidth(2, 78)
+        self.bars_table.setColumnWidth(3, 78)
+        self.bars_table.setColumnWidth(4, 88)
+        self.bars_table.setColumnWidth(5, 82)
+        self.bars_table.setColumnWidth(6, 136)
+        self.bars_table.setColumnWidth(7, 94)
+        self.bars_table.setColumnWidth(8, 72)
         self.bars_table.horizontalHeader().setStretchLastSection(True)
 
         # Context menu for bars table
@@ -290,12 +290,12 @@ class SilverBarHistoryDialog(QDialog):
         self.lists_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Interactive
         )
-        self.lists_table.setColumnWidth(0, 80)
-        self.lists_table.setColumnWidth(1, 160)
-        self.lists_table.setColumnWidth(2, 260)
-        self.lists_table.setColumnWidth(3, 150)
-        self.lists_table.setColumnWidth(4, 150)
-        self.lists_table.setColumnWidth(5, 90)
+        self.lists_table.setColumnWidth(0, 64)
+        self.lists_table.setColumnWidth(1, 170)
+        self.lists_table.setColumnWidth(2, 290)
+        self.lists_table.setColumnWidth(3, 118)
+        self.lists_table.setColumnWidth(4, 118)
+        self.lists_table.setColumnWidth(5, 78)
         self.lists_table.horizontalHeader().setStretchLastSection(True)
 
         # Context menu for lists table
@@ -332,13 +332,13 @@ class SilverBarHistoryDialog(QDialog):
         self.list_bars_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Interactive
         )
-        self.list_bars_table.setColumnWidth(0, 80)
-        self.list_bars_table.setColumnWidth(1, 260)
-        self.list_bars_table.setColumnWidth(2, 100)
-        self.list_bars_table.setColumnWidth(3, 100)
-        self.list_bars_table.setColumnWidth(4, 110)
-        self.list_bars_table.setColumnWidth(5, 110)
-        self.list_bars_table.setColumnWidth(6, 150)
+        self.list_bars_table.setColumnWidth(0, 56)
+        self.list_bars_table.setColumnWidth(1, 250)
+        self.list_bars_table.setColumnWidth(2, 78)
+        self.list_bars_table.setColumnWidth(3, 78)
+        self.list_bars_table.setColumnWidth(4, 88)
+        self.list_bars_table.setColumnWidth(5, 88)
+        self.list_bars_table.setColumnWidth(6, 94)
         self.list_bars_table.horizontalHeader().setStretchLastSection(True)
 
         layout.addWidget(self.list_bars_table)

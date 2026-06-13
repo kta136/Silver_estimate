@@ -94,12 +94,12 @@ class ItemSelectionDialog(QDialog):
         header_layout.setContentsMargins(10, 8, 10, 8)
         header_layout.setSpacing(2)
 
-        title = QLabel("Item Code Not Found")
+        title = QLabel("Select Matching Item")
         title.setObjectName("ItemSelectionTitleLabel")
         header_layout.addWidget(title)
 
         self.subtitle_label = QLabel(
-            f"Code '{self.search_term}' was not found. Select the closest item."
+            f"Code '{self.search_term}' was not an exact match. Select the closest item."
         )
         self.subtitle_label.setObjectName("ItemSelectionSubtitleLabel")
         self.subtitle_label.setWordWrap(True)

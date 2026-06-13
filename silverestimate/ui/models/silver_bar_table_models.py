@@ -53,6 +53,8 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
             return self.display_value(index.row(), index.column())
         if role == Qt.ItemDataRole.EditRole:
             return self.sort_value(index.row(), index.column())
+        if role == Qt.ItemDataRole.ToolTipRole:
+            return self.tooltip_value(index.row(), index.column())
         if role == Qt.ItemDataRole.TextAlignmentRole:
             return self.text_alignment(index.column())
         if role == Qt.ItemDataRole.BackgroundRole:
@@ -121,6 +123,15 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
             return ""
         return str(value)
 
+    def tooltip_value(self, row: int, column: int) -> str:
+        payload = self.row_payload(row)
+        if payload is None:
+            return ""
+        key = self.value_key(column)
+        if key and payload.get(key) is not None:
+            return str(payload.get(key))
+        return self.display_value(row, column)
+
     def sort_value(self, row: int, column: int) -> Any:
         payload = self.row_payload(row)
         if payload is None:
@@ -161,6 +172,11 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
             return f"{float(value or 0.0):.{places}f}"
         except TypeError, ValueError:
             return f"{0.0:.{places}f}"
+
+    @staticmethod
+    def _format_date(value: Any) -> str:
+        text = str(value or "")
+        return text.split()[0] if text else ""
 
     @staticmethod
     def _bar_id_sort_value(row: dict[str, Any]) -> int:
@@ -204,11 +220,11 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
 
 class _ManagementSilverBarsTableModel(_BaseSilverBarTableModel):
     HEADERS = [
-        "Voucher/Note",
-        "Weight (g)",
-        "Purity (%)",
-        "Fine Wt (g)",
-        "Date Added",
+        "Voucher",
+        "Weight",
+        "Purity",
+        "Fine Wt",
+        "Date",
         "Status",
     ]
 
@@ -238,7 +254,7 @@ class _ManagementSilverBarsTableModel(_BaseSilverBarTableModel):
         if column == 3:
             return self._format_float(payload.get("fine_weight"), 3)
         if column == 4:
-            return str(payload.get("date_added") or "")
+            return self._format_date(payload.get("date_added"))
         if column == 5:
             return str(payload.get("status") or "")
         return ""
@@ -252,7 +268,7 @@ class _ManagementSilverBarsTableModel(_BaseSilverBarTableModel):
             except TypeError, ValueError:
                 return 0.0
         if column == 4:
-            return str(row.get("date_added") or "")
+            return self._format_date(row.get("date_added"))
         if column == 5:
             return str(row.get("status") or "").casefold()
         return super().sort_key_value(row, column)
@@ -288,7 +304,7 @@ class _ManagementSilverBarsTableModel(_BaseSilverBarTableModel):
         if column == 3:
             return self._format_float(row.get("fine_weight"), 3)
         if column == 4:
-            return str(row.get("date_added") or "")
+            return self._format_date(row.get("date_added"))
         if column == 5:
             return str(row.get("status") or "")
         return ""
@@ -312,7 +328,7 @@ class HistorySilverBarsTableModel(_BaseSilverBarTableModel):
         "Status",
         "List",
         "Date Added",
-        "List Status",
+        "State",
     ]
 
     def value_key(self, column: int) -> str:
@@ -354,7 +370,7 @@ class HistorySilverBarsTableModel(_BaseSilverBarTableModel):
                 )
             return "None"
         if column == 7:
-            return str(payload.get("date_added") or "")
+            return self._format_date(payload.get("date_added"))
         if column == 8:
             if payload.get("list_id"):
                 return "Issued" if payload.get("issued_date") else "Active"
@@ -415,7 +431,7 @@ class HistorySilverBarsTableModel(_BaseSilverBarTableModel):
                 return str(row.get("list_identifier") or f"List {row['list_id']}")
             return "None"
         if column == 7:
-            return str(row.get("date_added") or "")
+            return self._format_date(row.get("date_added"))
         if column == 8:
             if row.get("list_id"):
                 return "Issued" if row.get("issued_date") else "Active"
@@ -503,7 +519,7 @@ class HistoryListBarsTableModel(_BaseSilverBarTableModel):
         if column == 5:
             return str(payload.get("status") or "Unknown")
         if column == 6:
-            return str(payload.get("date_added") or "")
+            return self._format_date(payload.get("date_added"))
         return ""
 
     def sort_key_value(self, row: dict[str, Any], column: int) -> Any:
@@ -556,5 +572,5 @@ class HistoryListBarsTableModel(_BaseSilverBarTableModel):
         if column == 5:
             return str(row.get("status") or "Unknown")
         if column == 6:
-            return str(row.get("date_added") or "")
+            return self._format_date(row.get("date_added"))
         return ""

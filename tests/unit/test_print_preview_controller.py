@@ -10,6 +10,18 @@ from silverestimate.ui.print_payload_builder import PrintPreviewPayload
 from silverestimate.ui.print_preview_controller import PrintPreviewController
 
 
+class _PreviewWidgetStub:
+    def __init__(self):
+        self.zoom_modes = []
+        self.zoom_factor = None
+
+    def setZoomMode(self, mode):
+        self.zoom_modes.append(mode)
+
+    def setZoomFactor(self, zoom_factor):
+        self.zoom_factor = zoom_factor
+
+
 def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
     controller = PrintPreviewController(
         printer=QPrinter(),
@@ -81,6 +93,35 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
     for action in toolbar.actions():
         if action.text() in set(expected_action_order):
             assert not action.icon().isNull()
+
+
+def test_preview_uses_fit_width_when_zoom_is_not_saved(qt_app, settings_stub):
+    del qt_app, settings_stub
+    controller = PrintPreviewController(
+        printer=QPrinter(),
+        render_document=lambda *args: None,
+    )
+    preview_widget = _PreviewWidgetStub()
+
+    controller._apply_initial_zoom(preview_widget)
+
+    assert preview_widget.zoom_modes == [QPrintPreviewWidget.ZoomMode.FitToWidth]
+    assert preview_widget.zoom_factor is None
+
+
+def test_preview_uses_saved_custom_zoom_when_available(qt_app, settings_stub):
+    del qt_app, settings_stub
+    get_app_settings().setValue("print/preview_zoom", 1.75)
+    controller = PrintPreviewController(
+        printer=QPrinter(),
+        render_document=lambda *args: None,
+    )
+    preview_widget = _PreviewWidgetStub()
+
+    controller._apply_initial_zoom(preview_widget)
+
+    assert preview_widget.zoom_modes == [QPrintPreviewWidget.ZoomMode.CustomZoom]
+    assert preview_widget.zoom_factor == 1.75
 
 
 def test_preview_defaults_persist_updated_print_preferences(

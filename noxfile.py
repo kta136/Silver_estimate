@@ -154,6 +154,26 @@ def tests_full(session: nox.Session) -> None:
 
 
 @nox.session(python=False)
+def smoke_ui(session: nox.Session) -> None:
+    artifact_dir = PROJECT_ROOT / "artifacts" / "smoke-ui"
+    clean_artifact(artifact_dir)
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+
+    session.env["QT_QPA_PLATFORM"] = "offscreen"
+    session.run(
+        "python",
+        "-m",
+        "pytest",
+        "tests/smoke",
+        "--run-smoke",
+        "--smoke-screenshots",
+        "--smoke-artifact-dir",
+        str(artifact_dir),
+        "-v",
+    )
+
+
+@nox.session(python=False)
 def bandit(session: nox.Session) -> None:
     session.run(
         "python", "-m", "bandit", "-c", "pyproject.toml", "-r", "silverestimate"

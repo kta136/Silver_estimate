@@ -186,8 +186,9 @@ class SilverBarManagementUiBuilder(HostProxy):
 
         center_widget = QWidget(self.host)
         center_widget.setObjectName("SilverBarTransferPane")
+        center_widget.setFixedWidth(128)
         center_layout = QVBoxLayout(center_widget)
-        center_layout.setContentsMargins(12, 12, 12, 12)
+        center_layout.setContentsMargins(6, 12, 6, 12)
         center_layout.addStretch()
         self.add_to_list_button = QPushButton("Add >")
         self.add_all_button = QPushButton("Add All >>")
@@ -298,7 +299,7 @@ class SilverBarManagementUiBuilder(HostProxy):
         self._splitter.addWidget(left_widget)
         self._splitter.addWidget(center_widget)
         self._splitter.addWidget(right_widget)
-        self._splitter.setSizes([520, 120, 520])
+        self._splitter.setSizes([546, 128, 546])
         main_layout.addWidget(self._splitter, 1)
 
         self._filter_reload_timer = QTimer(self.host)

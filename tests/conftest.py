@@ -55,6 +55,9 @@ class _SettingsStub:
     def remove(self, key):
         self._store.pop(key, None)
 
+    def contains(self, key):
+        return key in self._store
+
     def sync(self):  # QSettings compatibility
         return True
 
@@ -173,14 +176,20 @@ def settings_stub(monkeypatch):
 
 
 def pytest_collection_modifyitems(items):
+    run_smoke = bool(items and items[0].config.getoption("--run-smoke"))
+    skip_smoke = pytest.mark.skip(reason="use --run-smoke to run smoke tests")
     for item in items:
         path = item.path.as_posix()
+        if "/tests/smoke/" in path:
+            item.add_marker(pytest.mark.smoke)
         if "/tests/integration/" in path:
             item.add_marker(pytest.mark.integration)
-        else:
+        elif "/tests/smoke/" not in path:
             item.add_marker(pytest.mark.unit)
         if any(path.endswith(suffix) for suffix in _SLOW_PATH_SUFFIXES):
             item.add_marker(pytest.mark.slow)
+        if item.get_closest_marker("smoke") and not run_smoke:
+            item.add_marker(skip_smoke)
 
 
 @pytest.fixture(autouse=True)
@@ -188,4 +197,25 @@ def estimate_table_locale(monkeypatch):
     monkeypatch.setattr(
         "silverestimate.ui.estimate_table_formatting.get_estimate_table_locale",
         lambda: QLocale(QLocale.Language.English, QLocale.Country.India),
+    )
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--run-smoke",
+        action="store_true",
+        default=False,
+        help="Run opt-in full-startup smoke tests.",
+    )
+    parser.addoption(
+        "--smoke-screenshots",
+        action="store_true",
+        default=False,
+        help="Capture UI screenshots during smoke tests.",
+    )
+    parser.addoption(
+        "--smoke-artifact-dir",
+        action="store",
+        default="artifacts/smoke-ui",
+        help="Directory where smoke screenshots are written.",
     )

@@ -1,7 +1,7 @@
 import pytest
 from PyQt6.QtCore import QItemSelectionModel, Qt
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QDialog
+from PyQt6.QtWidgets import QDialog, QLabel
 
 from silverestimate.ui.item_selection_dialog import ItemSelectionDialog
 
@@ -101,7 +101,12 @@ def _select_row(dialog, row):
 
 def test_opens_prefilled_and_focuses_search(qtbot, sample_items):
     dialog = _make_dialog(qtbot, sample_items, term="ad")
+    label_texts = {label.text() for label in dialog.findChildren(QLabel)}
     assert dialog.search_edit.text() == "ad"
+    assert "Select Matching Item" in label_texts
+    assert dialog.subtitle_label.text() == (
+        "Code 'ad' was not an exact match. Select the closest item."
+    )
     assert dialog.minimumWidth() <= 700
     assert dialog.items_table.verticalHeader().isVisible() is False
     assert dialog.detail_code.objectName() == "ItemSelectionValueLabel"

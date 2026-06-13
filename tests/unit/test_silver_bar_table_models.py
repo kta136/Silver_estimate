@@ -39,6 +39,9 @@ def test_management_silver_bar_model_exposes_loaded_and_total_aggregates(qt_app)
     assert model.total_count() == 7
     assert model.total_weight() == 19.5
     assert model.total_fine_weight() == 19.309
+    date_index = model.index(0, 4)
+    assert model.data(date_index, Qt.ItemDataRole.DisplayRole) == "2026-02-15"
+    assert model.data(date_index, Qt.ItemDataRole.ToolTipRole) == "2026-02-15 10:00:00"
 
 
 def test_management_silver_bar_model_clear_rows_resets_counts(qt_app):

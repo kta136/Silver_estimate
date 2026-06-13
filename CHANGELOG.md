@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0] - 2026-06-13
+
+### Changed
+- Bumped application/package version to `3.0`.
+- Updated project README version header, badge, build-output examples, and version history to `v3.0`.
+
+### Removed
+- Removed unused UI helper code: `StatStrip`, `is_numeric_column()`, and `format_estimate_table_number()`.
+- Removed stale tracked temporary artifacts: `coverage.tmp.xml` and `pyinstaller-windows.out`.
+
 ## [2.9.0] - 2026-06-13
 
 ### Added

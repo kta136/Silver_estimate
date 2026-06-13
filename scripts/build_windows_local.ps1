@@ -19,7 +19,7 @@ function Get-PythonVersion([string]$pythonExe) {
     try {
         $versionText = & $pythonExe -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')" 2>$null |
             Select-Object -First 1
-        if ($LASTEXITCODE -ne 0 -or -not $versionText) {
+        if (-not $versionText) {
             return $null
         }
         return [version]$versionText
@@ -45,7 +45,7 @@ function Get-Python314FromLauncher {
 
     $pythonExe = & $launcher.Source -3.14 -c "import sys; print(sys.executable)" 2>$null |
         Select-Object -First 1
-    if ($LASTEXITCODE -eq 0 -and (Test-PythonForBuild -pythonExe $pythonExe)) {
+    if (Test-PythonForBuild -pythonExe $pythonExe) {
         return $pythonExe
     }
     return $null
@@ -118,7 +118,7 @@ function Sync-ProjectDependencies([string]$pythonExe) {
     $uv = Get-Command uv -ErrorAction SilentlyContinue
     if ($uv) {
         & $uv.Source sync --extra dev --python $pythonExe --locked
-        if ($LASTEXITCODE -ne 0) {
+        if (-not $?) {
             throw "uv dependency sync failed."
         }
 
@@ -129,11 +129,11 @@ function Sync-ProjectDependencies([string]$pythonExe) {
     }
 
     & $pythonExe -m pip install --upgrade pip
-    if ($LASTEXITCODE -ne 0) {
+    if (-not $?) {
         throw "pip upgrade failed."
     }
     & $pythonExe -m pip install -e ".[dev]"
-    if ($LASTEXITCODE -ne 0) {
+    if (-not $?) {
         throw "project dependency install failed."
     }
     return $pythonExe
@@ -141,11 +141,11 @@ function Sync-ProjectDependencies([string]$pythonExe) {
 
 function Ensure-PyInstaller([string]$pythonExe) {
     & $pythonExe -m PyInstaller --version | Out-Null
-    if ($LASTEXITCODE -eq 0) {
+    if ($?) {
         return
     }
     & $pythonExe -m pip install pyinstaller
-    if ($LASTEXITCODE -ne 0) {
+    if (-not $?) {
         throw "PyInstaller installation failed."
     }
 }
@@ -163,7 +163,7 @@ try {
     Ensure-PyInstaller -pythonExe $buildPython
 
     & $buildPython -m PyInstaller --clean --noconfirm $specPath
-    if ($LASTEXITCODE -ne 0) {
+    if (-not $?) {
         throw "PyInstaller build failed."
     }
 

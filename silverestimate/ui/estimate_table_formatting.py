@@ -4,28 +4,6 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QLocale
 
-from silverestimate.ui.estimate_entry_logic.constants import (
-    COL_FINE_WT,
-    COL_GROSS,
-    COL_NET_WT,
-    COL_PIECES,
-    COL_POLY,
-    COL_PURITY,
-    COL_WAGE_AMT,
-    COL_WAGE_RATE,
-)
-
-_DECIMAL_PLACES_BY_COLUMN = {
-    COL_GROSS: 3,
-    COL_POLY: 3,
-    COL_NET_WT: 2,
-    COL_PURITY: 2,
-    COL_WAGE_RATE: 2,
-    COL_FINE_WT: 2,
-}
-_INTEGER_COLUMNS = {COL_PIECES, COL_WAGE_AMT}
-NUMERIC_COLUMNS = frozenset(_DECIMAL_PLACES_BY_COLUMN) | _INTEGER_COLUMNS
-
 
 def get_estimate_table_locale() -> QLocale:
     """Return the locale used for estimate-entry numeric formatting."""
@@ -66,19 +44,3 @@ def format_indian_number(value, decimals: int, *, locale: QLocale | None = None)
     whole, fraction = fixed.split(".", 1)
     grouped = _group_indian_digits(whole, separator)
     return sign + grouped + decimal_point + fraction
-
-
-def format_estimate_table_number(
-    column: int, value, *, locale: QLocale | None = None
-) -> str:
-    """Format a numeric estimate-table value for display."""
-
-    active_locale = locale or get_estimate_table_locale()
-
-    if column in _INTEGER_COLUMNS:
-        return format_indian_number(value, 0, locale=active_locale)
-
-    decimals = _DECIMAL_PLACES_BY_COLUMN.get(column)
-    if decimals is None:
-        return str(value)
-    return format_indian_number(value, decimals, locale=active_locale)

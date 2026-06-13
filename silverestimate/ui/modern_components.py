@@ -119,35 +119,3 @@ class DetailsStrip(QFrame):
             group_layout.addWidget(value_widget)
             self._layout.addWidget(group)
         self._layout.addStretch(1)
-
-
-class StatStrip(QFrame):
-    """Small multi-value summary strip used by management tables."""
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.setObjectName("StatStrip")
-        self._layout = QHBoxLayout(self)
-        self._layout.setContentsMargins(10, 6, 10, 6)
-        self._layout.setSpacing(14)
-
-    def set_stats(self, stats: Iterable[tuple[str, object]]) -> None:
-        while self._layout.count():
-            item = self._layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.hide()
-                widget.setParent(None)
-                widget.deleteLater()
-        for label, value in stats:
-            box = QWidget(self)
-            box_layout = QVBoxLayout(box)
-            box_layout.setContentsMargins(0, 0, 0, 0)
-            box_layout.setSpacing(1)
-            label_widget = QLabel(str(label))
-            label_widget.setObjectName("StatStripLabel")
-            value_widget = QLabel(str(value))
-            value_widget.setObjectName("StatStripValue")
-            box_layout.addWidget(label_widget)
-            box_layout.addWidget(value_widget)
-            self._layout.addWidget(box, 1)

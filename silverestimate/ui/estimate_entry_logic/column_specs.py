@@ -240,10 +240,6 @@ def precision_for_column(column: int) -> int | None:
     return spec.precision if spec is not None else None
 
 
-def is_numeric_column(column: int) -> bool:
-    return column in NUMERIC_COLUMNS
-
-
 def is_editable_column(column: int) -> bool:
     return column in EDITABLE_COLUMNS
 

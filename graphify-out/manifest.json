@@ -20,9 +20,9 @@
     "semantic_hash": ""
   },
   "scripts/build_windows_local.ps1": {
-    "mtime": 1779264643.2135322,
-    "ast_hash": "aef9159b4cc9fcf0cb70ea797131d624",
-    "semantic_hash": "aef9159b4cc9fcf0cb70ea797131d624"
+    "mtime": 1781356199.6214752,
+    "ast_hash": "2bf288c81ecb387c6df5f28faf6f7140",
+    "semantic_hash": ""
   },
   "scripts/check_perf_budgets.py": {
     "mtime": 1773319514.5385551,
@@ -80,8 +80,8 @@
     "semantic_hash": "d36773d2ff0c4b6d8a3f99207438eef1"
   },
   "silverestimate/infrastructure/app_constants.py": {
-    "mtime": 1781348825.5580328,
-    "ast_hash": "9b73b0d62645359c8f0c0fe5e47ec18a",
+    "mtime": 1781355980.9655864,
+    "ast_hash": "09e86621ab8588ce8b422cbc8ee2165c",
     "semantic_hash": ""
   },
   "silverestimate/infrastructure/db_session.py": {
@@ -325,9 +325,9 @@
     "semantic_hash": "90bd25f57982d5a1a2a4446d39cff63d"
   },
   "silverestimate/ui/estimate_table_formatting.py": {
-    "mtime": 1779265187.0910642,
-    "ast_hash": "29f484316dda4a9ef04850166f9dda75",
-    "semantic_hash": "29f484316dda4a9ef04850166f9dda75"
+    "mtime": 1781355616.821004,
+    "ast_hash": "9529ab08d88db3d99b2c1dde41acfe93",
+    "semantic_hash": ""
   },
   "silverestimate/ui/icons.py": {
     "mtime": 1779264675.816769,
@@ -910,8 +910,8 @@
     "semantic_hash": ""
   },
   "CHANGELOG.md": {
-    "mtime": 1781348825.560012,
-    "ast_hash": "84146c8c4af0dffb325ed4976fa58339",
+    "mtime": 1781355980.969592,
+    "ast_hash": "85e2ce37e6d3040336e4ef6947b825da",
     "semantic_hash": ""
   },
   "python-win-check.txt": {
@@ -920,8 +920,8 @@
     "semantic_hash": ""
   },
   "readme.md": {
-    "mtime": 1781348825.559026,
-    "ast_hash": "fb0b7e1ff3153f577088c0ebd7269ff2",
+    "mtime": 1781355980.9690788,
+    "ast_hash": "2de2192193081bcefe63498cb45caf7e",
     "semantic_hash": ""
   },
   "win-pyinstaller-info.txt": {
@@ -1050,9 +1050,9 @@
     "semantic_hash": "4a2f95b669447ccf1fa60f748b801f25"
   },
   "silverestimate/ui/estimate_entry_logic/column_specs.py": {
-    "mtime": 1779269654.5743413,
-    "ast_hash": "a49148a67c9931f296e1d11144abb261",
-    "semantic_hash": "a49148a67c9931f296e1d11144abb261"
+    "mtime": 1781355616.821004,
+    "ast_hash": "019df86217f7b339e2bf31608d46c175",
+    "semantic_hash": ""
   },
   "tests/unit/test_application_theme.py": {
     "mtime": 1779274666.0898614,
@@ -1090,8 +1090,8 @@
     "semantic_hash": ""
   },
   "silverestimate/ui/modern_components.py": {
-    "mtime": 1781353404.2701693,
-    "ast_hash": "0a8a622e9e7468599e5715866970cdd6",
+    "mtime": 1781355656.5134757,
+    "ast_hash": "cb0f42a1c1fb758b73281e6e9d9b93f0",
     "semantic_hash": ""
   }
 }

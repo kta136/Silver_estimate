@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Protocol
 
-from PyQt6.QtGui import QColor, QPalette
+from PyQt6.QtGui import QColor, QFont, QPalette
 
 from .theme_tokens import (
     CARD_BORDER,
@@ -168,11 +168,11 @@ QScrollArea {{
 QGroupBox {{
     background-color: {SURFACE_BG};
     border: 1px solid {CARD_BORDER};
-    border-radius: 10px;
+    border-radius: 8px;
     color: {TEXT_STRONG};
     font-weight: 700;
     margin-top: 12px;
-    padding: 12px 12px 10px 12px;
+    padding: 10px 10px 8px 10px;
 }}
 
 QGroupBox::title {{
@@ -184,7 +184,7 @@ QGroupBox::title {{
 QTabWidget::pane {{
     background-color: {SURFACE_BG};
     border: 1px solid {CARD_BORDER};
-    border-radius: 10px;
+    border-radius: 8px;
     top: -1px;
 }}
 
@@ -195,8 +195,8 @@ QTabBar::tab {{
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
     color: {HEADER_TEXT};
-    min-height: 24px;
-    padding: 6px 12px;
+    min-height: 22px;
+    padding: 5px 12px;
 }}
 
 QTabBar::tab:selected {{
@@ -219,12 +219,13 @@ QMenuBar {{
     background-color: {HEADER_BG};
     color: {TEXT_STRONG};
     border-bottom: 1px solid {CARD_BORDER};
+    min-height: 22px;
 }}
 
 QMenuBar::item {{
     background-color: transparent;
     color: {TEXT_STRONG};
-    padding: 4px 8px;
+    padding: 3px 8px;
 }}
 
 QMenuBar::item:selected,
@@ -277,10 +278,10 @@ QToolTip {{
 QComboBox {{
     background-color: {SURFACE_BG};
     border: 1px solid {INPUT_BORDER};
-    border-radius: 8px;
+    border-radius: 6px;
     color: {TEXT_STRONG};
     min-height: 22px;
-    padding: 4px 28px 4px 8px;
+    padding: 3px 28px 3px 8px;
     selection-background-color: {SELECTION_BG};
     selection-color: {TEXT_STRONG};
 }}
@@ -443,18 +444,19 @@ QHeaderView::section {{
     border-bottom: 1px solid {CARD_BORDER_SOFT};
     color: {HEADER_TEXT};
     font-weight: 700;
-    padding: 6px 8px;
+    min-height: 28px;
+    padding: 4px 8px;
 }}
 
 QPushButton,
 QToolButton {{
     background-color: {HEADER_BG};
     border: 1px solid {INPUT_BORDER};
-    border-radius: 8px;
+    border-radius: 6px;
     color: {TEXT_STRONG};
     font-weight: 600;
     min-height: 22px;
-    padding: 5px 10px;
+    padding: 4px 10px;
 }}
 
 QPushButton:hover,
@@ -498,10 +500,10 @@ QTimeEdit,
 QDateTimeEdit {{
     background-color: {SURFACE_BG};
     border: 1px solid {INPUT_BORDER};
-    border-radius: 8px;
+    border-radius: 6px;
     color: {FIELD_TEXT};
-    min-height: 20px;
-    padding: 4px 8px;
+    min-height: 22px;
+    padding: 3px 8px;
     selection-background-color: {SELECTION_BG};
     selection-color: {TEXT_STRONG};
 }}
@@ -658,7 +660,7 @@ QToolBar {{
 QProgressBar {{
     background-color: {HEADER_BG};
     border: 1px solid {INPUT_BORDER};
-    border-radius: 8px;
+    border-radius: 6px;
     color: {TEXT_STRONG};
     min-height: 16px;
     text-align: center;
@@ -673,7 +675,7 @@ QDialogButtonBox QPushButton,
 QMessageBox QPushButton {{
     background-color: {HEADER_BG};
     border: 1px solid {INPUT_BORDER};
-    border-radius: 8px;
+    border-radius: 6px;
     color: {TEXT_STRONG};
     font-weight: 600;
     min-height: 24px;
@@ -727,6 +729,14 @@ def apply_light_application_theme(
         except Exception as exc:
             if logger:
                 logger.debug("Failed to force Fusion Qt style: %s", exc)
+
+    try:
+        set_font = getattr(app, "setFont", None)
+        if callable(set_font):
+            set_font(QFont("Segoe UI", 9))
+    except Exception as exc:
+        if logger:
+            logger.debug("Failed to apply light theme font: %s", exc)
 
     try:
         app.setPalette(build_light_palette())

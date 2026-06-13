@@ -413,7 +413,7 @@ class TotalsPanel(QWidget):
         card.setProperty("sectionKind", section_key)
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(8, 6, 8, 6)
+        card_layout.setContentsMargins(10, 8, 10, 8)
         card_layout.setSpacing(4)
 
         section_title = QLabel(title)
@@ -425,7 +425,7 @@ class TotalsPanel(QWidget):
         title_row.addWidget(section_title)
         title_row.addStretch(1)
 
-        drag_handle = QLabel("≡")
+        drag_handle = QLabel("::")
         drag_handle.setObjectName("SectionDragHandle")
         drag_handle.setToolTip("Drag to reorder this breakdown card")
         title_row.addWidget(drag_handle)
@@ -458,23 +458,37 @@ class TotalsPanel(QWidget):
         card.setProperty("sectionKind", self._FINAL_SECTION_KEY)
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
-        final_layout = QFormLayout(card)
-        final_layout.setContentsMargins(8, 8, 8, 8)
+        outer_layout = QVBoxLayout(card)
+        outer_layout.setContentsMargins(0, 0, 0, 8)
+        outer_layout.setSpacing(8)
+
+        header = QFrame(card)
+        header.setObjectName("FinalCalcHeader")
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(12, 8, 12, 8)
+        header_layout.setSpacing(8)
+
+        final_title = QLabel("Grand Total")
+        final_title.setObjectName("SectionTitle")
+        final_title.setProperty("sectionKind", self._FINAL_SECTION_KEY)
+        header_layout.addWidget(final_title)
+        header_layout.addStretch(1)
+
+        self.grand_total_label = QLabel("0")
+        self.grand_total_label.setObjectName("GrandTotalValue")
+        self.grand_total_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        header_layout.addWidget(self.grand_total_label)
+        outer_layout.addWidget(header)
+
+        final_layout = QFormLayout()
+        final_layout.setContentsMargins(12, 0, 12, 0)
         final_layout.setHorizontalSpacing(8)
         final_layout.setVerticalSpacing(4)
         final_layout.setFieldGrowthPolicy(
             QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow
         )
-
-        final_title = QLabel("Final Calculation")
-        final_title.setObjectName("SectionTitle")
-        final_title.setProperty("sectionKind", self._FINAL_SECTION_KEY)
-        title_row = QHBoxLayout()
-        title_row.setContentsMargins(0, 0, 0, 0)
-        title_row.setSpacing(6)
-        title_row.addWidget(final_title)
-        title_row.addStretch(1)
-        final_layout.addRow(title_row)
 
         self.net_fine_label = QLabel("0.0")
         self.net_fine_label.setObjectName("MetricValue")
@@ -495,21 +509,7 @@ class TotalsPanel(QWidget):
         final_layout.addRow(
             self._create_metric_header("Net Wage:"), self.net_wage_label
         )
-
-        line_before_grand = QFrame()
-        line_before_grand.setFrameShape(QFrame.Shape.HLine)
-        line_before_grand.setFrameShadow(QFrame.Shadow.Sunken)
-        final_layout.addRow(line_before_grand)
-
-        self.grand_total_label = QLabel("0")
-        self.grand_total_label.setObjectName("GrandTotalValue")
-        self.grand_total_label.setAlignment(
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-        )
-        final_layout.addRow(
-            self._create_metric_header("Grand Total:", object_name="GrandTotalLabel"),
-            self.grand_total_label,
-        )
+        outer_layout.addLayout(final_layout)
 
         return card
 
@@ -588,7 +588,7 @@ class TotalsPanel(QWidget):
         if not hasattr(self, "_summary_sections_list"):
             return
         viewport = self._summary_sections_list.viewport()
-        target_width = max(0, viewport.width() - 2)
+        target_width = max(0, viewport.width() - 8)
         for idx in range(self._summary_sections_list.count()):
             item = self._summary_sections_list.item(idx)
             if item is None:
@@ -633,7 +633,7 @@ class TotalsPanel(QWidget):
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(8, 8, 8, 8)
-        main_layout.setSpacing(8)
+        main_layout.setSpacing(6)
 
         self._sidebar_top_host = QWidget()
         self._sidebar_top_layout = QVBoxLayout(self._sidebar_top_host)
@@ -642,17 +642,6 @@ class TotalsPanel(QWidget):
         self._sidebar_top_host.setVisible(False)
         main_layout.addWidget(self._sidebar_top_host)
 
-        header_row = QHBoxLayout()
-        header_row.setContentsMargins(0, 0, 0, 0)
-        header_row.setSpacing(6)
-        summary_title = QLabel("Summary")
-        summary_title.setObjectName("SectionTitle")
-        header_row.addWidget(summary_title)
-        drag_hint = QLabel("Drag breakdown cards to reorder")
-        drag_hint.setObjectName("SummaryDragHint")
-        header_row.addWidget(drag_hint)
-        header_row.addStretch(1)
-        main_layout.addLayout(header_row)
         self._summary_sections_list = _SummarySectionsListWidget()
         self._summary_sections_list.setObjectName("SummarySectionsList")
         self._summary_sections_list.setSpacing(6)

@@ -17,7 +17,8 @@ def test_initial_state(toolbar):
     assert toolbar.get_voucher_number() == ""
     assert toolbar.get_note() == ""
     assert toolbar.get_date() == QDate.currentDate()
-    assert not toolbar.unsaved_badge.isVisible()
+    assert toolbar.unsaved_badge.text() == "● Ready"
+    assert toolbar.unsaved_badge.property("dirty") == "false"
     assert toolbar.mode_indicator_label.text() == "Mode: Regular"
     assert not toolbar.mode_indicator_label.isHidden()
     assert toolbar.layout().indexOf(toolbar.mode_indicator_label) >= 0
@@ -52,14 +53,17 @@ def test_show_unsaved_badge(toolbar):
     # Show the toolbar to ensure visibility changes work
     toolbar.show()
 
-    assert not toolbar.unsaved_badge.isVisible()
+    assert toolbar.unsaved_badge.text() == "● Ready"
+    assert toolbar.unsaved_badge.property("dirty") == "false"
 
     toolbar.show_unsaved_badge(True)
     assert toolbar.unsaved_badge.isVisible()
     assert toolbar.unsaved_badge.text() == "● Unsaved"
+    assert toolbar.unsaved_badge.property("dirty") == "true"
 
     toolbar.show_unsaved_badge(False)
-    assert not toolbar.unsaved_badge.isVisible()
+    assert toolbar.unsaved_badge.text() == "● Ready"
+    assert toolbar.unsaved_badge.property("dirty") == "false"
 
 
 def test_clear_voucher_metadata(toolbar):
@@ -77,7 +81,8 @@ def test_clear_voucher_metadata(toolbar):
     assert toolbar.get_voucher_number() == ""
     assert toolbar.get_note() == ""
     assert toolbar.get_date() == QDate.currentDate()
-    assert not toolbar.unsaved_badge.isVisible()
+    assert toolbar.unsaved_badge.text() == "● Ready"
+    assert toolbar.unsaved_badge.property("dirty") == "false"
 
 
 def test_load_clicked_signal(toolbar):

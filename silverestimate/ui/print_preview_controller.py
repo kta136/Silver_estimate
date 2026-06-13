@@ -234,7 +234,7 @@ class PrintPreviewController:
         toolbar.setMovable(False)
         toolbar.setFloatable(False)
         toolbar.setContentsMargins(4, 4, 4, 4)
-        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         toolbar.setIconSize(QSize(22, 22))
         toolbar.setStyleSheet(f"""
             QToolBar#PrintPreviewToolbar {{
@@ -246,11 +246,10 @@ class PrintPreviewController:
             QToolBar#PrintPreviewToolbar QToolButton {{
                 background-color: {SURFACE_BG};
                 border: 1px solid {INPUT_BORDER};
-                border-radius: 8px;
+                border-radius: 6px;
                 color: {TEXT_STRONG};
-                min-width: 34px;
-                min-height: 34px;
-                padding: 4px;
+                min-height: 30px;
+                padding: 4px 8px;
             }}
             QToolBar#PrintPreviewToolbar QToolButton:hover {{
                 background-color: {SELECTION_BG};
@@ -274,7 +273,10 @@ class PrintPreviewController:
             QWidget#PreviewPageNavigator {{
                 background-color: {SURFACE_BG};
                 border: 1px solid {INPUT_BORDER};
-                border-radius: 8px;
+                border-radius: 6px;
+            }}
+            QPrintPreviewWidget {{
+                background-color: #e5e7eb;
             }}
             QWidget#PreviewPageNavigator QLabel {{
                 color: {FIELD_TEXT};
@@ -294,7 +296,7 @@ class PrintPreviewController:
 
         payload = state["payload"]
 
-        act_qprint = QAction(get_icon("print", widget=preview), "Quick Print", preview)
+        act_qprint = QAction(get_icon("print", widget=preview), "Print", preview)
         act_qprint.setToolTip("Send directly to the selected printer (Ctrl+Shift+P)")
         act_qprint.setShortcut("Ctrl+Shift+P")
         act_qprint.triggered.connect(
@@ -306,7 +308,7 @@ class PrintPreviewController:
         )
         toolbar.addAction(act_qprint)
 
-        act_pdf = QAction(get_icon("save_pdf", widget=preview), "Save PDF", preview)
+        act_pdf = QAction(get_icon("save_pdf", widget=preview), "Export PDF", preview)
         act_pdf.setToolTip("Export the current preview to a PDF file (Ctrl+S)")
         act_pdf.setShortcut("Ctrl+S")
         act_pdf.triggered.connect(
@@ -316,7 +318,7 @@ class PrintPreviewController:
 
         act_sel_prn = QAction(
             get_icon("printer_select", widget=preview),
-            "Printer",
+            "Printer Setup",
             preview,
         )
         act_sel_prn.setToolTip("Choose a printer and keep it for this session")
@@ -465,6 +467,12 @@ class PrintPreviewController:
             except Exception as exc:
                 LOGGER.debug("Failed to hook previewChanged signal: %s", exc)
             update_page_info()
+
+        toolbar.addSeparator()
+        act_close = QAction(get_icon("close", widget=preview), "Close", preview)
+        act_close.setToolTip("Close print preview")
+        act_close.triggered.connect(preview.close)
+        toolbar.addAction(act_close)
 
     def _add_view_mode_actions(
         self,

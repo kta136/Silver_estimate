@@ -192,6 +192,11 @@ class EstimateEntryWidget(QWidget):
     def show_inline_status(self, message, timeout=3000, level="info"):
         self._status_helper.show(message, timeout=timeout, level=level)
 
+    def refresh_bottom_status(self) -> None:
+        refresher = getattr(self._layout_controller, "refresh_bottom_status", None)
+        if callable(refresher):
+            refresher()
+
     def _status(self, message, timeout=3000):
         self.show_status(message, timeout)
 
@@ -218,6 +223,10 @@ class EstimateEntryWidget(QWidget):
 
     def _on_unsaved_state_changed(self, dirty: bool) -> None:
         self.toolbar.show_unsaved_badge(dirty)
+        try:
+            self.refresh_bottom_status()
+        except Exception as exc:
+            self.logger.debug("Could not refresh estimate status strip: %s", exc)
         if self.main_window and hasattr(self.main_window, "setWindowModified"):
             try:
                 self.main_window.setWindowModified(bool(dirty))

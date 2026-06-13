@@ -225,9 +225,9 @@ def test_main_window_startup_sets_up_estimate_view(main_window_fixture, qt_app, 
     assert not widget.silver_bars_button.icon().isNull()
     assert not widget.delete_estimate_button.icon().isNull()
 
-    assert widget.save_button.text() == ""
-    assert widget.print_button.text() == ""
-    assert widget.clear_button.text() == ""
+    assert widget.save_button.text() == "Save"
+    assert widget.print_button.text() == "Print"
+    assert widget.clear_button.text() == "New"
     assert widget.delete_row_button.text() == ""
     assert widget.return_toggle_button.text() == ""
     assert widget.silver_bar_toggle_button.text() == ""

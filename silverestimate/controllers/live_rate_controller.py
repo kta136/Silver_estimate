@@ -95,9 +95,9 @@ class LiveRateController(QObject):
         if meta is not None:
             try:
                 if not show_ui:
-                    meta.setText("Waiting…")
+                    meta.setText("--:--")
                 elif label is not None and label.text() in (".", "-"):
-                    meta.setText("Waiting…")
+                    meta.setText("--:--")
             except Exception as exc:
                 self._logger.debug("Failed to update live-rate meta text: %s", exc)
         return show_ui
@@ -210,7 +210,7 @@ class LiveRateController(QObject):
             self._manual_refresh = False
             return
         timestamp = QDateTime.currentDateTime()
-        timestamp_display = timestamp.toString("HH:mm:ss")
+        timestamp_display = timestamp.toString("HH:mm")
         verbose_timestamp = timestamp.toString("yyyy-MM-dd HH:mm:ss")
         tooltip_rows = []
         if broadcast_rate not in (None, ""):
@@ -229,7 +229,7 @@ class LiveRateController(QObject):
             tooltip_rows.append(f"Reason: {reason}")
             tooltip_rows.append(f"Attempt: {verbose_timestamp}")
             label.setToolTip("\n".join(tooltip_rows))
-            self._set_meta_text(f"Failed {timestamp_display}: {reason}")
+            self._set_meta_text(timestamp_display)
             self._last_refresh_at = timestamp
             self._last_source = None
             self._last_error = reason
@@ -243,7 +243,7 @@ class LiveRateController(QObject):
             tooltip_rows.append(f"Reason: {reason}")
             tooltip_rows.append(f"Attempt: {verbose_timestamp}")
             label.setToolTip("\n".join(tooltip_rows))
-            self._set_meta_text(f"Failed {timestamp_display}: {reason}")
+            self._set_meta_text(timestamp_display)
             self._last_refresh_at = timestamp
             self._last_source = None
             self._last_error = reason

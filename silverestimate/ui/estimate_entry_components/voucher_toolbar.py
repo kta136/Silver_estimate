@@ -50,8 +50,10 @@ class VoucherToolbar(QWidget):
         self.unsaved_badge = QLabel("")
         self.unsaved_badge.setObjectName("UnsavedBadge")
         self.unsaved_badge.setAccessibleName("Unsaved Changes Indicator")
-        self.unsaved_badge.setVisible(False)
-        self.unsaved_badge.setToolTip("Unsaved changes")
+        self.unsaved_badge.setText("● Ready")
+        self.unsaved_badge.setProperty("dirty", "false")
+        self.unsaved_badge.setVisible(True)
+        self.unsaved_badge.setToolTip("Current estimate status")
         self.unsaved_badge.setSizePolicy(
             QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
         )
@@ -76,12 +78,12 @@ class VoucherToolbar(QWidget):
             QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred
         )
 
-        voucher_label = QLabel("Voucher")
+        voucher_label = QLabel("Voucher:")
         voucher_label.setObjectName("VoucherFieldLabel")
         layout.addWidget(voucher_label)
         self.voucher_edit = QLineEdit()
         self.voucher_edit.setObjectName("VoucherNumberEdit")
-        self.voucher_edit.setMaximumWidth(106)
+        self.voucher_edit.setMaximumWidth(112)
         self.voucher_edit.setToolTip("Voucher number (Enter to load)")
         layout.addWidget(self.voucher_edit)
 
@@ -90,7 +92,7 @@ class VoucherToolbar(QWidget):
         self.load_button.setToolTip("Load estimate (Enter)")
         layout.addWidget(self.load_button)
 
-        date_label = QLabel("Date")
+        date_label = QLabel("Date:")
         date_label.setObjectName("VoucherFieldLabel")
         layout.addWidget(date_label)
         self.date_edit = QDateEdit()
@@ -98,11 +100,11 @@ class VoucherToolbar(QWidget):
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDate(QDate.currentDate())
         self.date_edit.setDisplayFormat("dd-MM-yyyy")
-        self.date_edit.setMaximumWidth(110)
+        self.date_edit.setMaximumWidth(126)
         self.date_edit.setToolTip("Estimate date")
         layout.addWidget(self.date_edit)
 
-        silver_rate_label = QLabel("Rate")
+        silver_rate_label = QLabel("Rate:")
         silver_rate_label.setObjectName("VoucherFieldLabel")
         layout.addWidget(silver_rate_label)
         self.silver_rate_spin = QDoubleSpinBox()
@@ -111,11 +113,11 @@ class VoucherToolbar(QWidget):
         self.silver_rate_spin.setDecimals(2)
         self.silver_rate_spin.setValue(0.0)
         self.silver_rate_spin.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
-        self.silver_rate_spin.setMaximumWidth(96)
+        self.silver_rate_spin.setMaximumWidth(116)
         self.silver_rate_spin.setToolTip("Silver rate (₹/kg)")
         layout.addWidget(self.silver_rate_spin)
 
-        note_label = QLabel("Note")
+        note_label = QLabel("Note / Customer:")
         note_label.setObjectName("VoucherFieldLabel")
         layout.addWidget(note_label)
         self.note_edit = QLineEdit()
@@ -190,7 +192,15 @@ class VoucherToolbar(QWidget):
         """
         if show:
             self.unsaved_badge.setText("● Unsaved")
-        self.unsaved_badge.setVisible(show)
+            self.unsaved_badge.setProperty("dirty", "true")
+        else:
+            self.unsaved_badge.setText("● Ready")
+            self.unsaved_badge.setProperty("dirty", "false")
+        self.unsaved_badge.setVisible(True)
+        style = self.unsaved_badge.style()
+        style.unpolish(self.unsaved_badge)
+        style.polish(self.unsaved_badge)
+        self.unsaved_badge.update()
 
     def clear_voucher_metadata(self) -> None:
         """Clear all voucher metadata fields."""

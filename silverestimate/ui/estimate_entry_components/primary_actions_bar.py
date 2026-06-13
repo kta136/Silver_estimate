@@ -77,13 +77,10 @@ class PrimaryActionsBar(QWidget):
     @staticmethod
     def _configure_icon_button(button: QPushButton, *, label: str) -> None:
         button.setAccessibleName(label)
-        if button.icon().isNull():
-            button.setText(label)
-            button.setProperty("iconOnly", False)
-            return
-        button.setText("")
-        button.setProperty("iconOnly", True)
-        button.setIconSize(QSize(18, 18))
+        button.setText(label)
+        button.setProperty("iconOnly", False)
+        if not button.icon().isNull():
+            button.setIconSize(QSize(16, 16))
 
     def _setup_shortcuts(self) -> None:
         """Set up keyboard shortcuts.

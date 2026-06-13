@@ -177,7 +177,7 @@ class SecondaryActionsBar(QWidget):
         self.silver_bars_button.setAutoRaise(True)
         self._left_actions_layout.addWidget(self.silver_bars_button)
 
-        # Live rate value and meta info in vertical layout
+        # Live rate value with compact refresh/time controls.
         self.live_rate_container = QWidget()
         self.live_rate_container.setObjectName("LiveRateCard")
         self.live_rate_container.setSizePolicy(
@@ -186,25 +186,29 @@ class SecondaryActionsBar(QWidget):
 
         rate_layout = QHBoxLayout(self.live_rate_container)
         rate_layout.setContentsMargins(6, 5, 6, 5)
-        rate_layout.setSpacing(4)
-
-        left_stack = QVBoxLayout()
-        left_stack.setContentsMargins(0, 0, 0, 0)
-        left_stack.setSpacing(0)
-
-        value_row = QHBoxLayout()
-        value_row.setContentsMargins(0, 0, 0, 0)
-        value_row.setSpacing(4)
+        rate_layout.setSpacing(6)
 
         self.live_rate_value_label = QLabel("…")
         self.live_rate_value_label.setObjectName("LiveRateValue")
-        self.live_rate_value_label.setMinimumWidth(96)
+        self.live_rate_value_label.setMinimumWidth(220)
+        self.live_rate_value_label.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         self.live_rate_value_label.setAlignment(
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
         )
-        rate_layout.addWidget(self.live_rate_value_label)
+        rate_font = self.live_rate_value_label.font()
+        rate_font.setPointSize(22)
+        rate_font.setBold(True)
+        self.live_rate_value_label.setFont(rate_font)
+        rate_layout.addWidget(self.live_rate_value_label, 1)
+
+        refresh_stack = QVBoxLayout()
+        refresh_stack.setContentsMargins(0, 0, 0, 0)
+        refresh_stack.setSpacing(1)
 
         self.refresh_rate_button = QToolButton()
+        self.refresh_rate_button.setObjectName("RefreshRateButton")
         self.refresh_rate_button.setToolTip("Refresh live silver rate and set it here")
         self.refresh_rate_button.setIcon(
             get_icon("refresh", widget=self, color="#0f766e")
@@ -212,22 +216,26 @@ class SecondaryActionsBar(QWidget):
         self._configure_icon_button(
             self.refresh_rate_button, label="Refresh Silver Rate"
         )
+        self.refresh_rate_button.setFixedSize(QSize(34, 32))
+        self.refresh_rate_button.setSizePolicy(
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
+        )
         self.refresh_rate_button.setAutoRaise(True)
         self.refresh_rate_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.refresh_rate_button.setAccessibleName("Refresh Silver Rate")
-        value_row.addWidget(self.refresh_rate_button)
-
-        left_stack.addLayout(value_row)
+        refresh_stack.addWidget(
+            self.refresh_rate_button, 0, Qt.AlignmentFlag.AlignHCenter
+        )
 
         self.live_rate_meta_label = QLabel("")
         self.live_rate_meta_label.setObjectName("LiveRateMeta")
         self.live_rate_meta_label.setAccessibleName("Live Rate Status")
+        self.live_rate_meta_label.setFixedWidth(38)
         self.live_rate_meta_label.setAlignment(
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
         )
-        left_stack.addWidget(self.live_rate_meta_label)
-
-        rate_layout.addLayout(left_stack)
+        refresh_stack.addWidget(self.live_rate_meta_label)
+        rate_layout.addLayout(refresh_stack, 0)
 
         self._right_actions_layout.addWidget(self.live_rate_container)
         self.live_rate_divider = self._create_divider()
@@ -265,6 +273,9 @@ class SecondaryActionsBar(QWidget):
         if getattr(self, "delete_estimate_button", None) is None:
             return
 
+        self.live_rate_container.setSizePolicy(
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
+        )
         insert_index = layout.indexOf(self.delete_estimate_button)
         if insert_index < 0:
             insert_index = layout.count()

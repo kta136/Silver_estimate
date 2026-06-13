@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import logging
+from datetime import datetime
 
 from PyQt6.QtCore import QObject, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -28,6 +29,11 @@ from silverestimate.ui.models import (
     HistoryListBarsTableModel,
     HistorySilverBarsTableModel,
     IssuedSilverBarListsTableModel,
+)
+from silverestimate.ui.modern_components import (
+    BottomStatusStrip,
+    DetailsStrip,
+    polish_dense_table,
 )
 from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
 from silverestimate.ui.themed_controls import ThemedComboBox, ThemedSpinBox
@@ -64,7 +70,7 @@ class SilverBarHistoryDialog(QDialog):
                 QTabWidget::pane {
                     background-color: __SURFACE_BG__;
                     border: 1px solid __CARD_BORDER__;
-                    border-radius: 12px;
+                    border-radius: 8px;
                     top: -1px;
                 }
                 QTabBar::tab {
@@ -73,7 +79,7 @@ class SilverBarHistoryDialog(QDialog):
                     background-color: __HEADER_BG__;
                     border: 1px solid __CARD_BORDER__;
                     border-bottom: none;
-                    border-radius: 8px 8px 0 0;
+                    border-radius: 6px 6px 0 0;
                     color: __HEADER_TEXT__;
                 }
                 QTabBar::tab:selected {
@@ -87,7 +93,7 @@ class SilverBarHistoryDialog(QDialog):
                 QLabel#SilverBarHistorySummaryLabel {
                     background-color: __HEADER_BG__;
                     border: 1px solid __CARD_BORDER__;
-                    border-radius: 8px;
+                    border-radius: 6px;
                     color: __HEADER_TEXT__;
                     font-weight: 600;
                     padding: 8px;
@@ -110,8 +116,8 @@ class SilverBarHistoryDialog(QDialog):
     def init_ui(self):
         """Set up the user interface."""
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(16, 16, 16, 16)
-        main_layout.setSpacing(12)
+        main_layout.setContentsMargins(12, 12, 12, 12)
+        main_layout.setSpacing(10)
 
         header_card = QFrame(self)
         header_card.setObjectName("SilverBarHistoryHeaderCard")
@@ -157,8 +163,8 @@ class SilverBarHistoryDialog(QDialog):
         """Create the all bars search tab."""
         tab_widget = QWidget()
         layout = QVBoxLayout(tab_widget)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
 
         # Search filters — single row
         filters_row = QHBoxLayout()
@@ -233,6 +239,9 @@ class SilverBarHistoryDialog(QDialog):
         self.bars_table.setSelectionBehavior(
             QAbstractItemView.SelectionBehavior.SelectRows
         )
+        self.bars_table.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection
+        )
         self.bars_table.setAlternatingRowColors(True)
         self.bars_table.setSortingEnabled(True)
         self.bars_table.verticalHeader().setVisible(False)
@@ -250,6 +259,18 @@ class SilverBarHistoryDialog(QDialog):
         self.bars_table.setColumnWidth(7, 94)
         self.bars_table.setColumnWidth(8, 72)
         self.bars_table.horizontalHeader().setStretchLastSection(True)
+        polish_dense_table(
+            self.bars_table,
+            row_height=28,
+            header_height=30,
+            show_grid=False,
+            hide_vertical_header=True,
+        )
+        selection_model = self.bars_table.selectionModel()
+        if selection_model is not None:
+            selection_model.selectionChanged.connect(
+                lambda *_: self._update_selected_bar_details()
+            )
 
         # Context menu for bars table
         self.bars_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -257,10 +278,18 @@ class SilverBarHistoryDialog(QDialog):
 
         layout.addWidget(self.bars_table)
 
+        self.selected_bar_details = DetailsStrip("Selected Bar Details", self)
+        layout.addWidget(self.selected_bar_details)
+
         # Summary label
         self.bars_summary = QLabel("Total Bars: 0")
         self.bars_summary.setObjectName("SilverBarHistorySummaryLabel")
         layout.addWidget(self.bars_summary)
+
+        self.bars_bottom_status = BottomStatusStrip(self)
+        self.bars_bottom_status.set_left_items(["Loaded Bars: 0"])
+        layout.addWidget(self.bars_bottom_status)
+        self._update_selected_bar_details()
 
         return tab_widget
 
@@ -283,6 +312,9 @@ class SilverBarHistoryDialog(QDialog):
         self.lists_table.setSelectionBehavior(
             QAbstractItemView.SelectionBehavior.SelectRows
         )
+        self.lists_table.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection
+        )
         self.lists_table.setAlternatingRowColors(True)
         self.lists_table.setSortingEnabled(True)
         self.lists_table.verticalHeader().setVisible(False)
@@ -297,6 +329,13 @@ class SilverBarHistoryDialog(QDialog):
         self.lists_table.setColumnWidth(4, 118)
         self.lists_table.setColumnWidth(5, 78)
         self.lists_table.horizontalHeader().setStretchLastSection(True)
+        polish_dense_table(
+            self.lists_table,
+            row_height=28,
+            header_height=30,
+            show_grid=False,
+            hide_vertical_header=True,
+        )
 
         # Context menu for lists table
         self.lists_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -326,6 +365,9 @@ class SilverBarHistoryDialog(QDialog):
         self.list_bars_table.setSelectionBehavior(
             QAbstractItemView.SelectionBehavior.SelectRows
         )
+        self.list_bars_table.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection
+        )
         self.list_bars_table.setAlternatingRowColors(True)
         self.list_bars_table.setSortingEnabled(True)
         self.list_bars_table.verticalHeader().setVisible(False)
@@ -340,6 +382,13 @@ class SilverBarHistoryDialog(QDialog):
         self.list_bars_table.setColumnWidth(5, 88)
         self.list_bars_table.setColumnWidth(6, 94)
         self.list_bars_table.horizontalHeader().setStretchLastSection(True)
+        polish_dense_table(
+            self.list_bars_table,
+            row_height=28,
+            header_height=30,
+            show_grid=False,
+            hide_vertical_header=True,
+        )
 
         layout.addWidget(self.list_bars_table)
 
@@ -509,6 +558,13 @@ class SilverBarHistoryDialog(QDialog):
         self.bars_summary.setText(
             f"Loaded Bars: {len(normalized_rows)} (max {self._table_result_limit()})"
         )
+        self._last_refreshed_text = datetime.now().strftime("%d-%m-%Y %I:%M %p")
+        if normalized_rows:
+            self.bars_table.clearSelection()
+            self.bars_table.selectRow(0)
+        else:
+            self.bars_table.clearSelection()
+        self._update_selected_bar_details()
         try:
             self.bars_table.viewport().update()
         except Exception as exc:
@@ -637,6 +693,55 @@ class SilverBarHistoryDialog(QDialog):
 
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to reactivate list: {e}")
+
+    def _update_selected_bar_details(self) -> None:
+        details = getattr(self, "selected_bar_details", None)
+        if details is None:
+            return
+        selection_model = self.bars_table.selectionModel()
+        selected_rows = selection_model.selectedRows() if selection_model else []
+        if not selected_rows:
+            details.set_items(
+                [
+                    ("Bar ID", "-"),
+                    ("Voucher/Note", "-"),
+                    ("Weight (g)", "-"),
+                    ("Purity (%)", "-"),
+                    ("Fine Wt (g)", "-"),
+                    ("Status", "-"),
+                    ("List", "-"),
+                    ("Date Added", "-"),
+                    ("List Status", "-"),
+                ]
+            )
+            self._update_bars_bottom_status()
+            return
+        row = selected_rows[0].row()
+        details.set_items(
+            [
+                ("Bar ID", self._table_cell_text(self.bars_table, row, 0)),
+                ("Voucher/Note", self._table_cell_text(self.bars_table, row, 1)),
+                ("Weight (g)", self._table_cell_text(self.bars_table, row, 2)),
+                ("Purity (%)", self._table_cell_text(self.bars_table, row, 3)),
+                ("Fine Wt (g)", self._table_cell_text(self.bars_table, row, 4)),
+                ("Status", self._table_cell_text(self.bars_table, row, 5)),
+                ("List", self._table_cell_text(self.bars_table, row, 6)),
+                ("Date Added", self._table_cell_text(self.bars_table, row, 7)),
+                ("List Status", self._table_cell_text(self.bars_table, row, 8)),
+            ]
+        )
+        self._update_bars_bottom_status()
+
+    def _update_bars_bottom_status(self) -> None:
+        strip = getattr(self, "bars_bottom_status", None)
+        if strip is None:
+            return
+        total = self.bars_model.rowCount()
+        selection_model = self.bars_table.selectionModel()
+        selected = len(selection_model.selectedRows()) if selection_model else 0
+        refreshed = getattr(self, "_last_refreshed_text", "-")
+        strip.set_left_items([f"Loaded Bars: {total} (max {self._table_result_limit()})"])
+        strip.set_right_items([f"Selected: {selected}", f"Last Refreshed: {refreshed}"])
 
     def show_bars_context_menu(self, pos):
         """Show context menu for bars table."""

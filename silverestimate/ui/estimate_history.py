@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import logging
+import os
 import time
 from functools import partial
 
@@ -22,6 +23,11 @@ from PyQt6.QtWidgets import (
 
 from silverestimate.persistence.estimates_repository import fetch_estimate_history_rows
 from silverestimate.ui.models import EstimateHistoryRow, EstimateHistoryTableModel
+from silverestimate.ui.modern_components import (
+    BottomStatusStrip,
+    DetailsStrip,
+    polish_dense_table,
+)
 
 from .icons import get_icon
 from .print_manager import PrintManager, PrintPreviewBuildWorker
@@ -64,6 +70,7 @@ class EstimateHistoryDialog(QDialog):
                     "HistoryHeaderCard",
                     "HistoryFilterCard",
                     "HistoryActionCard",
+                    "HistoryDetailsStrip",
                 ],
                 title_label="HistoryTitleLabel",
                 subtitle_label="HistorySubtitleLabel",
@@ -80,7 +87,7 @@ class EstimateHistoryDialog(QDialog):
                 QLabel#HistorySummaryLabel {
                     background-color: __HEADER_BG__;
                     border: 1px solid __CARD_BORDER__;
-                    border-radius: 8px;
+                    border-radius: 6px;
                     color: __FIELD_TEXT__;
                     font-weight: 600;
                     padding: 5px 10px;
@@ -95,7 +102,7 @@ class EstimateHistoryDialog(QDialog):
                     alternate-background-color: __SURFACE_BG__;
                 }
                 QTableView::item {
-                    padding: 4px 6px;
+                    padding: 1px 6px;
                 }
                 QDateEdit {
                     min-width: 120px;
@@ -219,10 +226,29 @@ class EstimateHistoryDialog(QDialog):
         self.estimates_table.setShowGrid(False)
         self.estimates_table.setWordWrap(False)
         self.estimates_table.verticalHeader().setVisible(False)
-        self.estimates_table.verticalHeader().setDefaultSectionSize(30)
+        polish_dense_table(
+            self.estimates_table,
+            row_height=28,
+            header_height=30,
+            show_grid=False,
+            hide_vertical_header=True,
+        )
         self.estimates_table.doubleClicked.connect(lambda *_: self.accept())
+        selection_model = self.estimates_table.selectionModel()
+        if selection_model is not None:
+            selection_model.selectionChanged.connect(
+                lambda *_: self._update_selected_details()
+            )
 
         layout.addWidget(self.estimates_table, 1)
+
+        self.selected_details_strip = DetailsStrip("Selected Estimate", self)
+        self.selected_details_strip.setObjectName("HistoryDetailsStrip")
+        layout.addWidget(self.selected_details_strip)
+
+        self.bottom_status_strip = BottomStatusStrip(self)
+        self.bottom_status_strip.set_left_items(["Rows: 0"])
+        layout.addWidget(self.bottom_status_strip)
 
         actions_card = QFrame(self)
         actions_card.setObjectName("HistoryActionCard")
@@ -262,6 +288,7 @@ class EstimateHistoryDialog(QDialog):
         layout.addWidget(actions_card)
 
         self._update_results_summary()
+        self._update_selected_details()
 
     def _resolve_first_estimate_date(self):
         """Resolve the earliest estimate date, falling back to today."""
@@ -394,6 +421,7 @@ class EstimateHistoryDialog(QDialog):
                 table.selectRow(0)
             else:
                 table.clearSelection()
+            self._update_selected_details()
         finally:
             if sorting_enabled:
                 table.setSortingEnabled(True)
@@ -444,6 +472,54 @@ class EstimateHistoryDialog(QDialog):
         else:
             text += " in current date range"
         self.results_summary_label.setText(text)
+        self._update_bottom_status(total)
+
+    def _update_selected_details(self) -> None:
+        strip = getattr(self, "selected_details_strip", None)
+        if strip is None:
+            return
+        selection_model = self.estimates_table.selectionModel()
+        selected_rows = selection_model.selectedRows() if selection_model else []
+        if not selected_rows:
+            strip.setVisible(False)
+            strip.set_items([("Voucher No", "-"), ("Date", "-"), ("Grand Total", "-")])
+            self._update_bottom_status()
+            return
+        payload = self.estimates_model.row_payload(selected_rows[0].row())
+        if payload is None:
+            strip.setVisible(False)
+            strip.set_items([("Voucher No", "-"), ("Date", "-"), ("Grand Total", "-")])
+            self._update_bottom_status()
+            return
+        strip.setVisible(True)
+        strip.set_items(
+            [
+                ("Voucher No", payload.voucher_no),
+                ("Date", payload.date),
+                ("Note", payload.note or "-"),
+                ("Silver Rate", f"{payload.silver_rate:,.2f}"),
+                ("Total Gross", f"{payload.total_gross:.3f}"),
+                ("Total Net", f"{payload.total_net:.3f}"),
+                ("Net Fine", f"{payload.net_fine:.3f}"),
+                ("Net Wage", f"{payload.net_wage:,.2f}"),
+                ("Grand Total", f"{payload.grand_total:,.2f}"),
+            ]
+        )
+        self._update_bottom_status()
+
+    def _update_bottom_status(self, row_count: int | None = None) -> None:
+        strip = getattr(self, "bottom_status_strip", None)
+        if strip is None:
+            return
+        total = self.estimates_model.rowCount() if row_count is None else int(row_count)
+        selection_model = self.estimates_table.selectionModel()
+        selected = len(selection_model.selectedRows()) if selection_model else 0
+        try:
+            user = os.environ.get("USERNAME") or os.environ.get("USER") or "-"
+        except Exception:
+            user = "-"
+        strip.set_left_items([f"Rows: {total}"])
+        strip.set_right_items([f"{selected} row selected", "Last Saved: -", f"User: {user}"])
 
     def _cancel_active_loads(self, timeout_ms: int = 4000) -> None:
         # Invalidate any pending UI updates from old workers.

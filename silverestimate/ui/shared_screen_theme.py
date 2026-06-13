@@ -53,7 +53,7 @@ def build_management_screen_stylesheet(
             {card_selector} {{
                 background-color: {SURFACE_BG};
                 border: 1px solid {CARD_BORDER};
-                border-radius: 12px;
+                border-radius: 8px;
                 color: {TEXT_STRONG};
             }}
             """
@@ -66,7 +66,7 @@ def build_management_screen_stylesheet(
         }}
         QLabel#{title_label} {{
             color: {TEXT_STRONG};
-            font-size: 16pt;
+            font-size: 14pt;
             font-weight: 700;
         }}
         QLabel#{subtitle_label} {{
@@ -96,9 +96,9 @@ def build_management_screen_stylesheet(
         rules.append(
             f"""
             {",\n".join(button_selectors)} {{
-                border-radius: 8px;
+                border-radius: 6px;
                 color: {TEXT_STRONG};
-                padding: 5px 10px;
+                padding: 4px 10px;
                 min-height: 20px;
                 font-weight: 600;
             }}
@@ -157,10 +157,10 @@ def build_management_screen_stylesheet(
             {input_selector} {{
                 background-color: {SURFACE_BG};
                 border: 1px solid {INPUT_BORDER};
-                border-radius: 8px;
+                border-radius: 6px;
                 color: {FIELD_TEXT};
-                padding: 4px 8px;
-                min-height: 18px;
+                padding: 3px 8px;
+                min-height: 22px;
                 selection-background-color: {SELECTION_BG};
                 selection-color: {TEXT_STRONG};
             }}
@@ -183,8 +183,8 @@ def build_management_screen_stylesheet(
             QComboBox::drop-down {{
                 background-color: {HEADER_BG};
                 border-left: 1px solid {INPUT_BORDER};
-                border-top-right-radius: 8px;
-                border-bottom-right-radius: 8px;
+                border-top-right-radius: 6px;
+                border-bottom-right-radius: 6px;
                 subcontrol-origin: border;
                 subcontrol-position: top right;
                 width: 30px;
@@ -246,7 +246,7 @@ def build_management_screen_stylesheet(
         QGroupBox {{
             background-color: {SURFACE_BG};
             border: 1px solid {CARD_BORDER};
-            border-radius: 10px;
+            border-radius: 8px;
             color: {TEXT_STRONG};
             font-weight: 700;
             margin-top: 12px;
@@ -399,10 +399,13 @@ def build_management_screen_stylesheet(
             QTableView {{
                 background-color: {SURFACE_BG};
                 border: 1px solid {CARD_BORDER_SOFT};
-                border-radius: 12px;
+                border-radius: 8px;
                 gridline-color: {CARD_BORDER};
                 selection-background-color: {SELECTION_BG};
                 selection-color: {TEXT_STRONG};
+            }}
+            QTableView::item {{
+                padding: 1px 6px;
             }}
             QHeaderView::section {{
                 background-color: {HEADER_BG};
@@ -410,7 +413,8 @@ def build_management_screen_stylesheet(
                 border: none;
                 border-right: 1px solid {CARD_BORDER_SOFT};
                 border-bottom: 1px solid {CARD_BORDER_SOFT};
-                padding: 6px 8px;
+                min-height: 28px;
+                padding: 4px 8px;
                 font-weight: 700;
             }}
             """

@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import os
 from typing import Optional, cast
 
 from PyQt6 import sip
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (
     QHBoxLayout,
+    QMenu,
+    QPushButton,
     QSizePolicy,
     QSplitter,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -37,6 +42,8 @@ from .estimate_entry_ui import (
     CodeDelegate,
     NumericDelegate,
 )
+from .icons import get_icon
+from .modern_components import BottomStatusStrip, polish_dense_table
 
 
 class EstimateEntryLayoutController(HostProxy):
@@ -47,7 +54,7 @@ class EstimateEntryLayoutController(HostProxy):
         self.host.setStyleSheet(ESTIMATE_ENTRY_STYLESHEET)
 
         layout = QVBoxLayout(self.host)
-        layout.setSpacing(4)
+        layout.setSpacing(0)
         layout.setContentsMargins(0, 0, 0, 0)
 
         header_container = QWidget()
@@ -56,7 +63,7 @@ class EstimateEntryLayoutController(HostProxy):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
         header_layout = QHBoxLayout(header_container)
-        header_layout.setContentsMargins(6, 6, 6, 6)
+        header_layout.setContentsMargins(8, 4, 8, 4)
         header_layout.setSpacing(6)
 
         self.toolbar = VoucherToolbar()
@@ -65,25 +72,39 @@ class EstimateEntryLayoutController(HostProxy):
         )
         header_layout.addWidget(self.toolbar, 5)
 
-        actions_panel = QWidget()
-        actions_panel.setObjectName("EstimateHeaderActions")
-        actions_panel_layout = QHBoxLayout(actions_panel)
-        actions_panel_layout.setContentsMargins(0, 0, 0, 0)
-        actions_panel_layout.setSpacing(4)
-
         self.primary_actions = PrimaryActionsBar(shortcut_parent=self.host)
         self.primary_actions.setSizePolicy(
             QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed
         )
-        actions_panel_layout.addWidget(self.primary_actions)
+        header_layout.addWidget(self.primary_actions)
 
         self.secondary_actions = SecondaryActionsBar(shortcut_parent=self.host)
+        self.secondary_actions.setVisible(False)
         self.secondary_actions.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
         )
-        actions_panel_layout.addWidget(self.secondary_actions)
+        header_layout.addWidget(self.secondary_actions)
 
-        header_layout.addWidget(actions_panel, 4)
+        self.command_history_button = QPushButton("History")
+        self.command_history_button.setObjectName("EstimateHistoryButton")
+        self.command_history_button.setIcon(get_icon("history", widget=self.host))
+        self.command_history_button.setToolTip("View, load, or print past estimates (Ctrl+H)")
+        header_layout.addWidget(self.command_history_button)
+
+        self.command_settings_button = QPushButton("Settings")
+        self.command_settings_button.setObjectName("EstimateSettingsButton")
+        self.command_settings_button.setIcon(get_icon("settings", widget=self.host))
+        self.command_settings_button.setToolTip("Open application settings")
+        header_layout.addWidget(self.command_settings_button)
+
+        self.estimate_tools_button = QToolButton()
+        self.estimate_tools_button.setObjectName("EstimateToolsButton")
+        self.estimate_tools_button.setText("Tools")
+        self.estimate_tools_button.setIcon(get_icon("tools", widget=self.host))
+        self.estimate_tools_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.estimate_tools_button.setToolTip("Estimate row and silver-bar tools")
+        self.estimate_tools_button.setMenu(self._build_estimate_tools_menu())
+        header_layout.addWidget(self.estimate_tools_button)
         layout.addWidget(header_container, 0)
 
         self._content_splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -92,6 +113,13 @@ class EstimateEntryLayoutController(HostProxy):
 
         self.item_table = EstimateTableView()
         self.item_table.host_widget = self.host
+        polish_dense_table(
+            self.item_table,
+            row_height=26,
+            header_height=28,
+            show_grid=True,
+            hide_vertical_header=False,
+        )
         self.item_table.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
@@ -120,8 +148,22 @@ class EstimateEntryLayoutController(HostProxy):
         self._content_splitter.setSizes([1080, 300])
 
         layout.addWidget(self._content_splitter, 1)
+        self.bottom_status_strip = BottomStatusStrip(self.host)
+        self.bottom_status_strip.set_left_items(
+            [
+                "Ctrl+S Save",
+                "Ctrl+P Print",
+                "Ctrl+N New",
+                "Ctrl+H History",
+                "Ctrl+D Delete Row",
+                "Ctrl+R Return",
+                "Ctrl+B Silver Bar",
+            ]
+        )
+        layout.addWidget(self.bottom_status_strip, 0)
         layout.setStretch(0, 0)
         layout.setStretch(1, 1)
+        layout.setStretch(2, 0)
 
         self.voucher_edit = self.toolbar.voucher_edit
         self.date_edit = self.toolbar.date_edit
@@ -150,12 +192,112 @@ class EstimateEntryLayoutController(HostProxy):
 
         self.unsaved_badge = self.toolbar.unsaved_badge
         self.status_message_label = self.toolbar.status_message_label
+        self._update_bottom_status_strip()
+
+        try:
+            model = self.item_table.model()
+            model.rowsInserted.connect(lambda *_: self._update_bottom_status_strip())
+            model.rowsRemoved.connect(lambda *_: self._update_bottom_status_strip())
+            model.modelReset.connect(lambda *_: self._update_bottom_status_strip())
+        except (AttributeError, RuntimeError, TypeError) as exc:
+            self.logger.debug("Failed to bind bottom status strip table updates: %s", exc)
+
+    def _build_estimate_tools_menu(self) -> QMenu:
+        menu = QMenu(self.host)
+
+        delete_row = QAction(
+            get_icon("delete_row", widget=self.host, color="#dc2626"),
+            "Delete Current Row",
+            menu,
+        )
+        delete_row.triggered.connect(self.secondary_actions.delete_row_clicked.emit)
+        menu.addAction(delete_row)
+        menu.addSeparator()
+
+        return_mode = QAction(
+            get_icon("return_mode", widget=self.host, color="#2563eb"),
+            "Return Mode",
+            menu,
+        )
+        return_mode.setCheckable(True)
+        return_mode.triggered.connect(lambda _checked=False: self.return_toggle_button.click())
+        menu.addAction(return_mode)
+
+        silver_bar_mode = QAction(
+            get_icon("bar_mode", widget=self.host, color="#0f766e"),
+            "Silver Bar Mode",
+            menu,
+        )
+        silver_bar_mode.setCheckable(True)
+        silver_bar_mode.triggered.connect(
+            lambda _checked=False: self.silver_bar_toggle_button.click()
+        )
+        menu.addAction(silver_bar_mode)
+        menu.addSeparator()
+
+        balance = QAction(get_icon("balance", widget=self.host), "Add Last Balance", menu)
+        balance.triggered.connect(self.secondary_actions.last_balance_clicked.emit)
+        menu.addAction(balance)
+
+        bars = QAction(get_icon("silver_bars", widget=self.host), "Silver Bar Manager", menu)
+        bars.triggered.connect(self.secondary_actions.silver_bars_clicked.emit)
+        menu.addAction(bars)
+
+        refresh = QAction(get_icon("refresh", widget=self.host, color="#0f766e"), "Refresh Live Rate", menu)
+        refresh.triggered.connect(self.secondary_actions.refresh_rate_clicked.emit)
+        menu.addAction(refresh)
+        menu.addSeparator()
+
+        delete_estimate = QAction(
+            get_icon("delete_estimate", widget=self.host, color="#dc2626"),
+            "Delete Current Estimate",
+            menu,
+        )
+        delete_estimate.triggered.connect(
+            self.secondary_actions.delete_estimate_clicked.emit
+        )
+        menu.addAction(delete_estimate)
+
+        def sync_menu_state() -> None:
+            return_mode.setChecked(bool(self.return_toggle_button.isChecked()))
+            silver_bar_mode.setChecked(bool(self.silver_bar_toggle_button.isChecked()))
+            delete_estimate.setEnabled(bool(self.delete_estimate_button.isEnabled()))
+
+        menu.aboutToShow.connect(sync_menu_state)
+        return menu
+
+    def _update_bottom_status_strip(self) -> None:
+        strip = getattr(self, "bottom_status_strip", None)
+        if strip is None:
+            return
+        try:
+            rows = self.item_table.rowCount()
+        except Exception:
+            rows = 0
+        try:
+            user = os.environ.get("USERNAME") or os.environ.get("USER") or "-"
+        except Exception:
+            user = "-"
+        last_saved = getattr(self.host, "_last_saved_status", "-")
+        strip.set_right_items([f"Rows: {rows}", f"Last Saved: {last_saved}", f"User: {user}"])
+
+    def refresh_bottom_status(self) -> None:
+        self._update_bottom_status_strip()
+
+    def _show_settings_from_command_bar(self) -> None:
+        main_window = getattr(self.host, "main_window", None)
+        opener = getattr(main_window, "show_settings_dialog", None)
+        if callable(opener):
+            opener()
 
     def _move_live_rate_card_to_summary_top(self) -> None:
         sidebar_panel = getattr(self, "_totals_panel_sidebar", None)
         live_rate_card = getattr(self.secondary_actions, "live_rate_container", None)
         if sidebar_panel is None or live_rate_card is None:
             return
+        live_rate_card.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         try:
             sidebar_panel.set_sidebar_top_widget(live_rate_card)
         except (AttributeError, RuntimeError, TypeError) as exc:
@@ -222,6 +364,8 @@ class EstimateEntryLayoutController(HostProxy):
         self.secondary_actions.delete_estimate_clicked.connect(
             self.delete_current_estimate
         )
+        self.command_history_button.clicked.connect(self.show_history)
+        self.command_settings_button.clicked.connect(self._show_settings_from_command_bar)
 
         self.item_table.cell_edited.connect(self._on_table_cell_edited)
         self.item_table.column_layout_reset_requested.connect(
@@ -678,11 +822,12 @@ class EstimateEntryLayoutController(HostProxy):
             font = self.item_table.font()
             font.setPointSize(size_i)
             self.item_table.setFont(font)
-            row_height = max(28, min(38, size_i + 20))
+            row_height = max(24, min(32, size_i + 17))
             self.item_table.verticalHeader().setDefaultSectionSize(row_height)
             self.item_table.verticalHeader().setMinimumSectionSize(
-                max(26, row_height - 2)
+                max(22, row_height - 2)
             )
+            self.item_table.horizontalHeader().setFixedHeight(max(26, min(34, row_height + 2)))
             self._schedule_columns_autofit(delay_ms=0, force=True)
             self.item_table.viewport().update()
             return True

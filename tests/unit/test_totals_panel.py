@@ -294,4 +294,4 @@ def test_sidebar_cards_resize_with_available_width(qt_app):
         item = panel._summary_sections_list.item(idx)
         assert item is not None
         # Item width tracks the current viewport width (dynamic section sizing).
-        assert item.sizeHint().width() >= max(0, viewport_width - 4)
+        assert item.sizeHint().width() >= max(0, viewport_width - 8)

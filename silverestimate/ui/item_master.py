@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import logging
+import os
 import sqlite3
 import time
 
@@ -22,6 +23,7 @@ from PyQt6.QtWidgets import (
 from silverestimate.domain.item_validation import ItemValidationError, validate_item
 from silverestimate.persistence.items_repository import fetch_item_catalog_rows
 from silverestimate.ui.models import ItemMasterTableModel
+from silverestimate.ui.modern_components import BottomStatusStrip, polish_dense_table
 from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
 from silverestimate.ui.themed_controls import ThemedComboBox
 
@@ -121,10 +123,10 @@ class ItemMasterWidget(QWidget):
                     max-height: 1px;
                 }
                 QTableView {
-                    border-radius: 10px;
+                    border-radius: 8px;
                 }
                 QTableView::item {
-                    padding: 4px 8px;
+                    padding: 1px 6px;
                 }
                 QTableView::item:selected {
                     border-radius: 0px;
@@ -134,8 +136,8 @@ class ItemMasterWidget(QWidget):
         )
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(12, 12, 12, 12)
-        outer.setSpacing(10)
+        outer.setContentsMargins(10, 10, 10, 0)
+        outer.setSpacing(8)
 
         # ── Page header ─────────────────────────────────────────
         header_row = QHBoxLayout()
@@ -162,8 +164,8 @@ class ItemMasterWidget(QWidget):
         self._form_panel.setMinimumWidth(280)
         self._form_panel.setMaximumWidth(340)
         form_vbox = QVBoxLayout(self._form_panel)
-        form_vbox.setContentsMargins(16, 16, 16, 16)
-        form_vbox.setSpacing(10)
+        form_vbox.setContentsMargins(14, 14, 14, 14)
+        form_vbox.setSpacing(8)
 
         self._form_heading = QLabel("New Item")
         self._form_heading.setObjectName("ItemMasterFormHeading")
@@ -276,7 +278,7 @@ class ItemMasterWidget(QWidget):
 
         # ── RIGHT: Search + table ───────────────────────────────
         right_col = QVBoxLayout()
-        right_col.setSpacing(8)
+        right_col.setSpacing(6)
 
         search_row = QHBoxLayout()
         search_row.setSpacing(8)
@@ -302,7 +304,13 @@ class ItemMasterWidget(QWidget):
         hdr.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.items_table.verticalHeader().setVisible(False)
-        self.items_table.verticalHeader().setDefaultSectionSize(30)
+        polish_dense_table(
+            self.items_table,
+            row_height=28,
+            header_height=30,
+            show_grid=False,
+            hide_vertical_header=True,
+        )
         self.items_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.items_table.setSelectionBehavior(
             QAbstractItemView.SelectionBehavior.SelectRows
@@ -324,6 +332,13 @@ class ItemMasterWidget(QWidget):
 
         split.addLayout(right_col, 1)
         outer.addLayout(split, 1)
+
+        self.bottom_status_strip = BottomStatusStrip(self)
+        self.bottom_status_strip.set_left_items(
+            ["F2: Item Search", "Ins: Add Row", "Del: Delete Row", "Ctrl+S: Save", "F9: Print"]
+        )
+        outer.addWidget(self.bottom_status_strip)
+        self._update_bottom_status(0)
 
     def load_items(self, search_term=None):
         """Load items from the database into the table."""
@@ -440,6 +455,7 @@ class ItemMasterWidget(QWidget):
         count = len(items)
         noun = "item" if count == 1 else "items"
         self._item_count_label.setText(f"{count} {noun}")
+        self._update_bottom_status(count)
         self.show_status(f"Loaded {count} items.", 2000)
         elapsed_ms = (time.perf_counter() - started_at) * 1000.0
         self.logger.debug(
@@ -448,6 +464,17 @@ class ItemMasterWidget(QWidget):
             search_term,
             len(items),
         )
+
+    def _update_bottom_status(self, count: int | None = None) -> None:
+        strip = getattr(self, "bottom_status_strip", None)
+        if strip is None:
+            return
+        try:
+            user = os.environ.get("USERNAME") or os.environ.get("USER") or "-"
+        except Exception:
+            user = "-"
+        rows = self.items_model.rowCount() if count is None else int(count)
+        strip.set_right_items([f"Rows: {rows}", "Last Saved: -", f"User: {user}"])
 
     def _cancel_active_loads(self, timeout_ms: int = 3000) -> None:
         self._load_request_id += 1

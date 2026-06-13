@@ -110,7 +110,7 @@ def test_apply_visibility_settings_hides_rate_widgets_when_disabled():
     assert widget.live_rate_meta_label.visible is False
     assert widget.refresh_rate_button.visible is False
     assert widget.live_rate_value_label.text() == "-"
-    assert widget.live_rate_meta_label.text() == "Waiting…"
+    assert widget.live_rate_meta_label.text() == "--:--"
 
 
 def test_apply_visibility_settings_shows_placeholder_when_enabled():
@@ -122,7 +122,7 @@ def test_apply_visibility_settings_shows_placeholder_when_enabled():
 
     assert controller.apply_visibility_settings() is True
     assert widget.live_rate_value_label.text() == "."
-    assert widget.live_rate_meta_label.text() == "Waiting…"
+    assert widget.live_rate_meta_label.text() == "--:--"
 
 
 def test_initialize_starts_service_and_schedules_refresh_when_visible():
@@ -207,6 +207,8 @@ def test_update_display_sets_source_tooltip_and_state_on_success():
     assert widget.live_rate_value_label.text().endswith(" /g")
     assert "Source: Broadcast" in widget.live_rate_value_label.tooltip
     assert "Market open" in widget.live_rate_value_label.tooltip
+    assert len(widget.live_rate_meta_label.text()) == 5
+    assert widget.live_rate_meta_label.text().count(":") == 1
     assert controller._last_source == "Broadcast"
     assert controller._last_error is None
 
@@ -225,6 +227,8 @@ def test_update_display_handles_missing_rate_and_reports_manual_failure():
 
     assert widget.live_rate_value_label.text() == "N/A /g"
     assert "Reason: No live rate available" in widget.live_rate_value_label.tooltip
+    assert len(widget.live_rate_meta_label.text()) == 5
+    assert widget.live_rate_meta_label.text().count(":") == 1
     assert status[-1] == ("Live rate unavailable", 3000, "warning")
     assert controller._last_source is None
     assert controller._last_error == "No live rate available"

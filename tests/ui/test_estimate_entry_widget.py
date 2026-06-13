@@ -2,7 +2,14 @@ import types
 
 import pytest
 from PyQt6.QtCore import QDate, QEventLoop, Qt, QTimer
-from PyQt6.QtWidgets import QDialog, QHeaderView, QLineEdit, QMessageBox, QWidget
+from PyQt6.QtWidgets import (
+    QDialog,
+    QHeaderView,
+    QLineEdit,
+    QMessageBox,
+    QSizePolicy,
+    QWidget,
+)
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.persistence.database_manager import DatabaseManager
@@ -762,25 +769,78 @@ def test_totals_position_switching_and_persistence(qt_app, fake_db, settings_stu
 def test_live_rate_card_moves_between_sidebar_and_header(qt_app, fake_db):
     widget = _make_widget(fake_db)
     try:
-        sidebar_top_host = widget._totals_panel_sidebar._sidebar_top_host
+        widget.resize(1280, 800)
+        widget.show()
+        qt_app.processEvents()
 
-        assert widget.secondary_actions.live_rate_container.parent() is sidebar_top_host
+        sidebar_top_host = widget._totals_panel_sidebar._sidebar_top_host
+        live_rate_card = widget.secondary_actions.live_rate_container
+
+        assert live_rate_card.parent() is sidebar_top_host
         assert not sidebar_top_host.isHidden()
+        assert (
+            live_rate_card.sizePolicy().horizontalPolicy()
+            == QSizePolicy.Policy.Expanding
+        )
+        assert live_rate_card.width() >= sidebar_top_host.width() - 2
+        assert widget.refresh_rate_button.width() <= 38
+        assert (
+            widget.live_rate_value_label.width()
+            > widget.refresh_rate_button.width() * 3
+        )
+        assert widget.live_rate_value_label.minimumWidth() >= 220
+        assert widget.live_rate_value_label.font().pointSize() >= 22
+        assert widget.live_rate_meta_label.width() <= 42
+        assert (
+            abs(
+                widget.live_rate_meta_label.geometry().center().x()
+                - widget.refresh_rate_button.geometry().center().x()
+            )
+            <= 2
+        )
+        assert (
+            widget.live_rate_meta_label.geometry().top()
+            >= widget.refresh_rate_button.geometry().bottom()
+        )
 
         widget._apply_totals_position("bottom")
         qt_app.processEvents()
 
-        assert (
-            widget.secondary_actions.live_rate_container.parent()
-            is widget.secondary_actions
-        )
+        assert live_rate_card.parent() is widget.secondary_actions
         assert not widget.secondary_actions.live_rate_divider.isHidden()
+        assert (
+            live_rate_card.sizePolicy().horizontalPolicy() == QSizePolicy.Policy.Fixed
+        )
 
         widget._apply_totals_position("right")
         qt_app.processEvents()
 
-        assert widget.secondary_actions.live_rate_container.parent() is sidebar_top_host
+        assert live_rate_card.parent() is sidebar_top_host
         assert widget.secondary_actions.live_rate_divider.isHidden()
+        assert (
+            live_rate_card.sizePolicy().horizontalPolicy()
+            == QSizePolicy.Policy.Expanding
+        )
+        assert live_rate_card.width() >= sidebar_top_host.width() - 2
+        assert widget.refresh_rate_button.width() <= 38
+        assert (
+            widget.live_rate_value_label.width()
+            > widget.refresh_rate_button.width() * 3
+        )
+        assert widget.live_rate_value_label.minimumWidth() >= 220
+        assert widget.live_rate_value_label.font().pointSize() >= 22
+        assert widget.live_rate_meta_label.width() <= 42
+        assert (
+            abs(
+                widget.live_rate_meta_label.geometry().center().x()
+                - widget.refresh_rate_button.geometry().center().x()
+            )
+            <= 2
+        )
+        assert (
+            widget.live_rate_meta_label.geometry().top()
+            >= widget.refresh_rate_button.geometry().bottom()
+        )
     finally:
         widget.deleteLater()
 
@@ -796,7 +856,21 @@ def test_compact_header_preserves_table_viewport_height(qt_app, fake_db):
         assert header_container is not None
         assert header_container.height() <= 60
         assert widget.mode_indicator_label.isVisible()
-        assert widget.item_table.viewport().height() >= 694
+        assert widget.bottom_status_strip is not None
+        shortcuts = widget.bottom_status_strip._left.text()
+        for label in (
+            "Ctrl+S Save",
+            "Ctrl+P Print",
+            "Ctrl+N New",
+            "Ctrl+H History",
+            "Ctrl+D Delete Row",
+            "Ctrl+R Return",
+            "Ctrl+B Silver Bar",
+        ):
+            assert label in shortcuts
+        for stale_label in ("F2:", "Ins:", "Del:", "F9:"):
+            assert stale_label not in shortcuts
+        assert widget.item_table.viewport().height() >= 670
     finally:
         widget.deleteLater()
 

@@ -57,7 +57,9 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
 
     action_texts = [action.text() for action in toolbar.actions() if action.text()]
 
-    assert "Print" not in action_texts
+    assert "Quick Print" not in action_texts
+    assert "Save PDF" not in action_texts
+    assert "Printer" not in action_texts
     assert "Page setup" not in action_texts
     assert "Fit width" not in action_texts
     assert "Fit page" not in action_texts
@@ -72,9 +74,9 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
     assert "Show overview of all pages" not in action_texts
 
     expected_action_order = [
-        "Quick Print",
-        "Save PDF",
-        "Printer",
+        "Print",
+        "Export PDF",
+        "Printer Setup",
         "Page Setup",
         "Single Page",
         "Facing Pages",
@@ -87,6 +89,7 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
         "Prev",
         "Next",
         "Last",
+        "Close",
     ]
     assert action_texts == expected_action_order
 

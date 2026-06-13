@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import replace
+from datetime import datetime
 from typing import TYPE_CHECKING, Callable, Dict, Optional, cast
 
 from PyQt6.QtCore import (
@@ -189,6 +190,9 @@ class EstimateEntryWorkflowController(HostProxy):
             )
 
             if outcome.success:
+                self._last_saved_status = datetime.now().strftime("%d-%m-%Y %I:%M %p")
+                if hasattr(self, "refresh_bottom_status"):
+                    self.refresh_bottom_status()
                 self._status(outcome.message, 5000)
                 QMessageBox.information(
                     self._parent_widget(), "Success", outcome.message

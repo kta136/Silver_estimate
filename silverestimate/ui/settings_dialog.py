@@ -4,6 +4,7 @@ import logging  # Ensure logging is available for getLogger calls
 from PyQt6.QtCore import QSize, Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices, QFont, QGuiApplication
 from PyQt6.QtWidgets import (
+    QAbstractItemView,
     QCheckBox,
     QDialog,
     QDialogButtonBox,
@@ -12,6 +13,7 @@ from PyQt6.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QListView,
@@ -22,6 +24,8 @@ from PyQt6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QStackedWidget,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -45,6 +49,7 @@ from .theme_tokens import (
     HEADER_BG,
     HEADER_TEXT,
     INPUT_BORDER,
+    PRIMARY_BG,
     SELECTION_BG,
     SURFACE_BG,
     TEXT_MUTED,
@@ -63,12 +68,16 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.main_window = main_window_ref  # Store reference to main window
         self.setWindowTitle("Application Settings")
-        self.setMinimumSize(620, 540)
+        self.setMinimumSize(900, 540)
         self.setObjectName("SettingsDialog")
         self.setStyleSheet(
             build_management_screen_stylesheet(
                 root_selector="QDialog#SettingsDialog",
-                card_names=["SettingsHeaderCard", "SettingsPageCard"],
+                card_names=[
+                    "SettingsHeaderCard",
+                    "SettingsPageCard",
+                    "SettingsPreviewCard",
+                ],
                 title_label="SettingsTitleLabel",
                 subtitle_label="SettingsSubtitleLabel",
                 primary_button="SettingsPrimaryButton",
@@ -166,6 +175,28 @@ class SettingsDialog(QDialog):
                 }}
                 QDialogButtonBox {{
                     padding-top: 4px;
+                }}
+                QFrame#SettingsPreviewCard {{
+                    margin-top: 6px;
+                }}
+                QTableWidget#SettingsPreviewTable {{
+                    border-radius: 8px;
+                    gridline-color: {CARD_BORDER_SOFT};
+                    selection-background-color: {SELECTION_BG};
+                }}
+                QLabel#SettingsPreviewTitle {{
+                    color: {TEXT_STRONG};
+                    font-size: 10.5pt;
+                    font-weight: 700;
+                }}
+                QLabel#SettingsGrandTotalPreview {{
+                    background-color: {SURFACE_BG};
+                    border: 1px solid {CARD_BORDER};
+                    border-top: 24px solid {PRIMARY_BG};
+                    border-radius: 8px;
+                    color: {TEXT_STRONG};
+                    font-weight: 700;
+                    padding: 8px 10px;
                 }}
                 """,
             )
@@ -466,9 +497,69 @@ class SettingsDialog(QDialog):
         # Add more UI settings here...
 
         layout.addLayout(form_layout)
+        layout.addWidget(self._create_ui_preview_panel())
         layout.addStretch()  # Push settings to the top
         widget.setLayout(layout)
         return widget
+
+    def _create_ui_preview_panel(self):
+        preview = QFrame()
+        preview.setObjectName("SettingsPreviewCard")
+        preview_layout = QVBoxLayout(preview)
+        preview_layout.setContentsMargins(12, 10, 12, 12)
+        preview_layout.setSpacing(8)
+
+        title = QLabel("Preview")
+        title.setObjectName("SettingsPreviewTitle")
+        preview_layout.addWidget(title)
+
+        preview_row = QHBoxLayout()
+        preview_row.setSpacing(12)
+
+        table = QTableWidget(5, 6, preview)
+        table.setObjectName("SettingsPreviewTable")
+        table.setHorizontalHeaderLabels(
+            ["Code", "Item Name", "Gross", "Poly", "Net Wt", "Wage Amt"]
+        )
+        sample_rows = [
+            ("RING001", "Gold Ring", "10.000", "0.500", "9.500", "250.00"),
+            ("NECK001", "Gold Necklace", "15.000", "0.750", "14.250", "325.00"),
+            ("BRAC001", "Gold Bracelet", "20.000", "1.000", "19.000", "275.00"),
+            ("BAR001", "Silver Bar", "40.000", "0.040", "39.960", "0.00"),
+            ("ANKL001", "Silver Anklet", "25.000", "0.300", "24.700", "85.00"),
+        ]
+        for row, values in enumerate(sample_rows):
+            for col, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                if col >= 2:
+                    item.setTextAlignment(
+                        int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                    )
+                table.setItem(row, col, item)
+        table.verticalHeader().setVisible(False)
+        table.verticalHeader().setDefaultSectionSize(24)
+        table.horizontalHeader().setFixedHeight(28)
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        table.setMaximumHeight(178)
+        preview_row.addWidget(table, 3)
+
+        grand_total = QLabel(
+            "Grand Total        Rs 1,440,170.88\n\n"
+            "Net Fine Wt:      19.058\n"
+            "Net Wage:         6,094.00\n\n"
+            "Totals\n"
+            "Total Gross Wt:   335.000\n"
+            "Total Poly Wt:    16.760"
+        )
+        grand_total.setObjectName("SettingsGrandTotalPreview")
+        grand_total.setMinimumWidth(260)
+        grand_total.setAlignment(Qt.AlignmentFlag.AlignTop)
+        preview_row.addWidget(grand_total, 1)
+
+        preview_layout.addLayout(preview_row)
+        return preview
 
     def _create_live_rates_tab(self):
         """Create the Live Rates settings tab (DDASilver auto-refresh)."""

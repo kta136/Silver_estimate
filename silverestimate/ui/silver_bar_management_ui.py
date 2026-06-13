@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import cast
 
 from PyQt6.QtCore import Qt, QTimer
@@ -23,6 +24,7 @@ from silverestimate.ui.models import (
     AvailableSilverBarsTableModel,
     SelectedListSilverBarsTableModel,
 )
+from silverestimate.ui.modern_components import BottomStatusStrip, polish_dense_table
 from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
 from silverestimate.ui.themed_controls import ThemedComboBox
 from silverestimate.ui.window_sizing import resize_to_available_screen
@@ -64,7 +66,7 @@ class SilverBarManagementUiBuilder(HostProxy):
                 QWidget#SilverBarTransferPane {
                     background-color: __SURFACE_BG__;
                     border: 1px solid __CARD_BORDER__;
-                    border-radius: 12px;
+                    border-radius: 8px;
                 }
                 QLabel#SilverBarSectionLabel {
                     color: __TEXT_STRONG__;
@@ -80,7 +82,7 @@ class SilverBarManagementUiBuilder(HostProxy):
                 QLabel#SilverBarSummaryLabel {
                     background-color: __HEADER_BG__;
                     border: 1px solid __CARD_BORDER__;
-                    border-radius: 8px;
+                    border-radius: 6px;
                     color: __HEADER_TEXT__;
                     font-weight: 600;
                     padding: 6px 8px;
@@ -115,8 +117,8 @@ class SilverBarManagementUiBuilder(HostProxy):
         )
 
         main_layout = QVBoxLayout(self.host)
-        main_layout.setContentsMargins(16, 16, 16, 16)
-        main_layout.setSpacing(12)
+        main_layout.setContentsMargins(12, 12, 12, 0)
+        main_layout.setSpacing(10)
 
         self._splitter = QSplitter(Qt.Orientation.Horizontal, self.host)
         self._splitter.setChildrenCollapsible(False)
@@ -124,7 +126,7 @@ class SilverBarManagementUiBuilder(HostProxy):
         left_widget = QWidget(self.host)
         left_widget.setObjectName("SilverBarManagementPane")
         left_layout = QVBoxLayout(left_widget)
-        left_layout.setContentsMargins(8, 8, 8, 8)
+        left_layout.setContentsMargins(10, 10, 10, 10)
         left_layout.setSpacing(8)
 
         left_header = QHBoxLayout()
@@ -173,6 +175,13 @@ class SilverBarManagementUiBuilder(HostProxy):
         self.available_bars_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
         )
+        polish_dense_table(
+            self.available_bars_table,
+            row_height=28,
+            header_height=30,
+            show_grid=True,
+            hide_vertical_header=True,
+        )
         left_layout.addWidget(self.available_bars_table, 1)
 
         self.available_totals_label = QLabel("Available Bars: 0")
@@ -207,7 +216,7 @@ class SilverBarManagementUiBuilder(HostProxy):
         right_widget = QWidget(self.host)
         right_widget.setObjectName("SilverBarManagementPane")
         right_layout = QVBoxLayout(right_widget)
-        right_layout.setContentsMargins(8, 8, 8, 8)
+        right_layout.setContentsMargins(10, 10, 10, 10)
         right_layout.setSpacing(8)
 
         right_header = QHBoxLayout()
@@ -281,6 +290,13 @@ class SilverBarManagementUiBuilder(HostProxy):
         self.list_bars_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
         )
+        polish_dense_table(
+            self.list_bars_table,
+            row_height=28,
+            header_height=30,
+            show_grid=True,
+            hide_vertical_header=True,
+        )
         self.list_bars_table.horizontalHeader().setObjectName("SilverBarListHeader")
         self.list_bars_table.setProperty("listState", "inactive")
         self.list_bars_table.horizontalHeader().setProperty("listState", "inactive")
@@ -301,6 +317,13 @@ class SilverBarManagementUiBuilder(HostProxy):
         self._splitter.addWidget(right_widget)
         self._splitter.setSizes([546, 128, 546])
         main_layout.addWidget(self._splitter, 1)
+
+        self.bottom_status_strip = BottomStatusStrip(self.host)
+        self.bottom_status_strip.set_left_items(
+            ["F2: Item Search", "Ins: Add Row", "Del: Delete Row", "Ctrl+S: Save", "F9: Print"]
+        )
+        main_layout.addWidget(self.bottom_status_strip)
+        self._update_dialog_status_strip()
 
         self._filter_reload_timer = QTimer(self.host)
         self._filter_reload_timer.setSingleShot(True)
@@ -346,9 +369,15 @@ class SilverBarManagementUiBuilder(HostProxy):
         available_selection = self.available_bars_table.selectionModel()
         if available_selection is not None:
             available_selection.selectionChanged.connect(self._on_selection_changed)
+            available_selection.selectionChanged.connect(
+                lambda *_: self._update_dialog_status_strip()
+            )
         list_selection = self.list_bars_table.selectionModel()
         if list_selection is not None:
             list_selection.selectionChanged.connect(self._on_selection_changed)
+            list_selection.selectionChanged.connect(
+                lambda *_: self._update_dialog_status_strip()
+            )
 
         self.available_bars_table.doubleClicked.connect(
             lambda _index: self.add_selected_to_list()
@@ -388,3 +417,31 @@ class SilverBarManagementUiBuilder(HostProxy):
 
         self._restore_ui_state()
         self._update_transfer_buttons_state()
+
+        for model in (self.available_bars_model, self.list_bars_model):
+            try:
+                model.modelReset.connect(lambda *_: self._update_dialog_status_strip())
+                model.rowsInserted.connect(lambda *_: self._update_dialog_status_strip())
+                model.rowsRemoved.connect(lambda *_: self._update_dialog_status_strip())
+            except (AttributeError, RuntimeError, TypeError) as exc:
+                self.logger.debug("Failed to bind silver bar status strip updates: %s", exc)
+
+    def _update_dialog_status_strip(self) -> None:
+        strip = getattr(self, "bottom_status_strip", None)
+        if strip is None:
+            return
+        try:
+            left_rows = self.available_bars_model.rowCount()
+        except Exception:
+            left_rows = 0
+        try:
+            right_rows = self.list_bars_model.rowCount()
+        except Exception:
+            right_rows = 0
+        try:
+            user = os.environ.get("USERNAME") or os.environ.get("USER") or "-"
+        except Exception:
+            user = "-"
+        strip.set_right_items(
+            [f"Rows: {left_rows} (Left)", f"Rows: {right_rows} (Right)", "Last Saved: -", f"User: {user}"]
+        )

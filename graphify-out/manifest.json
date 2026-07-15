@@ -910,19 +910,19 @@
     "semantic_hash": "c5d431d728d5184fdaac4ca4b6ce0f22"
   },
   "CHANGELOG.md": {
-    "mtime": 1784115068.4895687,
-    "ast_hash": "4128d91b65c185ecf54fb8096e682dd0",
+    "mtime": 1784123981.5763946,
+    "ast_hash": "5f321e88d75ba2ec5ce37a4404981581",
     "semantic_hash": ""
   },
   "readme.md": {
-    "mtime": 1784115068.5153112,
-    "ast_hash": "0d094a3ef59f45ca74106fc55761edc6",
+    "mtime": 1784123981.577395,
+    "ast_hash": "23cb315faa7c4ba2a939b28c16fe2c94",
     "semantic_hash": ""
   },
   ".github/pull_request_template.md": {
-    "mtime": 1779264537.688552,
-    "ast_hash": "7b4444f13d7261038c0b00b63ed0c630",
-    "semantic_hash": "7b4444f13d7261038c0b00b63ed0c630"
+    "mtime": 1784123981.5753877,
+    "ast_hash": "5e41408338b85e4eea00cc3a0f1ba110",
+    "semantic_hash": ""
   },
   ".github/release.yml": {
     "mtime": 1773319514.40787,
@@ -930,9 +930,9 @@
     "semantic_hash": "00e9b1bc8bd293fdfbba70c5d2c91cfa"
   },
   ".github/ISSUE_TEMPLATE/bug_report.md": {
-    "mtime": 1773319514.3897893,
-    "ast_hash": "b87f44e34193fd60a805a6d0425df8a7",
-    "semantic_hash": "b87f44e34193fd60a805a6d0425df8a7"
+    "mtime": 1784123981.577912,
+    "ast_hash": "f048383a8efb5e30dc6175246eae6f55",
+    "semantic_hash": ""
   },
   ".github/ISSUE_TEMPLATE/feature_request.md": {
     "mtime": 1773319514.4003737,
@@ -940,9 +940,9 @@
     "semantic_hash": "975c7b18b4300e9336dd0fc8f10f57b4"
   },
   ".github/ISSUE_TEMPLATE/question.md": {
-    "mtime": 1773319514.4057028,
-    "ast_hash": "202a64c0377397ca23fcf28fa1095cbd",
-    "semantic_hash": "202a64c0377397ca23fcf28fa1095cbd"
+    "mtime": 1784123981.5790248,
+    "ast_hash": "8b14b3c432d0c48bce315ac5d65734ba",
+    "semantic_hash": ""
   },
   ".github/workflows/main-validation.yml": {
     "mtime": 1784115068.4874575,
@@ -960,18 +960,18 @@
     "semantic_hash": ""
   },
   "DOCS/api-reference.md": {
-    "mtime": 1784121099.074497,
-    "ast_hash": "3c5d2ea69df81a249d90e92ea79ff627",
+    "mtime": 1784123981.5763946,
+    "ast_hash": "0a66677c06879286c1fd88c170233e54",
     "semantic_hash": ""
   },
   "DOCS/data-model-relationships.md": {
-    "mtime": 1773319514.460826,
-    "ast_hash": "7ea3f56c0328d4f0bfc8e99e50b3bc42",
-    "semantic_hash": "7ea3f56c0328d4f0bfc8e99e50b3bc42"
+    "mtime": 1784123981.577912,
+    "ast_hash": "d920cc5cd99b4604d68f8281df1a4fed",
+    "semantic_hash": ""
   },
   "DOCS/deployment-guide.md": {
-    "mtime": 1784115068.4895687,
-    "ast_hash": "e1827bff242e536c3ce18e8b583d0871",
+    "mtime": 1784123981.577395,
+    "ast_hash": "3ca080a84864a95d4ddcb1c389d56ed4",
     "semantic_hash": ""
   },
   "DOCS/performance-baseline-thresholds.md": {
@@ -980,18 +980,18 @@
     "semantic_hash": ""
   },
   "DOCS/project-architecture.md": {
-    "mtime": 1784115068.491074,
-    "ast_hash": "05dd9433167b8e06bac08f1fc41ea765",
+    "mtime": 1784123981.5753877,
+    "ast_hash": "8bc24217245caa07ba415e8f65d50114",
     "semantic_hash": ""
   },
   "DOCS/security-architecture.md": {
-    "mtime": 1784121099.074497,
-    "ast_hash": "5eaa615a930c4ddb4a3f0ae7562e79d6",
+    "mtime": 1784123981.577912,
+    "ast_hash": "3af326396247e3eab18a31891af15ff0",
     "semantic_hash": ""
   },
   "DOCS/workflow-business-logic.md": {
-    "mtime": 1784121099.0709293,
-    "ast_hash": "2189ec1967f5f020367511e69b57c9b3",
+    "mtime": 1784123981.5753877,
+    "ast_hash": "44dbd997640820519b6a1284dcc86542",
     "semantic_hash": ""
   },
   "tests/manual/ESTIMATE_ENTRY_SMOKE_TESTS.md": {
@@ -1212,6 +1212,16 @@
   "graphify-out/memory/query_20260715_131553_do_safe_cleanup_now_and_likely_removable_after_a_f.md": {
     "mtime": 1784121353.501315,
     "ast_hash": "aa5f23c85c5a72e6c5d4a028b5798d60",
+    "semantic_hash": ""
+  },
+  "DOCS/README.md": {
+    "mtime": 1784123705.5372615,
+    "ast_hash": "bf60f99d751649247a87ecea0a797644",
+    "semantic_hash": ""
+  },
+  "graphify-out/memory/query_20260715_140012_update_the_docs__github_page_etc.md": {
+    "mtime": 1784124012.0605083,
+    "ast_hash": "f6c95ad17a416f7e0c9eb8dbefc391c0",
     "semantic_hash": ""
   }
 }

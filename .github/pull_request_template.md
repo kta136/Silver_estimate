@@ -17,8 +17,9 @@ Please delete options that are not relevant.
 ## How Has This Been Tested?
 Please describe the tests that you ran to verify your changes. Provide instructions so we can reproduce.
 
-- [ ] Test A
-- [ ] Test B
+- [ ] `uv run nox -s pr`
+- [ ] Focused pytest/UI checks for the changed behavior
+- [ ] Documentation links/commands verified when docs changed
 
 **Test Configuration**:
 - OS: [e.g., Windows 11]
@@ -34,7 +35,7 @@ Please describe the tests that you ran to verify your changes. Provide instructi
 - [ ] I have added tests that prove my fix is effective or that my feature works
 - [ ] New and existing unit tests pass locally with my changes
 - [ ] Any dependent changes have been merged and published in downstream modules
-- [ ] I have updated the CHANGELOG.md with my changes
+- [ ] I have updated `CHANGELOG.md` for user-visible changes
 - [ ] I have updated the version number if applicable
 
 ## Screenshots (if applicable)

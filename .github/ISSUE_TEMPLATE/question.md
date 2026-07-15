@@ -16,8 +16,9 @@ Please provide context for your question:
 - Where did you look for answers?
 
 ## Environment (if relevant)
-- OS: [e.g., Windows 11]
-- App Version: [e.g., v2.0.3]
+- OS: [Windows 10 or Windows 11]
+- App Version: [e.g., v3.01 or the release tag shown in About]
+- Installation Method: [GitHub release or source checkout]
 
 ## Additional Information
 Any other details that might help us answer your question.

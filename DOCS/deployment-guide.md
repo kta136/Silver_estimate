@@ -63,6 +63,11 @@ Main repeats frozen quality/security gates and complete Windows validation. Cove
 6. creates the Windows zip, CycloneDX JSON SBOM, and SHA-256 checksums;
 7. publishes only after every required gate succeeds.
 
+The `main` source version may be newer than the latest published package. The
+[GitHub Releases page](https://github.com/kta136/Silver_estimate/releases/latest)
+is authoritative for supported downloads; a release is not current until its
+matching tag workflow completes successfully.
+
 Signing is intentionally non-blocking until `WINDOWS_SIGNING_CERTIFICATE_BASE64` and `WINDOWS_SIGNING_CERTIFICATE_PASSWORD` are configured. Once production credentials are available, remove `continue-on-error` after validating the timestamp and certificate chain.
 
 ## Manual release smoke

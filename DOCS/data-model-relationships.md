@@ -31,6 +31,7 @@ silver_bars (1) ----< (M) bar_transfers
 | Column              | Type    | Constraints        | Description                |
 |--------------------|---------|-------------------|----------------------------|
 | voucher_no         | TEXT    | PRIMARY KEY       | Unique estimate ID         |
+| voucher_no_int     | INTEGER |                   | Numeric voucher key for ordering/pagination |
 | date               | TEXT    | NOT NULL          | Estimate date              |
 | silver_rate        | REAL    | DEFAULT 0         | Current silver rate        |
 | total_gross        | REAL    | DEFAULT 0         | Gross weight total         |
@@ -56,10 +57,12 @@ silver_bars (1) ----< (M) bar_transfers
 | purity      | REAL    | DEFAULT 0                             | Purity %            |
 | wage_rate   | REAL    | DEFAULT 0                             | Applied rate        |
 | pieces      | INTEGER | DEFAULT 1                             | Quantity            |
+| wage_type   | TEXT    |                                       | Applied `PC`/`WT` wage mode |
 | wage        | REAL    | DEFAULT 0                             | Wage amount         |
 | fine        | REAL    | DEFAULT 0                             | Fine silver weight  |
 | is_return   | INTEGER | DEFAULT 0                             | Return flag         |
 | is_silver_bar| INTEGER| DEFAULT 0                             | Silver bar flag     |
+| line_key    | TEXT    |                                       | Stable line identity used for bar synchronization |
 
 ### 4. silver_bars
 **Purpose**: Silver bar inventory tracking
@@ -74,6 +77,7 @@ silver_bars (1) ----< (M) bar_transfers
 | date_added        | TEXT    |                                          | Creation timestamp   |
 | status            | TEXT    | DEFAULT 'In Stock'                       | Current status       |
 | list_id           | INTEGER | FOREIGN KEY → silver_bar_lists ON DELETE SET NULL | Assigned list |
+| source_line_key   | TEXT    |                                          | Stable source estimate-line identity |
 
 ### 5. silver_bar_lists
 **Purpose**: Grouping mechanism for silver bars
@@ -143,15 +147,37 @@ silver_bars (1) ----< (M) bar_transfers
 3. **Silver Bars**: Created only on first estimate save
 4. **Calculations**: Net = Gross - Poly, Fine = Net × (Purity/100)
 5. **Wage Types**: PC (per piece) or WT (per weight)
-6. **Status Values**: 'In Stock', 'Assigned', 'Sold', 'Melted'
+6. **Status Values**: `In Stock`, `Assigned`, `Issued`, and `Sold`
+7. **Stable Line Identity**: `estimate_items.line_key` links a source line to `silver_bars.source_line_key`
 
 ## Schema Evolution
 
 ### Version 0 → 1
-- Added silver_bars table with new structure
-- Added silver_bar_lists table
-- Modified bar_transfers table
-- Implemented versioning system
+- Established the silver-bar/list/transfer schema and normalized missing baseline columns.
 
-### Version 1  2
-- Added `issued_date` column to `silver_bar_lists` to capture issuance events
+### Version 1 → 2
+- Added `issued_date` to `silver_bar_lists` for issuance/reactivation history.
+
+### Version 2 → 3
+- Added `estimates.voucher_no_int` and backfilled numeric voucher values for stable keyset ordering.
+
+### Version 3 → 4
+- Added `estimate_items.wage_type` so persisted lines retain their applied wage mode.
+
+### Version 4 → 5
+- Added `estimate_items.line_key` and `silver_bars.source_line_key` for stable, idempotent bar synchronization.
+
+### Version 5 → 6
+- Recomputed stored regular-item `total_gross` and `total_net` estimate summaries.
+- Added/validated the silver-bar availability index used by filtered keyset pages.
+
+Schema creation, all pending migrations, mandatory indexes, validation, and the
+schema-version write run in one transaction. Any failure rolls the full setup
+back instead of leaving a partially upgraded database.
+
+## Performance-Critical Indexes
+
+- Estimate history: `(voucher_no_int DESC, voucher_no DESC)`
+- Estimate lines: `(voucher_no, line_key)`
+- Available bars: `(status, list_id, weight, date_added DESC, bar_id DESC)`
+- Bar synchronization: `(estimate_voucher_no, source_line_key)`

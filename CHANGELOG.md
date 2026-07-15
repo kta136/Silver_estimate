@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added anonymous DDA current-rates hydration and SSE streaming for item ID `cmomws5tw000004i5k5t6yrnw`, using only customer `finalRate`, with sequence recovery, stale detection, jittered reconnects, 10-second disconnected polling, and verified offline cache.
 - Added explicit estimate/silver-bar facades, split silver-bar query/command/synchronization repositories, independent settings ownership, shared print specifications/strategies, and architecture regression tests.
 - Added deterministic scale/performance data, complete p95 enforcement, Windows PR smoke/build validation, frozen artifact startup, release tag validation, CycloneDX SBOM, checksums, and optional signing hooks.
+- Added shared user-facing Indian rupee/date formatting and reusable empty-table messaging across estimate and silver-bar history screens.
 
 ### Changed
 - Bumped the application/package version to `3.01` for the upgraded Windows test build.
@@ -22,9 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Made Bandit medium/high findings blocking and switched PR, main, and release dependency setup to `uv sync --frozen --extra dev`.
 - Declared Windows as the supported packaged platform; macOS/Linux remain untested development environments.
 - Reduced `.env.example` to the three environment controls consumed by the runtime.
+- Refined login, settings, estimate totals, history tables, and print preview for denser layouts, clearer saved/unsaved states, category-aware totals, compact navigation, and consistent display formatting.
+- Preserved saved print orientation directly and simplified credential, logging, and print-settings persistence after their one-time migrations completed on the installed system.
+- Updated the README, deep-dive documentation, GitHub templates, and repository metadata for the current PyQt6/Windows support model.
 
 ### Removed
 - Removed DDASilver scraping, hard-coded HTTP/IP/broadcast parsing, invalid-TLS retries, item-name matching, `baseRate` derivation, and all worker `QThread.terminate()` calls.
+- Removed completed QSettings credential, logging-key, and print-orientation migration paths.
+- Removed the temporary-database compatibility wrapper, dead private helpers/counters/aliases/constants, stale Windows diagnostic text files, and the duplicated v2.8.9 release-note file.
 
 ## [3.0] - 2026-06-13
 

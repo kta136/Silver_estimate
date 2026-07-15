@@ -2,7 +2,7 @@
 
 ## Authentication
 
-The main password authenticates and decrypts the database. The recovery password triggers the established data-wipe workflow. Password hashes use Argon2 and are stored in the operating-system keyring. Passwords and derived encryption keys are never persisted as plaintext.
+The main password authenticates and decrypts the database. The recovery password triggers the established data-wipe workflow. Password hashes use Argon2 and are stored only in the operating-system keyring. QSettings contains non-sensitive preferences and database metadata, not credential hashes. Passwords and derived encryption keys are never persisted as plaintext.
 
 ## SILVDB01 encrypted envelope
 
@@ -61,6 +61,7 @@ DDA rates use certificate-validated public HTTPS/SSE endpoints. The client sends
 
 ## Operational controls
 
+- Startup fails closed when no trusted operating-system keyring backend is available.
 - Logs must not contain passwords, keys, complete database rows, or credential values.
 - Bandit medium/high findings block pull requests, main, and release workflows. False positives use narrow, test-specific `# nosec Bxxx` annotations.
 - Dependency advisory scanning remains non-blocking until its upstream database and remediation workflow are made deterministic.

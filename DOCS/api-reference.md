@@ -53,7 +53,10 @@ This guide documents the primary controller, service, and persistence APIs expos
 ### Authentication (silverestimate/services/auth_service.py)
 - **run_authentication(logger: Optional[logging.Logger] = None, *, parent: Optional[QWidget] = None) -> Optional[AuthenticationResult]** - drives setup/login with retry-on-invalid-password behavior; returns `None` only when the dialog is cancelled, otherwise returns an `AuthenticationResult` describing the password provided or a wipe request (with silent flag when triggered by the recovery password).
 - **perform_data_wipe(db_path: str = DB_PATH, logger: Optional[logging.Logger] = None, *, silent: bool = False) -> bool** - deletes the encrypted DB, removes temporary plaintext, clears credentials, and, when `silent=True`, purges application log files without emitting wipe-related log entries.
-- Uses `silverestimate/security/credential_store.py` to persist Argon2 hashes in the OS keyring.
+
+### Credential Store (silverestimate/security/credential_store.py)
+- **get_backend_status() -> CredentialBackendStatus** - reports whether the active operating-system keyring backend is trusted and usable.
+- **get_password_hash(kind: str) -> Optional[str] / set_password_hash(kind, value, *, logger=None) / delete_password_hash(kind, *, logger=None)** - read, write, or remove the `main` and `backup` Argon2 hashes in the OS keyring. Credential hashes are not read from or written to QSettings.
 
 ### SettingsService (silverestimate/services/settings_service.py)
     SettingsService()
@@ -63,6 +66,12 @@ This guide documents the primary controller, service, and persistence APIs expos
 - **restore_geometry(window) -> bool / save_geometry(window)** – handle main window geometry and state.
 - **get(key, default=None, type=None)** and **set(key, value)** – thin wrappers around QSettings.
 - **raw() -> QSettings** – direct access for advanced scenarios.
+
+### Print Page Settings (silverestimate/ui/print_page_settings.py)
+- **PrintPageSettings** - normalized margins, printer, page-size dimensions, and orientation used by settings, preview, quick print, and PDF export.
+- **load_print_page_settings(settings) / save_print_page_settings(settings, state)** - round-trip the current print preferences without one-time orientation migration markers.
+- **apply_print_page_settings_to_printer(...) / save_printer_page_settings(...)** - apply or capture a Qt6 `QPrinter` page layout.
+- **validate_quick_print_printer(printer) -> tuple[bool, str]** - reject missing, stale, or unconfigured printer targets with user-facing guidance.
 
 ### NavigationService (silverestimate/services/navigation_service.py)
     NavigationService(main_window, stack_widget, logger: Optional[logging.Logger] = None)
@@ -101,15 +110,15 @@ Responsibilities:
 
 Key Public Methods:
 - **setup_database() -> None** – ensure schema and migrations are applied.
-- **generate_voucher_no() -> str** – delegate to EstimatesRepository while keeping legacy compatibility.
+- **generate_voucher_no() -> str** – delegate to `EstimatesRepository` through the repository facade.
 - **save_estimate_with_returns(... ) -> bool** – transactional save for headers/items, with bar sync.
 - **get_estimate_by_voucher(voucher_no: str) -> Optional[dict]** – retrieve composite estimate payloads.
 - **delete_all_estimates() / delete_single_estimate(voucher_no)** – destructive operations used by MainCommands.
 - **request_flush(delay_seconds: float = 2.0)** and **flush_to_encrypted()** – trigger generation-aware streamed `SILVDB01` encryption cycles.
 - **close()** – commit outstanding work, stop flush scheduler, remove temp files.
-- **Static helpers**: check_recovery_candidate, recover_encrypt_plain_to_encrypted, _get_or_create_salt_static.
+- **Static helpers**: `check_recovery_candidate` and `recover_encrypt_plain_to_encrypted`.
 
-Note: Legacy item/estimate helper methods remain for backwards compatibility but new code should favour the repositories below.
+New integrations should favour the role-specific repositories below instead of adding more forwarding methods to `DatabaseManager`.
 
 ### ItemsRepository (silverestimate/persistence/items_repository.py)
 - **get_item_by_code(code: str)** – fetch item rows with cache support.
@@ -141,6 +150,8 @@ Note: Legacy item/estimate helper methods remain for backwards compatibility but
 - **FlushScheduler (silverestimate/persistence/flush_scheduler.py)** - debounced commit/encrypt worker invoked by DatabaseManager.request_flush.
 - **InlineStatusController (silverestimate/ui/inline_status.py)** - helper used across UI widgets to surface status messages without tight UI coupling.
 - **CredentialStore (silverestimate/security/credential_store.py)** - OS keyring abstraction for hashed credentials.
+- **TempDatabaseStore (silverestimate/persistence/temp_database_store.py)** - owns marked temporary SQLite creation, recovery metadata, and guarded cleanup.
+- **Display formatting (silverestimate/ui/display_formatting.py)** - `format_display_date()` and `format_rupees()` provide consistent user-facing dates and Indian-number currency grouping.
 
 ## UI Facades
 

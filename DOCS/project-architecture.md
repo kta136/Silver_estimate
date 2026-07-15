@@ -24,6 +24,8 @@ Qt views and dialogs
 - SQLite background work uses a connection owned by its worker thread and a progress handler bound to the cancellation event.
 - Printing uses shared `PrintFormatSpec` values and renderer strategies. Existing Classic, Modern, Thermal, inventory, and list output remains compatible.
 - Settings contains independently owned pages/controllers, including the DDA live-rate page and print-settings controller. Pages expose state/signals instead of reaching into transport code.
+- Shared display helpers keep user-facing dates in `DD/MM/YYYY` form and currency in Indian-grouped rupees across models and history dialogs.
+- History and management tables use shared dense-table styling and explicit empty states; settings surfaces saved/unsaved feedback without controller compatibility aliases.
 
 Views cancel work, disconnect delivery, and let workers exit normally during shutdown. `QThread.terminate()` is prohibited.
 
@@ -55,6 +57,8 @@ The active format is the versioned `SILVDB01` envelope described in the security
 `FlushScheduler` tracks dirty and flushed generations. A request received during encryption sets a pending flag; a second flush begins after the active one. Unchanged generations do not rewrite the encrypted file.
 
 Every plaintext temporary directory contains an ownership marker with owner, PID, creation time, database filename, and encrypted-database identity. Recovery and cleanup operate only on matching marked directories.
+
+`DatabaseManager` constructs `TempDatabaseStore` directly with the application settings provider; no compatibility wrapper sits between lifecycle coordination and the store.
 
 ## DDA live-rate path
 

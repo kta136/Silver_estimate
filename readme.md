@@ -4,24 +4,30 @@ A desktop application built with PyQt6 and an encrypted SQLite database for mana
 
 [![Python](https://img.shields.io/badge/Python-3.14+-blue.svg)](https://www.python.org/)
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.11-green.svg)](https://www.riverbankcomputing.com/software/pyqt/)
-[![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v3.01-orange.svg)](CHANGELOG.md)
+[![License](https://img.shields.io/badge/License-Proprietary-red.svg)](#license)
+[![Source Version](https://img.shields.io/badge/source-v3.01-orange.svg)](CHANGELOG.md#301---2026-07-15)
+[![Latest Release](https://img.shields.io/github/v/release/kta136/Silver_estimate?label=stable%20release)](https://github.com/kta136/Silver_estimate/releases/latest)
 [![PR Validation](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml)
 [![Main Validation](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml)
 [![Release Windows](https://github.com/kta136/Silver_estimate/actions/workflows/release-windows.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/release-windows.yml)
 [![Formatter: Ruff](https://img.shields.io/badge/formatter-ruff-%23D7FF64)](https://docs.astral.sh/ruff/)
 [![Lint: Ruff](https://img.shields.io/badge/lint-ruff-%23D7FF64)](https://docs.astral.sh/ruff/)
-[![Type checking: mypy](https://img.shields.io/badge/type%20checking-mypy-blue.svg)](http://mypy-lang.org/)
+[![Type checking: mypy](https://img.shields.io/badge/type%20checking-mypy-blue.svg)](https://mypy-lang.org/)
 [![Security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
 [![Pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 [![Platform](https://img.shields.io/badge/packaged%20platform-Windows-lightgrey.svg)](https://github.com/kta136/Silver_estimate)
 
 ## Quick Links
 
-- [Download latest release](https://github.com/kta136/Silver_estimate/releases/latest)
+- [Download latest stable release](https://github.com/kta136/Silver_estimate/releases/latest)
+- [Documentation index](DOCS/README.md)
 - [Changelog](CHANGELOG.md)
 - [v3.01 changelog](CHANGELOG.md#301---2026-07-15)
 - [Deployment guide](DOCS/deployment-guide.md)
+
+> The source tree can be ahead of the latest packaged release. Use the release
+> page for supported Windows downloads and the source-version badge for the
+> current state of `main`.
 
 ## Table of Contents
 - [Quick Links](#quick-links)
@@ -48,6 +54,7 @@ The app helps silver shops to:
 - Track gross, net, and fine weights; wages (PC/WT)
 - Manage silver bar inventory and returns
 - Print formatted estimate slips with Indian rupee formatting
+- Follow live Agra Mohar rates through anonymous HTTPS/SSE updates with an offline snapshot
 - Keep the desktop UI in a strict light theme across Windows dark mode, dialogs, popups, and print preview controls
 - Store all data locally with file-level encryption
 - Back up and restore item catalogs
@@ -94,8 +101,13 @@ See also: `DOCS/project-architecture.md`.
 
 ### Printing & Reporting
 - Print-ready estimate layouts with INR formatting
-- Print preview and configurable fonts/sizes
+- Compact print preview with layout/orientation controls and a More menu for printer, page-view, and navigation actions
 - Shared Qt6 page setup helpers for page size, orientation, margins, printer validation, and safer PDF export
+
+### Desktop Experience
+- Consistent Indian rupee and `DD/MM/YYYY` formatting across estimates and silver-bar history
+- Clear empty-table messages, saved/unsaved settings feedback, and responsive row limits for history screens
+- Return and silver-bar summary cards stay hidden until those categories contain values
 
 ### Catalog Backup
 - Export item catalogs to a native `.seitems.json` backup file
@@ -177,7 +189,7 @@ Key areas of the codebase:
 - `silverestimate/persistence/` – `DatabaseManager`, repositories, migrations, and flush scheduler.
 - `silverestimate/security/` – AES-GCM utilities and keyring-backed credential storage.
 - `silverestimate/infrastructure/` – logging, settings helpers, and app constants.
-- `DOCS/` – deep-dive documentation for architecture, deployment, and security.
+- `DOCS/` – indexed deep-dive documentation for architecture, deployment, security, data relationships, APIs, and business workflows.
 
 Recommended development commands with `uv`:
 
@@ -256,6 +268,7 @@ For more details, see `DOCS/deployment-guide.md`.
 For support and troubleshooting:
 - GitHub Issues: report bugs and request features
 - Documentation quick links:
+  - [Documentation index](DOCS/README.md)
   - [Project architecture](DOCS/project-architecture.md)
   - [Security architecture](DOCS/security-architecture.md)
   - [Deployment guide](DOCS/deployment-guide.md)
@@ -264,7 +277,7 @@ For support and troubleshooting:
 
 This project is proprietary software. All rights reserved.
 
-c 2023-2025 Silver Estimation App
+Copyright 2023-2026 Silver Estimation App
 
 ---
 
@@ -274,6 +287,8 @@ c 2023-2025 Silver Estimation App
 - Delivered the full database, worker, encryption, DDA live-rate, architecture, performance, and Windows CI upgrade
 - Uses the public Agra Mohar item ID and customer-facing `finalRate` with SSE plus HTTPS fallback
 - Produced a verified Windows test build with startup smoke coverage
+- Polished login, settings, histories, totals, and print preview with consistent date/rupee formatting and clearer empty or saved states
+- Retired completed one-time settings migrations and removed dead compatibility wrappers, aliases, helpers, constants, and stale diagnostics
 
 ### v3.0 (2026-06-13)
 - Bumped the application/package release to v3.0

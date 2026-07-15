@@ -55,7 +55,10 @@ Grand Total = (Net Fine × Silver Rate) + Net Wage + Last Balance Amount
 
 #### Bar Lifecycle
 ```
-Creation → In Stock → Assigned to List → [Sold/Melted/Returned to Stock]
+Creation → In Stock → Assigned to List → Issued
+                       ↘ Unassigned → In Stock
+                       ↘ Sold
+Issued list → Reactivated → Assigned
 ```
 
 ### 4. Authentication and Security
@@ -98,7 +101,7 @@ Creation → In Stock → Assigned to List → [Sold/Melted/Returned to Stock]
 
 ### 2. Item Master Rules
 - Codes must be unique and uppercase
-- Purity range: 0-999999.99%
+- Purity range: 0-100%
 - Wage types: PC (per piece) or WT (per weight)
 - Deletion blocked if used in estimates
 
@@ -137,7 +140,7 @@ Creation → In Stock → Assigned to List → [Sold/Melted/Returned to Stock]
 - Schema version checking
 
 ### 3. File Operations
-- Multiple encoding attempts for import
+- UTF-8 parsing with format/signature/schema validation for native catalog backups
 - Graceful handling of malformed data
 - Temporary file cleanup
 - Encryption failure recovery

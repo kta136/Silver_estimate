@@ -25,19 +25,19 @@ What actually happened.
 If applicable, add screenshots to help explain your problem.
 
 ## Environment
-- OS: [e.g., Windows 11, macOS 13, Ubuntu 22.04]
-- App Version: [e.g., v2.0.3]
-- Python Version: [e.g., 3.11.5]
-- Installation Method: [e.g., from source, PyInstaller exe]
+- OS: [Windows 10 or Windows 11, including build number]
+- App Version: [e.g., v3.01 or the release tag shown in About]
+- Python Version: [e.g., 3.14.x; source installations only]
+- Installation Method: [GitHub release or source checkout]
 
 ## Database Information
-- Encrypted: [Yes/No]
-- Approximate size: [e.g., 10MB]
+- Approximate encrypted database size: [e.g., 10 MB]
 - Number of estimates: [approximate]
 
 ## Log Files
 If available, please attach relevant log files from the `logs/` directory.
-**Important:** Remove any sensitive data before attaching.
+**Important:** Remove customer identifiers and sensitive data before attaching.
+Never attach a production database, credential-vault export, password, or key.
 
 ```
 Paste relevant log excerpts here

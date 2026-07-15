@@ -120,7 +120,7 @@ class SilverBarListLifecycleController(HostProxy):
         if index >= 0:
             list_date = (
                 details["creation_date"].split()[0]
-                if "creation_date" in details.keys() and details["creation_date"]
+                if "creation_date" in details and details["creation_date"]
                 else ""
             )
             display_text = f"{details['list_identifier']} ({list_date})"
@@ -150,7 +150,21 @@ class SilverBarListLifecycleController(HostProxy):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        success, message = self.db_manager.delete_silver_bar_list(self.current_list_id)
+        typed_delete = getattr(self.db_manager, "delete_silver_bar_list_result", None)
+        if callable(typed_delete):
+            result = typed_delete(self.current_list_id)
+            success = bool(result.succeeded)
+            message = (
+                result.value
+                if result.succeeded
+                else result.failure.message
+                if result.failure is not None
+                else "Unknown repository failure."
+            )
+        else:
+            success, message = self.db_manager.delete_silver_bar_list(
+                self.current_list_id
+            )
         if success:
             QMessageBox.information(
                 self.host,

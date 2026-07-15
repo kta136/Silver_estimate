@@ -1,3 +1,4 @@
+import contextlib
 import types
 
 import pytest
@@ -159,10 +160,8 @@ def _make_widget(db_manager):
     repository = _RepositoryStub(db_manager)
     widget = EstimateEntryWidget(db_manager, main_window_stub, repository)
     widget.presenter.handle_item_code = lambda row, code: False
-    try:
+    with contextlib.suppress(TypeError):
         widget.item_table.cellChanged.disconnect(widget.handle_cell_changed)
-    except TypeError:
-        pass
     return widget
 
 

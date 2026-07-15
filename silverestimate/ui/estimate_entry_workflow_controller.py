@@ -789,25 +789,24 @@ class EstimateEntryWorkflowController(HostProxy):
             skipped = ", ".join(str(row) for row in preparation.skipped_rows)
             self._status(f"Preview skipped invalid rows: {skipped}", 5000)
 
-        items = []
-        for item in preparation.payload.items:
-            items.append(
-                {
-                    "id": item.row_number,
-                    "item_code": item.code,
-                    "item_name": item.name,
-                    "gross": item.gross,
-                    "poly": item.poly,
-                    "net_wt": item.net_wt,
-                    "purity": item.purity,
-                    "wage_rate": item.wage_rate,
-                    "pieces": item.pieces,
-                    "wage": item.wage,
-                    "fine": item.fine,
-                    "is_return": 1 if item.is_return else 0,
-                    "is_silver_bar": 1 if item.is_silver_bar else 0,
-                }
-            )
+        items = [
+            {
+                "id": item.row_number,
+                "item_code": item.code,
+                "item_name": item.name,
+                "gross": item.gross,
+                "poly": item.poly,
+                "net_wt": item.net_wt,
+                "purity": item.purity,
+                "wage_rate": item.wage_rate,
+                "pieces": item.pieces,
+                "wage": item.wage,
+                "fine": item.fine,
+                "is_return": 1 if item.is_return else 0,
+                "is_silver_bar": 1 if item.is_silver_bar else 0,
+            }
+            for item in preparation.payload.items
+        ]
 
         return {
             "header": {

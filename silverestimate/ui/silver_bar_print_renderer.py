@@ -38,38 +38,38 @@ class SilverBarPrintRenderer:
             for bar in bars:
                 bw = (
                     bar["weight"]
-                    if "weight" in bar.keys() and bar["weight"] is not None
+                    if "weight" in bar and bar["weight"] is not None
                     else 0.0
                 )
                 bfw = (
                     bar["fine_weight"]
-                    if "fine_weight" in bar.keys() and bar["fine_weight"] is not None
+                    if "fine_weight" in bar and bar["fine_weight"] is not None
                     else 0.0
                 )
                 bp = (
                     bar["purity"]
-                    if "purity" in bar.keys() and bar["purity"] is not None
+                    if "purity" in bar and bar["purity"] is not None
                     else 0.0
                 )
                 bid = (
                     bar["bar_id"]
-                    if "bar_id" in bar.keys() and bar["bar_id"] is not None
+                    if "bar_id" in bar and bar["bar_id"] is not None
                     else "N/A"
                 )
                 evch = (
                     bar["estimate_voucher_no"]
-                    if "estimate_voucher_no" in bar.keys()
+                    if "estimate_voucher_no" in bar
                     and bar["estimate_voucher_no"] is not None
                     else "N/A"
                 )
                 da = (
                     bar["date_added"]
-                    if "date_added" in bar.keys() and bar["date_added"] is not None
+                    if "date_added" in bar and bar["date_added"] is not None
                     else ""
                 )
                 st = (
                     bar["status"]
-                    if "status" in bar.keys() and bar["status"] is not None
+                    if "status" in bar and bar["status"] is not None
                     else ""
                 )
 
@@ -96,13 +96,13 @@ class SilverBarPrintRenderer:
         """Generate HTML content for printing a single list's details."""
         li = (
             list_info["list_identifier"]
-            if "list_identifier" in list_info.keys()
+            if "list_identifier" in list_info
             and list_info["list_identifier"] is not None
             else "N/A"
         )
         ln = (
             list_info["list_note"]
-            if "list_note" in list_info.keys() and list_info["list_note"] is not None
+            if "list_note" in list_info and list_info["list_note"] is not None
             else ""
         )
         li_display = html_lib.escape(str(li))
@@ -137,17 +137,17 @@ class SilverBarPrintRenderer:
             for idx, bar in enumerate(bars_in_list):
                 bw = (
                     bar["weight"]
-                    if "weight" in bar.keys() and bar["weight"] is not None
+                    if "weight" in bar and bar["weight"] is not None
                     else 0.0
                 )
                 bfw = (
                     bar["fine_weight"]
-                    if "fine_weight" in bar.keys() and bar["fine_weight"] is not None
+                    if "fine_weight" in bar and bar["fine_weight"] is not None
                     else 0.0
                 )
                 bp = (
                     bar["purity"]
-                    if "purity" in bar.keys() and bar["purity"] is not None
+                    if "purity" in bar and bar["purity"] is not None
                     else 0.0
                 )
 

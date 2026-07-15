@@ -1,6 +1,7 @@
 import logging
 import sqlite3
 from datetime import datetime
+from types import SimpleNamespace
 
 import pytest
 
@@ -1053,3 +1054,153 @@ def test_save_estimate_accepts_mixed_case_item_codes(fake_db):
 
     assert saved
     assert fake_db.last_error is None
+
+
+def test_silver_bar_repository_handles_missing_database_runtime() -> None:
+    db = SimpleNamespace(
+        conn=None,
+        cursor=None,
+        logger=logging.getLogger("test.silver-bars.missing-db"),
+    )
+    repo = SilverBarsRepository(db)
+
+    assert repo.generate_list_identifier().startswith("ERR-L-")
+    assert repo.create_list("offline") is None
+    assert repo.get_lists() == []
+    assert repo.get_list_details(1) is None
+    assert repo.get_list_details_result(1).succeeded is False
+    assert repo.update_list_note(1, "note") is False
+    assert repo.mark_list_as_issued(1) is False
+    assert repo.reactivate_list(1) is False
+    assert repo.delete_list(1) == (False, "No database connection")
+    assert repo.delete_list_result(1).succeeded is False
+    assert repo.assign_bar_to_list(1, 1) is False
+    assert repo.assign_bars_to_list_bulk([1], 1) == (0, [])
+    assert repo.remove_bar_from_list(1) is False
+    assert repo.remove_bars_from_list_bulk([1]) == (0, [])
+    assert repo.get_available_bars_page() == ([], 0)
+    assert repo.get_available_bars_keyset_page().items == ()
+    assert repo.get_bars_in_list_page(1) == ([], 0)
+    assert repo.get_bars_in_list_keyset_page(1).items == ()
+    assert repo.get_bars_in_list(1) == []
+    assert repo.get_available_bars() == []
+    assert repo.search_history_bars() == []
+    assert repo.search_history_bars_page().items == ()
+    assert repo.count_bars_by_list_ids([1]) == {}
+    assert repo.get_silver_bars_for_estimate("1") == []
+    assert repo.sync_silver_bars_for_estimate("1", []) == (0, 0)
+    assert repo.add_silver_bar("1", 1.0, 99.9) is None
+    assert repo.get_silver_bars() == []
+    assert repo.delete_bars_for_estimate("1") == (0, set())
+    assert repo.cleanup_empty_lists([1]) is None
+
+
+def test_silver_bar_repository_storage_errors_are_contained(fake_db) -> None:
+    class ErrorCursor:
+        rowcount = 0
+        lastrowid = None
+
+        def execute(self, *_args, **_kwargs):
+            raise sqlite3.OperationalError("injected storage fault")
+
+        def executemany(self, *_args, **_kwargs):
+            raise sqlite3.OperationalError("injected storage fault")
+
+    fake_db.cursor = ErrorCursor()
+    repo = SilverBarsRepository(fake_db)
+
+    assert repo.generate_list_identifier().startswith("L-")
+    assert repo.create_list("fault") is None
+    assert repo.get_lists() == []
+    assert repo.get_list_details(1) is None
+    assert repo.update_list_note(1, "fault") is False
+    assert repo.mark_list_as_issued(1) is False
+    assert repo.reactivate_list(1) is False
+    deleted, message = repo.delete_list(1)
+    assert deleted is False
+    assert "injected storage fault" in message
+    assert repo.assign_bar_to_list(1, 1) is False
+    assert repo.assign_bars_to_list_bulk([1], 1) == (0, [1])
+    assert repo.remove_bar_from_list(1) is False
+    assert repo.remove_bars_from_list_bulk([1]) == (0, [1])
+    assert repo.get_available_bars_page() == ([], 0)
+    with pytest.raises(sqlite3.OperationalError, match="injected storage fault"):
+        repo.get_available_bars_keyset_page()
+    assert repo.get_bars_in_list_page(1) == ([], 0)
+    with pytest.raises(sqlite3.OperationalError, match="injected storage fault"):
+        repo.get_bars_in_list_keyset_page(1)
+    assert repo.get_available_bars() == []
+    assert repo.search_history_bars() == []
+    with pytest.raises(sqlite3.OperationalError, match="injected storage fault"):
+        repo.search_history_bars_page()
+    assert repo.count_bars_by_list_ids([1]) == {}
+    assert repo.get_silver_bars_for_estimate("1") == []
+    assert repo.sync_silver_bars_for_estimate("1", [{"weight": 1, "purity": 99}]) == (
+        0,
+        1,
+    )
+    assert repo.add_silver_bar("1", 1.0, 99.9) is None
+    assert repo.get_silver_bars() == []
+    with pytest.raises(sqlite3.OperationalError, match="injected storage fault"):
+        repo.delete_bars_for_estimate("1")
+    assert repo.cleanup_empty_lists([1]) is None
+
+
+def test_silver_bar_repository_exercises_edge_outcomes(fake_db) -> None:
+    repo = SilverBarsRepository(fake_db)
+    list_id = repo.create_list("edge cases")
+    assert list_id is not None
+
+    fake_db.cursor.execute(
+        "UPDATE silver_bar_lists SET list_identifier = 'malformed' WHERE list_id = ?",
+        (list_id,),
+    )
+    assert repo.generate_list_identifier().endswith("-001")
+    assert repo.update_list_note(-1, "missing") is False
+    assert repo.mark_list_as_issued(-1) is False
+    assert repo.reactivate_list(-1) is False
+    assert repo.assign_bar_to_list(-1, list_id) is False
+
+    bar_id = repo.add_silver_bar("edge", 2.5, 95.0)
+    assert bar_id is not None
+    assert repo.assign_bar_to_list(bar_id, -1) is False
+    assert repo.assign_bars_to_list_bulk([], list_id) == (0, [])
+    assert repo.assign_bars_to_list_bulk([bar_id], -1) == (0, [bar_id])
+    assert repo.assign_bars_to_list_bulk([-1, "bad", bar_id, bar_id], list_id) == (
+        1,
+        [],
+    )
+    assert repo.remove_bars_from_list_bulk([]) == (0, [])
+    assert repo.remove_bars_from_list_bulk([-1, "bad"]) == (0, [])
+    assert repo.remove_bars_from_list_bulk([bar_id, 999999]) == (1, [999999])
+    assert repo.remove_bar_from_list(bar_id) is False
+
+    result = repo.delete_list(999999)
+    assert result == (False, "List not found")
+    typed = repo.delete_list_result(999999)
+    assert typed.succeeded is False
+
+    rows = repo.get_silver_bars(
+        status="In Stock",
+        weight_query="invalid",
+        estimate_voucher_no="edge",
+        unassigned_only=True,
+        min_purity="invalid",
+        max_purity="invalid",
+        date_range=("2000-01-01", "2099-01-01"),
+        limit=1,
+        offset=1,
+    )
+    assert rows == []
+    assert repo.count_bars_by_list_ids([]) == {}
+    assert repo.get_silver_bars_for_estimate("") == []
+
+    added, failed = repo.sync_silver_bars_for_estimate(
+        "edge-sync",
+        [
+            {"weight": object(), "purity": 99},
+            {"weight": 1, "purity": 99, "line_key": "same"},
+            {"weight": 2, "purity": 98, "line_key": "same"},
+        ],
+    )
+    assert (added, failed) == (1, 2)

@@ -868,9 +868,10 @@ class SilverBarHistoryDialog(QDialog):
             rows = []
             for idx in selected:
                 r = idx.row()
-                values = []
-                for c in range(table.model().columnCount()):
-                    values.append(self._table_cell_text(table, r, c))
+                values = [
+                    self._table_cell_text(table, r, c)
+                    for c in range(table.model().columnCount())
+                ]
                 rows.append("\t".join(values))
 
             text = "\n".join(rows)

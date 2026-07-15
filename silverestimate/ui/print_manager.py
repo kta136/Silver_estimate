@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import QMessageBox
 from silverestimate.infrastructure.settings import get_app_settings
 
 from .estimate_print_renderer import EstimatePrintRenderer
+from .print_format_spec import build_estimate_strategies
 from .print_page_settings import (
     PrintPageSettings,
     apply_print_page_settings_to_printer,
@@ -180,6 +181,11 @@ class PrintManager:
             render_old=self._generate_estimate_old_format,
             render_new=self._generate_estimate_new_format,
             render_thermal=self._generate_estimate_thermal_format,
+            renderer_strategies=build_estimate_strategies(
+                render_old=self._generate_estimate_old_format,
+                render_new=self._generate_estimate_new_format,
+                render_thermal=self._generate_estimate_thermal_format,
+            ),
             estimate_data=estimate_data,
         )
 

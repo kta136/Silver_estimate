@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import threading
 import time
@@ -86,6 +87,7 @@ class SilverBarLoadController(HostProxy):
 
     def __init__(self, host) -> None:
         super().__init__(host)
+        object.__setattr__(self, "_load_shutdown", False)
         self._available_cursor: AvailableBarCursor | None = None
         self._list_cursor: BarListCursor | None = None
         self._available_rows: list[dict[str, Any]] = []
@@ -141,10 +143,8 @@ class SilverBarLoadController(HostProxy):
         self._refresh_widget_style(list_table)
         if header is not None:
             self._refresh_widget_style(header)
-        try:
+        with contextlib.suppress(AttributeError, RuntimeError, TypeError):
             self._refresh_widget_style(list_table.viewport())
-        except AttributeError, RuntimeError, TypeError:
-            pass
 
     def _next_load_request_id(self, target: str) -> int:
         if target == "available":
@@ -169,6 +169,8 @@ class SilverBarLoadController(HostProxy):
         *,
         append: bool = False,
     ) -> int:
+        if object.__getattribute__(self, "_load_shutdown"):
+            return 0
         cursor: AvailableBarCursor | BarListCursor | None
         if target == "available":
             cursor = self._available_cursor
@@ -354,9 +356,24 @@ class SilverBarLoadController(HostProxy):
     def _cancel_active_loads(self) -> None:
         for runner in (self._available_runner, self._list_runner):
             runner.cancel()
+
+    def _shutdown_loads(self) -> None:
+        if object.__getattribute__(self, "_load_shutdown"):
+            return
+        object.__setattr__(self, "_load_shutdown", True)
+        for runner in (self._available_runner, self._list_runner):
+            runner.cancel()
+            with contextlib.suppress(TypeError, RuntimeError):
+                runner.result.disconnect(self._on_bars_load_ready)
+            with contextlib.suppress(TypeError, RuntimeError):
+                runner.failed.disconnect(self._on_bars_load_error)
+            with contextlib.suppress(TypeError, RuntimeError):
+                runner.settled.disconnect(self._on_bars_load_finished)
             runner.shutdown()
 
     def load_available_bars(self, *, append: bool = False):
+        if object.__getattribute__(self, "_load_shutdown"):
+            return
         weight_query = self.weight_search_edit.text().strip()
         self._start_bars_load(
             "available",
@@ -379,7 +396,7 @@ class SilverBarLoadController(HostProxy):
                 list_note = list_row["list_note"] or ""
                 list_date = (
                     list_row["creation_date"].split()[0]
-                    if "creation_date" in list_row.keys() and list_row["creation_date"]
+                    if "creation_date" in list_row and list_row["creation_date"]
                     else ""
                 )
                 display_text = f"{list_row['list_identifier']} ({list_date})"
@@ -403,6 +420,8 @@ class SilverBarLoadController(HostProxy):
 
     def list_selection_changed(self, *args, **kwargs):
         del args, kwargs
+        if object.__getattribute__(self, "_load_shutdown"):
+            return
         selected_index = self.list_combo.currentIndex()
         self.current_list_id = self.list_combo.itemData(selected_index)
 
@@ -425,9 +444,7 @@ class SilverBarLoadController(HostProxy):
             if details:
                 info = f"{details['list_identifier']}"
                 try:
-                    note_val = (
-                        details["list_note"] if "list_note" in details.keys() else None
-                    )
+                    note_val = details.get("list_note", None)
                 except AttributeError, KeyError, TypeError:
                     note_val = getattr(details, "list_note", None)
                 if note_val:

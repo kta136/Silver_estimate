@@ -305,12 +305,6 @@ class _Host(QWidget):
 def workflow_host(qt_app, monkeypatch):  # noqa: ARG001
     _MessageBoxStub.reset()
     monkeypatch.setattr(workflow_module, "QMessageBox", _MessageBoxStub)
-    monkeypatch.setattr(
-        workflow_module.refresh_widget_style,
-        "__call__",
-        getattr(workflow_module.refresh_widget_style, "__call__", None),
-        raising=False,
-    )
     monkeypatch.setattr(workflow_module, "refresh_widget_style", lambda *_a, **_k: None)
     host = _Host()
     controller = EstimateEntryWorkflowController(host)

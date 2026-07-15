@@ -122,11 +122,17 @@ class DatabaseRepositoryFacadeMixin:
     def get_silver_bar_list_details(self, list_id):
         return self.silver_bars_repo.get_list_details(list_id)
 
+    def get_silver_bar_list_details_result(self, list_id):
+        return self.silver_bars_repo.get_list_details_result(list_id)
+
     def update_silver_bar_list_note(self, list_id, new_note):
         return self.silver_bars_repo.update_list_note(list_id, new_note)
 
     def delete_silver_bar_list(self, list_id):
         return self.silver_bars_repo.delete_list(list_id)
+
+    def delete_silver_bar_list_result(self, list_id):
+        return self.silver_bars_repo.delete_list_result(list_id)
 
     def assign_bar_to_list(
         self, bar_id, list_id, note="Assigned to list", perform_commit=True

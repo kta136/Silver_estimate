@@ -38,6 +38,7 @@ from silverestimate.security.credential_store import CredentialStoreError
 from .custom_font_dialog import CustomFontDialog
 from .icons import get_icon
 from .login_dialog import LoginDialog  # Needed for password verification/hashing
+from .settings_live_rates_page import LiveRatesSettingsPage
 from .settings_print_controller import PrintSettingsWidgets, SettingsPrintController
 from .shared_screen_theme import build_management_screen_stylesheet
 from .theme_tokens import (
@@ -562,54 +563,14 @@ class SettingsDialog(QDialog):
         return preview
 
     def _create_live_rates_tab(self):
-        """Create the DDA public HTTPS/SSE live-rate settings tab."""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
-
-        group = QGroupBox("DDA Agra Mohar Live Rate")
-        form = QFormLayout(group)
-        self._configure_settings_form(form)
-
-        # Enable live rate display and fetching
-        live_enabled_default = True
-        live_enabled = self.settings.value(
-            "rates/live_enabled", live_enabled_default, type=bool
-        )
-        self.live_enabled_checkbox = QCheckBox("Enable live rate (show in UI)")
-        self.live_enabled_checkbox.setChecked(live_enabled)
-        self.live_enabled_checkbox.toggled.connect(self._mark_dirty)
-        form.addRow("Live Rate:", self.live_enabled_checkbox)
-
-        # Enable auto-refresh
-        self.live_enable_checkbox = QCheckBox("Enable automatic live rate updates")
-        enabled = self.settings.value("rates/auto_refresh_enabled", True, type=bool)
-        self.live_enable_checkbox.setChecked(enabled)
-        self.live_enable_checkbox.toggled.connect(self._mark_dirty)
-        form.addRow("Auto Refresh:", self.live_enable_checkbox)
-
-        hint = QLabel(
-            "Uses DDA's public customer finalRate for the configured Agra Mohar item ID. "
-            "SSE updates are instant; HTTPS retries every 10 seconds only while disconnected."
-        )
-        hint.setWordWrap(True)
-
-        layout.addWidget(group)
-        layout.addWidget(hint)
-        layout.addStretch()
-
-        # Initial enable/disable of dependent controls
-        def _sync_enabled(state: bool):
-            self.live_enable_checkbox.setEnabled(state)
-
-        _sync_enabled(self.live_enabled_checkbox.isChecked())
-        self.live_enabled_checkbox.toggled.connect(_sync_enabled)
-        self.live_enable_checkbox.toggled.connect(
-            lambda _: _sync_enabled(self.live_enabled_checkbox.isChecked())
-        )
-
-        return widget
+        """Create the independently owned DDA live-rate page."""
+        page = LiveRatesSettingsPage(self.settings, self)
+        page.changed.connect(self._mark_dirty)
+        self._live_rates_page = page
+        # Compatibility aliases for callers that customize the controls.
+        self.live_enabled_checkbox = page.live_enabled_checkbox
+        self.live_enable_checkbox = page.automatic_checkbox
+        return page
 
     def _create_print_tab(self):
         """Create the Printing settings tab."""
@@ -1056,7 +1017,7 @@ class SettingsDialog(QDialog):
         # Reusing logic similar to MainWindow.load_settings
         default_font = QFont("Courier New", 7)  # Sensible default for print
         default_font_size = 7.0
-        setattr(default_font, "float_size", default_font_size)
+        default_font.float_size = default_font_size
 
         font_family = self.settings.value(
             "font/family", default_font.family(), type=str
@@ -1071,7 +1032,7 @@ class SettingsDialog(QDialog):
 
         loaded_font = QFont(font_family, int(round(font_size_float)))
         loaded_font.setBold(font_bold)
-        setattr(loaded_font, "float_size", font_size_float)
+        loaded_font.float_size = font_size_float
         return loaded_font
 
     def _load_table_font_size_setting(self):
@@ -1226,11 +1187,7 @@ class SettingsDialog(QDialog):
             )
 
             # Live Rates settings
-            ui_enabled = bool(self.live_enabled_checkbox.isChecked())
-            auto_enabled = bool(self.live_enable_checkbox.isChecked())
-            self.settings.setValue("rates/live_enabled", ui_enabled)
-            self.settings.setValue("rates/auto_refresh_enabled", auto_enabled)
-            self.settings.remove("rates/refresh_interval_sec")
+            self._live_rates_page.save()
             if hasattr(self.main_window, "reconfigure_rate_visibility_from_settings"):
                 self.main_window.reconfigure_rate_visibility_from_settings()
             if hasattr(self.main_window, "reconfigure_rate_timer_from_settings"):
@@ -1529,7 +1486,7 @@ class SettingsDialog(QDialog):
         """Restore sensible default settings for this dialog and update the UI."""
         # Fonts
         default_font = QFont("Courier New", 7)
-        setattr(default_font, "float_size", 7.0)
+        default_font.float_size = 7.0
         self._current_print_font = default_font
         self.print_font_label.setText(self._get_font_display_text(default_font))
 
@@ -1587,18 +1544,17 @@ class SettingsDialog(QDialog):
             if (
                 hasattr(self, "print_font_sample")
                 and self.print_font_sample is not None
-            ):
-                if self._current_print_font:
-                    sample_font = QFont(self._current_print_font)
-                    # Respect fractional size stored in float_size if present
-                    size_f = getattr(
-                        self._current_print_font,
-                        "float_size",
-                        float(self._current_print_font.pointSize()),
-                    )
-                    if size_f:
-                        sample_font.setPointSizeF(max(5.0, float(size_f)))
-                    self.print_font_sample.setFont(sample_font)
+            ) and self._current_print_font:
+                sample_font = QFont(self._current_print_font)
+                # Respect fractional size stored in float_size if present
+                size_f = getattr(
+                    self._current_print_font,
+                    "float_size",
+                    float(self._current_print_font.pointSize()),
+                )
+                if size_f:
+                    sample_font.setPointSizeF(max(5.0, float(size_f)))
+                self.print_font_sample.setFont(sample_font)
         except Exception as exc:
             logging.getLogger(__name__).debug(
                 "Failed to update print-font sample label: %s", exc

@@ -17,6 +17,7 @@ from silverestimate.presenter import (
     EstimateEntryViewState,
 )
 
+from .estimate_entry_facade import EstimateEntryFacade
 from .estimate_entry_layout_controller import EstimateEntryLayoutController
 from .estimate_entry_logic.constants import (
     COL_CODE,
@@ -52,7 +53,7 @@ class _RunningCategoryTotals:
     wage: float = 0.0
 
 
-class EstimateEntryWidget(QWidget):
+class EstimateEntryWidget(EstimateEntryFacade, QWidget):
     """Widget for silver estimate entry and management."""
 
     if TYPE_CHECKING:
@@ -330,165 +331,3 @@ class EstimateEntryWidget(QWidget):
                 "Could not disconnect voucher returnPressed handler: %s", exc
             )
         self.voucher_edit.returnPressed.connect(self.safe_load_estimate)
-
-
-def _delegate(controller_attr: str, method_name: str):
-    def _method(self, *args, **kwargs):
-        controller = getattr(self, controller_attr)
-        return object.__getattribute__(controller, method_name)(*args, **kwargs)
-
-    _method.__name__ = method_name
-    _method.__qualname__ = f"EstimateEntryWidget.{method_name}"
-    return _method
-
-
-for _method_name in (
-    "_format_currency",
-    "generate_voucher",
-    "load_estimate",
-    "safe_load_estimate",
-    "save_estimate",
-    "delete_current_estimate",
-    "print_estimate",
-    "clear_form",
-    "confirm_exit",
-    "show_history",
-    "toggle_return_mode",
-    "toggle_silver_bar_mode",
-    "delete_current_row",
-    "prompt_item_selection",
-    "focus_after_item_lookup",
-    "open_history_dialog",
-    "show_silver_bar_management",
-    "show_silver_bars",
-    "apply_loaded_estimate",
-    "refresh_silver_rate",
-    "_apply_refreshed_live_rate",
-    "_handle_silver_rate_changed",
-    "_update_view_model_snapshot",
-    "_get_row_code",
-    "_get_cell_str",
-    "show_last_balance_dialog",
-):
-    setattr(
-        EstimateEntryWidget,
-        _method_name,
-        _delegate("_workflow_controller", _method_name),
-    )
-
-for _method_name in (
-    "_setup_ui",
-    "_move_live_rate_card_to_summary_top",
-    "_sync_live_rate_card_placement",
-    "_setup_table_delegates",
-    "_wire_component_signals",
-    "_bind_totals_panel_labels",
-    "_normalize_totals_position",
-    "_normalize_totals_section_order",
-    "_apply_totals_section_order",
-    "_load_totals_section_order_setting",
-    "_on_totals_section_order_changed",
-    "_apply_totals_position",
-    "_load_totals_position_setting",
-    "_on_totals_position_requested",
-    "apply_totals_position",
-    "connect_signals",
-    "_settings",
-    "_read_column_autofit_mode_setting",
-    "_is_continuous_column_autofit_enabled",
-    "_column_width_limits",
-    "_schedule_columns_autofit",
-    "_apply_pending_column_autofit",
-    "_ensure_column_can_fit_content",
-    "_save_column_widths_setting",
-    "_load_column_widths_setting",
-    "_on_item_table_section_resized",
-    "_auto_stretch_item_name",
-    "_reset_columns_layout",
-    "_load_table_font_size_setting",
-    "_load_breakdown_font_size_setting",
-    "_load_final_calc_font_size_setting",
-    "apply_table_font_size",
-    "apply_breakdown_font_size",
-    "apply_final_calc_font_size",
-):
-    setattr(
-        EstimateEntryWidget,
-        _method_name,
-        _delegate("_layout_controller", _method_name),
-    )
-
-for _method_name in (
-    "_get_table_adapter",
-    "populate_item_row",
-    "add_empty_row",
-    "clear_all_rows",
-    "_on_table_cell_edited",
-    "_on_table_row_delete_requested",
-    "cell_clicked",
-    "selection_changed",
-    "current_cell_changed",
-    "handle_cell_changed",
-    "_schedule_auto_advance_from",
-    "_auto_advance_if_origin_unchanged",
-    "_schedule_focus_code_from",
-    "_focus_code_if_origin_unchanged",
-    "_mark_manual_row_navigation",
-    "_manual_row_nav_recent",
-    "process_item_code",
-    "_is_code_empty",
-    "_enforce_code_required",
-    "move_to_next_cell",
-    "move_to_previous_cell",
-    "_next_edit_target",
-    "_previous_edit_target",
-    "focus_on_code_column",
-    "_safe_edit_item",
-    "_is_table_valid",
-    "_is_pieces_editable_for_row",
-    "_should_force_code_focus",
-    "_get_cell_float",
-    "_get_cell_int",
-    "_schedule_cell_edit",
-    "_request_edit_cell",
-    "_run_edit_request",
-):
-    setattr(
-        EstimateEntryWidget,
-        _method_name,
-        _delegate("_table_controller", _method_name),
-    )
-
-for _method_name in (
-    "calculate_net_weight",
-    "calculate_fine",
-    "calculate_wage",
-    "_row_wage_type",
-    "_recompute_row_derived_values",
-    "_schedule_totals_recalc",
-    "_apply_incremental_totals_now",
-    "_refresh_totals_after_row_edit",
-    "_log_perf_metric",
-    "_inactive_row_contribution",
-    "_totals_incremental_is_active",
-    "_category_bucket_for",
-    "_row_contribution_from_row_state",
-    "_apply_signed_contribution",
-    "_apply_contribution_delta",
-    "_reset_incremental_aggregates",
-    "_rebuild_incremental_totals_from_table",
-    "_update_incremental_for_row",
-    "_remove_incremental_row",
-    "_frozen_category_totals",
-    "_build_totals_result_from_aggregates",
-    "_disable_incremental_totals_and_fallback",
-    "calculate_totals",
-):
-    setattr(
-        EstimateEntryWidget,
-        _method_name,
-        _delegate("_totals_controller", _method_name),
-    )
-
-
-EstimateEntryWidget.table_adapter = property(lambda self: self._get_table_adapter())

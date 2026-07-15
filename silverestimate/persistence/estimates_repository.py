@@ -7,6 +7,8 @@ import sqlite3
 from datetime import datetime
 from typing import Any, Iterable, List, Optional
 
+from silverestimate.domain.pagination import EstimateHistoryCursor, Page
+
 
 def fetch_estimate_history_rows(
     cursor: sqlite3.Cursor,
@@ -86,6 +88,83 @@ def fetch_estimate_history_rows(
     """
     cursor.execute(query, params)
     return [dict(row) for row in cursor.fetchall()]
+
+
+def fetch_estimate_history_page(
+    cursor: sqlite3.Cursor,
+    *,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    voucher_search: str | None = None,
+    page_cursor: EstimateHistoryCursor | None = None,
+    limit: int = 500,
+) -> Page[dict[str, Any], EstimateHistoryCursor]:
+    """Return a keyset page using persisted estimate-header summaries."""
+    page_size = max(1, min(int(limit), 2000))
+    conditions = ["1=1"]
+    params: list[Any] = []
+    if date_from:
+        conditions.append("date >= ?")
+        params.append(date_from)
+    if date_to:
+        conditions.append("date <= ?")
+        params.append(date_to)
+    normalized_search = str(voucher_search or "").strip()
+    if normalized_search:
+        conditions.append("voucher_no LIKE ? COLLATE NOCASE")
+        params.append(f"%{normalized_search}%")
+
+    where_sql = " AND ".join(conditions)
+    cursor.execute(f"SELECT COUNT(*) FROM estimates WHERE {where_sql}", params)  # nosec B608
+    count_row = cursor.fetchone()
+    total = int(count_row[0]) if count_row else 0
+
+    keyset_sql = ""
+    query_params = list(params)
+    if page_cursor is not None:
+        numeric_cursor = (
+            int(page_cursor.voucher_no_int)
+            if page_cursor.voucher_no_int is not None
+            else -1
+        )
+        keyset_sql = (
+            " AND (COALESCE(voucher_no_int, -1) < ? OR "
+            "(COALESCE(voucher_no_int, -1) = ? AND voucher_no < ?))"
+        )
+        query_params.extend((numeric_cursor, numeric_cursor, page_cursor.voucher_no))
+    query_params.append(page_size + 1)
+    cursor.execute(
+        f"""
+        SELECT
+            voucher_no,
+            voucher_no_int,
+            date,
+            note,
+            silver_rate,
+            total_gross,
+            total_net,
+            total_fine,
+            total_wage,
+            last_balance_amount
+        FROM estimates
+        WHERE {where_sql}{keyset_sql}
+        ORDER BY COALESCE(voucher_no_int, -1) DESC, voucher_no DESC
+        LIMIT ?
+        """,  # nosec B608 - internal clauses; values are bound
+        query_params,
+    )
+    fetched = [dict(row) for row in cursor.fetchall()]
+    has_more = len(fetched) > page_size
+    rows = fetched[:page_size]
+    next_cursor = None
+    if has_more and rows:
+        last = rows[-1]
+        raw_numeric = last.get("voucher_no_int")
+        next_cursor = EstimateHistoryCursor(
+            int(raw_numeric) if raw_numeric is not None else None,
+            str(last.get("voucher_no", "") or ""),
+        )
+    return Page(items=tuple(rows), total=total, next_cursor=next_cursor)
 
 
 class EstimatesRepository:
@@ -239,6 +318,31 @@ class EstimatesRepository:
                 exc_info=True,
             )
             return []
+
+    def get_estimate_history_page(
+        self,
+        *,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        voucher_search: str | None = None,
+        cursor: EstimateHistoryCursor | None = None,
+        limit: int = 500,
+    ) -> Page[dict[str, Any], EstimateHistoryCursor]:
+        db_cursor = self._cursor
+        if not db_cursor:
+            return Page(items=(), total=0, next_cursor=None)
+        try:
+            return fetch_estimate_history_page(
+                db_cursor,
+                date_from=date_from,
+                date_to=date_to,
+                voucher_search=voucher_search,
+                page_cursor=cursor,
+                limit=limit,
+            )
+        except sqlite3.Error:
+            self._logger.exception("DB Error getting estimate-history page")
+            raise
 
     def _load_estimate_items_by_voucher(
         self, voucher_nos: Iterable[str]

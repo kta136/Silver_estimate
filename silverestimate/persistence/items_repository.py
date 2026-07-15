@@ -7,6 +7,7 @@ import sqlite3
 from typing import Any, Iterable, Optional
 
 from silverestimate.domain.item_validation import ItemValidationError, validate_item
+from silverestimate.domain.pagination import ItemCursor, Page
 
 ITEM_CATALOG_COLUMNS = "code, name, purity, wage_type, wage_rate"
 
@@ -55,6 +56,74 @@ def fetch_item_catalog_rows(
         (pattern, pattern, pattern),
     )
     return cursor.fetchall()
+
+
+def fetch_item_catalog_page(
+    cursor: sqlite3.Cursor,
+    search_term: str,
+    *,
+    page_cursor: ItemCursor | None = None,
+    limit: int = 1000,
+) -> Page[dict[str, Any], ItemCursor]:
+    """Return one keyset-ordered item-master page and its total match count."""
+    page_size = max(1, min(int(limit), 5000))
+    term = (search_term or "").strip()
+    where_sql = "1=1"
+    where_params: list[Any] = []
+
+    if term:
+        prefix = f"{term}%"
+        cursor.execute(
+            "SELECT EXISTS(SELECT 1 FROM items "
+            "WHERE code LIKE ? COLLATE NOCASE OR name LIKE ? COLLATE NOCASE)",
+            (prefix, prefix),
+        )
+        has_prefix = bool(cursor.fetchone()[0])
+        if has_prefix:
+            pattern = prefix
+        elif len(term) >= 2:
+            pattern = f"%{term}%"
+        else:
+            return Page(items=(), total=0, next_cursor=None)
+        where_sql = "(code LIKE ? COLLATE NOCASE OR name LIKE ? COLLATE NOCASE)"
+        where_params.extend((pattern, pattern))
+
+    cursor.execute(f"SELECT COUNT(*) FROM items WHERE {where_sql}", where_params)  # nosec B608
+    count_row = cursor.fetchone()
+    total = int(count_row[0]) if count_row else 0
+
+    keyset_sql = ""
+    params = list(where_params)
+    if page_cursor is not None:
+        keyset_sql = (
+            " AND (UPPER(code) > ? OR (UPPER(code) = ? AND code > ? COLLATE BINARY))"
+        )
+        params.extend(
+            (
+                page_cursor.normalized_code,
+                page_cursor.normalized_code,
+                page_cursor.code,
+            )
+        )
+    params.append(page_size + 1)
+    cursor.execute(
+        f"""
+        SELECT {ITEM_CATALOG_COLUMNS}
+        FROM items
+        WHERE {where_sql}{keyset_sql}
+        ORDER BY UPPER(code), code COLLATE BINARY
+        LIMIT ?
+        """,  # nosec B608 - clauses are internal constants; values are bound
+        params,
+    )
+    fetched = [dict(row) for row in cursor.fetchall()]
+    has_more = len(fetched) > page_size
+    rows = fetched[:page_size]
+    next_cursor = None
+    if has_more and rows:
+        last_code = str(rows[-1].get("code", "") or "")
+        next_cursor = ItemCursor(last_code.upper(), last_code)
+    return Page(items=tuple(rows), total=total, next_cursor=next_cursor)
 
 
 class ItemsRepository:
@@ -132,6 +201,23 @@ class ItemsRepository:
         except sqlite3.Error as exc:
             self._logger.error("DB Error search_items: %s", exc, exc_info=True)
             return []
+
+    def search_items_page(
+        self,
+        search_term: str,
+        *,
+        cursor: ItemCursor | None = None,
+        limit: int = 1000,
+    ) -> Page[dict[str, Any], ItemCursor]:
+        db_cursor = self._cursor
+        if not db_cursor:
+            return Page(items=(), total=0, next_cursor=None)
+        return fetch_item_catalog_page(
+            db_cursor,
+            search_term,
+            page_cursor=cursor,
+            limit=limit,
+        )
 
     def search_items_for_selection(
         self, search_term: str, *, limit: int = 500
@@ -375,38 +461,32 @@ class ItemsRepository:
             return None
 
         existing_codes = self._load_all_item_codes()
-        inserted = 0
-        updated = 0
+        inserted = sum(item.code not in existing_codes for item in normalized_items)
+        updated = len(normalized_items) - inserted
         deleted = 0
         try:
             conn.execute("BEGIN")
-            for item in normalized_items:
-                if item.code in existing_codes:
-                    cursor.execute(
-                        "UPDATE items SET name = ?, purity = ?, wage_type = ?, wage_rate = ? WHERE code = ?",
-                        (
-                            item.name,
-                            item.purity,
-                            item.wage_type,
-                            item.wage_rate,
-                            item.code,
-                        ),
-                    )
-                    updated += 1
-                    continue
-
-                cursor.execute(
-                    "INSERT INTO items (code, name, purity, wage_type, wage_rate) VALUES (?, ?, ?, ?, ?)",
+            cursor.executemany(
+                """
+                INSERT INTO items (code, name, purity, wage_type, wage_rate)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(code) DO UPDATE SET
+                    name = excluded.name,
+                    purity = excluded.purity,
+                    wage_type = excluded.wage_type,
+                    wage_rate = excluded.wage_rate
+                """,
+                [
                     (
                         item.code,
                         item.name,
                         item.purity,
                         item.wage_type,
                         item.wage_rate,
-                    ),
-                )
-                existing_codes.add(item.code)
-                inserted += 1
+                    )
+                    for item in normalized_items
+                ],
+            )
 
             if replace_existing:
                 obsolete_codes = existing_codes - seen_codes
@@ -421,11 +501,17 @@ class ItemsRepository:
             return None
 
         self._request_flush()
-        for code in seen_codes:
-            self._invalidate_cache(code)
-        if replace_existing:
-            for code in existing_codes - seen_codes:
-                self._invalidate_cache(code)
+        cursor.execute(f"SELECT {ITEM_CATALOG_COLUMNS} FROM items")  # nosec B608
+        catalog_rows = [dict(row) for row in cursor.fetchall()]
+        cache_controller = self._cache_controller
+        if cache_controller and hasattr(cache_controller, "replace_all"):
+            cache_controller.replace_all(catalog_rows)
+        else:
+            self._fallback_cache = {
+                str(row.get("code", "") or "").upper(): row
+                for row in catalog_rows
+                if row.get("code")
+            }
         return {
             "inserted": inserted,
             "updated": updated,

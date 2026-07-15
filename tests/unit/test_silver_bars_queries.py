@@ -29,7 +29,7 @@ def test_build_available_bars_queries_applies_filters_and_limit():
     assert "sb.date_added >= ?" in statements.query.query
     assert "sb.date_added <= ?" in statements.query.query
     assert statements.query.query.endswith(
-        "ORDER BY sb.date_added DESC, sb.bar_id DESC LIMIT ?"
+        "ORDER BY COALESCE(sb.date_added, '') DESC, sb.bar_id DESC LIMIT ?"
     )
     assert statements.query.params == (
         9.5,
@@ -91,7 +91,7 @@ def test_build_history_bars_query_applies_filters_and_normalizes_limit():
     assert "sb.weight = ?" in statement.query
     assert "sb.status = ?" in statement.query
     assert statement.query.endswith(
-        "ORDER BY sb.date_added DESC, sb.bar_id DESC LIMIT ?"
+        "ORDER BY COALESCE(sb.date_added, '') DESC, sb.bar_id DESC LIMIT ?"
     )
     assert statement.params == ("%V001%", "%V001%", 12.5, "Assigned", 100)
 
@@ -107,3 +107,35 @@ def test_build_history_bars_query_ignores_invalid_weight_filter():
     assert "sb.weight = ?" not in statement.query
     assert "sb.status = ?" not in statement.query
     assert statement.params == (2000,)
+
+
+def test_keyset_queries_bind_stable_cursor_values():
+    available = build_available_bars_queries(
+        limit=11,
+        after_date_added="2026-07-15T01:00:00",
+        after_bar_id=42,
+    )
+    assert "COALESCE(sb.date_added, '') < ?" in available.query.query
+    assert available.query.params[-4:] == (
+        "2026-07-15T01:00:00",
+        "2026-07-15T01:00:00",
+        42,
+        11,
+    )
+
+    listed = build_bars_in_list_queries(9, limit=11, after_bar_id=42)
+    assert "sb.bar_id > ?" in listed.query.query
+    assert listed.query.params == (9, 42, 11)
+
+    history = build_history_bars_query(
+        limit=11,
+        after_date_added="2026-07-15T01:00:00",
+        after_bar_id=42,
+    )
+    assert "COALESCE(sb.date_added, '') < ?" in history.query
+    assert history.params == (
+        "2026-07-15T01:00:00",
+        "2026-07-15T01:00:00",
+        42,
+        100,
+    )

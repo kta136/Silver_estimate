@@ -63,7 +63,6 @@ class FakeDB:
             "INSERT INTO schema_version (version, applied_date) VALUES (?, ?)",
             (new_version, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
         )
-        self.conn.commit()
         return True
 
     def request_flush(self) -> None:
@@ -87,14 +86,119 @@ def test_items_repository_roundtrip(fake_db):
     assert fake_db._flush_requested
 
 
-def test_schema_setup_upgrades_to_v5_and_adds_line_key_columns(fake_db):
+def test_item_catalog_keyset_pages_do_not_duplicate_rows(fake_db):
+    repo = ItemsRepository(fake_db)
+    result = repo.upsert_item_catalog(
+        [
+            {
+                "code": code,
+                "name": f"Item {code}",
+                "purity": 90.0,
+                "wage_type": "P",
+                "wage_rate": 1.0,
+            }
+            for code in ("A001", "A002", "A003", "B001")
+        ]
+    )
+    assert result == {"inserted": 4, "updated": 0, "deleted": 0, "total": 4}
+
+    first = repo.search_items_page("A", limit=2)
+    second = repo.search_items_page("A", cursor=first.next_cursor, limit=2)
+
+    assert first.total == 3
+    assert first.has_more is True
+    assert [row["code"] for row in first.items] == ["A001", "A002"]
+    assert [row["code"] for row in second.items] == ["A003"]
+    assert second.next_cursor is None
+    assert fake_db.item_cache_controller.get("B001")["name"] == "Item B001"
+
+
+def test_estimate_history_keyset_page_reads_header_totals(fake_db):
+    repo = EstimatesRepository(fake_db)
+    fake_db.cursor.executemany(
+        "INSERT INTO estimates "
+        "(voucher_no, voucher_no_int, date, total_gross, total_net) "
+        "VALUES (?, ?, '2026-07-15', ?, ?)",
+        [
+            ("1", 1, 10.0, 9.0),
+            ("2", 2, 20.0, 18.0),
+            ("3", 3, 30.0, 27.0),
+        ],
+    )
+    fake_db.conn.commit()
+
+    first = repo.get_estimate_history_page(limit=2)
+    second = repo.get_estimate_history_page(cursor=first.next_cursor, limit=2)
+
+    assert first.total == 3
+    assert [row["voucher_no"] for row in first.items] == ["3", "2"]
+    assert first.items[0]["total_gross"] == 30.0
+    assert [row["voucher_no"] for row in second.items] == ["1"]
+
+
+def test_schema_setup_upgrades_to_v6_and_adds_line_key_columns(fake_db):
     fake_db.cursor.execute("SELECT MAX(version) AS v FROM schema_version")
     row = fake_db.cursor.fetchone()
-    assert row["v"] == 5
+    assert row["v"] == 6
     assert fake_db._column_exists("estimates", "voucher_no_int")
     assert fake_db._column_exists("estimate_items", "wage_type")
     assert fake_db._column_exists("estimate_items", "line_key")
     assert fake_db._column_exists("silver_bars", "source_line_key")
+    fake_db.cursor.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='index' "
+        "AND name='idx_sbars_status_list_weight_date_id'"
+    )
+    assert fake_db.cursor.fetchone() is not None
+
+
+def test_schema_setup_rolls_back_all_domain_changes_when_version_stage_fails():
+    class FailingDB(FakeDB):
+        def _update_schema_version(self, new_version: int) -> bool:
+            if new_version == 4:
+                raise sqlite3.OperationalError("injected migration failure")
+            return super()._update_schema_version(new_version)
+
+    db = FailingDB()
+    try:
+        with pytest.raises(sqlite3.OperationalError, match="injected"):
+            migrations.run_schema_setup(db)
+        db.cursor.execute("SELECT MAX(version) FROM schema_version")
+        assert db.cursor.fetchone()[0] == 0
+        assert db._table_exists("items") is False
+    finally:
+        db.conn.close()
+
+
+def test_migration_v6_rebuilds_persisted_history_totals():
+    db = FakeDB()
+    try:
+        migrations.run_schema_setup(db)
+        db.cursor.execute("DELETE FROM schema_version WHERE version = 6")
+        db.cursor.execute(
+            "INSERT INTO estimates "
+            "(voucher_no, voucher_no_int, date, total_gross, total_net) "
+            "VALUES ('9', 9, '2026-07-15', 999, 999)"
+        )
+        db.cursor.executemany(
+            "INSERT INTO estimate_items "
+            "(voucher_no, gross, net_wt, is_return, is_silver_bar) "
+            "VALUES (?, ?, ?, ?, ?)",
+            [
+                ("9", 10.0, 8.0, 0, 0),
+                ("9", 4.0, 3.0, 1, 0),
+                ("9", 2.0, 2.0, 0, 1),
+            ],
+        )
+        db.conn.commit()
+
+        migrations.run_schema_setup(db)
+
+        row = db.conn.execute(
+            "SELECT total_gross, total_net FROM estimates WHERE voucher_no='9'"
+        ).fetchone()
+        assert tuple(row) == (10.0, 8.0)
+    finally:
+        db.conn.close()
 
 
 def test_migration_v3_backfills_numeric_vouchers_from_legacy_schema():
@@ -148,7 +252,7 @@ def test_migration_v3_backfills_numeric_vouchers_from_legacy_schema():
         assert rows["AB-1"] is None
 
         db.cursor.execute("SELECT MAX(version) AS v FROM schema_version")
-        assert db.cursor.fetchone()["v"] == 5
+        assert db.cursor.fetchone()["v"] == 6
     finally:
         db.conn.close()
 
@@ -764,6 +868,26 @@ def test_silver_bar_list_query_limit_and_offset(fake_db):
     offset_rows = repo.get_bars_in_list(list_id, limit=1, offset=1)
     assert len(offset_rows) == 1
     assert offset_rows[0]["bar_id"] == limited[1]["bar_id"]
+
+
+def test_silver_bar_keyset_pages_preserve_stable_order(fake_db):
+    repo = SilverBarsRepository(fake_db)
+    created = [
+        repo.add_silver_bar(f"PAGE-{index}", float(index), 99.0)
+        for index in range(1, 5)
+    ]
+    assert all(bar_id is not None for bar_id in created)
+
+    first = repo.get_available_bars_keyset_page(limit=2)
+    second = repo.get_available_bars_keyset_page(
+        cursor=first.next_cursor,
+        limit=2,
+    )
+
+    ids = [row["bar_id"] for row in (*first.items, *second.items)]
+    assert first.total == 4
+    assert len(ids) == len(set(ids)) == 4
+    assert ids == sorted(ids, reverse=True)
 
 
 def test_silver_bar_repository_available_page_and_history_search(fake_db):

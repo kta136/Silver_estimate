@@ -32,6 +32,13 @@ class DatabaseRepositoryFacadeMixin:
     def search_items(self, search_term):
         return self.items_repo.search_items(search_term)
 
+    def search_items_page(self, search_term, *, cursor=None, limit=1000):
+        return self.items_repo.search_items_page(
+            search_term,
+            cursor=cursor,
+            limit=limit,
+        )
+
     def search_items_for_selection(self, search_term, limit=500):
         return self.items_repo.search_items_for_selection(search_term, limit=limit)
 
@@ -62,6 +69,23 @@ class DatabaseRepositoryFacadeMixin:
             date_from=date_from,
             date_to=date_to,
             voucher_search=voucher_search,
+        )
+
+    def get_estimate_history_page(
+        self,
+        *,
+        date_from=None,
+        date_to=None,
+        voucher_search=None,
+        cursor=None,
+        limit=500,
+    ):
+        return self.estimates_repo.get_estimate_history_page(
+            date_from=date_from,
+            date_to=date_to,
+            voucher_search=voucher_search,
+            cursor=cursor,
+            limit=limit,
         )
 
     def get_first_estimate_date(self):
@@ -162,11 +186,39 @@ class DatabaseRepositoryFacadeMixin:
             limit=limit,
         )
 
+    def get_available_silver_bars_keyset_page(
+        self,
+        *,
+        weight_query=None,
+        weight_tolerance=0.001,
+        min_purity=None,
+        max_purity=None,
+        date_range=None,
+        cursor=None,
+        limit=1500,
+    ):
+        return self.silver_bars_repo.get_available_bars_keyset_page(
+            weight_query=weight_query,
+            weight_tolerance=weight_tolerance,
+            min_purity=min_purity,
+            max_purity=max_purity,
+            date_range=date_range,
+            cursor=cursor,
+            limit=limit,
+        )
+
     def get_silver_bars_in_list_page(self, list_id, *, limit=None, offset=0):
         return self.silver_bars_repo.get_bars_in_list_page(
             list_id,
             limit=limit,
             offset=offset,
+        )
+
+    def get_silver_bars_in_list_keyset_page(self, list_id, *, cursor=None, limit=1500):
+        return self.silver_bars_repo.get_bars_in_list_keyset_page(
+            list_id,
+            cursor=cursor,
+            limit=limit,
         )
 
     def search_silver_bar_history(
@@ -181,6 +233,23 @@ class DatabaseRepositoryFacadeMixin:
             voucher_term=voucher_term,
             weight_text=weight_text,
             status_text=status_text,
+            limit=limit,
+        )
+
+    def search_silver_bar_history_page(
+        self,
+        *,
+        voucher_term="",
+        weight_text="",
+        status_text="All Statuses",
+        cursor=None,
+        limit=1000,
+    ):
+        return self.silver_bars_repo.search_history_bars_page(
+            voucher_term=voucher_term,
+            weight_text=weight_text,
+            status_text=status_text,
+            cursor=cursor,
             limit=limit,
         )
 

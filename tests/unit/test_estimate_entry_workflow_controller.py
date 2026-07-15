@@ -1068,30 +1068,26 @@ def test_get_cell_helpers_and_last_balance_dialog(workflow_host, monkeypatch):
 def test_refresh_silver_rate_emits_none_on_failure(workflow_host, monkeypatch):
     host, controller = workflow_host
 
-    class _ThreadStubImmediate:
-        def __init__(self, *, target=None, daemon=None):
-            self._target = target
-            self.daemon = daemon
+    class _RunnerSignal:
+        def __init__(self):
+            self.callback = None
 
-        def start(self):
-            if self._target:
-                self._target()
+        def connect(self, callback):
+            self.callback = callback
 
-    monkeypatch.setattr(workflow_module.threading, "Thread", _ThreadStubImmediate)
+        def emit(self, *args):
+            if self.callback:
+                self.callback(*args)
 
-    def _boom(*args, **kwargs):
-        del args, kwargs
-        raise RuntimeError("offline")
+    class _Runner:
+        def __init__(self, *_args, **_kwargs):
+            self.result = _RunnerSignal()
+            self.failed = _RunnerSignal()
 
-    fake_module = types.SimpleNamespace(
-        fetch_broadcast_rate_exact=_boom,
-        fetch_silver_agra_local_mohar_rate=lambda timeout=7: (None, None),
-    )
-    monkeypatch.setitem(
-        __import__("sys").modules,
-        "silverestimate.services.dda_rate_fetcher",
-        fake_module,
-    )
+        def submit(self, _request):
+            self.failed.emit(1, RuntimeError("offline"))
+
+    monkeypatch.setattr(workflow_module, "LatestRequestRunner", _Runner)
 
     controller.refresh_silver_rate()
 

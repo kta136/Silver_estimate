@@ -1,434 +1,292 @@
-#!/usr/bin/env python
+"""Validated anonymous client for DDA's public customer-rate snapshot."""
+
+from __future__ import annotations
+
 import json
-import re
-import ssl
-import urllib.error
+import logging
+import math
 import urllib.request
-from html import unescape
-from math import ceil
-from typing import Any, Optional, cast
-from urllib.parse import urlparse
+from collections.abc import Callable, Mapping
+from dataclasses import asdict, dataclass, replace
+from datetime import datetime, timezone
+from typing import Any, Literal, Protocol, cast
 
-DEFAULT_BASE_URL = "http://www.ddasilver.com/"
-# DDASilver's homepage currently fails normal HTTPS certificate verification.
-# Keep the scrape URL on HTTP unless the vendor fixes TLS and the endpoint is
-# re-verified. Do not recommend switching this to HTTPS blindly.
-# Policy note: keep this exact DDASilver commodity target fixed for live-rate
-# fetches until product requirements explicitly specify a different item.
-# Do not swap this to another DDASilver row, a spot quote, or a different feed
-# just because it looks numerically closer without an explicit requirement.
-TARGET_NAME = "Silver Agra Local Mohar"
+from silverestimate.infrastructure.settings import SettingsStore, get_app_settings
 
-SCRAPE_HEADERS = {
-    "User-Agent": "SilverEstimate/1.0 (+https://ddasilver.com)",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Connection": "close",
-}
+DDA_CURRENT_RATES_URL = "https://ddajewels.com/api/v1/rates/current"
+DDA_AGRA_MOHAR_ITEM_ID = "cmomws5tw000004i5k5t6yrnw"
+DDA_RATE_UNIT = "PER_KG"
+DDA_SCHEMA_VERSION = 1
+MAX_CURRENT_RATES_BYTES = 2 * 1024 * 1024
+SNAPSHOT_SETTINGS_KEY = "rates/dda_last_verified_snapshot"
 
-# Broadcast endpoints used by site UI for exact on-screen numbers.
-# Probe the homepage-advertised feed first and retain older known hosts as
-# fallbacks because DDASilver rotates infrastructure without stable redirects.
-# Verified on 2026-03-10: strict HTTPS does not work for these hosts because
-# certificate validation fails (self-signed cert / hostname mismatch). Keep
-# the broadcast endpoints on HTTP unless the vendor publishes valid TLS.
-BROADCAST_URLS = (
-    "http://3.108.128.67/lmxtrade/winbullliteapi/api/v1/broadcastrates",
-    "http://13.235.208.189/lmxtrade/winbullliteapi/api/v1/broadcastrates",
-    "http://3.109.80.6/lmxtrade/winbullliteapi/api/v1/broadcastrates",
-)
-BROADCAST_URL = BROADCAST_URLS[0]
-BROADCAST_CLIENT = "ddasil"
-_ALLOWED_URL_SCHEMES = frozenset({"http", "https"})
-_TLS_RETRY_ALLOWED_HOSTS = frozenset(
-    filter(None, (urlparse(url).hostname for url in BROADCAST_URLS))
-)
-_HOMEPAGE_BROADCAST_URL: str | None = None
-
-RateValue = int | float
-RateMetadata = dict[str, Any]
+RateTransport = Literal["https", "sse", "cache"]
 
 
-def fetch_silver_agra_local_mohar_rate(
-    base_url: str = DEFAULT_BASE_URL, timeout: int = 10
-):
-    """
-    Fetch the live rate for 'Silver Agra Local Mohar' by scraping the DDASilver homepage.
+class DdaRateError(RuntimeError):
+    """Base error for public DDA transport and contract failures."""
 
-    Returns a tuple: (rate_int_or_none, metadata_dict)
-    - rate is an integer (rounded) or None when the content could not be parsed
-    - metadata contains the raw hidden-row fields when available
-    """
-    url = base_url.rstrip("/") + "/"
-    _validate_request_url(url)
-    headers = dict(SCRAPE_HEADERS)
-    headers.setdefault("Referer", url)
-    req = urllib.request.Request(url, headers=headers)
+
+class DdaRateTransportError(DdaRateError):
+    """The public HTTPS request could not be completed."""
+
+
+class DdaRateContractError(DdaRateError):
+    """A DDA response did not satisfy the public version-1 contract."""
+
+
+@dataclass(frozen=True)
+class DdaRateSnapshot:
+    """Verified customer-facing Agra Mohar rate and stream position."""
+
+    item_id: str
+    final_rate: float
+    unit: str
+    sequence: int
+    received_at: datetime
+    server_time: datetime
+    market_state: Mapping[str, Any] | None
+    transport: RateTransport
+
+    def as_cached(self) -> DdaRateSnapshot:
+        return replace(self, transport="cache")
+
+
+class _HttpResponse(Protocol):
+    status: int
+
+    def read(self, amount: int = -1) -> bytes: ...
+
+    def __enter__(self) -> _HttpResponse: ...
+
+    def __exit__(self, *args: object) -> object: ...
+
+
+HttpOpen = Callable[..., _HttpResponse]
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _parse_datetime(value: object, field: str) -> datetime:
+    if not isinstance(value, str) or not value.strip():
+        raise DdaRateContractError(f"{field} must be an ISO-8601 timestamp.")
+    normalized = value.strip()
+    if normalized.endswith("Z"):
+        normalized = f"{normalized[:-1]}+00:00"
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310
-            html = resp.read().decode("utf-8", errors="replace")
-    except urllib.error.URLError, urllib.error.HTTPError, TimeoutError:
-        return None, {}
-
-    return _parse_scraped_rate(html, TARGET_NAME)
-
-
-def _parse_scraped_rate(html: str, target_name: str):
-    """Parse the commodity table markup and extract the rate plus related metadata."""
-    row_pattern = re.compile(
-        r"<tr[^>]*>\s*<td[^>]*>\s*"
-        + re.escape(target_name)
-        + r"\s*</td>(?P<body>.*?)</tr>",
-        re.IGNORECASE | re.DOTALL,
-    )
-    row_match = row_pattern.search(html)
-    if not row_match:
-        return None, {}
-
-    cells_html = row_match.group("body")
-    metadata: RateMetadata = {}
-
-    for div_match in re.finditer(
-        r'<div\s+[^>]*class="([^"]+)"[^>]*>\s*([^<]*)</div>',
-        cells_html,
-        re.IGNORECASE | re.DOTALL,
-    ):
-        key = div_match.group(1).strip()
-        if not key:
-            continue
-        value = unescape(div_match.group(2).strip())
-        metadata[key] = value
-
-    display_match = re.search(
-        r'<div[^>]*class="[^"]*(?:redround|greenround)[^"]*"[^>]*>\s*([^<]*)</div>',
-        cells_html,
-        re.IGNORECASE | re.DOTALL,
-    )
-    if display_match:
-        display_value = unescape(display_match.group(1).strip())
-        if display_value:
-            metadata.setdefault("display_rate", display_value)
-
-    metadata["source"] = "scraped"
-
-    def _convert_to_float(raw_val: Optional[str]) -> Optional[float]:
-        if raw_val is None:
-            return None
-        cleaned = raw_val.replace(",", "").strip()
-        if cleaned in {"", "-", "--"}:
-            return None
-        # Strip currency symbols if present
-        cleaned = cleaned.lstrip("₹").strip()
-        try:
-            return float(cleaned)
-        except Exception:
-            return None
-
-    rate_float: float | None = None
-    source: str | None = None
-    # Prefer a numeric on-screen value when DDASilver exposes one directly.
-    # If the visible rate cell is "-", keep using this row only and derive the
-    # business rate from the hidden sell rate plus display purity instead of
-    # falling back to some other commodity or broadcast line.
-    display_val = _convert_to_float(metadata.get("display_rate"))
-    if display_val is not None:
-        rate_float = display_val
-        source = "display_rate"
-    if rate_float is None:
-        sell_rate_val = _convert_to_float(metadata.get("sell_rate"))
-        if sell_rate_val is not None:
-            rate_float = sell_rate_val
-            source = "sell_rate"
-
-    if rate_float is None:
-        return None, metadata
-
-    if source == "sell_rate":
-        purity_val = _convert_to_float(metadata.get("com_display_purity"))
-        if purity_val is not None and 0 < purity_val < 100:
-            # Business-required fallback. Example observed on 2026-03-07:
-            # 275569 at 99% purity must yield 272814, not the raw 275569.
-            metadata["applied_adjustment"] = "sell_rate * display_purity_percent"
-            metadata["applied_purity_percent"] = purity_val
-            metadata["parsed_decimals"] = 0
-            metadata["raw_source"] = source
-            return int(ceil(rate_float * (purity_val / 100.0))), metadata
-
-    decimals = 0
-    rate_str = f"{rate_float}"
-    if "." in rate_str:
-        decimals = len(rate_str.split(".", 1)[1].rstrip("0"))
-    if decimals <= 0:
-        rate_val: RateValue = int(round(rate_float))
-    else:
-        decimals = min(decimals, 4)
-        rate_val = round(rate_float, decimals)
-    metadata["parsed_decimals"] = decimals
-    if source:
-        metadata["raw_source"] = source
-    return rate_val, metadata
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise DdaRateContractError(f"{field} must be an ISO-8601 timestamp.") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise DdaRateContractError(f"{field} must include a timezone offset.")
+    return parsed.astimezone(timezone.utc)
 
 
-def _main():
-    rate, meta = fetch_silver_agra_local_mohar_rate()
-    if rate is None:
-        print("Failed to scrape rate from homepage; attempting broadcast...")
-        br, open_, info = fetch_broadcast_rate_exact()
-        print(br, open_, info)
-    else:
-        print(rate)
+def _nonnegative_int(value: object, field: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise DdaRateContractError(f"{field} must be a non-negative integer.")
+    return value
 
 
-def _lookup_com_id_for_target(base_url: str = DEFAULT_BASE_URL, timeout: int = 10):
-    """Resolve com_id for TARGET_NAME via the scraped metadata."""
-    rate, item = fetch_silver_agra_local_mohar_rate(base_url=base_url, timeout=timeout)
-    try:
-        return int(item.get("com_id")) if item else None
-    except Exception:
-        return None
+def _positive_finite_number(value: object, field: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise DdaRateContractError(f"{field} must be a finite positive number.")
+    number = float(value)
+    if not math.isfinite(number) or number <= 0:
+        raise DdaRateContractError(f"{field} must be a finite positive number.")
+    return number
 
 
-def _lookup_homepage_broadcast_url(
-    base_url: str = DEFAULT_BASE_URL, timeout: int = 10
-) -> str | None:
-    """Return the broadcast endpoint currently advertised by the DDASilver homepage."""
-    global _HOMEPAGE_BROADCAST_URL
-
-    if _HOMEPAGE_BROADCAST_URL:
-        return _HOMEPAGE_BROADCAST_URL
-
-    homepage_url = base_url.rstrip("/") + "/"
-    try:
-        html = _fetch_url_text(homepage_url, timeout=timeout, headers=SCRAPE_HEADERS)
-    except Exception:
-        return None
-
-    match = re.search(r'var\s+bcurl\s*=\s*"([^"]+)"', html, re.IGNORECASE)
-    if not match:
-        return None
-
-    endpoint = match.group(1).strip()
-    if not endpoint:
-        return None
-
-    try:
-        _validate_request_url(endpoint)
-    except ValueError:
-        return None
-
-    _HOMEPAGE_BROADCAST_URL = endpoint
-    return endpoint
+def _validate_schema_and_view(payload: Mapping[str, Any]) -> None:
+    if payload.get("schemaVersion") != DDA_SCHEMA_VERSION:
+        raise DdaRateContractError("Unsupported DDA schemaVersion; expected 1.")
+    if payload.get("view") not in {"default", "tv"}:
+        raise DdaRateContractError("DDA view must be 'default' or 'tv'.")
 
 
-def _candidate_broadcast_urls(
-    base_url: str = DEFAULT_BASE_URL, timeout: int = 10
-) -> tuple[str, ...]:
-    """Build the ordered set of broadcast endpoints to probe."""
-    candidate_urls: list[str] = []
-
-    homepage_endpoint = _lookup_homepage_broadcast_url(
-        base_url=base_url, timeout=timeout
-    )
-    if homepage_endpoint:
-        candidate_urls.append(homepage_endpoint)
-
-    candidate_urls.extend(BROADCAST_URLS)
-
-    deduped: list[str] = []
-    for endpoint in candidate_urls:
-        if endpoint and endpoint not in deduped:
-            deduped.append(endpoint)
-    return tuple(deduped)
-
-
-def fetch_broadcast_rate_exact(
-    timeout: int = 10,
-    client: str = BROADCAST_CLIENT,
-    target_name: str = TARGET_NAME,
-    base_url: str = DEFAULT_BASE_URL,
-    prefer_static_id: bool = True,
-):
-    """
-    Fetch the exact on-screen rate via the broadcast endpoint the site uses.
-
-    Returns (rate_or_none, market_open_bool, info_dict)
-    - rate: integer if available
-    - market_open_bool: False when the broadcast signals market closed/message mode
-    - info: auxiliary data (e.g., matched com_id)
-    """
-    # Prefer the known com_id (47) to avoid blocking on the website during lookup.
-    # Only attempt dynamic lookup if explicitly requested and broadcast parsing fails.
-    com_id = (
-        47
-        if prefer_static_id
-        else (_lookup_com_id_for_target(base_url=base_url, timeout=timeout) or 47)
-    )
-
-    payload = json.dumps({"client": client}).encode("utf-8")
-    endpoint_used = None
-    fetch_errors = []
-    rate_val = None
-    market_open = True
-
-    endpoints = _candidate_broadcast_urls(base_url=base_url, timeout=timeout)
-
-    for endpoint in endpoints:
-        try:
-            text = _fetch_broadcast_payload(endpoint, payload, timeout=timeout)
-        except Exception as exc:  # pragma: no cover - network errors vary
-            fetch_errors.append(repr(exc))
-            continue
-
-        candidate_rate, candidate_open = _parse_broadcast_payload(text, com_id)
-        # Record the latest market status even if the rate was missing.
-        market_open = candidate_open
-        if candidate_rate is not None:
-            rate_val = candidate_rate
-            endpoint_used = endpoint
-            break
-
-    # If not found and we didn't try dynamic lookup, try once more by resolving com_id dynamically
-    if rate_val is None and prefer_static_id:
-        dyn_id = _lookup_com_id_for_target(base_url=base_url, timeout=timeout)
-        if dyn_id and dyn_id != com_id:
-            for endpoint in endpoints:
-                retry_text: str | None = None
-                try:
-                    retry_text = _fetch_broadcast_payload(
-                        endpoint, payload, timeout=timeout
-                    )
-                except Exception:
-                    retry_text = None
-                if retry_text is None:
-                    continue
-                candidate_rate, candidate_open = _parse_broadcast_payload(
-                    retry_text, dyn_id
-                )
-                market_open = candidate_open
-                if candidate_rate is not None:
-                    rate_val = candidate_rate
-                    endpoint_used = endpoint
-                    break
-            com_id = dyn_id or com_id
-
-    if rate_val is None and fetch_errors:
-        info = {"com_id": com_id, "errors": fetch_errors}
-        return None, market_open, info
-
-    info = {"com_id": com_id}
-    if endpoint_used:
-        info["endpoint"] = endpoint_used
-    return rate_val, market_open, info
-
-
-def _is_tls_cert_error(exc: urllib.error.URLError) -> bool:
-    reason = getattr(exc, "reason", None)
-    if isinstance(reason, ssl.SSLCertVerificationError):
-        return True
-    message = str(reason or exc).lower()
-    return "certificate verify failed" in message
-
-
-def _validate_request_url(url: str) -> str:
-    parsed = urlparse(url)
-    scheme = (parsed.scheme or "").lower()
-    if scheme not in _ALLOWED_URL_SCHEMES:
-        raise ValueError(
-            f"Blocked request with unsupported scheme: {scheme or '<none>'}"
+def _matching_item(items: object, *, require_unit: bool) -> Mapping[str, Any]:
+    if not isinstance(items, list):
+        raise DdaRateContractError("DDA items must be an array.")
+    matches = [
+        item
+        for item in items
+        if isinstance(item, Mapping) and item.get("itemId") == DDA_AGRA_MOHAR_ITEM_ID
+    ]
+    if len(matches) != 1:
+        raise DdaRateContractError(
+            "DDA response must contain exactly one configured Agra Mohar item ID."
         )
-    if not parsed.hostname:
-        raise ValueError("Blocked request with missing hostname")
-    return url
+    item = cast(Mapping[str, Any], matches[0])
+    if require_unit and item.get("unit") != DDA_RATE_UNIT:
+        raise DdaRateContractError("Agra Mohar rate unit must be PER_KG.")
+    return item
 
 
-def _fetch_url_text(
-    url: str,
-    timeout: int = 10,
+def parse_current_rates(
+    payload: bytes | str | Mapping[str, Any],
     *,
-    data: bytes | None = None,
-    headers: dict[str, str] | None = None,
-    method: str | None = None,
-) -> str:
-    _validate_request_url(url)
-    req = urllib.request.Request(
-        url,
-        data=data,
-        headers=headers or {},
-        method=method,
+    received_at: datetime | None = None,
+) -> DdaRateSnapshot:
+    """Parse the public response using only the configured item's ``finalRate``."""
+    if isinstance(payload, bytes | str):
+        try:
+            decoded = json.loads(payload)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise DdaRateContractError("DDA response is not valid JSON.") from exc
+    else:
+        decoded = payload
+    if not isinstance(decoded, Mapping):
+        raise DdaRateContractError("DDA response must be a JSON object.")
+    _validate_schema_and_view(decoded)
+    sequence = _nonnegative_int(decoded.get("sequence"), "sequence")
+    server_time = _parse_datetime(decoded.get("serverTime"), "serverTime")
+    item = _matching_item(decoded.get("items"), require_unit=True)
+    final_rate = _positive_finite_number(item.get("finalRate"), "finalRate")
+    feed_status = decoded.get("feedStatus")
+    market_state: Mapping[str, Any] | None = None
+    if feed_status is not None:
+        if not isinstance(feed_status, Mapping):
+            raise DdaRateContractError("feedStatus must be an object.")
+        raw_market_state = feed_status.get("marketState")
+        if raw_market_state is not None:
+            if not isinstance(raw_market_state, Mapping):
+                raise DdaRateContractError("feedStatus.marketState must be an object.")
+            market_state = dict(raw_market_state)
+    return DdaRateSnapshot(
+        item_id=DDA_AGRA_MOHAR_ITEM_ID,
+        final_rate=final_rate,
+        unit=DDA_RATE_UNIT,
+        sequence=sequence,
+        received_at=(received_at or utc_now()).astimezone(timezone.utc),
+        server_time=server_time,
+        market_state=market_state,
+        transport="https",
     )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310
-            return cast(bytes, resp.read()).decode("utf-8", errors="replace")
-    except urllib.error.URLError as exc:
-        if not _is_tls_cert_error(exc):
+
+
+class DdaCurrentRatesClient:
+    """Anonymous HTTPS hydration and sequence-reconciliation client."""
+
+    def __init__(
+        self,
+        *,
+        endpoint: str = DDA_CURRENT_RATES_URL,
+        timeout: float = 7.0,
+        opener: HttpOpen = urllib.request.urlopen,
+        now: Callable[[], datetime] = utc_now,
+    ) -> None:
+        self._endpoint = endpoint
+        self._timeout = timeout
+        self._opener = opener
+        self._now = now
+
+    def fetch_current(self) -> DdaRateSnapshot:
+        """Fetch the public snapshot without API-key or authorization headers."""
+        request = urllib.request.Request(
+            self._endpoint,
+            headers={
+                "Accept": "application/json",
+                "User-Agent": "SilverEstimate/2.0",
+            },
+            method="GET",
+        )
+        try:
+            with self._opener(request, timeout=self._timeout) as response:
+                status = int(getattr(response, "status", 200))
+                if status != 200:
+                    raise DdaRateTransportError(
+                        f"DDA current-rates returned HTTP {status}."
+                    )
+                body = response.read(MAX_CURRENT_RATES_BYTES + 1)
+        except DdaRateError:
             raise
-
-        host = (urlparse(url).hostname or "").strip().lower()
-        if host not in _TLS_RETRY_ALLOWED_HOSTS:
-            raise ValueError("Blocked request to untrusted endpoint") from exc
-
-        # DDASilver's broadcast HTTPS currently responds only with invalid certs.
-        # This retry is intentionally limited to the known vendor hosts; do not
-        # generalize it or describe HTTPS as "fixed" until the vendor resolves TLS.
-        insecure_context = ssl._create_unverified_context()  # nosec B323
-        with urllib.request.urlopen(
-            req, timeout=timeout, context=insecure_context
-        ) as resp:  # nosec B310
-            return cast(bytes, resp.read()).decode("utf-8", errors="replace")
+        except Exception as exc:
+            raise DdaRateTransportError(
+                f"DDA current-rates request failed: {exc}"
+            ) from exc
+        if len(body) > MAX_CURRENT_RATES_BYTES:
+            raise DdaRateContractError("DDA current-rates response is too large.")
+        return parse_current_rates(body, received_at=self._now())
 
 
-def _fetch_broadcast_payload(endpoint: str, payload: bytes, timeout: int) -> str:
-    return _fetch_url_text(
-        endpoint,
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "User-Agent": "SilverEstimate/1.0",
-        },
-        method="POST",
-        timeout=timeout,
-    )
+class DdaSnapshotStore:
+    """Persist only the last fully verified public snapshot in QSettings."""
+
+    def __init__(
+        self,
+        *,
+        settings_provider: Callable[[], SettingsStore] = get_app_settings,
+        logger: logging.Logger | None = None,
+    ) -> None:
+        self._settings_provider = settings_provider
+        self._logger = logger or logging.getLogger(__name__)
+
+    def save(self, snapshot: DdaRateSnapshot) -> None:
+        payload = asdict(snapshot)
+        payload["received_at"] = snapshot.received_at.isoformat()
+        payload["server_time"] = snapshot.server_time.isoformat()
+        payload["market_state"] = (
+            dict(snapshot.market_state) if snapshot.market_state is not None else None
+        )
+        try:
+            settings = self._settings_provider()
+            settings.setValue(
+                SNAPSHOT_SETTINGS_KEY,
+                json.dumps(payload, sort_keys=True, separators=(",", ":")),
+            )
+            settings.sync()
+        except Exception as exc:
+            self._logger.warning("Could not persist verified DDA snapshot: %s", exc)
+
+    def load(self) -> DdaRateSnapshot | None:
+        try:
+            raw = self._settings_provider().value(SNAPSHOT_SETTINGS_KEY, "")
+            decoded = json.loads(str(raw)) if raw else None
+            if not isinstance(decoded, Mapping):
+                return None
+            item_id = decoded.get("item_id")
+            if item_id != DDA_AGRA_MOHAR_ITEM_ID:
+                raise DdaRateContractError("Cached DDA item ID does not match.")
+            if decoded.get("unit") != DDA_RATE_UNIT:
+                raise DdaRateContractError("Cached DDA unit does not match.")
+            market_state = decoded.get("market_state")
+            if market_state is not None and not isinstance(market_state, Mapping):
+                raise DdaRateContractError("Cached DDA market state is invalid.")
+            return DdaRateSnapshot(
+                item_id=DDA_AGRA_MOHAR_ITEM_ID,
+                final_rate=_positive_finite_number(
+                    decoded.get("final_rate"), "cached final_rate"
+                ),
+                unit=DDA_RATE_UNIT,
+                sequence=_nonnegative_int(decoded.get("sequence"), "cached sequence"),
+                received_at=_parse_datetime(
+                    decoded.get("received_at"), "cached received_at"
+                ),
+                server_time=_parse_datetime(
+                    decoded.get("server_time"), "cached server_time"
+                ),
+                market_state=(
+                    dict(market_state) if isinstance(market_state, Mapping) else None
+                ),
+                transport="cache",
+            )
+        except Exception as exc:
+            self._logger.warning("Ignoring invalid cached DDA snapshot: %s", exc)
+            return None
 
 
-def _parse_broadcast_payload(text: str, target_com_id: int):
-    rate_val = None
-    market_open = True
-
-    for line in text.splitlines():
-        parts = line.split("\t")
-        if not parts or len(parts) < 2:
-            continue
-        rec_type = parts[0]
-        if rec_type == "4":
-            status_flags: tuple[bool, bool] | None = None
-            try:
-                status_flags = (int(parts[3]) == 0, int(parts[4]) == 1)
-            except IndexError, TypeError, ValueError:
-                status_flags = None
-            if status_flags is not None:
-                closed_flag, message_flag = status_flags
-                if closed_flag or message_flag:
-                    market_open = False
-        elif rec_type == "3":
-            cid: int | None = None
-            try:
-                cid = int(parts[1])
-            except IndexError, TypeError, ValueError:
-                cid = None
-            if cid is None:
-                continue
-            if cid == target_com_id:
-                try:
-                    rate_val = int(float(parts[4]))
-                except Exception:
-                    try:
-                        rate_val = int(round(float(parts[4])))
-                    except Exception:
-                        rate_val = None
-                if rate_val is not None:
-                    break
-
-    return rate_val, market_open
-
-
-if __name__ == "__main__":
-    _main()
+__all__ = [
+    "DDA_AGRA_MOHAR_ITEM_ID",
+    "DDA_CURRENT_RATES_URL",
+    "DDA_RATE_UNIT",
+    "DDA_SCHEMA_VERSION",
+    "DdaCurrentRatesClient",
+    "DdaRateContractError",
+    "DdaRateError",
+    "DdaRateSnapshot",
+    "DdaRateTransportError",
+    "DdaSnapshotStore",
+    "parse_current_rates",
+]

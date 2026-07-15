@@ -1,109 +1,89 @@
-"""Live rate polling and scheduling services."""
+"""Qt lifecycle wrapper for the DDA HTTPS/SSE live-rate worker."""
 
 from __future__ import annotations
 
 import logging
-import threading
-from typing import Callable, Optional, Protocol, Tuple
+from collections.abc import Callable
 
-from PyQt6.QtCore import QObject, QTimer, pyqtSignal
+from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
 from silverestimate.infrastructure.settings import SettingsReader, get_app_settings
-from silverestimate.services.dda_rate_fetcher import (
-    fetch_broadcast_rate_exact,
-    fetch_silver_agra_local_mohar_rate,
-)
-
-
-class _BackgroundThread(Protocol):
-    def start(self) -> None: ...
+from silverestimate.services.dda_rate_stream import DdaRateStreamWorker
 
 
 class LiveRateService(QObject):
-    rate_updated = pyqtSignal(object, object, object)
+    """Own exactly one cooperative DDA stream worker and its Qt thread."""
+
+    rate_updated = pyqtSignal(object)
+    feed_status_updated = pyqtSignal(object)
+    connection_state_changed = pyqtSignal(str)
+    stream_error = pyqtSignal(str)
 
     def __init__(
         self,
-        parent: Optional[QObject] = None,
-        logger: Optional[logging.Logger] = None,
+        parent: QObject | None = None,
+        logger: logging.Logger | None = None,
         settings_provider: Callable[[], SettingsReader] = get_app_settings,
-        thread_factory: Callable[..., _BackgroundThread] = threading.Thread,
-        broadcast_fetcher: Callable[..., Tuple[object, object, object]] = (
-            fetch_broadcast_rate_exact
-        ),
-        api_fetcher: Callable[..., Tuple[object, object]] = (
-            fetch_silver_agra_local_mohar_rate
-        ),
+        worker_factory: Callable[..., DdaRateStreamWorker] = DdaRateStreamWorker,
+        thread_factory: Callable[..., QThread] = QThread,
     ) -> None:
         super().__init__(parent)
         self._logger = logger or logging.getLogger(__name__)
-        self._rate_fetch_in_progress = False
-        self._timer: Optional[QTimer] = None
         self._settings_provider = settings_provider
+        self._worker_factory = worker_factory
         self._thread_factory = thread_factory
-        self._broadcast_fetcher = broadcast_fetcher
-        self._api_fetcher = api_fetcher
+        self._worker: DdaRateStreamWorker | None = None
+        self._thread: QThread | None = None
 
     def start(self) -> None:
         settings = self._settings_provider()
-        if not self._timer:
-            self._timer = QTimer(self)
-            self._timer.setSingleShot(False)
-            self._timer.timeout.connect(self.refresh_now)
-        interval_sec = int(settings.value("rates/refresh_interval_sec", 60))
-        interval_ms = max(5, interval_sec) * 1000
-        self._timer.setInterval(interval_ms)
-        raw_enabled = settings.value("rates/auto_refresh_enabled", True)
-        if isinstance(raw_enabled, bool):
-            auto_enabled = raw_enabled
-        elif isinstance(raw_enabled, str):
-            auto_enabled = raw_enabled.strip().lower() in ("1", "true", "yes", "on")
-        else:
-            auto_enabled = True
-        if auto_enabled:
-            if not self._timer.isActive():
-                self._timer.start()
-                self._logger.info("Live-rate timer started: every %s ms", interval_ms)
-        else:
-            self.stop()
-
-    def stop(self) -> None:
-        if self._timer and self._timer.isActive():
-            self._timer.stop()
-            self._logger.info("Live-rate timer disabled via settings")
-
-    def refresh_now(self) -> None:
-        settings = self._settings_provider()
         if not settings.value("rates/live_enabled", True, type=bool):
             return
-        if self._rate_fetch_in_progress:
+        if self._thread is not None and self._thread.isRunning():
             return
-        self._rate_fetch_in_progress = True
-        self._logger.info("Live-rate fetch started")
 
-        def _worker():
-            try:
-                brate, is_open, _ = self._broadcast_fetcher(timeout=5)
-                api_rate = None
-                if brate is None:
-                    api_rate, _ = self._api_fetcher(timeout=5)
-                self._logger.info(
-                    "LiveRate fetch: broadcast=%s, open=%s, api=%s",
-                    brate,
-                    is_open,
-                    api_rate,
-                )
-            except Exception as exc:
-                self._logger.warning("Rate fetch error (broadcast): %s", exc)
-                brate, is_open = None, True
+        worker = self._worker_factory(logger=self._logger)
+        thread = self._thread_factory(self)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.rate_received.connect(self.rate_updated.emit)
+        worker.feed_status_received.connect(self.feed_status_updated.emit)
+        worker.connection_state_changed.connect(self.connection_state_changed.emit)
+        worker.stream_error.connect(self.stream_error.emit)
+        self._worker = worker
+        self._thread = thread
+        thread.start()
+
+    def stop(self) -> None:
+        worker = self._worker
+        thread = self._thread
+        if worker is not None:
+            worker.stop()
+        if thread is not None:
+            thread.quit()
+            if thread.isRunning() and not thread.wait(6000):
+                self._logger.warning("DDA SSE worker did not stop within 6 seconds.")
+        if worker is not None:
+            for signal in (
+                worker.rate_received,
+                worker.feed_status_received,
+                worker.connection_state_changed,
+                worker.stream_error,
+            ):
                 try:
-                    api_rate, _ = self._api_fetcher(timeout=5)
-                except Exception as fallback_exc:
-                    self._logger.warning(
-                        "Rate fetch error (API fallback): %s", fallback_exc
-                    )
-                    api_rate = None
-            self.rate_updated.emit(brate, api_rate, is_open)
-            self._rate_fetch_in_progress = False
+                    signal.disconnect()
+                except TypeError:
+                    pass
+        self._worker = None
+        self._thread = None
 
-        self._thread_factory(target=_worker, daemon=True).start()
+    def refresh_now(self) -> None:
+        if not self._settings_provider().value("rates/live_enabled", True, type=bool):
+            return
+        was_running = self._thread is not None and self._thread.isRunning()
+        self.start()
+        if was_running and self._worker is not None:
+            self._worker.request_refresh()
+
+
+__all__ = ["LiveRateService"]

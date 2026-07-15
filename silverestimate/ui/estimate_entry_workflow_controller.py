@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import threading
 import time
 from dataclasses import replace
 from datetime import datetime
@@ -27,7 +26,9 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
+from silverestimate.infrastructure.latest_request_runner import LatestRequestRunner
 from silverestimate.presenter import LoadedEstimate
+from silverestimate.services.dda_rate_fetcher import DdaCurrentRatesClient
 from silverestimate.services.estimate_entry_persistence import (
     EstimateEntryPersistenceService,
 )
@@ -689,25 +690,38 @@ class EstimateEntryWorkflowController(HostProxy):
         if button is not None:
             button.setEnabled(False)
         self._status("Refreshing live silver rate...", 2000)
+        live_rate_controller = getattr(self.main_window, "live_rate_controller", None)
+        if live_rate_controller is not None:
+            live_rate_controller.refresh_now()
+            if button is not None:
+                button.setEnabled(True)
+            return
 
-        def worker():
-            try:
-                from silverestimate.services.dda_rate_fetcher import (
-                    fetch_broadcast_rate_exact,
-                    fetch_silver_agra_local_mohar_rate,
-                )
+        runner = getattr(self.host, "_live_rate_runner", None)
+        if runner is None:
+            client = DdaCurrentRatesClient(timeout=7.0)
 
-                rate, _, _ = fetch_broadcast_rate_exact(timeout=7)
-                if rate is None:
-                    rate, _ = fetch_silver_agra_local_mohar_rate(timeout=7)
-                self.live_rate_fetched.emit(rate)
-            except Exception as exc:
-                self.logger.warning(
-                    "Live silver rate refresh failed: %s", exc, exc_info=True
-                )
-                self.live_rate_fetched.emit(None)
+            def fetch_rate(_request, cancel_event):
+                if cancel_event.is_set():
+                    return None
+                snapshot = client.fetch_current()
+                return None if cancel_event.is_set() else snapshot.final_rate
 
-        threading.Thread(target=worker, daemon=True).start()
+            runner = LatestRequestRunner(
+                fetch_rate,
+                parent=self.host,
+                name="estimate-live-rate",
+            )
+            runner.result.connect(
+                lambda _generation, rate: self.live_rate_fetched.emit(rate)
+            )
+            runner.failed.connect(self._handle_live_rate_failure)
+            self.host._live_rate_runner = runner
+        runner.submit(None)
+
+    def _handle_live_rate_failure(self, _generation: int, error: object) -> None:
+        self.logger.warning("Live silver rate refresh failed: %s", error)
+        self.live_rate_fetched.emit(None)
 
     def _apply_refreshed_live_rate(self, rate) -> None:
         button = getattr(self, "refresh_rate_button", None)

@@ -562,13 +562,13 @@ class SettingsDialog(QDialog):
         return preview
 
     def _create_live_rates_tab(self):
-        """Create the Live Rates settings tab (DDASilver auto-refresh)."""
+        """Create the DDA public HTTPS/SSE live-rate settings tab."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
 
-        group = QGroupBox("DDASilver Live Rate")
+        group = QGroupBox("DDA Agra Mohar Live Rate")
         form = QFormLayout(group)
         self._configure_settings_form(form)
 
@@ -589,23 +589,9 @@ class SettingsDialog(QDialog):
         self.live_enable_checkbox.toggled.connect(self._mark_dirty)
         form.addRow("Auto Refresh:", self.live_enable_checkbox)
 
-        # Refresh interval (seconds)
-        self.live_interval_spin = ThemedSpinBox()
-        self.live_interval_spin.setRange(5, 3600)
-        self.live_interval_spin.setSuffix(" s")
-        interval_sec = self.settings.value("rates/refresh_interval_sec", 60, type=int)
-        try:
-            interval_sec = int(interval_sec)
-        except Exception:
-            interval_sec = 60
-        self.live_interval_spin.setValue(max(5, interval_sec))
-        self._polish_field_control(self.live_interval_spin, width=160)
-        self.live_interval_spin.valueChanged.connect(self._mark_dirty)
-        form.addRow("Refresh Interval:", self.live_interval_spin)
-
-        # Hint
         hint = QLabel(
-            "Updates the Silver Rate field from DDASilver.com (item: 'Silver Agra Local Mohar')."
+            "Uses DDA's public customer finalRate for the configured Agra Mohar item ID. "
+            "SSE updates are instant; HTTPS retries every 10 seconds only while disconnected."
         )
         hint.setWordWrap(True)
 
@@ -616,9 +602,6 @@ class SettingsDialog(QDialog):
         # Initial enable/disable of dependent controls
         def _sync_enabled(state: bool):
             self.live_enable_checkbox.setEnabled(state)
-            self.live_interval_spin.setEnabled(
-                state and self.live_enable_checkbox.isChecked()
-            )
 
         _sync_enabled(self.live_enabled_checkbox.isChecked())
         self.live_enabled_checkbox.toggled.connect(_sync_enabled)
@@ -1245,10 +1228,9 @@ class SettingsDialog(QDialog):
             # Live Rates settings
             ui_enabled = bool(self.live_enabled_checkbox.isChecked())
             auto_enabled = bool(self.live_enable_checkbox.isChecked())
-            live_interval = int(self.live_interval_spin.value())
             self.settings.setValue("rates/live_enabled", ui_enabled)
             self.settings.setValue("rates/auto_refresh_enabled", auto_enabled)
-            self.settings.setValue("rates/refresh_interval_sec", max(5, live_interval))
+            self.settings.remove("rates/refresh_interval_sec")
             if hasattr(self.main_window, "reconfigure_rate_visibility_from_settings"):
                 self.main_window.reconfigure_rate_visibility_from_settings()
             if hasattr(self.main_window, "reconfigure_rate_timer_from_settings"):

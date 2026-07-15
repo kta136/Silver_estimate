@@ -230,7 +230,7 @@ class SecondaryActionsBar(QWidget):
         self.live_rate_meta_label = QLabel("")
         self.live_rate_meta_label.setObjectName("LiveRateMeta")
         self.live_rate_meta_label.setAccessibleName("Live Rate Status")
-        self.live_rate_meta_label.setFixedWidth(38)
+        self.live_rate_meta_label.setFixedWidth(52)
         self.live_rate_meta_label.setAlignment(
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
         )

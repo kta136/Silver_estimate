@@ -790,7 +790,7 @@ def test_live_rate_card_moves_between_sidebar_and_header(qt_app, fake_db):
         )
         assert widget.live_rate_value_label.minimumWidth() >= 220
         assert widget.live_rate_value_label.font().pointSize() >= 22
-        assert widget.live_rate_meta_label.width() <= 42
+        assert widget.live_rate_meta_label.width() <= 56
         assert (
             abs(
                 widget.live_rate_meta_label.geometry().center().x()
@@ -829,7 +829,7 @@ def test_live_rate_card_moves_between_sidebar_and_header(qt_app, fake_db):
         )
         assert widget.live_rate_value_label.minimumWidth() >= 220
         assert widget.live_rate_value_label.font().pointSize() >= 22
-        assert widget.live_rate_meta_label.width() <= 42
+        assert widget.live_rate_meta_label.width() <= 56
         assert (
             abs(
                 widget.live_rate_meta_label.geometry().center().x()

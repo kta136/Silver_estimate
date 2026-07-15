@@ -273,6 +273,9 @@ class EstimateEntryWidget(QWidget):
         if not self.confirm_exit():
             event.ignore()
             return
+        live_rate_runner = getattr(self, "_live_rate_runner", None)
+        if live_rate_runner is not None:
+            live_rate_runner.shutdown()
         self._save_column_widths_setting()
         super().closeEvent(event)
 

@@ -1,5 +1,13 @@
 import logging
+import threading
+from datetime import datetime, timezone
 
+from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
+
+from silverestimate.services.dda_rate_fetcher import (
+    DDA_AGRA_MOHAR_ITEM_ID,
+    DdaRateSnapshot,
+)
 from silverestimate.services.live_rate_service import LiveRateService
 
 
@@ -7,178 +15,148 @@ class _SettingsStub:
     def __init__(self, values=None):
         self._values = dict(values or {})
 
-    def value(self, key, default=None, type=None):  # noqa: A002 - Qt-like API
+    def value(self, key, default=None, type=None):  # noqa: A002
         value = self._values.get(key, default)
-        if type is bool:
-            if isinstance(value, bool):
-                return value
-            if isinstance(value, str):
-                return value.strip().lower() in {"1", "true", "yes", "on"}
-            return bool(value)
-        return value
+        return bool(value) if type is bool else value
 
 
-class _ImmediateThread:
-    def __init__(self, target=None, daemon=None):
-        self._target = target
-        self.daemon = daemon
-        self._alive = False
-
-    def start(self):
-        self._alive = True
-        try:
-            if self._target:
-                self._target()
-        finally:
-            self._alive = False
-
-    def is_alive(self):
-        return self._alive
-
-    def join(self, timeout=None):
-        return None
+def _snapshot():
+    now = datetime(2026, 7, 15, tzinfo=timezone.utc)
+    return DdaRateSnapshot(
+        item_id=DDA_AGRA_MOHAR_ITEM_ID,
+        final_rate=100000,
+        unit="PER_KG",
+        sequence=1,
+        received_at=now,
+        server_time=now,
+        market_state=None,
+        transport="https",
+    )
 
 
-class _HoldingThread:
-    def __init__(self, target=None, daemon=None):
-        self._target = target
-        self.daemon = daemon
-        self.started = False
+class _Worker(QObject):
+    rate_received = pyqtSignal(object)
+    feed_status_received = pyqtSignal(object)
+    connection_state_changed = pyqtSignal(str)
+    stream_error = pyqtSignal(str)
 
-    def start(self):
-        self.started = True
+    def __init__(self):
+        super().__init__()
+        self.run_calls = 0
+        self.stop_calls = 0
+        self.refresh_calls = 0
 
     def run(self):
-        if self._target:
-            self._target()
+        self.run_calls += 1
+        self.rate_received.emit(_snapshot())
+        self.connection_state_changed.emit("connected")
+
+    def stop(self):
+        self.stop_calls += 1
+
+    def request_refresh(self):
+        self.refresh_calls += 1
 
 
-def test_live_rate_service_emits_broadcast(qt_app):
+def test_service_starts_one_qthread_worker_and_forwards_signals(qtbot):
+    workers = []
+
+    def factory(**_kwargs):
+        worker = _Worker()
+        workers.append(worker)
+        return worker
+
     service = LiveRateService(
-        logger=logging.getLogger("test_live_rate"),
+        logger=logging.getLogger("test.live_rate"),
         settings_provider=lambda: _SettingsStub({"rates/live_enabled": True}),
-        thread_factory=lambda **kwargs: _ImmediateThread(**kwargs),
-        broadcast_fetcher=lambda timeout=5: (50000, True, None),
-        api_fetcher=lambda timeout=5: (47000, None),
+        worker_factory=factory,
     )
-
-    captured = {}
-
-    def _capture(brate, api_rate, is_open):
-        captured["args"] = (brate, api_rate, is_open)
-
-    service.rate_updated.connect(_capture)
-    service.refresh_now()
-
-    assert captured["args"] == (50000, None, True)
-    assert service._rate_fetch_in_progress is False
-
-
-def test_live_rate_service_uses_fallback_when_broadcast_fails(qt_app):
-    service = LiveRateService(
-        logger=logging.getLogger("test_live_rate_fallback"),
-        settings_provider=lambda: _SettingsStub({"rates/live_enabled": True}),
-        thread_factory=lambda **kwargs: _ImmediateThread(**kwargs),
-        broadcast_fetcher=lambda timeout=5: (_ for _ in ()).throw(RuntimeError("down")),
-        api_fetcher=lambda timeout=5: (45500, None),
-    )
-
-    captured = {}
-
-    def _capture(brate, api_rate, is_open):
-        captured["args"] = (brate, api_rate, is_open)
-
-    service.rate_updated.connect(_capture)
-    service.refresh_now()
-
-    assert captured["args"] == (None, 45500, True)
-    assert service._rate_fetch_in_progress is False
-
-
-def test_live_rate_service_skips_reentrant_refresh(qt_app):
-    created_threads = []
-
-    def _thread_factory(**kwargs):
-        thread = _HoldingThread(**kwargs)
-        created_threads.append(thread)
-        return thread
-
-    service = LiveRateService(
-        logger=logging.getLogger("test_live_rate_reentrant"),
-        settings_provider=lambda: _SettingsStub({"rates/live_enabled": True}),
-        thread_factory=_thread_factory,
-        broadcast_fetcher=lambda timeout=5: (50000, True, None),
-        api_fetcher=lambda timeout=5: (47000, None),
-    )
-
-    service.refresh_now()
-    service.refresh_now()
-
-    assert len(created_threads) == 1
-    assert service._rate_fetch_in_progress is True
-
-    created_threads[0].run()
-    assert service._rate_fetch_in_progress is False
-
-
-def test_live_rate_service_handles_fallback_failure(qt_app):
-    service = LiveRateService(
-        logger=logging.getLogger("test_live_rate_fallback_failure"),
-        settings_provider=lambda: _SettingsStub({"rates/live_enabled": True}),
-        thread_factory=lambda **kwargs: _ImmediateThread(**kwargs),
-        broadcast_fetcher=lambda timeout=5: (_ for _ in ()).throw(RuntimeError("boom")),
-        api_fetcher=lambda timeout=5: (_ for _ in ()).throw(RuntimeError("api boom")),
-    )
-
-    captured = {}
-
-    def _capture(brate, api_rate, is_open):
-        captured["args"] = (brate, api_rate, is_open)
-
-    service.rate_updated.connect(_capture)
-    service.refresh_now()
-
-    assert captured["args"] == (None, None, True)
-    assert service._rate_fetch_in_progress is False
-
-
-def test_live_rate_service_start_uses_min_interval_and_honors_auto_flag(qt_app):
-    settings_values = {
-        "rates/refresh_interval_sec": 1,
-        "rates/auto_refresh_enabled": True,
-        "rates/live_enabled": True,
-    }
-    service = LiveRateService(
-        logger=logging.getLogger("test_live_rate_start"),
-        settings_provider=lambda: _SettingsStub(settings_values),
-    )
+    received = []
+    states = []
+    service.rate_updated.connect(received.append)
+    service.connection_state_changed.connect(states.append)
 
     service.start()
-    assert service._timer is not None
-    assert service._timer.interval() == 5000
-    assert service._timer.isActive() is True
-
-    settings_values["rates/auto_refresh_enabled"] = False
+    qtbot.waitUntil(lambda: bool(received), timeout=1000)
     service.start()
-    assert service._timer.isActive() is False
+
+    assert len(workers) == 1
+    assert received[-1].final_rate == 100000
+    assert states[-1] == "connected"
+    service.stop()
+    assert workers[0].stop_calls == 1
 
 
-def test_live_rate_service_refresh_respects_live_enabled_setting(qt_app):
-    thread_calls = {"count": 0}
-
-    def _thread_factory(**kwargs):
-        thread_calls["count"] += 1
-        return _ImmediateThread(**kwargs)
-
+def test_manual_refresh_reuses_running_worker(qtbot):
+    worker = _Worker()
     service = LiveRateService(
-        logger=logging.getLogger("test_live_rate_disabled"),
+        settings_provider=lambda: _SettingsStub({"rates/live_enabled": True}),
+        worker_factory=lambda **_kwargs: worker,
+    )
+    service.start()
+    qtbot.waitUntil(lambda: worker.run_calls == 1, timeout=1000)
+
+    service.refresh_now()
+
+    assert worker.refresh_calls == 1
+    service.stop()
+
+
+def test_manual_refresh_starts_worker_when_not_running(qtbot):
+    worker = _Worker()
+    service = LiveRateService(
+        settings_provider=lambda: _SettingsStub({"rates/live_enabled": True}),
+        worker_factory=lambda **_kwargs: worker,
+    )
+
+    service.refresh_now()
+    qtbot.waitUntil(lambda: worker.run_calls == 1, timeout=1000)
+
+    assert worker.refresh_calls == 0
+    service.stop()
+
+
+def test_disabled_setting_prevents_worker_creation():
+    calls = []
+    service = LiveRateService(
         settings_provider=lambda: _SettingsStub({"rates/live_enabled": False}),
-        thread_factory=_thread_factory,
-        broadcast_fetcher=lambda timeout=5: (50000, True, None),
-        api_fetcher=lambda timeout=5: (47000, None),
+        worker_factory=lambda **kwargs: calls.append(kwargs),
     )
 
+    service.start()
     service.refresh_now()
 
-    assert thread_calls["count"] == 0
-    assert service._rate_fetch_in_progress is False
+    assert calls == []
+
+
+def test_stop_is_idempotent_without_worker():
+    service = LiveRateService(
+        settings_provider=lambda: _SettingsStub({"rates/live_enabled": True})
+    )
+
+    service.stop()
+    service.stop()
+
+
+def test_worker_rate_is_delivered_to_qobject_receiver_on_gui_thread(qtbot):
+    gui_thread_id = threading.get_ident()
+    handled_on = []
+
+    class _Receiver(QObject):
+        @pyqtSlot(object)
+        def handle(self, _snapshot):
+            handled_on.append(threading.get_ident())
+
+    receiver = _Receiver()
+    worker = _Worker()
+    service = LiveRateService(
+        settings_provider=lambda: _SettingsStub({"rates/live_enabled": True}),
+        worker_factory=lambda **_kwargs: worker,
+    )
+    service.rate_updated.connect(receiver.handle)
+
+    service.start()
+    qtbot.waitUntil(lambda: bool(handled_on), timeout=1000)
+
+    assert handled_on == [gui_thread_id]
+    service.stop()

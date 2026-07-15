@@ -200,3 +200,66 @@ def test_flush_scheduler_skips_without_connection(scheduler_events):
     assert not scheduler_events["queued"].is_set()
     assert not scheduler_events["done"].is_set()
     assert counts == {"commit": 0, "checkpoint": 0, "encrypt": 0}
+
+
+def test_request_during_active_flush_runs_latest_generation_afterward():
+    timers = []
+    calls = {"encrypt": 0}
+    scheduler_ref = {}
+
+    def timer_factory(delay, callback):
+        timer = _ManualTimer(delay, callback)
+        timers.append(timer)
+        return timer
+
+    def encrypt():
+        calls["encrypt"] += 1
+        if calls["encrypt"] == 1:
+            scheduler_ref["scheduler"].schedule(delay_seconds=0)
+        return True
+
+    scheduler = FlushScheduler(
+        has_connection=lambda: True,
+        commit=lambda: True,
+        checkpoint=lambda: True,
+        encrypt=encrypt,
+        timer_factory=timer_factory,
+        thread_factory=lambda **kwargs: _ImmediateThread(**kwargs),
+    )
+    scheduler_ref["scheduler"] = scheduler
+
+    scheduler.schedule(delay_seconds=0)
+    timers[0].fire()
+
+    assert calls["encrypt"] == 2
+    assert scheduler.dirty_generation == 2
+    assert scheduler.flushed_generation == 2
+
+
+def test_unchanged_generation_is_not_encrypted_twice():
+    calls = {"encrypt": 0}
+    timers = []
+
+    def encrypt():
+        calls["encrypt"] += 1
+        return True
+
+    def timer_factory(delay, callback):
+        timer = _ManualTimer(delay, callback)
+        timers.append(timer)
+        return timer
+
+    scheduler = FlushScheduler(
+        has_connection=lambda: True,
+        commit=lambda: True,
+        checkpoint=lambda: True,
+        encrypt=encrypt,
+        timer_factory=timer_factory,
+        thread_factory=lambda **kwargs: _ImmediateThread(**kwargs),
+    )
+    scheduler.schedule(delay_seconds=0)
+    timers[0].fire()
+    scheduler._start_worker()
+
+    assert calls["encrypt"] == 1
+    assert scheduler.flushed_generation == scheduler.dirty_generation == 1

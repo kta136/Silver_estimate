@@ -68,6 +68,54 @@ def test_initialize_database_recovers_candidate_before_connect(monkeypatch, tmp_
     assert calls["preload_started"] is True
 
 
+def test_initialize_database_discards_declined_recovery_candidate(
+    monkeypatch, tmp_path
+):
+    calls = {}
+    db_path = tmp_path / "db" / "estimation.db"
+
+    class StubMessageBox:
+        class StandardButton:
+            Yes = 1
+            No = 2
+
+        @staticmethod
+        def question(*_args, **_kwargs):
+            return StubMessageBox.StandardButton.No
+
+        @staticmethod
+        def critical(*_args, **_kwargs):
+            return None
+
+    class StubDatabaseManager:
+        @staticmethod
+        def check_recovery_candidate(_encrypted_db_path):
+            return str(tmp_path / "recover.sqlite")
+
+        @staticmethod
+        def discard_recovery_candidate(candidate, encrypted, logger=None):
+            del logger
+            calls["discarded"] = (candidate, encrypted)
+            return True
+
+        def __init__(self, path, password):
+            calls["init"] = (path, password)
+
+        def start_preload_item_cache(self):
+            return None
+
+    monkeypatch.setattr(startup_module, "QMessageBox", StubMessageBox)
+    monkeypatch.setattr(startup_module, "DatabaseManager", StubDatabaseManager)
+    monkeypatch.setattr(startup_module, "DB_PATH", str(db_path))
+
+    controller = StartupController(logger=logging.getLogger("test-decline-recovery"))
+    assert controller._initialize_database("secret") is not None
+    assert calls["discarded"] == (
+        str(tmp_path / "recover.sqlite"),
+        str(db_path),
+    )
+
+
 def test_authenticate_cancelled_skips_database_initialization(monkeypatch):
     calls = {"db_init": 0}
 

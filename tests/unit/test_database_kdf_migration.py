@@ -4,6 +4,7 @@ import silverestimate.persistence.database_manager as database_manager_module
 from silverestimate.persistence.database_manager import DatabaseManager
 from silverestimate.persistence.encrypted_database_store import EncryptedDatabaseStore
 from silverestimate.security import encryption as crypto_utils
+from silverestimate.security.encrypted_envelope import MAGIC
 
 
 class _StubSettings:
@@ -48,8 +49,9 @@ def _create_legacy_encrypted_database(
         algorithm=crypto_utils.LEGACY_KDF_ALGORITHM,
         iterations=crypto_utils.DEFAULT_KDF_ITERATIONS,
     )
-    store = EncryptedDatabaseStore(str(encrypted_db_path), key=legacy_key)
-    assert store.encrypt_from_path(str(plain_db_path)) is True
+    encrypted_db_path.write_bytes(
+        crypto_utils.encrypt_payload(plain_db_path.read_bytes(), legacy_key)
+    )
     plain_db_path.unlink()
     return encrypted_db_path, salt, legacy_key
 
@@ -77,6 +79,8 @@ def test_database_manager_migrates_legacy_pbkdf2_database_to_argon2(
         assert manager._pending_kdf_migration is False
         assert manager._active_kdf_algorithm == crypto_utils.PREFERRED_KDF_ALGORITHM
         assert manager.key == manager._preferred_key
+        assert encrypted_db_path.read_bytes().startswith(MAGIC)
+        assert not (tmp_path / "encrypted.db.legacy.bak").exists()
 
         preferred_key = crypto_utils.derive_key(
             password,

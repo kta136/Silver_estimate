@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
+from collections.abc import Iterable
 from typing import Any, Dict, Optional, cast
 
 
@@ -52,10 +53,10 @@ class ItemCacheController:
         with self._lock:
             self._cache.pop(code.upper(), None)
 
-    def replace_all(self, rows: object) -> None:
+    def replace_all(self, rows: Iterable[object] | None) -> None:
         """Atomically replace the cache after a catalog transaction."""
         replacement: dict[str, dict[str, Any]] = {}
-        for raw_row in rows or []:
+        for raw_row in rows or ():
             try:
                 row = raw_row if isinstance(raw_row, dict) else dict(cast(Any, raw_row))
                 code = str(row.get("code", "") or "").strip()

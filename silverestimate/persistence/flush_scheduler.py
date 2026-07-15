@@ -58,6 +58,10 @@ class FlushScheduler:
         self._timer: Optional[_TimerHandle] = None
         self._thread: Optional[_ThreadHandle] = None
         self._in_progress = False
+        self._dirty_generation = 0
+        self._flushed_generation = 0
+        self._pending_after_flush = False
+        self._shutdown = False
         self._timer_factory = timer_factory or (
             lambda delay, callback: threading.Timer(delay, callback)
         )
@@ -73,64 +77,103 @@ class FlushScheduler:
             self._debug("schedule skipped: no connection available")
             return
 
-        def _start_worker() -> None:
-            with self._lock:
-                self._timer = None
-                if self._in_progress:
-                    return
-                self._in_progress = True
-
-            def _worker() -> None:
-                try:
-                    try:
-                        self._commit()
-                    except Exception as exc:  # pragma: no cover - defensive logging
-                        self._logger.debug(
-                            "Commit before flush failed: %s", exc, exc_info=True
-                        )
-                    try:
-                        self._checkpoint()
-                    except Exception as exc:  # pragma: no cover - best effort only
-                        self._logger.debug(
-                            "Checkpoint before flush failed: %s", exc, exc_info=True
-                        )
-                    self._encrypt()
-                except Exception as exc:  # pragma: no cover - error bubbled to logs
-                    self._logger.error("Async flush failed: %s", exc, exc_info=True)
-                finally:
-                    with self._lock:
-                        self._in_progress = False
-                    self._invoke_callback(self._on_done_getter())
-
-            thread = self._thread_factory(
-                target=_worker,
-                name="DBEncryptFlush",
-                daemon=True,
-            )
-            thread.start()
-            with self._lock:
-                self._thread = thread
-
         with self._lock:
+            if self._shutdown:
+                self._debug("schedule skipped: scheduler is shut down")
+                return
+            self._dirty_generation += 1
+            if self._in_progress:
+                self._pending_after_flush = True
+                queued_during_flush = True
+            else:
+                queued_during_flush = False
             if self._timer:
                 try:
                     self._timer.cancel()
                 except Exception as exc:
                     self._debug(f"Failed to cancel pending flush timer: {exc}")
-            self._timer = self._timer_factory(delay_seconds, _start_worker)
-            try:
-                self._timer.daemon = True
-            except Exception as exc:
-                self._debug(f"Failed to mark flush timer as daemon: {exc}")
-            self._timer.start()
+            if not queued_during_flush:
+                self._timer = self._timer_factory(delay_seconds, self._start_worker)
+                try:
+                    self._timer.daemon = True
+                except Exception as exc:
+                    self._debug(f"Failed to mark flush timer as daemon: {exc}")
+                self._timer.start()
 
         self._invoke_callback(self._on_queued_getter())
+
+    @property
+    def dirty_generation(self) -> int:
+        with self._lock:
+            return self._dirty_generation
+
+    @property
+    def flushed_generation(self) -> int:
+        with self._lock:
+            return self._flushed_generation
+
+    def _start_worker(self) -> None:
+        with self._lock:
+            self._timer = None
+            if self._shutdown or self._in_progress:
+                return
+            target_generation = self._dirty_generation
+            if target_generation <= self._flushed_generation:
+                self._debug("flush skipped: generation is unchanged")
+                return
+            self._in_progress = True
+
+        def _worker() -> None:
+            success = False
+            try:
+                try:
+                    self._commit()
+                except Exception as exc:  # pragma: no cover - defensive logging
+                    self._logger.debug(
+                        "Commit before flush failed: %s", exc, exc_info=True
+                    )
+                try:
+                    self._checkpoint()
+                except Exception as exc:  # pragma: no cover - best effort only
+                    self._logger.debug(
+                        "Checkpoint before flush failed: %s", exc, exc_info=True
+                    )
+                success = bool(self._encrypt())
+            except Exception as exc:  # pragma: no cover - error bubbled to logs
+                self._logger.error("Async flush failed: %s", exc, exc_info=True)
+            finally:
+                with self._lock:
+                    if success:
+                        self._flushed_generation = max(
+                            self._flushed_generation,
+                            target_generation,
+                        )
+                    run_pending = (
+                        not self._shutdown
+                        and self._pending_after_flush
+                        and self._dirty_generation > target_generation
+                    )
+                    self._pending_after_flush = False
+                    self._in_progress = False
+                self._invoke_callback(self._on_done_getter())
+                if run_pending:
+                    self._start_worker()
+
+        thread = self._thread_factory(
+            target=_worker,
+            name="DBEncryptFlush",
+            daemon=True,
+        )
+        with self._lock:
+            self._thread = thread
+        thread.start()
 
     def shutdown(
         self, *, wait: bool = True, join_timeout: float = 8.0, poll_timeout: float = 2.0
     ) -> None:
         """Cancel pending timers and optionally wait for active work."""
         with self._lock:
+            self._shutdown = True
             timer = self._timer
             thread = self._thread
             self._timer = None

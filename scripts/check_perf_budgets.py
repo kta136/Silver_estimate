@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Fail CI when p95 performance telemetry exceeds configured budgets."""
+"""Fail CI unless every deterministic p95 performance budget is satisfied."""
 
 from __future__ import annotations
 
@@ -8,29 +8,33 @@ import math
 import re
 import sys
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 
-METRIC_BUDGETS_MS = {
-    "estimate_entry.cell_edit": 60.0,
-    "estimate_entry.apply_loaded_estimate": 800.0,
-    "item_master.load_items": 150.0,
-    "silver_bars.load_available": 500.0,
-    "silver_bars.load_list": 500.0,
-    "startup.qt_ready_ms": 450.0,
-    "startup.auth_dialog_accepted_ms": 1200.0,
-    "startup.db_ready_ms": 900.0,
-    "startup.main_window_show_ms": 2200.0,
-    "startup.main_window_first_idle_ms": 2600.0,
+
+@dataclass(frozen=True)
+class MetricBudget:
+    p95_ms: float
+    minimum_samples: int
+
+
+METRIC_BUDGETS: dict[str, MetricBudget] = {
+    "estimate_history.page": MetricBudget(250.0, 20),
+    "silver_bar_history.page": MetricBudget(250.0, 20),
+    "estimate_totals.recompute": MetricBudget(60.0, 20),
+    "view_model.synchronize": MetricBudget(120.0, 20),
+    "encrypted_flush": MetricBudget(150.0, 5),
+    "dda_current.parse": MetricBudget(20.0, 20),
+    "dda_sse.parse_apply": MetricBudget(20.0, 20),
 }
 
-PERF_RE = re.compile(
-    r"\[perf\]\s+([a-zA-Z0-9_.]+)=([0-9]+(?:\.[0-9]+)?)(?:ms)?\b"
-)
+PERF_PREFIX_RE = re.compile(r"\[perf\]")
+PERF_VALUE_RE = re.compile(r"\[perf\]\s+([a-zA-Z0-9_.]+)=([^\s]+)(?:\s+.*)?$")
 
 
 def percentile(values: list[float], pct: float) -> float:
     if not values:
-        return 0.0
+        raise ValueError("A percentile requires at least one value.")
     ordered = sorted(values)
     rank = (len(ordered) - 1) * max(0.0, min(100.0, pct)) / 100.0
     low = math.floor(rank)
@@ -41,39 +45,61 @@ def percentile(values: list[float], pct: float) -> float:
     return ordered[low] * (1.0 - weight) + ordered[high] * weight
 
 
-def parse_metrics(log_text: str) -> dict[str, list[float]]:
+def parse_metrics(log_text: str) -> tuple[dict[str, list[float]], list[str]]:
     metrics: dict[str, list[float]] = defaultdict(list)
-    for line in log_text.splitlines():
-        match = PERF_RE.search(line)
-        if not match:
+    malformed: list[str] = []
+    for line_number, line in enumerate(log_text.splitlines(), start=1):
+        if not PERF_PREFIX_RE.search(line):
             continue
-        metric = match.group(1)
-        duration_ms = float(match.group(2))
-        metrics[metric].append(duration_ms)
-    return metrics
+        match = PERF_VALUE_RE.search(line)
+        if match is None:
+            malformed.append(f"line {line_number}: {line.strip()}")
+            continue
+        raw_value = match.group(2)
+        if raw_value.endswith("ms"):
+            raw_value = raw_value[:-2]
+        try:
+            duration_ms = float(raw_value)
+        except ValueError:
+            malformed.append(f"line {line_number}: {line.strip()}")
+            continue
+        if not math.isfinite(duration_ms) or duration_ms < 0:
+            malformed.append(f"line {line_number}: {line.strip()}")
+            continue
+        metrics[match.group(1)].append(duration_ms)
+    return dict(metrics), malformed
 
 
-def find_missing_metrics(
-    metrics: dict[str, list[float]],
-    required_metrics: list[str],
-) -> list[str]:
-    return [
-        metric
-        for metric in required_metrics
-        if not metrics.get(metric)
-    ]
+def evaluate_metrics(metrics: dict[str, list[float]]) -> tuple[list[str], list[str]]:
+    messages: list[str] = []
+    failures: list[str] = []
+    for metric, budget in METRIC_BUDGETS.items():
+        samples = metrics.get(metric, [])
+        if not samples:
+            failures.append(f"missing:{metric}")
+            continue
+        if len(samples) < budget.minimum_samples:
+            failures.append(
+                f"insufficient:{metric}:samples={len(samples)},required={budget.minimum_samples}"
+            )
+            continue
+        p95 = percentile(samples, 95.0)
+        messages.append(
+            f"metric={metric} samples={len(samples)} p95={p95:.2f}ms "
+            f"budget={budget.p95_ms:.2f}ms"
+        )
+        if p95 > budget.p95_ms:
+            failures.append(
+                f"exceeded:{metric}:p95={p95:.2f}ms,budget={budget.p95_ms:.2f}ms,"
+                f"samples={len(samples)}"
+            )
+    return messages, failures
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--log-file", required=True, help="Path to captured test/app log"
-    )
-    parser.add_argument(
-        "--require-metric",
-        action="append",
-        default=[],
-        help="Metric name that must appear at least once in the log. Repeat as needed.",
+        "--log-file", required=True, help="Path to deterministic telemetry"
     )
     args = parser.parse_args()
 
@@ -82,37 +108,43 @@ def main() -> int:
         print(f"Perf gate failed: log file not found: {log_path}")
         return 1
 
-    metrics = parse_metrics(log_path.read_text(encoding="utf-8", errors="replace"))
-    if not metrics:
-        print("Perf gate failed: no [perf] telemetry lines were found in the log.")
+    metrics, malformed = parse_metrics(
+        log_path.read_text(encoding="utf-8", errors="replace")
+    )
+    if malformed:
+        print("Perf gate failed: malformed telemetry:")
+        for detail in malformed:
+            print(f"- {detail}")
         return 1
 
-    missing_metrics = find_missing_metrics(metrics, list(args.require_metric or []))
-    if missing_metrics:
-        print("Perf gate failed: required metrics were not observed:")
-        for metric in missing_metrics:
-            print(f"- {metric}")
+    missing = [name for name in METRIC_BUDGETS if not metrics.get(name)]
+    if missing:
+        print("Perf gate failed: configured metrics were not observed:")
+        for name in missing:
+            print(f"- {name}")
         return 1
 
-    failed: list[tuple[str, float, float, int]] = []
-    for metric, budget_ms in METRIC_BUDGETS_MS.items():
-        samples = metrics.get(metric)
-        if not samples:
-            continue
-        p95 = percentile(samples, 95.0)
-        print(
-            f"metric={metric} samples={len(samples)} p95={p95:.2f}ms budget={budget_ms:.2f}ms"
-        )
-        if p95 > budget_ms:
-            failed.append((metric, p95, budget_ms, len(samples)))
-
-    if failed:
+    messages, failures = evaluate_metrics(metrics)
+    for message in messages:
+        print(message)
+    insufficient = [
+        failure for failure in failures if failure.startswith("insufficient:")
+    ]
+    exceeded = [failure for failure in failures if failure.startswith("exceeded:")]
+    if insufficient:
+        print("\nPerf gate failed: insufficient samples:")
+        for failure in insufficient:
+            _, metric, detail = failure.split(":", 2)
+            print(f"- {metric}: {detail}")
+    if exceeded:
         print("\nPerf budget violations:")
-        for metric, p95, budget, count in failed:
-            print(f"- {metric}: p95={p95:.2f}ms > {budget:.2f}ms (samples={count})")
+        for failure in exceeded:
+            _, metric, detail = failure.split(":", 2)
+            print(f"- {metric}: {detail}")
+    if failures:
         return 1
 
-    print("All observed performance metrics are within configured budgets.")
+    print("All configured performance metrics satisfy their p95 budgets.")
     return 0
 
 

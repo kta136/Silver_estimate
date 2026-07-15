@@ -1185,8 +1185,8 @@
     "semantic_hash": ""
   },
   "tests/unit/test_architecture_boundaries.py": {
-    "mtime": 1784109084.1269257,
-    "ast_hash": "3641814884779014dcce91cfba662bee",
+    "mtime": 1784111471.9830744,
+    "ast_hash": "42e62823aa2e626934f32a0732582866",
     "semantic_hash": ""
   },
   "tests/unit/test_credential_backend_status.py": {

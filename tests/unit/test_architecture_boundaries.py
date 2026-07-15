@@ -71,3 +71,58 @@ def test_print_strategy_carries_shared_format_spec() -> None:
     )
     assert strategy.spec.document_kind == "estimate"
     assert strategy.render("voucher") == "rendered:voucher"
+
+
+def test_explicit_facade_methods_delegate_without_dynamic_widget_composition() -> None:
+    def return_one(_self, *_args, **_kwargs):
+        return 1
+
+    facade_controllers = {
+        EstimateEntryFacade: (
+            "_workflow_controller",
+            "_layout_controller",
+            "_table_controller",
+            "_totals_controller",
+        ),
+        SilverBarManagementFacade: (
+            "_ui_builder",
+            "_load_controller",
+            "_transfer_controller",
+            "_list_lifecycle_controller",
+            "_list_print_controller",
+            "_table_controller",
+            "_state_store",
+            "_selection_state_controller",
+        ),
+    }
+
+    for facade_type, controller_attributes in facade_controllers.items():
+        facade_methods = {
+            name: member
+            for name, member in vars(facade_type).items()
+            if callable(member) and name != "_facade_call"
+        }
+        controller_type = type(
+            f"{facade_type.__name__}ControllerStub",
+            (),
+            {name: return_one for name in facade_methods},
+        )
+        facade = facade_type()
+        controller = controller_type()
+        for attribute in controller_attributes:
+            setattr(facade, attribute, controller)
+
+        for method_name, method in facade_methods.items():
+            required_args = [
+                1
+                for parameter in list(inspect.signature(method).parameters.values())[1:]
+                if parameter.default is inspect.Parameter.empty
+                and parameter.kind
+                in {
+                    inspect.Parameter.POSITIONAL_ONLY,
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                }
+            ]
+            getattr(facade, method_name)(*required_args)
+
+        assert getattr(facade, "table_adapter", 1) == 1

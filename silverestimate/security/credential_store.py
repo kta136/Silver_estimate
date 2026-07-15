@@ -53,22 +53,9 @@ class CredentialBackendStatus:
     reason: str = ""
 
 
-@dataclass(frozen=True)
-class _CredentialDescriptor:
-    kind: str
-    secure_id: str
-    legacy_key: str
-
-
 _ENTRIES = {
-    "main": _CredentialDescriptor(
-        kind="main", secure_id="main_password_hash", legacy_key="security/password_hash"
-    ),
-    "backup": _CredentialDescriptor(
-        kind="backup",
-        secure_id="backup_password_hash",
-        legacy_key="security/backup_hash",
-    ),
+    "main": "main_password_hash",
+    "backup": "backup_password_hash",
 }
 
 
@@ -126,7 +113,7 @@ def get_backend_status() -> CredentialBackendStatus:
     return status
 
 
-def _get_entry(kind: str) -> _CredentialDescriptor:
+def _get_secure_id(kind: str) -> str:
     try:
         return _ENTRIES[kind]
     except KeyError as exc:  # pragma: no cover - developer error
@@ -142,75 +129,36 @@ def _ensure_keyring() -> Any:
     return keyring
 
 
-def get_password_hash(
-    kind: str,
-    *,
-    settings: Optional[Any] = None,
-    logger: Optional[logging.Logger] = None,
-) -> Optional[str]:
-    """
-    Retrieve the hashed password for ``kind`` from the secure store.
-
-    When a legacy value exists in QSettings, it is migrated to the secure store automatically.
-    """
-    descriptor = _get_entry(kind)
+def get_password_hash(kind: str) -> Optional[str]:
+    """Retrieve the hashed password for ``kind`` from the secure store."""
+    secure_id = _get_secure_id(kind)
     kr = _ensure_keyring()
     try:
-        value = kr.get_password(SERVICE_NAME, descriptor.secure_id)
+        value = kr.get_password(SERVICE_NAME, secure_id)
     except KeyringError as exc:
         raise CredentialStoreError(
             f"Failed to read credential '{kind}': {exc}"
         ) from exc
 
-    if value:
-        return str(value)
-
-    if not settings:
-        return None
-
-    legacy_value_raw = settings.value(descriptor.legacy_key)
-    legacy_value = str(legacy_value_raw) if legacy_value_raw else None
-    if legacy_value:
-        try:
-            kr.set_password(SERVICE_NAME, descriptor.secure_id, legacy_value)
-        except KeyringError as exc:
-            if logger:
-                logger.warning(
-                    "Failed to migrate legacy credential '%s': %s",
-                    kind,
-                    exc,
-                    exc_info=True,
-                )
-        else:
-            settings.remove(descriptor.legacy_key)
-            settings.sync()
-            if logger:
-                logger.info("Migrated legacy credential '%s' into secure store", kind)
-            return legacy_value
-
-    return None
+    return str(value) if value else None
 
 
 def set_password_hash(
     kind: str,
     value: str,
     *,
-    settings: Optional[Any] = None,
     logger: Optional[logging.Logger] = None,
 ) -> None:
-    """Persist ``value`` for ``kind`` in the secure store, removing legacy storage when present."""
-    descriptor = _get_entry(kind)
+    """Persist ``value`` for ``kind`` in the secure store."""
+    secure_id = _get_secure_id(kind)
     kr = _ensure_keyring()
     try:
-        kr.set_password(SERVICE_NAME, descriptor.secure_id, value)
+        kr.set_password(SERVICE_NAME, secure_id, value)
     except KeyringError as exc:
         raise CredentialStoreError(
             f"Failed to store credential '{kind}': {exc}"
         ) from exc
 
-    if settings:
-        settings.remove(descriptor.legacy_key)
-        settings.sync()
     if logger:
         logger.debug("Stored credential '%s' in secure store", kind)
 
@@ -218,24 +166,17 @@ def set_password_hash(
 def delete_password_hash(
     kind: str,
     *,
-    settings: Optional[Any] = None,
     logger: Optional[logging.Logger] = None,
 ) -> None:
-    """Remove ``kind`` from both secure and legacy stores."""
-    descriptor = _get_entry(kind)
-    if settings:
-        settings.remove(descriptor.legacy_key)
-        settings.sync()
+    """Remove ``kind`` from the secure store."""
+    secure_id = _get_secure_id(kind)
     if keyring is None:
         if logger:
-            logger.debug(
-                "Keyring unavailable while deleting credential '%s'; legacy key removed only",
-                kind,
-            )
+            logger.debug("Keyring unavailable while deleting credential '%s'", kind)
         return
 
     try:
-        keyring.delete_password(SERVICE_NAME, descriptor.secure_id)
+        keyring.delete_password(SERVICE_NAME, secure_id)
     except PasswordDeleteError:
         if logger:
             logger.debug(

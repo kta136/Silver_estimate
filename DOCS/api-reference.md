@@ -53,7 +53,7 @@ This guide documents the primary controller, service, and persistence APIs expos
 ### Authentication (silverestimate/services/auth_service.py)
 - **run_authentication(logger: Optional[logging.Logger] = None, *, parent: Optional[QWidget] = None) -> Optional[AuthenticationResult]** - drives setup/login with retry-on-invalid-password behavior; returns `None` only when the dialog is cancelled, otherwise returns an `AuthenticationResult` describing the password provided or a wipe request (with silent flag when triggered by the recovery password).
 - **perform_data_wipe(db_path: str = DB_PATH, logger: Optional[logging.Logger] = None, *, silent: bool = False) -> bool** - deletes the encrypted DB, removes temporary plaintext, clears credentials, and, when `silent=True`, purges application log files without emitting wipe-related log entries.
-- Uses `silverestimate/security/credential_store.py` to persist Argon2 hashes in the OS keyring (automatically migrating legacy QSettings values).
+- Uses `silverestimate/security/credential_store.py` to persist Argon2 hashes in the OS keyring.
 
 ### SettingsService (silverestimate/services/settings_service.py)
     SettingsService()
@@ -140,7 +140,7 @@ Note: Legacy item/estimate helper methods remain for backwards compatibility but
 - **ItemCacheController (silverestimate/infrastructure/item_cache.py)** - shared cache utilised by ItemsRepository for hot lookups.
 - **FlushScheduler (silverestimate/persistence/flush_scheduler.py)** - debounced commit/encrypt worker invoked by DatabaseManager.request_flush.
 - **InlineStatusController (silverestimate/ui/inline_status.py)** - helper used across UI widgets to surface status messages without tight UI coupling.
-- **CredentialStore (silverestimate/security/credential_store.py)** - OS keyring abstraction with migration helpers for legacy QSettings credentials.
+- **CredentialStore (silverestimate/security/credential_store.py)** - OS keyring abstraction for hashed credentials.
 
 ## UI Facades
 

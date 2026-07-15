@@ -7,7 +7,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, TypeAlias, cast
+from typing import Any, TypeAlias, cast
 
 from PyQt6.QtWidgets import QMessageBox
 
@@ -81,10 +81,6 @@ def _load_bars_page(
 class SilverBarLoadController(HostProxy):
     """Coordinate async available/list loads and stale-response handling."""
 
-    if TYPE_CHECKING:
-        _available_load_request_id: int
-        _list_load_request_id: int
-
     def __init__(self, host) -> None:
         super().__init__(host)
         object.__setattr__(self, "_load_shutdown", False)
@@ -145,22 +141,6 @@ class SilverBarLoadController(HostProxy):
             self._refresh_widget_style(header)
         with contextlib.suppress(AttributeError, RuntimeError, TypeError):
             self._refresh_widget_style(list_table.viewport())
-
-    def _next_load_request_id(self, target: str) -> int:
-        if target == "available":
-            self._available_load_request_id += 1
-            return self._available_load_request_id
-        if target == "list":
-            self._list_load_request_id += 1
-            return self._list_load_request_id
-        raise ValueError(f"Unknown load target: {target}")
-
-    def _is_latest_load(self, target: str, request_id: int) -> bool:
-        if target == "available":
-            return request_id == self._available_load_request_id
-        if target == "list":
-            return request_id == self._list_load_request_id
-        return False
 
     def _start_bars_load(
         self,

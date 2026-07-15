@@ -7,6 +7,8 @@ from typing import Any
 
 from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
 
+from silverestimate.ui.display_formatting import format_display_date, format_rupees
+
 
 @dataclass(frozen=True)
 class EstimateHistoryRow:
@@ -114,11 +116,11 @@ class EstimateHistoryTableModel(QAbstractTableModel):
         if column == 0:
             return row.voucher_no
         if column == 1:
-            return row.date
+            return format_display_date(row.date)
         if column == 2:
             return row.note
         if column == 3:
-            return f"{row.silver_rate:,.2f}"
+            return format_rupees(row.silver_rate)
         if column == 4:
             return f"{row.total_gross:.3f}"
         if column == 5:
@@ -126,9 +128,9 @@ class EstimateHistoryTableModel(QAbstractTableModel):
         if column == 6:
             return f"{row.net_fine:.3f}"
         if column == 7:
-            return f"{row.net_wage:,.2f}"
+            return format_rupees(row.net_wage)
         if column == 8:
-            return f"{row.grand_total:,.2f}"
+            return format_rupees(row.grand_total)
         return ""
 
     def _sort_value(self, row: EstimateHistoryRow, column: int) -> Any:

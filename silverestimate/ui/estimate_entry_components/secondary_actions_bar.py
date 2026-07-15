@@ -181,27 +181,36 @@ class SecondaryActionsBar(QWidget):
         self.live_rate_container = QWidget()
         self.live_rate_container.setObjectName("LiveRateCard")
         self.live_rate_container.setSizePolicy(
-            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
 
         rate_layout = QHBoxLayout(self.live_rate_container)
         rate_layout.setContentsMargins(6, 5, 6, 5)
         rate_layout.setSpacing(6)
 
-        self.live_rate_value_label = QLabel("…")
+        rate_text_layout = QVBoxLayout()
+        rate_text_layout.setContentsMargins(4, 0, 4, 0)
+        rate_text_layout.setSpacing(1)
+
+        self.live_rate_title_label = QLabel("Live silver rate")
+        self.live_rate_title_label.setObjectName("LiveRateTitle")
+        rate_text_layout.addWidget(self.live_rate_title_label)
+
+        self.live_rate_value_label = QLabel("Loading…")
         self.live_rate_value_label.setObjectName("LiveRateValue")
-        self.live_rate_value_label.setMinimumWidth(220)
+        self.live_rate_value_label.setMinimumWidth(150)
         self.live_rate_value_label.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
         self.live_rate_value_label.setAlignment(
-            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
         rate_font = self.live_rate_value_label.font()
-        rate_font.setPointSize(22)
+        rate_font.setPointSize(12)
         rate_font.setBold(True)
         self.live_rate_value_label.setFont(rate_font)
-        rate_layout.addWidget(self.live_rate_value_label, 1)
+        rate_text_layout.addWidget(self.live_rate_value_label)
+        rate_layout.addLayout(rate_text_layout, 1)
 
         refresh_stack = QVBoxLayout()
         refresh_stack.setContentsMargins(0, 0, 0, 0)
@@ -227,10 +236,10 @@ class SecondaryActionsBar(QWidget):
             self.refresh_rate_button, 0, Qt.AlignmentFlag.AlignHCenter
         )
 
-        self.live_rate_meta_label = QLabel("")
+        self.live_rate_meta_label = QLabel("Not updated")
         self.live_rate_meta_label.setObjectName("LiveRateMeta")
         self.live_rate_meta_label.setAccessibleName("Live Rate Status")
-        self.live_rate_meta_label.setFixedWidth(52)
+        self.live_rate_meta_label.setFixedWidth(76)
         self.live_rate_meta_label.setAlignment(
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
         )

@@ -64,16 +64,12 @@ def test_run_authentication_first_time(monkeypatch, settings_stub):
     assert result.wipe_requested is False
     assert credential_store.get_password_hash("main") == "hashed-primary-pass"
     assert credential_store.get_password_hash("backup") == "hashed-backup-pass"
-    settings = settings_stub()
-    assert settings.value("security/password_hash") is None
-    assert settings.value("security/backup_hash") is None
 
 
 def test_run_authentication_existing_password(monkeypatch, settings_stub):
     _MessageBoxStub.reset()
-    settings = settings_stub()
-    settings.setValue("security/password_hash", "stored-hash")
-    settings.setValue("security/backup_hash", "backup-hash")
+    credential_store.set_password_hash("main", "stored-hash")
+    credential_store.set_password_hash("backup", "backup-hash")
 
     class _LoginDialog:
         def __init__(self, is_setup=False, parent=None):
@@ -100,18 +96,14 @@ def test_run_authentication_existing_password(monkeypatch, settings_stub):
     assert isinstance(result, auth_service.AuthenticationResult)
     assert result.password == "secret"
     assert result.wipe_requested is False
-    # Legacy values should migrate to secure store.
     assert credential_store.get_password_hash("main") == "stored-hash"
     assert credential_store.get_password_hash("backup") == "backup-hash"
-    assert settings.value("security/password_hash") is None
-    assert settings.value("security/backup_hash") is None
 
 
 def test_run_authentication_uses_lazy_login_dialog_resolver(monkeypatch, settings_stub):
     _MessageBoxStub.reset()
-    settings = settings_stub()
-    settings.setValue("security/password_hash", "stored-hash")
-    settings.setValue("security/backup_hash", "backup-hash")
+    credential_store.set_password_hash("main", "stored-hash")
+    credential_store.set_password_hash("backup", "backup-hash")
 
     calls = {"resolver": 0}
 
@@ -150,9 +142,8 @@ def test_run_authentication_secondary_password_triggers_silent_wipe(
     monkeypatch, settings_stub
 ):
     _MessageBoxStub.reset()
-    settings = settings_stub()
-    settings.setValue("security/password_hash", "stored-hash")
-    settings.setValue("security/backup_hash", "backup-hash")
+    credential_store.set_password_hash("main", "stored-hash")
+    credential_store.set_password_hash("backup", "backup-hash")
 
     class _LoginDialog:
         def __init__(self, is_setup=False, parent=None):
@@ -189,9 +180,8 @@ def test_run_authentication_retries_after_incorrect_password(
     monkeypatch, settings_stub
 ):
     _MessageBoxStub.reset()
-    settings = settings_stub()
-    settings.setValue("security/password_hash", "stored-hash")
-    settings.setValue("security/backup_hash", "backup-hash")
+    credential_store.set_password_hash("main", "stored-hash")
+    credential_store.set_password_hash("backup", "backup-hash")
 
     attempts = {"count": 0}
 
@@ -234,8 +224,6 @@ def test_perform_data_wipe_removes_files(tmp_path, monkeypatch, settings_stub):
     temp_file.write_text("temp")
 
     settings = settings_stub()
-    settings.setValue("security/password_hash", "legacy-hash")
-    settings.setValue("security/backup_hash", "legacy-backup")
     settings.setValue("security/db_salt", b"salt")
     settings.setValue("security/last_temp_db_path", str(temp_file))
     credential_store.set_password_hash("main", "hash")
@@ -252,12 +240,7 @@ def test_perform_data_wipe_removes_files(tmp_path, monkeypatch, settings_stub):
     assert not temp_file.exists()
     assert credential_store.get_password_hash("main") is None
     assert credential_store.get_password_hash("backup") is None
-    for key in (
-        "security/password_hash",
-        "security/backup_hash",
-        "security/db_salt",
-        "security/last_temp_db_path",
-    ):
+    for key in ("security/db_salt", "security/last_temp_db_path"):
         assert settings.value(key) is None
 
 
@@ -308,8 +291,6 @@ def test_perform_data_wipe_failure_notifies_user(tmp_path, monkeypatch, settings
     db_file = tmp_path / "estimation.db"
     db_file.write_text("encrypted")
 
-    settings = settings_stub()
-    settings.setValue("security/password_hash", "hash")
     credential_store.set_password_hash("main", "hash")
 
     def _boom(path):  # noqa: ARG001
@@ -330,7 +311,6 @@ def test_perform_data_wipe_failure_notifies_user(tmp_path, monkeypatch, settings
     assert db_file.exists()
     # Secure store should still contain the credential because wipe failed.
     assert credential_store.get_password_hash("main") == "hash"
-    assert settings.value("security/password_hash") == "hash"
     assert _MessageBoxStub.critical_calls
 
     # restore os module after test via monkeypatch context in pytest

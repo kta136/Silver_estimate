@@ -138,7 +138,7 @@ def test_populate_table_uses_model_rows_and_selection_lookup(qtbot, monkeypatch)
         assert dialog.get_selected_voucher() == "V002"
         assert (
             dialog.estimates_model.data(dialog.estimates_model.index(target_row, 8))
-            == "229.38"
+            == "₹ 229.38"
         )
     finally:
         dialog.close()
@@ -166,7 +166,7 @@ def test_estimate_history_uses_compact_top_controls(qtbot, monkeypatch):
         assert "QCalendarWidget QToolButton" in dialog.styleSheet()
         assert header_card.height() <= 54
         assert filter_card.height() <= 56
-        assert dialog.estimates_table.viewport().height() >= 560
+        assert dialog.estimates_table.viewport().height() >= 548
     finally:
         dialog.close()
         dialog.deleteLater()

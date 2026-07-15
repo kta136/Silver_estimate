@@ -4,12 +4,11 @@ import os
 
 import pytest
 
-from silverestimate.persistence.database_manager import _TempDatabaseStore
 from silverestimate.persistence.temp_database_store import TempDatabaseStore
 
 
 @pytest.fixture
-def temp_store_factory(monkeypatch):
+def temp_store_factory():
     entries = {}
     created = []
 
@@ -24,13 +23,11 @@ def temp_store_factory(monkeypatch):
             pass
 
     stub_settings = StubSettings()
-    monkeypatch.setattr(
-        "silverestimate.persistence.database_manager.get_app_settings",
-        lambda: stub_settings,
-    )
-
     def factory(**kwargs):
-        store = _TempDatabaseStore(**kwargs)
+        store = TempDatabaseStore(
+            settings_factory=lambda: stub_settings,
+            **kwargs,
+        )
         created.append(store)
         return store
 

@@ -253,13 +253,20 @@ QWidget#LiveRateCard {
     border-color: #bfdbfe;
 }
 
+QLabel#LiveRateTitle {
+    color: __TEXT_MUTED__;
+    background-color: transparent;
+    font-size: 9pt;
+    font-weight: 600;
+}
+
 QLabel#LiveRateValue {
     color: __TEXT_STRONG__;
     background-color: transparent;
     border: none;
     border-radius: 0px;
     padding: 2px 8px;
-    font-size: 22pt;
+    font-size: 12pt;
     font-weight: 800;
 }
 

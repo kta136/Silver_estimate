@@ -39,8 +39,6 @@ def get_app_settings(*, org: str = SETTINGS_ORG, app: str = SETTINGS_APP) -> QSe
     # For upgraded installs keep using legacy storage when existing keys are present.
     critical_keys = (
         "security/db_salt",
-        "security/password_hash",
-        "security/backup_hash",
         "rates/live_enabled",
     )
     if any(primary.value(key) is not None for key in critical_keys):

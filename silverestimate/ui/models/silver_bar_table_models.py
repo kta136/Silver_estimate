@@ -7,6 +7,8 @@ from typing import Any, Optional
 from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
 from PyQt6.QtGui import QBrush, QColor
 
+from silverestimate.ui.display_formatting import format_display_date
+
 
 class _BaseSilverBarTableModel(QAbstractTableModel):
     HEADERS: list[str] = []
@@ -175,8 +177,7 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
 
     @staticmethod
     def _format_date(value: Any) -> str:
-        text = str(value or "")
-        return text.split()[0] if text else ""
+        return format_display_date(value)
 
     @staticmethod
     def _bar_id_sort_value(row: dict[str, Any]) -> int:
@@ -328,7 +329,7 @@ class HistorySilverBarsTableModel(_BaseSilverBarTableModel):
         "Status",
         "List",
         "Date Added",
-        "State",
+        "List State",
     ]
 
     def value_key(self, column: int) -> str:
@@ -368,13 +369,13 @@ class HistorySilverBarsTableModel(_BaseSilverBarTableModel):
                 return str(
                     payload.get("list_identifier") or f"List {payload['list_id']}"
                 )
-            return "None"
+            return "—"
         if column == 7:
             return self._format_date(payload.get("date_added"))
         if column == 8:
             if payload.get("list_id"):
                 return "Issued" if payload.get("issued_date") else "Active"
-            return "N/A"
+            return "Not Listed"
         return ""
 
     def sort_key_value(self, row: dict[str, Any], column: int) -> Any:
@@ -429,13 +430,13 @@ class HistorySilverBarsTableModel(_BaseSilverBarTableModel):
         if column == 6:
             if row.get("list_id"):
                 return str(row.get("list_identifier") or f"List {row['list_id']}")
-            return "None"
+            return "—"
         if column == 7:
             return self._format_date(row.get("date_added"))
         if column == 8:
             if row.get("list_id"):
                 return "Issued" if row.get("issued_date") else "Active"
-            return "N/A"
+            return "Not Listed"
         return ""
 
 
@@ -461,6 +462,8 @@ class IssuedSilverBarListsTableModel(_BaseSilverBarTableModel):
             return str(payload.get("list_id") or "")
         if column == 5:
             return str(payload.get("bar_count") or 0)
+        if column in (3, 4):
+            return self._format_date(payload.get(self.value_key(column)))
         return str(payload.get(self.value_key(column)) or "")
 
     def sort_key_value(self, row: dict[str, Any], column: int) -> Any:

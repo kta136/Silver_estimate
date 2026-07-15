@@ -90,13 +90,15 @@ class LiveRateController(QObject):
                 if not show_ui:
                     label.setText("-")
                 elif label.text() in {"", "-"}:
-                    label.setText(".")
+                    label.setText("Loading…")
             except Exception as exc:
                 self._logger.debug("Failed to update live-rate label: %s", exc)
         if meta is not None:
             try:
-                if not show_ui or self._last_snapshot is None:
+                if not show_ui:
                     meta.setText("--:--")
+                elif self._last_snapshot is None:
+                    meta.setText("Not updated")
             except Exception as exc:
                 self._logger.debug("Failed to update live-rate metadata: %s", exc)
         return show_ui
@@ -196,6 +198,13 @@ class LiveRateController(QObject):
         self._last_error = str(message)
         self._logger.warning("DDA live-rate stream: %s", message)
         if self._last_snapshot is None and self._manual_refresh:
+            widget = self._widget_getter()
+            label = getattr(widget, "live_rate_value_label", None) if widget else None
+            meta = getattr(widget, "live_rate_meta_label", None) if widget else None
+            if label is not None:
+                label.setText("Unavailable")
+            if meta is not None:
+                meta.setText("Retry")
             self._status_callback("Live rate unavailable", 3000, "warning")
             self._manual_refresh = False
 

@@ -48,8 +48,6 @@ class SilverBarDialog(SilverBarManagementFacade, QDialog):
         self.logger = logging.getLogger(__name__)
         self.current_list_id = None
         self._active_load_workers = {}
-        self._available_load_request_id = 0
-        self._list_load_request_id = 0
         self._load_started_at = {}
 
         self._ui_builder = SilverBarManagementUiBuilder(self)
@@ -123,11 +121,11 @@ class OptimalListDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Generate Optimal List")
-        self.setMinimumSize(420, 380)
+        self.setMinimumSize(620, 600)
         resize_to_available_screen(
             self,
-            preferred_width=500,
-            preferred_height=560,
+            preferred_width=660,
+            preferred_height=620,
         )
         self.setObjectName("OptimalListDialog")
         self.setStyleSheet(
@@ -149,6 +147,14 @@ class OptimalListDialog(QDialog):
                 QLabel#OptimalListBodyLabel {
                     color: __FIELD_TEXT__;
                     font-size: 9pt;
+                }
+                QLabel#OptimalListRangeSummary {
+                    background-color: __HEADER_BG__;
+                    border: 1px solid __CARD_BORDER__;
+                    border-radius: 6px;
+                    color: __TEXT_STRONG__;
+                    font-weight: 700;
+                    padding: 8px;
                 }
                 """,
             )
@@ -217,8 +223,15 @@ class OptimalListDialog(QDialog):
         minmax_layout.addLayout(max_group)
 
         weight_layout.addLayout(minmax_layout)
+        weight_layout.addSpacing(16)
+        self.range_summary_label = QLabel()
+        self.range_summary_label.setObjectName("OptimalListRangeSummary")
+        weight_layout.addWidget(self.range_summary_label)
+        self.min_weight_spin.valueChanged.connect(self._update_range_summary)
+        self.max_weight_spin.valueChanged.connect(self._update_range_summary)
+        self._update_range_summary()
         range_explanation = QLabel(
-            "The algorithm will find bars with total fine weight between these values."
+            "Only combinations whose total fine weight falls inside this range are considered."
         )
         range_explanation.setObjectName("OptimalListBodyLabel")
         range_explanation.setWordWrap(True)
@@ -249,16 +262,16 @@ class OptimalListDialog(QDialog):
         opt_layout.addWidget(preference_label)
 
         self.opt_button_group = QButtonGroup(self)
-        self.min_bars_radio = QRadioButton("Minimum number of silver bars")
+        self.min_bars_radio = QRadioButton("Use the fewest bars")
         self.min_bars_radio.setChecked(True)
-        self.max_bars_radio = QRadioButton("Maximum number of silver bars")
+        self.max_bars_radio = QRadioButton("Use the most bars")
         self.opt_button_group.addButton(self.min_bars_radio, 0)
         self.opt_button_group.addButton(self.max_bars_radio, 1)
         opt_layout.addWidget(self.min_bars_radio)
         opt_layout.addWidget(self.max_bars_radio)
 
         explanation = QLabel(
-            "Minimum bars prefers fewer bars. Maximum bars uses as many bars as possible within range."
+            "Choose fewer bars for simpler handling, or more bars to spread the target across inventory."
         )
         explanation.setObjectName("OptimalListBodyLabel")
         explanation.setWordWrap(True)
@@ -279,6 +292,14 @@ class OptimalListDialog(QDialog):
         generate_button.clicked.connect(self.accept)
         button_layout.addWidget(generate_button)
         layout.addLayout(button_layout)
+
+    def _update_range_summary(self) -> None:
+        minimum = self.min_weight_spin.value()
+        maximum = self.max_weight_spin.value()
+        midpoint = (minimum + maximum) / 2
+        self.range_summary_label.setText(
+            f"{minimum:,.1f}–{maximum:,.1f} g fine · midpoint {midpoint:,.1f} g"
+        )
 
     def accept(self):
         min_val = self.min_weight_spin.value()

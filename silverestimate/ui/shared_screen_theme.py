@@ -71,7 +71,7 @@ def build_management_screen_stylesheet(
         }}
         QLabel#{subtitle_label} {{
             color: {TEXT_MUTED};
-            font-size: 9pt;
+            font-size: 9.5pt;
         }}
         """
     )
@@ -81,7 +81,7 @@ def build_management_screen_stylesheet(
             f"""
             QLabel#{field_label} {{
                 color: {FIELD_TEXT};
-                font-size: 8.5pt;
+                font-size: 9pt;
                 font-weight: 600;
             }}
             """
@@ -98,8 +98,8 @@ def build_management_screen_stylesheet(
             {",\n".join(button_selectors)} {{
                 border-radius: 6px;
                 color: {TEXT_STRONG};
-                padding: 4px 10px;
-                min-height: 20px;
+                padding: 5px 10px;
+                min-height: 24px;
                 font-weight: 600;
             }}
             """
@@ -159,8 +159,8 @@ def build_management_screen_stylesheet(
                 border: 1px solid {INPUT_BORDER};
                 border-radius: 6px;
                 color: {FIELD_TEXT};
-                padding: 3px 8px;
-                min-height: 22px;
+                padding: 4px 8px;
+                min-height: 24px;
                 selection-background-color: {SELECTION_BG};
                 selection-color: {TEXT_STRONG};
             }}

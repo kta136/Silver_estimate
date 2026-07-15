@@ -20,11 +20,16 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from silverestimate.ui.icons import get_icon
 from silverestimate.ui.models import (
     AvailableSilverBarsTableModel,
     SelectedListSilverBarsTableModel,
 )
-from silverestimate.ui.modern_components import BottomStatusStrip, polish_dense_table
+from silverestimate.ui.modern_components import (
+    BottomStatusStrip,
+    install_table_empty_state,
+    polish_dense_table,
+)
 from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
 from silverestimate.ui.themed_controls import ThemedComboBox
 from silverestimate.ui.window_sizing import resize_to_available_screen
@@ -140,11 +145,17 @@ class SilverBarManagementUiBuilder(HostProxy):
         left_layout.addLayout(left_header)
 
         filter_row = QHBoxLayout()
+        weight_filter_label = QLabel("Weight")
+        weight_filter_label.setObjectName("SilverBarListInfoLabel")
+        filter_row.addWidget(weight_filter_label)
         self.weight_search_edit = QLineEdit()
         self.weight_search_edit.setClearButtonEnabled(True)
         self.weight_search_edit.setMaximumWidth(120)
-        self.weight_search_edit.setPlaceholderText("Weight")
+        self.weight_search_edit.setPlaceholderText("e.g. 40")
         filter_row.addWidget(self.weight_search_edit, 2)
+        date_filter_label = QLabel("Added")
+        date_filter_label.setObjectName("SilverBarListInfoLabel")
+        filter_row.addWidget(date_filter_label)
         self.date_range_combo = ThemedComboBox()
         self.date_range_combo.addItems(
             ["Any", "Today", "Last 7 days", "Last 30 days", "This Month"]
@@ -153,6 +164,9 @@ class SilverBarManagementUiBuilder(HostProxy):
         filter_row.addWidget(self.date_range_combo)
 
         self.clear_filters_button = QPushButton("Clear Filters")
+        self.clear_filters_button.setIcon(
+            get_icon("mdi6.filter-remove-outline", widget=self.host)
+        )
         filter_row.addWidget(self.clear_filters_button)
         left_layout.addLayout(filter_row)
 
@@ -172,9 +186,11 @@ class SilverBarManagementUiBuilder(HostProxy):
         self.available_bars_table.setContextMenuPolicy(
             Qt.ContextMenuPolicy.CustomContextMenu
         )
-        self.available_bars_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch
-        )
+        available_header = self.available_bars_table.horizontalHeader()
+        available_header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        available_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        for column, width in ((1, 78), (2, 72), (3, 82), (4, 94), (5, 82)):
+            self.available_bars_table.setColumnWidth(column, width)
         polish_dense_table(
             self.available_bars_table,
             row_height=28,
@@ -183,6 +199,10 @@ class SilverBarManagementUiBuilder(HostProxy):
             hide_vertical_header=True,
         )
         left_layout.addWidget(self.available_bars_table, 1)
+        self._available_empty_state = install_table_empty_state(
+            self.available_bars_table,
+            "No available silver bars match the current filters.",
+        )
 
         self.available_totals_label = QLabel("Available Bars: 0")
         self.available_selection_label = QLabel(
@@ -206,14 +226,18 @@ class SilverBarManagementUiBuilder(HostProxy):
 
         center_widget = QWidget(self.host)
         center_widget.setObjectName("SilverBarTransferPane")
-        center_widget.setFixedWidth(128)
+        center_widget.setFixedWidth(154)
         center_layout = QVBoxLayout(center_widget)
         center_layout.setContentsMargins(6, 12, 6, 12)
         center_layout.addStretch()
-        self.add_to_list_button = QPushButton("Add >")
-        self.add_all_button = QPushButton("Add All >>")
-        self.remove_from_list_button = QPushButton("< Remove")
-        self.remove_all_button = QPushButton("<< Remove All")
+        self.add_to_list_button = QPushButton("Add selected")
+        self.add_to_list_button.setIcon(get_icon("move_right", widget=self.host))
+        self.add_all_button = QPushButton("Add all")
+        self.add_all_button.setIcon(get_icon("move_all_right", widget=self.host))
+        self.remove_from_list_button = QPushButton("Remove selected")
+        self.remove_from_list_button.setIcon(get_icon("move_left", widget=self.host))
+        self.remove_all_button = QPushButton("Remove all")
+        self.remove_all_button.setIcon(get_icon("move_all_left", widget=self.host))
         for button in (self.add_to_list_button, self.add_all_button):
             button.setObjectName("SilverBarPrimaryButton")
             button.setEnabled(False)
@@ -246,17 +270,25 @@ class SilverBarManagementUiBuilder(HostProxy):
         list_row.addWidget(self.list_combo, 1)
         self.create_list_button = QPushButton("New List")
         self.create_list_button.setObjectName("SilverBarPrimaryButton")
+        self.create_list_button.setIcon(get_icon("new", widget=self.host))
         list_row.addWidget(self.create_list_button)
         right_layout.addLayout(list_row)
 
         action_row = QHBoxLayout()
         self.edit_note_button = QPushButton("Edit Note")
+        self.edit_note_button.setIcon(
+            get_icon("mdi6.note-edit-outline", widget=self.host)
+        )
         self.edit_note_button.setObjectName("SilverBarSecondaryButton")
         self.edit_note_button.setEnabled(False)
         self.delete_list_button = QPushButton("Delete List")
+        self.delete_list_button.setIcon(get_icon("delete", widget=self.host))
         self.delete_list_button.setObjectName("SilverBarDangerButton")
         self.delete_list_button.setEnabled(False)
         self.mark_issued_button = QPushButton("Mark Issued")
+        self.mark_issued_button.setIcon(
+            get_icon("mdi6.check-circle-outline", widget=self.host)
+        )
         self.mark_issued_button.setObjectName("SilverBarPrimaryButton")
         self.mark_issued_button.setEnabled(False)
         action_row.addWidget(self.edit_note_button)
@@ -266,12 +298,19 @@ class SilverBarManagementUiBuilder(HostProxy):
 
         print_row = QHBoxLayout()
         self.print_list_button = QPushButton("Print")
+        self.print_list_button.setIcon(get_icon("print", widget=self.host))
         self.print_list_button.setObjectName("SilverBarSecondaryButton")
         self.print_list_button.setEnabled(False)
         self.export_list_button = QPushButton("Export CSV")
+        self.export_list_button.setIcon(
+            get_icon("mdi6.file-delimited-outline", widget=self.host)
+        )
         self.export_list_button.setObjectName("SilverBarSecondaryButton")
         self.export_list_button.setEnabled(False)
         self.generate_optimal_button = QPushButton("Generate Optimal")
+        self.generate_optimal_button.setIcon(
+            get_icon("mdi6.auto-fix", widget=self.host)
+        )
         self.generate_optimal_button.setObjectName("SilverBarPrimaryButton")
         print_row.addWidget(self.print_list_button)
         print_row.addWidget(self.export_list_button)
@@ -298,9 +337,11 @@ class SilverBarManagementUiBuilder(HostProxy):
         self.list_bars_table.setContextMenuPolicy(
             Qt.ContextMenuPolicy.CustomContextMenu
         )
-        self.list_bars_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch
-        )
+        list_header = self.list_bars_table.horizontalHeader()
+        list_header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        list_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        for column, width in ((1, 78), (2, 72), (3, 82), (4, 94), (5, 82)):
+            self.list_bars_table.setColumnWidth(column, width)
         polish_dense_table(
             self.list_bars_table,
             row_height=28,
@@ -313,6 +354,10 @@ class SilverBarManagementUiBuilder(HostProxy):
         self.list_bars_table.horizontalHeader().setProperty("listState", "inactive")
         self.list_bars_table.setEnabled(False)
         right_layout.addWidget(self.list_bars_table, 1)
+        self._list_empty_state = install_table_empty_state(
+            self.list_bars_table,
+            "Choose a list, then add silver bars from the available inventory.",
+        )
 
         self.list_totals_label = QLabel("List Bars: 0")
         self.list_selection_label = QLabel(
@@ -337,17 +382,16 @@ class SilverBarManagementUiBuilder(HostProxy):
         self._splitter.addWidget(left_widget)
         self._splitter.addWidget(center_widget)
         self._splitter.addWidget(right_widget)
-        self._splitter.setSizes([546, 128, 546])
+        self._splitter.setSizes([530, 154, 530])
         main_layout.addWidget(self._splitter, 1)
 
         self.bottom_status_strip = BottomStatusStrip(self.host)
         self.bottom_status_strip.set_left_items(
             [
-                "F2: Item Search",
-                "Ins: Add Row",
-                "Del: Delete Row",
-                "Ctrl+S: Save",
-                "F9: Print",
+                "Double-click: Transfer selected bar",
+                "Ctrl+N: New list",
+                "Ctrl+P: Print list",
+                "Delete: Remove from list",
             ]
         )
         main_layout.addWidget(self.bottom_status_strip)

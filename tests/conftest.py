@@ -70,45 +70,22 @@ class _CredentialStoreStub:
     """In-memory stand-in for secure credential storage."""
 
     _store = {}
-    _legacy_keys = {
-        "main": "security/password_hash",
-        "backup": "security/backup_hash",
-    }
 
     @classmethod
     def reset(cls):
         cls._store = {}
 
     @classmethod
-    def _legacy_key(cls, kind: str) -> str:
-        return cls._legacy_keys[kind]
+    def get_password_hash(cls, kind):
+        return cls._store.get(kind)
 
     @classmethod
-    def get_password_hash(cls, kind, *, settings=None, logger=None):
-        value = cls._store.get(kind)
-        if value is not None:
-            return value
-        if settings is None:
-            return None
-        legacy_key = cls._legacy_key(kind)
-        legacy_value = settings.value(legacy_key)
-        if legacy_value is not None:
-            cls._store[kind] = legacy_value
-            settings.remove(legacy_key)
-            return legacy_value
-        return None
-
-    @classmethod
-    def set_password_hash(cls, kind, value, *, settings=None, logger=None):
+    def set_password_hash(cls, kind, value, *, logger=None):
         cls._store[kind] = value
-        if settings is not None:
-            settings.remove(cls._legacy_key(kind))
 
     @classmethod
-    def delete_password_hash(cls, kind, *, settings=None, logger=None):
+    def delete_password_hash(cls, kind, *, logger=None):
         cls._store.pop(kind, None)
-        if settings is not None:
-            settings.remove(cls._legacy_key(kind))
 
 
 @pytest.fixture(scope="session")

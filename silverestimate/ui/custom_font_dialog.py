@@ -97,7 +97,7 @@ class CustomFontDialog(QDialog):
         self.preview_label = QLabel(
             "Estimate 100\n"
             "RING001  Gold Ring      9.500    8.702\n"
-            "Grand Total                         Rs 2,375",
+            "Grand Total                         ₹ 2,375",
             self,
         )
         self.preview_label.setObjectName("CustomFontSampleText")

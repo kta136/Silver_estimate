@@ -952,7 +952,7 @@ def test_apply_refreshed_live_rate_updates_label_and_status(workflow_host):
     assert host.status_calls[-1] == ("Live rate refreshed.", 2000)
 
     controller._apply_refreshed_live_rate("not-a-number")
-    assert host.live_rate_value_label.text() == "N/A"
+    assert host.live_rate_value_label.text() == "Unavailable"
     assert host.status_calls[-1] == ("Live rate unavailable.", 3000)
 
 

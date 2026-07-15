@@ -36,18 +36,6 @@ class SilverBarManagementFacade:
             "_load_controller", "_schedule_available_reload", *args, **kwargs
         )
 
-    def _next_load_request_id(self, *args: Any, **kwargs: Any) -> int:
-        return int(
-            self._facade_call(
-                "_load_controller", "_next_load_request_id", *args, **kwargs
-            )
-        )
-
-    def _is_latest_load(self, *args: Any, **kwargs: Any) -> bool:
-        return bool(
-            self._facade_call("_load_controller", "_is_latest_load", *args, **kwargs)
-        )
-
     def _start_bars_load(self, *args: Any, **kwargs: Any) -> Any:
         return self._facade_call(
             "_load_controller", "_start_bars_load", *args, **kwargs

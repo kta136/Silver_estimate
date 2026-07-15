@@ -31,10 +31,12 @@ from silverestimate.infrastructure.latest_request_runner import (
 )
 from silverestimate.infrastructure.sqlite_worker import cancellable_sqlite_connection
 from silverestimate.persistence.estimates_repository import fetch_estimate_history_page
+from silverestimate.ui.display_formatting import format_display_date, format_rupees
 from silverestimate.ui.models import EstimateHistoryRow, EstimateHistoryTableModel
 from silverestimate.ui.modern_components import (
     BottomStatusStrip,
     DetailsStrip,
+    install_table_empty_state,
     polish_dense_table,
 )
 
@@ -169,7 +171,7 @@ class EstimateHistoryDialog(QDialog):
                 }
                 QTableView {
                     color: __TEXT_STRONG__;
-                    font-size: 8.8pt;
+                    font-size: 9.5pt;
                     alternate-background-color: __SURFACE_BG__;
                 }
                 QTableView::item {
@@ -220,6 +222,7 @@ class EstimateHistoryDialog(QDialog):
         filter_layout.addWidget(from_label)
         self.date_from = ThemedDateEdit()
         self.date_from.setCalendarPopup(True)
+        self.date_from.setDisplayFormat("dd/MM/yyyy")
         first_estimate_date = self._resolve_first_estimate_date()
         self.date_from.setDate(first_estimate_date)
         self.date_from.setMinimumWidth(124)
@@ -231,6 +234,7 @@ class EstimateHistoryDialog(QDialog):
         filter_layout.addWidget(to_label)
         self.date_to = ThemedDateEdit()
         self.date_to.setCalendarPopup(True)
+        self.date_to.setDisplayFormat("dd/MM/yyyy")
         self.date_to.setDate(QDate.currentDate())
         self.date_to.setMinimumWidth(124)
         self.date_to.setMaximumWidth(138)
@@ -274,13 +278,13 @@ class EstimateHistoryDialog(QDialog):
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         header.setStretchLastSection(False)
         self.estimates_table.setColumnWidth(0, 92)
-        self.estimates_table.setColumnWidth(1, 96)
-        self.estimates_table.setColumnWidth(3, 98)
+        self.estimates_table.setColumnWidth(1, 104)
+        self.estimates_table.setColumnWidth(3, 112)
         self.estimates_table.setColumnWidth(4, 94)
         self.estimates_table.setColumnWidth(5, 94)
         self.estimates_table.setColumnWidth(6, 94)
-        self.estimates_table.setColumnWidth(7, 104)
-        self.estimates_table.setColumnWidth(8, 128)
+        self.estimates_table.setColumnWidth(7, 118)
+        self.estimates_table.setColumnWidth(8, 142)
 
         # Table properties
         self.estimates_table.setEditTriggers(
@@ -312,6 +316,10 @@ class EstimateHistoryDialog(QDialog):
             )
 
         layout.addWidget(self.estimates_table, 1)
+        self._empty_state_overlay = install_table_empty_state(
+            self.estimates_table,
+            "No estimates match this date range or voucher filter.",
+        )
 
         self.selected_details_strip = DetailsStrip("Selected Estimate", self)
         self.selected_details_strip.setObjectName("HistoryDetailsStrip")
@@ -584,14 +592,11 @@ class EstimateHistoryDialog(QDialog):
         strip.set_items(
             [
                 ("Voucher No", payload.voucher_no),
-                ("Date", payload.date),
+                ("Date", format_display_date(payload.date)),
                 ("Note", payload.note or "-"),
-                ("Silver Rate", f"{payload.silver_rate:,.2f}"),
-                ("Total Gross", f"{payload.total_gross:.3f}"),
-                ("Total Net", f"{payload.total_net:.3f}"),
                 ("Net Fine", f"{payload.net_fine:.3f}"),
-                ("Net Wage", f"{payload.net_wage:,.2f}"),
-                ("Grand Total", f"{payload.grand_total:,.2f}"),
+                ("Net Wage", format_rupees(payload.net_wage)),
+                ("Grand Total", format_rupees(payload.grand_total)),
             ]
         )
         self._update_bottom_status()

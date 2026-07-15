@@ -50,7 +50,6 @@ from .theme_tokens import (
     HEADER_BG,
     HEADER_TEXT,
     INPUT_BORDER,
-    PRIMARY_BG,
     SELECTION_BG,
     SURFACE_BG,
     TEXT_MUTED,
@@ -193,11 +192,26 @@ class SettingsDialog(QDialog):
                 QLabel#SettingsGrandTotalPreview {{
                     background-color: {SURFACE_BG};
                     border: 1px solid {CARD_BORDER};
-                    border-top: 24px solid {PRIMARY_BG};
                     border-radius: 8px;
                     color: {TEXT_STRONG};
                     font-weight: 700;
                     padding: 8px 10px;
+                }}
+                QLabel#SettingsFeedbackLabel {{
+                    border-radius: 6px;
+                    color: {TEXT_STRONG};
+                    font-weight: 600;
+                    padding: 6px 10px;
+                }}
+                QLabel#SettingsFeedbackLabel[state="dirty"] {{
+                    background-color: #fff7ed;
+                    border: 1px solid #fdba74;
+                    color: #9a3412;
+                }}
+                QLabel#SettingsFeedbackLabel[state="saved"] {{
+                    background-color: #ecfdf5;
+                    border: 1px solid #bbf7d0;
+                    color: #166534;
                 }}
                 """,
             )
@@ -354,6 +368,10 @@ class SettingsDialog(QDialog):
         content.addWidget(page_card, 1)
 
         layout.addLayout(content)
+        self.settings_feedback_label = QLabel("")
+        self.settings_feedback_label.setObjectName("SettingsFeedbackLabel")
+        self.settings_feedback_label.setVisible(False)
+        layout.addWidget(self.settings_feedback_label)
         layout.addWidget(self.buttonBox)  # Use self.buttonBox here
         self.setLayout(layout)
         self._resize_to_available_screen()
@@ -433,7 +451,7 @@ class SettingsDialog(QDialog):
         form_layout.addRow("Print Font:", font_layout)
 
         # Live font sample
-        self.print_font_sample = QLabel("RING001  Gold Ring    9.500 g    Rs 2,375")
+        self.print_font_sample = QLabel("RING001  Gold Ring    9.500 g    ₹ 2,375")
         self.print_font_sample.setToolTip(
             "Live preview of selected print font\nShows estimate-like text as it will appear in printouts\nUpdates automatically when font changes"
         )
@@ -514,9 +532,6 @@ class SettingsDialog(QDialog):
         title.setObjectName("SettingsPreviewTitle")
         preview_layout.addWidget(title)
 
-        preview_row = QHBoxLayout()
-        preview_row.setSpacing(12)
-
         table = QTableWidget(5, 6, preview)
         table.setObjectName("SettingsPreviewTable")
         table.setHorizontalHeaderLabels(
@@ -540,26 +555,26 @@ class SettingsDialog(QDialog):
         table.verticalHeader().setVisible(False)
         table.verticalHeader().setDefaultSectionSize(24)
         table.horizontalHeader().setFixedHeight(28)
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        table.horizontalHeader().setMinimumSectionSize(68)
+        table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.ResizeToContents
+        )
+        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
-        table.setMaximumHeight(178)
-        preview_row.addWidget(table, 3)
+        table.setFixedHeight(154)
+        preview_layout.addWidget(table)
 
         grand_total = QLabel(
-            "Grand Total        Rs 1,440,170.88\n\n"
-            "Net Fine Wt:      19.058\n"
-            "Net Wage:         6,094.00\n\n"
-            "Totals\n"
-            "Total Gross Wt:   335.000\n"
-            "Total Poly Wt:    16.760"
+            "Grand Total  ₹ 14,40,170.88    ·    Net Fine Wt  19.058    ·    "
+            "Net Wage  ₹ 6,094.00\n"
+            "Totals: Gross Wt  335.000    ·    Poly Wt  16.760"
         )
         grand_total.setObjectName("SettingsGrandTotalPreview")
-        grand_total.setMinimumWidth(260)
+        grand_total.setWordWrap(True)
         grand_total.setAlignment(Qt.AlignmentFlag.AlignTop)
-        preview_row.addWidget(grand_total, 1)
-
-        preview_layout.addLayout(preview_row)
+        grand_total.setMinimumHeight(58)
+        preview_layout.addWidget(grand_total)
         return preview
 
     def _create_live_rates_tab(self):
@@ -567,9 +582,6 @@ class SettingsDialog(QDialog):
         page = LiveRatesSettingsPage(self.settings, self)
         page.changed.connect(self._mark_dirty)
         self._live_rates_page = page
-        # Compatibility aliases for callers that customize the controls.
-        self.live_enabled_checkbox = page.live_enabled_checkbox
-        self.live_enable_checkbox = page.automatic_checkbox
         return page
 
     def _create_print_tab(self):
@@ -1224,6 +1236,11 @@ class SettingsDialog(QDialog):
                 False
             )
             self._dirty = False
+            self.settings_feedback_label.setText("Settings applied and saved.")
+            self.settings_feedback_label.setProperty("state", "saved")
+            self.settings_feedback_label.setVisible(True)
+            self.settings_feedback_label.style().unpolish(self.settings_feedback_label)
+            self.settings_feedback_label.style().polish(self.settings_feedback_label)
             return True
         except Exception as e:
             QMessageBox.critical(
@@ -1234,6 +1251,9 @@ class SettingsDialog(QDialog):
             self.buttonBox.button(QDialogButtonBox.StandardButton.Apply).setEnabled(
                 True
             )
+            self.settings_feedback_label.setText("Settings could not be applied.")
+            self.settings_feedback_label.setProperty("state", "dirty")
+            self.settings_feedback_label.setVisible(True)
             return False
 
     def _handle_password_change(self):
@@ -1246,9 +1266,7 @@ class SettingsDialog(QDialog):
 
         logger = logging.getLogger(__name__)
         try:
-            stored_main_hash = credential_store.get_password_hash(
-                "main", settings=self.settings, logger=logger
-            )
+            stored_main_hash = credential_store.get_password_hash("main")
         except CredentialStoreError as exc:
             logger.error(
                 "Secure credential store unavailable during password change: %s",
@@ -1330,10 +1348,10 @@ class SettingsDialog(QDialog):
         # 6. Persist new hashes in secure store
         try:
             credential_store.set_password_hash(
-                "main", new_main_hash, settings=self.settings, logger=logger
+                "main", new_main_hash, logger=logger
             )
             credential_store.set_password_hash(
-                "backup", new_secondary_hash, settings=self.settings, logger=logger
+                "backup", new_secondary_hash, logger=logger
             )
 
             QMessageBox.information(self, "Success", "Passwords changed successfully.")
@@ -1470,6 +1488,13 @@ class SettingsDialog(QDialog):
         """Enable Apply button when any setting changes."""
         # Record dirty state even if buttonBox not yet constructed
         self._dirty = True
+        feedback = getattr(self, "settings_feedback_label", None)
+        if feedback is not None:
+            feedback.setText("Unsaved settings changes")
+            feedback.setProperty("state", "dirty")
+            feedback.setVisible(True)
+            feedback.style().unpolish(feedback)
+            feedback.style().polish(feedback)
         try:
             btn = self.buttonBox.button(QDialogButtonBox.StandardButton.Apply)
             if btn:
@@ -1477,10 +1502,6 @@ class SettingsDialog(QDialog):
         except AttributeError:
             # buttonBox not available yet during early construction; will enable later
             pass
-
-    def _refresh_printer_list(self):
-        """Populate the default printer combo with available printers."""
-        self._print_settings_controller.refresh_printer_list(self.printer_combo)
 
     def _restore_defaults(self):
         """Restore sensible default settings for this dialog and update the UI."""

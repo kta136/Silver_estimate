@@ -17,13 +17,7 @@ from silverestimate.ui.print_page_settings import (
     serialize_margins,
 )
 from silverestimate.ui.print_page_settings import (
-    PRINT_ORIENTATION_MIGRATION_KEY as PRINT_ORIENTATION_MIGRATION_KEY,
-)
-from silverestimate.ui.print_page_settings import (
     SUPPORTED_ORIENTATIONS as SUPPORTED_ORIENTATIONS,
-)
-from silverestimate.ui.print_page_settings import (
-    SUPPORTED_PAGE_SIZES as SUPPORTED_PAGE_SIZES,
 )
 
 LOGGER = logging.getLogger(__name__)

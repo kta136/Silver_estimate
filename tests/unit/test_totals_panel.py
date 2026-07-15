@@ -141,6 +141,38 @@ def test_set_totals_with_zero_values(panel):
     assert panel.grand_total_label.text() == "₹ 0"
 
 
+def test_optional_return_and_silver_bar_sections_only_show_when_used(panel):
+    assert panel._category_visibility["return"] is False
+    assert panel._category_visibility["silver_bar"] is False
+
+    totals = TotalsResult(
+        overall_gross=10.0,
+        overall_poly=0.0,
+        regular=CategoryTotals(gross=10.0, net=9.0, fine=8.0),
+        returns=CategoryTotals(gross=1.0, net=0.9, fine=0.8),
+        silver_bars=CategoryTotals(gross=2.0, net=1.9, fine=1.8),
+        net_fine_core=8.0,
+        net_wage_core=0.0,
+        net_value_core=0.0,
+        net_fine=8.0,
+        net_wage=0.0,
+        net_value=0.0,
+        grand_total=0.0,
+        silver_rate=0.0,
+        last_balance_silver=0.0,
+        last_balance_amount=0.0,
+    )
+    panel.set_totals(totals)
+
+    assert panel._category_visibility["return"] is True
+    assert panel._category_visibility["silver_bar"] is True
+
+    panel.clear_totals()
+
+    assert panel._category_visibility["return"] is False
+    assert panel._category_visibility["silver_bar"] is False
+
+
 def test_decimal_formatting(panel):
     """Test that decimal values are formatted correctly."""
     totals = TotalsResult(

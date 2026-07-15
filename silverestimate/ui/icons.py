@@ -238,6 +238,22 @@ _ICON_SPECS: Final[dict[str, IconSpec]] = {
         "mdi6.weight",
         fallback=QStyle.StandardPixmap.SP_DriveHDIcon,
     ),
+    "move_right": IconSpec(
+        "mdi6.arrow-right-bold",
+        fallback=QStyle.StandardPixmap.SP_ArrowRight,
+    ),
+    "move_left": IconSpec(
+        "mdi6.arrow-left-bold",
+        fallback=QStyle.StandardPixmap.SP_ArrowLeft,
+    ),
+    "move_all_right": IconSpec(
+        "mdi6.page-last",
+        fallback=QStyle.StandardPixmap.SP_MediaSkipForward,
+    ),
+    "move_all_left": IconSpec(
+        "mdi6.page-first",
+        fallback=QStyle.StandardPixmap.SP_MediaSkipBackward,
+    ),
     "reset_layout": IconSpec(
         "mdi6.table-column-width",
         fallback=QStyle.StandardPixmap.SP_DialogResetButton,

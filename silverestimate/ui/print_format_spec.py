@@ -38,14 +38,6 @@ ESTIMATE_FORMAT_SPECS: Mapping[str, PrintFormatSpec] = {
     "new": PrintFormatSpec("new", "estimate", False, "Courier New", 7.0, 1.0),
     "thermal": PrintFormatSpec("thermal", "estimate", False, "Courier New", 7.0, 1.0),
 }
-SILVER_BAR_INVENTORY_SPEC = PrintFormatSpec(
-    "inventory", "silver_bar_inventory", True, "Arial", 8.0, 1.1
-)
-SILVER_BAR_LIST_SPEC = PrintFormatSpec(
-    "list", "silver_bar_list", True, "Arial", 8.0, 1.1
-)
-
-
 def build_estimate_strategies(
     *,
     render_old: Callable[[object], str],
@@ -66,7 +58,5 @@ __all__ = [
     "FunctionRendererStrategy",
     "PrintFormatSpec",
     "PrintRendererStrategy",
-    "SILVER_BAR_INVENTORY_SPEC",
-    "SILVER_BAR_LIST_SPEC",
     "build_estimate_strategies",
 ]

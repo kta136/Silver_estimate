@@ -8,7 +8,7 @@ import tempfile
 from typing import Callable
 
 from PyQt6.QtCore import QEvent, QObject, QSize, Qt
-from PyQt6.QtGui import QAction, QActionGroup, QPageLayout, QPageSize
+from PyQt6.QtGui import QAction, QActionGroup, QPageLayout
 from PyQt6.QtPrintSupport import (
     QPageSetupDialog,
     QPrintDialog,
@@ -21,17 +21,19 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QMessageBox,
     QSizePolicy,
     QToolBar,
+    QToolButton,
     QWidget,
+    QWidgetAction,
 )
 
 from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.ui.icons import get_icon
 from silverestimate.ui.print_page_settings import (
     copy_printer_page_layout,
-    page_size_label,
     save_printer_page_settings,
     validate_quick_print_printer,
 )
@@ -47,6 +49,7 @@ from silverestimate.ui.theme_tokens import (
     TEXT_STRONG,
 )
 from silverestimate.ui.themed_controls import ThemedComboBox, ThemedSpinBox
+from silverestimate.ui.window_sizing import resize_to_available_screen
 
 LOGGER = logging.getLogger(__name__)
 
@@ -137,6 +140,12 @@ class PrintPreviewController:
         except Exception as exc:
             LOGGER.warning("Could not augment preview toolbar: %s", exc, exc_info=True)
 
+        resize_to_available_screen(
+            preview,
+            preferred_width=1280,
+            preferred_height=820,
+            margin=24,
+        )
         preview.showMaximized()
         preview.exec()
         self._save_preview_zoom(preview_widget)
@@ -212,10 +221,6 @@ class PrintPreviewController:
         if self._persist_estimate_layout is not None:
             self._persist_estimate_layout(layout_mode)
 
-    @staticmethod
-    def _page_size_label(page_size: QPageSize) -> str:
-        return page_size_label(page_size)
-
     def _augment_preview_toolbar(
         self,
         preview: QPrintPreviewDialog,
@@ -283,8 +288,8 @@ class PrintPreviewController:
             }}
             QComboBox#PreviewOrientationCombo,
             QComboBox#PreviewLayoutCombo {{
-                min-width: 128px;
-                max-width: 150px;
+                min-width: 90px;
+                max-width: 100px;
                 min-height: 28px;
             }}
             QSpinBox#PreviewPageSpin {{
@@ -322,15 +327,20 @@ class PrintPreviewController:
             preview,
         )
         act_sel_prn.setToolTip("Choose a printer and keep it for this session")
+        act_sel_prn.setPriority(QAction.Priority.LowPriority)
         act_sel_prn.triggered.connect(lambda: self._choose_printer(preview))
-        toolbar.addAction(act_sel_prn)
 
         act_page = QAction(
             get_icon("page_setup", widget=preview), "Page Setup", preview
         )
         act_page.setToolTip("Choose page size, margins, and paper setup")
+        act_page.setPriority(QAction.Priority.LowPriority)
         act_page.triggered.connect(lambda: self._page_setup_and_refresh(preview))
-        toolbar.addAction(act_page)
+
+        more_menu = QMenu("More preview actions", preview)
+        more_menu.setObjectName("PreviewMoreMenu")
+        more_menu.addAction(act_sel_prn)
+        more_menu.addAction(act_page)
 
         orientation_combo = self._build_orientation_combo(preview)
         toolbar.addWidget(orientation_combo)
@@ -349,8 +359,8 @@ class PrintPreviewController:
         toolbar.addSeparator()
 
         if preview_widget:
-            self._add_view_mode_actions(toolbar, preview_widget, preview)
-            toolbar.addSeparator()
+            more_menu.addSeparator()
+            self._add_view_mode_actions(more_menu, preview_widget, preview)
 
             act_fitw = QAction(
                 get_icon("fit_width", widget=preview),
@@ -358,6 +368,8 @@ class PrintPreviewController:
                 preview,
             )
             act_fitw.setShortcut("Ctrl+W")
+            act_fitw.setToolTip("Fit the page width to the preview (Ctrl+W)")
+            act_fitw.setPriority(QAction.Priority.LowPriority)
             act_fitw.triggered.connect(lambda: self._fit_width(preview_widget))
             toolbar.addAction(act_fitw)
 
@@ -367,6 +379,8 @@ class PrintPreviewController:
                 preview,
             )
             act_fitp.setShortcut("Ctrl+F")
+            act_fitp.setToolTip("Fit the whole page in the preview (Ctrl+F)")
+            act_fitp.setPriority(QAction.Priority.LowPriority)
             act_fitp.triggered.connect(lambda: self._fit_page(preview_widget))
             toolbar.addAction(act_fitp)
 
@@ -376,6 +390,8 @@ class PrintPreviewController:
                 preview,
             )
             act_zo.setShortcut("Ctrl+-")
+            act_zo.setToolTip("Zoom out (Ctrl+-)")
+            act_zo.setPriority(QAction.Priority.LowPriority)
             act_zo.triggered.connect(lambda: self._zoom_out(preview_widget))
             toolbar.addAction(act_zo)
 
@@ -385,6 +401,8 @@ class PrintPreviewController:
                 preview,
             )
             act_zi.setShortcut("Ctrl++")
+            act_zi.setToolTip("Zoom in (Ctrl++)")
+            act_zi.setPriority(QAction.Priority.LowPriority)
             act_zi.triggered.connect(lambda: self._zoom_in(preview_widget))
             toolbar.addAction(act_zi)
 
@@ -403,8 +421,10 @@ class PrintPreviewController:
             )
             act_first.setToolTip("Go to first page (Home)")
             act_first.setShortcut("Home")
+            act_first.setPriority(QAction.Priority.LowPriority)
             act_first.triggered.connect(lambda: preview_widget.setCurrentPage(1))
-            toolbar.addAction(act_first)
+            more_menu.addSeparator()
+            more_menu.addAction(act_first)
 
             act_prev = QAction(
                 get_icon("page_previous", widget=preview),
@@ -413,18 +433,21 @@ class PrintPreviewController:
             )
             act_prev.setToolTip("Go to previous page (PgUp)")
             act_prev.setShortcut("PgUp")
+            act_prev.setPriority(QAction.Priority.LowPriority)
             act_prev.triggered.connect(
                 lambda: preview_widget.setCurrentPage(
                     max(1, preview_widget.currentPage() - 1)
                 )
             )
-            toolbar.addAction(act_prev)
+            more_menu.addAction(act_prev)
 
             page_spin, total_label = self._build_page_navigation_widget(
                 preview,
                 preview_widget,
             )
-            toolbar.addWidget(page_spin.parentWidget())
+            page_navigation_action = QWidgetAction(more_menu)
+            page_navigation_action.setDefaultWidget(page_spin.parentWidget())
+            more_menu.addAction(page_navigation_action)
 
             act_next = QAction(
                 get_icon("page_next", widget=preview),
@@ -433,8 +456,9 @@ class PrintPreviewController:
             )
             act_next.setToolTip("Go to next page (PgDown)")
             act_next.setShortcut("PgDown")
+            act_next.setPriority(QAction.Priority.LowPriority)
             act_next.triggered.connect(lambda: self._go_next_page(preview_widget))
-            toolbar.addAction(act_next)
+            more_menu.addAction(act_next)
 
             act_last = QAction(
                 get_icon("page_last", widget=preview),
@@ -443,8 +467,9 @@ class PrintPreviewController:
             )
             act_last.setToolTip("Go to last page (End)")
             act_last.setShortcut("End")
+            act_last.setPriority(QAction.Priority.LowPriority)
             act_last.triggered.connect(lambda: self._go_last_page(preview_widget))
-            toolbar.addAction(act_last)
+            more_menu.addAction(act_last)
 
             def update_page_info() -> None:
                 try:
@@ -468,15 +493,25 @@ class PrintPreviewController:
                 LOGGER.debug("Failed to hook previewChanged signal: %s", exc)
             update_page_info()
 
-        toolbar.addSeparator()
+        more_menu.addSeparator()
         act_close = QAction(get_icon("close", widget=preview), "Close", preview)
         act_close.setToolTip("Close print preview")
         act_close.triggered.connect(preview.close)
-        toolbar.addAction(act_close)
+        more_menu.addAction(act_close)
+
+        more_button = QToolButton(preview)
+        more_button.setObjectName("PreviewMoreButton")
+        more_button.setText("More")
+        more_button.setIcon(get_icon("settings", widget=preview))
+        more_button.setToolTip("Printer, page view, navigation, and close actions")
+        more_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        more_button.setMenu(more_menu)
+        more_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        toolbar.addWidget(more_button)
 
     def _add_view_mode_actions(
         self,
-        toolbar: QToolBar,
+        target: QToolBar | QMenu,
         preview_widget: QPrintPreviewWidget,
         preview: QPrintPreviewDialog,
     ) -> None:
@@ -503,6 +538,8 @@ class PrintPreviewController:
         ):
             action = QAction(get_icon(icon_name, widget=preview), text, preview)
             action.setCheckable(True)
+            action.setPriority(QAction.Priority.LowPriority)
+            action.setToolTip(text)
             action.triggered.connect(
                 lambda checked=False, view_mode=mode: self._set_view_mode(
                     preview_widget,
@@ -510,7 +547,7 @@ class PrintPreviewController:
                 )
             )
             group.addAction(action)
-            toolbar.addAction(action)
+            target.addAction(action)
             view_actions.append((action, mode))
 
         def sync_view_actions() -> None:
@@ -532,8 +569,8 @@ class PrintPreviewController:
     def _build_orientation_combo(self, preview: QPrintPreviewDialog) -> ThemedComboBox:
         combo = ThemedComboBox(preview)
         combo.setObjectName("PreviewOrientationCombo")
-        combo.setMinimumWidth(128)
-        combo.setMaximumWidth(150)
+        combo.setMinimumWidth(90)
+        combo.setMaximumWidth(100)
         combo.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         combo.setToolTip("Choose paper orientation for this preview")
         combo.addItem("Portrait", QPageLayout.Orientation.Portrait)
@@ -553,8 +590,8 @@ class PrintPreviewController:
     ) -> ThemedComboBox:
         combo = ThemedComboBox(preview)
         combo.setObjectName("PreviewLayoutCombo")
-        combo.setMinimumWidth(128)
-        combo.setMaximumWidth(150)
+        combo.setMinimumWidth(90)
+        combo.setMaximumWidth(100)
         combo.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         combo.setToolTip("Switch the estimate print layout without leaving preview")
         for layout_mode in payload.available_layouts:

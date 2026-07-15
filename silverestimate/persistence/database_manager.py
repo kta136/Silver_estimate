@@ -3,7 +3,6 @@ import logging
 import os
 import shutil
 import sqlite3
-from typing import Optional
 
 from silverestimate.infrastructure import settings as settings_module
 from silverestimate.infrastructure.db_session import ConnectionThreadGuard
@@ -29,24 +28,6 @@ from silverestimate.security.encrypted_envelope import (
 
 # Constants
 KDF_ITERATIONS = crypto_utils.DEFAULT_KDF_ITERATIONS  # PBKDF2 iteration count
-
-
-class _TempDatabaseStore(TempDatabaseStore):
-    """Compatibility wrapper keeping tests and call sites stable."""
-
-    def __init__(
-        self,
-        *,
-        logger: Optional[logging.Logger] = None,
-        store_metadata: bool = True,
-        encrypted_db_path: str | None = None,
-    ) -> None:
-        super().__init__(
-            logger=logger,
-            store_metadata=store_metadata,
-            encrypted_db_path=encrypted_db_path,
-            settings_factory=get_app_settings,
-        )
 
 
 class DatabaseManager(DatabaseRepositoryFacadeMixin):
@@ -130,10 +111,11 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
 
         recovery_enabled = getattr(settings_module, "ENABLE_TEMP_DB_RECOVERY", False)
         self._recovery_enabled = recovery_enabled
-        self._temp_store = _TempDatabaseStore(
+        self._temp_store = TempDatabaseStore(
             logger=self.logger,
             store_metadata=recovery_enabled,
             encrypted_db_path=self.encrypted_db_path,
+            settings_factory=get_app_settings,
         )
         self._startup = DatabaseStartupCoordinator(
             temp_store=self._temp_store,
@@ -366,14 +348,6 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
             column_name,
         )
 
-    def _is_column_unique(self, table_name, column_name):
-        """Check if a column has a UNIQUE constraint via PK or unique index."""
-        return self._sqlite_runtime.is_column_unique(
-            self.cursor,
-            table_name,
-            column_name,
-        )
-
     def _check_schema_version(self):
         """Check if the database has the schema version table and current version."""
         return self._sqlite_runtime.check_schema_version(self.conn, self.cursor)
@@ -467,13 +441,6 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
                 )
 
     # --- Startup Recovery Utilities ---
-    def _snapshot_temp_db_copy(self):
-        """Create a consistent snapshot of the temp DB using SQLite backup API.
-
-        Returns path to the snapshot file, or None if backup failed.
-        """
-        return self._encrypted_store.snapshot_copy(self.temp_db_path)
-
     def _checkpoint_wal(self):
         """Force a WAL checkpoint so the main DB file contains latest data.
 

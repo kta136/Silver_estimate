@@ -54,7 +54,6 @@ def run_authentication(
     logger.debug("[perf] startup.auth_dialog_prepare_start t_unix=%.6f", time.time())
     login_dialog_cls = _resolve_login_dialog()
 
-    settings = get_app_settings()
     backend_status = credential_store.get_backend_status()
     if not backend_status.available:
         logger.critical(
@@ -73,12 +72,8 @@ def run_authentication(
         )
         return None
     try:
-        password_hash = credential_store.get_password_hash(
-            "main", settings=settings, logger=logger
-        )
-        backup_hash = credential_store.get_password_hash(
-            "backup", settings=settings, logger=logger
-        )
+        password_hash = credential_store.get_password_hash("main")
+        backup_hash = credential_store.get_password_hash("backup")
     except CredentialStoreError as exc:
         logger.critical("Secure credential storage unavailable: %s", exc, exc_info=True)
         QMessageBox.critical(
@@ -145,7 +140,7 @@ def run_authentication(
             )
 
     if logger:
-        logger.info("Password hashes not found in settings. Starting first-time setup.")
+        logger.info("Password hashes not found in secure store. Starting first-time setup.")
     logger.debug(
         "[perf] startup.auth_dialog_shown_ms=%.2f t_unix=%.6f mode=setup",
         (time.perf_counter() - flow_started_at) * 1000.0,
@@ -167,10 +162,10 @@ def run_authentication(
             return None
         try:
             credential_store.set_password_hash(
-                "main", hashed_password, settings=settings, logger=logger
+                "main", hashed_password, logger=logger
             )
             credential_store.set_password_hash(
-                "backup", hashed_backup, settings=settings, logger=logger
+                "backup", hashed_backup, logger=logger
             )
         except CredentialStoreError as exc:
             logger.critical(
@@ -240,7 +235,6 @@ def perform_data_wipe(
                 cred_logger = None if silent else logger
                 credential_store.delete_password_hash(
                     kind,
-                    settings=settings,
                     logger=cred_logger,
                 )
             except CredentialStoreError:

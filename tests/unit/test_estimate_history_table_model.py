@@ -27,10 +27,11 @@ def test_estimate_history_table_model_formats_display_values():
         == "Voucher No"
     )
     assert model.data(model.index(0, 0), Qt.ItemDataRole.DisplayRole) == "V001"
-    assert model.data(model.index(0, 3), Qt.ItemDataRole.DisplayRole) == "75,950.50"
+    assert model.data(model.index(0, 1), Qt.ItemDataRole.DisplayRole) == "01/03/2026"
+    assert model.data(model.index(0, 3), Qt.ItemDataRole.DisplayRole) == "₹ 75,950.50"
     assert model.data(model.index(0, 4), Qt.ItemDataRole.DisplayRole) == "2.750"
-    assert model.data(model.index(0, 8), Qt.ItemDataRole.DisplayRole) == "12,325.12"
-    assert model.data(model.index(0, 8), Qt.ItemDataRole.ToolTipRole) == "12,325.12"
+    assert model.data(model.index(0, 8), Qt.ItemDataRole.DisplayRole) == "₹ 12,325.12"
+    assert model.data(model.index(0, 8), Qt.ItemDataRole.ToolTipRole) == "₹ 12,325.12"
     assert model.data(model.index(0, 8), Qt.ItemDataRole.TextAlignmentRole) == (
         Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
     )

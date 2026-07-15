@@ -270,6 +270,7 @@ def _submit_next_login_dialog(
         dialog.password_input.setText(password)
         if dialog.is_setup:
             assert recovery_password is not None
+            dialog.confirm_main_password_input.setText(password)
             dialog.backup_password_input.setText(recovery_password)
             dialog.confirm_password_input.setText(recovery_password)
         capture(dialog, screenshot_name)

@@ -15,7 +15,7 @@ SELECTION_BORDER = "#60a5fa"
 HEADER_BG = "#f8fafc"
 HEADER_TEXT = "#334155"
 TEXT_STRONG = "#0f172a"
-TEXT_MUTED = "#64748b"
+TEXT_MUTED = "#526176"
 FIELD_TEXT = "#475569"
 FOCUS_RING = "#2563eb"
 SUCCESS_BG = "#ecfdf5"
@@ -29,8 +29,8 @@ INFO_BORDER = "#bfdbfe"
 INFO_TEXT = "#1d4ed8"
 RADIUS_SM = "6px"
 RADIUS_MD = "8px"
-DENSE_ROW_HEIGHT = 26
-DENSE_HEADER_HEIGHT = 28
+DENSE_ROW_HEIGHT = 28
+DENSE_HEADER_HEIGHT = 30
 
 
 def apply_theme_tokens(stylesheet: str) -> str:

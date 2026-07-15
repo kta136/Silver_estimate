@@ -123,7 +123,6 @@ class SilverBarTableController(HostProxy):
                 self._restore_selected_bar_ids(table, selected_bar_ids)
 
             loaded_count_getter = getattr(model, "loaded_count", None)
-            total_count_getter = getattr(model, "total_count", None)
             total_weight_getter = getattr(model, "total_weight", None)
             total_fine_getter = getattr(model, "total_fine_weight", None)
 
@@ -138,18 +137,8 @@ class SilverBarTableController(HostProxy):
             total_fine_weight = (
                 float(total_fine_getter()) if callable(total_fine_getter) else 0.0
             )
-            effective_total_rows = (
-                int(total_count_getter())
-                if callable(total_count_getter)
-                else total_rows
-            )
-
-            loaded_text = f"{bar_count}"
-            if isinstance(effective_total_rows, int) and effective_total_rows >= 0:
-                loaded_text = f"{bar_count}/{effective_total_rows}"
             totals_text = (
-                f"Bars: {bar_count} | Total Weight: {total_weight:.3f} g | "
-                f"Total Fine Wt: {total_fine_weight:.3f} g | Loaded: {loaded_text}"
+                f"Total: {total_weight:.3f} g  ·  Fine: {total_fine_weight:.3f} g"
             )
             if table == self.available_bars_table:
                 self.available_totals_label.setText(f"Available {totals_text}")

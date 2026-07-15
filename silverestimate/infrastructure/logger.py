@@ -30,25 +30,10 @@ def _coerce_bool_setting(value, default):
 
 
 def _read_error_logging_enabled(settings):
-    enabled_value = settings.value("logging/enable_critical", None)
-    if enabled_value is not None:
-        return _coerce_bool_setting(enabled_value, True)
-
-    legacy_value = settings.value("logging/enable_error", None)
-    if legacy_value is None:
-        return True
-
-    enabled = _coerce_bool_setting(legacy_value, True)
-    try:
-        settings.setValue("logging/enable_critical", enabled)
-        settings.remove("logging/enable_error")
-        settings.sync()
-    except Exception:
-        logging.getLogger(__name__).debug(
-            "Failed to migrate legacy logging setting to logging/enable_critical",
-            exc_info=True,
-        )
-    return enabled
+    return _coerce_bool_setting(
+        settings.value("logging/enable_critical", True),
+        True,
+    )
 
 
 def setup_logging(

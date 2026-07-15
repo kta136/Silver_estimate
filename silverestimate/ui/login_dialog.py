@@ -41,6 +41,8 @@ class LoginDialog(QDialog):
     Dialog for user authentication (login) and initial password setup.
     """
 
+    MIN_PASSWORD_LENGTH = 8
+
     def __init__(self, is_setup=False, parent=None):
         super().__init__(parent)
         self.is_setup = is_setup
@@ -71,7 +73,15 @@ class LoginDialog(QDialog):
                 }
                 QLabel#LoginHelpLabel {
                     color: __TEXT_MUTED__;
-                    font-size: 8.3pt;
+                    font-size: 9pt;
+                }
+                QLabel#LoginRequirementsLabel {
+                    background-color: __HEADER_BG__;
+                    border: 1px solid __CARD_BORDER_SOFT__;
+                    border-radius: 8px;
+                    color: __FIELD_TEXT__;
+                    font-size: 9pt;
+                    padding: 7px 9px;
                 }
                 QCheckBox#LoginShowPasswords {
                     color: __FIELD_TEXT__;
@@ -102,8 +112,9 @@ class LoginDialog(QDialog):
                     min-width: 84px;
                 }
                 QPushButton#LoginForgotButton {
-                    color: __TEXT_MUTED__;
-                    font-size: 8.3pt;
+                    color: __PRIMARY_BG__;
+                    font-size: 9pt;
+                    font-weight: 600;
                     text-align: left;
                     border: none;
                     padding: 0;
@@ -194,6 +205,28 @@ class LoginDialog(QDialog):
         panel_layout.addWidget(self.password_input)
 
         if self.is_setup:
+            self.confirm_main_password_label = QLabel("Confirm Main Password:")
+            self.confirm_main_password_label.setObjectName("LoginFieldLabel")
+            self.confirm_main_password_input = QLineEdit()
+            self.confirm_main_password_input.setEchoMode(QLineEdit.EchoMode.Password)
+            self.confirm_main_password_input.setClearButtonEnabled(True)
+            self.confirm_main_password_input.setPlaceholderText(
+                "Re-enter the main password"
+            )
+            self.confirm_main_password_input.setToolTip(
+                "Re-enter the main password exactly to prevent setup lockout"
+            )
+            panel_layout.addWidget(self.confirm_main_password_label)
+            panel_layout.addWidget(self.confirm_main_password_input)
+
+            self.password_requirements_label = QLabel(
+                "Use at least 8 characters for each password. Keep the two "
+                "passwords different and store the recovery password safely."
+            )
+            self.password_requirements_label.setObjectName("LoginRequirementsLabel")
+            self.password_requirements_label.setWordWrap(True)
+            panel_layout.addWidget(self.password_requirements_label)
+
             self.password_help_label = QLabel(
                 "Use two different passwords. The main password opens the database; "
                 "the recovery password is for emergency access."
@@ -228,14 +261,16 @@ class LoginDialog(QDialog):
             panel_layout.addWidget(self.confirm_password_label)
             panel_layout.addWidget(self.confirm_password_input)
 
-        self.show_passwords_checkbox = QCheckBox("Show passwords")
+        self.show_passwords_checkbox = QCheckBox(
+            "Show passwords" if self.is_setup else "Show password"
+        )
         self.show_passwords_checkbox.setObjectName("LoginShowPasswords")
         panel_layout.addWidget(self.show_passwords_checkbox)
 
         button_layout = QHBoxLayout()
         button_layout.setSpacing(10)
         self.ok_button = QPushButton(
-            "Login" if not self.is_setup else "Create Passwords"
+            "Sign In" if not self.is_setup else "Create Passwords"
         )
         self.ok_button.setObjectName("LoginPrimaryButton")
         self.ok_button.setDefault(True)
@@ -263,6 +298,8 @@ class LoginDialog(QDialog):
         if not self.is_setup:
             forgot_link = QPushButton("Forgot password?")
             forgot_link.setObjectName("LoginForgotButton")
+            forgot_link.setCursor(Qt.CursorShape.PointingHandCursor)
+            forgot_link.setAccessibleName("Show password recovery options")
             forgot_link.setFlat(True)
             panel_layout.addWidget(forgot_link)
 
@@ -314,6 +351,7 @@ class LoginDialog(QDialog):
         # Optionally connect returnPressed for convenience
         self.password_input.returnPressed.connect(self._handle_ok)
         if self.is_setup:
+            self.confirm_main_password_input.returnPressed.connect(self._handle_ok)
             self.backup_password_input.returnPressed.connect(self._handle_ok)
             self.confirm_password_input.returnPressed.connect(self._handle_ok)
 
@@ -342,9 +380,43 @@ class LoginDialog(QDialog):
         mode = QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password
         fields = [self.password_input]
         if self.is_setup:
-            fields.extend([self.backup_password_input, self.confirm_password_input])
+            fields.extend(
+                [
+                    self.confirm_main_password_input,
+                    self.backup_password_input,
+                    self.confirm_password_input,
+                ]
+            )
         for field in fields:
             field.setEchoMode(mode)
+
+    def _setup_validation_error(
+        self,
+        password: str,
+        confirm_main: str,
+        backup_password: str,
+        confirm_backup: str,
+    ) -> str | None:
+        error: str | None = None
+        if len(password) < self.MIN_PASSWORD_LENGTH:
+            error = (
+                f"Main password must contain at least {self.MIN_PASSWORD_LENGTH} "
+                "characters."
+            )
+        elif password != confirm_main:
+            error = "Main passwords do not match."
+        elif not backup_password:
+            error = "Recovery password cannot be empty."
+        elif len(backup_password) < self.MIN_PASSWORD_LENGTH:
+            error = (
+                f"Recovery password must contain at least {self.MIN_PASSWORD_LENGTH} "
+                "characters."
+            )
+        elif password == backup_password:
+            error = "Main and Recovery Passwords must be different."
+        elif backup_password != confirm_backup:
+            error = "Recovery passwords do not match."
+        return error
 
     def _handle_ok(self):
         """Handle the OK/Login/Create button click."""
@@ -357,25 +429,17 @@ class LoginDialog(QDialog):
             return
 
         if self.is_setup:
+            confirm_main = self.confirm_main_password_input.text()
             backup_password = self.backup_password_input.text()
             confirm_backup = self.confirm_password_input.text()
-
-            if not backup_password:
-                QMessageBox.warning(
-                    self, "Input Error", "Recovery password cannot be empty."
-                )
-                return
-            if password == backup_password:
-                QMessageBox.warning(
-                    self,
-                    "Input Error",
-                    "Main and Recovery Passwords must be different.",
-                )
-                return
-            if backup_password != confirm_backup:
-                QMessageBox.warning(
-                    self, "Input Error", "Recovery passwords do not match."
-                )
+            validation_error = self._setup_validation_error(
+                password,
+                confirm_main,
+                backup_password,
+                confirm_backup,
+            )
+            if validation_error:
+                QMessageBox.warning(self, "Input Error", validation_error)
                 return
 
             # Store passwords internally for retrieval after accept()

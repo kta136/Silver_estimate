@@ -38,6 +38,7 @@ from silverestimate.ui.models import (
 from silverestimate.ui.modern_components import (
     BottomStatusStrip,
     DetailsStrip,
+    install_table_empty_state,
     polish_dense_table,
 )
 from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
@@ -240,7 +241,7 @@ class SilverBarHistoryDialog(QDialog):
         self.status_combo.currentTextChanged.connect(self._schedule_search)
         filters_row.addWidget(self.status_combo)
 
-        limit_label = QLabel("Max")
+        limit_label = QLabel("Rows")
         limit_label.setObjectName("SilverBarHistoryFieldLabel")
         filters_row.addWidget(limit_label)
         self.max_rows_spin = ThemedSpinBox()
@@ -248,17 +249,17 @@ class SilverBarHistoryDialog(QDialog):
         self.max_rows_spin.setSingleStep(100)
         self.max_rows_spin.setMinimumWidth(116)
         self.max_rows_spin.setMaximumWidth(132)
-        default_limit = 1000
+        default_limit = 500
         try:
             default_limit = get_app_settings().value(
-                "silver_bar/history_max_rows", defaultValue=1000, type=int
+                "silver_bar/history_max_rows", defaultValue=500, type=int
             )
         except Exception as exc:
             self.logger.debug(
                 "Could not read persisted history max rows setting: %s", exc
             )
-        self.max_rows_spin.setValue(min(1000, max(100, int(default_limit or 1000))))
-        self.max_rows_spin.setSuffix(" / page")
+        self.max_rows_spin.setValue(min(1000, max(100, int(default_limit or 500))))
+        self.max_rows_spin.setSuffix(" max")
         self.max_rows_spin.setToolTip(
             "Limit maximum rows loaded in history tables to keep UI responsive."
         )
@@ -308,6 +309,10 @@ class SilverBarHistoryDialog(QDialog):
             show_grid=False,
             hide_vertical_header=True,
         )
+        install_table_empty_state(
+            self.bars_table,
+            "No silver bars match the current filters.",
+        )
         selection_model = self.bars_table.selectionModel()
         if selection_model is not None:
             selection_model.selectionChanged.connect(
@@ -322,11 +327,6 @@ class SilverBarHistoryDialog(QDialog):
 
         self.selected_bar_details = DetailsStrip("Selected Bar Details", self)
         layout.addWidget(self.selected_bar_details)
-
-        # Summary label
-        self.bars_summary = QLabel("Total Bars: 0")
-        self.bars_summary.setObjectName("SilverBarHistorySummaryLabel")
-        layout.addWidget(self.bars_summary)
 
         paging_row = QHBoxLayout()
         paging_row.addStretch()
@@ -389,6 +389,10 @@ class SilverBarHistoryDialog(QDialog):
             show_grid=False,
             hide_vertical_header=True,
         )
+        install_table_empty_state(
+            self.lists_table,
+            "No issued silver-bar lists are available.",
+        )
 
         # Context menu for lists table
         self.lists_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -441,6 +445,10 @@ class SilverBarHistoryDialog(QDialog):
             header_height=30,
             show_grid=False,
             hide_vertical_header=True,
+        )
+        install_table_empty_state(
+            self.list_bars_table,
+            "Select an issued list to view its bars.",
         )
 
         layout.addWidget(self.list_bars_table)
@@ -628,11 +636,8 @@ class SilverBarHistoryDialog(QDialog):
             for bar in list(bars_data or [])
         ]
         self.bars_model.set_rows(normalized_rows)
-        self.bars_summary.setText(
-            f"Loaded Bars: {len(normalized_rows)} of {self._bars_total}"
-        )
         self.load_more_button.setVisible(self._bars_cursor is not None)
-        self._last_refreshed_text = datetime.now().strftime("%d-%m-%Y %I:%M %p")
+        self._last_refreshed_text = datetime.now().strftime("%d/%m/%Y %I:%M %p")
         if normalized_rows:
             self.bars_table.clearSelection()
             self.bars_table.selectRow(0)
@@ -778,7 +783,6 @@ class SilverBarHistoryDialog(QDialog):
                     ("Status", "-"),
                     ("List", "-"),
                     ("Date Added", "-"),
-                    ("List Status", "-"),
                 ]
             )
             self._update_bars_bottom_status()
@@ -794,7 +798,6 @@ class SilverBarHistoryDialog(QDialog):
                 ("Status", self._table_cell_text(self.bars_table, row, 5)),
                 ("List", self._table_cell_text(self.bars_table, row, 6)),
                 ("Date Added", self._table_cell_text(self.bars_table, row, 7)),
-                ("List Status", self._table_cell_text(self.bars_table, row, 8)),
             ]
         )
         self._update_bars_bottom_status()
@@ -807,10 +810,8 @@ class SilverBarHistoryDialog(QDialog):
         selection_model = self.bars_table.selectionModel()
         selected = len(selection_model.selectedRows()) if selection_model else 0
         refreshed = getattr(self, "_last_refreshed_text", "-")
-        strip.set_left_items(
-            [f"Loaded Bars: {total} (max {self._table_result_limit()})"]
-        )
-        strip.set_right_items([f"Selected: {selected}", f"Last Refreshed: {refreshed}"])
+        strip.set_left_items([f"Loaded: {total} of {self._bars_total} bars"])
+        strip.set_right_items([f"Selected: {selected}", f"Refreshed: {refreshed}"])
 
     def show_bars_context_menu(self, pos):
         """Show context menu for bars table."""

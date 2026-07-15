@@ -176,39 +176,12 @@ def test_settings_dialog_uses_defaults_for_invalid_print_settings(
         dialog.deleteLater()
 
 
-def test_settings_dialog_migrates_legacy_portrait_orientation_default(
+def test_settings_dialog_preserves_portrait_orientation(
     qt_app, monkeypatch, settings_stub
 ):
     del qt_app, settings_stub
     settings = get_app_settings()
     settings.setValue("print/orientation", "Portrait")
-
-    monkeypatch.setattr(
-        "silverestimate.ui.settings_print_controller.QPrinterInfo.availablePrinters",
-        lambda: [],
-    )
-
-    estimate_widget = types.SimpleNamespace(
-        apply_table_font_size=lambda size: True,
-        apply_breakdown_font_size=lambda size: True,
-        apply_final_calc_font_size=lambda size: True,
-        apply_totals_position=lambda value: True,
-    )
-    dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
-    try:
-        assert dialog.orientation_combo.currentText() == "Landscape"
-        assert settings.value("print/orientation") == "Landscape"
-    finally:
-        dialog.deleteLater()
-
-
-def test_settings_dialog_preserves_explicit_portrait_orientation(
-    qt_app, monkeypatch, settings_stub
-):
-    del qt_app, settings_stub
-    settings = get_app_settings()
-    settings.setValue("print/orientation", "Portrait")
-    settings.setValue("print/orientation_explicit", True)
 
     monkeypatch.setattr(
         "silverestimate.ui.settings_print_controller.QPrinterInfo.availablePrinters",

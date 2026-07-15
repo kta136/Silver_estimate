@@ -162,6 +162,10 @@ class TotalsPanel(QWidget):
         super().__init__(parent)
         self._layout_mode = (layout_mode or "horizontal").strip().lower()
         self._section_order = list(self._DEFAULT_SECTION_ORDER)
+        self._category_visibility = {
+            "return": False,
+            "silver_bar": False,
+        }
         self._suspend_section_order_signals = False
         self._sidebar_size_sync_timer = QTimer(self)
         self._sidebar_size_sync_timer.setSingleShot(True)
@@ -622,6 +626,8 @@ class TotalsPanel(QWidget):
                 item.setFlags(item_flags)
                 self._summary_sections_list.addItem(item)
                 self._summary_sections_list.setItemWidget(item, card)
+                if section_key in self._category_visibility:
+                    item.setHidden(not self._category_visibility[section_key])
         finally:
             self._suspend_section_order_signals = False
         self._restore_display_state(snapshot)
@@ -698,6 +704,30 @@ class TotalsPanel(QWidget):
 
     # Public methods for updating totals
 
+    def _set_category_visibility(self, section_key: str, visible: bool) -> None:
+        if section_key not in self._category_visibility:
+            return
+        self._category_visibility[section_key] = bool(visible)
+        if self._layout_mode != "sidebar" or not hasattr(
+            self, "_summary_sections_list"
+        ):
+            return
+        for index in range(self._summary_sections_list.count()):
+            item = self._summary_sections_list.item(index)
+            if item is None:
+                continue
+            if item.data(Qt.ItemDataRole.UserRole) == section_key:
+                item.setHidden(not visible)
+                break
+        self._schedule_sidebar_item_size_sync()
+
+    @staticmethod
+    def _category_has_value(category) -> bool:
+        return any(
+            abs(float(getattr(category, field, 0.0) or 0.0)) > 0.000001
+            for field in ("gross", "net", "fine")
+        )
+
     @staticmethod
     def _format_weight(value: float) -> str:
         """Format weight values with two decimals."""
@@ -744,6 +774,13 @@ class TotalsPanel(QWidget):
         self.bar_net_label.setText(self._format_weight(totals.silver_bars.net))
         self.bar_fine_label.setText(self._format_weight(totals.silver_bars.fine))
 
+        self._set_category_visibility(
+            "return", self._category_has_value(totals.returns)
+        )
+        self._set_category_visibility(
+            "silver_bar", self._category_has_value(totals.silver_bars)
+        )
+
         # Final calculations
         self.net_fine_label.setText(self._format_weight(totals.net_fine))
         self.net_wage_label.setText(self._format_whole(totals.net_wage))
@@ -775,6 +812,8 @@ class TotalsPanel(QWidget):
         self.net_fine_label.setText("0.0")
         self.net_wage_label.setText(self._format_whole(0))
         self.grand_total_label.setText(self._format_currency(0))
+        self._set_category_visibility("return", False)
+        self._set_category_visibility("silver_bar", False)
         self._schedule_sidebar_item_size_sync()
 
     # Font size methods for EstimateLogic compatibility

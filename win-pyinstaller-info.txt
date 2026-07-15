@@ -1,3 +1,0 @@
-pyinstaller=6.15.0
-file=C:\Users\kk\AppData\Local\Programs\Python\Python313\Lib\site-packages\PyInstaller\__init__.py
-exe=C:\Users\kk\AppData\Local\Programs\Python\Python313\python.exe

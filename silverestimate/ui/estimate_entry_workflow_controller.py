@@ -689,6 +689,10 @@ class EstimateEntryWorkflowController(HostProxy):
         button = getattr(self, "refresh_rate_button", None)
         if button is not None:
             button.setEnabled(False)
+        if hasattr(self, "live_rate_value_label"):
+            self.live_rate_value_label.setText("Refreshing…")
+        if hasattr(self, "live_rate_meta_label"):
+            self.live_rate_meta_label.setText("Updating")
         self._status("Refreshing live silver rate...", 2000)
         live_rate_controller = getattr(self.main_window, "live_rate_controller", None)
         if live_rate_controller is not None:
@@ -734,15 +738,21 @@ class EstimateEntryWorkflowController(HostProxy):
                 gram_rate = None
             if gram_rate is None:
                 if hasattr(self, "live_rate_value_label"):
-                    self.live_rate_value_label.setText("N/A")
+                    self.live_rate_value_label.setText("Unavailable")
+                if hasattr(self, "live_rate_meta_label"):
+                    self.live_rate_meta_label.setText("Retry")
                 self._status("Live rate unavailable.", 3000)
                 return
             if hasattr(self, "live_rate_value_label"):
                 self.live_rate_value_label.setText(f"₹ {gram_rate:.2f} /g")
+            if hasattr(self, "live_rate_meta_label"):
+                self.live_rate_meta_label.setText("Updated")
             self._status("Live rate refreshed.", 2000)
             return
         if hasattr(self, "live_rate_value_label"):
-            self.live_rate_value_label.setText("N/A")
+            self.live_rate_value_label.setText("Unavailable")
+        if hasattr(self, "live_rate_meta_label"):
+            self.live_rate_meta_label.setText("Retry")
         self._status("Live rate unavailable.", 3000)
 
     def _handle_silver_rate_changed(self, *_):

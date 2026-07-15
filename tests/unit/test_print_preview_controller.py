@@ -3,7 +3,14 @@ from pathlib import Path
 from PyQt6.QtCore import QSizeF
 from PyQt6.QtGui import QPageLayout, QPageSize
 from PyQt6.QtPrintSupport import QPrinter, QPrintPreviewDialog, QPrintPreviewWidget
-from PyQt6.QtWidgets import QFileDialog, QMessageBox, QToolBar, QWidget
+from PyQt6.QtWidgets import (
+    QFileDialog,
+    QMenu,
+    QMessageBox,
+    QToolBar,
+    QToolButton,
+    QWidget,
+)
 
 from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.ui.print_payload_builder import PrintPreviewPayload
@@ -53,7 +60,7 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
     assert not toolbar.isMovable()
     assert not toolbar.isFloatable()
     assert toolbar.iconSize().width() == 22
-    assert toolbar.findChild(QWidget, "PreviewPageNavigator") is not None
+    assert preview.findChild(QWidget, "PreviewPageNavigator") is not None
 
     action_texts = [action.text() for action in toolbar.actions() if action.text()]
 
@@ -73,28 +80,39 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
     assert "Show facing pages" not in action_texts
     assert "Show overview of all pages" not in action_texts
 
-    expected_action_order = [
+    expected_toolbar_actions = [
         "Print",
         "Export PDF",
+        "Fit Width",
+        "Fit Page",
+        "Zoom Out",
+        "Zoom In",
+    ]
+    assert action_texts == expected_toolbar_actions
+
+    more_button = toolbar.findChild(QToolButton, "PreviewMoreButton")
+    assert more_button is not None
+    more_menu = more_button.menu()
+    assert isinstance(more_menu, QMenu)
+    menu_action_texts = [
+        action.text() for action in more_menu.actions() if action.text()
+    ]
+    expected_menu_actions = [
         "Printer Setup",
         "Page Setup",
         "Single Page",
         "Facing Pages",
         "All Pages",
-        "Fit Width",
-        "Fit Page",
-        "Zoom Out",
-        "Zoom In",
         "First",
         "Prev",
         "Next",
         "Last",
         "Close",
     ]
-    assert action_texts == expected_action_order
+    assert menu_action_texts == expected_menu_actions
 
-    for action in toolbar.actions():
-        if action.text() in set(expected_action_order):
+    for action in [*toolbar.actions(), *more_menu.actions()]:
+        if action.text() in set(expected_toolbar_actions + expected_menu_actions):
             assert not action.icon().isNull()
 
 
@@ -168,7 +186,6 @@ def test_preview_defaults_persist_updated_print_preferences(
     settings = get_app_settings()
     assert settings.value("print/default_printer") == "Warehouse Printer"
     assert settings.value("print/orientation") == "Portrait"
-    assert settings.value("print/orientation_explicit") is True
     assert settings.value("print/page_size") == "Legal"
     assert settings.value("print/page_size_name") == "Legal"
     assert settings.value("print/page_width_mm") == 215.9

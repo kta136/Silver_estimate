@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -78,10 +78,10 @@ class DetailsStrip(QFrame):
     def __init__(self, title: str = "", parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("DetailsStrip")
-        self.setMinimumHeight(58)
+        self.setMinimumHeight(64)
         self._layout = QHBoxLayout(self)
         self._layout.setContentsMargins(12, 8, 12, 8)
-        self._layout.setSpacing(16)
+        self._layout.setSpacing(12)
         self._title = title
         self.set_items([])
 
@@ -96,7 +96,7 @@ class DetailsStrip(QFrame):
         if self._title:
             title_label = QLabel(self._title)
             title_label.setObjectName("DetailsStripTitle")
-            title_label.setMinimumWidth(120)
+            title_label.setMinimumWidth(96)
             title_label.setSizePolicy(
                 QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred
             )
@@ -106,7 +106,7 @@ class DetailsStrip(QFrame):
             self._layout.addWidget(title_label)
         for label, value in items:
             group = QWidget(self)
-            group.setMinimumWidth(84)
+            group.setMinimumWidth(76)
             group.setSizePolicy(
                 QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Preferred
             )
@@ -117,7 +117,59 @@ class DetailsStrip(QFrame):
             label_widget.setObjectName("DetailsStripLabel")
             value_widget = QLabel(str(value))
             value_widget.setObjectName("DetailsStripValue")
+            value_widget.setToolTip(str(value))
             group_layout.addWidget(label_widget)
             group_layout.addWidget(value_widget)
             self._layout.addWidget(group)
         self._layout.addStretch(1)
+
+
+class TableEmptyStateOverlay(QLabel):
+    """Centered empty-state message that tracks a table model and viewport."""
+
+    def __init__(self, table: QTableView, text: str) -> None:
+        super().__init__(text, table.viewport())
+        self._table = table
+        self.setObjectName("TableEmptyStateOverlay")
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setWordWrap(True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        table.viewport().installEventFilter(self)
+
+        model = table.model()
+        if model is not None:
+            for signal_name in (
+                "modelReset",
+                "rowsInserted",
+                "rowsRemoved",
+                "layoutChanged",
+            ):
+                signal = getattr(model, signal_name, None)
+                if signal is not None:
+                    signal.connect(lambda *_: self.refresh())
+        self.refresh()
+
+    def eventFilter(self, watched, event) -> bool:
+        if watched is self._table.viewport() and event.type() in {
+            QEvent.Type.Resize,
+            QEvent.Type.Show,
+        }:
+            self._sync_geometry()
+        return super().eventFilter(watched, event)
+
+    def refresh(self) -> None:
+        model = self._table.model()
+        is_empty = model is None or model.rowCount() == 0
+        self.setVisible(is_empty)
+        if is_empty:
+            self._sync_geometry()
+            self.raise_()
+
+    def _sync_geometry(self) -> None:
+        self.setGeometry(self._table.viewport().rect().adjusted(24, 24, -24, -24))
+
+
+def install_table_empty_state(table: QTableView, text: str) -> TableEmptyStateOverlay:
+    """Install and return a model-aware empty-state overlay for ``table``."""
+
+    return TableEmptyStateOverlay(table, text)

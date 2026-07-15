@@ -2,7 +2,7 @@
 
 ## Authentication
 
-The main password authenticates and decrypts the database. The recovery password triggers the established data-wipe workflow. Password hashes use Argon2 and are stored in the operating-system keyring; legacy QSettings hashes migrate on successful access. Passwords and derived encryption keys are never persisted as plaintext.
+The main password authenticates and decrypts the database. The recovery password triggers the established data-wipe workflow. Password hashes use Argon2 and are stored in the operating-system keyring. Passwords and derived encryption keys are never persisted as plaintext.
 
 ## SILVDB01 encrypted envelope
 

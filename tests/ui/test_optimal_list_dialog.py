@@ -17,5 +17,8 @@ def test_optimal_list_dialog_accepts_valid_inputs(qtbot):
         assert dialog.max_target == 110.0
         assert dialog.list_name == "Target Batch"
         assert dialog.optimization_type == "max_bars"
+        assert dialog.range_summary_label.text() == (
+            "90.0–110.0 g fine · midpoint 100.0 g"
+        )
     finally:
         dialog.deleteLater()

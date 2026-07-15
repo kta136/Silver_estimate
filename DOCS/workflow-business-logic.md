@@ -61,7 +61,7 @@ Creation → In Stock → Assigned to List → [Sold/Melted/Returned to Stock]
 ### 4. Authentication and Security
 
 #### Login Flow
-1. Check secure credential store for existing password hashes (migrates legacy QSettings entries if present)
+1. Check the operating-system credential store for existing password hashes
 2. First run: Dual password setup
 3. Subsequent runs: Verify main password
 4. Secondary password triggers data wipe

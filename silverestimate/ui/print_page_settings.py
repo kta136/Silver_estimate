@@ -14,8 +14,6 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_PRINT_MARGINS = (10, 2, 10, 2)
 DEFAULT_PAGE_SIZE = "A4"
 DEFAULT_ORIENTATION = "Landscape"
-PRINT_ORIENTATION_MIGRATION_KEY = "print/orientation_explicit"
-SUPPORTED_PAGE_SIZES = ("A4", "A5", "Letter", "Legal", "Thermal 80mm")
 SUPPORTED_ORIENTATIONS = ("Portrait", "Landscape")
 THERMAL_PAGE_WIDTH_MM = 79.5
 THERMAL_PAGE_HEIGHT_MM = 200.0
@@ -115,7 +113,6 @@ def save_print_page_settings(settings, state: PrintPageSettings) -> None:
         else DEFAULT_ORIENTATION
     )
     settings.setValue("print/orientation", orientation)
-    settings.setValue(PRINT_ORIENTATION_MIGRATION_KEY, True)
 
 
 def apply_print_page_settings_to_printer(
@@ -150,7 +147,6 @@ def save_printer_page_settings(
 
     orientation = orientation_name(printer.pageLayout().orientation())
     settings.setValue("print/orientation", orientation)
-    settings.setValue(PRINT_ORIENTATION_MIGRATION_KEY, True)
 
     page_size = printer.pageLayout().pageSize()
     label = page_size_label(page_size)
@@ -215,20 +211,7 @@ def serialize_margins(margins: tuple[int, int, int, int]) -> str:
 
 def load_orientation(settings) -> str:
     raw_value = settings.value("print/orientation", None, type=str)
-    explicit = bool(
-        settings.value(
-            PRINT_ORIENTATION_MIGRATION_KEY,
-            False,
-            type=bool,
-        )
-    )
     if raw_value in SUPPORTED_ORIENTATIONS:
-        if raw_value == "Portrait" and not explicit:
-            LOGGER.info(
-                "Migrating legacy print orientation from Portrait to Landscape."
-            )
-            settings.setValue("print/orientation", DEFAULT_ORIENTATION)
-            return DEFAULT_ORIENTATION
         return str(raw_value)
     if raw_value is not None:
         LOGGER.warning(

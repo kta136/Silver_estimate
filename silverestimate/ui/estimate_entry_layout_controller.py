@@ -12,7 +12,6 @@ from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (
     QHBoxLayout,
     QMenu,
-    QPushButton,
     QSizePolicy,
     QSplitter,
     QToolButton,
@@ -86,26 +85,15 @@ class EstimateEntryLayoutController(HostProxy):
         )
         header_layout.addWidget(self.secondary_actions)
 
-        self.command_history_button = QPushButton("History")
-        self.command_history_button.setObjectName("EstimateHistoryButton")
-        self.command_history_button.setIcon(get_icon("history", widget=self.host))
-        self.command_history_button.setToolTip(
-            "View, load, or print past estimates (Ctrl+H)"
-        )
-        header_layout.addWidget(self.command_history_button)
-
-        self.command_settings_button = QPushButton("Settings")
-        self.command_settings_button.setObjectName("EstimateSettingsButton")
-        self.command_settings_button.setIcon(get_icon("settings", widget=self.host))
-        self.command_settings_button.setToolTip("Open application settings")
-        header_layout.addWidget(self.command_settings_button)
-
         self.estimate_tools_button = QToolButton()
         self.estimate_tools_button.setObjectName("EstimateToolsButton")
         self.estimate_tools_button.setText("Tools")
         self.estimate_tools_button.setIcon(get_icon("tools", widget=self.host))
         self.estimate_tools_button.setPopupMode(
             QToolButton.ToolButtonPopupMode.InstantPopup
+        )
+        self.estimate_tools_button.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
         )
         self.estimate_tools_button.setToolTip("Estimate row and silver-bar tools")
         self.estimate_tools_button.setMenu(self._build_estimate_tools_menu())
@@ -211,6 +199,18 @@ class EstimateEntryLayoutController(HostProxy):
 
     def _build_estimate_tools_menu(self) -> QMenu:
         menu = QMenu(self.host)
+
+        self.command_history_action = QAction(
+            get_icon("history", widget=self.host), "Estimate History", menu
+        )
+        self.command_history_action.setShortcut("Ctrl+H")
+        menu.addAction(self.command_history_action)
+
+        self.command_settings_action = QAction(
+            get_icon("settings", widget=self.host), "Application Settings", menu
+        )
+        menu.addAction(self.command_settings_action)
+        menu.addSeparator()
 
         delete_row = QAction(
             get_icon("delete_row", widget=self.host, color="#dc2626"),
@@ -381,8 +381,8 @@ class EstimateEntryLayoutController(HostProxy):
         self.secondary_actions.delete_estimate_clicked.connect(
             self.delete_current_estimate
         )
-        self.command_history_button.clicked.connect(self.show_history)
-        self.command_settings_button.clicked.connect(
+        self.command_history_action.triggered.connect(self.show_history)
+        self.command_settings_action.triggered.connect(
             self._show_settings_from_command_bar
         )
 

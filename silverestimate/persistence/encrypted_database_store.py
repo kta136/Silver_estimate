@@ -11,7 +11,7 @@ from contextlib import closing
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Optional, cast
+from typing import Callable, Optional, cast
 
 from cryptography.exceptions import InvalidTag
 
@@ -35,9 +35,6 @@ from silverestimate.security.encrypted_envelope import (
     read_envelope_metadata,
     write_envelope,
 )
-
-RateValue = int | float
-RateMetadata = dict[str, Any]
 
 
 class DecryptionOutcome(str, Enum):

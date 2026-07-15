@@ -99,7 +99,7 @@ class VoucherToolbar(QWidget):
         self.date_edit.setObjectName("EstimateDateEdit")
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDate(QDate.currentDate())
-        self.date_edit.setDisplayFormat("dd-MM-yyyy")
+        self.date_edit.setDisplayFormat("dd/MM/yyyy")
         self.date_edit.setMaximumWidth(126)
         self.date_edit.setToolTip("Estimate date")
         layout.addWidget(self.date_edit)
@@ -123,7 +123,8 @@ class VoucherToolbar(QWidget):
         self.note_edit = QLineEdit()
         self.note_edit.setObjectName("EstimateNoteEdit")
         self.note_edit.setPlaceholderText("Customer, instructions...")
-        self.note_edit.setToolTip("Optional notes")
+        self.note_edit.setMinimumWidth(240)
+        self.note_edit.setToolTip("Customer name or optional estimate instructions")
         layout.addWidget(self.note_edit, 1)
         layout.addWidget(self.status_message_label)
 

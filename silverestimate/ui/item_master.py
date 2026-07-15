@@ -28,7 +28,11 @@ from silverestimate.infrastructure.latest_request_runner import LatestRequestRun
 from silverestimate.infrastructure.sqlite_worker import cancellable_sqlite_connection
 from silverestimate.persistence.items_repository import fetch_item_catalog_page
 from silverestimate.ui.models import ItemMasterTableModel
-from silverestimate.ui.modern_components import BottomStatusStrip, polish_dense_table
+from silverestimate.ui.modern_components import (
+    BottomStatusStrip,
+    install_table_empty_state,
+    polish_dense_table,
+)
 from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
 from silverestimate.ui.themed_controls import ThemedComboBox
 
@@ -328,6 +332,10 @@ class ItemMasterWidget(QWidget):
         self.items_table.setColumnWidth(2, 95)
         self.items_table.setColumnWidth(3, 90)
         self.items_table.setColumnWidth(4, 110)
+        install_table_empty_state(
+            self.items_table,
+            "No catalog items match the current search.",
+        )
         selection_model = self.items_table.selectionModel()
         if selection_model:
             selection_model.selectionChanged.connect(lambda *_: self.on_item_selected())
@@ -348,11 +356,8 @@ class ItemMasterWidget(QWidget):
         self.bottom_status_strip = BottomStatusStrip(self)
         self.bottom_status_strip.set_left_items(
             [
-                "F2: Item Search",
-                "Ins: Add Row",
-                "Del: Delete Row",
-                "Ctrl+S: Save",
-                "F9: Print",
+                "Select a row to edit",
+                "Search by code or name",
             ]
         )
         outer.addWidget(self.bottom_status_strip)

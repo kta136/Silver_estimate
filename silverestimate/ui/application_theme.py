@@ -153,6 +153,13 @@ QProgressDialog QLabel {{
     color: {TEXT_STRONG};
 }}
 
+QLabel#TableEmptyStateOverlay {{
+    background-color: {SURFACE_BG};
+    color: {TEXT_MUTED};
+    font-size: 10pt;
+    padding: 18px;
+}}
+
 QFrame,
 QStackedWidget,
 QScrollArea,
@@ -733,7 +740,7 @@ def apply_light_application_theme(
     try:
         set_font = getattr(app, "setFont", None)
         if callable(set_font):
-            set_font(QFont("Segoe UI", 9))
+            set_font(QFont("Segoe UI", 10))
     except Exception as exc:
         if logger:
             logger.debug("Failed to apply light theme font: %s", exc)

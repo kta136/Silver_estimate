@@ -22,7 +22,7 @@ def test_custom_font_dialog_returns_selected_font(qtbot):
         selected = dialog.get_selected_font()
 
         assert selected.pointSize() == 12
-        assert getattr(selected, "float_size") == 11.5
+        assert selected.float_size == 11.5
         assert selected.bold() is True
     finally:
         dialog.deleteLater()

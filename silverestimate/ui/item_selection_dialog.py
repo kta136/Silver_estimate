@@ -269,15 +269,18 @@ class ItemSelectionDialog(QDialog):
         self.search_edit.selectAll()
 
     def eventFilter(self, watched, event):
-        if watched is self.search_edit and event.type() == QEvent.Type.KeyPress:
-            if event.key() == Qt.Key.Key_Down:
-                if self._filtered_items:
-                    target_row = self._current_row()
-                    if target_row < 0:
-                        target_row = 0
-                    self.items_table.setFocus()
-                    self._select_row(target_row)
-                    return True
+        if (
+            watched is self.search_edit
+            and event.type() == QEvent.Type.KeyPress
+            and event.key() == Qt.Key.Key_Down
+            and self._filtered_items
+        ):
+            target_row = self._current_row()
+            if target_row < 0:
+                target_row = 0
+            self.items_table.setFocus()
+            self._select_row(target_row)
+            return True
         return super().eventFilter(watched, event)
 
     def _clear_search(self) -> None:

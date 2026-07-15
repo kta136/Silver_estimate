@@ -1,7 +1,12 @@
 import sqlite3
+import threading
+import time
 from pathlib import Path
 
-from silverestimate.ui.silver_bar_management import _BarsLoadWorker
+from silverestimate.ui.silver_bar_load_controller import (
+    _BarsLoadRequest,
+    _load_bars_page,
+)
 
 
 def _seed_worker_db(path: Path) -> None:
@@ -49,13 +54,12 @@ def _seed_worker_db(path: Path) -> None:
 
 
 def test_available_worker_filters_unassigned_stock_only(qt_app, tmp_path):
+    del qt_app
     db_path = tmp_path / "bars.sqlite"
     _seed_worker_db(db_path)
 
-    events = {"ready": None, "error": None}
-    worker = _BarsLoadWorker(
+    request = _BarsLoadRequest(
         "available",
-        7,
         str(db_path),
         {
             "weight_query": None,
@@ -65,57 +69,34 @@ def test_available_worker_filters_unassigned_stock_only(qt_app, tmp_path):
             "date_range": None,
             "limit": 100,
         },
+        None,
+        False,
+        time.perf_counter(),
     )
-    worker.data_ready.connect(
-        lambda target, request_id, rows, total: events.__setitem__(
-            "ready", (target, request_id, rows, total)
-        )
-    )
-    worker.error.connect(
-        lambda target, request_id, message: events.__setitem__(
-            "error", (target, request_id, message)
-        )
-    )
+    returned_request, page = _load_bars_page(request, threading.Event())
 
-    worker.run()
-
-    assert events["error"] is None
-    target, request_id, rows, total = events["ready"]
-    assert target == "available"
-    assert request_id == 7
-    assert total == 1
-    assert [row["list_id"] for row in rows] == [None]
-    assert [row["status"] for row in rows] == ["In Stock"]
+    assert returned_request is request
+    assert page.total == 1
+    assert [row["list_id"] for row in page.items] == [None]
+    assert [row["status"] for row in page.items] == ["In Stock"]
 
 
-def test_list_worker_returns_limited_rows_and_total_count(qt_app, tmp_path):
+def test_list_worker_returns_keyset_page_and_total_count(qt_app, tmp_path):
+    del qt_app
     db_path = tmp_path / "bars.sqlite"
     _seed_worker_db(db_path)
 
-    events = {"ready": None, "error": None}
-    worker = _BarsLoadWorker(
+    request = _BarsLoadRequest(
         "list",
-        9,
         str(db_path),
         {"list_id": 1, "limit": 1, "offset": 0},
+        None,
+        False,
+        time.perf_counter(),
     )
-    worker.data_ready.connect(
-        lambda target, request_id, rows, total: events.__setitem__(
-            "ready", (target, request_id, rows, total)
-        )
-    )
-    worker.error.connect(
-        lambda target, request_id, message: events.__setitem__(
-            "error", (target, request_id, message)
-        )
-    )
+    returned_request, page = _load_bars_page(request, threading.Event())
 
-    worker.run()
-
-    assert events["error"] is None
-    target, request_id, rows, total = events["ready"]
-    assert target == "list"
-    assert request_id == 9
-    assert total == 2
-    assert len(rows) == 1
-    assert rows[0]["list_id"] == 1
+    assert returned_request is request
+    assert page.total == 2
+    assert len(page.items) == 2
+    assert all(row["list_id"] == 1 for row in page.items)

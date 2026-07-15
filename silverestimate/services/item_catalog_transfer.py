@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sqlite3
 from datetime import datetime, timezone
@@ -77,10 +78,8 @@ def load_item_catalog_rows_from_db_path(db_path: str) -> list[dict[str, Any]]:
         ) from exc
     finally:
         if conn is not None:
-            try:
+            with contextlib.suppress(Exception):
                 conn.close()
-            except Exception:
-                pass
 
 
 def import_item_catalog(

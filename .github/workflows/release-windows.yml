@@ -2,8 +2,7 @@ name: Release Windows
 
 on:
   push:
-    tags:
-      - 'v*'
+    tags: ["v*"]
 
 concurrency:
   group: release-${{ github.ref }}
@@ -13,51 +12,77 @@ permissions:
   contents: write
 
 jobs:
-  build-windows:
+  validate-build-publish:
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
+    env:
+      QT_QPA_PLATFORM: offscreen
+      SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+      SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
         with:
-          python-version: '3.14'
-          cache: 'pip'
+          enable-cache: true
+      - run: uv python install 3.14
+      - name: Sync frozen development environment
+        run: uv sync --frozen --extra dev
 
-      - name: Install dependencies
+      - name: Verify tag equals APP_VERSION
+        shell: pwsh
         run: |
-          python -m pip install --upgrade pip
-          pip install .
-          pip install pyinstaller
+          $version = uv run python -c "from silverestimate.infrastructure.app_constants import APP_VERSION; print(APP_VERSION)"
+          $expected = "v$($version.Trim())"
+          if ($expected -ne "${{ github.ref_name }}") {
+            throw "Release tag ${{ github.ref_name }} does not match APP_VERSION $expected"
+          }
+
+      - name: Quality, typing, and blocking security gates
+        shell: pwsh
+        run: |
+          uv run nox -s ruff
+          uv run nox -s mypy
+          uv run nox -s bandit
+      - name: Complete tests and performance gates
+        run: uv run nox -s tests_full
+      - name: Offscreen Qt startup smoke
+        run: uv run nox -s smoke_ui
 
       - name: Build executable from canonical spec
-        run: |
-          python -m PyInstaller --clean --noconfirm SilverEstimate.spec
+        run: uv run python -m PyInstaller --clean --noconfirm SilverEstimate.spec
 
-      - name: Rename executable with version and package artifact
+      - name: Optional Windows code-signing hook
+        if: ${{ env.SIGNING_CERTIFICATE_BASE64 != '' }}
+        continue-on-error: true
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          $tag = "${{ github.ref_name }}"
-          $exeSrc = "dist\SilverEstimate.exe"
-          if (!(Test-Path $exeSrc)) { throw 'Build did not produce dist\\SilverEstimate.exe' }
-          $exeDst = "dist\SilverEstimate-$tag.exe"
-          Move-Item -Force -Path $exeSrc -Destination $exeDst
-          $zipName = "SilverEstimate-$tag-win64.zip"
-          if (Test-Path $zipName) { Remove-Item -Force $zipName }
-          Compress-Archive -Path $exeDst -DestinationPath $zipName
+          $certificate = Join-Path $env:RUNNER_TEMP "silverestimate-signing.pfx"
+          [IO.File]::WriteAllBytes($certificate, [Convert]::FromBase64String($env:SIGNING_CERTIFICATE_BASE64))
+          & signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $certificate /p $env:SIGNING_CERTIFICATE_PASSWORD dist\SilverEstimate.exe
+          if ($LASTEXITCODE -ne 0) { throw "signtool failed with exit code $LASTEXITCODE" }
+          Remove-Item -LiteralPath $certificate -Force
 
-      - name: Generate release checksum
+      - name: Verify frozen artifact starts
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
+          $env:SILVER_SHOW_CONSOLE = "1"
+          & dist\SilverEstimate.exe --artifact-smoke
+          if ($LASTEXITCODE -ne 0) { throw "Frozen artifact startup failed" }
+
+      - name: Package artifact and generate SBOM/checksums
+        shell: pwsh
+        run: |
           $tag = "${{ github.ref_name }}"
-          $zipName = "SilverEstimate-$tag-win64.zip"
-          if (!(Test-Path $zipName)) { throw "Missing release archive: $zipName" }
-          $hash = (Get-FileHash -Path $zipName -Algorithm SHA256).Hash.ToLower()
-          "$hash  $zipName" | Set-Content -Path "$zipName.sha256" -NoNewline
+          $exe = "SilverEstimate-$tag.exe"
+          $zip = "SilverEstimate-$tag-win64.zip"
+          $sbom = "SilverEstimate-$tag.cdx.json"
+          Copy-Item -LiteralPath dist\SilverEstimate.exe -Destination $exe
+          Compress-Archive -LiteralPath $exe -DestinationPath $zip -Force
+          uv run cyclonedx-py environment --output-format JSON --output-file $sbom
+          foreach ($artifact in @($exe, $zip, $sbom)) {
+            $hash = (Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash.ToLower()
+            "$hash  $artifact" | Set-Content -LiteralPath "$artifact.sha256" -NoNewline
+          }
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -66,7 +91,9 @@ jobs:
           prerelease: false
           generate_release_notes: true
           files: |
+            SilverEstimate-${{ github.ref_name }}.exe
+            SilverEstimate-${{ github.ref_name }}.exe.sha256
             SilverEstimate-${{ github.ref_name }}-win64.zip
             SilverEstimate-${{ github.ref_name }}-win64.zip.sha256
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            SilverEstimate-${{ github.ref_name }}.cdx.json
+            SilverEstimate-${{ github.ref_name }}.cdx.json.sha256

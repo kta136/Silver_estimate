@@ -6,6 +6,8 @@ import logging
 import sqlite3
 from typing import TYPE_CHECKING
 
+CURRENT_SCHEMA_VERSION = 6
+
 if TYPE_CHECKING:  # pragma: no cover
     from silverestimate.persistence.database_manager import DatabaseManager
 
@@ -25,16 +27,19 @@ def run_schema_setup(db: "DatabaseManager") -> None:
         current_version = db._check_schema_version()
         logger.info("Current database schema version: %s", current_version)
 
-        conn.execute("BEGIN TRANSACTION")
+        conn.execute("BEGIN IMMEDIATE")
 
         _ensure_core_tables(db, current_version)
         _apply_versioned_migrations(db, current_version)
+        _ensure_indexes(db)
+        _validate_schema(db)
 
         conn.commit()
-        logger.info("Database schema setup/update complete.")
-
-        _ensure_indexes(db)
-    except sqlite3.Error as exc:  # pragma: no cover - bubbled up to caller
+        logger.info(
+            "Database schema setup/update complete at version %s.",
+            CURRENT_SCHEMA_VERSION,
+        )
+    except (sqlite3.Error, RuntimeError) as exc:  # pragma: no cover - bubbled up
         logger.critical("FATAL Database setup error: %s", exc, exc_info=True)
         conn.rollback()
         raise
@@ -151,8 +156,11 @@ def _apply_versioned_migrations(db: "DatabaseManager", current_version: int) -> 
     assert cursor is not None
     assert logger is not None
 
-    if current_version >= 5:
-        logger.debug("Schema version >= 5 detected; skipping legacy migration checks.")
+    if current_version >= CURRENT_SCHEMA_VERSION:
+        logger.debug(
+            "Schema version >= %s detected; skipping migration checks.",
+            CURRENT_SCHEMA_VERSION,
+        )
         return
 
     if current_version < 1:
@@ -189,7 +197,7 @@ def _apply_versioned_migrations(db: "DatabaseManager", current_version: int) -> 
                         f"ALTER TABLE bar_transfers ADD COLUMN {column} {definition}"
                     )
 
-        db._update_schema_version(1)
+        _stage_schema_version(db, 1)
 
     if current_version < 2:
         logger.info(
@@ -197,7 +205,7 @@ def _apply_versioned_migrations(db: "DatabaseManager", current_version: int) -> 
         )
         if not db._column_exists("silver_bar_lists", "issued_date"):
             cursor.execute("ALTER TABLE silver_bar_lists ADD COLUMN issued_date TEXT")
-        db._update_schema_version(2)
+        _stage_schema_version(db, 2)
     else:
         logger.info(
             "Silver bar schema is already at version 2 or higher. No migration needed."
@@ -215,7 +223,7 @@ def _apply_versioned_migrations(db: "DatabaseManager", current_version: int) -> 
             WHERE voucher_no GLOB '[0-9]*'
               AND voucher_no_int IS NULL
             """)
-        db._update_schema_version(3)
+        _stage_schema_version(db, 3)
 
     if current_version < 4:
         logger.info(
@@ -223,7 +231,7 @@ def _apply_versioned_migrations(db: "DatabaseManager", current_version: int) -> 
         )
         if not db._column_exists("estimate_items", "wage_type"):
             cursor.execute("ALTER TABLE estimate_items ADD COLUMN wage_type TEXT")
-        db._update_schema_version(4)
+        _stage_schema_version(db, 4)
 
     if current_version < 5:
         logger.info(
@@ -233,79 +241,192 @@ def _apply_versioned_migrations(db: "DatabaseManager", current_version: int) -> 
             cursor.execute("ALTER TABLE estimate_items ADD COLUMN line_key TEXT")
         if not db._column_exists("silver_bars", "source_line_key"):
             cursor.execute("ALTER TABLE silver_bars ADD COLUMN source_line_key TEXT")
-        db._update_schema_version(5)
+        _stage_schema_version(db, 5)
+
+    if current_version < 6:
+        logger.info(
+            "Performing schema migration to version 6: refreshing estimate summaries..."
+        )
+        cursor.execute(
+            """
+            UPDATE estimates
+            SET
+                total_gross = COALESCE(
+                    (
+                        SELECT SUM(ei.gross)
+                        FROM estimate_items ei
+                        WHERE ei.voucher_no = estimates.voucher_no
+                          AND COALESCE(ei.is_return, 0) = 0
+                          AND COALESCE(ei.is_silver_bar, 0) = 0
+                    ),
+                    0
+                ),
+                total_net = COALESCE(
+                    (
+                        SELECT SUM(ei.net_wt)
+                        FROM estimate_items ei
+                        WHERE ei.voucher_no = estimates.voucher_no
+                          AND COALESCE(ei.is_return, 0) = 0
+                          AND COALESCE(ei.is_silver_bar, 0) = 0
+                    ),
+                    0
+                )
+            """
+        )
+        _stage_schema_version(db, 6)
+
+
+def _stage_schema_version(db: "DatabaseManager", version: int) -> None:
+    if db._update_schema_version(version) is not True:
+        raise sqlite3.OperationalError(f"Failed to stage schema version {version}.")
 
 
 def _ensure_indexes(db: "DatabaseManager") -> None:
     cursor = db.cursor
     logger = db.logger
-    conn = db.conn
     assert cursor is not None
     assert logger is not None
-    assert conn is not None
 
-    try:
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_items_code ON items(code)")
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_items_code_nocase ON items(code COLLATE NOCASE)"
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_items_name_nocase ON items(name COLLATE NOCASE)"
-        )
-        try:
-            cursor.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS idx_items_code_upper ON items(UPPER(code))"
-            )
-        except sqlite3.Error:
-            pass
-
-        cursor.execute(
+    mandatory_indexes = {
+        "idx_items_code": "CREATE INDEX IF NOT EXISTS idx_items_code ON items(code)",
+        "idx_items_code_nocase": (
+            "CREATE INDEX IF NOT EXISTS idx_items_code_nocase "
+            "ON items(code COLLATE NOCASE)"
+        ),
+        "idx_items_name_nocase": (
+            "CREATE INDEX IF NOT EXISTS idx_items_name_nocase "
+            "ON items(name COLLATE NOCASE)"
+        ),
+        "idx_estimates_voucher": (
             "CREATE INDEX IF NOT EXISTS idx_estimates_voucher ON estimates(voucher_no)"
-        )
-        cursor.execute(
+        ),
+        "idx_estimates_date": (
             "CREATE INDEX IF NOT EXISTS idx_estimates_date ON estimates(date)"
-        )
-        cursor.execute(
+        ),
+        "idx_estimates_voucher_no_int": (
             "CREATE INDEX IF NOT EXISTS idx_estimates_voucher_no_int "
             "ON estimates(voucher_no_int DESC)"
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_estimate_items_voucher ON estimate_items(voucher_no)"
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_estimate_items_code ON estimate_items(item_code)"
-        )
-        cursor.execute(
+        ),
+        "idx_estimates_history_keyset": (
+            "CREATE INDEX IF NOT EXISTS idx_estimates_history_keyset "
+            "ON estimates(voucher_no_int DESC, voucher_no DESC)"
+        ),
+        "idx_estimate_items_voucher": (
+            "CREATE INDEX IF NOT EXISTS idx_estimate_items_voucher "
+            "ON estimate_items(voucher_no)"
+        ),
+        "idx_estimate_items_code": (
+            "CREATE INDEX IF NOT EXISTS idx_estimate_items_code "
+            "ON estimate_items(item_code)"
+        ),
+        "idx_estimate_items_voucher_line_key": (
             "CREATE INDEX IF NOT EXISTS idx_estimate_items_voucher_line_key "
             "ON estimate_items(voucher_no, line_key)"
-        )
-
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_sbars_voucher ON silver_bars(estimate_voucher_no)"
-        )
-        cursor.execute(
+        ),
+        "idx_sbars_voucher": (
+            "CREATE INDEX IF NOT EXISTS idx_sbars_voucher "
+            "ON silver_bars(estimate_voucher_no)"
+        ),
+        "idx_sbars_list": (
             "CREATE INDEX IF NOT EXISTS idx_sbars_list ON silver_bars(list_id)"
-        )
-        cursor.execute(
+        ),
+        "idx_sbars_status": (
             "CREATE INDEX IF NOT EXISTS idx_sbars_status ON silver_bars(status)"
-        )
-        cursor.execute(
+        ),
+        "idx_sbars_status_list_date_id": (
             "CREATE INDEX IF NOT EXISTS idx_sbars_status_list_date_id "
             "ON silver_bars(status, list_id, date_added DESC, bar_id DESC)"
-        )
-        cursor.execute(
+        ),
+        "idx_sbars_status_list_weight_date_id": (
+            "CREATE INDEX IF NOT EXISTS idx_sbars_status_list_weight_date_id "
+            "ON silver_bars(status, list_id, weight, date_added DESC, bar_id DESC)"
+        ),
+        "idx_sbars_date_added": (
             "CREATE INDEX IF NOT EXISTS idx_sbars_date_added ON silver_bars(date_added)"
-        )
-        cursor.execute(
+        ),
+        "idx_sbars_voucher_line_key": (
             "CREATE INDEX IF NOT EXISTS idx_sbars_voucher_line_key "
             "ON silver_bars(estimate_voucher_no, source_line_key)"
-        )
+        ),
+        "idx_sbar_lists_identifier": (
+            "CREATE INDEX IF NOT EXISTS idx_sbar_lists_identifier "
+            "ON silver_bar_lists(list_identifier)"
+        ),
+    }
+    failures: list[str] = []
+    for position, (name, statement) in enumerate(mandatory_indexes.items()):
+        savepoint = f"schema_index_{position}"
+        cursor.execute(f"SAVEPOINT {savepoint}")
+        try:
+            cursor.execute(statement)
+        except sqlite3.Error as exc:
+            cursor.execute(f"ROLLBACK TO {savepoint}")
+            failures.append(f"{name}: {exc}")
+        finally:
+            cursor.execute(f"RELEASE {savepoint}")
 
+    try:
         cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_sbar_lists_identifier ON silver_bar_lists(list_identifier)"
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_items_code_upper "
+            "ON items(UPPER(code))"
+        )
+    except sqlite3.Error as exc:
+        logger.warning(
+            "Optional case-insensitive item-code uniqueness index was skipped: %s",
+            exc,
         )
 
-        conn.commit()
-        logger.info("Database indexes ensured.")
-    except sqlite3.Error as exc:
-        logger.warning("Failed creating one or more indexes: %s", exc)
+    if failures:
+        raise sqlite3.OperationalError(
+            "Mandatory index creation failed: " + "; ".join(failures)
+        )
+    logger.info("Database indexes staged.")
+
+
+def _validate_schema(db: "DatabaseManager") -> None:
+    cursor = db.cursor
+    assert cursor is not None
+
+    required_columns = {
+        "items": {"code", "name", "purity", "wage_type", "wage_rate"},
+        "estimates": {
+            "voucher_no",
+            "voucher_no_int",
+            "date",
+            "total_gross",
+            "total_net",
+        },
+        "estimate_items": {"voucher_no", "wage_type", "line_key"},
+        "silver_bars": {
+            "bar_id",
+            "weight",
+            "status",
+            "list_id",
+            "source_line_key",
+        },
+        "silver_bar_lists": {"list_id", "list_identifier", "issued_date"},
+        "bar_transfers": {"id", "silver_bar_id"},
+    }
+    for table_name, expected in required_columns.items():
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        actual = {str(row["name"]) for row in cursor.fetchall()}
+        missing = expected - actual
+        if missing:
+            raise sqlite3.OperationalError(
+                f"Schema validation failed for {table_name}; missing {sorted(missing)}"
+            )
+
+    cursor.execute("SELECT MAX(version) FROM schema_version")
+    version_row = cursor.fetchone()
+    version = int(version_row[0]) if version_row and version_row[0] is not None else 0
+    if version != CURRENT_SCHEMA_VERSION:
+        raise sqlite3.OperationalError(
+            f"Expected schema version {CURRENT_SCHEMA_VERSION}, found {version}."
+        )
+
+    cursor.execute("PRAGMA foreign_key_check")
+    violations = cursor.fetchall()
+    if violations:
+        raise sqlite3.IntegrityError(
+            f"Foreign-key validation failed with {len(violations)} violation(s)."
+        )

@@ -39,6 +39,8 @@ def build_available_bars_queries(
     max_purity: Any = None,
     date_range: Any = None,
     limit: int | None = None,
+    after_date_added: str | None = None,
+    after_bar_id: int | None = None,
 ) -> PagedSqlStatements:
     """Build paired queries for unassigned in-stock silver bars."""
 
@@ -100,7 +102,14 @@ def build_available_bars_queries(
             params.append(end_iso)
             count_params.append(end_iso)
 
-    query += " ORDER BY sb.date_added DESC, sb.bar_id DESC"
+    if after_date_added is not None and after_bar_id is not None:
+        query += (
+            " AND (COALESCE(sb.date_added, '') < ? OR "
+            "(COALESCE(sb.date_added, '') = ? AND sb.bar_id < ?))"
+        )
+        params.extend((after_date_added, after_date_added, int(after_bar_id)))
+
+    query += " ORDER BY COALESCE(sb.date_added, '') DESC, sb.bar_id DESC"
     if isinstance(limit, int) and limit > 0:
         query += " LIMIT ?"
         params.append(int(limit))
@@ -116,6 +125,7 @@ def build_bars_in_list_queries(
     *,
     limit: int | None = None,
     offset: int = 0,
+    after_bar_id: int | None = None,
 ) -> PagedSqlStatements:
     """Build paired queries for bars assigned to a specific list."""
 
@@ -125,8 +135,11 @@ def build_bars_in_list_queries(
         "FROM silver_bars sb "
         "LEFT JOIN estimates e ON sb.estimate_voucher_no = e.voucher_no "
         "WHERE sb.list_id = ? "
-        "ORDER BY sb.bar_id"
     )
+    if after_bar_id is not None:
+        query += "AND sb.bar_id > ? "
+        params.append(int(after_bar_id))
+    query += "ORDER BY sb.bar_id"
     if isinstance(limit, int) and limit > 0:
         query += " LIMIT ?"
         params.append(int(limit))
@@ -149,6 +162,8 @@ def build_history_bars_query(
     weight_text: str = "",
     status_text: str = "All Statuses",
     limit: int = 2000,
+    after_date_added: str | None = None,
+    after_bar_id: int | None = None,
 ) -> SqlStatement:
     """Build the history search query used by the history dialog worker."""
 
@@ -175,6 +190,13 @@ def build_history_bars_query(
         conditions.append("sb.status = ?")
         params.append(normalized_status)
 
+    if after_date_added is not None and after_bar_id is not None:
+        conditions.append(
+            "(COALESCE(sb.date_added, '') < ? OR "
+            "(COALESCE(sb.date_added, '') = ? AND sb.bar_id < ?))"
+        )
+        params.extend((after_date_added, after_date_added, int(after_bar_id)))
+
     query = (
         "SELECT "
         "sb.bar_id, sb.estimate_voucher_no, sb.weight, sb.purity, sb.fine_weight, "
@@ -187,6 +209,6 @@ def build_history_bars_query(
     )
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
-    query += " ORDER BY sb.date_added DESC, sb.bar_id DESC LIMIT ?"
+    query += " ORDER BY COALESCE(sb.date_added, '') DESC, sb.bar_id DESC LIMIT ?"
     params.append(normalize_row_limit(limit, default=2000))
     return SqlStatement(query, tuple(params))

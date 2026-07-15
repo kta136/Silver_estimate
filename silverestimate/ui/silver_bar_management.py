@@ -23,7 +23,8 @@ from PyQt6.QtWidgets import (
 from .shared_screen_theme import build_management_screen_stylesheet
 from .silver_bar_list_lifecycle_controller import SilverBarListLifecycleController
 from .silver_bar_list_print_controller import SilverBarListPrintController
-from .silver_bar_load_controller import SilverBarLoadController, _BarsLoadWorker
+from .silver_bar_load_controller import SilverBarLoadController
+from .silver_bar_management_facade import SilverBarManagementFacade
 from .silver_bar_management_state import SilverBarManagementStateStore
 from .silver_bar_management_ui import SilverBarManagementUiBuilder
 from .silver_bar_optimization_controller import SilverBarOptimizationController
@@ -34,7 +35,7 @@ from .themed_controls import ThemedDoubleSpinBox
 from .window_sizing import resize_to_available_screen
 
 
-class SilverBarDialog(QDialog):
+class SilverBarDialog(SilverBarManagementFacade, QDialog):
     """Dialog for managing silver bars and grouping them into lists."""
 
     if TYPE_CHECKING:
@@ -79,7 +80,7 @@ class SilverBarDialog(QDialog):
         super().showEvent(event)
 
     def closeEvent(self, event):
-        self._cancel_active_loads()
+        self._shutdown_loads()
         try:
             self._save_ui_state()
             if self._is_embedded():
@@ -91,7 +92,7 @@ class SilverBarDialog(QDialog):
         super().closeEvent(event)
 
     def accept(self):
-        self._cancel_active_loads()
+        self._shutdown_loads()
         try:
             self._save_ui_state()
             if self._is_embedded():
@@ -102,7 +103,7 @@ class SilverBarDialog(QDialog):
         super().accept()
 
     def reject(self):
-        self._cancel_active_loads()
+        self._shutdown_loads()
         try:
             self._save_ui_state()
             if self._is_embedded():
@@ -315,122 +316,6 @@ class OptimalListDialog(QDialog):
         super().accept()
 
 
-def _delegate(controller_attr: str, method_name: str):
-    def _method(self, *args, **kwargs):
-        controller = getattr(self, controller_attr)
-        return object.__getattribute__(controller, method_name)(*args, **kwargs)
-
-    _method.__name__ = method_name
-    _method.__qualname__ = f"SilverBarDialog.{method_name}"
-    return _method
-
-
-for _method_name in ("init_ui",):
-    setattr(SilverBarDialog, _method_name, _delegate("_ui_builder", _method_name))
-
-for _method_name in (
-    "_schedule_available_reload",
-    "_next_load_request_id",
-    "_is_latest_load",
-    "_start_bars_load",
-    "_on_bars_load_ready",
-    "_on_bars_load_error",
-    "_on_bars_load_finished",
-    "_cancel_active_loads",
-    "load_available_bars",
-    "load_lists",
-    "list_selection_changed",
-    "load_bars_in_selected_list",
-):
-    setattr(SilverBarDialog, _method_name, _delegate("_load_controller", _method_name))
-
-for _method_name in (
-    "_bulk_assign_to_list",
-    "_bulk_remove_from_list",
-    "add_selected_to_list",
-    "remove_selected_from_list",
-    "add_all_filtered_to_list",
-    "remove_all_from_list",
-    "export_current_list_to_csv",
-):
-    setattr(
-        SilverBarDialog,
-        _method_name,
-        _delegate("_transfer_controller", _method_name),
-    )
-
-for _method_name in (
-    "create_new_list",
-    "_create_list_from_selection",
-    "edit_list_note",
-    "delete_selected_list",
-    "mark_list_as_issued",
-):
-    setattr(
-        SilverBarDialog,
-        _method_name,
-        _delegate("_list_lifecycle_controller", _method_name),
-    )
-
-for _method_name in (
-    "print_selected_list",
-    "_next_print_preview_request_id",
-    "_start_list_print_preview_build",
-    "_on_list_print_preview_ready",
-    "_on_list_print_preview_error",
-    "_finish_list_print_preview_build",
-):
-    setattr(
-        SilverBarDialog,
-        _method_name,
-        _delegate("_list_print_controller", _method_name),
-    )
-
-for _method_name in (
-    "_table_cell_value",
-    "_table_cell_text",
-    "_bar_id_from_table",
-    "_clear_management_table",
-    "_populate_table",
-    "_show_available_context_menu",
-    "_show_list_context_menu",
-    "_copy_selected_rows",
-    "_clear_filters",
-):
-    setattr(
-        SilverBarDialog,
-        _method_name,
-        _delegate("_table_controller", _method_name),
-    )
-
-for _method_name in (
-    "_settings",
-    "_save_table_sort_state",
-    "_save_ui_state",
-    "_restore_ui_state",
-    "_restore_selected_list_from_settings",
-    "_get_table_column_widths",
-    "_apply_table_column_widths",
-    "_restore_table_column_widths",
-    "_current_date_range",
-    "_find_main_window",
-    "_is_embedded",
-    "_navigate_back_to_estimate",
-):
-    setattr(SilverBarDialog, _method_name, _delegate("_state_store", _method_name))
-
-for _method_name in (
-    "_update_transfer_buttons_state",
-    "_on_selection_changed",
-    "_update_selection_summaries",
-):
-    setattr(
-        SilverBarDialog,
-        _method_name,
-        _delegate("_selection_state_controller", _method_name),
-    )
-
-
 def show_silver_bar_management(db_manager, parent=None):
     dialog = SilverBarDialog(db_manager, parent)
     return dialog.exec()
@@ -443,7 +328,6 @@ def show_silver_bars(db_manager, parent=None):
 __all__ = [
     "SilverBarDialog",
     "OptimalListDialog",
-    "_BarsLoadWorker",
     "show_silver_bar_management",
     "show_silver_bars",
 ]

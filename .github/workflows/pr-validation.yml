@@ -2,8 +2,7 @@ name: PR Validation
 
 on:
   pull_request:
-    branches:
-      - main
+    branches: [main]
     paths-ignore:
       - "DOCS/**"
       - "**/*.md"
@@ -17,95 +16,60 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint-and-format:
-    name: Code Quality Checks
+  quality-security:
+    name: Quality, typing, and security
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
         with:
-          python-version: '3.14'
-          cache: 'pip'
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv python install 3.14
+      - name: Sync frozen development environment
+        run: uv sync --frozen --extra dev
+      - name: Ruff
+        run: uv run nox -s ruff
+      - name: Mypy
+        run: uv run nox -s mypy
+      - name: Blocking Bandit medium/high gate
+        run: uv run nox -s bandit
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: Lint and sort imports with Ruff
-        run: nox -s ruff
-
-  type-check:
-    name: Type Checking
-    runs-on: ubuntu-latest
-
+  windows-validation:
+    name: Windows tests, smoke, performance, and package
+    needs: quality-security
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      QT_QPA_PLATFORM: offscreen
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
         with:
-          python-version: '3.14'
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: Type check with mypy
-        run: nox -s mypy
-
-  test-fast:
-    name: Fast Tests (Python 3.14)
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
         with:
-          python-version: '3.14'
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: Run fast validation test suite
-        run: nox -s tests_fast
-
-  security:
-    name: Security Checks
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+          enable-cache: true
+      - run: uv python install 3.14
+      - name: Sync frozen development environment
+        run: uv sync --frozen --extra dev
+      - name: Complete tests, smoke coverage, performance, and global coverage
+        run: uv run nox -s tests_full
+      - name: Changed-line coverage
+        run: uv run diff-cover coverage.xml --compare-branch origin/main --fail-under=90
+      - name: Offscreen Qt startup smoke
+        run: uv run nox -s smoke_ui
+      - name: PyInstaller build verification
+        run: uv run nox -s build_clean
+      - name: Frozen artifact startup
+        run: uv run nox -s artifact_smoke
+      - uses: actions/upload-artifact@v4
         with:
-          python-version: '3.14'
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: Run Bandit security checks
-        run: nox -s bandit
-        continue-on-error: true
-
-      - name: Check for known security vulnerabilities
-        run: nox -s safety
-        continue-on-error: true
+          name: pr-windows-verification-${{ github.run_number }}
+          path: |
+            coverage.xml
+            perf-metrics.log
+            artifacts/smoke-ui/**
+            dist/SilverEstimate-v*-win64.zip
+          if-no-files-found: error
+          retention-days: 14

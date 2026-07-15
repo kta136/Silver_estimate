@@ -117,9 +117,12 @@ def tests_fast(session: nox.Session) -> None:
 @nox.session(python=False)
 def tests_full(session: nox.Session) -> None:
     perf_log = PROJECT_ROOT / "perf-metrics.log"
+    coverage_data = PROJECT_ROOT / ".coverage"
     coverage_xml = PROJECT_ROOT / "coverage.xml"
     clean_artifact(perf_log)
+    clean_artifact(coverage_data)
     clean_artifact(coverage_xml)
+    session.env["QT_QPA_PLATFORM"] = "offscreen"
 
     session.run(
         "python",
@@ -129,28 +132,38 @@ def tests_full(session: nox.Session) -> None:
         "error",
         "-W",
         "ignore:'crypt' is deprecated and slated for removal in Python 3.13:DeprecationWarning",
-        "-m",
-        "unit or integration or slow",
+        "tests",
+        "--ignore=tests/smoke",
         "--cov=silverestimate",
-        "--cov-report=xml",
-        "--cov-report=term-missing",
-        "--cov-fail-under=70",
+        "--cov-report=",
         "-v",
     )
     session.run(
         "python",
         "-m",
         "pytest",
-        "tests/ui/test_estimate_entry_widget.py",
-        "tests/ui/test_item_master.py",
-        "tests/integration/test_repositories.py",
-        "-q",
-        "--log-file",
+        "tests/smoke",
+        "--run-smoke",
+        "--cov=silverestimate",
+        "--cov-append",
+        "--cov-report=",
+        "-v",
+    )
+    session.run(
+        "python",
+        "-m",
+        "coverage",
+        "run",
+        "--append",
+        "scripts/run_performance_gate.py",
+        "--output",
         str(perf_log),
-        "--log-file-level",
-        "DEBUG",
     )
     session.run("python", "scripts/check_perf_budgets.py", "--log-file", str(perf_log))
+    session.run(
+        "python", "-m", "coverage", "report", "--show-missing", "--fail-under=75"
+    )
+    session.run("python", "-m", "coverage", "xml", "-o", str(coverage_xml))
 
 
 @nox.session(python=False)
@@ -176,7 +189,15 @@ def smoke_ui(session: nox.Session) -> None:
 @nox.session(python=False)
 def bandit(session: nox.Session) -> None:
     session.run(
-        "python", "-m", "bandit", "-c", "pyproject.toml", "-r", "silverestimate"
+        "python",
+        "-m",
+        "bandit",
+        "-c",
+        "pyproject.toml",
+        "-r",
+        "silverestimate",
+        "-ll",
+        "-ii",
     )
 
 
@@ -199,6 +220,14 @@ def build_clean(session: nox.Session) -> None:
     if not artifact.exists():
         session.error(f"Build artifact was not created: {artifact}")
     session.log(f"Build artifact created at {artifact}")
+
+
+@nox.session(python=False, name="artifact_smoke")
+def artifact_smoke(session: nox.Session) -> None:
+    artifact = _versioned_artifact_path()
+    if not artifact.exists():
+        session.error(f"Versioned artifact is unavailable: {artifact}")
+    session.run(str(artifact), "--artifact-smoke", external=True)
 
 
 @nox.session(python=False, name="pr")

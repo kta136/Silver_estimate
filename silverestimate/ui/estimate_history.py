@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 import logging
 import os
+import threading
 import time
-from functools import partial
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any, cast
 
-from PyQt6.QtCore import QDate, QObject, Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QDate, Qt
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QDialog,
@@ -21,7 +24,13 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from silverestimate.persistence.estimates_repository import fetch_estimate_history_rows
+from silverestimate.domain.pagination import EstimateHistoryCursor, Page
+from silverestimate.infrastructure.latest_request_runner import (
+    LatestRequestRunner,
+    RequestCancelledError,
+)
+from silverestimate.infrastructure.sqlite_worker import cancellable_sqlite_connection
+from silverestimate.persistence.estimates_repository import fetch_estimate_history_page
 from silverestimate.ui.models import EstimateHistoryRow, EstimateHistoryTableModel
 from silverestimate.ui.modern_components import (
     BottomStatusStrip,
@@ -30,10 +39,56 @@ from silverestimate.ui.modern_components import (
 )
 
 from .icons import get_icon
-from .print_manager import PrintManager, PrintPreviewBuildWorker
+from .print_manager import PrintManager
+from .print_payload_builder import PrintPreviewPayload
 from .shared_screen_theme import build_management_screen_stylesheet
 from .themed_controls import ThemedDateEdit
 from .window_sizing import resize_to_available_screen
+
+
+@dataclass(frozen=True)
+class _HistoryLoadRequest:
+    db_path: str
+    date_from: str
+    date_to: str
+    voucher_search: str
+    cursor: EstimateHistoryCursor | None
+    append: bool
+    started_at: float
+
+
+def _load_history_page(
+    request: _HistoryLoadRequest,
+    cancel_event: threading.Event,
+) -> tuple[_HistoryLoadRequest, Page[dict[str, Any], EstimateHistoryCursor]]:
+    with cancellable_sqlite_connection(request.db_path, cancel_event) as connection:
+        page = fetch_estimate_history_page(
+            connection.cursor(),
+            date_from=request.date_from,
+            date_to=request.date_to,
+            voucher_search=request.voucher_search,
+            page_cursor=request.cursor,
+            limit=500,
+        )
+    return request, page
+
+
+@dataclass(frozen=True)
+class _PreviewRequest:
+    print_manager: PrintManager
+    build_preview: Callable[[], object]
+
+
+def _build_preview(
+    request: _PreviewRequest,
+    cancel_event: threading.Event,
+) -> tuple[_PreviewRequest, object]:
+    if cancel_event.is_set():
+        raise RequestCancelledError
+    payload = request.build_preview()
+    if cancel_event.is_set():
+        raise RequestCancelledError
+    return request, payload
 
 
 class EstimateHistoryDialog(QDialog):
@@ -46,10 +101,26 @@ class EstimateHistoryDialog(QDialog):
         self.logger = logging.getLogger(__name__)
         self.main_window = main_window_ref  # Store the explicit reference to MainWindow
         self.selected_voucher = None
-        self._load_request_id = 0
-        self._active_load_workers: dict[QThread, QObject] = {}
-        self._print_preview_request_id = 0
-        self._active_print_preview_workers: dict[QThread, QObject] = {}
+        self._history_rows: list[dict[str, Any]] = []
+        self._history_cursor: EstimateHistoryCursor | None = None
+        self._history_total = 0
+        self._load_runner = LatestRequestRunner(
+            _load_history_page,
+            self,
+            name="estimate-history-loader",
+        )
+        self._load_runner.result.connect(self._handle_load_result)
+        self._load_runner.failed.connect(self._handle_load_error)
+        self._load_runner.settled.connect(self._loading_done)
+        self._print_preview_progress: QProgressDialog | None = None
+        self._print_preview_runner = LatestRequestRunner(
+            _build_preview,
+            self,
+            name="estimate-preview-builder",
+        )
+        self._print_preview_runner.result.connect(self._on_print_preview_ready)
+        self._print_preview_runner.failed.connect(self._on_print_preview_error)
+        self._print_preview_runner.settled.connect(self._finish_print_preview_build)
         self.init_ui()
         self.load_estimates()
 
@@ -279,6 +350,12 @@ class EstimateHistoryDialog(QDialog):
 
         button_layout.addStretch(1)
 
+        self.load_more_button = QPushButton("Load more")
+        self.load_more_button.setObjectName("HistorySecondaryButton")
+        self.load_more_button.setVisible(False)
+        self.load_more_button.clicked.connect(lambda: self.load_estimates(append=True))
+        button_layout.addWidget(self.load_more_button)
+
         self.close_button = QPushButton("Close")
         self.close_button.setObjectName("HistorySecondaryButton")
         self.close_button.setIcon(get_icon("close", widget=self))
@@ -305,10 +382,16 @@ class EstimateHistoryDialog(QDialog):
         except Exception:
             return today
 
-    def load_estimates(self):
+    def load_estimates(self, *, append: bool = False):
         """Load estimates based on search criteria (runs queries in a background thread)."""
-        self._load_request_id += 1
-        request_id = self._load_request_id
+        if not append:
+            self._history_rows = []
+            self._history_cursor = None
+            self._history_total = 0
+            self.estimates_model.set_rows([])
+            self.load_more_button.setVisible(False)
+        elif self._history_cursor is None:
+            return
         self.results_summary_label.setText("Loading estimates...")
         started_at = time.perf_counter()
 
@@ -321,6 +404,7 @@ class EstimateHistoryDialog(QDialog):
                 self.print_button.setEnabled(False)
             if hasattr(self, "delete_button"):
                 self.delete_button.setEnabled(False)
+            self.load_more_button.setEnabled(False)
         except Exception as exc:
             self.logger.debug("Failed to disable history action buttons: %s", exc)
 
@@ -332,63 +416,72 @@ class EstimateHistoryDialog(QDialog):
         ):
             try:
                 rows = self._load_estimates_sync()
-                self._populate_table(rows, request_id=request_id, started_at=started_at)
+                self._populate_table(rows, started_at=started_at, append=append)
             except Exception as exc:
-                self._handle_load_error(str(exc), request_id)
-                self._loading_done(None, None, request_id)
+                self._handle_load_error(0, exc)
+            finally:
+                self._loading_done(0)
             return
 
-        worker = _HistoryLoadWorker(
+        request = _HistoryLoadRequest(
             temp_db_path,
             self.date_from.date().toString("yyyy-MM-dd"),
             self.date_to.date().toString("yyyy-MM-dd"),
             self.voucher_search.text().strip(),
+            self._history_cursor,
+            append,
+            started_at,
         )
-        thread = QThread(self)
-        worker.moveToThread(thread)
-        thread.started.connect(worker.run)
-        worker.data_ready.connect(
-            partial(self._populate_table, request_id=request_id, started_at=started_at)
-        )
-        worker.error.connect(partial(self._handle_load_error, request_id=request_id))
-        worker.finished.connect(thread.quit)
-        worker.finished.connect(worker.deleteLater)
-        thread.finished.connect(thread.deleteLater)
-        thread.finished.connect(partial(self._loading_done, thread, None, request_id))
-        self._active_load_workers[thread] = worker
-        thread.start()
-        return
+        self._load_runner.submit(request)
 
-    def _load_estimates_sync(self) -> list[dict]:
-        getter = getattr(self.db_manager, "get_estimate_history_rows", None)
+    def _load_estimates_sync(
+        self,
+    ) -> Page[dict[str, Any], EstimateHistoryCursor]:
+        getter = getattr(self.db_manager, "get_estimate_history_page", None)
         if callable(getter):
-            return list(
+            return cast(
+                Page[dict[str, Any], EstimateHistoryCursor],
                 getter(
                     date_from=self.date_from.date().toString("yyyy-MM-dd"),
                     date_to=self.date_to.date().toString("yyyy-MM-dd"),
                     voucher_search=self.voucher_search.text().strip(),
-                )
-                or []
+                    cursor=self._history_cursor,
+                    limit=500,
+                ),
             )
         raise RuntimeError("Estimate history rows are unavailable.")
 
-    def _handle_load_error(self, message, request_id, *_) -> None:
-        if request_id != self._load_request_id:
-            return
-        QMessageBox.warning(self, "Load Error", message)
+    def _handle_load_result(self, _generation: int, value: object) -> None:
+        request, page = cast(
+            tuple[
+                _HistoryLoadRequest,
+                Page[dict[str, Any], EstimateHistoryCursor],
+            ],
+            value,
+        )
+        self._populate_table(page, started_at=request.started_at, append=request.append)
+
+    def _handle_load_error(self, _generation: int, error: object) -> None:
+        QMessageBox.warning(self, "Load Error", str(error))
 
     def _populate_table(
-        self, history_rows, request_id=None, started_at=None, *_
+        self,
+        page: Page[dict[str, Any], EstimateHistoryCursor],
+        *,
+        started_at: float | None = None,
+        append: bool = False,
     ) -> None:
-        if request_id is not None and request_id != self._load_request_id:
-            return
+        page_rows = list(page.items)
+        self._history_rows = [*self._history_rows, *page_rows] if append else page_rows
+        self._history_cursor = page.next_cursor
+        self._history_total = page.total
         table = self.estimates_table
         sorting_enabled = table.isSortingEnabled()
         table.setUpdatesEnabled(False)
         table.blockSignals(True)
         try:
             rows = []
-            for history_row in history_rows or []:
+            for history_row in self._history_rows:
                 vno = str(history_row.get("voucher_no", "") or "")
                 total_gross = float(history_row.get("total_gross", 0.0) or 0.0)
                 total_net = float(history_row.get("total_net", 0.0) or 0.0)
@@ -417,6 +510,7 @@ class EstimateHistoryDialog(QDialog):
                 table.setSortingEnabled(False)
             self.estimates_model.set_rows(rows)
             self._update_results_summary(len(rows))
+            self.load_more_button.setVisible(self._history_cursor is not None)
             if rows:
                 table.selectRow(0)
             else:
@@ -437,16 +531,7 @@ class EstimateHistoryDialog(QDialog):
                     len(rows),
                 )
 
-    def _loading_done(self, thread, worker, request_id=None, *_) -> None:
-        if thread is not None:
-            self._active_load_workers.pop(thread, None)
-        if worker is not None:
-            try:
-                worker.deleteLater()
-            except Exception as exc:
-                self.logger.debug("Failed to schedule history worker deletion: %s", exc)
-        if request_id is not None and request_id != self._load_request_id:
-            return
+    def _loading_done(self, _generation: int) -> None:
         try:
             self.search_button.setEnabled(True)
             if hasattr(self, "open_button"):
@@ -455,24 +540,28 @@ class EstimateHistoryDialog(QDialog):
                 self.print_button.setEnabled(True)
             if hasattr(self, "delete_button"):
                 self.delete_button.setEnabled(True)
+            self.load_more_button.setEnabled(True)
         except Exception as exc:
             self.logger.debug("Failed to re-enable history action buttons: %s", exc)
 
     def _update_results_summary(self, row_count: int | None = None) -> None:
-        total = self.estimates_model.rowCount() if row_count is None else int(row_count)
-        if total <= 0:
+        loaded = (
+            self.estimates_model.rowCount() if row_count is None else int(row_count)
+        )
+        total = self._history_total
+        if loaded <= 0:
             text = "No estimates found"
-        elif total == 1:
-            text = "1 estimate"
+        elif total == 1 and loaded == 1:
+            text = "1 of 1 estimate"
         else:
-            text = f"{total} estimates"
+            text = f"{loaded} of {total} estimates"
 
         if self.voucher_search.text().strip():
             text += " match current filters"
         else:
             text += " in current date range"
         self.results_summary_label.setText(text)
-        self._update_bottom_status(total)
+        self._update_bottom_status(loaded)
 
     def _update_selected_details(self) -> None:
         strip = getattr(self, "selected_details_strip", None)
@@ -519,32 +608,13 @@ class EstimateHistoryDialog(QDialog):
         except Exception:
             user = "-"
         strip.set_left_items([f"Rows: {total}"])
-        strip.set_right_items([f"{selected} row selected", "Last Saved: -", f"User: {user}"])
+        strip.set_right_items(
+            [f"{selected} row selected", "Last Saved: -", f"User: {user}"]
+        )
 
-    def _cancel_active_loads(self, timeout_ms: int = 4000) -> None:
-        # Invalidate any pending UI updates from old workers.
-        self._load_request_id += 1
-        active = list(self._active_load_workers.items())
-        self._active_load_workers.clear()
-
-        for thread, worker in active:
-            try:
-                worker.deleteLater()
-            except Exception as exc:
-                self.logger.debug(
-                    "Failed to schedule history worker deletion during cancel: %s", exc
-                )
-            try:
-                if thread.isRunning():
-                    thread.quit()
-                    if not thread.wait(timeout_ms):
-                        thread.terminate()
-                        thread.wait(1000)
-            except Exception as exc:
-                self.logger.debug(
-                    "Failed to stop estimate history worker thread during cancel: %s",
-                    exc,
-                )
+    def _cancel_active_loads(self) -> None:
+        self._load_runner.cancel()
+        self._load_runner.shutdown()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Escape:
@@ -614,12 +684,8 @@ class EstimateHistoryDialog(QDialog):
             ),
         )
 
-    def _next_print_preview_request_id(self) -> int:
-        self._print_preview_request_id += 1
-        return self._print_preview_request_id
-
     def _start_print_preview_build(self, *, print_manager, build_preview) -> None:
-        request_id = self._next_print_preview_request_id()
+        self._dispose_print_preview_progress()
         progress = QProgressDialog("Preparing print preview...", "", 0, 0, self)
         progress.setCancelButton(None)
         progress.setWindowTitle("Print Preview")
@@ -627,57 +693,18 @@ class EstimateHistoryDialog(QDialog):
         progress.setAutoClose(False)
         progress.setAutoReset(False)
         progress.show()
-
-        worker = PrintPreviewBuildWorker(request_id, build_preview)
-        thread = QThread(self)
-        worker.moveToThread(thread)
-        self._active_print_preview_workers[thread] = worker
-
-        thread.started.connect(worker.run)
-        worker.preview_ready.connect(
-            partial(
-                self._on_print_preview_ready,
-                thread=thread,
-                worker=worker,
-                print_manager=print_manager,
-                progress=progress,
-            )
-        )
-        worker.preview_error.connect(
-            partial(
-                self._on_print_preview_error,
-                thread=thread,
-                worker=worker,
-                progress=progress,
-            )
-        )
-        worker.finished.connect(
-            partial(
-                self._finish_print_preview_build,
-                thread=thread,
-                worker=worker,
-                progress=progress,
-            )
-        )
-        thread.start()
+        self._print_preview_progress = progress
+        self._print_preview_runner.submit(_PreviewRequest(print_manager, build_preview))
 
     def _on_print_preview_ready(
         self,
-        request_id,
-        payload,
-        *,
-        thread,
-        worker,
-        print_manager,
-        progress,
+        _generation: int,
+        value: object,
     ) -> None:
-        del thread, worker
-        if request_id != self._print_preview_request_id:
-            return
-        try:
-            progress.close()
-        except Exception as exc:
-            self.logger.debug("Failed to close history print preview progress: %s", exc)
+        request, payload = cast(
+            tuple[_PreviewRequest, PrintPreviewPayload | None], value
+        )
+        self._close_print_preview_progress()
         if payload is None:
             QMessageBox.warning(
                 self,
@@ -685,87 +712,38 @@ class EstimateHistoryDialog(QDialog):
                 "Failed to prepare the selected estimate for preview.",
             )
             return
-        print_manager.show_preview(payload, parent_widget=self)
+        request.print_manager.show_preview(payload, parent_widget=self)
 
     def _on_print_preview_error(
         self,
-        request_id,
-        message,
-        *,
-        thread,
-        worker,
-        progress,
+        _generation: int,
+        error: object,
     ) -> None:
-        del thread, worker
-        if request_id != self._print_preview_request_id:
-            return
-        try:
-            progress.close()
-        except Exception as exc:
-            self.logger.debug(
-                "Failed to close history print preview progress after error: %s",
-                exc,
-            )
-        QMessageBox.warning(self, "Print Error", message)
+        self._close_print_preview_progress()
+        QMessageBox.warning(self, "Print Error", str(error))
 
     def _finish_print_preview_build(
         self,
-        request_id,
-        *,
-        thread,
-        worker,
-        progress,
+        _generation: int,
     ) -> None:
-        self._active_print_preview_workers.pop(thread, None)
-        try:
+        self._dispose_print_preview_progress()
+
+    def _close_print_preview_progress(self) -> None:
+        progress = self._print_preview_progress
+        if progress is not None:
+            progress.close()
+
+    def _dispose_print_preview_progress(self) -> None:
+        progress = self._print_preview_progress
+        self._print_preview_progress = None
+        if progress is not None:
             progress.close()
             progress.deleteLater()
-        except Exception as exc:
-            self.logger.debug(
-                "Failed to dispose history print preview progress dialog: %s",
-                exc,
-            )
-        try:
-            thread.quit()
-            thread.wait(1000)
-        except Exception as exc:
-            self.logger.debug(
-                "Failed to stop estimate history preview worker thread: %s", exc
-            )
-        try:
-            worker.deleteLater()
-            thread.deleteLater()
-        except Exception as exc:
-            self.logger.debug(
-                "Failed to schedule history preview worker deletion: %s", exc
-            )
-        if request_id != self._print_preview_request_id:
-            return
 
-    def _cancel_active_print_previews(self, timeout_ms: int = 4000) -> None:
-        self._print_preview_request_id += 1
-        active = list(self._active_print_preview_workers.items())
-        self._active_print_preview_workers.clear()
-
-        for thread, worker in active:
-            try:
-                worker.deleteLater()
-            except Exception as exc:
-                self.logger.debug(
-                    "Failed to schedule history preview worker deletion during cancel: %s",
-                    exc,
-                )
-            try:
-                if thread.isRunning():
-                    thread.quit()
-                    if not thread.wait(timeout_ms):
-                        thread.terminate()
-                        thread.wait(1000)
-            except Exception as exc:
-                self.logger.debug(
-                    "Failed to stop estimate history preview worker during cancel: %s",
-                    exc,
-                )
+    def _cancel_active_print_previews(self) -> None:
+        self._print_preview_runner.cancel()
+        self._print_preview_runner.shutdown()
+        self._dispose_print_preview_progress()
 
     def delete_selected_estimate(self):
         """Handle deletion of the selected estimate."""
@@ -807,43 +785,3 @@ class EstimateHistoryDialog(QDialog):
                     "Error",
                     f"An unexpected error occurred during deletion: {str(e)}",
                 )
-
-
-class _HistoryLoadWorker(QObject):
-    data_ready = pyqtSignal(list)
-    error = pyqtSignal(str)
-    finished = pyqtSignal()
-
-    def __init__(self, db_path, date_from, date_to, voucher_search):
-        super().__init__()
-        self.db_path = db_path
-        self.date_from = date_from
-        self.date_to = date_to
-        self.voucher_search = voucher_search
-
-    def run(self):
-        import sqlite3
-
-        conn = None
-        try:
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
-            rows = fetch_estimate_history_rows(
-                cur,
-                date_from=self.date_from,
-                date_to=self.date_to,
-                voucher_search=self.voucher_search,
-            )
-            self.data_ready.emit(rows)
-        except Exception as e:
-            self.error.emit(str(e))
-        finally:
-            if conn is not None:
-                try:
-                    conn.close()
-                except Exception as exc:
-                    logging.getLogger(__name__).debug(
-                        "Failed to close estimate history worker connection: %s", exc
-                    )
-            self.finished.emit()

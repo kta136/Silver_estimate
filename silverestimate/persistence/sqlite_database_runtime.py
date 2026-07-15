@@ -197,7 +197,7 @@ class SqliteDatabaseRuntime:
         cursor: sqlite3.Cursor | None,
         new_version: int,
     ) -> bool:
-        """Append a schema version entry."""
+        """Stage a schema version entry in the caller-owned transaction."""
         if not conn or not cursor:
             return False
         try:
@@ -208,8 +208,7 @@ class SqliteDatabaseRuntime:
             """,
                 (new_version, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
             )
-            conn.commit()
-            self._logger.info("Schema updated to version %s", new_version)
+            self._logger.info("Schema version %s staged", new_version)
             return True
         except sqlite3.Error as exc:
             self._logger.error(
@@ -217,8 +216,7 @@ class SqliteDatabaseRuntime:
                 exc,
                 exc_info=True,
             )
-            conn.rollback()
-            return False
+            raise
 
     def _configure_connection_pragmas(self, conn: sqlite3.Connection) -> None:
         try:

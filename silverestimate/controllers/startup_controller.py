@@ -181,6 +181,18 @@ class StartupController:
                     self._logger.error(
                         "Recovery operation raised error: %s", exc, exc_info=True
                     )
+            else:
+                try:
+                    db_cls.discard_recovery_candidate(
+                        candidate,
+                        DB_PATH,
+                        logger=self._logger,
+                    )
+                except Exception as exc:  # pragma: no cover - defensive cleanup
+                    self._logger.warning(
+                        "Could not discard declined recovery candidate: %s",
+                        exc,
+                    )
 
         try:
             db_manager = db_cls(DB_PATH, password=password)

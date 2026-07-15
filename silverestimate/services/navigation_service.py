@@ -48,7 +48,7 @@ class NavigationService:
 
                 self._logger.info("Creating ItemMasterWidget on demand...")
                 widget = ItemMasterWidget(self.db, self.main_window)
-                setattr(self.main_window, "item_master_widget", widget)
+                self.main_window.item_master_widget = widget
                 if self.stack:
                     self.stack.addWidget(widget)
             except Exception as exc:

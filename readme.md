@@ -1,11 +1,11 @@
-# Silver Estimation App - v3.0
+# Silver Estimation App - v3.01
 
 A desktop application built with PyQt6 and an encrypted SQLite database for managing silver sales estimates - item-wise entries, silver bar inventory, returns, and print-ready outputs.
 
 [![Python](https://img.shields.io/badge/Python-3.14+-blue.svg)](https://www.python.org/)
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.11-green.svg)](https://www.riverbankcomputing.com/software/pyqt/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v3.0-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v3.01-orange.svg)](CHANGELOG.md)
 [![PR Validation](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml)
 [![Main Validation](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml)
 [![Release Windows](https://github.com/kta136/Silver_estimate/actions/workflows/release-windows.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/release-windows.yml)
@@ -14,13 +14,13 @@ A desktop application built with PyQt6 and an encrypted SQLite database for mana
 [![Type checking: mypy](https://img.shields.io/badge/type%20checking-mypy-blue.svg)](http://mypy-lang.org/)
 [![Security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
 [![Pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/kta136/Silver_estimate)
+[![Platform](https://img.shields.io/badge/packaged%20platform-Windows-lightgrey.svg)](https://github.com/kta136/Silver_estimate)
 
 ## Quick Links
 
 - [Download latest release](https://github.com/kta136/Silver_estimate/releases/latest)
 - [Changelog](CHANGELOG.md)
-- [v3.0 changelog](CHANGELOG.md#30---2026-06-13)
+- [v3.01 changelog](CHANGELOG.md#301---2026-07-15)
 - [Deployment guide](DOCS/deployment-guide.md)
 
 ## Table of Contents
@@ -59,14 +59,16 @@ The app helps silver shops to:
 - **Presenter**: `silverestimate/presenter/estimate_entry_presenter.py` coordinates estimate workflows, keeping UI widgets thin and testable.
 - **Controllers**: Startup, navigation, and live-rate controllers bootstrap the app, wire menus/toolbars, and manage background refresh cadence.
 - **Services**: `MainCommands`, `SettingsService`, `LiveRateService`, and `AuthService` encapsulate reusable logic; authentication relies on the secure credential store.
-- **Persistence**: `DatabaseManager` plus repository classes (`items`, `estimates`, `silver_bars`) manage the decrypted working copy, WAL checkpoints, and AES-GCM encryption.
+- **Persistence**: `DatabaseManager` plus query/command/synchronization repositories manage atomic schema v6 migrations, keyset pages, the decrypted working copy, WAL checkpoints, and streamed AES-GCM snapshots.
 - **Security & infrastructure**: OS keyring-backed credential storage (`silverestimate/security/credential_store.py`), Qt6 startup bootstrap (`silverestimate/infrastructure/qt_bootstrap.py`), structured logging with optional cleanup scheduler, and QSettings helpers maintain app state safely.
 
-### Live Rate Maintainer Notes
+### DDA Agra Mohar Live Rate
 
-- Keep live-rate fetches pinned to DDASilver item `Silver Agra Local Mohar` unless product requirements explicitly change.
-- If DDASilver shows `-` in the visible rate cell, derive the required rate from `sell_rate * com_display_purity / 100` and round up to the next integer. Example observed on 2026-03-07: `275569 * 99% = 272814`.
-- Do not recommend migrating the DDASilver URLs to HTTPS unless the vendor fixes certificate validation and the endpoints are re-verified. As of 2026-03-07, strict HTTPS fails for both the homepage and the broadcast feed.
+- The startup/recovery snapshot is anonymous HTTPS: `https://ddajewels.com/api/v1/rates/current`.
+- Instant updates use `https://ddajewels.com/sse/rates`; disconnected streams fall back to a 10-second HTTPS poll.
+- Selection is by stable item ID `cmomws5tw000004i5k5t6yrnw`, never by a display name.
+- The displayed customer rate is `finalRate` with unit `PER_KG`. `baseRate` is intentionally ignored and no previous-rate percentage is derived.
+- No API key or authorization header is required while the endpoint remains public. A verified snapshot is retained for offline/stale display.
 
 ### Key Design Principles
 - Separation of concerns: UI, presenter, services, and persistence remain loosely coupled.
@@ -86,7 +88,7 @@ See also: `DOCS/project-architecture.md`.
 - Return processing and last balance handling
 
 ### Security
-- Encrypted database: AES-256-GCM file-level encryption
+- Encrypted database: versioned `SILVDB01` Argon2id/AES-256-GCM envelope with authenticated 1 MiB chunks
 - Password hashing: Argon2 with hashes stored in the OS keyring (Python `keyring`)
 - Secure settings store: non-sensitive preferences via QSettings
 
@@ -110,7 +112,7 @@ See also: `DOCS/project-architecture.md`.
 Recommended for development with `uv`:
 
 ```bash
-uv sync --extra dev
+uv sync --frozen --extra dev
 ```
 
 This repository now includes a committed `uv.lock` file so local development and CI can converge on the same resolved dependency set.
@@ -126,15 +128,7 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
-```bash
-# macOS/Linux
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
-```
-
-> Note: The app relies on the operating system keyring for storing password hashes. Windows Credential Manager and macOS Keychain work out of the box. On Linux, install a SecretService-compatible keyring (for example `gnome-keyring`) or configure an alternative backend before launching the app.
+Packaged releases support Windows 10/11. macOS and Linux may be useful for untested development work, but they are not release or support targets.
 
 ## Usage
 
@@ -152,10 +146,11 @@ First run notes:
 
 ## Security
 
-- Encryption: AES-256-GCM with per-install salt stored via QSettings
+- Encryption: `SILVDB01`, Argon2id, AES-256-GCM, authenticated metadata/chunk order, and streamed 1 MiB chunks
 - Passwords: Argon2 hashing (passlib) with hashes persisted in the OS keyring (Python `keyring`)
 - Files: Encrypted DB at `database/estimation.db` (ignored in Git)
 - Logs: Written to `logs/` (ignored); avoid logging sensitive data
+- Temporary plaintext overwrite/removal is best-effort only; SSD wear levelling and copy-on-write filesystems can retain physical copies.
 
 ## Configuration
 
@@ -163,6 +158,7 @@ First run notes:
 - Paths: DB path via `DB_PATH` in `silverestimate/infrastructure/app_constants.py`
 - Printing: Fonts and sizes configurable via Settings dialog
 - UI: The app forces Qt's Fusion-style light palette/QSS during startup and uses non-native dialogs where needed so Windows dark mode does not leak into file dialogs
+- Environment: only `SILVER_APP_DEBUG`, `SILVER_APP_LOG_DIR`, and `SILVER_SHOW_CONSOLE` are runtime controls; see `.env.example`.
 
 ## Development
 
@@ -186,7 +182,7 @@ Key areas of the codebase:
 Recommended development commands with `uv`:
 
 ```bash
-uv sync --extra dev
+uv sync --frozen --extra dev
 uv run python main.py
 uv run nox -s pr
 uv run nox -s ci
@@ -208,7 +204,8 @@ uv run pre-commit run --all-files
   - `uv run nox -s pr` for the required PR gate set
   - `uv run nox -s ci` for the required main-branch gate set
   - `uv run nox -s advisory` for advisory `bandit` and `safety`
-- CI enforces coverage thresholds using explicit pytest coverage flags in workflow commands.
+- CI requires 75% global coverage and 90% changed-line coverage on pull requests.
+- CI builds the deterministic scale dataset and requires all seven p95 performance metrics with 20 hot-path or five encrypted-flush samples.
 - To iterate quickly on the application builder branch, run `pytest tests/unit/test_application_builder.py`.
 - Ruff enforces linting and import ordering in CI.
 - Ruff formatting is enforced locally via pre-commit and checked in CI.
@@ -220,8 +217,9 @@ uv run pre-commit run --all-files
 - Prereqs: Python 3.14+, PowerShell
 - Fast iteration: `uv run nox -s build`
 - Clean rebuild: `python -m PyInstaller --clean --noconfirm SilverEstimate.spec` or `uv run nox -s build_clean`
-- Output: `dist/SilverEstimate.exe`, `dist/SilverEstimate-v3.0.exe`, and `dist/SilverEstimate-v3.0-win64.zip` on Windows
+- Output: `dist/SilverEstimate.exe`, `dist/SilverEstimate-v3.01.exe`, and `dist/SilverEstimate-v3.01-win64.zip` on Windows
 - Release/CI builds use the clean spec-based path; local `nox -s build` reuses PyInstaller caches for faster iteration
+- Packaged releases are Windows-only; macOS/Linux are untested development environments.
 
 ### GitHub Release (Windows CI)
 - Update version in `silverestimate/infrastructure/app_constants.py` (`APP_VERSION`)
@@ -271,6 +269,11 @@ c 2023-2025 Silver Estimation App
 ---
 
 ## Version History (highlights)
+
+### v3.01 (2026-07-15)
+- Delivered the full database, worker, encryption, DDA live-rate, architecture, performance, and Windows CI upgrade
+- Uses the public Agra Mohar item ID and customer-facing `finalRate` with SSE plus HTTPS fallback
+- Produced a verified Windows test build with startup smoke coverage
 
 ### v3.0 (2026-06-13)
 - Bumped the application/package release to v3.0

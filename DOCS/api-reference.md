@@ -83,12 +83,11 @@ This guide documents the primary controller, service, and persistence APIs expos
 ### LiveRateService (silverestimate/services/live_rate_service.py)
     LiveRateService(parent: Optional[QObject] = None, logger: Optional[logging.Logger] = None)
 
-- Source policy: live-rate fetches are pinned to DDASilver item `Silver Agra Local Mohar` (via `services/dda_rate_fetcher.py::TARGET_NAME`) and should remain fixed until a new explicit requirement changes it.
-- Parsing policy: if DDASilver's visible rate cell is not numeric, keep deriving the business-required value from `sell_rate * com_display_purity / 100` and round up to the next integer. Example observed on 2026-03-07: `275569 * 99% = 272814`.
-- HTTPS policy: do not recommend changing the DDASilver live-rate URLs from HTTP to HTTPS unless the vendor fixes certificate validation and the endpoints are re-verified. As of 2026-03-07, strict HTTPS fails for both the homepage and the broadcast host.
-- **rate_updated** – Qt signal emitting (broadcast_rate, api_rate, market_open) tuples.
-- **start() / stop()** – manage the auto-refresh timer using settings for cadence and enablement.
-- **refresh_now()** – fetch the latest rates (broadcast first, API fallback) in a background thread and emit results.
+- Source policy: public DDA HTTPS/SSE, exact item ID `cmomws5tw000004i5k5t6yrnw`, `PER_KG`, and `finalRate` only. No API key is sent.
+- **DdaCurrentRatesClient.fetch_current() -> DdaRateSnapshot** – hydrate/reconcile from `/api/v1/rates/current`.
+- **DdaRateStreamWorker** – class-level `pyqtSignal` delivery for rate, feed status, connection state, and errors; consumes `/sse/rates`, sequence-checks events, and polls current-rates every 10 seconds only while disconnected.
+- **start() / stop()** – start the stream thread or cooperatively close the active response and exit.
+- **refresh_now()** – request an anonymous current-rates reconciliation.
 
 ## Persistence Layer
 
@@ -106,7 +105,7 @@ Key Public Methods:
 - **save_estimate_with_returns(... ) -> bool** – transactional save for headers/items, with bar sync.
 - **get_estimate_by_voucher(voucher_no: str) -> Optional[dict]** – retrieve composite estimate payloads.
 - **delete_all_estimates() / delete_single_estimate(voucher_no)** – destructive operations used by MainCommands.
-- **request_flush(delay_seconds: float = 2.0)** and **flush_to_encrypted()** – trigger immediate or delayed encryption cycles.
+- **request_flush(delay_seconds: float = 2.0)** and **flush_to_encrypted()** – trigger generation-aware streamed `SILVDB01` encryption cycles.
 - **close()** – commit outstanding work, stop flush scheduler, remove temp files.
 - **Static helpers**: check_recovery_candidate, recover_encrypt_plain_to_encrypted, _get_or_create_salt_static.
 
@@ -114,21 +113,24 @@ Note: Legacy item/estimate helper methods remain for backwards compatibility but
 
 ### ItemsRepository (silverestimate/persistence/items_repository.py)
 - **get_item_by_code(code: str)** – fetch item rows with cache support.
-- **search_items(search_term: str) / get_all_items()** – list items with filtering.
+- **get_items_page(...) -> Page[dict, ItemCursor]** – keyset page of up to 1,000 filtered items.
+- **search_items(search_term: str) / get_all_items()** – compatibility list helpers.
 - **add_item(...) / update_item(...) / delete_item(code: str)** – maintain catalog entries and trigger flushes.
 
 ### EstimatesRepository (silverestimate/persistence/estimates_repository.py)
 - **generate_voucher_no() -> str** – sequential voucher generator with error fallback.
 - **get_estimate_by_voucher(voucher_no: str)** – return header plus line items in a dict payload.
-- **get_estimates(...) / get_estimate_headers(...)** – filtered reporting queries.
+- **get_estimate_history_page(...) -> Page[dict, EstimateHistoryCursor]** – up to 500 stored header summaries; line items load only on open/print.
 - **save_estimate_with_returns(voucher_no, date, silver_rate, regular_items, return_items, totals) -> bool** – transactional save/update, including validation for missing item codes.
 - **delete_single_estimate(voucher_no: str) -> bool** – cleanup helper used by DatabaseManager.
 
 ### SilverBarsRepository (silverestimate/persistence/silver_bars_repository.py)
+- Compatibility facade over `SilverBarQueryRepository`, `SilverBarCommandRepository`, and `SilverBarSynchronizationRepository`.
 - **create_list(note: Optional[str] = None) -> Optional[int] / get_lists(include_issued: bool = True)** – manage bar list metadata.
 - **assign_bar_to_list(bar_id: int, list_id: int, note: str = ...) -> bool** – move bars into lists with transfer logging.
 - **remove_bar_from_list(bar_id: int, note: str = ...) -> bool** – reverse assignments, recording transfer history.
-- **get_available_bars(...) / get_bars_in_list(list_id: int)** – query stock by status.
+- **get_available_bars_keyset_page(...) / get_bars_in_list_keyset_page(...)** – up to 1,500 rows with typed cursors.
+- **search_history_bars_page(...)** – up to 1,000 rows by `(date_added, bar_id)`.
 - **get_silver_bars(..., unassigned_only: bool = False)** – query inventory with optional `list_id IS NULL` filtering for available-only screens.
 - **delete_list(list_id: int) -> Tuple[bool, str]** – drop lists and safely unassign bars.
 - **add_silver_bar(...) / update_silver_bar_values(...)** – maintain silver bar records linked to estimates.

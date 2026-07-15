@@ -7,6 +7,12 @@ import sqlite3
 from datetime import datetime
 from typing import Any, Iterable, List, Mapping, Optional, Tuple
 
+from silverestimate.domain.pagination import (
+    AvailableBarCursor,
+    BarListCursor,
+    Page,
+    SilverBarHistoryCursor,
+)
 from silverestimate.persistence.silver_bars_queries import (
     build_available_bars_queries,
     build_bars_in_list_queries,
@@ -14,7 +20,7 @@ from silverestimate.persistence.silver_bars_queries import (
 )
 
 
-class SilverBarsRepository:
+class _SilverBarsRepositoryBackend:
     """Encapsulate silver bar list and inventory persistence logic."""
 
     def __init__(self, db_manager: Any) -> None:
@@ -599,6 +605,50 @@ class SilverBarsRepository:
             )
             return [], 0
 
+    def get_available_bars_keyset_page(
+        self,
+        *,
+        weight_query: Optional[float] = None,
+        weight_tolerance: float = 0.001,
+        min_purity: Optional[float] = None,
+        max_purity: Optional[float] = None,
+        date_range: Optional[Tuple[Optional[str], Optional[str]]] = None,
+        cursor: AvailableBarCursor | None = None,
+        limit: int = 1500,
+    ) -> Page[dict[str, Any], AvailableBarCursor]:
+        db_cursor = self._cursor
+        if not db_cursor:
+            return Page(items=(), total=0, next_cursor=None)
+        page_size = max(1, min(int(limit), 5000))
+        statements = build_available_bars_queries(
+            weight_query=weight_query,
+            weight_tolerance=weight_tolerance,
+            min_purity=min_purity,
+            max_purity=max_purity,
+            date_range=date_range,
+            limit=page_size + 1,
+            after_date_added=cursor.date_added if cursor else None,
+            after_bar_id=cursor.bar_id if cursor else None,
+        )
+        db_cursor.execute(
+            statements.count_query.query,
+            tuple(statements.count_query.params),
+        )
+        count_row = db_cursor.fetchone()
+        total = int(count_row[0]) if count_row else 0
+        db_cursor.execute(statements.query.query, tuple(statements.query.params))
+        fetched = [dict(row) for row in db_cursor.fetchall()]
+        has_more = len(fetched) > page_size
+        rows = fetched[:page_size]
+        next_cursor = None
+        if has_more and rows:
+            last = rows[-1]
+            next_cursor = AvailableBarCursor(
+                str(last.get("date_added", "") or ""),
+                int(last["bar_id"]),
+            )
+        return Page(tuple(rows), total, next_cursor)
+
     def get_bars_in_list_page(
         self,
         list_id: int,
@@ -627,6 +677,37 @@ class SilverBarsRepository:
                 exc_info=True,
             )
             return [], 0
+
+    def get_bars_in_list_keyset_page(
+        self,
+        list_id: int,
+        *,
+        cursor: BarListCursor | None = None,
+        limit: int = 1500,
+    ) -> Page[dict[str, Any], BarListCursor]:
+        db_cursor = self._cursor
+        if not db_cursor:
+            return Page(items=(), total=0, next_cursor=None)
+        page_size = max(1, min(int(limit), 5000))
+        statements = build_bars_in_list_queries(
+            list_id,
+            limit=page_size + 1,
+            after_bar_id=cursor.bar_id if cursor else None,
+        )
+        db_cursor.execute(
+            statements.count_query.query,
+            tuple(statements.count_query.params),
+        )
+        count_row = db_cursor.fetchone()
+        total = int(count_row[0]) if count_row else 0
+        db_cursor.execute(statements.query.query, tuple(statements.query.params))
+        fetched = [dict(row) for row in db_cursor.fetchall()]
+        has_more = len(fetched) > page_size
+        rows = fetched[:page_size]
+        next_cursor = (
+            BarListCursor(int(rows[-1]["bar_id"])) if has_more and rows else None
+        )
+        return Page(tuple(rows), total, next_cursor)
 
     def get_bars_in_list(
         self,
@@ -685,6 +766,54 @@ class SilverBarsRepository:
                 exc_info=True,
             )
             return []
+
+    def search_history_bars_page(
+        self,
+        *,
+        voucher_term: str = "",
+        weight_text: str = "",
+        status_text: str = "All Statuses",
+        cursor: SilverBarHistoryCursor | None = None,
+        limit: int = 1000,
+    ) -> Page[dict[str, Any], SilverBarHistoryCursor]:
+        db_cursor = self._cursor
+        if not db_cursor:
+            return Page(items=(), total=0, next_cursor=None)
+        page_size = max(1, min(int(limit), 5000))
+        count_statement = build_history_bars_query(
+            voucher_term=voucher_term,
+            weight_text=weight_text,
+            status_text=status_text,
+            limit=1,
+        )
+        count_base = count_statement.query.rsplit(" ORDER BY ", 1)[0]
+        db_cursor.execute(
+            f"SELECT COUNT(*) FROM ({count_base})",  # nosec B608
+            tuple(count_statement.params[:-1]),
+        )
+        count_row = db_cursor.fetchone()
+        total = int(count_row[0]) if count_row else 0
+
+        statement = build_history_bars_query(
+            voucher_term=voucher_term,
+            weight_text=weight_text,
+            status_text=status_text,
+            limit=page_size + 1,
+            after_date_added=cursor.date_added if cursor else None,
+            after_bar_id=cursor.bar_id if cursor else None,
+        )
+        db_cursor.execute(statement.query, tuple(statement.params))
+        fetched = [dict(row) for row in db_cursor.fetchall()]
+        has_more = len(fetched) > page_size
+        rows = fetched[:page_size]
+        next_cursor = None
+        if has_more and rows:
+            last = rows[-1]
+            next_cursor = SilverBarHistoryCursor(
+                str(last.get("date_added", "") or ""),
+                int(last["bar_id"]),
+            )
+        return Page(tuple(rows), total, next_cursor)
 
     def count_bars_by_list_ids(self, list_ids: Iterable[int]) -> dict[int, int]:
         cursor = self._cursor
@@ -1175,3 +1304,120 @@ class SilverBarsRepository:
             seen.add(bar_id)
             normalized.append(bar_id)
         return normalized
+
+
+class SilverBarsRepository:
+    """Compatibility facade over query, command, and synchronization repositories."""
+
+    def __init__(self, db_manager: Any) -> None:
+        from silverestimate.persistence.silver_bar_command_repository import (
+            SilverBarCommandRepository,
+        )
+        from silverestimate.persistence.silver_bar_query_repository import (
+            SilverBarQueryRepository,
+        )
+        from silverestimate.persistence.silver_bar_synchronization_repository import (
+            SilverBarSynchronizationRepository,
+        )
+
+        backend = _SilverBarsRepositoryBackend(db_manager)
+        self.query_repository = SilverBarQueryRepository(backend)
+        self.command_repository = SilverBarCommandRepository(backend)
+        self.synchronization_repository = SilverBarSynchronizationRepository(backend)
+
+    def generate_list_identifier(self) -> str:
+        return self.command_repository.generate_list_identifier()
+
+    def create_list(self, note: str | None = None) -> int | None:
+        return self.command_repository.create_list(note)
+
+    def get_lists(self, include_issued: bool = True) -> Any:
+        return self.query_repository.get_lists(include_issued)
+
+    def get_list_details(self, list_id: int) -> Any:
+        return self.query_repository.get_list_details(list_id)
+
+    def get_list_details_result(self, list_id: int) -> Any:
+        return self.query_repository.get_list_details_result(list_id)
+
+    def update_list_note(self, list_id: int, new_note: str) -> bool:
+        return self.command_repository.update_list_note(list_id, new_note)
+
+    def mark_list_as_issued(self, *args: Any, **kwargs: Any) -> Any:
+        return self.command_repository.mark_list_as_issued(*args, **kwargs)
+
+    def reactivate_list(self, list_id: int) -> bool:
+        return self.command_repository.reactivate_list(list_id)
+
+    def delete_list(self, list_id: int) -> tuple[bool, str]:
+        return self.command_repository.delete_list(list_id)
+
+    def delete_list_result(self, list_id: int) -> Any:
+        return self.command_repository.delete_list_result(list_id)
+
+    def assign_bar_to_list(self, *args: Any, **kwargs: Any) -> Any:
+        return self.command_repository.assign_bar_to_list(*args, **kwargs)
+
+    def assign_bars_to_list_bulk(self, *args: Any, **kwargs: Any) -> Any:
+        return self.command_repository.assign_bars_to_list_bulk(*args, **kwargs)
+
+    def remove_bar_from_list(self, *args: Any, **kwargs: Any) -> Any:
+        return self.command_repository.remove_bar_from_list(*args, **kwargs)
+
+    def remove_bars_from_list_bulk(self, *args: Any, **kwargs: Any) -> Any:
+        return self.command_repository.remove_bars_from_list_bulk(*args, **kwargs)
+
+    def get_available_bars_page(self, *args: Any, **kwargs: Any) -> Any:
+        return self.query_repository.get_available_bars_page(*args, **kwargs)
+
+    def get_available_bars_keyset_page(self, *args: Any, **kwargs: Any) -> Any:
+        return self.query_repository.get_available_bars_keyset_page(*args, **kwargs)
+
+    def get_bars_in_list_page(self, *args: Any, **kwargs: Any) -> Any:
+        return self.query_repository.get_bars_in_list_page(*args, **kwargs)
+
+    def get_bars_in_list_keyset_page(self, *args: Any, **kwargs: Any) -> Any:
+        return self.query_repository.get_bars_in_list_keyset_page(*args, **kwargs)
+
+    def get_bars_in_list(self, list_id: int, *args: Any, **kwargs: Any) -> Any:
+        return self.query_repository.get_bars_in_list(list_id, *args, **kwargs)
+
+    def get_available_bars(self) -> Any:
+        return self.query_repository.get_available_bars()
+
+    def search_history_bars(self, *args: Any, **kwargs: Any) -> Any:
+        return self.query_repository.search_history_bars(*args, **kwargs)
+
+    def search_history_bars_page(self, *args: Any, **kwargs: Any) -> Any:
+        return self.query_repository.search_history_bars_page(*args, **kwargs)
+
+    def count_bars_by_list_ids(self, list_ids: Iterable[int]) -> dict[int, int]:
+        return self.query_repository.count_bars_by_list_ids(list_ids)
+
+    def get_silver_bars_for_estimate(self, voucher_no: str) -> Any:
+        return self.query_repository.get_silver_bars_for_estimate(voucher_no)
+
+    def sync_silver_bars_for_estimate(
+        self,
+        voucher_no: str,
+        bars: Iterable[Mapping[str, Any]],
+    ) -> tuple[int, int]:
+        result = self.synchronization_repository.synchronize(voucher_no, bars)
+        return result.added, result.failed
+
+    def add_silver_bar(
+        self, voucher_no: str, weight: float, purity: float
+    ) -> int | None:
+        return self.command_repository.add_silver_bar(voucher_no, weight, purity)
+
+    def get_silver_bars(self, *args: Any, **kwargs: Any) -> Any:
+        return self.query_repository.get_silver_bars(*args, **kwargs)
+
+    def delete_bars_for_estimate(self, voucher_no: str) -> tuple[int, set[Any]]:
+        return self.command_repository.delete_bars_for_estimate(voucher_no)
+
+    def cleanup_empty_lists(self, list_ids: Iterable[int]) -> None:
+        self.command_repository.cleanup_empty_lists(list_ids)
+
+
+__all__ = ["SilverBarsRepository"]

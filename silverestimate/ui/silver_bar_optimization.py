@@ -61,9 +61,10 @@ def dp_combination_range(bars, min_target: float, max_target: float):
 
         for weight, (count, indices) in dp.items():
             new_weight = weight + bar_weight
-            if new_weight <= max_target_int:
-                if new_weight not in new_dp or new_dp[new_weight][0] > count + 1:
-                    new_dp[new_weight] = (count + 1, indices + [index])
+            if new_weight <= max_target_int and (
+                new_weight not in new_dp or new_dp[new_weight][0] > count + 1
+            ):
+                new_dp[new_weight] = (count + 1, indices + [index])
 
         dp = new_dp
 

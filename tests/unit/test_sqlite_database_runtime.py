@@ -39,6 +39,8 @@ def test_schema_helpers_create_and_advance_schema_version():
         assert runtime.table_exists(cursor, "schema_version") is True
         assert runtime.update_schema_version(conn, cursor, 3) is True
         assert runtime.check_schema_version(conn, cursor) == 3
+        conn.rollback()
+        assert runtime.check_schema_version(conn, cursor) == 0
     finally:
         conn.close()
 

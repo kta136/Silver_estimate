@@ -1,6 +1,7 @@
 import logging
 import sqlite3
 from datetime import datetime
+from types import SimpleNamespace
 
 import pytest
 
@@ -63,7 +64,6 @@ class FakeDB:
             "INSERT INTO schema_version (version, applied_date) VALUES (?, ?)",
             (new_version, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
         )
-        self.conn.commit()
         return True
 
     def request_flush(self) -> None:
@@ -87,14 +87,119 @@ def test_items_repository_roundtrip(fake_db):
     assert fake_db._flush_requested
 
 
-def test_schema_setup_upgrades_to_v5_and_adds_line_key_columns(fake_db):
+def test_item_catalog_keyset_pages_do_not_duplicate_rows(fake_db):
+    repo = ItemsRepository(fake_db)
+    result = repo.upsert_item_catalog(
+        [
+            {
+                "code": code,
+                "name": f"Item {code}",
+                "purity": 90.0,
+                "wage_type": "P",
+                "wage_rate": 1.0,
+            }
+            for code in ("A001", "A002", "A003", "B001")
+        ]
+    )
+    assert result == {"inserted": 4, "updated": 0, "deleted": 0, "total": 4}
+
+    first = repo.search_items_page("A", limit=2)
+    second = repo.search_items_page("A", cursor=first.next_cursor, limit=2)
+
+    assert first.total == 3
+    assert first.has_more is True
+    assert [row["code"] for row in first.items] == ["A001", "A002"]
+    assert [row["code"] for row in second.items] == ["A003"]
+    assert second.next_cursor is None
+    assert fake_db.item_cache_controller.get("B001")["name"] == "Item B001"
+
+
+def test_estimate_history_keyset_page_reads_header_totals(fake_db):
+    repo = EstimatesRepository(fake_db)
+    fake_db.cursor.executemany(
+        "INSERT INTO estimates "
+        "(voucher_no, voucher_no_int, date, total_gross, total_net) "
+        "VALUES (?, ?, '2026-07-15', ?, ?)",
+        [
+            ("1", 1, 10.0, 9.0),
+            ("2", 2, 20.0, 18.0),
+            ("3", 3, 30.0, 27.0),
+        ],
+    )
+    fake_db.conn.commit()
+
+    first = repo.get_estimate_history_page(limit=2)
+    second = repo.get_estimate_history_page(cursor=first.next_cursor, limit=2)
+
+    assert first.total == 3
+    assert [row["voucher_no"] for row in first.items] == ["3", "2"]
+    assert first.items[0]["total_gross"] == 30.0
+    assert [row["voucher_no"] for row in second.items] == ["1"]
+
+
+def test_schema_setup_upgrades_to_v6_and_adds_line_key_columns(fake_db):
     fake_db.cursor.execute("SELECT MAX(version) AS v FROM schema_version")
     row = fake_db.cursor.fetchone()
-    assert row["v"] == 5
+    assert row["v"] == 6
     assert fake_db._column_exists("estimates", "voucher_no_int")
     assert fake_db._column_exists("estimate_items", "wage_type")
     assert fake_db._column_exists("estimate_items", "line_key")
     assert fake_db._column_exists("silver_bars", "source_line_key")
+    fake_db.cursor.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='index' "
+        "AND name='idx_sbars_status_list_weight_date_id'"
+    )
+    assert fake_db.cursor.fetchone() is not None
+
+
+def test_schema_setup_rolls_back_all_domain_changes_when_version_stage_fails():
+    class FailingDB(FakeDB):
+        def _update_schema_version(self, new_version: int) -> bool:
+            if new_version == 4:
+                raise sqlite3.OperationalError("injected migration failure")
+            return super()._update_schema_version(new_version)
+
+    db = FailingDB()
+    try:
+        with pytest.raises(sqlite3.OperationalError, match="injected"):
+            migrations.run_schema_setup(db)
+        db.cursor.execute("SELECT MAX(version) FROM schema_version")
+        assert db.cursor.fetchone()[0] == 0
+        assert db._table_exists("items") is False
+    finally:
+        db.conn.close()
+
+
+def test_migration_v6_rebuilds_persisted_history_totals():
+    db = FakeDB()
+    try:
+        migrations.run_schema_setup(db)
+        db.cursor.execute("DELETE FROM schema_version WHERE version = 6")
+        db.cursor.execute(
+            "INSERT INTO estimates "
+            "(voucher_no, voucher_no_int, date, total_gross, total_net) "
+            "VALUES ('9', 9, '2026-07-15', 999, 999)"
+        )
+        db.cursor.executemany(
+            "INSERT INTO estimate_items "
+            "(voucher_no, gross, net_wt, is_return, is_silver_bar) "
+            "VALUES (?, ?, ?, ?, ?)",
+            [
+                ("9", 10.0, 8.0, 0, 0),
+                ("9", 4.0, 3.0, 1, 0),
+                ("9", 2.0, 2.0, 0, 1),
+            ],
+        )
+        db.conn.commit()
+
+        migrations.run_schema_setup(db)
+
+        row = db.conn.execute(
+            "SELECT total_gross, total_net FROM estimates WHERE voucher_no='9'"
+        ).fetchone()
+        assert tuple(row) == (10.0, 8.0)
+    finally:
+        db.conn.close()
 
 
 def test_migration_v3_backfills_numeric_vouchers_from_legacy_schema():
@@ -148,7 +253,7 @@ def test_migration_v3_backfills_numeric_vouchers_from_legacy_schema():
         assert rows["AB-1"] is None
 
         db.cursor.execute("SELECT MAX(version) AS v FROM schema_version")
-        assert db.cursor.fetchone()["v"] == 5
+        assert db.cursor.fetchone()["v"] == 6
     finally:
         db.conn.close()
 
@@ -766,6 +871,26 @@ def test_silver_bar_list_query_limit_and_offset(fake_db):
     assert offset_rows[0]["bar_id"] == limited[1]["bar_id"]
 
 
+def test_silver_bar_keyset_pages_preserve_stable_order(fake_db):
+    repo = SilverBarsRepository(fake_db)
+    created = [
+        repo.add_silver_bar(f"PAGE-{index}", float(index), 99.0)
+        for index in range(1, 5)
+    ]
+    assert all(bar_id is not None for bar_id in created)
+
+    first = repo.get_available_bars_keyset_page(limit=2)
+    second = repo.get_available_bars_keyset_page(
+        cursor=first.next_cursor,
+        limit=2,
+    )
+
+    ids = [row["bar_id"] for row in (*first.items, *second.items)]
+    assert first.total == 4
+    assert len(ids) == len(set(ids)) == 4
+    assert ids == sorted(ids, reverse=True)
+
+
 def test_silver_bar_repository_available_page_and_history_search(fake_db):
     repo = SilverBarsRepository(fake_db)
     list_id = repo.create_list("Page List")
@@ -929,3 +1054,153 @@ def test_save_estimate_accepts_mixed_case_item_codes(fake_db):
 
     assert saved
     assert fake_db.last_error is None
+
+
+def test_silver_bar_repository_handles_missing_database_runtime() -> None:
+    db = SimpleNamespace(
+        conn=None,
+        cursor=None,
+        logger=logging.getLogger("test.silver-bars.missing-db"),
+    )
+    repo = SilverBarsRepository(db)
+
+    assert repo.generate_list_identifier().startswith("ERR-L-")
+    assert repo.create_list("offline") is None
+    assert repo.get_lists() == []
+    assert repo.get_list_details(1) is None
+    assert repo.get_list_details_result(1).succeeded is False
+    assert repo.update_list_note(1, "note") is False
+    assert repo.mark_list_as_issued(1) is False
+    assert repo.reactivate_list(1) is False
+    assert repo.delete_list(1) == (False, "No database connection")
+    assert repo.delete_list_result(1).succeeded is False
+    assert repo.assign_bar_to_list(1, 1) is False
+    assert repo.assign_bars_to_list_bulk([1], 1) == (0, [])
+    assert repo.remove_bar_from_list(1) is False
+    assert repo.remove_bars_from_list_bulk([1]) == (0, [])
+    assert repo.get_available_bars_page() == ([], 0)
+    assert repo.get_available_bars_keyset_page().items == ()
+    assert repo.get_bars_in_list_page(1) == ([], 0)
+    assert repo.get_bars_in_list_keyset_page(1).items == ()
+    assert repo.get_bars_in_list(1) == []
+    assert repo.get_available_bars() == []
+    assert repo.search_history_bars() == []
+    assert repo.search_history_bars_page().items == ()
+    assert repo.count_bars_by_list_ids([1]) == {}
+    assert repo.get_silver_bars_for_estimate("1") == []
+    assert repo.sync_silver_bars_for_estimate("1", []) == (0, 0)
+    assert repo.add_silver_bar("1", 1.0, 99.9) is None
+    assert repo.get_silver_bars() == []
+    assert repo.delete_bars_for_estimate("1") == (0, set())
+    assert repo.cleanup_empty_lists([1]) is None
+
+
+def test_silver_bar_repository_storage_errors_are_contained(fake_db) -> None:
+    class ErrorCursor:
+        rowcount = 0
+        lastrowid = None
+
+        def execute(self, *_args, **_kwargs):
+            raise sqlite3.OperationalError("injected storage fault")
+
+        def executemany(self, *_args, **_kwargs):
+            raise sqlite3.OperationalError("injected storage fault")
+
+    fake_db.cursor = ErrorCursor()
+    repo = SilverBarsRepository(fake_db)
+
+    assert repo.generate_list_identifier().startswith("L-")
+    assert repo.create_list("fault") is None
+    assert repo.get_lists() == []
+    assert repo.get_list_details(1) is None
+    assert repo.update_list_note(1, "fault") is False
+    assert repo.mark_list_as_issued(1) is False
+    assert repo.reactivate_list(1) is False
+    deleted, message = repo.delete_list(1)
+    assert deleted is False
+    assert "injected storage fault" in message
+    assert repo.assign_bar_to_list(1, 1) is False
+    assert repo.assign_bars_to_list_bulk([1], 1) == (0, [1])
+    assert repo.remove_bar_from_list(1) is False
+    assert repo.remove_bars_from_list_bulk([1]) == (0, [1])
+    assert repo.get_available_bars_page() == ([], 0)
+    with pytest.raises(sqlite3.OperationalError, match="injected storage fault"):
+        repo.get_available_bars_keyset_page()
+    assert repo.get_bars_in_list_page(1) == ([], 0)
+    with pytest.raises(sqlite3.OperationalError, match="injected storage fault"):
+        repo.get_bars_in_list_keyset_page(1)
+    assert repo.get_available_bars() == []
+    assert repo.search_history_bars() == []
+    with pytest.raises(sqlite3.OperationalError, match="injected storage fault"):
+        repo.search_history_bars_page()
+    assert repo.count_bars_by_list_ids([1]) == {}
+    assert repo.get_silver_bars_for_estimate("1") == []
+    assert repo.sync_silver_bars_for_estimate("1", [{"weight": 1, "purity": 99}]) == (
+        0,
+        1,
+    )
+    assert repo.add_silver_bar("1", 1.0, 99.9) is None
+    assert repo.get_silver_bars() == []
+    with pytest.raises(sqlite3.OperationalError, match="injected storage fault"):
+        repo.delete_bars_for_estimate("1")
+    assert repo.cleanup_empty_lists([1]) is None
+
+
+def test_silver_bar_repository_exercises_edge_outcomes(fake_db) -> None:
+    repo = SilverBarsRepository(fake_db)
+    list_id = repo.create_list("edge cases")
+    assert list_id is not None
+
+    fake_db.cursor.execute(
+        "UPDATE silver_bar_lists SET list_identifier = 'malformed' WHERE list_id = ?",
+        (list_id,),
+    )
+    assert repo.generate_list_identifier().endswith("-001")
+    assert repo.update_list_note(-1, "missing") is False
+    assert repo.mark_list_as_issued(-1) is False
+    assert repo.reactivate_list(-1) is False
+    assert repo.assign_bar_to_list(-1, list_id) is False
+
+    bar_id = repo.add_silver_bar("edge", 2.5, 95.0)
+    assert bar_id is not None
+    assert repo.assign_bar_to_list(bar_id, -1) is False
+    assert repo.assign_bars_to_list_bulk([], list_id) == (0, [])
+    assert repo.assign_bars_to_list_bulk([bar_id], -1) == (0, [bar_id])
+    assert repo.assign_bars_to_list_bulk([-1, "bad", bar_id, bar_id], list_id) == (
+        1,
+        [],
+    )
+    assert repo.remove_bars_from_list_bulk([]) == (0, [])
+    assert repo.remove_bars_from_list_bulk([-1, "bad"]) == (0, [])
+    assert repo.remove_bars_from_list_bulk([bar_id, 999999]) == (1, [999999])
+    assert repo.remove_bar_from_list(bar_id) is False
+
+    result = repo.delete_list(999999)
+    assert result == (False, "List not found")
+    typed = repo.delete_list_result(999999)
+    assert typed.succeeded is False
+
+    rows = repo.get_silver_bars(
+        status="In Stock",
+        weight_query="invalid",
+        estimate_voucher_no="edge",
+        unassigned_only=True,
+        min_purity="invalid",
+        max_purity="invalid",
+        date_range=("2000-01-01", "2099-01-01"),
+        limit=1,
+        offset=1,
+    )
+    assert rows == []
+    assert repo.count_bars_by_list_ids([]) == {}
+    assert repo.get_silver_bars_for_estimate("") == []
+
+    added, failed = repo.sync_silver_bars_for_estimate(
+        "edge-sync",
+        [
+            {"weight": object(), "purity": 99},
+            {"weight": 1, "purity": 99, "line_key": "same"},
+            {"weight": 2, "purity": 98, "line_key": "same"},
+        ],
+    )
+    assert (added, failed) == (1, 2)

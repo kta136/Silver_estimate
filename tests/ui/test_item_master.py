@@ -4,6 +4,7 @@ import types
 
 from PyQt6.QtCore import QItemSelectionModel
 
+from silverestimate.domain.pagination import Page
 from silverestimate.ui.item_master import ItemMasterWidget
 
 
@@ -159,39 +160,6 @@ def test_item_master_async_snapshot_load_populates_rows(qtbot, tmp_path):
         widget.deleteLater()
 
 
-def test_item_master_ignores_stale_async_results(qtbot):
-    db = _StubDbManager()
-    widget = ItemMasterWidget(db)
-    qtbot.addWidget(widget)
-    try:
-        original_codes = [
-            widget.items_model.row_payload(row)["code"]
-            for row in range(widget.items_model.rowCount())
-        ]
-        widget._load_request_id = 2
-        widget._load_request_meta = {1: (0.0, "old"), 2: (0.0, "new")}
-
-        widget._handle_async_load_result(
-            1,
-            [
-                {
-                    "code": "OLD001",
-                    "name": "Old",
-                    "purity": 90.0,
-                    "wage_type": "WT",
-                    "wage_rate": 10.0,
-                }
-            ],
-        )
-
-        assert [
-            widget.items_model.row_payload(row)["code"]
-            for row in range(widget.items_model.rowCount())
-        ] == original_codes
-    finally:
-        widget.deleteLater()
-
-
 def test_item_master_logs_perf_metric_even_for_fast_loads(qtbot, monkeypatch):
     db = _StubDbManager()
     widget = ItemMasterWidget(db)
@@ -204,9 +172,10 @@ def test_item_master_logs_perf_metric_even_for_fast_loads(qtbot, monkeypatch):
     )
     try:
         widget._apply_loaded_items(
-            list(db.get_all_items()),
+            Page(tuple(db.get_all_items()), 2, None),
             search_term="",
             started_at=time.perf_counter(),
+            append=False,
         )
         assert any(
             str(message).startswith("[perf] item_master.load_items=")

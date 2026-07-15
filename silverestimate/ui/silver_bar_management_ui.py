@@ -193,6 +193,17 @@ class SilverBarManagementUiBuilder(HostProxy):
         self.available_totals_label.setObjectName("SilverBarSummaryLabel")
         self.available_selection_label.setObjectName("SilverBarSummaryLabel")
 
+        available_paging_row = QHBoxLayout()
+        available_paging_row.addStretch()
+        self.available_load_more_button = QPushButton("Load more")
+        self.available_load_more_button.setObjectName("SilverBarSecondaryButton")
+        self.available_load_more_button.setVisible(False)
+        self.available_load_more_button.clicked.connect(
+            lambda: self.load_available_bars(append=True)
+        )
+        available_paging_row.addWidget(self.available_load_more_button)
+        left_layout.addLayout(available_paging_row)
+
         center_widget = QWidget(self.host)
         center_widget.setObjectName("SilverBarTransferPane")
         center_widget.setFixedWidth(128)
@@ -312,6 +323,17 @@ class SilverBarManagementUiBuilder(HostProxy):
         right_layout.addWidget(self.list_totals_label)
         right_layout.addWidget(self.list_selection_label)
 
+        list_paging_row = QHBoxLayout()
+        list_paging_row.addStretch()
+        self.list_load_more_button = QPushButton("Load more")
+        self.list_load_more_button.setObjectName("SilverBarSecondaryButton")
+        self.list_load_more_button.setVisible(False)
+        self.list_load_more_button.clicked.connect(
+            lambda: self.load_bars_in_selected_list(append=True)
+        )
+        list_paging_row.addWidget(self.list_load_more_button)
+        right_layout.addLayout(list_paging_row)
+
         self._splitter.addWidget(left_widget)
         self._splitter.addWidget(center_widget)
         self._splitter.addWidget(right_widget)
@@ -320,7 +342,13 @@ class SilverBarManagementUiBuilder(HostProxy):
 
         self.bottom_status_strip = BottomStatusStrip(self.host)
         self.bottom_status_strip.set_left_items(
-            ["F2: Item Search", "Ins: Add Row", "Del: Delete Row", "Ctrl+S: Save", "F9: Print"]
+            [
+                "F2: Item Search",
+                "Ins: Add Row",
+                "Del: Delete Row",
+                "Ctrl+S: Save",
+                "F9: Print",
+            ]
         )
         main_layout.addWidget(self.bottom_status_strip)
         self._update_dialog_status_strip()
@@ -421,10 +449,14 @@ class SilverBarManagementUiBuilder(HostProxy):
         for model in (self.available_bars_model, self.list_bars_model):
             try:
                 model.modelReset.connect(lambda *_: self._update_dialog_status_strip())
-                model.rowsInserted.connect(lambda *_: self._update_dialog_status_strip())
+                model.rowsInserted.connect(
+                    lambda *_: self._update_dialog_status_strip()
+                )
                 model.rowsRemoved.connect(lambda *_: self._update_dialog_status_strip())
             except (AttributeError, RuntimeError, TypeError) as exc:
-                self.logger.debug("Failed to bind silver bar status strip updates: %s", exc)
+                self.logger.debug(
+                    "Failed to bind silver bar status strip updates: %s", exc
+                )
 
     def _update_dialog_status_strip(self) -> None:
         strip = getattr(self, "bottom_status_strip", None)
@@ -443,5 +475,10 @@ class SilverBarManagementUiBuilder(HostProxy):
         except Exception:
             user = "-"
         strip.set_right_items(
-            [f"Rows: {left_rows} (Left)", f"Rows: {right_rows} (Right)", "Last Saved: -", f"User: {user}"]
+            [
+                f"Rows: {left_rows} (Left)",
+                f"Rows: {right_rows} (Right)",
+                "Last Saved: -",
+                f"User: {user}",
+            ]
         )

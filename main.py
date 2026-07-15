@@ -2,6 +2,7 @@
 import faulthandler
 import os
 import sys
+from contextlib import suppress
 
 # Proactively hide the console as early as possible on Windows when not explicitly requested.
 if os.name == "nt" and os.environ.get("SILVER_SHOW_CONSOLE") != "1":
@@ -21,19 +22,22 @@ from silverestimate.infrastructure.main_window_runtime import create_main_window
 
 # Fix sys.stdout and sys.stderr for GUI mode (Windows without console)
 if sys.stderr is None:
-    sys.stderr = open(os.devnull, "w")
+    sys.stderr = open(os.devnull, "w")  # noqa: SIM115 - process-lifetime stream
 if sys.stdout is None:
-    sys.stdout = open(os.devnull, "w")
+    sys.stdout = open(os.devnull, "w")  # noqa: SIM115 - process-lifetime stream
 
 # Enable Python-level crash dumps for segmentation faults (only if stderr is available)
-try:
+with suppress(Exception):
     faulthandler.enable()
-except Exception:
-    pass
 
 
 def main() -> int:
     """Start the SilverEstimate application and return the exit code."""
+    if "--artifact-smoke" in sys.argv:
+        from silverestimate.infrastructure.app_constants import APP_VERSION
+
+        print(f"SilverEstimate {APP_VERSION} artifact startup OK")
+        return 0
     if os.name == "nt" and os.environ.get("SILVER_SHOW_CONSOLE") != "1":
         from silverestimate.infrastructure.windows_integration import (
             hide_console_window,

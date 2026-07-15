@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Mapping
+
+from .print_format_spec import PrintRendererStrategy
 
 
 def _sanitize_filename_stem(value: str) -> str:
@@ -40,6 +42,7 @@ class PrintPayloadBuilder:
         render_old: Callable[[object], str],
         render_new: Callable[[object], str],
         render_thermal: Callable[[object], str],
+        renderer_strategies: Mapping[str, PrintRendererStrategy] | None = None,
         estimate_data=None,
     ) -> PrintPreviewPayload | None:
         resolved_data = (
@@ -50,7 +53,13 @@ class PrintPayloadBuilder:
 
         def build_payload(selected_layout: str) -> PrintPreviewPayload:
             normalized_layout = (selected_layout or "old").lower()
-            if normalized_layout == "new":
+            if renderer_strategies is not None:
+                strategy = renderer_strategies.get(normalized_layout)
+                if strategy is None:
+                    normalized_layout = "old"
+                    strategy = renderer_strategies[normalized_layout]
+                html_text = strategy.render(resolved_data)
+            elif normalized_layout == "new":
                 html_text = render_new(resolved_data)
             elif normalized_layout == "thermal":
                 html_text = render_thermal(resolved_data)
@@ -106,7 +115,7 @@ class PrintPayloadBuilder:
 
         identifier = (
             list_info["list_identifier"]
-            if "list_identifier" in list_info.keys()
+            if "list_identifier" in list_info
             and list_info["list_identifier"] is not None
             else "N/A"
         )

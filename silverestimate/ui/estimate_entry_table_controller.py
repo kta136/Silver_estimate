@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -120,10 +121,8 @@ class EstimateEntryTableController(HostProxy):
             or target_col >= self.item_table.columnCount()
         ):
             target_col = COL_CODE
-        try:
+        with contextlib.suppress(AttributeError, RuntimeError, TypeError, ValueError):
             self.item_table.setCurrentCell(row, target_col)
-        except AttributeError, RuntimeError, TypeError, ValueError:
-            pass
         self.current_row = row
         self.current_column = target_col
         self.delete_current_row()
@@ -160,9 +159,10 @@ class EstimateEntryTableController(HostProxy):
         )
         if row_changed and not mouse_pressed:
             self._mark_manual_row_navigation()
-        if not mouse_pressed:
-            if not self._enforce_code_required(currentRow, currentCol):
-                return
+        if not mouse_pressed and not self._enforce_code_required(
+            currentRow, currentCol
+        ):
+            return
         self.current_row = currentRow
         self.current_column = currentCol
         if (
@@ -298,17 +298,19 @@ class EstimateEntryTableController(HostProxy):
             ):
                 return True
 
-            if 0 <= self.current_row < self.item_table.rowCount():
-                if self._is_code_empty(self.current_row):
-                    if target_row != self.current_row or target_col != COL_CODE:
-                        if show_hint:
-                            self._status("Enter item code first", 1500)
-                        self._enforcing_code_nav = True
-                        try:
-                            self.focus_on_code_column(self.current_row)
-                        finally:
-                            self._enforcing_code_nav = False
-                        return False
+            if (
+                0 <= self.current_row < self.item_table.rowCount()
+                and self._is_code_empty(self.current_row)
+                and (target_row != self.current_row or target_col != COL_CODE)
+            ):
+                if show_hint:
+                    self._status("Enter item code first", 1500)
+                self._enforcing_code_nav = True
+                try:
+                    self.focus_on_code_column(self.current_row)
+                finally:
+                    self._enforcing_code_nav = False
+                return False
         except AttributeError, RuntimeError, TypeError, ValueError:
             return True
         return True
@@ -500,9 +502,9 @@ class EstimateEntryTableController(HostProxy):
                 return True
             if focus_widget is table:
                 return True
-            if hasattr(table, "isAncestorOf") and table.isAncestorOf(focus_widget):
-                return True
-            return False
+            return bool(
+                hasattr(table, "isAncestorOf") and table.isAncestorOf(focus_widget)
+            )
         except AttributeError, RuntimeError, TypeError:
             return False
 

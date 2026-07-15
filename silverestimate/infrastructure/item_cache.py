@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
+from collections.abc import Iterable
 from typing import Any, Dict, Optional, cast
 
 
@@ -20,12 +21,14 @@ class ItemCacheController:
 
     @property
     def cache(self) -> Dict[str, dict[str, Any]]:
-        return self._cache
+        with self._lock:
+            return dict(self._cache)
 
     def get(self, code: str):
         if not code:
             return None
-        return self._cache.get(code.upper())
+        with self._lock:
+            return self._cache.get(code.upper())
 
     def store(self, code: str, value: object) -> None:
         if not code:
@@ -41,12 +44,29 @@ class ItemCacheController:
             except Exception:
                 return
         if to_store is not None:
-            self._cache[code.upper()] = to_store
+            with self._lock:
+                self._cache[code.upper()] = to_store
 
     def invalidate(self, code: str) -> None:
         if not code:
             return
-        self._cache.pop(code.upper(), None)
+        with self._lock:
+            self._cache.pop(code.upper(), None)
+
+    def replace_all(self, rows: Iterable[object] | None) -> None:
+        """Atomically replace the cache after a catalog transaction."""
+        replacement: dict[str, dict[str, Any]] = {}
+        for raw_row in rows or ():
+            try:
+                row = raw_row if isinstance(raw_row, dict) else dict(cast(Any, raw_row))
+                code = str(row.get("code", "") or "").strip()
+            except TypeError, ValueError:
+                continue
+            if code:
+                replacement[code.upper()] = dict(row)
+        with self._lock:
+            self._cache = replacement
+            self._preloaded = True
 
     def start_preload(self, db_path: Optional[str]) -> None:
         """Warm the cache using a dedicated SQLite connection in the background."""

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 from typing import Optional, cast
 
@@ -88,7 +89,9 @@ class EstimateEntryLayoutController(HostProxy):
         self.command_history_button = QPushButton("History")
         self.command_history_button.setObjectName("EstimateHistoryButton")
         self.command_history_button.setIcon(get_icon("history", widget=self.host))
-        self.command_history_button.setToolTip("View, load, or print past estimates (Ctrl+H)")
+        self.command_history_button.setToolTip(
+            "View, load, or print past estimates (Ctrl+H)"
+        )
         header_layout.addWidget(self.command_history_button)
 
         self.command_settings_button = QPushButton("Settings")
@@ -101,7 +104,9 @@ class EstimateEntryLayoutController(HostProxy):
         self.estimate_tools_button.setObjectName("EstimateToolsButton")
         self.estimate_tools_button.setText("Tools")
         self.estimate_tools_button.setIcon(get_icon("tools", widget=self.host))
-        self.estimate_tools_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.estimate_tools_button.setPopupMode(
+            QToolButton.ToolButtonPopupMode.InstantPopup
+        )
         self.estimate_tools_button.setToolTip("Estimate row and silver-bar tools")
         self.estimate_tools_button.setMenu(self._build_estimate_tools_menu())
         header_layout.addWidget(self.estimate_tools_button)
@@ -200,7 +205,9 @@ class EstimateEntryLayoutController(HostProxy):
             model.rowsRemoved.connect(lambda *_: self._update_bottom_status_strip())
             model.modelReset.connect(lambda *_: self._update_bottom_status_strip())
         except (AttributeError, RuntimeError, TypeError) as exc:
-            self.logger.debug("Failed to bind bottom status strip table updates: %s", exc)
+            self.logger.debug(
+                "Failed to bind bottom status strip table updates: %s", exc
+            )
 
     def _build_estimate_tools_menu(self) -> QMenu:
         menu = QMenu(self.host)
@@ -220,7 +227,9 @@ class EstimateEntryLayoutController(HostProxy):
             menu,
         )
         return_mode.setCheckable(True)
-        return_mode.triggered.connect(lambda _checked=False: self.return_toggle_button.click())
+        return_mode.triggered.connect(
+            lambda _checked=False: self.return_toggle_button.click()
+        )
         menu.addAction(return_mode)
 
         silver_bar_mode = QAction(
@@ -235,15 +244,23 @@ class EstimateEntryLayoutController(HostProxy):
         menu.addAction(silver_bar_mode)
         menu.addSeparator()
 
-        balance = QAction(get_icon("balance", widget=self.host), "Add Last Balance", menu)
+        balance = QAction(
+            get_icon("balance", widget=self.host), "Add Last Balance", menu
+        )
         balance.triggered.connect(self.secondary_actions.last_balance_clicked.emit)
         menu.addAction(balance)
 
-        bars = QAction(get_icon("silver_bars", widget=self.host), "Silver Bar Manager", menu)
+        bars = QAction(
+            get_icon("silver_bars", widget=self.host), "Silver Bar Manager", menu
+        )
         bars.triggered.connect(self.secondary_actions.silver_bars_clicked.emit)
         menu.addAction(bars)
 
-        refresh = QAction(get_icon("refresh", widget=self.host, color="#0f766e"), "Refresh Live Rate", menu)
+        refresh = QAction(
+            get_icon("refresh", widget=self.host, color="#0f766e"),
+            "Refresh Live Rate",
+            menu,
+        )
         refresh.triggered.connect(self.secondary_actions.refresh_rate_clicked.emit)
         menu.addAction(refresh)
         menu.addSeparator()
@@ -279,7 +296,9 @@ class EstimateEntryLayoutController(HostProxy):
         except Exception:
             user = "-"
         last_saved = getattr(self.host, "_last_saved_status", "-")
-        strip.set_right_items([f"Rows: {rows}", f"Last Saved: {last_saved}", f"User: {user}"])
+        strip.set_right_items(
+            [f"Rows: {rows}", f"Last Saved: {last_saved}", f"User: {user}"]
+        )
 
     def refresh_bottom_status(self) -> None:
         self._update_bottom_status_strip()
@@ -315,10 +334,8 @@ class EstimateEntryLayoutController(HostProxy):
             return
 
         if normalized == "bottom":
-            try:
+            with contextlib.suppress(AttributeError, RuntimeError, TypeError):
                 sidebar_panel.set_sidebar_top_widget(None)
-            except AttributeError, RuntimeError, TypeError:
-                pass
             if hasattr(self.secondary_actions, "show_live_rate_in_header"):
                 self.secondary_actions.show_live_rate_in_header(show_divider=True)
             return
@@ -365,7 +382,9 @@ class EstimateEntryLayoutController(HostProxy):
             self.delete_current_estimate
         )
         self.command_history_button.clicked.connect(self.show_history)
-        self.command_settings_button.clicked.connect(self._show_settings_from_command_bar)
+        self.command_settings_button.clicked.connect(
+            self._show_settings_from_command_bar
+        )
 
         self.item_table.cell_edited.connect(self._on_table_cell_edited)
         self.item_table.column_layout_reset_requested.connect(
@@ -748,13 +767,15 @@ class EstimateEntryLayoutController(HostProxy):
         if val:
             try:
                 widths = [int(w) for w in val.split(",")]
-                for i, w in enumerate(widths):
+                saved_widths = {
+                    i: w
+                    for i, w in enumerate(widths)
                     if (
                         i < self.item_table.columnCount()
                         and not is_stretch_column(i)
                         and w > 0
-                    ):
-                        saved_widths[i] = w
+                    )
+                }
             except (TypeError, ValueError) as exc:
                 self.logger.debug("Failed to restore column widths setting: %s", exc)
         self._apply_non_autofit_column_layout(saved_widths)
@@ -827,7 +848,9 @@ class EstimateEntryLayoutController(HostProxy):
             self.item_table.verticalHeader().setMinimumSectionSize(
                 max(22, row_height - 2)
             )
-            self.item_table.horizontalHeader().setFixedHeight(max(26, min(34, row_height + 2)))
+            self.item_table.horizontalHeader().setFixedHeight(
+                max(26, min(34, row_height + 2))
+            )
             self._schedule_columns_autofit(delay_ms=0, force=True)
             self.item_table.viewport().update()
             return True

@@ -1,4 +1,5 @@
 import logging
+from contextlib import suppress
 
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (
@@ -334,11 +335,8 @@ class LoginDialog(QDialog):
         QApplication.alert(self, 0)
         self.password_input.setFocus(Qt.FocusReason.ActiveWindowFocusReason)
 
-        try:
+        with suppress(Exception):
             bring_window_to_front(int(self.winId()))
-        except Exception:
-            # Keep startup resilient even if native focus promotion is unavailable.
-            pass
 
     def _toggle_password_visibility(self, checked):
         mode = QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password

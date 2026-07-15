@@ -230,9 +230,10 @@ class SilverBarTableController(HostProxy):
             rows = []
             for idx in selected:
                 row = idx.row()
-                values = []
-                for column in range(table.model().columnCount()):
-                    values.append(self._table_cell_text(table, row, column))
+                values = [
+                    self._table_cell_text(table, row, column)
+                    for column in range(table.model().columnCount())
+                ]
                 rows.append("\t".join(values))
             QApplication.clipboard().setText("\n".join(rows))
         except Exception as exc:

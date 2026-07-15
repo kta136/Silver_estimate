@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 import logging
+import threading
+from dataclasses import dataclass
 from datetime import datetime
+from typing import Any, cast
 
-from PyQt6.QtCore import QObject, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -21,6 +24,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from silverestimate.domain.pagination import Page, SilverBarHistoryCursor
+from silverestimate.infrastructure.latest_request_runner import LatestRequestRunner
 from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.persistence.silver_bars_snapshot_repository import (
     SilverBarsSnapshotRepository,
@@ -38,6 +43,34 @@ from silverestimate.ui.modern_components import (
 from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
 from silverestimate.ui.themed_controls import ThemedComboBox, ThemedSpinBox
 from silverestimate.ui.window_sizing import resize_to_available_screen
+
+
+@dataclass(frozen=True)
+class _BarsHistoryRequest:
+    db_path: str
+    voucher_term: str
+    weight_text: str
+    status_text: str
+    cursor: SilverBarHistoryCursor | None
+    append: bool
+
+
+def _load_bars_history_page(
+    request: _BarsHistoryRequest,
+    cancel_event: threading.Event,
+) -> tuple[_BarsHistoryRequest, Page[dict[str, Any], SilverBarHistoryCursor]]:
+    snapshot = SilverBarsSnapshotRepository(
+        request.db_path,
+        cancel_event=cancel_event,
+    )
+    page = snapshot.search_history_bars_page(
+        voucher_term=request.voucher_term,
+        weight_text=request.weight_text,
+        status_text=request.status_text,
+        cursor=request.cursor,
+        limit=1000,
+    )
+    return request, page
 
 
 class SilverBarHistoryDialog(QDialog):
@@ -106,8 +139,17 @@ class SilverBarHistoryDialog(QDialog):
         self._search_timer.setSingleShot(True)
         self._search_timer.setInterval(180)
         self._search_timer.timeout.connect(self.search_bars)
-        self._bars_load_request_id = 0
-        self._active_load_workers: dict[QThread, QObject] = {}
+        self._history_rows: list[dict[str, Any]] = []
+        self._bars_cursor: SilverBarHistoryCursor | None = None
+        self._bars_total = 0
+        self._bars_load_runner = LatestRequestRunner(
+            _load_bars_history_page,
+            self,
+            name="silver-bar-history-loader",
+        )
+        self._bars_load_runner.result.connect(self._on_bars_load_ready)
+        self._bars_load_runner.failed.connect(self._on_bars_load_error)
+        self._bars_load_runner.settled.connect(self._on_bars_load_finished)
 
         self.init_ui()
         self.load_all_bars()
@@ -154,7 +196,7 @@ class SilverBarHistoryDialog(QDialog):
 
         close_button = QPushButton("Close")
         close_button.setObjectName("SilverBarHistorySecondaryButton")
-        close_button.clicked.connect(self.accept)
+        close_button.clicked.connect(self.reject)
         close_layout.addWidget(close_button)
 
         main_layout.addLayout(close_layout)
@@ -202,21 +244,21 @@ class SilverBarHistoryDialog(QDialog):
         limit_label.setObjectName("SilverBarHistoryFieldLabel")
         filters_row.addWidget(limit_label)
         self.max_rows_spin = ThemedSpinBox()
-        self.max_rows_spin.setRange(100, 50000)
+        self.max_rows_spin.setRange(100, 1000)
         self.max_rows_spin.setSingleStep(100)
         self.max_rows_spin.setMinimumWidth(116)
         self.max_rows_spin.setMaximumWidth(132)
-        default_limit = 2000
+        default_limit = 1000
         try:
             default_limit = get_app_settings().value(
-                "silver_bar/history_max_rows", defaultValue=2000, type=int
+                "silver_bar/history_max_rows", defaultValue=1000, type=int
             )
         except Exception as exc:
             self.logger.debug(
                 "Could not read persisted history max rows setting: %s", exc
             )
-        self.max_rows_spin.setValue(max(100, int(default_limit or 2000)))
-        self.max_rows_spin.setSuffix(" rows")
+        self.max_rows_spin.setValue(min(1000, max(100, int(default_limit or 1000))))
+        self.max_rows_spin.setSuffix(" / page")
         self.max_rows_spin.setToolTip(
             "Limit maximum rows loaded in history tables to keep UI responsive."
         )
@@ -285,6 +327,17 @@ class SilverBarHistoryDialog(QDialog):
         self.bars_summary = QLabel("Total Bars: 0")
         self.bars_summary.setObjectName("SilverBarHistorySummaryLabel")
         layout.addWidget(self.bars_summary)
+
+        paging_row = QHBoxLayout()
+        paging_row.addStretch()
+        self.load_more_button = QPushButton("Load more")
+        self.load_more_button.setObjectName("SilverBarHistorySecondaryButton")
+        self.load_more_button.setVisible(False)
+        self.load_more_button.clicked.connect(
+            lambda: self._start_bars_load(self._current_bars_payload(), append=True)
+        )
+        paging_row.addWidget(self.load_more_button)
+        layout.addLayout(paging_row)
 
         self.bars_bottom_status = BottomStatusStrip(self)
         self.bars_bottom_status.set_left_items(["Loaded Bars: 0"])
@@ -416,35 +469,34 @@ class SilverBarHistoryDialog(QDialog):
                 "voucher_term": "",
                 "weight_text": "",
                 "status_text": "All Statuses",
-                "limit": self._table_result_limit(),
             }
         )
 
-    def _start_bars_load(self, payload: dict) -> None:
-        self._bars_load_request_id += 1
-        request_id = self._bars_load_request_id
+    def _start_bars_load(self, payload: dict, *, append: bool = False) -> None:
+        if not append:
+            self._history_rows = []
+            self._bars_cursor = None
+            self._bars_total = 0
+            self.bars_model.set_rows([])
+            self.load_more_button.setVisible(False)
+        elif self._bars_cursor is None:
+            return
+        self.load_more_button.setEnabled(False)
         db_path = getattr(self.db_manager, "temp_db_path", None)
         if not db_path:
-            self._load_bars_fallback(payload, request_id)
+            self._load_bars_fallback(payload, append=append)
             return
 
-        worker = _BarsHistoryLoadWorker(db_path, payload)
-        thread = QThread(self)
-        worker.moveToThread(thread)
-        thread.started.connect(worker.run)
-        worker.data_ready.connect(
-            lambda rows, req=request_id: self._on_bars_load_ready(req, rows)
-        )
-        worker.error.connect(
-            lambda message, req=request_id: self._on_bars_load_error(req, message)
-        )
-        worker.finished.connect(
-            lambda req=request_id, th=thread, w=worker: self._on_bars_load_finished(
-                req, th, w
+        self._bars_load_runner.submit(
+            _BarsHistoryRequest(
+                str(db_path),
+                str(payload.get("voucher_term") or "").strip(),
+                str(payload.get("weight_text") or "").strip(),
+                str(payload.get("status_text") or "All Statuses").strip(),
+                self._bars_cursor,
+                append,
             )
         )
-        self._active_load_workers[thread] = worker
-        thread.start()
 
     @staticmethod
     def _table_cell_value(
@@ -478,49 +530,70 @@ class SilverBarHistoryDialog(QDialog):
                 "Failed to clear silver bar history table rows: %s", exc
             )
 
-    def _load_bars_fallback(self, payload: dict, request_id: int) -> None:
+    def _load_bars_fallback(self, payload: dict, *, append: bool) -> None:
         try:
-            rows = self.db_manager.search_silver_bar_history(
-                voucher_term=str(payload.get("voucher_term") or "").strip(),
-                weight_text=str(payload.get("weight_text") or "").strip(),
-                status_text=str(payload.get("status_text") or "").strip(),
-                limit=int(payload.get("limit", 2000) or 2000),
+            getter = getattr(self.db_manager, "search_silver_bar_history_page", None)
+            if callable(getter):
+                page = getter(
+                    voucher_term=str(payload.get("voucher_term") or "").strip(),
+                    weight_text=str(payload.get("weight_text") or "").strip(),
+                    status_text=str(payload.get("status_text") or "").strip(),
+                    cursor=self._bars_cursor,
+                    limit=1000,
+                )
+            else:
+                rows = self.db_manager.search_silver_bar_history(
+                    voucher_term=str(payload.get("voucher_term") or "").strip(),
+                    weight_text=str(payload.get("weight_text") or "").strip(),
+                    status_text=str(payload.get("status_text") or "").strip(),
+                    limit=1000,
+                )
+                normalized = tuple(dict(row) for row in rows)
+                page = Page(normalized, len(normalized), None)
+            request = _BarsHistoryRequest(
+                "",
+                str(payload.get("voucher_term") or "").strip(),
+                str(payload.get("weight_text") or "").strip(),
+                str(payload.get("status_text") or "All Statuses").strip(),
+                self._bars_cursor,
+                append,
             )
-            rows = [
-                dict(row) if not isinstance(row, dict) else dict(row) for row in rows
-            ]
-            self._on_bars_load_ready(request_id, rows)
+            self._on_bars_load_ready(0, (request, page))
         except Exception as exc:
-            self._on_bars_load_error(request_id, str(exc))
+            self._on_bars_load_error(0, exc)
+        finally:
+            self._on_bars_load_finished(0)
 
-    def _on_bars_load_ready(self, request_id: int, rows: list[dict]) -> None:
-        if request_id != self._bars_load_request_id:
-            return
-        self.populate_bars_table(rows)
+    def _on_bars_load_ready(self, _generation: int, value: object) -> None:
+        request, page = cast(
+            tuple[
+                _BarsHistoryRequest,
+                Page[dict[str, Any], SilverBarHistoryCursor],
+            ],
+            value,
+        )
+        self._bars_cursor = page.next_cursor
+        self._bars_total = page.total
+        page_rows = [dict(row) for row in page.items]
+        self._history_rows = (
+            [*self._history_rows, *page_rows] if request.append else page_rows
+        )
+        self.populate_bars_table(self._history_rows)
 
-    def _on_bars_load_error(self, request_id: int, message: str) -> None:
-        if request_id != self._bars_load_request_id:
-            return
+    def _on_bars_load_error(self, _generation: int, error: object) -> None:
         QMessageBox.critical(
-            self, "Search Error", f"Failed to load silver bars: {message}"
+            self, "Search Error", f"Failed to load silver bars: {error}"
         )
 
-    def _on_bars_load_finished(self, request_id: int, thread: QThread, worker: QObject):
-        del request_id
-        self._active_load_workers.pop(thread, None)
-        try:
-            thread.quit()
-            thread.wait(1000)
-        except Exception as exc:
-            self.logger.debug(
-                "Failed to stop silver bar history worker thread: %s", exc
-            )
-        try:
-            worker.deleteLater()
-        except Exception as exc:
-            self.logger.debug(
-                "Failed to schedule silver bar history worker deletion: %s", exc
-            )
+    def _on_bars_load_finished(self, _generation: int) -> None:
+        self.load_more_button.setEnabled(True)
+
+    def _current_bars_payload(self) -> dict:
+        return {
+            "voucher_term": self.voucher_edit.text().strip(),
+            "weight_text": self.weight_edit.text().strip(),
+            "status_text": self.status_combo.currentText(),
+        }
 
     def _schedule_search(self, *args, **kwargs):
         if self._suppress_search:
@@ -533,10 +606,10 @@ class SilverBarHistoryDialog(QDialog):
 
     def _table_result_limit(self) -> int:
         try:
-            return max(100, int(self.max_rows_spin.value()))
+            return min(1000, max(100, int(self.max_rows_spin.value())))
         except Exception as exc:
             self.logger.debug("Invalid history row limit value: %s", exc)
-            return 2000
+            return 1000
 
     def _save_row_limit_setting(self, value: int) -> None:
         try:
@@ -556,8 +629,9 @@ class SilverBarHistoryDialog(QDialog):
         ]
         self.bars_model.set_rows(normalized_rows)
         self.bars_summary.setText(
-            f"Loaded Bars: {len(normalized_rows)} (max {self._table_result_limit()})"
+            f"Loaded Bars: {len(normalized_rows)} of {self._bars_total}"
         )
+        self.load_more_button.setVisible(self._bars_cursor is not None)
         self._last_refreshed_text = datetime.now().strftime("%d-%m-%Y %I:%M %p")
         if normalized_rows:
             self.bars_table.clearSelection()
@@ -597,14 +671,7 @@ class SilverBarHistoryDialog(QDialog):
 
     def search_bars(self):
         """Search bars based on current filter criteria."""
-        self._start_bars_load(
-            {
-                "voucher_term": self.voucher_edit.text().strip(),
-                "weight_text": self.weight_edit.text().strip(),
-                "status_text": self.status_combo.currentText(),
-                "limit": self._table_result_limit(),
-            }
-        )
+        self._start_bars_load(self._current_bars_payload())
 
     def clear_filters(self):
         """Clear all search filters."""
@@ -740,7 +807,9 @@ class SilverBarHistoryDialog(QDialog):
         selection_model = self.bars_table.selectionModel()
         selected = len(selection_model.selectedRows()) if selection_model else 0
         refreshed = getattr(self, "_last_refreshed_text", "-")
-        strip.set_left_items([f"Loaded Bars: {total} (max {self._table_result_limit()})"])
+        strip.set_left_items(
+            [f"Loaded Bars: {total} (max {self._table_result_limit()})"]
+        )
         strip.set_right_items([f"Selected: {selected}", f"Last Refreshed: {refreshed}"])
 
     def show_bars_context_menu(self, pos):
@@ -810,29 +879,9 @@ class SilverBarHistoryDialog(QDialog):
         except Exception as exc:
             self.logger.warning("Failed to copy selected rows: %s", exc, exc_info=True)
 
-    def _cancel_active_loads(self, timeout_ms: int = 3000) -> None:
-        self._bars_load_request_id += 1
-        active = list(self._active_load_workers.items())
-        self._active_load_workers.clear()
-        for thread, worker in active:
-            try:
-                worker.deleteLater()
-            except Exception as exc:
-                self.logger.debug(
-                    "Failed to schedule silver bar history worker deletion during cancel: %s",
-                    exc,
-                )
-            try:
-                if thread.isRunning():
-                    thread.quit()
-                    if not thread.wait(timeout_ms):
-                        thread.terminate()
-                        thread.wait(1000)
-            except Exception as exc:
-                self.logger.debug(
-                    "Failed to stop silver bar history worker thread during cancel: %s",
-                    exc,
-                )
+    def _cancel_active_loads(self) -> None:
+        self._bars_load_runner.cancel()
+        self._bars_load_runner.shutdown()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Escape:
@@ -847,32 +896,6 @@ class SilverBarHistoryDialog(QDialog):
     def closeEvent(self, event):
         self._cancel_active_loads()
         super().closeEvent(event)
-
-
-class _BarsHistoryLoadWorker(QObject):
-    data_ready = pyqtSignal(list)
-    error = pyqtSignal(str)
-    finished = pyqtSignal()
-
-    def __init__(self, db_path: str, payload: dict):
-        super().__init__()
-        self.db_path = db_path
-        self.payload = payload or {}
-
-    def run(self):
-        try:
-            snapshot = SilverBarsSnapshotRepository(self.db_path)
-            rows = snapshot.search_history_bars(
-                voucher_term=str(self.payload.get("voucher_term") or "").strip(),
-                weight_text=str(self.payload.get("weight_text") or "").strip(),
-                status_text=str(self.payload.get("status_text") or "").strip(),
-                limit=int(self.payload.get("limit", 2000) or 2000),
-            )
-            self.data_ready.emit(rows)
-        except Exception as exc:
-            self.error.emit(str(exc))
-        finally:
-            self.finished.emit()
 
 
 # Example usage (if run directly)

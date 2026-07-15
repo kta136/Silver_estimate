@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 from contextlib import closing
 from typing import Any
 
@@ -22,14 +23,25 @@ from silverestimate.persistence.silver_bars_queries import (
 class SilverBarsSnapshotRepository:
     """Execute read-only silver-bar queries against a standalone DB snapshot."""
 
-    def __init__(self, db_path: str) -> None:
+    def __init__(
+        self,
+        db_path: str,
+        *,
+        cancel_event: threading.Event | None = None,
+    ) -> None:
         self._db_path = db_path
+        self._cancel_event = cancel_event
 
     def _connect(self) -> sqlite3.Connection:
         if not self._db_path:
             raise RuntimeError("Temporary database path is unavailable.")
         conn = sqlite3.connect(self._db_path)
         conn.row_factory = sqlite3.Row
+        if self._cancel_event is not None:
+            conn.set_progress_handler(
+                lambda: 1 if self._cancel_event and self._cancel_event.is_set() else 0,
+                1_000,
+            )
         return conn
 
     def get_available_bars_page(

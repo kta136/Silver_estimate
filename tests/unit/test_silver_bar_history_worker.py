@@ -1,7 +1,13 @@
 import sqlite3
+import threading
 from pathlib import Path
 
-from silverestimate.ui.silver_bar_history import _BarsHistoryLoadWorker
+import pytest
+
+from silverestimate.ui.silver_bar_history import (
+    _BarsHistoryRequest,
+    _load_bars_history_page,
+)
 
 
 def _seed_history_worker_db(path: Path) -> None:
@@ -68,36 +74,27 @@ def _seed_history_worker_db(path: Path) -> None:
 
 
 def test_history_worker_filters_rows_from_snapshot_repository(qt_app, tmp_path):
+    del qt_app
     db_path = tmp_path / "history-worker.sqlite"
     _seed_history_worker_db(db_path)
 
-    events = {"ready": None, "error": None}
-    worker = _BarsHistoryLoadWorker(
+    request = _BarsHistoryRequest(
         str(db_path),
-        {
-            "voucher_term": "Worker B",
-            "weight_text": "11.0",
-            "status_text": "Issued",
-            "limit": 2000,
-        },
+        "Worker B",
+        "11.0",
+        "Issued",
+        None,
+        False,
     )
-    worker.data_ready.connect(lambda rows: events.__setitem__("ready", rows))
-    worker.error.connect(lambda message: events.__setitem__("error", message))
+    returned_request, page = _load_bars_history_page(request, threading.Event())
 
-    worker.run()
-
-    assert events["error"] is None
-    assert [row["estimate_voucher_no"] for row in events["ready"]] == ["W002"]
-    assert events["ready"][0]["list_identifier"] == "LIST-010"
+    assert returned_request is request
+    assert [row["estimate_voucher_no"] for row in page.items] == ["W002"]
+    assert page.items[0]["list_identifier"] == "LIST-010"
 
 
 def test_history_worker_emits_error_for_missing_snapshot_db(qt_app):
-    events = {"ready": None, "error": None}
-    worker = _BarsHistoryLoadWorker("", {"status_text": "All Statuses", "limit": 2000})
-    worker.data_ready.connect(lambda rows: events.__setitem__("ready", rows))
-    worker.error.connect(lambda message: events.__setitem__("error", message))
-
-    worker.run()
-
-    assert events["ready"] is None
-    assert events["error"] == "Temporary database path is unavailable."
+    del qt_app
+    request = _BarsHistoryRequest("", "", "", "All Statuses", None, False)
+    with pytest.raises(RuntimeError, match="Temporary database path is unavailable"):
+        _load_bars_history_page(request, threading.Event())

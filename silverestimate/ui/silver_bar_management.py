@@ -23,7 +23,7 @@ from PyQt6.QtWidgets import (
 from .shared_screen_theme import build_management_screen_stylesheet
 from .silver_bar_list_lifecycle_controller import SilverBarListLifecycleController
 from .silver_bar_list_print_controller import SilverBarListPrintController
-from .silver_bar_load_controller import SilverBarLoadController, _BarsLoadWorker
+from .silver_bar_load_controller import SilverBarLoadController
 from .silver_bar_management_state import SilverBarManagementStateStore
 from .silver_bar_management_ui import SilverBarManagementUiBuilder
 from .silver_bar_optimization_controller import SilverBarOptimizationController
@@ -443,7 +443,6 @@ def show_silver_bars(db_manager, parent=None):
 __all__ = [
     "SilverBarDialog",
     "OptimalListDialog",
-    "_BarsLoadWorker",
     "show_silver_bar_management",
     "show_silver_bars",
 ]

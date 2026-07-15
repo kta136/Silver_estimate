@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 import logging
 import os
-import sqlite3
+import threading
 import time
+from dataclasses import dataclass
+from typing import Any, cast
 
-from PyQt6.QtCore import QLocale, QModelIndex, QObject, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtCore import QLocale, QModelIndex, Qt, QTimer
 from PyQt6.QtGui import QDoubleValidator
 from PyQt6.QtWidgets import (
     QAbstractItemView,
@@ -21,44 +23,37 @@ from PyQt6.QtWidgets import (
 )
 
 from silverestimate.domain.item_validation import ItemValidationError, validate_item
-from silverestimate.persistence.items_repository import fetch_item_catalog_rows
+from silverestimate.domain.pagination import ItemCursor, Page
+from silverestimate.infrastructure.latest_request_runner import LatestRequestRunner
+from silverestimate.infrastructure.sqlite_worker import cancellable_sqlite_connection
+from silverestimate.persistence.items_repository import fetch_item_catalog_page
 from silverestimate.ui.models import ItemMasterTableModel
 from silverestimate.ui.modern_components import BottomStatusStrip, polish_dense_table
 from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
 from silverestimate.ui.themed_controls import ThemedComboBox
 
 
-class _ItemMasterLoadWorker(QObject):
-    data_ready = pyqtSignal(int, list)
-    error = pyqtSignal(int, str)
-    finished = pyqtSignal(int)
+@dataclass(frozen=True)
+class _ItemLoadRequest:
+    db_path: str
+    search_term: str
+    cursor: ItemCursor | None
+    append: bool
+    started_at: float
 
-    def __init__(self, request_id: int, db_path: str, search_term: str) -> None:
-        super().__init__()
-        self.request_id = request_id
-        self.db_path = db_path
-        self.search_term = search_term
 
-    def run(self) -> None:
-        conn = None
-        try:
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            rows = fetch_item_catalog_rows(cursor, self.search_term)
-            self.data_ready.emit(
-                self.request_id,
-                [dict(row) for row in rows],
-            )
-        except Exception as exc:
-            self.error.emit(self.request_id, str(exc))
-        finally:
-            if conn is not None:
-                try:
-                    conn.close()
-                except Exception:
-                    pass
-            self.finished.emit(self.request_id)
+def _load_item_page(
+    request: _ItemLoadRequest,
+    cancel_event: threading.Event,
+) -> tuple[_ItemLoadRequest, Page[dict[str, Any], ItemCursor]]:
+    with cancellable_sqlite_connection(request.db_path, cancel_event) as connection:
+        page = fetch_item_catalog_page(
+            connection.cursor(),
+            request.search_term,
+            page_cursor=request.cursor,
+            limit=1000,
+        )
+    return request, page
 
 
 class ItemMasterWidget(QWidget):
@@ -73,9 +68,17 @@ class ItemMasterWidget(QWidget):
         self._search_timer.setSingleShot(True)
         self._search_timer.setInterval(180)
         self._search_timer.timeout.connect(self.search_items)
-        self._load_request_id = 0
-        self._active_load_workers = {}
-        self._load_request_meta = {}
+        self._loaded_items: list[dict[str, Any]] = []
+        self._item_cursor: ItemCursor | None = None
+        self._item_total = 0
+        self._load_runner = LatestRequestRunner(
+            _load_item_page,
+            self,
+            name="item-master-loader",
+        )
+        self._load_runner.result.connect(self._handle_async_load_result)
+        self._load_runner.failed.connect(self._handle_async_load_error)
+        self._load_runner.settled.connect(self._finish_async_load)
         self.init_ui()
         self.load_items()
 
@@ -330,27 +333,60 @@ class ItemMasterWidget(QWidget):
             selection_model.selectionChanged.connect(lambda *_: self.on_item_selected())
         right_col.addWidget(self.items_table)
 
+        paging_row = QHBoxLayout()
+        paging_row.addStretch()
+        self.load_more_button = QPushButton("Load more")
+        self.load_more_button.setObjectName("ItemMasterSecondaryButton")
+        self.load_more_button.setVisible(False)
+        self.load_more_button.clicked.connect(self._load_more_items)
+        paging_row.addWidget(self.load_more_button)
+        right_col.addLayout(paging_row)
+
         split.addLayout(right_col, 1)
         outer.addLayout(split, 1)
 
         self.bottom_status_strip = BottomStatusStrip(self)
         self.bottom_status_strip.set_left_items(
-            ["F2: Item Search", "Ins: Add Row", "Del: Delete Row", "Ctrl+S: Save", "F9: Print"]
+            [
+                "F2: Item Search",
+                "Ins: Add Row",
+                "Del: Delete Row",
+                "Ctrl+S: Save",
+                "F9: Print",
+            ]
         )
         outer.addWidget(self.bottom_status_strip)
         self._update_bottom_status(0)
 
-    def load_items(self, search_term=None):
+    def load_items(self, search_term=None, *, append: bool = False):
         """Load items from the database into the table."""
         normalized_term = (search_term or "").strip()
-        temp_db_path = getattr(self.db_manager, "temp_db_path", None)
-        if isinstance(temp_db_path, str) and temp_db_path:
-            self._start_async_load(normalized_term, temp_db_path)
+        if not append:
+            self._loaded_items = []
+            self._item_cursor = None
+            self._item_total = 0
+            self.items_model.set_rows([])
+            self._item_count_label.setText("0 of 0 items")
+            self.load_more_button.setVisible(False)
+        elif self._item_cursor is None:
             return
 
         started_at = time.perf_counter()
+        temp_db_path = getattr(self.db_manager, "temp_db_path", None)
+        if isinstance(temp_db_path, str) and temp_db_path:
+            request = _ItemLoadRequest(
+                temp_db_path,
+                normalized_term,
+                self._item_cursor,
+                append,
+                started_at,
+            )
+            self.load_more_button.setEnabled(False)
+            self._load_runner.submit(request)
+            return
+
         try:
-            items = self._load_items_sync(normalized_term)
+            page = self._load_items_sync(normalized_term)
         except Exception as exc:
             QMessageBox.warning(self, "Load Error", str(exc))
             self.logger.warning(
@@ -358,9 +394,10 @@ class ItemMasterWidget(QWidget):
             )
             return
         self._apply_loaded_items(
-            list(items or []),
+            page,
             search_term=normalized_term,
             started_at=started_at,
+            append=append,
         )
 
     def _schedule_search(self, *_args) -> None:
@@ -372,70 +409,59 @@ class ItemMasterWidget(QWidget):
     def search_items(self):
         """Search for items based on the search term."""
         search_term = self.search_edit.text().strip()
-        self.load_items(search_term)  # Pass search term (can be empty)
+        self.load_items(search_term)
 
-    def _load_items_sync(self, search_term: str):
-        if search_term:
-            return self.db_manager.search_items(search_term)
-        return self.db_manager.get_all_items()
+    def _load_more_items(self) -> None:
+        self.load_items(self.search_edit.text().strip(), append=True)
 
-    def _next_load_request_id(self) -> int:
-        self._load_request_id += 1
-        return self._load_request_id
-
-    def _start_async_load(self, search_term: str, db_path: str) -> None:
-        request_id = self._next_load_request_id()
-        self._load_request_meta[request_id] = (time.perf_counter(), search_term)
-
-        worker = _ItemMasterLoadWorker(request_id, db_path, search_term)
-        thread = QThread(self)
-        worker.moveToThread(thread)
-        thread.started.connect(worker.run)
-        worker.data_ready.connect(self._handle_async_load_result)
-        worker.error.connect(self._handle_async_load_error)
-        worker.finished.connect(thread.quit)
-        worker.finished.connect(worker.deleteLater)
-        thread.finished.connect(thread.deleteLater)
-        thread.finished.connect(
-            lambda finished_request_id=request_id, th=thread: self._finish_async_load(
-                finished_request_id, th
+    def _load_items_sync(self, search_term: str) -> Page[dict[str, Any], ItemCursor]:
+        getter = getattr(self.db_manager, "search_items_page", None)
+        if callable(getter):
+            return cast(
+                Page[dict[str, Any], ItemCursor],
+                getter(search_term, cursor=self._item_cursor, limit=1000),
             )
+        rows = (
+            self.db_manager.search_items(search_term)
+            if search_term
+            else self.db_manager.get_all_items()
         )
-        self._active_load_workers[thread] = worker
-        thread.start()
+        converted = tuple(dict(row) for row in rows[:1000])
+        return Page(converted, len(rows), None)
 
-    def _handle_async_load_result(self, request_id: int, rows: list) -> None:
-        meta = self._load_request_meta.get(request_id)
-        if meta is None or request_id != self._load_request_id:
-            return
-        started_at, search_term = meta
+    def _handle_async_load_result(self, _generation: int, value: object) -> None:
+        request, page = cast(
+            tuple[_ItemLoadRequest, Page[dict[str, Any], ItemCursor]],
+            value,
+        )
         self._apply_loaded_items(
-            list(rows or []),
-            search_term=search_term,
-            started_at=started_at,
+            page,
+            search_term=request.search_term,
+            started_at=request.started_at,
+            append=request.append,
         )
 
-    def _handle_async_load_error(self, request_id: int, message: str) -> None:
-        if request_id != self._load_request_id:
-            return
-        QMessageBox.warning(self, "Load Error", message)
-        self.logger.warning("Failed to load item master rows: %s", message)
+    def _handle_async_load_error(self, _generation: int, error: object) -> None:
+        QMessageBox.warning(self, "Load Error", str(error))
+        self.logger.warning("Failed to load item master rows: %s", error)
 
-    def _finish_async_load(
-        self,
-        request_id: int,
-        thread: QThread,
-    ) -> None:
-        self._load_request_meta.pop(request_id, None)
-        self._active_load_workers.pop(thread, None)
+    def _finish_async_load(self, _generation: int) -> None:
+        self.load_more_button.setEnabled(True)
 
     def _apply_loaded_items(
         self,
-        items: list,
+        page: Page[dict[str, Any], ItemCursor],
         *,
         search_term: str,
         started_at: float,
+        append: bool,
     ) -> None:
+        page_items = list(page.items)
+        self._loaded_items = (
+            [*self._loaded_items, *page_items] if append else page_items
+        )
+        self._item_cursor = page.next_cursor
+        self._item_total = page.total
         table = self.items_table
         model = self.items_model
         sorting_enabled = table.isSortingEnabled()
@@ -444,7 +470,7 @@ class ItemMasterWidget(QWidget):
         try:
             if sorting_enabled:
                 table.setSortingEnabled(False)
-            model.set_rows(items)
+            model.set_rows(cast(list[object], self._loaded_items))
         finally:
             if sorting_enabled:
                 table.setSortingEnabled(True)
@@ -452,17 +478,18 @@ class ItemMasterWidget(QWidget):
             table.setUpdatesEnabled(True)
             table.viewport().update()
 
-        count = len(items)
-        noun = "item" if count == 1 else "items"
-        self._item_count_label.setText(f"{count} {noun}")
+        count = len(self._loaded_items)
+        self._item_count_label.setText(f"{count} of {self._item_total} items")
+        self.load_more_button.setVisible(self._item_cursor is not None)
+        self.load_more_button.setEnabled(True)
         self._update_bottom_status(count)
-        self.show_status(f"Loaded {count} items.", 2000)
+        self.show_status(f"Loaded {count} of {self._item_total} items.", 2000)
         elapsed_ms = (time.perf_counter() - started_at) * 1000.0
         self.logger.debug(
             "[perf] item_master.load_items=%.2fms search_term=%r rows=%s",
             elapsed_ms,
             search_term,
-            len(items),
+            len(self._loaded_items),
         )
 
     def _update_bottom_status(self, count: int | None = None) -> None:
@@ -476,28 +503,9 @@ class ItemMasterWidget(QWidget):
         rows = self.items_model.rowCount() if count is None else int(count)
         strip.set_right_items([f"Rows: {rows}", "Last Saved: -", f"User: {user}"])
 
-    def _cancel_active_loads(self, timeout_ms: int = 3000) -> None:
-        self._load_request_id += 1
-        active = list(self._active_load_workers.items())
-        self._active_load_workers.clear()
-        self._load_request_meta.clear()
-
-        for thread, worker in active:
-            try:
-                worker.deleteLater()
-            except Exception as exc:
-                self.logger.debug("Failed to queue item-master worker cleanup: %s", exc)
-            try:
-                if thread.isRunning():
-                    thread.quit()
-                    if not thread.wait(timeout_ms):
-                        thread.terminate()
-                        thread.wait(1000)
-            except Exception as exc:
-                self.logger.debug(
-                    "Failed to stop item-master worker thread during cancel: %s",
-                    exc,
-                )
+    def _cancel_active_loads(self) -> None:
+        self._load_runner.cancel()
+        self._load_runner.shutdown()
 
     def on_item_selected(self):
         """Handle item selection in the table."""

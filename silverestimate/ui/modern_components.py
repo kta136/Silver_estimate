@@ -58,7 +58,9 @@ class BottomStatusStrip(QFrame):
         self._left.setObjectName("StatusStripText")
         self._right = QLabel("")
         self._right.setObjectName("StatusStripText")
-        self._right.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._right.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
         layout.addWidget(self._left, 1)
         layout.addWidget(self._right, 0)
         self.setFixedHeight(24)

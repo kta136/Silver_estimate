@@ -19,7 +19,7 @@ class FontSettings:
     def to_qfont(self) -> QFont:
         font = QFont(self.family, int(round(self.size)))
         font.setBold(self.bold)
-        setattr(font, "float_size", self.size)
+        font.float_size = self.size
         return font
 
     @classmethod

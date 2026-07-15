@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from PyQt6.QtCore import QObject
 
+import silverestimate.controllers.live_rate_controller as live_rate_module
 from silverestimate.controllers.live_rate_controller import LiveRateController
 from silverestimate.services.dda_rate_fetcher import (
     DDA_AGRA_MOHAR_ITEM_ID,
@@ -265,3 +266,145 @@ def test_shutdown_calls_service_stop_and_clears_reference():
 
     assert service.stop_calls == 1
     assert controller._service is None
+
+
+def test_visibility_and_initialize_handle_missing_or_faulty_widgets():
+    scheduled = []
+    controller, _, _ = _build_controller(
+        settings={"rates/live_enabled": False},
+        widget=None,
+        single_shot=lambda *args: scheduled.append(args),
+    )
+    controller.initialize()
+    assert scheduled == []
+
+    class FaultyLabel(_LabelStub):
+        def setVisible(self, _visible):
+            raise RuntimeError("visibility")
+
+        def setText(self, _text):
+            raise RuntimeError("text")
+
+    widget = types.SimpleNamespace(
+        live_rate_value_label=FaultyLabel("-"),
+        live_rate_meta_label=FaultyLabel(""),
+        refresh_rate_button=None,
+    )
+    controller, _, _ = _build_controller(
+        settings={"rates/live_enabled": True}, widget=widget
+    )
+    assert controller.apply_visibility_settings() is True
+
+
+def test_service_start_stop_and_shutdown_failures_are_contained():
+    service = _ServiceStub()
+    controller, _, _ = _build_controller(
+        settings={"rates/live_enabled": True, "rates/auto_refresh_enabled": True},
+        service=service,
+        widget=_WidgetStub(),
+    )
+    service.stop = lambda: (_ for _ in ()).throw(RuntimeError("stop"))
+    service.start = lambda: (_ for _ in ()).throw(RuntimeError("start"))
+    controller.apply_timer_settings()
+
+    controller._service = service
+    controller.shutdown()
+    assert controller._service is None
+    controller.shutdown()
+
+    unavailable, _, _ = _build_controller(
+        settings={"rates/live_enabled": False, "rates/auto_refresh_enabled": False},
+        widget=_WidgetStub(),
+    )
+    unavailable._service_factory = lambda **_kwargs: (_ for _ in ()).throw(
+        RuntimeError("factory")
+    )
+    unavailable.apply_timer_settings(force_show_ui=True)
+
+
+def test_refresh_disabled_and_fallback_error_paths():
+    widget = _WidgetStub()
+    controller, service, status = _build_controller(
+        settings={"rates/live_enabled": False}, widget=widget
+    )
+    controller.apply_visibility_settings()
+    controller.refresh_now()
+    assert service.refresh_calls == 0
+
+    controller._ui_enabled = True
+    controller._service_factory = lambda **_kwargs: (_ for _ in ()).throw(
+        RuntimeError("unavailable")
+    )
+    widget.refresh_silver_rate = lambda: (_ for _ in ()).throw(RuntimeError("widget"))
+    controller.refresh_now()
+    assert status[-1] == ("Live rate refresh failed", 3000, "warning")
+    assert controller._manual_refresh is False
+
+
+def test_signal_validation_and_display_without_label():
+    controller, _, status = _build_controller(
+        settings={"rates/live_enabled": True}, widget=types.SimpleNamespace()
+    )
+    controller._manual_refresh = True
+    controller._handle_rate_updated(object())
+    assert status[-1] == ("Live rate unavailable", 3000, "warning")
+    assert controller._last_error is not None
+
+    controller._handle_feed_status("invalid")
+    controller._handle_feed_status({"marketState": {"code": "closed"}})
+    controller._handle_connection_state("disconnected")
+    controller._update_display(_snapshot())
+    assert controller._manual_refresh is False
+
+
+def test_display_https_without_meta_and_settings_coercion():
+    widget = types.SimpleNamespace(live_rate_value_label=_LabelStub())
+    controller, _, _ = _build_controller(
+        settings={"rates/live_enabled": True}, widget=widget
+    )
+    controller._connection_state = "reconnecting"
+    controller._last_error = "offline"
+    snapshot = _snapshot(transport="https")
+    snapshot = DdaRateSnapshot(
+        item_id=snapshot.item_id,
+        final_rate=snapshot.final_rate,
+        unit=snapshot.unit,
+        sequence=snapshot.sequence,
+        received_at=snapshot.received_at,
+        server_time=snapshot.server_time,
+        market_state={"code": "closed"},
+        transport=snapshot.transport,
+    )
+    controller._update_display(snapshot)
+    assert "Source: DDA HTTPS" in widget.live_rate_value_label.tooltip
+    assert "Market: closed" in widget.live_rate_value_label.tooltip
+    assert "Last transport error: offline" in widget.live_rate_value_label.tooltip
+
+    controller._settings_provider = lambda: (_ for _ in ()).throw(
+        RuntimeError("settings")
+    )
+    assert controller._read_settings() == (True, True, 10)
+    assert controller._coerce_bool(True, False) is True
+    assert controller._coerce_bool(None, False) is False
+    assert controller._coerce_bool("", True) is True
+    assert controller._coerce_bool("off", True) is False
+    assert controller._coerce_bool("enabled", False) is True
+    assert controller._coerce_bool(0, True) is False
+    assert controller._coerce_bool(object(), True) is True
+
+
+def test_valid_worker_signal_and_currency_fallback(monkeypatch):
+    widget = _WidgetStub()
+    controller, _, _ = _build_controller(
+        settings={"rates/live_enabled": True}, widget=widget
+    )
+    controller._handle_rate_updated(_snapshot())
+    assert controller._last_snapshot is not None
+
+    monkeypatch.setattr(
+        live_rate_module.QLocale,
+        "system",
+        lambda: (_ for _ in ()).throw(RuntimeError("locale unavailable")),
+    )
+    controller._update_display(_snapshot(final_rate=123456))
+    assert widget.live_rate_value_label.text() == "₹ 123.46 /g"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
 import hmac
 import json
@@ -344,10 +345,8 @@ def decrypt_envelope_to_path(
         os.replace(partial_path, output_path)
         return metadata
     except Exception:
-        try:
+        with contextlib.suppress(OSError):
             Path(partial_path).unlink(missing_ok=True)
-        except OSError:
-            pass
         raise
 
 

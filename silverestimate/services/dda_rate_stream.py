@@ -407,9 +407,12 @@ class DdaRateStreamWorker(QObject):
         persist: bool,
         authoritative: bool,
     ) -> None:
-        if not authoritative and self._last_sequence is not None:
-            if snapshot.sequence < self._last_sequence:
-                return
+        if (
+            not authoritative
+            and self._last_sequence is not None
+            and snapshot.sequence < self._last_sequence
+        ):
+            return
         self._last_snapshot = snapshot
         self._last_sequence = snapshot.sequence
         if snapshot.market_state is not None:

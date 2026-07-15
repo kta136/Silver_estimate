@@ -250,14 +250,13 @@ class EncryptedDatabaseStore:
         if not temp_db_path:
             return None
         try:
-            tmp = tempfile.NamedTemporaryFile(
+            with tempfile.NamedTemporaryFile(
                 delete=False,
                 suffix=".sqlite",
                 prefix="snapshot-",
                 dir=os.path.dirname(temp_db_path),
-            )
-            snapshot_path = tmp.name
-            tmp.close()
+            ) as tmp:
+                snapshot_path = tmp.name
             try:
                 src = sqlite3.connect(
                     f"file:{temp_db_path}?mode=ro", uri=True, timeout=5

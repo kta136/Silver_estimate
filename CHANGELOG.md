@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added atomic schema v6 migration/validation, estimate-header totals backfill, silver-bar availability index, typed keyset pages, Load more controls, and bulk catalog upserts with immutable cache replacement.
+- Added `LatestRequestRunner` with persistent workers, generation-based stale-result rejection, thread-local cancellable SQLite connections, and cooperative print/network shutdown.
+- Added the versioned `SILVDB01` Argon2id/AES-256-GCM streaming envelope, distinct integrity outcomes, legacy migration verification, generation-aware flushing, marked crash recovery, and flush telemetry.
+- Added anonymous DDA current-rates hydration and SSE streaming for item ID `cmomws5tw000004i5k5t6yrnw`, using only customer `finalRate`, with sequence recovery, stale detection, jittered reconnects, 10-second disconnected polling, and verified offline cache.
+- Added explicit estimate/silver-bar facades, split silver-bar query/command/synchronization repositories, independent settings ownership, shared print specifications/strategies, and architecture regression tests.
+- Added deterministic scale/performance data, complete p95 enforcement, Windows PR smoke/build validation, frozen artifact startup, release tag validation, CycloneDX SBOM, checksums, and optional signing hooks.
+
+### Changed
+- Raised global coverage to 75% and pull-request changed-line coverage to 90%.
+- Expanded Ruff to Bugbear, Simplify, Performance, McCabe, and selected Pylint complexity rules with a complexity cap of 15.
+- Made Bandit medium/high findings blocking and switched PR, main, and release dependency setup to `uv sync --frozen --extra dev`.
+- Declared Windows as the supported packaged platform; macOS/Linux remain untested development environments.
+- Reduced `.env.example` to the three environment controls consumed by the runtime.
+
+### Removed
+- Removed DDASilver scraping, hard-coded HTTP/IP/broadcast parsing, invalid-TLS retries, item-name matching, `baseRate` derivation, and all worker `QThread.terminate()` calls.
+
 ## [3.0] - 2026-06-13
 
 ### Changed

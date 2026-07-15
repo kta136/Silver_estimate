@@ -67,10 +67,11 @@ Creation → In Stock → Assigned to List → [Sold/Melted/Returned to Stock]
 4. Secondary password triggers data wipe
 
 #### Data Protection
-1. AES-GCM encryption at rest
-2. Temporary decrypted files during session
-3. Secure key derivation with PBKDF2
-4. Salt stored in QSettings
+1. Versioned `SILVDB01` AES-256-GCM encryption at rest
+2. Authenticated canonical metadata and ordered 1 MiB chunks
+3. Argon2id key derivation once per normal startup
+4. PBKDF2 and the QSettings salt only when reading a legacy envelope
+5. Marked, permission-restricted temporary decrypted files during the session
 
 ### 5. Catalog Backup Processes
 

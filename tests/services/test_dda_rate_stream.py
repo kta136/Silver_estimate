@@ -3,10 +3,12 @@ import threading
 import time
 from datetime import datetime, timezone
 
+import pytest
 from PyQt6.QtCore import pyqtSignal
 
 from silverestimate.services.dda_rate_fetcher import (
     DDA_AGRA_MOHAR_ITEM_ID,
+    DdaRateContractError,
     DdaRateSnapshot,
 )
 from silverestimate.services.dda_rate_stream import (
@@ -338,3 +340,247 @@ def test_stop_unblocks_a_blocking_sse_read():
     thread.join(1)
 
     assert not thread.is_alive()
+
+
+@pytest.mark.parametrize(
+    ("payload", "received_at", "message"),
+    [
+        (_snapshot_payload(), datetime(2026, 7, 15), "timezone"),
+        ({**_snapshot_payload(), "sequence": True}, NOW, "sequence"),
+        ({**_snapshot_payload(), "view": "unknown"}, NOW, "view"),
+        ({**_snapshot_payload(), "items": {}}, NOW, "array"),
+        (
+            {
+                **_snapshot_payload(),
+                "items": _snapshot_payload()["items"] * 2,
+            },
+            NOW,
+            "duplicated",
+        ),
+        (
+            {
+                **_snapshot_payload(),
+                "items": [{**_snapshot_payload()["items"][0], "unit": "PER_GM"}],
+            },
+            NOW,
+            "PER_KG",
+        ),
+        ({**_snapshot_payload(), "items": []}, NOW, "omitted"),
+        (
+            {
+                **_snapshot_payload(),
+                "items": [{**_snapshot_payload()["items"][0], "finalRate": 0}],
+            },
+            NOW,
+            "finite positive",
+        ),
+        (
+            {
+                **_snapshot_payload(),
+                "items": [
+                    {**_snapshot_payload()["items"][0], "finalRate": float("nan")}
+                ],
+            },
+            NOW,
+            "finite positive",
+        ),
+    ],
+)
+def test_snapshot_contract_rejects_invalid_payloads(payload, received_at, message):
+    with pytest.raises(DdaRateContractError, match=message):
+        parse_sse_snapshot(payload, received_at=received_at)
+
+
+def test_rate_delta_rejects_matching_item_before_snapshot():
+    with pytest.raises(DdaRateContractError, match="before a snapshot"):
+        apply_sse_rate_event(_rate_payload(), previous=None, received_at=NOW)
+
+
+def test_run_hydrates_uses_seeded_stream_then_unseeded_reset(qt_app):
+    current = _CurrentClient([_snapshot()])
+    store = _Store()
+    requests = []
+    responses = [
+        _Response(_sse("stream-reset", {"schemaVersion": 1, "reason": "max_age"})),
+        _Response(),
+    ]
+    worker = None
+
+    def opener(request, **_kwargs):
+        requests.append(request.full_url)
+        response = responses.pop(0)
+        if not responses:
+            assert worker is not None
+            worker.stop()
+        return response
+
+    worker = DdaRateStreamWorker(
+        current_client=current,
+        snapshot_store=store,
+        opener=opener,
+        now=lambda: NOW,
+    )
+    states = []
+    worker.connection_state_changed.connect(states.append)
+
+    worker.run()
+
+    assert "seeded=1" in requests[0]
+    assert "seeded=1" not in requests[1]
+    assert "reconnecting" in states
+    assert states[-1] == "stopped"
+    assert store.saved == [_snapshot()]
+
+
+def test_run_reconnect_failure_uses_backoff_and_stops(qt_app):
+    delays = []
+    worker = DdaRateStreamWorker(
+        current_client=_CurrentClient([_snapshot()]),
+        snapshot_store=_Store(),
+        opener=lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("down")),
+        jitter=lambda delay: delays.append(delay) or delay,
+    )
+    errors = []
+    states = []
+    worker.stream_error.connect(errors.append)
+    worker.connection_state_changed.connect(states.append)
+
+    def stop_during_wait(_delay, next_poll_at):
+        worker.stop()
+        return next_poll_at
+
+    worker._wait_disconnected = stop_during_wait
+    worker.run()
+
+    assert delays == [1.0]
+    assert errors[-1] == "down"
+    assert "disconnected" in states
+    assert states[-1] == "stopped"
+
+
+def test_run_processes_manual_refresh_before_connecting(qt_app):
+    current = _CurrentClient([_snapshot(sequence=1), _snapshot(sequence=2)])
+    worker = None
+
+    def opener(*_args, **_kwargs):
+        assert worker is not None
+        worker.stop()
+        return _Response()
+
+    worker = DdaRateStreamWorker(
+        current_client=current,
+        snapshot_store=_Store(),
+        opener=opener,
+    )
+    worker._refresh_event.set()
+
+    worker.run()
+
+    assert current.calls == 2
+    assert worker.last_sequence == 2
+
+
+def test_connect_consume_closes_response_and_rejects_http_error(qt_app):
+    response = _Response(_sse("heartbeat", {"schemaVersion": 1}))
+    worker = DdaRateStreamWorker(
+        current_client=_CurrentClient(),
+        snapshot_store=_Store(),
+        opener=lambda *_args, **_kwargs: response,
+    )
+
+    assert worker._connect_and_consume(seeded=True) == (1, False)
+    assert response.closed is True
+    assert worker._active_response is None
+
+    bad_response = _Response()
+    bad_response.status = 503
+    worker._opener = lambda *_args, **_kwargs: bad_response
+    with pytest.raises(ConnectionError, match="HTTP 503"):
+        worker._connect_and_consume(seeded=False)
+    assert bad_response.closed is True
+
+
+def test_response_parser_detects_stale_oversized_and_invalid_utf8(qt_app):
+    moments = iter([0.0, 46.0])
+    stale_worker = DdaRateStreamWorker(
+        current_client=_CurrentClient(),
+        snapshot_store=_Store(),
+        monotonic=lambda: next(moments),
+    )
+    with pytest.raises(TimeoutError, match="no activity"):
+        stale_worker._consume_response(_Response([b": heartbeat\n"]))
+
+    worker = DdaRateStreamWorker(
+        current_client=_CurrentClient(),
+        snapshot_store=_Store(),
+    )
+    with pytest.raises(DdaRateContractError, match="exceeded"):
+        worker._consume_response(_Response([b"x" * (1024 * 1024 + 1)]))
+
+    errors = []
+    worker.stream_error.connect(errors.append)
+    count, reset = worker._consume_response(
+        _Response([b"\xff\n", *_sse("heartbeat", {"schemaVersion": 1})])
+    )
+    assert (count, reset) == (1, False)
+    assert "UTF-8" in errors[-1]
+
+
+def test_dispatch_snapshot_feed_validation_and_stale_acceptance(qt_app):
+    worker = DdaRateStreamWorker(
+        current_client=_CurrentClient(error=RuntimeError("gap offline")),
+        snapshot_store=_Store(),
+        now=lambda: NOW,
+    )
+    errors = []
+    received = []
+    worker.stream_error.connect(errors.append)
+    worker.rate_received.connect(received.append)
+
+    assert worker._dispatch_event("snapshot", json.dumps(_snapshot_payload())) is False
+    worker._handle_snapshot(_snapshot_payload(sequence=10, final_rate=999999))
+    assert len(received) == 1
+    with pytest.raises(ConnectionError, match="recovery failed"):
+        worker._handle_rate(_rate_payload(sequence=13))
+
+    for payload in (
+        {"schemaVersion": 1, "status": "bad"},
+        {"schemaVersion": 1, "status": {}, "marketState": "bad"},
+    ):
+        with pytest.raises(DdaRateContractError):
+            worker._handle_feed_status(payload)
+
+    worker._accept_snapshot(_snapshot(sequence=9), persist=False, authoritative=False)
+    assert worker.last_sequence == 11
+    assert worker._dispatch_event("unknown", "[]") is False
+    assert (
+        worker._dispatch_event(
+            "stream-reset", json.dumps({"schemaVersion": 1, "reason": "bad"})
+        )
+        is False
+    )
+    assert errors
+
+
+def test_refresh_wait_and_response_cleanup_edges(qt_app):
+    worker = DdaRateStreamWorker(
+        current_client=_CurrentClient(),
+        snapshot_store=_Store(),
+    )
+    response = _Response()
+    worker._active_response = response
+    worker.request_refresh()
+    assert response.closed is True
+    assert worker._wait_disconnected(1, 123.0) == 123.0
+
+    class CloseFailure(_Response):
+        def close(self):
+            raise RuntimeError("close failed")
+
+    active = CloseFailure()
+    other = _Response()
+    worker._active_response = active
+    worker._clear_active_response(other)
+    assert worker._active_response is active
+    worker._close_active_response()
+    assert worker._active_response is None

@@ -3,6 +3,7 @@ import struct
 
 import pytest
 
+from silverestimate.security import encrypted_envelope as envelope
 from silverestimate.security.encrypted_envelope import (
     MAGIC,
     Argon2Metadata,
@@ -14,6 +15,7 @@ from silverestimate.security.encrypted_envelope import (
     EnvelopeUnsupportedError,
     EnvelopeWrongPasswordError,
     decrypt_envelope_to_path,
+    is_current_envelope,
     read_envelope_metadata,
     write_envelope,
 )
@@ -131,4 +133,114 @@ def test_unknown_silvdb_magic_is_not_treated_as_legacy(tmp_path):
     with pytest.raises(EnvelopeUnsupportedError):
         read_envelope_metadata(encrypted)
     with pytest.raises(EnvelopeUnsupportedError):
+        decrypt_envelope_to_path(encrypted, restored, KEY)
+
+
+def _header_bytes(**updates):
+    header = {
+        "chunk_count": 1,
+        "chunk_size": CHUNK_SIZE,
+        "cipher": "AES-256-GCM",
+        "format_version": 1,
+        "kdf": {
+            "algorithm": "argon2id",
+            "memory_cost_kib": ARGON2.memory_cost_kib,
+            "parallelism": ARGON2.parallelism,
+            "salt": "c3Nzc3Nzc3Nzc3Nzc3Nzcw==",
+            "time_cost": ARGON2.time_cost,
+        },
+        "key_check": "unused",
+        "plaintext_size": 1,
+    }
+    header.update(updates)
+    header["header_checksum"] = envelope._header_checksum(header)
+    return envelope._canonical_json(header)
+
+
+@pytest.mark.parametrize(
+    ("header_bytes", "error", "message"),
+    [
+        (b"\xff", EnvelopeCorruptError, "canonical JSON"),
+        (b"[]", EnvelopeCorruptError, "JSON object"),
+        (b"{}", EnvelopeCorruptError, "checksum is missing"),
+        (
+            envelope._canonical_json({"header_checksum": "bad"}),
+            EnvelopeCorruptError,
+            "checksum does not match",
+        ),
+        (_header_bytes(format_version=99), EnvelopeUnsupportedError, "version"),
+        (_header_bytes(cipher="other"), EnvelopeUnsupportedError, "cipher"),
+        (
+            _header_bytes(kdf={"algorithm": "pbkdf2"}),
+            EnvelopeUnsupportedError,
+            "Argon2id",
+        ),
+        (_header_bytes(plaintext_size="bad"), EnvelopeCorruptError, "field types"),
+        (
+            _header_bytes(
+                kdf={
+                    "algorithm": "argon2id",
+                    "memory_cost_kib": 1,
+                    "parallelism": 1,
+                    "salt": "c2hvcnQ=",
+                    "time_cost": 1,
+                }
+            ),
+            EnvelopeCorruptError,
+            "salt is too short",
+        ),
+        (
+            _header_bytes(
+                kdf={
+                    "algorithm": "argon2id",
+                    "memory_cost_kib": 1,
+                    "parallelism": 0,
+                    "salt": "c3Nzc3Nzc3Nzc3Nzc3Nzcw==",
+                    "time_cost": 1,
+                }
+            ),
+            EnvelopeCorruptError,
+            "parameters must be positive",
+        ),
+        (_header_bytes(chunk_size=1), EnvelopeCorruptError, "size metadata"),
+        (_header_bytes(chunk_count=2), EnvelopeCorruptError, "chunk count"),
+        (_header_bytes() + b" ", EnvelopeCorruptError, "canonically encoded"),
+    ],
+)
+def test_header_metadata_validation_is_specific(header_bytes, error, message):
+    with pytest.raises(error, match=message):
+        envelope._parse_header(header_bytes)
+
+
+def test_envelope_file_detection_and_argument_validation(tmp_path):
+    missing = tmp_path / "missing.enc"
+    legacy = tmp_path / "legacy.enc"
+    legacy.write_bytes(b"legacy")
+    encrypted, restored, _metadata = _write_fixture(tmp_path, b"payload")
+
+    assert is_current_envelope(missing) is False
+    assert is_current_envelope(legacy) is False
+    assert is_current_envelope(encrypted) is True
+    assert read_envelope_metadata(legacy) is None
+
+    with pytest.raises(ValueError, match="32-byte"):
+        write_envelope(legacy, encrypted, b"short", argon2=ARGON2)
+    with pytest.raises(ValueError, match="chunk size"):
+        write_envelope(legacy, encrypted, KEY, argon2=ARGON2, chunk_size=1)
+    with pytest.raises(EnvelopeWrongPasswordError, match="invalid length"):
+        decrypt_envelope_to_path(encrypted, restored, b"short")
+
+    legacy.write_bytes(b"not-current-envelope")
+    with pytest.raises(EnvelopeUnsupportedError, match="not a current"):
+        decrypt_envelope_to_path(legacy, restored, KEY)
+
+
+def test_zero_header_length_is_rejected_by_metadata_and_decrypt(tmp_path):
+    encrypted = tmp_path / "bad-header.enc"
+    restored = tmp_path / "restored.sqlite"
+    encrypted.write_bytes(MAGIC + struct.pack(">I", 0))
+
+    with pytest.raises(EnvelopeCorruptError, match="header length"):
+        read_envelope_metadata(encrypted)
+    with pytest.raises(EnvelopeCorruptError, match="header length"):
         decrypt_envelope_to_path(encrypted, restored, KEY)

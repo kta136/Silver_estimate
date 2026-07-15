@@ -20,16 +20,18 @@ def fetch_item_catalog_rows(
     term = (search_term or "").strip()
     if not term:
         cursor.execute(
-            f"SELECT {ITEM_CATALOG_COLUMNS} FROM items ORDER BY code COLLATE NOCASE"
+            "SELECT code, name, purity, wage_type, wage_rate "
+            "FROM items ORDER BY code COLLATE NOCASE"
         )
         return cursor.fetchall()
 
     prefix_pattern = f"{term}%"
     cursor.execute(
-        f"""
-        SELECT {ITEM_CATALOG_COLUMNS} FROM items WHERE code LIKE ? COLLATE NOCASE
+        """
+        SELECT code, name, purity, wage_type, wage_rate
+        FROM items WHERE code LIKE ? COLLATE NOCASE
         UNION ALL
-        SELECT {ITEM_CATALOG_COLUMNS} FROM items
+        SELECT code, name, purity, wage_type, wage_rate FROM items
         WHERE name LIKE ? COLLATE NOCASE
           AND code NOT LIKE ? COLLATE NOCASE
         ORDER BY code COLLATE NOCASE
@@ -45,10 +47,11 @@ def fetch_item_catalog_rows(
 
     pattern = f"%{term}%"
     cursor.execute(
-        f"""
-        SELECT {ITEM_CATALOG_COLUMNS} FROM items WHERE code LIKE ? COLLATE NOCASE
+        """
+        SELECT code, name, purity, wage_type, wage_rate
+        FROM items WHERE code LIKE ? COLLATE NOCASE
         UNION ALL
-        SELECT {ITEM_CATALOG_COLUMNS} FROM items
+        SELECT code, name, purity, wage_type, wage_rate FROM items
         WHERE name LIKE ? COLLATE NOCASE
           AND code NOT LIKE ? COLLATE NOCASE
         ORDER BY code COLLATE NOCASE
@@ -113,7 +116,7 @@ def fetch_item_catalog_page(
         WHERE {where_sql}{keyset_sql}
         ORDER BY UPPER(code), code COLLATE BINARY
         LIMIT ?
-        """,  # nosec B608 - clauses are internal constants; values are bound
+        """,  # nosec B608
         params,
     )
     fetched = [dict(row) for row in cursor.fetchall()]

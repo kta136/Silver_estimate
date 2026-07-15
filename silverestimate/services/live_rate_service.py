@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from collections.abc import Callable
 
@@ -70,10 +71,8 @@ class LiveRateService(QObject):
                 worker.connection_state_changed,
                 worker.stream_error,
             ):
-                try:
+                with contextlib.suppress(TypeError):
                     signal.disconnect()
-                except TypeError:
-                    pass
         self._worker = None
         self._thread = None
 

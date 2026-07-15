@@ -150,7 +150,7 @@ def fetch_estimate_history_page(
         WHERE {where_sql}{keyset_sql}
         ORDER BY COALESCE(voucher_no_int, -1) DESC, voucher_no DESC
         LIMIT ?
-        """,  # nosec B608 - internal clauses; values are bound
+        """,  # nosec B608
         query_params,
     )
     fetched = [dict(row) for row in cursor.fetchall()]
@@ -519,47 +519,46 @@ class EstimatesRepository:
             cursor.execute(
                 "DELETE FROM estimate_items WHERE voucher_no = ?", (voucher_no,)
             )
-            params = []
-            for item in regular_items_list:
-                params.append(
-                    (
-                        voucher_no,
-                        item.get("code", ""),
-                        item.get("name", ""),
-                        float(item.get("gross", 0.0)),
-                        float(item.get("poly", 0.0)),
-                        float(item.get("net_wt", 0.0)),
-                        float(item.get("purity", 0.0)),
-                        float(item.get("wage_rate", 0.0)),
-                        int(item.get("pieces", 1)),
-                        str(item.get("wage_type", "WT") or "WT"),
-                        float(item.get("wage", 0.0)),
-                        float(item.get("fine", 0.0)),
-                        0,
-                        0,
-                        str(item.get("line_key", "") or ""),
-                    )
+            params = [
+                (
+                    voucher_no,
+                    item.get("code", ""),
+                    item.get("name", ""),
+                    float(item.get("gross", 0.0)),
+                    float(item.get("poly", 0.0)),
+                    float(item.get("net_wt", 0.0)),
+                    float(item.get("purity", 0.0)),
+                    float(item.get("wage_rate", 0.0)),
+                    int(item.get("pieces", 1)),
+                    str(item.get("wage_type", "WT") or "WT"),
+                    float(item.get("wage", 0.0)),
+                    float(item.get("fine", 0.0)),
+                    0,
+                    0,
+                    str(item.get("line_key", "") or ""),
                 )
-            for item in return_items_list:
-                params.append(
-                    (
-                        voucher_no,
-                        item.get("code", ""),
-                        item.get("name", ""),
-                        float(item.get("gross", 0.0)),
-                        float(item.get("poly", 0.0)),
-                        float(item.get("net_wt", 0.0)),
-                        float(item.get("purity", 0.0)),
-                        float(item.get("wage_rate", 0.0)),
-                        int(item.get("pieces", 1)),
-                        str(item.get("wage_type", "WT") or "WT"),
-                        float(item.get("wage", 0.0)),
-                        float(item.get("fine", 0.0)),
-                        1 if item.get("is_return", False) else 0,
-                        1 if item.get("is_silver_bar", False) else 0,
-                        str(item.get("line_key", "") or ""),
-                    )
+                for item in regular_items_list
+            ]
+            params.extend(
+                (
+                    voucher_no,
+                    item.get("code", ""),
+                    item.get("name", ""),
+                    float(item.get("gross", 0.0)),
+                    float(item.get("poly", 0.0)),
+                    float(item.get("net_wt", 0.0)),
+                    float(item.get("purity", 0.0)),
+                    float(item.get("wage_rate", 0.0)),
+                    int(item.get("pieces", 1)),
+                    str(item.get("wage_type", "WT") or "WT"),
+                    float(item.get("wage", 0.0)),
+                    float(item.get("fine", 0.0)),
+                    1 if item.get("is_return", False) else 0,
+                    1 if item.get("is_silver_bar", False) else 0,
+                    str(item.get("line_key", "") or ""),
                 )
+                for item in return_items_list
+            )
             if params:
                 try:
                     prepared = getattr(self._db, "_c_insert_estimate_item", None)
@@ -690,7 +689,7 @@ class EstimatesRepository:
 
     def _set_last_error(self, message: str | None) -> None:
         try:
-            setattr(self._db, "last_error", message)
+            self._db.last_error = message
         except Exception as exc:
             self._logger.debug(
                 "Failed to store estimate repository error state: %s", exc

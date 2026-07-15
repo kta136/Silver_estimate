@@ -96,7 +96,7 @@ def test_show_item_master_lazy_creation(monkeypatch):
     )
     service.show_item_master()
 
-    widget = getattr(main_window, "item_master_widget")
+    widget = main_window.item_master_widget
     assert widget is not None
     assert created["db"] is main_window.db
     assert created["main_window"] is main_window

@@ -1,289 +1,71 @@
-# Security Architecture - Silver Estimation App
+# Security Architecture
 
-## Overview
+## Authentication
 
-The application implements a multi-layered security approach combining password authentication, database encryption, and secure key management to protect sensitive business data.
+The main password authenticates and decrypts the database. The recovery password triggers the established data-wipe workflow. Password hashes use Argon2 and are stored in the operating-system keyring; legacy QSettings hashes migrate on successful access. Passwords and derived encryption keys are never persisted as plaintext.
 
-## Authentication System
+## SILVDB01 encrypted envelope
 
-### 1. Password Management
+New and migrated databases use this binary layout:
 
-#### Dual Password System
-- **Primary Password**: Application access and database decryption
-- **Recovery Password**: Data wipe trigger (emergency recovery). When used, the wipe runs in silent mode—no wipe-related logs are emitted and existing log files are purged alongside the encrypted database.
-
-#### Password Storage
-- Passwords never stored in plaintext
-- Argon2 hashing algorithm (memory-hard, resistant to GPU attacks)
-- Unique salt per password
-- Hashes stored in the OS keyring via `silverestimate/security/credential_store.py` (legacy QSettings values are migrated on first launch)
-
-#### Password Flow
-```
-User Input → Argon2 Hash → Compare with Stored Hash → Grant/Deny Access
-                                                   → Derive Encryption Key
+```text
+"SILVDB01"
+4-byte big-endian canonical-JSON header length
+canonical JSON header
+repeated chunk records:
+  8-byte chunk index
+  4-byte plaintext chunk length
+  12-byte nonce
+  AES-256-GCM ciphertext and 16-byte tag
 ```
 
-### 2. First-Run Setup
-1. Prompt for primary and recovery passwords
-2. Validate passwords are different
-3. Generate hashes using Argon2
-4. Persist hashed credentials via the credential store (Python `keyring` backend)
-5. Create initial database with encryption
+The header records format version, AES-256-GCM, Argon2id parameters and salt, plaintext size, 1 MiB chunk size, chunk count, key check, and a metadata checksum. The complete envelope prefix plus each chunk index/length is authenticated as AES-GCM additional authenticated data.
 
-### 3. Authentication Process
-```python
-from silverestimate.security import credential_store
+Normal startup derives the Argon2id encryption key once (time cost 3, 64 MiB memory, parallelism 4). PBKDF2 is derived only when a legacy nonce-plus-ciphertext envelope must be opened. After legacy authentication, the next flush writes and verifies `SILVDB01` atomically before its encrypted migration backup is removed.
 
-settings = get_app_settings()
-main_hash = credential_store.get_password_hash("main", settings=settings, logger=logger)
-backup_hash = credential_store.get_password_hash("backup", settings=settings, logger=logger)
+The reader returns distinct outcomes for:
 
-if main_hash and backup_hash:
-    entered_password = prompt_login()
-    if verify_password(main_hash, entered_password):
-        return SUCCESS
-    if verify_password(backup_hash, entered_password):
-        return TRIGGER_WIPE
-    return FAILURE
+- wrong password;
+- unsupported magic/version/KDF/cipher;
+- corrupt authenticated metadata or ciphertext;
+- truncated data;
+- reordered chunks;
+- duplicate chunks;
+- trailing data.
 
-setup_new_passwords()
-```
+Plaintext and ciphertext are streamed; the implementation does not keep complete duplicate buffers in memory.
 
-## Database Encryption
+## Flush integrity
 
-### 1. Encryption Algorithm
-- **Algorithm**: AES-256-GCM (Authenticated Encryption)
-- **Key Size**: 256 bits
-- **Nonce Size**: 12 bytes (per encryption operation)
-- **Authentication Tag**: Included with ciphertext
+SQLite is committed and checkpointed before a consistent backup snapshot is encrypted. The encrypted replacement is written to a sibling temporary file, verified, and atomically replaced. Flush telemetry includes duration and byte size.
 
-### 2. Key Derivation
-```python
-def derive_key(password, salt):
-    kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA256(),
-        length=32,  # 256 bits
-        salt=salt,
-        iterations=100000,  # Configurable
-        backend=default_backend()
-    )
-    return kdf.derive(password.encode('utf-8'))
-```
+Dirty and flushed generations prevent redundant rewrites. A save during an active flush sets a pending flag and guarantees a subsequent pass.
 
-### 3. Encryption Process
-1. Generate random 12-byte nonce
-2. Encrypt database content with AES-GCM
-3. Store: nonce + ciphertext + tag
-4. Save to disk as encrypted file
+## Crash recovery and temporary plaintext
 
-### 4. Decryption Process
-1. Read nonce from file (first 12 bytes)
-2. Read ciphertext (remaining bytes)
-3. Decrypt using derived key
-4. Verify authentication tag
-5. Write to temporary file
+Each temporary database directory is permission-restricted and includes `.silverestimate-temp.json` with:
 
-## Key Management
+- owner identifier;
+- process ID;
+- creation time;
+- plaintext database filename;
+- SHA-256 identity of the encrypted database path.
 
-### 1. Salt Generation and Storage
-- **Generation**: `os.urandom(16)` - cryptographically secure
-- **Storage**: QSettings with base64 encoding
-- **Location**: Platform-specific secure storage
-- **Uniqueness**: Per installation
+Startup considers only a marked directory belonging to the current encrypted file. A newer valid SQLite database can be offered for recovery. Declined, invalid, or older-than-24-hours abandoned candidates are removed together with WAL/SHM and snapshot files. Unmarked directories are never cleaned.
 
-### 2. Key Lifecycle
-```
-Password + Salt → PBKDF2 → Encryption Key → [Session Use] → Secure Disposal
-```
+Temporary database overwrite and deletion is best-effort. SSD wear levelling, filesystem snapshots, cloud synchronization, and copy-on-write storage may retain physical copies. Full-disk encryption and trusted-device controls are required when that residual risk matters.
 
-### 3. Session Management
-- Keys exist only in memory during runtime
-- No key persistence between sessions
-- Secure memory cleanup on exit
+## Network security
 
-## Data Protection
+DDA rates use certificate-validated public HTTPS/SSE endpoints. The client sends no API key or authorization header. It accepts only contract version 1, the exact configured item ID, `PER_KG`, a finite positive `finalRate`, valid timestamps, and valid sequences. Unknown fields are ignored for forward compatibility. `baseRate`, product names, and previous-rate percentage calculations are not trusted inputs.
 
-### 1. At Rest
-- Database file always encrypted on disk
-- No plaintext data persistence
-- Temporary files securely deleted
+## Operational controls
 
-### 2. In Transit (Runtime)
-- Temporary decrypted file with restricted permissions
-- Automatic cleanup on application exit
-- Crash-resistant cleanup mechanisms
+- Logs must not contain passwords, keys, complete database rows, or credential values.
+- Bandit medium/high findings block pull requests, main, and release workflows. False positives use narrow, test-specific `# nosec Bxxx` annotations.
+- Dependency advisory scanning remains non-blocking until its upstream database and remediation workflow are made deterministic.
+- Windows code-signing hooks are present but non-blocking until certificate secrets are supplied.
 
-### 3. Access Control
-- Single-user model (current limitation)
-- No granular permissions (future enhancement)
-- All-or-nothing access model
+## Security limitations
 
-## Security Mechanisms
-
-### 1. Data Wipe Feature
-```python
-import logging
-import os
-from typing import Optional
-from silverestimate.security import credential_store
-from silverestimate.infrastructure.settings import get_app_settings
-
-def perform_data_wipe(
-    db_path: str,
-    logger: Optional[logging.Logger] = None,
-    *,
-    silent: bool = False,
-) -> bool:
-    # 1. Delete encrypted database file
-    if os.path.exists(db_path):
-        os.remove(db_path)
-
-    # 2. Remove encryption salt and temp artifacts
-    settings = get_app_settings()
-    for key in ("security/db_salt", "security/last_temp_db_path"):
-        settings.remove(key)
-
-    # 3. Clear password hashes from the secure store
-    for kind in ("main", "backup"):
-        credential_store.delete_password_hash(
-            kind,
-            settings=settings,
-            logger=None if silent else logger,
-        )
-
-    # 4. Silent wipe clears logs without emitting signals
-    if silent:
-        _clear_log_artifacts()
-
-    return True
-```
-
-### 2. Temporary File Security
-- Created with restricted permissions
-- Stored in system temp directory
-- Securely wiped on shutdown (configurable recovery register via `settings.ENABLE_TEMP_DB_RECOVERY`)
-- Crash recovery cleanup
-
-### 3. Error Handling
-- No sensitive data in error messages
-- Secure logging practices
-- Graceful degradation on failures
-
-## Threat Model
-
-### 1. Protected Against
-- **Unauthorized Access**: Password protection
-- **Data Theft**: File-level encryption
-- **Memory Dumps**: Limited key lifetime
-- **Brute Force**: Argon2 + high iteration count
-- **Rainbow Tables**: Unique salts per installation
-
-### 2. Current Limitations
-- **Physical Access**: No protection against keyloggers
-- **Memory Analysis**: Keys exist in memory during use
-- **Multi-user**: No user separation
-- **Network Attacks**: Local-only operation
-
-### 3. Future Enhancements
-- Hardware security module integration
-- Two-factor authentication
-- Role-based access control
-- Audit logging
-
-## Implementation Details
-
-### 1. Password Hashing
-```python
-# Using passlib for Argon2
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
-
-def hash_password(password):
-    return pwd_context.hash(password)
-
-def verify_password(stored_hash, provided_password):
-    return pwd_context.verify(provided_password, stored_hash)
-```
-
-### 2. Database Encryption
-```python
-class DatabaseManager:
-    def _encrypt_db(self):
-        aesgcm = AESGCM(self.key)
-        nonce = os.urandom(12)
-        
-        with open(self.temp_db_path, 'rb') as f_in:
-            plaintext = f_in.read()
-            
-        ciphertext = aesgcm.encrypt(nonce, plaintext, None)
-        
-        with open(self.encrypted_db_path, 'wb') as f_out:
-            f_out.write(nonce)
-            f_out.write(ciphertext)
-```
-
-### 3. Key Derivation
-```python
-def _derive_key(self, password, salt):
-    kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=salt,
-        iterations=KDF_ITERATIONS,
-        backend=default_backend()
-    )
-    return kdf.derive(password.encode('utf-8'))
-```
-
-## Security Best Practices
-
-### 1. Development
-- Never log passwords or keys
-- Use secure random for all crypto operations
-- Validate all security-related inputs
-- Regular security audits
-
-### 2. Deployment
-- Restrict file permissions
-- Use secure temp directories
-- Enable OS-level security features
-- Regular security updates
-
-### 3. Operations
-- Regular password rotation
-- Backup encryption keys separately
-- Monitor for unauthorized access
-- Incident response plan
-
-## Compliance Considerations
-
-### 1. Data Protection
-- Encryption at rest (compliant)
-- Access control (basic)
-- Audit logging (future)
-- Data retention policies (manual)
-
-### 2. Security Standards
-- NIST recommendations for key sizes
-- OWASP guidelines for password storage
-- Industry best practices for encryption
-
-## Security Maintenance
-
-### 1. Regular Tasks
-- Update cryptographic libraries
-- Review security logs
-- Test backup/restore procedures
-- Verify encryption integrity
-
-### 2. Incident Response
-- Data breach procedures
-- Password reset protocol
-- Emergency access methods
-- Recovery procedures
-
-### 3. Upgrades
-- Key rotation strategy
-- Algorithm migration plan
-- Backward compatibility
-- Security patch management
+Encryption at rest does not defend against malware, keyloggers, a compromised logged-in account, live process memory inspection, malicious printers, or a user who has already authenticated. The application is single-user and does not provide role-based access control.

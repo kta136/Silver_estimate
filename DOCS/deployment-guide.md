@@ -1,92 +1,72 @@
-# Deployment & Packaging Guide
+# Deployment and Release Guide
 
-## Overview
-- Primary target: Windows 10/11 desktops.
-- Build system: PyInstaller 6.x driven from `SilverEstimate.spec`.
-- Runtime Python: 3.14.
-- GUI runtime: PyQt6 6.11 / Qt 6.11. PyQt5 is no longer supported or packaged.
-- Artifacts: a single executable in `dist/`, later zipped for release publishing.
+## Supported platform
 
-## Local Windows Packaging
-1. Open PowerShell in the repo root.
-2. Create/activate a virtual environment and install dependencies:
-   - `python -m venv .venv`
-   - `.\.venv\Scripts\Activate.ps1`
-   - `python -m pip install --upgrade pip`
-   - `python -m pip install -e ".[dev]"`
-   - Development installs resolve PyQt6 6.11 and configure `pytest-qt` for PyQt6.
-3. Build with the canonical spec:
-   - Fast local iteration: `uv run nox -s build`
-   - Clean rebuild: `python -m PyInstaller --clean --noconfirm SilverEstimate.spec`
-   - Clean rebuild through nox: `uv run nox -s build_clean`
-4. Output artifact:
-   - `dist/SilverEstimate.exe`
-   - `dist/SilverEstimate-v<version>.exe`
-   - `dist/SilverEstimate-v<version>-win64.zip`
-5. Optionally zip the executable manually for distribution if not using `nox -s build_clean`.
+Packaged releases support Windows 10/11 only. PyInstaller output is verified on `windows-latest`. macOS and Linux are untested development environments and are not release targets.
 
-### Manual PyInstaller Invocation
-- Spec file: `SilverEstimate.spec` (canonical and required for builds).
-- Hidden imports, PyQt6/Qt6 plugin filtering, qtawesome data collection, and other packaging settings live in the spec file.
-- Add datas or icons by editing the spec file if new resources are introduced.
-- Use `--clean` for release builds or after packaging changes; omit it for faster repeat local builds when you want PyInstaller to reuse cached analysis results.
-- Do not add PyQt5/Qt5 bundle paths; the package is PyQt6-only and the spec filters Qt6 resources explicitly.
+## Reproducible environment
 
-## Continuous Delivery (GitHub Actions)
-Workflow: `.github/workflows/release-windows.yml`.
-- Trigger: pushing a tag matching `v*` (e.g., `v1.72.7`).
-- Jobs:
-  - Checkout repository.
-  - Install Python 3.14 and project dependencies from `pyproject.toml` / `uv.lock` (including PyQt6 6.11 and `pyinstaller` for packaging).
-  - Build the executable from `SilverEstimate.spec`.
-  - Rename artifact to `SilverEstimate-<tag>.exe` and zip as `SilverEstimate-<tag>-win64.zip`.
-  - Publish the zip to the GitHub Release using `softprops/action-gh-release`.
+Python 3.14 and the committed `uv.lock` are required:
 
-### Release Checklist
-1. Update `APP_VERSION` in `silverestimate/infrastructure/app_constants.py`.
-2. Update `CHANGELOG.md` and relevant docs.
-3. Commit changes and push to the main branch.
-4. Create and push annotated tag `git tag v<version>` followed by `git push origin v<version>`.
-5. Confirm the GitHub Actions build attaches the new zip to the release entry.
+```powershell
+uv sync --frozen --extra dev
+```
 
-### v2.8.9 Release Readiness
-- Status: ready for stable release publishing after manual visual smoke.
-- Release notes: `DOCS/release-notes-v2.8.9.md`.
-- Published release: `https://github.com/kta136/Silver_estimate/releases/tag/v2.8.9`.
-- Verified artifacts:
-  - Direct EXE: `SilverEstimate-v2.8.9.exe` from local clean build.
-  - ZIP package: `SilverEstimate-v2.8.9-win64.zip` from the GitHub Actions tag build.
-- Tag: `v2.8.9` at `39d08fa13e7f5a4ca814a7072498a0f799218ed5`.
-- App-code commit: `c7253ed4a6a456912aa5fe7cac2e757b34d781f2`.
-- Local release gate completed: `ruff`, focused PyQt6 UI/theme suite, whitespace check, clean PyInstaller build, Graphify refresh, and PyQt5/Qt5 residue scan.
-- This release is PyQt6-only; do not attach PyQt5/Qt5 artifacts or restore PyQt5 fallback packaging.
+Do not install an ad-hoc release dependency set. PR, main, and tag workflows all run the same frozen development sync so tests, security tools, SBOM generation, and PyInstaller use the locked graph.
 
-## Dependency Management
-- Runtime dependencies are defined in `pyproject.toml` (`[project.dependencies]`).
-- Development dependencies are defined in `pyproject.toml` (`[project.optional-dependencies].dev`).
-- Preferred local bootstrap: `uv sync --extra dev` after `python` resolves to Python 3.14+.
-- Fallback local bootstrap: `python -m venv .venv`, activate it, then `python -m pip install -e ".[dev]"`.
+## Local validation
 
-## Testing Before Packaging
-- Run `uv run --extra dev nox -s ruff` before packaging.
-- Run `uv run --extra dev nox -s tests_fast` for the fast unit/integration gate.
-- For UI/theme regressions, run `uv run --extra dev pytest tests/unit/test_application_theme.py tests/unit/test_themed_controls.py tests/ui/test_settings_dialog.py -q`.
-- Run `pytest` from the repo root for a broader local pass when needed (requires developer dependencies such as `pytest` and `pytest-qt`; pytest is configured to use PyQt6).
-- Ensure the application starts with `python main.py` before freezing.
-- Verify encrypted database handling by launching the packaged build, creating a password (ensure the OS keyring is available), saving a sample estimate, closing, and reopening.
-- With Windows dark mode enabled, open settings, login, item master, silver-bar screens, print preview, combo popups, message boxes, and file dialogs. They should remain light.
-- For print/PDF changes, smoke-test Classic, Modern, Thermal, silver-bar inventory/list exports, quick print with no/stale/valid printer, and PDF export replacement behavior.
+```powershell
+uv run nox -s ruff
+uv run nox -s mypy
+uv run nox -s bandit
+uv run nox -s tests_full
+$env:QT_QPA_PLATFORM = "offscreen"
+uv run nox -s smoke_ui
+uv run nox -s build_clean
+uv run nox -s artifact_smoke
+```
 
-## Common Troubleshooting
-- **Missing DLLs:** Ensure the host machine has the Microsoft Visual C++ redistributables. PyInstaller bundles the interpreter but relies on system runtimes.
-- **Antivirus false positives:** Sign the executable when distributing to customers; CI output is unsigned. Consider submitting the binary to Microsoft Defender for pre-approval.
-- **Stale virtual environment:** Delete `.venv/` if dependency versions are inconsistent, then reinstall with `python -m pip install -e ".[dev]"`.
-- **Wrong Qt binding selected:** Delete `.venv/`, run `uv sync --extra dev`, and confirm `uv run python -c "import PyQt6; print(PyQt6.__file__)"` resolves. The project sets PyQt6 binding defaults for tests and packaging.
-- **Dark native dialogs:** Confirm `silverestimate/infrastructure/qt_bootstrap.py` is called before QApplication creation and the app is not being launched through a wrapper that overrides Qt platform options.
-- **Invisible combo/spinbox arrows:** New dialog controls should use `ThemedComboBox`, `ThemedSpinBox`, or `ThemedDoubleSpinBox` when the shared QSS is applied.
-- **Spec updates ignored:** Remove `build/` and `dist/` folders to force PyInstaller to regenerate caches after editing the spec.
+The clean build produces:
 
-## Future Enhancements
-- Automate icon/resource inclusion inside the spec once assets are finalized.
-- Capture build metadata (git commit, build time) and embed it into the executable via a version resource.
-- Extend CI to produce non-onefile archives for faster startup if customer feedback prefers unpacked builds.
+- `dist/SilverEstimate.exe`;
+- `dist/SilverEstimate-v<APP_VERSION>.exe`;
+- `dist/SilverEstimate-v<APP_VERSION>-win64.zip`.
+
+`--artifact-smoke` imports the packaged application and version metadata, then exits without authentication or customer data.
+
+## Pull requests
+
+PR validation runs:
+
+- Ruff formatting/lint and mypy;
+- blocking Bandit medium/high findings;
+- the complete non-smoke test suite on Windows;
+- 75% global coverage and 90% changed-line coverage;
+- deterministic performance gates;
+- offscreen Qt full-startup smoke;
+- clean PyInstaller build and frozen-artifact startup.
+
+## Main branch
+
+Main repeats frozen quality/security gates and complete Windows validation. Coverage, performance telemetry, smoke screenshots, executable, and zip are uploaded as workflow artifacts.
+
+## Release tags
+
+`.github/workflows/release-windows.yml` runs for `v*` tags. Before any publish step it:
+
+1. verifies the tag equals `v<APP_VERSION>`;
+2. runs Ruff, mypy, blocking Bandit, complete tests, coverage, performance, and offscreen smoke;
+3. builds with the canonical `SilverEstimate.spec`;
+4. optionally signs the executable when certificate secrets exist;
+5. starts the frozen executable in artifact-smoke mode;
+6. creates the Windows zip, CycloneDX JSON SBOM, and SHA-256 checksums;
+7. publishes only after every required gate succeeds.
+
+Signing is intentionally non-blocking until `WINDOWS_SIGNING_CERTIFICATE_BASE64` and `WINDOWS_SIGNING_CERTIFICATE_PASSWORD` are configured. Once production credentials are available, remove `continue-on-error` after validating the timestamp and certificate chain.
+
+## Manual release smoke
+
+Before promoting a stable release, verify a copy of a legacy encrypted production database, automatic `SILVDB01` upgrade, estimate create/edit/delete, paged searches and Load more, Agra Mohar SSE updates, forced SSE outage with 10-second polling, offline timestamp display, password rotation, every print layout, and simulated crash recovery.
+
+Temporary plaintext secure deletion is best-effort on SSD and copy-on-write storage. Production devices should use Windows device encryption/BitLocker and a trusted user account.

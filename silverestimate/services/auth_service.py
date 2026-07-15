@@ -140,7 +140,9 @@ def run_authentication(
             )
 
     if logger:
-        logger.info("Password hashes not found in secure store. Starting first-time setup.")
+        logger.info(
+            "Password hashes not found in secure store. Starting first-time setup."
+        )
     logger.debug(
         "[perf] startup.auth_dialog_shown_ms=%.2f t_unix=%.6f mode=setup",
         (time.perf_counter() - flow_started_at) * 1000.0,
@@ -161,12 +163,8 @@ def run_authentication(
             QMessageBox.critical(parent, "Setup Error", "Failed to hash passwords.")
             return None
         try:
-            credential_store.set_password_hash(
-                "main", hashed_password, logger=logger
-            )
-            credential_store.set_password_hash(
-                "backup", hashed_backup, logger=logger
-            )
+            credential_store.set_password_hash("main", hashed_password, logger=logger)
+            credential_store.set_password_hash("backup", hashed_backup, logger=logger)
         except CredentialStoreError as exc:
             logger.critical(
                 "Failed to persist passwords in secure store: %s", exc, exc_info=True

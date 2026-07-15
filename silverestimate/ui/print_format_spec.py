@@ -38,6 +38,8 @@ ESTIMATE_FORMAT_SPECS: Mapping[str, PrintFormatSpec] = {
     "new": PrintFormatSpec("new", "estimate", False, "Courier New", 7.0, 1.0),
     "thermal": PrintFormatSpec("thermal", "estimate", False, "Courier New", 7.0, 1.0),
 }
+
+
 def build_estimate_strategies(
     *,
     render_old: Callable[[object], str],

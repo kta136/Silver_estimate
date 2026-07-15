@@ -1,16 +1,16 @@
 # Graph Report - Silver Estimate  (2026-07-15)
 
 ## Corpus Check
-- 237 files · ~154,501 words
+- 237 files · ~154,497 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 4818 nodes · 9699 edges · 432 communities (278 shown, 154 thin omitted)
+- 4818 nodes · 9699 edges · 431 communities (277 shown, 154 thin omitted)
 - Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 746 edges (avg confidence: 0.55)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `6ba70ffd`
+- Built from commit: `45a8a281`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -164,7 +164,6 @@
 - KDF Migration Tests
 - Icon Tests
 - Toolbar UI Components
-- Sidebar Card Forms
 - Stub Repository
 - Context Menu Icons
 - Item Validation
@@ -386,7 +385,7 @@
 - **Authentication and Security Components** — readme_auth_service, readme_credential_store, readme_argon2id, readme_aes256gcm, readme_silvdb01, docs_sec_pbkdf2_legacy, docs_sec_temp_directory_marker [EXTRACTED 1.00]
 - **CI/CD Pipeline** — github_workflows_main_validation_workflow, github_workflows_pr_validation_workflow, github_workflows_release_windows_workflow, changelog_ruff, changelog_mypy, changelog_bandit, changelog_windows_ci, changelog_smoke_suite, changelog_p95_budgets, docs_perf_performance_harness [EXTRACTED 1.00]
 
-## Communities (432 total, 154 thin omitted)
+## Communities (431 total, 154 thin omitted)
 
 ### Community 1 - "Test Command Stubs"
 Cohesion: 0.05
@@ -449,8 +448,8 @@ Cohesion: 0.08
 Nodes (43): EstimateLine, Domain models supporting estimate calculations., Represents a single row in the estimate grid., Breakdown of overall, categorical, and derived totals., TotalsResult, EstimateEntryView, EstimateEntryViewState, Protocol (+35 more)
 
 ### Community 16 - "Print Page Settings"
-Cohesion: 0.12
-Nodes (28): Utility helpers for application QSettings access., available_printer_names(), _clean_text(), _coerce_positive_float(), copy_printer_page_layout(), default_printer_name(), load_margins(), load_orientation() (+20 more)
+Cohesion: 0.13
+Nodes (27): available_printer_names(), _clean_text(), _coerce_positive_float(), copy_printer_page_layout(), default_printer_name(), load_margins(), load_orientation(), _load_page_size() (+19 more)
 
 ### Community 17 - "Database Manager"
 Cohesion: 0.04
@@ -493,12 +492,12 @@ Cohesion: 0.08
 Nodes (24): ConnectionThreadGuard, Logger, Helpers for tracking the thread that owns a SQLite connection., Keep track of which thread is allowed to mutate the SQLite connection., Remember the current thread as the connection owner., Forget the previously recorded owner thread., Return `True` when called from the owning thread., Commit on the owning thread and skip politely on others. (+16 more)
 
 ### Community 27 - "Repository Flush"
-Cohesion: 0.07
-Nodes (21): IntegrityError, Lazy-load the EstimatesRepository instance., Lazy-load the SilverBarsRepository instance., EstimatesRepository, fetch_estimate_history_rows(), Any, Cursor, Encapsulate estimate header/item persistence logic. (+13 more)
+Cohesion: 0.09
+Nodes (12): IntegrityError, Lazy-load the EstimatesRepository instance., Lazy-load the SilverBarsRepository instance., EstimatesRepository, fetch_estimate_history_rows(), Any, Cursor, Encapsulate estimate header/item persistence logic. (+4 more)
 
 ### Community 28 - "Print Preview Controller"
-Cohesion: 0.11
-Nodes (14): QPrintPreviewDialog, QPrintPreviewWidget, QToolBar, PrintPreviewController, Exception, Orientation, QLabel, QMenu (+6 more)
+Cohesion: 0.08
+Nodes (28): QPageSize, QPrintPreviewDialog, QPrintPreviewWidget, QToolBar, PrintPreviewPayload, Serialized preview payload that can be prepared before opening the dialog., PrintPreviewController, Exception (+20 more)
 
 ### Community 29 - "Estimate Entry View State"
 Cohesion: 0.06
@@ -509,8 +508,8 @@ Cohesion: 0.11
 Nodes (4): EstimateEntryLayoutController, QMenu, Own layout wiring, totals placement, and persisted UI preferences., is_stretch_column()
 
 ### Community 31 - "Table Adapter Controller"
-Cohesion: 0.10
-Nodes (5): first_navigation_column(), is_auto_edit_column(), EstimateEntryTableController, Any, Handle row management, focus, editing, and cell navigation.
+Cohesion: 0.11
+Nodes (4): is_auto_edit_column(), EstimateEntryTableController, Any, Handle row management, focus, editing, and cell navigation.
 
 ### Community 32 - "Item Selection Dialog"
 Cohesion: 0.10
@@ -585,8 +584,8 @@ Cohesion: 0.18
 Nodes (12): NavigationService, Navigation service to manage view switching and history dialogs., Handle main-window navigation, lazy view creation, and dialogs., _ActionStub, _MessageBoxRecorder, _StackStub, test_show_estimate_history_loads_selected_voucher(), test_show_estimate_switches_widget() (+4 more)
 
 ### Community 52 - "Print Preview Payload"
-Cohesion: 0.09
-Nodes (24): QPageSize, build_estimate_strategies(), PrintFormatSpec, PrintRendererStrategy, Protocol, Shared print-format specifications and renderer strategy contracts., Build the estimate preview HTML without opening UI widgets., PrintPayloadBuilder (+16 more)
+Cohesion: 0.67
+Nodes (3): [2.0.3] - 2025-10-29, Changed, Fixed
 
 ### Community 53 - "Application Theme"
 Cohesion: 0.08
@@ -601,8 +600,8 @@ Cohesion: 0.07
 Nodes (34): RequestT, EstimateHistoryCursor, Page, Typed keyset-pagination primitives shared by repositories and UI loaders., A stable page of rows and the cursor needed to continue the query., LatestRequestRunner, Event, QObject (+26 more)
 
 ### Community 56 - "Print Format Spec"
-Cohesion: 0.13
-Nodes (13): PrintPreviewBuildWorker, QObject, Background worker that prepares preview payloads off the UI thread., Initialize the print manager, accepting an optional print font., apply_print_page_settings_to_printer(), PrintPageSettings, Apply persisted page preferences to a QPrinter., Normalized page settings persisted under the print/ namespace. (+5 more)
+Cohesion: 0.08
+Nodes (23): build_estimate_strategies(), PrintFormatSpec, PrintRendererStrategy, Protocol, Shared print-format specifications and renderer strategy contracts., PrintPreviewBuildWorker, QObject, Build the estimate preview HTML without opening UI widgets. (+15 more)
 
 ### Community 57 - "Totals Controller"
 Cohesion: 0.15
@@ -630,7 +629,7 @@ Nodes (4): _LifecycleDbStub, _LifecycleHost, QDialog, test_lifecycle_controller_
 
 ### Community 63 - "Column Specs"
 Cohesion: 0.08
-Nodes (31): QStyledItemDelegate, Layout and settings controller for estimate entry., column_count(), column_uses_blank_zero_editor(), column_width_limits(), columns_for_editor_type(), default_column_widths(), EstimateColumnSpec (+23 more)
+Nodes (32): QStyledItemDelegate, Layout and settings controller for estimate entry., column_count(), column_uses_blank_zero_editor(), column_width_limits(), columns_for_editor_type(), default_column_widths(), EstimateColumnSpec (+24 more)
 
 ### Community 64 - "Item Master Table Model"
 Cohesion: 0.16
@@ -657,8 +656,8 @@ Cohesion: 0.20
 Nodes (22): advisory(), _artifact_extension(), artifact_smoke(), bandit(), build(), build_clean(), ci(), clean_artifact() (+14 more)
 
 ### Community 70 - "Logging"
-Cohesion: 0.16
-Nodes (11): _coerce_bool_setting(), get_log_config(), Get logging configuration from environment variables or settings.      Returns, _read_error_logging_enabled(), get_app_settings(), QSettings, Return QSettings, preferring new org identifiers with legacy fallback., Application settings service built on QSettings. (+3 more)
+Cohesion: 0.18
+Nodes (12): _coerce_bool_setting(), get_log_config(), Get logging configuration from environment variables or settings.      Returns, _read_error_logging_enabled(), get_app_settings(), QSettings, Utility helpers for application QSettings access., Return QSettings, preferring new org identifiers with legacy fallback. (+4 more)
 
 ### Community 71 - "Qt Bootstrap"
 Cohesion: 0.11
@@ -726,7 +725,7 @@ Nodes (12): Structured result returned by :class:`StartupController`., StartupRe
 
 ### Community 87 - "Temp Database Store Tests"
 Cohesion: 0.09
-Nodes (23): [1.72.7] - 2025-09-16, [2.0.0] - 2025-09-15, [2.0.1] - 2025-09-16, [2.0.3] - 2025-10-29, [2.6.1] - 2026-02-13, [2.6] - 2026-02-13, [2.6.2] - 2026-02-13, [2.6.3] - 2026-02-14 (+15 more)
+Nodes (23): [1.72.7] - 2025-09-16, [2.0.0] - 2025-09-15, [2.0.1] - 2025-09-16, [2.53] - 2026-02-13, [2.6.1] - 2026-02-13, [2.6] - 2026-02-13, [2.6.2] - 2026-02-13, [2.6.3] - 2026-02-14 (+15 more)
 
 ### Community 88 - "Repository Facade Tests"
 Cohesion: 0.26
@@ -769,8 +768,8 @@ Cohesion: 0.09
 Nodes (3): _AdapterStub, _Host, QWidget
 
 ### Community 98 - "Full Startup Smoke Test"
-Cohesion: 0.13
-Nodes (19): _build(), fine_calculation_cases(), FineCalculationCase, Any, Representative data for fine-weight calculations., Representative data for wage calculations., Hypothesis strategy producing realistic fine-weight scenarios., Hypothesis strategy producing realistic wage scenarios. (+11 more)
+Cohesion: 0.10
+Nodes (28): _build(), estimate_totals(), fine_calculation_cases(), FineCalculationCase, Any, Representative data for fine-weight calculations., Representative data for wage calculations., Hypothesis strategy producing realistic fine-weight scenarios. (+20 more)
 
 ### Community 100 - "Database Encryption Management"
 Cohesion: 0.22
@@ -956,10 +955,6 @@ Nodes (3): _QtAwesomeStub, test_get_icon_supports_extended_action_mappings(), te
 Cohesion: 0.12
 Nodes (12): Any, Estimate-to-inventory silver-bar synchronization component., Own reconciliation of estimate rows with mutable inventory rows., SilverBarSynchronizationRepository, SilverBarSyncResult, Explicit typed facade forwarding estimate-entry widget actions to controllers., FunctionRendererStrategy, Explicit typed facade for the silver-bar management controllers. (+4 more)
 
-### Community 150 - "Sidebar Card Forms"
-Cohesion: 0.67
-Nodes (3): [2.53] - 2026-02-13, Changed, Fixed
-
 ### Community 153 - "Context Menu Icons"
 Cohesion: 0.10
 Nodes (19): QDate, Tests for VoucherToolbar component., Test that date changes emit signal., Test that note changes emit signal., Test that toolbar initializes with default values., Test setting voucher number., Test showing/hiding unsaved badge., Test clearing all metadata. (+11 more)
@@ -1136,7 +1131,7 @@ Nodes (5): _FallbackKeyringError, _FallbackPasswordDeleteError, Exception, Fallb
 ## Work-memory lessons
 
 **Preferred sources** — corroborated by past sessions; start here.
-- `TempDatabaseStore` (2× useful, score=1.998360675)
+- `TempDatabaseStore` (2× useful, score=1.998218609)
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_

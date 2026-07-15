@@ -23,6 +23,7 @@ def temp_store_factory():
             pass
 
     stub_settings = StubSettings()
+
     def factory(**kwargs):
         store = TempDatabaseStore(
             settings_factory=lambda: stub_settings,

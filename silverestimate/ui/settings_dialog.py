@@ -1347,9 +1347,7 @@ class SettingsDialog(QDialog):
 
         # 6. Persist new hashes in secure store
         try:
-            credential_store.set_password_hash(
-                "main", new_main_hash, logger=logger
-            )
+            credential_store.set_password_hash("main", new_main_hash, logger=logger)
             credential_store.set_password_hash(
                 "backup", new_secondary_hash, logger=logger
             )

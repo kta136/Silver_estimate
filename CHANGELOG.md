@@ -5,7 +5,7 @@ All notable changes to the Silver Estimation App will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.01] - 2026-07-15
 
 ### Added
 - Added atomic schema v6 migration/validation, estimate-header totals backfill, silver-bar availability index, typed keyset pages, Load more controls, and bulk catalog upserts with immutable cache replacement.
@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added deterministic scale/performance data, complete p95 enforcement, Windows PR smoke/build validation, frozen artifact startup, release tag validation, CycloneDX SBOM, checksums, and optional signing hooks.
 
 ### Changed
+- Bumped the application/package version to `3.01` for the upgraded Windows test build.
 - Raised global coverage to 75% and pull-request changed-line coverage to 90%.
 - Expanded Ruff to Bugbear, Simplify, Performance, McCabe, and selected Pylint complexity rules with a complexity cap of 15.
 - Made Bandit medium/high findings blocking and switched PR, main, and release dependency setup to `uv sync --frozen --extra dev`.

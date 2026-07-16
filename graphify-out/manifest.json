@@ -75,8 +75,8 @@
     "semantic_hash": ""
   },
   "silverestimate/infrastructure/app_constants.py": {
-    "mtime": 1784182278.9006867,
-    "ast_hash": "a78657da92eebec986de3e91179c67fc",
+    "mtime": 1784184139.4799843,
+    "ast_hash": "7163a9db2cd92a58171438fd66db3290",
     "semantic_hash": ""
   },
   "silverestimate/infrastructure/db_session.py": {
@@ -275,9 +275,9 @@
     "semantic_hash": ""
   },
   "silverestimate/ui/estimate_entry.py": {
-    "mtime": 1784182650.9031525,
-    "ast_hash": "26cb42d89a925cf5aacba4fc7b06945e",
-    "semantic_hash": "26cb42d89a925cf5aacba4fc7b06945e"
+    "mtime": 1784184171.224996,
+    "ast_hash": "5f468a53c2d44ec34725b915a582b3e3",
+    "semantic_hash": ""
   },
   "silverestimate/ui/estimate_entry_layout_controller.py": {
     "mtime": 1784182573.633065,
@@ -325,8 +325,8 @@
     "semantic_hash": "9529ab08d88db3d99b2c1dde41acfe93"
   },
   "silverestimate/ui/icons.py": {
-    "mtime": 1784182550.6656725,
-    "ast_hash": "ad631c9d92ee3a5009d3a70d18373526",
+    "mtime": 1784185388.818718,
+    "ast_hash": "c950436b6fcfc3b4afa8e6568edf8937",
     "semantic_hash": ""
   },
   "silverestimate/ui/inline_status.py": {
@@ -350,8 +350,8 @@
     "semantic_hash": ""
   },
   "silverestimate/ui/main_window.py": {
-    "mtime": 1784127856.9445531,
-    "ast_hash": "c020dfc4e2b37df8c720b525428310d2",
+    "mtime": 1784184171.224996,
+    "ast_hash": "f670fafb882fdf7363ee1b609e301ac7",
     "semantic_hash": ""
   },
   "silverestimate/ui/numeric_font.py": {
@@ -625,9 +625,9 @@
     "semantic_hash": "8eabc5aabec90dc3d249b5cb49f04a0c"
   },
   "tests/ui/test_estimate_entry_integration.py": {
-    "mtime": 1779269302.0221424,
-    "ast_hash": "9edd9f5fe725ce98ecc38e3adf379fad",
-    "semantic_hash": "9edd9f5fe725ce98ecc38e3adf379fad"
+    "mtime": 1784183773.9031172,
+    "ast_hash": "9b02b88756358345969eeeb5dd7c1c1f",
+    "semantic_hash": ""
   },
   "tests/ui/test_estimate_entry_widget.py": {
     "mtime": 1784182573.678887,
@@ -655,8 +655,8 @@
     "semantic_hash": ""
   },
   "tests/ui/test_main_window_interactions.py": {
-    "mtime": 1784127282.1985297,
-    "ast_hash": "eb282bf7370560277b9ada49784f7f82",
+    "mtime": 1784183773.9031172,
+    "ast_hash": "1287b9e09b909b68c0b3f57994c2c0ba",
     "semantic_hash": ""
   },
   "tests/ui/test_mode_toggle_buttons.py": {
@@ -785,8 +785,8 @@
     "semantic_hash": "11b1dab735e93a98b70e1448de0dcbf4"
   },
   "tests/unit/test_icons.py": {
-    "mtime": 1784128273.0833683,
-    "ast_hash": "fa13da3ea33bc17190e68d8d6c0108fd",
+    "mtime": 1784185367.3010197,
+    "ast_hash": "100f7d047564f9383a25e2d85cfdf9f9",
     "semantic_hash": ""
   },
   "tests/unit/test_items_repository_validation.py": {
@@ -905,13 +905,13 @@
     "semantic_hash": "c5d431d728d5184fdaac4ca4b6ce0f22"
   },
   "CHANGELOG.md": {
-    "mtime": 1784182278.9039817,
-    "ast_hash": "5fd2e121bab995f94be297748383ecdc",
+    "mtime": 1784184139.4799843,
+    "ast_hash": "ba574c7cf786907dd6b554fc0844efe2",
     "semantic_hash": ""
   },
   "readme.md": {
-    "mtime": 1784182278.9045873,
-    "ast_hash": "b5786eae3b55cdad55a23aff5ea7df33",
+    "mtime": 1784184139.4799843,
+    "ast_hash": "15eec47dd0ca70a26b6d9a94b26d19f8",
     "semantic_hash": ""
   },
   ".github/pull_request_template.md": {
@@ -1210,8 +1210,8 @@
     "semantic_hash": ""
   },
   "DOCS/README.md": {
-    "mtime": 1784182278.9045873,
-    "ast_hash": "863f78051678fd6577b84a1ed87a802b",
+    "mtime": 1784184139.4799843,
+    "ast_hash": "61d2f0fe2901028440a4b1b3e1202cf8",
     "semantic_hash": ""
   },
   "graphify-out/memory/query_20260715_140012_update_the_docs__github_page_etc.md": {
@@ -1240,8 +1240,8 @@
     "semantic_hash": ""
   },
   "graphify-out/memory/query_20260715_150111_i_have_used_the_latest_build_to_start_the_db_and_p.md": {
-    "mtime": 1784127671.4812486,
-    "ast_hash": "d231904d4c655eee4513050e1d18d778",
+    "mtime": 1784182833.8177893,
+    "ast_hash": "fc230c6ad47ae87fcf0a5fa354ad7e96",
     "semantic_hash": ""
   },
   "silverestimate/infrastructure/data_migration.py": {
@@ -1255,8 +1255,18 @@
     "semantic_hash": ""
   },
   "graphify-out/memory/query_20260715_150633_why_are_the_consolidate_the_database_path__and_mig.md": {
-    "mtime": 1784127993.443883,
-    "ast_hash": "977f97e05a097b7d4fa05b02ca495175",
+    "mtime": 1784182833.8331861,
+    "ast_hash": "8eb5a6a6036ea685950005156582b124",
+    "semantic_hash": ""
+  },
+  "graphify-out/memory/query_20260716_061912_db_which_is_in_the_root_folder_of_exe_should_we_us.md": {
+    "mtime": 1784182833.8331861,
+    "ast_hash": "c335d6c277fe0cc18465ca5d30ed0190",
+    "semantic_hash": ""
+  },
+  "graphify-out/memory/query_20260716_063920_program_does_start_very_fast_but_since_user_cannot.md": {
+    "mtime": 1784183960.4953475,
+    "ast_hash": "a78eae324b5e599dc845b81e667967f5",
     "semantic_hash": ""
   }
 }

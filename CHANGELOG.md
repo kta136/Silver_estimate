@@ -5,6 +5,17 @@ All notable changes to the Silver Estimation App will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.03] - 2026-07-16
+
+### Added
+- Added an explicit startup loading message and indeterminate progress indicator while the estimate workspace is being prepared.
+- Added UI regression coverage proving that the first code editor accepts typing as soon as it becomes visible.
+
+### Changed
+- Bumped the application/package version to `3.03` for the responsive-startup Windows build.
+- Prioritized estimate input by activating the first code cell on the first visible event-loop turn and deferring menu and live-rate setup until the input surface is ready.
+- Prevented startup focus from stealing an immediate user selection in another estimate cell.
+
 ## [3.02] - 2026-07-16
 
 ### Added

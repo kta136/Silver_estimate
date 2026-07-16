@@ -566,10 +566,22 @@ def test_widget_initialization_with_timers(qtbot, fake_db):
     force_focus_to_first_cell() which are missed by synchronous tests.
     """
     widget = _make_widget(fake_db)
+    qtbot.addWidget(widget)
     try:
+        widget.show()
         qtbot.waitUntil(lambda: widget.item_table.rowCount() > 0, timeout=1500)
+        qtbot.waitUntil(
+            lambda: widget.item_table.findChild(QLineEdit) is not None,
+            timeout=1500,
+        )
         current_index = widget.item_table.currentIndex()
-        assert (not current_index.isValid()) or (current_index.column() == COL_CODE)
+        assert current_index.isValid()
+        assert current_index.column() == COL_CODE
+
+        editor = widget.item_table.findChild(QLineEdit)
+        assert editor is not None
+        qtbot.keyClicks(editor, "AB12")
+        assert editor.text() == "AB12"
     finally:
         widget.deleteLater()
 

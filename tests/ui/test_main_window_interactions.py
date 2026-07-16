@@ -291,6 +291,8 @@ def test_deferred_runtime_starts_after_lightweight_shell_paints(
     try:
         assert window.stack.currentWidget().objectName() == "StartupShell"
         assert not hasattr(window, "estimate_widget")
+        assert window._loading_progress.minimum() == 0
+        assert window._loading_progress.maximum() == 0
 
         window.show()
         qtbot.waitUntil(lambda: window._runtime_initialized, timeout=3000)
@@ -298,6 +300,11 @@ def test_deferred_runtime_starts_after_lightweight_shell_paints(
         assert window.stack.currentWidget() is window.estimate_widget
         assert window.stack.count() == 1
         assert db.generate_calls == 1
+        assert window._runtime_services_initialized is False
+        qtbot.waitUntil(
+            lambda: window._runtime_services_initialized,
+            timeout=3000,
+        )
     finally:
         window.close()
         window.deleteLater()

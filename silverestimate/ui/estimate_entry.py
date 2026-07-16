@@ -112,6 +112,7 @@ class EstimateEntryWidget(EstimateEntryFacade, QWidget):
         self._last_manual_row_nav_ts = 0.0
         self._edit_request_token = 0
         self._manual_row_nav_edit_delay_ms = 35
+        self._initial_focus_scheduled = False
 
         self.return_mode = False
         self.silver_bar_mode = False
@@ -184,8 +185,14 @@ class EstimateEntryWidget(EstimateEntryFacade, QWidget):
         self._load_final_calc_font_size_setting()
 
         self.initializing = False
-        QTimer.singleShot(100, self.force_focus_to_first_cell)
-        QTimer.singleShot(100, self.reconnect_load_estimate)
+        self.reconnect_load_estimate()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self._initial_focus_scheduled:
+            return
+        self._initial_focus_scheduled = True
+        QTimer.singleShot(0, self.force_focus_to_first_cell)
 
     def show_status(self, message, timeout=3000, level="info"):
         self._status_helper.show(message, timeout=timeout, level=level)
@@ -319,9 +326,16 @@ class EstimateEntryWidget(EstimateEntryFacade, QWidget):
             super().keyPressEvent(event)
 
     def force_focus_to_first_cell(self):
-        if self.item_table.rowCount() > 0:
-            self.item_table.setCurrentCell(0, COL_CODE)
-            QTimer.singleShot(10, lambda: self._safe_edit_item(0, COL_CODE))
+        if self.item_table.rowCount() <= 0 or not self._should_force_code_focus():
+            return
+        current_index = self.item_table.currentIndex()
+        if current_index.isValid() and (
+            current_index.row() != 0 or current_index.column() != COL_CODE
+        ):
+            return
+        self.item_table.setFocus(Qt.FocusReason.OtherFocusReason)
+        self.item_table.setCurrentCell(0, COL_CODE)
+        QTimer.singleShot(0, lambda: self._safe_edit_item(0, COL_CODE))
 
     def reconnect_load_estimate(self):
         try:

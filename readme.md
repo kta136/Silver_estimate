@@ -1,11 +1,11 @@
-# Silver Estimation App - v3.02
+# Silver Estimation App - v3.03
 
 A desktop application built with PyQt6 and an encrypted SQLite database for managing silver sales estimates - item-wise entries, silver bar inventory, returns, and print-ready outputs.
 
 [![Python](https://img.shields.io/badge/Python-3.14+-blue.svg)](https://www.python.org/)
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.11-green.svg)](https://www.riverbankcomputing.com/software/pyqt/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](#license)
-[![Source Version](https://img.shields.io/badge/source-v3.02-orange.svg)](CHANGELOG.md#302---2026-07-16)
+[![Source Version](https://img.shields.io/badge/source-v3.03-orange.svg)](CHANGELOG.md#303---2026-07-16)
 [![Latest Release](https://img.shields.io/github/v/release/kta136/Silver_estimate?label=stable%20release)](https://github.com/kta136/Silver_estimate/releases/latest)
 [![PR Validation](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml)
 [![Main Validation](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml)
@@ -22,7 +22,7 @@ A desktop application built with PyQt6 and an encrypted SQLite database for mana
 - [Download latest stable release](https://github.com/kta136/Silver_estimate/releases/latest)
 - [Documentation index](DOCS/README.md)
 - [Changelog](CHANGELOG.md)
-- [v3.02 changelog](CHANGELOG.md#302---2026-07-16)
+- [v3.03 changelog](CHANGELOG.md#303---2026-07-16)
 - [Deployment guide](DOCS/deployment-guide.md)
 
 > The source tree can be ahead of the latest packaged release. Use the release
@@ -229,7 +229,7 @@ uv run pre-commit run --all-files
 - Prereqs: Python 3.14+, PowerShell
 - Fast iteration: `uv run nox -s build`
 - Clean rebuild: `python -m PyInstaller --clean --noconfirm SilverEstimate.spec` or `uv run nox -s build_clean`
-- Output: `dist/SilverEstimate.exe`, `dist/SilverEstimate-v3.02.exe`, and `dist/SilverEstimate-v3.02-win64.zip` on Windows
+- Output: `dist/SilverEstimate.exe`, `dist/SilverEstimate-v3.03.exe`, and `dist/SilverEstimate-v3.03-win64.zip` on Windows
 - Release/CI builds use the clean spec-based path; local `nox -s build` reuses PyInstaller caches for faster iteration
 - Packaged releases are Windows-only; macOS/Linux are untested development environments.
 
@@ -282,6 +282,12 @@ Copyright 2023-2026 Silver Estimation App
 ---
 
 ## Version History (highlights)
+
+### v3.03 (2026-07-16)
+- Shows an explicit progress state while the estimate workspace is being prepared
+- Makes the first code cell editable on the first visible event-loop turn
+- Defers secondary menu and live-rate setup so keyboard input gets priority
+- Preserves an immediate user click or cell selection instead of moving focus back to the first code cell
 
 ### v3.02 (2026-07-16)
 - Uses the encrypted database under the executable directory through an absolute, working-directory-independent path

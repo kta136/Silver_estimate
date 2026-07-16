@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMessageBox,
+    QProgressBar,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -84,6 +85,8 @@ class MainWindow(QMainWindow):
         self._runtime_initialized = False
         self._runtime_initialization_scheduled = False
         self._runtime_initialization_failed = False
+        self._runtime_services_initialized = False
+        self._runtime_services_initialization_scheduled = False
         self._shell_shown_logged = False
         self._closing = False
         self._taskbar_icon_handle: int | None = None
@@ -120,10 +123,7 @@ class MainWindow(QMainWindow):
                 settings_service=self.settings_service,
             )
             self._attach_runtime(runtime)
-            self.navigation_controller.initialize()
             self._initialize_estimate_widget()
-            self._initialize_live_rate()
-            self._deliver_pending_status_message()
             self._remove_loading_page()
             self._runtime_initialized = True
             ready_ms = (time.perf_counter() - self._startup_started_at) * 1000.0
@@ -138,6 +138,11 @@ class MainWindow(QMainWindow):
                 ready_ms,
             )
             QTimer.singleShot(0, self._log_first_idle_tick)
+            if self._defer_runtime:
+                self._runtime_services_initialization_scheduled = True
+                QTimer.singleShot(100, self._initialize_runtime_services)
+            else:
+                self._initialize_runtime_services()
         except Exception as exc:
             self._runtime_initialization_failed = True
             self.logger.critical("Failed to initialize widgets: %s", exc, exc_info=True)
@@ -153,6 +158,27 @@ class MainWindow(QMainWindow):
             app = QApplication.instance()
             if app is not None:
                 QTimer.singleShot(0, app.quit)
+
+    def _initialize_runtime_services(self) -> None:
+        """Finish nonessential startup work after the entry surface is interactive."""
+        if self._runtime_services_initialized or self._closing:
+            return
+
+        try:
+            self.navigation_controller.initialize()
+        except Exception as exc:
+            self.logger.warning(
+                "Navigation menu initialization failed: %s", exc, exc_info=True
+            )
+        self._initialize_live_rate()
+        self._deliver_pending_status_message()
+        self._runtime_services_initialized = True
+        services_ready_ms = (time.perf_counter() - self._startup_started_at) * 1000.0
+        self.logger.info(
+            '[telemetry] {"metric":"startup.main_window_services_ready_ms",'
+            '"duration_ms":%.3f}',
+            services_ready_ms,
+        )
 
     def _configure_window_shell(self) -> None:
         from silverestimate.infrastructure.app_constants import APP_TITLE
@@ -195,15 +221,7 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget(self.central_widget)
         self._root_layout.addWidget(self.stack)
 
-        self._loading_page: QWidget | None = QWidget(self.stack)
-        self._loading_page.setObjectName("StartupShell")
-        loading_layout = QVBoxLayout(self._loading_page)
-        self._loading_label = QLabel("Preparing your workspace…", self._loading_page)
-        self._loading_label.setObjectName("StartupShellMessage")
-        self._loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        loading_layout.addWidget(self._loading_label)
-        self.stack.addWidget(self._loading_page)
-        self.stack.setCurrentWidget(self._loading_page)
+        self._configure_loading_page()
 
         self._geometry_restored = False
         try:
@@ -212,6 +230,30 @@ class MainWindow(QMainWindow):
             self.logger.debug("Failed to restore window geometry: %s", exc)
         if not self._geometry_restored:
             self.resize(1280, 800)
+
+    def _configure_loading_page(self) -> None:
+        """Create the lightweight, explicit startup state shown before input is ready."""
+        self._loading_page: QWidget | None = QWidget(self.stack)
+        self._loading_page.setObjectName("StartupShell")
+        loading_layout = QVBoxLayout(self._loading_page)
+        self._loading_label = QLabel(
+            "Loading the estimate workspace…\nInput will be ready shortly.",
+            self._loading_page,
+        )
+        self._loading_label.setObjectName("StartupShellMessage")
+        self._loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        loading_layout.addWidget(self._loading_label)
+        self._loading_progress = QProgressBar(self._loading_page)
+        self._loading_progress.setObjectName("StartupShellProgress")
+        self._loading_progress.setRange(0, 0)
+        self._loading_progress.setTextVisible(False)
+        self._loading_progress.setMaximumWidth(420)
+        self._loading_progress.setAccessibleName("Loading estimate workspace")
+        loading_layout.addWidget(
+            self._loading_progress, alignment=Qt.AlignmentFlag.AlignHCenter
+        )
+        self.stack.addWidget(self._loading_page)
+        self.stack.setCurrentWidget(self._loading_page)
 
     def _remove_loading_page(self) -> None:
         loading_page = getattr(self, "_loading_page", None)

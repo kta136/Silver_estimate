@@ -1,7 +1,7 @@
 from silverestimate.infrastructure.paths import get_database_path
 
 APP_NAME = "Silver Estimation App"
-APP_VERSION = "3.02"
+APP_VERSION = "3.03"
 APP_TITLE = f"{APP_NAME} v{APP_VERSION}"
 
 # Keep a stable organization identifier for all new installs.

@@ -40,8 +40,8 @@
     "semantic_hash": "66431cc80e14b417d8940bc9da3081e2"
   },
   "silverestimate/controllers/startup_controller.py": {
-    "mtime": 1784182573.730899,
-    "ast_hash": "e1f21e29526358c559196c545d65c98b",
+    "mtime": 1784188474.9858747,
+    "ast_hash": "7667cc0b1e999c3a7460fe5f9012d08d",
     "semantic_hash": ""
   },
   "silverestimate/controllers/__init__.py": {
@@ -75,8 +75,8 @@
     "semantic_hash": ""
   },
   "silverestimate/infrastructure/app_constants.py": {
-    "mtime": 1784184139.4799843,
-    "ast_hash": "7163a9db2cd92a58171438fd66db3290",
+    "mtime": 1784188744.0738814,
+    "ast_hash": "9d4c5a4ad842eb8fd3cf8dc936bfac1c",
     "semantic_hash": ""
   },
   "silverestimate/infrastructure/db_session.py": {
@@ -105,8 +105,8 @@
     "semantic_hash": ""
   },
   "silverestimate/infrastructure/settings.py": {
-    "mtime": 1784181569.5195792,
-    "ast_hash": "5b104454bd5be1c8d6daf384be5f0085",
+    "mtime": 1784188474.9868748,
+    "ast_hash": "36077e344880c8dc546f29d4356a8647",
     "semantic_hash": ""
   },
   "silverestimate/infrastructure/windows_integration.py": {
@@ -125,14 +125,14 @@
     "semantic_hash": "15e4b2be9911d653d5b63c0a7f912bf4"
   },
   "silverestimate/persistence/database_manager.py": {
-    "mtime": 1784182650.8927696,
-    "ast_hash": "59ff2251fbfa95d6e6988e0c8a826d08",
+    "mtime": 1784188751.4012654,
+    "ast_hash": "1ac0b797b995cd8538cb4d2bf5e28948",
     "semantic_hash": ""
   },
   "silverestimate/persistence/database_repository_facade.py": {
-    "mtime": 1784182650.8953192,
-    "ast_hash": "f80ba0fa75025e3d7520d036e45b0e72",
-    "semantic_hash": "f80ba0fa75025e3d7520d036e45b0e72"
+    "mtime": 1784189026.8065412,
+    "ast_hash": "5160220428e78990e911c0ad883129f7",
+    "semantic_hash": ""
   },
   "silverestimate/persistence/database_startup.py": {
     "mtime": 1773319514.6996746,
@@ -140,8 +140,8 @@
     "semantic_hash": "e182988c1d232771c6ab2649962a0403"
   },
   "silverestimate/persistence/encrypted_database_store.py": {
-    "mtime": 1784182650.8963456,
-    "ast_hash": "2a0bd942fd98e2d667a710dd1488c063",
+    "mtime": 1784188751.4082255,
+    "ast_hash": "57b06610c5af0836f1ebda173f2eade9",
     "semantic_hash": ""
   },
   "silverestimate/persistence/estimates_repository.py": {
@@ -160,8 +160,8 @@
     "semantic_hash": "2264be039562f231af20c46478ed68be"
   },
   "silverestimate/persistence/migrations.py": {
-    "mtime": 1784182573.657088,
-    "ast_hash": "5970f64e9fe5c90da1cc37512adea8da",
+    "mtime": 1784189000.8102045,
+    "ast_hash": "cf502e688293c1f6625b3e1c252dbfd4",
     "semantic_hash": ""
   },
   "silverestimate/persistence/silver_bars_queries.py": {
@@ -170,9 +170,9 @@
     "semantic_hash": "14e070ac76fb365de99e27889f7c37f3"
   },
   "silverestimate/persistence/silver_bars_repository.py": {
-    "mtime": 1784182650.9010952,
-    "ast_hash": "5e43a827f27bb79da58b58af2589d072",
-    "semantic_hash": "5e43a827f27bb79da58b58af2589d072"
+    "mtime": 1784189026.8127394,
+    "ast_hash": "665c95ef2d618b4c40b3f50c1336999f",
+    "semantic_hash": ""
   },
   "silverestimate/persistence/silver_bars_snapshot_repository.py": {
     "mtime": 1784182650.9010952,
@@ -205,9 +205,9 @@
     "semantic_hash": "585d9cd89fdd102df741686b9d789565"
   },
   "silverestimate/security/encryption.py": {
-    "mtime": 1784182650.9031525,
-    "ast_hash": "5b2ed4e120134a93dccd935325fd851d",
-    "semantic_hash": "5b2ed4e120134a93dccd935325fd851d"
+    "mtime": 1784188554.798842,
+    "ast_hash": "607af88be989542b7cd2ab149ea0b9b7",
+    "semantic_hash": ""
   },
   "silverestimate/security/__init__.py": {
     "mtime": 1773319514.7988477,
@@ -295,9 +295,9 @@
     "semantic_hash": ""
   },
   "silverestimate/ui/estimate_entry_totals_controller.py": {
-    "mtime": 1779267004.8232598,
-    "ast_hash": "a8c8550d9a3906cfa92be49fd95767e1",
-    "semantic_hash": "a8c8550d9a3906cfa92be49fd95767e1"
+    "mtime": 1784189000.8102045,
+    "ast_hash": "a6b0855b337131754044882933b41fdf",
+    "semantic_hash": ""
   },
   "silverestimate/ui/estimate_entry_ui.py": {
     "mtime": 1779269204.3419464,
@@ -325,8 +325,8 @@
     "semantic_hash": "9529ab08d88db3d99b2c1dde41acfe93"
   },
   "silverestimate/ui/icons.py": {
-    "mtime": 1784185388.818718,
-    "ast_hash": "c950436b6fcfc3b4afa8e6568edf8937",
+    "mtime": 1784189000.8102045,
+    "ast_hash": "99ad008c27870869224520e249a4169a",
     "semantic_hash": ""
   },
   "silverestimate/ui/inline_status.py": {
@@ -490,8 +490,8 @@
     "semantic_hash": ""
   },
   "silverestimate/ui/estimate_entry_components/totals_panel.py": {
-    "mtime": 1784127150.3232887,
-    "ast_hash": "074198c9575067412f5620c60cffa64d",
+    "mtime": 1784189000.8102045,
+    "ast_hash": "c3909cd81ee6408febbce5165eb3d8ec",
     "semantic_hash": ""
   },
   "silverestimate/ui/estimate_entry_components/voucher_toolbar.py": {
@@ -520,8 +520,8 @@
     "semantic_hash": ""
   },
   "silverestimate/ui/models/estimate_table_model.py": {
-    "mtime": 1784127503.5506294,
-    "ast_hash": "ad7c3b43111b12d18e59eb0382b0b692",
+    "mtime": 1784189015.834543,
+    "ast_hash": "29509a31289b3d9b0dc5be070b536474",
     "semantic_hash": ""
   },
   "silverestimate/ui/models/item_master_table_model.py": {
@@ -560,9 +560,9 @@
     "semantic_hash": ""
   },
   "tests/test_security.py": {
-    "mtime": 1784182650.9335113,
-    "ast_hash": "73995c9d5b726495157254f7d069ecb3",
-    "semantic_hash": "73995c9d5b726495157254f7d069ecb3"
+    "mtime": 1784188611.2914078,
+    "ast_hash": "7c19f674777656efcc40af2e7128903d",
+    "semantic_hash": ""
   },
   "tests/controllers/test_live_rate_controller.py": {
     "mtime": 1784182650.930995,
@@ -699,11 +699,6 @@
     "ast_hash": "77eafebaa685d1defa3a2d1621aec57d",
     "semantic_hash": "77eafebaa685d1defa3a2d1621aec57d"
   },
-  "tests/unit/test_database_kdf_migration.py": {
-    "mtime": 1784182650.9335113,
-    "ast_hash": "8ca545af482f6fa6c211f50fd5c6a6c5",
-    "semantic_hash": "8ca545af482f6fa6c211f50fd5c6a6c5"
-  },
   "tests/unit/test_database_lifecycle.py": {
     "mtime": 1773319515.5410545,
     "ast_hash": "67a3b1b24b457e8e69312c850f78091b",
@@ -720,9 +715,9 @@
     "semantic_hash": "84268e7e23ed2babe955eef2dc05239a"
   },
   "tests/unit/test_encrypted_database_store.py": {
-    "mtime": 1784182650.9335113,
-    "ast_hash": "063d131a8b3a54d2e53af0c4f0b4d6fb",
-    "semantic_hash": "063d131a8b3a54d2e53af0c4f0b4d6fb"
+    "mtime": 1784188751.405376,
+    "ast_hash": "9dd1bfac6da6464c871654b95a6e4684",
+    "semantic_hash": ""
   },
   "tests/unit/test_estimate_entry_persistence_service.py": {
     "mtime": 1784182650.9335113,
@@ -760,8 +755,8 @@
     "semantic_hash": "84e0ad2796f6db0875bc73d9a4b6da77"
   },
   "tests/unit/test_estimate_table_model.py": {
-    "mtime": 1784182573.7090764,
-    "ast_hash": "76e5364be8083c9722e1ac2b14393d7a",
+    "mtime": 1784189000.8038223,
+    "ast_hash": "a493810cf00c7714aed125952eb99847",
     "semantic_hash": ""
   },
   "tests/unit/test_estimate_table_view.py": {
@@ -880,8 +875,8 @@
     "semantic_hash": "aa20ec8b4ab1b620387ed5abc2828750"
   },
   "tests/unit/test_startup_controller_recovery.py": {
-    "mtime": 1784181717.375903,
-    "ast_hash": "7669f5c45e8df3785857609e5e27567f",
+    "mtime": 1784188474.992874,
+    "ast_hash": "5701498cfa415deefbdb8af6f35950b5",
     "semantic_hash": ""
   },
   "tests/unit/test_temp_database_store.py": {
@@ -905,13 +900,13 @@
     "semantic_hash": "c5d431d728d5184fdaac4ca4b6ce0f22"
   },
   "CHANGELOG.md": {
-    "mtime": 1784184139.4799843,
-    "ast_hash": "ba574c7cf786907dd6b554fc0844efe2",
+    "mtime": 1784188744.0738814,
+    "ast_hash": "1f64e999660e60293cf290b7913a1825",
     "semantic_hash": ""
   },
   "readme.md": {
-    "mtime": 1784184139.4799843,
-    "ast_hash": "15eec47dd0ca70a26b6d9a94b26d19f8",
+    "mtime": 1784188744.0774329,
+    "ast_hash": "e1412f1c8edcf94f54c6ce01d5ba5b14",
     "semantic_hash": ""
   },
   ".github/pull_request_template.md": {
@@ -965,8 +960,8 @@
     "semantic_hash": ""
   },
   "DOCS/deployment-guide.md": {
-    "mtime": 1784123981.577395,
-    "ast_hash": "3ca080a84864a95d4ddcb1c389d56ed4",
+    "mtime": 1784188744.0774329,
+    "ast_hash": "7127dce994ec7703998cfccac361fc0b",
     "semantic_hash": ""
   },
   "DOCS/performance-baseline-thresholds.md": {
@@ -980,13 +975,13 @@
     "semantic_hash": ""
   },
   "DOCS/security-architecture.md": {
-    "mtime": 1784123981.577912,
-    "ast_hash": "3af326396247e3eab18a31891af15ff0",
+    "mtime": 1784188744.0774329,
+    "ast_hash": "575bd2003e37c50c68bef566ba82b329",
     "semantic_hash": ""
   },
   "DOCS/workflow-business-logic.md": {
-    "mtime": 1784123981.5753877,
-    "ast_hash": "44dbd997640820519b6a1284dcc86542",
+    "mtime": 1784188744.0774329,
+    "ast_hash": "9ddc6b969c7070aad22b86365ff4557c",
     "semantic_hash": ""
   },
   "tests/manual/ESTIMATE_ENTRY_SMOKE_TESTS.md": {
@@ -1105,9 +1100,9 @@
     "semantic_hash": "bdcd0b8fb22e1548545206909d9fd041"
   },
   "silverestimate/persistence/silver_bar_query_repository.py": {
-    "mtime": 1784182650.8989084,
-    "ast_hash": "74f3fc383746a55b38e3295a8debbaff",
-    "semantic_hash": "74f3fc383746a55b38e3295a8debbaff"
+    "mtime": 1784189026.8065412,
+    "ast_hash": "7c51bae8b5b04cd6831e080b149a541f",
+    "semantic_hash": ""
   },
   "silverestimate/persistence/silver_bar_synchronization_repository.py": {
     "mtime": 1784182650.8989084,
@@ -1120,9 +1115,9 @@
     "semantic_hash": ""
   },
   "silverestimate/security/encrypted_envelope.py": {
-    "mtime": 1784182650.9031525,
-    "ast_hash": "d8ffac7ab0217baadb5e20e23ceb0989",
-    "semantic_hash": "d8ffac7ab0217baadb5e20e23ceb0989"
+    "mtime": 1784188751.4082255,
+    "ast_hash": "fbff54eb4c02a53dde3a88401145d226",
+    "semantic_hash": ""
   },
   "silverestimate/services/dda_rate_stream.py": {
     "mtime": 1784182650.9031525,
@@ -1170,14 +1165,14 @@
     "semantic_hash": "beec720923f87909dfc99020b58f552d"
   },
   "tests/unit/test_database_envelope_startup.py": {
-    "mtime": 1784182650.9335113,
-    "ast_hash": "4ca59ffa867ed510bf81ae0da3d37f5a",
-    "semantic_hash": "4ca59ffa867ed510bf81ae0da3d37f5a"
+    "mtime": 1784188751.4012654,
+    "ast_hash": "80afb572492ee7c4311bfc8bca7bd3ae",
+    "semantic_hash": ""
   },
   "tests/unit/test_encrypted_envelope.py": {
-    "mtime": 1784182650.9335113,
-    "ast_hash": "cd3a92e83ba43290364fbace144df55f",
-    "semantic_hash": "cd3a92e83ba43290364fbace144df55f"
+    "mtime": 1784188751.4398773,
+    "ast_hash": "9316ff4e4e6caeaa7b68887eed82f045",
+    "semantic_hash": ""
   },
   "tests/unit/test_item_cache_controller.py": {
     "mtime": 1784182650.943522,
@@ -1210,8 +1205,8 @@
     "semantic_hash": ""
   },
   "DOCS/README.md": {
-    "mtime": 1784184139.4799843,
-    "ast_hash": "61d2f0fe2901028440a4b1b3e1202cf8",
+    "mtime": 1784188744.0774329,
+    "ast_hash": "8dcdae0e82d80bc768a687033cec7e1e",
     "semantic_hash": ""
   },
   "graphify-out/memory/query_20260715_140012_update_the_docs__github_page_etc.md": {
@@ -1244,16 +1239,6 @@
     "ast_hash": "fc230c6ad47ae87fcf0a5fa354ad7e96",
     "semantic_hash": ""
   },
-  "silverestimate/infrastructure/data_migration.py": {
-    "mtime": 1784181626.0306804,
-    "ast_hash": "6476b812be780bbc3a6e778dbe377ba9",
-    "semantic_hash": ""
-  },
-  "tests/unit/test_runtime_data_migration.py": {
-    "mtime": 1784181626.0050986,
-    "ast_hash": "5dfb69e6d98bbbf04621075a99513b04",
-    "semantic_hash": ""
-  },
   "graphify-out/memory/query_20260715_150633_why_are_the_consolidate_the_database_path__and_mig.md": {
     "mtime": 1784182833.8331861,
     "ast_hash": "8eb5a6a6036ea685950005156582b124",
@@ -1267,6 +1252,16 @@
   "graphify-out/memory/query_20260716_063920_program_does_start_very_fast_but_since_user_cannot.md": {
     "mtime": 1784183960.4953475,
     "ast_hash": "a78eae324b5e599dc845b81e667967f5",
+    "semantic_hash": ""
+  },
+  "tests/unit/test_runtime_paths.py": {
+    "mtime": 1784188474.991873,
+    "ast_hash": "aa41086b65c958b85c927628b97d12a0",
+    "semantic_hash": ""
+  },
+  "graphify-out/memory/query_20260716_080132_now_all_the_older_db_setttings_etc_have_been_migra.md": {
+    "mtime": 1784188892.9635887,
+    "ast_hash": "42e81f02ec0fbcb2d1ce55bf5822a5ac",
     "semantic_hash": ""
   }
 }

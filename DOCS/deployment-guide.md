@@ -72,6 +72,6 @@ Signing is intentionally non-blocking until `WINDOWS_SIGNING_CERTIFICATE_BASE64`
 
 ## Manual release smoke
 
-Before promoting a stable release, verify a copy of a legacy encrypted production database, automatic `SILVDB01` upgrade, estimate create/edit/delete, paged searches and Load more, Agra Mohar SSE updates, forced SSE outage with 10-second polling, offline timestamp display, password rotation, every print layout, and simulated crash recovery.
+Before promoting a stable release, verify the current production `SILVDB01` database, rejection of unsupported encrypted formats, estimate create/edit/delete, paged searches and Load more, Agra Mohar SSE updates, forced SSE outage with 10-second polling, offline timestamp display, password rotation, every print layout, and simulated crash recovery.
 
 Temporary plaintext secure deletion is best-effort on SSD and copy-on-write storage. Production devices should use Windows device encryption/BitLocker and a trusted user account.

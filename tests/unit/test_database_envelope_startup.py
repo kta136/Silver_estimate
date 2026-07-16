@@ -63,11 +63,11 @@ def test_current_envelope_uses_header_salt_and_derives_only_argon2(
     password = "correct password"
     encrypted, argon2 = _create_current_database(tmp_path, password)
     settings = _StubSettings()
-    algorithms = []
+    derivations = []
     original_derive = crypto_utils.derive_key
 
     def recording_derive(*args, **kwargs):
-        algorithms.append(kwargs.get("algorithm", crypto_utils.PREFERRED_KDF_ALGORITHM))
+        derivations.append((args, kwargs))
         return original_derive(*args, **kwargs)
 
     monkeypatch.setattr(database_manager_module, "get_app_settings", lambda: settings)
@@ -76,24 +76,21 @@ def test_current_envelope_uses_header_salt_and_derives_only_argon2(
     manager = DatabaseManager(str(encrypted), password)
     try:
         assert manager.salt == argon2.salt
-        assert algorithms == [crypto_utils.PREFERRED_KDF_ALGORITHM]
-        assert settings.value(crypto_utils.SALT_SETTINGS_KEY) is None
+        assert len(derivations) == 1
         row = manager.conn.execute("SELECT value FROM retained").fetchone()
         assert tuple(row) == ("yes",)
     finally:
         manager.close()
 
 
-def test_current_envelope_wrong_password_does_not_derive_legacy_key(
-    tmp_path, monkeypatch
-):
+def test_current_envelope_wrong_password_attempts_one_derivation(tmp_path, monkeypatch):
     encrypted, _argon2 = _create_current_database(tmp_path, "correct password")
     settings = _StubSettings()
-    algorithms = []
+    derivations = []
     original_derive = crypto_utils.derive_key
 
     def recording_derive(*args, **kwargs):
-        algorithms.append(kwargs.get("algorithm", crypto_utils.PREFERRED_KDF_ALGORITHM))
+        derivations.append((args, kwargs))
         return original_derive(*args, **kwargs)
 
     monkeypatch.setattr(database_manager_module, "get_app_settings", lambda: settings)
@@ -102,19 +99,19 @@ def test_current_envelope_wrong_password_does_not_derive_legacy_key(
     with pytest.raises(Exception, match="Database decryption failed"):
         DatabaseManager(str(encrypted), "wrong password")
 
-    assert algorithms == [crypto_utils.PREFERRED_KDF_ALGORITHM]
+    assert len(derivations) == 1
 
 
-def test_unsupported_current_envelope_does_not_derive_legacy_key(tmp_path, monkeypatch):
+def test_unsupported_envelope_attempts_one_derivation(tmp_path, monkeypatch):
     encrypted, _argon2 = _create_current_database(tmp_path, "correct password")
     payload = encrypted.read_bytes()
     encrypted.write_bytes(b"SILVDB02" + payload[8:])
     settings = _StubSettings()
-    algorithms = []
+    derivations = []
     original_derive = crypto_utils.derive_key
 
     def recording_derive(*args, **kwargs):
-        algorithms.append(kwargs.get("algorithm", crypto_utils.PREFERRED_KDF_ALGORITHM))
+        derivations.append((args, kwargs))
         return original_derive(*args, **kwargs)
 
     monkeypatch.setattr(database_manager_module, "get_app_settings", lambda: settings)
@@ -123,4 +120,4 @@ def test_unsupported_current_envelope_does_not_derive_legacy_key(tmp_path, monke
     with pytest.raises(Exception, match="Database decryption failed"):
         DatabaseManager(str(encrypted), "correct password")
 
-    assert algorithms == [crypto_utils.PREFERRED_KDF_ALGORITHM]
+    assert len(derivations) == 1

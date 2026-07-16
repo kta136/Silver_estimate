@@ -78,14 +78,6 @@ class EnvelopeMetadata:
     header_bytes: bytes
 
 
-def is_current_envelope(path: str | os.PathLike[str]) -> bool:
-    try:
-        with open(path, "rb") as source:
-            return source.read(len(MAGIC)) == MAGIC
-    except OSError:
-        return False
-
-
 def _canonical_json(value: dict[str, Any]) -> bytes:
     return json.dumps(
         value,
@@ -179,16 +171,14 @@ def _parse_header(header_bytes: bytes) -> EnvelopeMetadata:
 
 def read_envelope_metadata(
     path: str | os.PathLike[str],
-) -> EnvelopeMetadata | None:
-    """Read public KDF/size metadata, or return ``None`` for a legacy payload."""
+) -> EnvelopeMetadata:
+    """Read and validate public KDF and size metadata."""
     with open(path, "rb") as source:
         magic = source.read(len(MAGIC))
         if magic != MAGIC:
-            if magic.startswith(MAGIC_PREFIX):
-                raise EnvelopeUnsupportedError(
-                    f"Unsupported encrypted envelope magic: {magic!r}."
-                )
-            return None
+            raise EnvelopeUnsupportedError(
+                f"Unsupported encrypted envelope magic: {magic!r}."
+            )
         header_length = _HEADER_LENGTH.unpack(
             _read_exact(source, _HEADER_LENGTH.size, "header length")
         )[0]
@@ -364,7 +354,6 @@ __all__ = [
     "EnvelopeWrongPasswordError",
     "MAGIC",
     "decrypt_envelope_to_path",
-    "is_current_envelope",
     "read_envelope_metadata",
     "write_envelope",
 ]

@@ -15,7 +15,6 @@ from silverestimate.security.encrypted_envelope import (
     EnvelopeUnsupportedError,
     EnvelopeWrongPasswordError,
     decrypt_envelope_to_path,
-    is_current_envelope,
     read_envelope_metadata,
     write_envelope,
 )
@@ -125,7 +124,7 @@ def test_reordered_and_duplicate_chunks_are_rejected(tmp_path):
         decrypt_envelope_to_path(encrypted, restored, KEY)
 
 
-def test_unknown_silvdb_magic_is_not_treated_as_legacy(tmp_path):
+def test_unknown_silvdb_magic_is_unsupported(tmp_path):
     encrypted, restored, _metadata = _write_fixture(tmp_path, b"sqlite payload")
     payload = encrypted.read_bytes()
     encrypted.write_bytes(b"SILVDB02" + payload[len(MAGIC) :])
@@ -213,26 +212,23 @@ def test_header_metadata_validation_is_specific(header_bytes, error, message):
 
 
 def test_envelope_file_detection_and_argument_validation(tmp_path):
-    missing = tmp_path / "missing.enc"
-    legacy = tmp_path / "legacy.enc"
-    legacy.write_bytes(b"legacy")
+    unsupported = tmp_path / "unsupported.enc"
+    unsupported.write_bytes(b"unsupported")
     encrypted, restored, _metadata = _write_fixture(tmp_path, b"payload")
 
-    assert is_current_envelope(missing) is False
-    assert is_current_envelope(legacy) is False
-    assert is_current_envelope(encrypted) is True
-    assert read_envelope_metadata(legacy) is None
+    with pytest.raises(EnvelopeUnsupportedError, match="magic"):
+        read_envelope_metadata(unsupported)
 
     with pytest.raises(ValueError, match="32-byte"):
-        write_envelope(legacy, encrypted, b"short", argon2=ARGON2)
+        write_envelope(unsupported, encrypted, b"short", argon2=ARGON2)
     with pytest.raises(ValueError, match="chunk size"):
-        write_envelope(legacy, encrypted, KEY, argon2=ARGON2, chunk_size=1)
+        write_envelope(unsupported, encrypted, KEY, argon2=ARGON2, chunk_size=1)
     with pytest.raises(EnvelopeWrongPasswordError, match="invalid length"):
         decrypt_envelope_to_path(encrypted, restored, b"short")
 
-    legacy.write_bytes(b"not-current-envelope")
+    unsupported.write_bytes(b"not-current-envelope")
     with pytest.raises(EnvelopeUnsupportedError, match="not a current"):
-        decrypt_envelope_to_path(legacy, restored, KEY)
+        decrypt_envelope_to_path(unsupported, restored, KEY)
 
 
 def test_zero_header_length_is_rejected_by_metadata_and_decrypt(tmp_path):

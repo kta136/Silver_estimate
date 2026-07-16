@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 
 class DatabaseRepositoryFacadeMixin:
-    """Expose repository operations through the legacy DatabaseManager API."""
+    """Expose repository operations through the public DatabaseManager API."""
 
     if TYPE_CHECKING:
         items_repo: Any

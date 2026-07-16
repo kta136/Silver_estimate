@@ -157,7 +157,7 @@ class TotalsPanel(QWidget):
 
         Args:
             parent: Optional parent widget
-            layout_mode: "horizontal" (legacy footer) or "sidebar" (right panel)
+            layout_mode: "horizontal" (bottom panel) or "sidebar" (right panel)
         """
         super().__init__(parent)
         self._layout_mode = (layout_mode or "horizontal").strip().lower()
@@ -822,7 +822,7 @@ class TotalsPanel(QWidget):
         self._set_category_visibility("silver_bar", False)
         self._schedule_sidebar_item_size_sync()
 
-    # Font size methods for EstimateLogic compatibility
+    # Font size methods used by the estimate layout controller.
 
     def set_breakdown_font_size(self, size: int) -> None:
         """Apply font size to breakdown totals labels.

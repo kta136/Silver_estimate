@@ -1,6 +1,6 @@
 """Deterministic vector icons for the desktop application.
 
-The Windows Qt style exposes several ``StandardPixmap`` values as opaque legacy
+The Windows Qt style exposes several ``StandardPixmap`` values as historically named
 bitmaps. Recolouring those bitmaps turns them into solid squares, especially in
 disabled menu states. These icons are painted from simple vector primitives so
 they stay crisp, transparent, and semantically stable on every supported PC.

@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import logging
 import os
-import shutil
 import sqlite3
 
 from silverestimate.infrastructure import settings as settings_module
@@ -13,21 +12,14 @@ from silverestimate.persistence.database_repository_facade import (
     DatabaseRepositoryFacadeMixin,
 )
 from silverestimate.persistence.database_startup import DatabaseStartupCoordinator
-from silverestimate.persistence.encrypted_database_store import (
-    DecryptionOutcome,
-    EncryptedDatabaseStore,
-)
+from silverestimate.persistence.encrypted_database_store import EncryptedDatabaseStore
 from silverestimate.persistence.sqlite_database_runtime import SqliteDatabaseRuntime
 from silverestimate.persistence.temp_database_store import TempDatabaseStore
 from silverestimate.security import encryption as crypto_utils
 from silverestimate.security.encrypted_envelope import (
     Argon2Metadata,
     EnvelopeError,
-    is_current_envelope,
 )
-
-# Constants
-KDF_ITERATIONS = crypto_utils.DEFAULT_KDF_ITERATIONS  # PBKDF2 iteration count
 
 
 class DatabaseManager(DatabaseRepositoryFacadeMixin):
@@ -46,30 +38,22 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         self.logger.info(f"Initializing DatabaseManager for {db_path}")
 
         self.encrypted_db_path = db_path
-        self._envelope_metadata_error: EnvelopeError | None = None
         try:
             envelope_metadata = EncryptedDatabaseStore.read_metadata(db_path)
-        except EnvelopeError as exc:
+        except EnvelopeError:
             envelope_metadata = None
-            self._envelope_metadata_error = exc
         self._argon2_metadata = (
             envelope_metadata.argon2
             if envelope_metadata is not None
             else Argon2Metadata(
-                salt=self._get_or_create_salt(),
+                salt=os.urandom(crypto_utils.DEFAULT_SALT_BYTES),
                 time_cost=crypto_utils.DEFAULT_ARGON2_TIME_COST,
                 memory_cost_kib=crypto_utils.DEFAULT_ARGON2_MEMORY_COST_KIB,
                 parallelism=crypto_utils.DEFAULT_ARGON2_PARALLELISM,
             )
         )
         self.salt = self._argon2_metadata.salt
-        self._preferred_key = self._derive_key(password, self.salt)
-        self._password = password
-        self._legacy_key: bytes | None = None
-        self.key = self._preferred_key
-        self._pending_kdf_migration = False
-        self._pending_envelope_migration = False
-        self._active_kdf_algorithm = crypto_utils.PREFERRED_KDF_ALGORITHM
+        self.key = self._derive_key(password, self.salt)
         self._encrypted_store = EncryptedDatabaseStore(
             self.encrypted_db_path,
             key=self.key,
@@ -128,7 +112,6 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
             logger=self.logger,
         )
         self._startup.initialize()
-        self._migrate_legacy_kdf_if_needed()
 
     @property
     def items_repo(self):
@@ -176,26 +159,11 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         self._c_insert_estimate_item = state.insert_estimate_item_cursor
         self._sql_insert_estimate_item = state.insert_estimate_item_sql
 
-    def _get_or_create_salt(self):
-        """Retrieves the salt from QSettings or creates and saves a new one."""
-        return EncryptedDatabaseStore.get_or_create_salt(
-            logger=self.logger,
-            settings_factory=get_app_settings,
-        )
-
-    def _derive_key(
-        self,
-        password,
-        salt,
-        *,
-        algorithm=crypto_utils.PREFERRED_KDF_ALGORITHM,
-    ):
+    def _derive_key(self, password, salt):
         """Derive a 32-byte AES key from the password and salt."""
         return crypto_utils.derive_key(
             password,
             salt,
-            algorithm=algorithm,
-            iterations=KDF_ITERATIONS,
             time_cost=self._argon2_metadata.time_cost,
             memory_cost_kib=self._argon2_metadata.memory_cost_kib,
             parallelism=self._argon2_metadata.parallelism,
@@ -225,109 +193,8 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         )
 
     def _decrypt_db(self):
-        """Decrypt the database, falling back to the legacy KDF when needed."""
-        preferred_status = self._decrypt_db_with_key(
-            self._preferred_key,
-            crypto_utils.PREFERRED_KDF_ALGORITHM,
-        )
-        if preferred_status != "error":
-            if (
-                preferred_status == "success"
-                and self._encrypted_store.last_decryption_result.outcome
-                == DecryptionOutcome.LEGACY
-            ):
-                self._pending_envelope_migration = True
-            return preferred_status
-
-        if self._envelope_metadata_error is not None or is_current_envelope(
-            self.encrypted_db_path
-        ):
-            return preferred_status
-
-        self.logger.warning(
-            "Preferred KDF decryption failed; trying legacy %s for migration",
-            crypto_utils.LEGACY_KDF_ALGORITHM,
-        )
-        if self._legacy_key is None:
-            self._legacy_key = self._derive_key(
-                self._password,
-                self.salt,
-                algorithm=crypto_utils.LEGACY_KDF_ALGORITHM,
-            )
-        legacy_key = self._legacy_key
-        assert legacy_key is not None
-        legacy_status = self._decrypt_db_with_key(
-            legacy_key,
-            crypto_utils.LEGACY_KDF_ALGORITHM,
-        )
-        if legacy_status == "success":
-            self.key = legacy_key
-            self._active_kdf_algorithm = crypto_utils.LEGACY_KDF_ALGORITHM
-            self._pending_kdf_migration = True
-            self._pending_envelope_migration = True
-            self.logger.warning(
-                "Database opened using legacy %s; migration to %s is pending.",
-                crypto_utils.LEGACY_KDF_ALGORITHM,
-                crypto_utils.PREFERRED_KDF_ALGORITHM,
-            )
-            return legacy_status
-
-        self._cleanup_temp_db(keep_file=False)
-        return legacy_status
-
-    def _decrypt_db_with_key(self, key: bytes, algorithm: str) -> str:
-        """Attempt a database decrypt using a specific derived key."""
-        self.key = key
-        self._active_kdf_algorithm = algorithm
-        self._encrypted_store.set_key(key)
+        """Decrypt the current encrypted database into the session file."""
         return self._encrypted_store.decrypt_to_path(self.temp_db_path)
-
-    def _migrate_legacy_kdf_if_needed(self) -> None:
-        """Rewrite authenticated legacy payloads into the current envelope."""
-        if not (self._pending_kdf_migration or self._pending_envelope_migration):
-            return
-
-        self.logger.info(
-            "Migrating encrypted database from %s to %s",
-            crypto_utils.LEGACY_KDF_ALGORITHM,
-            crypto_utils.PREFERRED_KDF_ALGORITHM,
-        )
-        backup_path = f"{self.encrypted_db_path}.legacy.bak"
-        try:
-            if not os.path.exists(backup_path):
-                shutil.copy2(self.encrypted_db_path, backup_path)
-        except OSError as exc:
-            self.logger.error("Could not create encrypted migration backup: %s", exc)
-            return
-        self.key = self._preferred_key
-        self._active_kdf_algorithm = crypto_utils.PREFERRED_KDF_ALGORITHM
-
-        if self._encrypt_db() and self._encrypted_store.verify_current_envelope():
-            self._pending_kdf_migration = False
-            self._pending_envelope_migration = False
-            try:
-                os.remove(backup_path)
-            except OSError as exc:
-                self.logger.warning(
-                    "Could not remove verified encrypted migration backup: %s", exc
-                )
-            self.logger.info(
-                "Encrypted database migrated and verified successfully to %s",
-                crypto_utils.PREFERRED_KDF_ALGORITHM,
-            )
-            return
-
-        try:
-            shutil.copy2(backup_path, self.encrypted_db_path)
-        except OSError as exc:
-            self.logger.critical(
-                "Failed to restore encrypted migration backup: %s", exc
-            )
-        self.key = self._preferred_key
-        self._active_kdf_algorithm = crypto_utils.PREFERRED_KDF_ALGORITHM
-        self.logger.warning(
-            "Encrypted database migration verification failed; the authenticated legacy backup was retained.",
-        )
 
     def _cleanup_temp_db(self, keep_file=False):
         """Safely deletes the temporary database file."""
@@ -470,7 +337,6 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
             password,
             logger=logger,
             settings_factory=get_app_settings,
-            iterations=KDF_ITERATIONS,
         )
 
     @staticmethod

@@ -70,18 +70,10 @@ def test_store_reports_current_wrong_password_corrupt_and_unsupported(tmp_path):
         DecryptionOutcome.UNSUPPORTED
     )
 
-
-def test_store_reports_authenticated_legacy_payload(tmp_path):
-    encrypted = tmp_path / "legacy.db"
-    restored = tmp_path / "restored.sqlite"
-    key = b"1" * 32
-    encrypted.write_bytes(crypto_utils.encrypt_payload(b"legacy sqlite", key))
-    store = EncryptedDatabaseStore(str(encrypted), key=key)
-
-    result = store.decrypt_to_path_result(str(restored))
-
-    assert result.outcome == DecryptionOutcome.LEGACY
-    assert restored.read_bytes() == b"legacy sqlite"
+    encrypted.write_bytes(b"obsolete raw encrypted payload")
+    assert store.decrypt_to_path_result(str(restored)).outcome == (
+        DecryptionOutcome.UNSUPPORTED
+    )
 
 
 def test_decrypt_missing_file_returns_first_run(tmp_path):
@@ -153,9 +145,14 @@ def test_recover_encrypt_plain_to_encrypted_clears_plaintext_and_metadata(tmp_pa
     assert not plain_temp_path.exists()
     assert settings.value("security/last_temp_db_path") is None
 
+    metadata = EncryptedDatabaseStore.read_metadata(str(encrypted_db_path))
+    assert metadata is not None
     key = crypto_utils.derive_key(
         "recovery-password",
-        EncryptedDatabaseStore.get_or_create_salt(settings_factory=lambda: settings),
+        metadata.argon2.salt,
+        time_cost=metadata.argon2.time_cost,
+        memory_cost_kib=metadata.argon2.memory_cost_kib,
+        parallelism=metadata.argon2.parallelism,
     )
     store = EncryptedDatabaseStore(str(encrypted_db_path), key=key)
     decrypted_db_path = tmp_path / "recovered.sqlite"

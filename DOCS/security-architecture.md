@@ -2,11 +2,11 @@
 
 ## Authentication
 
-The main password authenticates and decrypts the database. The recovery password triggers the established data-wipe workflow. Password hashes use Argon2 and are stored only in the operating-system keyring. QSettings contains non-sensitive preferences and database metadata, not credential hashes. Passwords and derived encryption keys are never persisted as plaintext.
+The main password authenticates and decrypts the database. The recovery password triggers the established data-wipe workflow. Password hashes use Argon2 and are stored only in the operating-system keyring. QSettings contains non-sensitive preferences and marked crash-recovery metadata, not credential hashes or encryption salts. Passwords and derived encryption keys are never persisted as plaintext.
 
 ## SILVDB01 encrypted envelope
 
-New and migrated databases use this binary layout:
+Databases use this binary layout:
 
 ```text
 "SILVDB01"
@@ -21,7 +21,7 @@ repeated chunk records:
 
 The header records format version, AES-256-GCM, Argon2id parameters and salt, plaintext size, 1 MiB chunk size, chunk count, key check, and a metadata checksum. The complete envelope prefix plus each chunk index/length is authenticated as AES-GCM additional authenticated data.
 
-Normal startup derives the Argon2id encryption key once (time cost 3, 64 MiB memory, parallelism 4). PBKDF2 is derived only when a legacy nonce-plus-ciphertext envelope must be opened. After legacy authentication, the next flush writes and verifies `SILVDB01` atomically before its encrypted migration backup is removed.
+Normal startup derives the Argon2id encryption key once (time cost 3, 64 MiB memory, parallelism 4). The salt and KDF parameters live in the authenticated envelope header. Readers accept only `SILVDB01`; obsolete raw encrypted payloads and unknown envelope versions fail closed as unsupported.
 
 The reader returns distinct outcomes for:
 

@@ -1,75 +1,23 @@
-import base64
 import os
 
 import pytest
-from cryptography.exceptions import InvalidTag
 
 from silverestimate.security import encryption
 
 
-class FakeSettings:
-    def __init__(self, initial=None):
-        self._storage = dict(initial or {})
-        self.synced = False
-
-    def value(self, key):
-        return self._storage.get(key)
-
-    def setValue(self, key, value):
-        self._storage[key] = value
-
-    def sync(self):
-        self.synced = True
-
-    def remove(self, key):
-        self._storage.pop(key, None)
-
-
-def test_get_or_create_salt_creates_and_persists():
-    settings = FakeSettings()
-    salt = encryption.get_or_create_salt(settings, length=8)
-    assert isinstance(salt, bytes)
-    assert len(salt) == 8
-
-    stored = settings.value(encryption.SALT_SETTINGS_KEY)
-    assert stored is not None
-    assert base64.b64decode(stored) == salt
-    assert settings.synced
-
-    # Subsequent call should reuse the stored salt
-    reused = encryption.get_or_create_salt(settings, length=8)
-    assert reused == salt
-
-
-def test_get_or_create_salt_recovers_from_bad_value():
-    settings = FakeSettings({encryption.SALT_SETTINGS_KEY: "not-base64"})
-    salt = encryption.get_or_create_salt(settings, length=8)
-    assert isinstance(salt, bytes)
-    assert len(salt) == 8
-
-
-def test_derive_key_roundtrip():
+def test_derive_key_uses_argon2id_deterministically():
     salt = os.urandom(encryption.DEFAULT_SALT_BYTES)
-    key = encryption.derive_key("password", salt, iterations=1_000)
-    assert len(key) == 32
+    options = {
+        "time_cost": 1,
+        "memory_cost_kib": 1024,
+        "parallelism": 1,
+    }
 
+    first = encryption.derive_key("password", salt, **options)
+    second = encryption.derive_key("password", salt, **options)
 
-def test_derive_key_supports_argon2id_and_legacy_pbkdf2():
-    salt = os.urandom(encryption.DEFAULT_SALT_BYTES)
-    argon2_key = encryption.derive_key(
-        "password",
-        salt,
-        algorithm=encryption.PREFERRED_KDF_ALGORITHM,
-    )
-    legacy_key = encryption.derive_key(
-        "password",
-        salt,
-        algorithm=encryption.LEGACY_KDF_ALGORITHM,
-        iterations=1_000,
-    )
-    assert len(argon2_key) == 32
-    assert len(legacy_key) == 32
-    assert argon2_key != legacy_key
+    assert len(first) == 32
+    assert first == second
 
 
 def test_derive_key_requires_password_and_salt():
@@ -78,33 +26,3 @@ def test_derive_key_requires_password_and_salt():
         encryption.derive_key("", salt)
     with pytest.raises(ValueError):
         encryption.derive_key("password", b"")
-
-
-def test_derive_key_rejects_unknown_algorithm():
-    salt = os.urandom(encryption.DEFAULT_SALT_BYTES)
-    with pytest.raises(ValueError, match="Unsupported key-derivation algorithm"):
-        encryption.derive_key("password", salt, algorithm="unknown")
-
-
-def test_encrypt_decrypt_roundtrip():
-    salt = os.urandom(encryption.DEFAULT_SALT_BYTES)
-    key = encryption.derive_key("secret", salt, iterations=1_000)
-    payload = encryption.encrypt_payload(b"super-secret", key)
-    assert len(payload) > encryption.NONCE_BYTES
-    plaintext = encryption.decrypt_payload(payload, key)
-    assert plaintext == b"super-secret"
-
-
-def test_encrypt_payload_empty_returns_nonce_only():
-    key = os.urandom(32)
-    payload = encryption.encrypt_payload(b"", key)
-    assert len(payload) == encryption.NONCE_BYTES
-
-
-def test_decrypt_payload_invalid_tag_raises():
-    salt = os.urandom(encryption.DEFAULT_SALT_BYTES)
-    key = encryption.derive_key("secret", salt, iterations=1_000)
-    payload = encryption.encrypt_payload(b"data", key)
-    tampered = payload[:-1] + bytes([payload[-1] ^ 1])
-    with pytest.raises(InvalidTag):
-        encryption.decrypt_payload(tampered, key)

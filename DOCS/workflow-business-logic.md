@@ -73,7 +73,7 @@ Issued list → Reactivated → Assigned
 1. Versioned `SILVDB01` AES-256-GCM encryption at rest
 2. Authenticated canonical metadata and ordered 1 MiB chunks
 3. Argon2id key derivation once per normal startup
-4. PBKDF2 and the QSettings salt only when reading a legacy envelope
+4. Argon2id parameters and salt stored in the authenticated envelope header
 5. Marked, permission-restricted temporary decrypted files during the session
 
 ### 5. Catalog Backup Processes

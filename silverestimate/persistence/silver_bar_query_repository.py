@@ -18,7 +18,7 @@ from silverestimate.persistence.repository_results import (
 
 
 class SilverBarQueryRepository:
-    """Own every silver-bar and list read behind the compatibility facade."""
+    """Own every silver-bar and list read exposed by the public facade."""
 
     def __init__(self, backend: Any) -> None:
         self._backend = backend

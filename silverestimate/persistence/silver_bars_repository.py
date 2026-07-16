@@ -1010,13 +1010,13 @@ class _SilverBarsRepositoryBackend:
                 )
                 existing_rows = cursor.fetchall()
                 existing_by_key: dict[str, Any] = {}
-                legacy_rows: list[Any] = []
+                unkeyed_rows: list[Any] = []
                 for row in existing_rows:
                     source_line_key = str(row["source_line_key"] or "").strip()
                     if source_line_key:
                         existing_by_key[source_line_key] = row
                     else:
-                        legacy_rows.append(row)
+                        unkeyed_rows.append(row)
 
                 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 for desired_entry in desired:
@@ -1025,13 +1025,13 @@ class _SilverBarsRepositoryBackend:
                     line_key = str(desired_entry.get("line_key") or "").strip() or None
 
                     existing = existing_by_key.get(line_key) if line_key else None
-                    matched_legacy = False
-                    if existing is None and legacy_rows:
-                        existing = legacy_rows.pop(0)
-                        matched_legacy = True
+                    matched_unkeyed = False
+                    if existing is None and unkeyed_rows:
+                        existing = unkeyed_rows.pop(0)
+                        matched_unkeyed = True
 
                     if existing is not None:
-                        if matched_legacy and line_key:
+                        if matched_unkeyed and line_key:
                             cursor.execute(
                                 "UPDATE silver_bars SET source_line_key = ? WHERE bar_id = ?",
                                 (line_key, existing["bar_id"]),
@@ -1307,7 +1307,7 @@ class _SilverBarsRepositoryBackend:
 
 
 class SilverBarsRepository:
-    """Compatibility facade over query, command, and synchronization repositories."""
+    """Public facade over query, command, and synchronization repositories."""
 
     def __init__(self, db_manager: Any) -> None:
         from silverestimate.persistence.silver_bar_command_repository import (

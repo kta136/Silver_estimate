@@ -105,7 +105,7 @@ def _ensure_core_tables(db: "DatabaseManager", current_version: int) -> None:
         )
         """)
 
-    # Ensure note/last balance columns exist for legacy installs
+    # Ensure note and last-balance columns exist for older schema versions.
     if current_version < 3:
         if not db._column_exists("estimates", "note"):
             cursor.execute("ALTER TABLE estimates ADD COLUMN note TEXT")

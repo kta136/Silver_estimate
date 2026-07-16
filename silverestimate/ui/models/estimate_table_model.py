@@ -16,7 +16,6 @@ from silverestimate.ui.estimate_entry_logic.column_specs import (
     header_for_column,
     is_editable_column,
     precision_for_column,
-    table_headers,
 )
 from silverestimate.ui.estimate_entry_logic.constants import (
     COL_CODE,
@@ -48,8 +47,6 @@ class EstimateTableModel(QAbstractTableModel):
     # Signal emitted when data changes (row, column, old_value, new_value)
     data_changed_detailed = pyqtSignal(int, int, object, object)
 
-    # Compatibility shim for older tests and callers that read the class attr.
-    HEADERS = list(table_headers())
     _NUMERIC_COLUMNS = NUMERIC_COLUMNS
     _TYPE_BACKGROUND_BRUSHES = {
         EstimateLineCategory.RETURN: QBrush(QColor("#dbeafe")),

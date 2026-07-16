@@ -49,7 +49,7 @@ def test_initial_state(model):
 
 
 def test_column_specs_define_table_contract(model):
-    assert list(table_headers()) == model.HEADERS
+    assert len(table_headers()) == model.columnCount()
     assert navigation_columns() == (
         COL_CODE,
         COL_GROSS,

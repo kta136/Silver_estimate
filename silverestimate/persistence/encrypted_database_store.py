@@ -13,8 +13,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Callable, Optional, cast
 
-from cryptography.exceptions import InvalidTag
-
 from silverestimate.infrastructure.settings import (
     SettingsStore,
     get_app_settings,
@@ -40,7 +38,6 @@ from silverestimate.security.encrypted_envelope import (
 class DecryptionOutcome(str, Enum):
     FIRST_RUN = "first_run"
     CURRENT = "current"
-    LEGACY = "legacy"
     WRONG_PASSWORD = "wrong_password"
     CORRUPT = "corrupt"
     UNSUPPORTED = "unsupported"
@@ -53,10 +50,7 @@ class DecryptionResult:
 
     @property
     def succeeded(self) -> bool:
-        return self.outcome in {
-            DecryptionOutcome.CURRENT,
-            DecryptionOutcome.LEGACY,
-        }
+        return self.outcome == DecryptionOutcome.CURRENT
 
 
 class EncryptedDatabaseStore:
@@ -73,19 +67,15 @@ class EncryptedDatabaseStore:
         self.encrypted_db_path = encrypted_db_path
         self.key = key
         self.argon2_metadata = argon2_metadata or Argon2Metadata(
-            salt=b"\0" * crypto_utils.DEFAULT_SALT_BYTES,
+            salt=os.urandom(crypto_utils.DEFAULT_SALT_BYTES),
             time_cost=crypto_utils.DEFAULT_ARGON2_TIME_COST,
             memory_cost_kib=crypto_utils.DEFAULT_ARGON2_MEMORY_COST_KIB,
             parallelism=crypto_utils.DEFAULT_ARGON2_PARALLELISM,
         )
-        self.last_decryption_result = DecryptionResult(DecryptionOutcome.FIRST_RUN)
         self._logger = logger or logging.getLogger(__name__)
 
     def set_key(self, key: bytes | None) -> None:
         self.key = key
-
-    def set_argon2_metadata(self, metadata: Argon2Metadata) -> None:
-        self.argon2_metadata = metadata
 
     @staticmethod
     def read_metadata(encrypted_db_path: str) -> EnvelopeMetadata | None:
@@ -155,7 +145,7 @@ class EncryptedDatabaseStore:
                 )
 
     def decrypt_to_path(self, temp_db_path: str | None) -> str:
-        """Compatibility wrapper returning ``success``, ``first_run``, or ``error``."""
+        """Return the startup status for an attempted database decrypt."""
         result = self.decrypt_to_path_result(temp_db_path)
         if result.succeeded:
             return "success"
@@ -167,16 +157,16 @@ class EncryptedDatabaseStore:
         self,
         temp_db_path: str | None,
     ) -> DecryptionResult:
-        """Decrypt the store with distinct current/legacy/failure outcomes."""
+        """Decrypt the current envelope with distinct failure outcomes."""
         if not os.path.exists(self.encrypted_db_path):
             self._logger.info("Encrypted database file not found")
-            return self._remember(DecryptionResult(DecryptionOutcome.FIRST_RUN))
-        if os.path.getsize(self.encrypted_db_path) <= crypto_utils.NONCE_BYTES:
-            self._logger.warning("Encrypted database file is empty or too small")
-            return self._remember(DecryptionResult(DecryptionOutcome.FIRST_RUN))
+            return DecryptionResult(DecryptionOutcome.FIRST_RUN)
+        if os.path.getsize(self.encrypted_db_path) == 0:
+            self._logger.warning("Encrypted database file is empty")
+            return DecryptionResult(DecryptionOutcome.FIRST_RUN)
         if not self.key:
             self._logger.error("Decryption skipped: No encryption key available")
-            return self._remember(DecryptionResult(DecryptionOutcome.WRONG_PASSWORD))
+            return DecryptionResult(DecryptionOutcome.WRONG_PASSWORD)
         if not temp_db_path:
             raise RuntimeError("Temporary database path not set.")
 
@@ -184,27 +174,23 @@ class EncryptedDatabaseStore:
         start_time = time.perf_counter()
         try:
             metadata = read_envelope_metadata(self.encrypted_db_path)
-            if metadata is not None:
-                decrypt_envelope_to_path(
-                    self.encrypted_db_path,
-                    temp_db_path,
-                    self.key,
-                )
-                outcome = DecryptionResult(DecryptionOutcome.CURRENT, metadata)
-            else:
-                self._decrypt_legacy_to_path(temp_db_path)
-                outcome = DecryptionResult(DecryptionOutcome.LEGACY)
+            decrypt_envelope_to_path(
+                self.encrypted_db_path,
+                temp_db_path,
+                self.key,
+            )
+            outcome = DecryptionResult(DecryptionOutcome.CURRENT, metadata)
             duration = time.perf_counter() - start_time
             self._logger.info(
                 "Database decrypted successfully in %.2f seconds", duration
             )
-            return self._remember(outcome)
+            return outcome
         except EnvelopeWrongPasswordError as exc:
             self._logger.warning("Encrypted database password rejected: %s", exc)
-            return self._remember(DecryptionResult(DecryptionOutcome.WRONG_PASSWORD))
+            return DecryptionResult(DecryptionOutcome.WRONG_PASSWORD)
         except EnvelopeUnsupportedError as exc:
             self._logger.error("Encrypted database format is unsupported: %s", exc)
-            return self._remember(DecryptionResult(DecryptionOutcome.UNSUPPORTED))
+            return DecryptionResult(DecryptionOutcome.UNSUPPORTED)
         except (
             EnvelopeCorruptError,
             EnvelopeDuplicateChunkError,
@@ -213,34 +199,10 @@ class EncryptedDatabaseStore:
             EnvelopeTruncatedError,
         ) as exc:
             self._logger.error("Encrypted database is corrupt: %s", exc)
-            return self._remember(DecryptionResult(DecryptionOutcome.CORRUPT))
-        except InvalidTag:
-            self._logger.error(
-                "Legacy decryption failed: password is wrong or payload is corrupt"
-            )
-            return self._remember(DecryptionResult(DecryptionOutcome.WRONG_PASSWORD))
+            return DecryptionResult(DecryptionOutcome.CORRUPT)
         except Exception as exc:
             self._logger.error("Database decryption failed: %s", exc, exc_info=True)
-            return self._remember(DecryptionResult(DecryptionOutcome.CORRUPT))
-
-    def _decrypt_legacy_to_path(self, temp_db_path: str) -> None:
-        assert self.key is not None
-        with open(self.encrypted_db_path, "rb") as handle:
-            payload = handle.read()
-        plaintext = crypto_utils.decrypt_payload(payload, self.key, logger=self._logger)
-        partial_path = f"{temp_db_path}.decrypting"
-        try:
-            with open(partial_path, "wb") as handle:
-                handle.write(plaintext)
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(partial_path, temp_db_path)
-        finally:
-            Path(partial_path).unlink(missing_ok=True)
-
-    def _remember(self, result: DecryptionResult) -> DecryptionResult:
-        self.last_decryption_result = result
-        return result
+            return DecryptionResult(DecryptionOutcome.CORRUPT)
 
     def snapshot_copy(self, temp_db_path: str | None) -> str | None:
         """Create a consistent snapshot copy using SQLite backup API."""
@@ -325,15 +287,6 @@ class EncryptedDatabaseStore:
             return False
         finally:
             verification_store.cleanup()
-
-    @staticmethod
-    def get_or_create_salt(
-        *,
-        logger: Optional[logging.Logger] = None,
-        settings_factory: Callable[[], SettingsStore] = get_app_settings,
-    ) -> bytes:
-        settings = settings_factory()
-        return crypto_utils.get_or_create_salt(settings, logger=logger)
 
     @staticmethod
     def check_recovery_candidate(
@@ -430,7 +383,6 @@ class EncryptedDatabaseStore:
         *,
         logger: Optional[logging.Logger] = None,
         settings_factory: Callable[[], SettingsStore] = get_app_settings,
-        iterations: int = crypto_utils.DEFAULT_KDF_ITERATIONS,
     ) -> bool:
         try:
             if not os.path.exists(plain_temp_path):
@@ -440,14 +392,10 @@ class EncryptedDatabaseStore:
                     )
                 return False
 
-            salt = EncryptedDatabaseStore.get_or_create_salt(
-                logger=logger,
-                settings_factory=settings_factory,
-            )
+            salt = os.urandom(crypto_utils.DEFAULT_SALT_BYTES)
             key = crypto_utils.derive_key(
                 password,
                 salt,
-                iterations=iterations,
                 logger=logger,
             )
             store = EncryptedDatabaseStore(

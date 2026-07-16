@@ -5,6 +5,17 @@ All notable changes to the Silver Estimation App will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.04] - 2026-07-16
+
+### Changed
+- Bumped the application/package version to `3.04` after completing the installed-system data migration cycle.
+- New databases and recovered plaintext sessions now create their Argon2id salt directly in the authenticated `SILVDB01` envelope instead of QSettings.
+
+### Removed
+- Removed the completed working-directory database relocation module and its startup error path.
+- Removed the completed legacy-organization QSettings copier and the obsolete organization identifier.
+- Removed PBKDF2 key derivation, raw nonce-plus-ciphertext database reads, encrypted migration backups, and their migration-only tests.
+
 ## [3.03] - 2026-07-16
 
 ### Added

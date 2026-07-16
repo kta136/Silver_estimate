@@ -337,7 +337,7 @@ class EstimateEntryTotalsController(HostProxy):
     def _disable_incremental_totals_and_fallback(self, exc: Exception) -> None:
         if not self._incremental_totals_failed:
             self.logger.warning(
-                "Incremental totals failed; legacy fallback is disabled: %s",
+                "Incremental totals failed; full recalculation fallback is disabled: %s",
                 exc,
                 exc_info=True,
             )

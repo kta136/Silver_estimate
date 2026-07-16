@@ -301,6 +301,33 @@ def test_numeric_columns_return_font_role_derived_from_table_font(qt_app):
         assert font.key() == expected_font.key()
 
 
+def test_numeric_font_role_is_cached_until_parent_font_changes(qt_app, monkeypatch):
+    table = QTableView()
+    model = EstimateTableModel(table)
+    model.add_row(EstimateEntryRowState())
+    calls = []
+
+    def _numeric_font(base_font):
+        calls.append(base_font.toString())
+        return numeric_table_font(base_font)
+
+    monkeypatch.setattr(
+        "silverestimate.ui.models.estimate_table_model.numeric_table_font",
+        _numeric_font,
+    )
+    index = model.index(0, COL_GROSS)
+
+    model.data(index, Qt.ItemDataRole.FontRole)
+    model.data(index, Qt.ItemDataRole.FontRole)
+    assert len(calls) == 1
+
+    changed_font = table.font()
+    changed_font.setPointSize(changed_font.pointSize() + 1)
+    table.setFont(changed_font)
+    model.data(index, Qt.ItemDataRole.FontRole)
+    assert len(calls) == 2
+
+
 def test_non_numeric_columns_do_not_return_font_role(model):
     model.add_row(EstimateEntryRowState())
 

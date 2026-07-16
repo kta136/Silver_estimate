@@ -33,9 +33,12 @@ def _coerce_bool(value, default):
 class _SettingsStub:
     """In-memory replacement for QSettings during tests."""
 
+    class Status:
+        NoError = 0
+
     _data = {}
 
-    def __init__(self, org="YourCompany", app="SilverEstimateApp"):
+    def __init__(self, org="SilverEstimate", app="SilverEstimateApp"):
         self._key = (org, app)
         self._store = _SettingsStub._data.setdefault(self._key, {})
 
@@ -57,6 +60,12 @@ class _SettingsStub:
 
     def contains(self, key):
         return key in self._store
+
+    def allKeys(self):
+        return list(self._store)
+
+    def status(self):
+        return 0
 
     def sync(self):  # QSettings compatibility
         return True

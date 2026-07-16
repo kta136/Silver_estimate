@@ -26,6 +26,15 @@ def run_schema_setup(db: "DatabaseManager") -> None:
     try:
         current_version = db._check_schema_version()
         logger.info("Current database schema version: %s", current_version)
+        if current_version == CURRENT_SCHEMA_VERSION:
+            logger.debug("Database schema is current; skipping migration checks.")
+            return
+        if current_version > CURRENT_SCHEMA_VERSION:
+            raise RuntimeError(
+                "Database schema version "
+                f"{current_version} is newer than supported version "
+                f"{CURRENT_SCHEMA_VERSION}."
+            )
 
         conn.execute("BEGIN IMMEDIATE")
 

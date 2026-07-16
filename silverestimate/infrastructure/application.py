@@ -95,6 +95,8 @@ class ApplicationBuilder:
         ] = qt_bootstrap.available_application_attributes(),
         user_model_id: str = "com.silverestimate.app",
         app_name: str = "silver_app",
+        startup_t0_perf: float | None = None,
+        startup_t0_unix: float | None = None,
     ) -> None:
         self._main_window_factory = main_window_factory
         self._startup_controller_factory = startup_controller_factory
@@ -106,6 +108,8 @@ class ApplicationBuilder:
         self._qt_attributes = qt_attributes
         self._user_model_id = user_model_id
         self._app_name = app_name
+        self._startup_t0_perf = startup_t0_perf
+        self._startup_t0_unix = startup_t0_unix
 
     def run(self) -> int:
         """Build and execute the application, returning an exit code."""
@@ -132,8 +136,14 @@ class ApplicationBuilder:
 
     def _run(self, context: ApplicationContext) -> int:
         """Internal orchestration for startup."""
-        context.startup_t0_perf = time.perf_counter()
-        context.startup_t0_unix = time.time()
+        context.startup_t0_perf = (
+            self._startup_t0_perf
+            if self._startup_t0_perf is not None
+            else time.perf_counter()
+        )
+        context.startup_t0_unix = (
+            self._startup_t0_unix if self._startup_t0_unix is not None else time.time()
+        )
         self._configure_logging(context)
         if context.logger:
             context.logger.debug(
@@ -142,19 +152,42 @@ class ApplicationBuilder:
             )
         self._configure_qt(context)
         if context.logger:
+            qt_ready_ms = (time.perf_counter() - context.startup_t0_perf) * 1000.0
             context.logger.debug(
                 "[perf] startup.qt_ready_ms=%.2f t_unix=%.6f",
-                (time.perf_counter() - context.startup_t0_perf) * 1000.0,
+                qt_ready_ms,
                 time.time(),
             )
+            self._log_startup_telemetry(context, "startup.qt_ready_ms", qt_ready_ms)
         db_manager, early_exit = self._authenticate(context)
+        self._log_startup_telemetry(context, "startup.authentication_complete_ms")
         if early_exit is not None:
             return early_exit
         context.main_window = self._main_window_factory(
             db_manager=db_manager,
             logger=context.logger,
         )
+        self._log_startup_telemetry(context, "startup.main_window_created_ms")
         return self._enter_event_loop(context)
+
+    def _log_startup_telemetry(
+        self,
+        context: ApplicationContext,
+        metric: str,
+        duration_ms: float | None = None,
+    ) -> None:
+        if context.logger is None:
+            return
+        elapsed_ms = (
+            duration_ms
+            if duration_ms is not None
+            else (time.perf_counter() - context.startup_t0_perf) * 1000.0
+        )
+        context.logger.info(
+            '[telemetry] {"metric":"%s","duration_ms":%.3f}',
+            metric,
+            elapsed_ms,
+        )
 
     def _configure_logging(self, context: ApplicationContext) -> None:
         logs_dir = Path("logs")
@@ -327,6 +360,7 @@ class ApplicationBuilder:
                 time.time(),
             )
         context.main_window.show()
+        self._log_startup_telemetry(context, "startup.main_window_show_called_ms")
         if context.logger:
             context.logger.debug("Entering Qt main event loop")
         exit_code = context.app.exec()

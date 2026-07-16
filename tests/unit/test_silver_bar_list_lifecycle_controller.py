@@ -1,6 +1,6 @@
 import logging
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QItemSelectionModel, Qt
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -106,11 +106,13 @@ def test_lifecycle_controller_creates_list_from_selection_and_assigns_bars(
     selection_model = host.available_bars_table.selectionModel()
     selection_model.select(
         host.available_bars_model.index(0, 0),
-        selection_model.Select | selection_model.Rows,
+        QItemSelectionModel.SelectionFlag.Select
+        | QItemSelectionModel.SelectionFlag.Rows,
     )
     selection_model.select(
         host.available_bars_model.index(1, 0),
-        selection_model.Select | selection_model.Rows,
+        QItemSelectionModel.SelectionFlag.Select
+        | QItemSelectionModel.SelectionFlag.Rows,
     )
 
     monkeypatch.setattr(

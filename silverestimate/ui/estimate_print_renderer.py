@@ -146,7 +146,7 @@ class EstimatePrintRenderer:
                 sno = f"{args[0]:>{W_SNO}}"
                 fine = f"{args[1]:>{W_FINE}.3f}"
                 labour = f"{args[2]:>{W_LBR}.2f}"
-                qty = f"{args[3]:>{W_QTY}.3f}"
+                qty = f"{args[3]:.3f}".rjust(W_QTY)
                 poly = f"{args[4]:>{W_POLY}.0f}"
                 name = f"{str(args[5] or ''):<{W_NAME}.{W_NAME}}"
                 sper = f"{args[6]:>{W_SPER}.2f}"
@@ -211,7 +211,7 @@ class EstimatePrintRenderer:
         h_sno = "SNo".center(W_SNO)
         h_fine = "Fine".center(W_FINE)
         h_labour = "Labour".center(W_LBR)
-        h_qty = "Quantity".center(W_QTY)
+        h_qty = "Quantity".rjust(W_QTY)
         h_poly = "Poly".center(W_POLY)
         h_name = "Item Name".center(W_NAME)
         h_sper = "S.Per%".center(W_SPER)

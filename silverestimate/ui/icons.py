@@ -1,291 +1,101 @@
-"""Shared application icon helpers."""
+"""Shared application icon helpers backed by Qt's native icon set."""
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Final, cast
 
-from PyQt6.QtGui import QIcon
+from PyQt6.QtCore import QSize
+from PyQt6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import QApplication, QStyle, QWidget
-
-from silverestimate.infrastructure.paths import get_asset_path
-
-LOGGER = logging.getLogger(__name__)
-
-try:
-    import qtawesome as _qtawesome
-except Exception:  # pragma: no cover - dependency availability varies by env
-    _qtawesome = None
-
-
-def _resolve_qtawesome_fonts_dir() -> Path | None:
-    try:
-        bundled_fonts_dir = get_asset_path("qtawesome", "fonts")
-    except Exception:
-        bundled_fonts_dir = None
-    if bundled_fonts_dir is not None and bundled_fonts_dir.is_dir():
-        return bundled_fonts_dir
-
-    if _qtawesome is None:
-        return None
-
-    package_fonts_dir = Path(_qtawesome.__file__).resolve().parent / "fonts"
-    if package_fonts_dir.is_dir():
-        return package_fonts_dir
-    return None
-
-
-def _configure_qtawesome_font_lookup() -> None:
-    if _qtawesome is None:
-        return
-
-    fonts_dir = _resolve_qtawesome_fonts_dir()
-    if fonts_dir is None:
-        return
-
-    try:
-        from qtawesome import iconic_font as _iconic_font
-    except Exception:
-        return
-
-    if getattr(_iconic_font.IconicFont, "_silverestimate_font_patch", False):
-        return
-
-    def _patched_get_fonts_directory(self):
-        return self._install_fonts(str(fonts_dir))
-
-    _iconic_font.IconicFont._get_fonts_directory = _patched_get_fonts_directory
-    _iconic_font.IconicFont._silverestimate_font_patch = True
-
-
-_configure_qtawesome_font_lookup()
 
 
 @dataclass(frozen=True)
 class IconSpec:
-    """Description of an app icon with fallback metadata."""
+    """Description of an app icon with theme and native fallbacks."""
 
-    mdi6_name: str
     theme_name: str | None = None
     fallback: QStyle.StandardPixmap | None = None
 
 
 _DEFAULT_COLOR = "#334155"
 _DISABLED_COLOR = "#94a3b8"
+_ICON_SIZES: Final[tuple[int, ...]] = (16, 20, 24, 32)
+_ICON_CACHE: dict[tuple[str, str, str, str], QIcon] = {}
 
 _ICON_SPECS: Final[dict[str, IconSpec]] = {
     "estimate_entry": IconSpec(
-        "mdi6.calculator-variant-outline",
-        fallback=QStyle.StandardPixmap.SP_FileDialogDetailedView,
+        fallback=QStyle.StandardPixmap.SP_FileDialogDetailedView
     ),
-    "item_master": IconSpec(
-        "mdi6.clipboard-list-outline",
-        fallback=QStyle.StandardPixmap.SP_FileDialogContentsView,
+    "item_master": IconSpec(fallback=QStyle.StandardPixmap.SP_FileDialogContentsView),
+    "tools": IconSpec(fallback=QStyle.StandardPixmap.SP_FileDialogDetailedView),
+    "save": IconSpec("document-save", QStyle.StandardPixmap.SP_DialogSaveButton),
+    "search": IconSpec("edit-find", QStyle.StandardPixmap.SP_FileDialogContentsView),
+    "open": IconSpec("document-open", QStyle.StandardPixmap.SP_DialogOpenButton),
+    "print": IconSpec("document-print", QStyle.StandardPixmap.SP_FileIcon),
+    "print_estimate": IconSpec("document-print", QStyle.StandardPixmap.SP_FileIcon),
+    "delete": IconSpec("edit-delete", QStyle.StandardPixmap.SP_TrashIcon),
+    "delete_row": IconSpec(fallback=QStyle.StandardPixmap.SP_TrashIcon),
+    "delete_estimate": IconSpec(fallback=QStyle.StandardPixmap.SP_TrashIcon),
+    "clear_filters": IconSpec("edit-clear", QStyle.StandardPixmap.SP_DialogResetButton),
+    "edit_note": IconSpec(
+        "document-edit", QStyle.StandardPixmap.SP_FileDialogDetailedView
     ),
-    "save": IconSpec(
-        "mdi6.content-save-outline",
-        fallback=QStyle.StandardPixmap.SP_DialogSaveButton,
+    "mark_issued": IconSpec(
+        "emblem-default", QStyle.StandardPixmap.SP_DialogApplyButton
     ),
-    "search": IconSpec(
-        "mdi6.magnify",
-        theme_name="edit-find",
-        fallback=QStyle.StandardPixmap.SP_FileDialogContentsView,
+    "export_csv": IconSpec(
+        "document-save-as", QStyle.StandardPixmap.SP_DialogSaveButton
     ),
-    "open": IconSpec(
-        "mdi6.folder-open-outline",
-        theme_name="document-open",
-        fallback=QStyle.StandardPixmap.SP_DialogOpenButton,
-    ),
-    "print": IconSpec(
-        "mdi6.printer-outline",
-        theme_name="document-print",
-        fallback=QStyle.StandardPixmap.SP_FileIcon,
-    ),
-    "print_estimate": IconSpec(
-        "mdi6.printer-outline",
-        theme_name="document-print",
-        fallback=QStyle.StandardPixmap.SP_FileIcon,
-    ),
-    "delete": IconSpec(
-        "mdi6.delete-outline",
-        theme_name="edit-delete",
-        fallback=QStyle.StandardPixmap.SP_TrashIcon,
-    ),
-    "delete_row": IconSpec(
-        "mdi6.table-row-remove",
-        fallback=QStyle.StandardPixmap.SP_TrashIcon,
-    ),
-    "delete_estimate": IconSpec(
-        "mdi6.trash-can-outline",
-        fallback=QStyle.StandardPixmap.SP_TrashIcon,
-    ),
-    "close": IconSpec(
-        "mdi6.close",
-        theme_name="window-close",
-        fallback=QStyle.StandardPixmap.SP_DialogCloseButton,
-    ),
-    "refresh": IconSpec(
-        "mdi6.refresh",
-        theme_name="view-refresh",
-        fallback=QStyle.StandardPixmap.SP_BrowserReload,
-    ),
-    "save_pdf": IconSpec(
-        "mdi6.file-pdf-box",
-        theme_name="document-save",
-        fallback=QStyle.StandardPixmap.SP_DialogSaveButton,
-    ),
+    "generate_optimal": IconSpec("system-run", QStyle.StandardPixmap.SP_BrowserReload),
+    "close": IconSpec("window-close", QStyle.StandardPixmap.SP_DialogCloseButton),
+    "refresh": IconSpec("view-refresh", QStyle.StandardPixmap.SP_BrowserReload),
+    "save_pdf": IconSpec("document-save", QStyle.StandardPixmap.SP_DialogSaveButton),
     "page_setup": IconSpec(
-        "mdi6.file-document-edit-outline",
-        theme_name="document-properties",
-        fallback=QStyle.StandardPixmap.SP_FileDialogDetailedView,
+        "document-properties", QStyle.StandardPixmap.SP_FileDialogDetailedView
     ),
-    "new": IconSpec(
-        "mdi6.file-plus-outline",
-        fallback=QStyle.StandardPixmap.SP_FileDialogNewFolder,
-    ),
-    "zoom_in": IconSpec(
-        "mdi6.magnify-plus-outline",
-        theme_name="zoom-in",
-        fallback=QStyle.StandardPixmap.SP_ArrowUp,
-    ),
-    "zoom_out": IconSpec(
-        "mdi6.magnify-minus-outline",
-        theme_name="zoom-out",
-        fallback=QStyle.StandardPixmap.SP_ArrowDown,
-    ),
+    "new": IconSpec(fallback=QStyle.StandardPixmap.SP_FileDialogNewFolder),
+    "zoom_in": IconSpec("zoom-in", QStyle.StandardPixmap.SP_ArrowUp),
+    "zoom_out": IconSpec("zoom-out", QStyle.StandardPixmap.SP_ArrowDown),
     "fit_width": IconSpec(
-        "mdi6.arrow-expand-horizontal",
-        theme_name="zoom-fit-width",
-        fallback=QStyle.StandardPixmap.SP_TitleBarShadeButton,
+        "zoom-fit-width", QStyle.StandardPixmap.SP_TitleBarShadeButton
     ),
     "fit_page": IconSpec(
-        "mdi6.fit-to-page-outline",
-        theme_name="zoom-fit-best",
-        fallback=QStyle.StandardPixmap.SP_TitleBarUnshadeButton,
+        "zoom-fit-best", QStyle.StandardPixmap.SP_TitleBarUnshadeButton
     ),
-    "view_single_page": IconSpec(
-        "mdi6.file-outline",
-        fallback=QStyle.StandardPixmap.SP_FileIcon,
-    ),
-    "view_facing_pages": IconSpec(
-        "mdi6.book-open-page-variant-outline",
-        fallback=QStyle.StandardPixmap.SP_DirOpenIcon,
-    ),
-    "view_overview": IconSpec(
-        "mdi6.view-grid-outline",
-        fallback=QStyle.StandardPixmap.SP_FileDialogListView,
-    ),
-    "page_first": IconSpec(
-        "mdi6.page-first",
-        theme_name="go-first",
-        fallback=QStyle.StandardPixmap.SP_MediaSkipBackward,
-    ),
+    "view_single_page": IconSpec(fallback=QStyle.StandardPixmap.SP_FileIcon),
+    "view_facing_pages": IconSpec(fallback=QStyle.StandardPixmap.SP_DirOpenIcon),
+    "view_overview": IconSpec(fallback=QStyle.StandardPixmap.SP_FileDialogListView),
+    "page_first": IconSpec("go-first", QStyle.StandardPixmap.SP_MediaSkipBackward),
     "page_previous": IconSpec(
-        "mdi6.page-previous",
-        theme_name="go-previous",
-        fallback=QStyle.StandardPixmap.SP_MediaSeekBackward,
+        "go-previous", QStyle.StandardPixmap.SP_MediaSeekBackward
     ),
-    "page_next": IconSpec(
-        "mdi6.page-next",
-        theme_name="go-next",
-        fallback=QStyle.StandardPixmap.SP_MediaSeekForward,
-    ),
-    "page_last": IconSpec(
-        "mdi6.page-last",
-        theme_name="go-last",
-        fallback=QStyle.StandardPixmap.SP_MediaSkipForward,
-    ),
-    "printer_select": IconSpec(
-        "mdi6.printer-settings",
-        theme_name="printer",
-        fallback=QStyle.StandardPixmap.SP_ComputerIcon,
-    ),
-    "exit": IconSpec(
-        "mdi6.logout-variant",
-        fallback=QStyle.StandardPixmap.SP_DialogCloseButton,
-    ),
-    "silver_bars": IconSpec(
-        "mdi6.gold",
-        fallback=QStyle.StandardPixmap.SP_DriveHDIcon,
-    ),
+    "page_next": IconSpec("go-next", QStyle.StandardPixmap.SP_MediaSeekForward),
+    "page_last": IconSpec("go-last", QStyle.StandardPixmap.SP_MediaSkipForward),
+    "printer_select": IconSpec("printer", QStyle.StandardPixmap.SP_ComputerIcon),
+    "exit": IconSpec(fallback=QStyle.StandardPixmap.SP_DialogCloseButton),
+    "silver_bars": IconSpec(fallback=QStyle.StandardPixmap.SP_DriveHDIcon),
     "silver_history": IconSpec(
-        "mdi6.history",
-        fallback=QStyle.StandardPixmap.SP_FileDialogDetailedView,
+        fallback=QStyle.StandardPixmap.SP_FileDialogDetailedView
     ),
-    "settings": IconSpec(
-        "mdi6.cog-outline",
-        fallback=QStyle.StandardPixmap.SP_FileDialogDetailedView,
-    ),
-    "about": IconSpec(
-        "mdi6.information-outline",
-        fallback=QStyle.StandardPixmap.SP_MessageBoxInformation,
-    ),
-    "balance": IconSpec(
-        "mdi6.bank-outline",
-        fallback=QStyle.StandardPixmap.SP_DialogApplyButton,
-    ),
-    "history": IconSpec(
-        "mdi6.history",
-        fallback=QStyle.StandardPixmap.SP_FileDialogDetailedView,
-    ),
-    "return_mode": IconSpec(
-        "mdi6.cash-refund",
-        fallback=QStyle.StandardPixmap.SP_ArrowBack,
-    ),
-    "bar_mode": IconSpec(
-        "mdi6.weight",
-        fallback=QStyle.StandardPixmap.SP_DriveHDIcon,
-    ),
-    "move_right": IconSpec(
-        "mdi6.arrow-right-bold",
-        fallback=QStyle.StandardPixmap.SP_ArrowRight,
-    ),
-    "move_left": IconSpec(
-        "mdi6.arrow-left-bold",
-        fallback=QStyle.StandardPixmap.SP_ArrowLeft,
-    ),
-    "move_all_right": IconSpec(
-        "mdi6.page-last",
-        fallback=QStyle.StandardPixmap.SP_MediaSkipForward,
-    ),
-    "move_all_left": IconSpec(
-        "mdi6.page-first",
-        fallback=QStyle.StandardPixmap.SP_MediaSkipBackward,
-    ),
-    "reset_layout": IconSpec(
-        "mdi6.table-column-width",
-        fallback=QStyle.StandardPixmap.SP_DialogResetButton,
-    ),
-    "user_interface": IconSpec(
-        "mdi6.monitor-dashboard",
-        fallback=QStyle.StandardPixmap.SP_DesktopIcon,
-    ),
-    "live_rates": IconSpec(
-        "mdi6.chart-line",
-        fallback=QStyle.StandardPixmap.SP_BrowserReload,
-    ),
-    "printing": IconSpec(
-        "mdi6.printer-outline",
-        fallback=QStyle.StandardPixmap.SP_FileDialogDetailedView,
-    ),
-    "data_management": IconSpec(
-        "mdi6.database-cog-outline",
-        fallback=QStyle.StandardPixmap.SP_DirHomeIcon,
-    ),
-    "security": IconSpec(
-        "mdi6.shield-lock-outline",
-        fallback=QStyle.StandardPixmap.SP_MessageBoxWarning,
-    ),
-    "import_export": IconSpec(
-        "mdi6.file-import-outline",
-        fallback=QStyle.StandardPixmap.SP_DialogOpenButton,
-    ),
-    "logging": IconSpec(
-        "mdi6.clipboard-text-outline",
-        fallback=QStyle.StandardPixmap.SP_FileDialogInfoView,
-    ),
+    "settings": IconSpec(fallback=QStyle.StandardPixmap.SP_FileDialogDetailedView),
+    "about": IconSpec(fallback=QStyle.StandardPixmap.SP_MessageBoxInformation),
+    "balance": IconSpec(fallback=QStyle.StandardPixmap.SP_DialogApplyButton),
+    "history": IconSpec(fallback=QStyle.StandardPixmap.SP_FileDialogDetailedView),
+    "return_mode": IconSpec(fallback=QStyle.StandardPixmap.SP_ArrowBack),
+    "bar_mode": IconSpec(fallback=QStyle.StandardPixmap.SP_DriveHDIcon),
+    "move_right": IconSpec(fallback=QStyle.StandardPixmap.SP_ArrowRight),
+    "move_left": IconSpec(fallback=QStyle.StandardPixmap.SP_ArrowLeft),
+    "move_all_right": IconSpec(fallback=QStyle.StandardPixmap.SP_MediaSkipForward),
+    "move_all_left": IconSpec(fallback=QStyle.StandardPixmap.SP_MediaSkipBackward),
+    "reset_layout": IconSpec(fallback=QStyle.StandardPixmap.SP_DialogResetButton),
+    "user_interface": IconSpec(fallback=QStyle.StandardPixmap.SP_DesktopIcon),
+    "live_rates": IconSpec(fallback=QStyle.StandardPixmap.SP_BrowserReload),
+    "printing": IconSpec(fallback=QStyle.StandardPixmap.SP_FileDialogDetailedView),
+    "data_management": IconSpec(fallback=QStyle.StandardPixmap.SP_DirHomeIcon),
+    "security": IconSpec(fallback=QStyle.StandardPixmap.SP_MessageBoxWarning),
+    "import_export": IconSpec(fallback=QStyle.StandardPixmap.SP_DialogOpenButton),
+    "logging": IconSpec(fallback=QStyle.StandardPixmap.SP_FileDialogInfoView),
 }
 
 
@@ -296,37 +106,71 @@ def get_icon(
     color: str | None = None,
     active_color: str | None = None,
 ) -> QIcon:
-    """Resolve a semantic icon using mdi6 with Qt/theme fallbacks."""
+    """Resolve and cache a semantic icon using Qt theme/native resources only."""
+
+    style = _resolve_style(widget)
+    if style is None:
+        return QIcon()
+
+    icon_color = color or _DEFAULT_COLOR
+    active_icon_color = active_color or icon_color
+    style_key = f"{type(style).__name__}:{style.objectName()}"
+    cache_key = (name, style_key, icon_color, active_icon_color)
+    cached = _ICON_CACHE.get(cache_key)
+    if cached is not None:
+        return QIcon(cached)
 
     spec = _ICON_SPECS.get(name)
-    mdi6_name = (
-        spec.mdi6_name if spec is not None else name if "." in name else f"mdi6.{name}"
-    )
+    source = _source_icon(style, spec)
+    icon = _colored_icon(source, icon_color, active_icon_color)
+    _ICON_CACHE[cache_key] = icon
+    return QIcon(icon)
 
-    if _qtawesome is not None:
-        try:
-            icon_color = color or _DEFAULT_COLOR
-            return cast(
-                QIcon,
-                _qtawesome.icon(
-                    mdi6_name,
-                    color=icon_color,
-                    color_active=active_color or icon_color,
-                    color_disabled=_DISABLED_COLOR,
-                ),
-            )
-        except Exception as exc:  # pragma: no cover - depends on QtAwesome state
-            LOGGER.debug("Failed to build qtawesome icon %s: %s", mdi6_name, exc)
 
+def clear_icon_cache() -> None:
+    """Clear rendered icons after an application style or palette change."""
+
+    _ICON_CACHE.clear()
+
+
+def _source_icon(style: QStyle, spec: IconSpec | None) -> QIcon:
     if spec is not None and spec.theme_name:
         themed = QIcon.fromTheme(spec.theme_name)
         if not themed.isNull():
             return themed
 
-    style = _resolve_style(widget)
-    if style is not None and spec is not None and spec.fallback is not None:
-        return style.standardIcon(spec.fallback)
-    return QIcon()
+    fallback = spec.fallback if spec is not None else QStyle.StandardPixmap.SP_FileIcon
+    icon = style.standardIcon(fallback or QStyle.StandardPixmap.SP_FileIcon)
+    if not icon.isNull():
+        return icon
+    return style.standardIcon(QStyle.StandardPixmap.SP_FileIcon)
+
+
+def _colored_icon(source: QIcon, color: str, active_color: str) -> QIcon:
+    rendered = QIcon()
+    mode_colors = (
+        (QIcon.Mode.Normal, color),
+        (QIcon.Mode.Active, active_color),
+        (QIcon.Mode.Selected, active_color),
+        (QIcon.Mode.Disabled, _DISABLED_COLOR),
+    )
+    for size in _ICON_SIZES:
+        dimensions = QSize(size, size)
+        source_pixmap = source.pixmap(dimensions)
+        if source_pixmap.isNull():
+            continue
+        for mode, mode_color in mode_colors:
+            rendered.addPixmap(_tint(source_pixmap, mode_color), mode)
+    return rendered if not rendered.isNull() else source
+
+
+def _tint(source: QPixmap, color: str) -> QPixmap:
+    result = QPixmap(source)
+    painter = QPainter(result)
+    painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+    painter.fillRect(result.rect(), QColor(color))
+    painter.end()
+    return result
 
 
 def _resolve_style(widget: QWidget | None) -> QStyle | None:

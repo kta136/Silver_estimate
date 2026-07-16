@@ -27,7 +27,6 @@ classifiers = [
 dependencies = [
     "PyQt6>=6.11,<6.12",
     "PyQt6-Qt6==6.11.1; sys_platform == 'win32'",
-    "qtawesome>=1.4.1",
     "cryptography>=42.0.0",
     "passlib[argon2]>=1.7.4",
     "argon2_cffi>=21.3.0",
@@ -175,7 +174,6 @@ exclude = [
 [[tool.mypy.overrides]]
 module = [
     "PyQt6.*",
-    "qtawesome.*",
     "keyring.*",
     "passlib.*",
 ]

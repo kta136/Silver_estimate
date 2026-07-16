@@ -278,6 +278,32 @@ def test_main_window_startup_sets_up_estimate_view(main_window_fixture, qt_app, 
     qtbot.waitUntil(lambda: db.closed is True, timeout=1000)
 
 
+def test_deferred_runtime_starts_after_lightweight_shell_paints(
+    main_window_fixture, qt_app, qtbot
+):
+    db = FakeDbManager()
+    window = MainWindow(
+        db_manager=db,
+        logger=logging.getLogger("test.mainwindow.deferred"),
+        defer_runtime=True,
+    )
+    qtbot.addWidget(window)
+    try:
+        assert window.stack.currentWidget().objectName() == "StartupShell"
+        assert not hasattr(window, "estimate_widget")
+
+        window.show()
+        qtbot.waitUntil(lambda: window._runtime_initialized, timeout=3000)
+
+        assert window.stack.currentWidget() is window.estimate_widget
+        assert window.stack.count() == 1
+        assert db.generate_calls == 1
+    finally:
+        window.close()
+        window.deleteLater()
+        qt_app.processEvents()
+
+
 def test_user_entry_updates_totals_and_view_model(main_window_fixture, qtbot):
     context = main_window_fixture
     window = context["window"]

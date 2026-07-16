@@ -164,9 +164,7 @@ class SilverBarManagementUiBuilder(HostProxy):
         filter_row.addWidget(self.date_range_combo)
 
         self.clear_filters_button = QPushButton("Clear Filters")
-        self.clear_filters_button.setIcon(
-            get_icon("mdi6.filter-remove-outline", widget=self.host)
-        )
+        self.clear_filters_button.setIcon(get_icon("clear_filters", widget=self.host))
         filter_row.addWidget(self.clear_filters_button)
         left_layout.addLayout(filter_row)
 
@@ -276,9 +274,7 @@ class SilverBarManagementUiBuilder(HostProxy):
 
         action_row = QHBoxLayout()
         self.edit_note_button = QPushButton("Edit Note")
-        self.edit_note_button.setIcon(
-            get_icon("mdi6.note-edit-outline", widget=self.host)
-        )
+        self.edit_note_button.setIcon(get_icon("edit_note", widget=self.host))
         self.edit_note_button.setObjectName("SilverBarSecondaryButton")
         self.edit_note_button.setEnabled(False)
         self.delete_list_button = QPushButton("Delete List")
@@ -286,9 +282,7 @@ class SilverBarManagementUiBuilder(HostProxy):
         self.delete_list_button.setObjectName("SilverBarDangerButton")
         self.delete_list_button.setEnabled(False)
         self.mark_issued_button = QPushButton("Mark Issued")
-        self.mark_issued_button.setIcon(
-            get_icon("mdi6.check-circle-outline", widget=self.host)
-        )
+        self.mark_issued_button.setIcon(get_icon("mark_issued", widget=self.host))
         self.mark_issued_button.setObjectName("SilverBarPrimaryButton")
         self.mark_issued_button.setEnabled(False)
         action_row.addWidget(self.edit_note_button)
@@ -302,14 +296,12 @@ class SilverBarManagementUiBuilder(HostProxy):
         self.print_list_button.setObjectName("SilverBarSecondaryButton")
         self.print_list_button.setEnabled(False)
         self.export_list_button = QPushButton("Export CSV")
-        self.export_list_button.setIcon(
-            get_icon("mdi6.file-delimited-outline", widget=self.host)
-        )
+        self.export_list_button.setIcon(get_icon("export_csv", widget=self.host))
         self.export_list_button.setObjectName("SilverBarSecondaryButton")
         self.export_list_button.setEnabled(False)
         self.generate_optimal_button = QPushButton("Generate Optimal")
         self.generate_optimal_button.setIcon(
-            get_icon("mdi6.auto-fix", widget=self.host)
+            get_icon("generate_optimal", widget=self.host)
         )
         self.generate_optimal_button.setObjectName("SilverBarPrimaryButton")
         print_row.addWidget(self.print_list_button)

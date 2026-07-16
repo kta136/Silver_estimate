@@ -33,6 +33,17 @@ def _get_pwd_context():
     return _pwd_context
 
 
+def warm_password_context() -> None:
+    """Load the verifier while the authentication dialog is idle."""
+
+    try:
+        _get_pwd_context()
+    except Exception:
+        logging.getLogger(__name__).debug(
+            "Password verifier warm-up failed", exc_info=True
+        )
+
+
 # Optional: Filter specific passlib warnings if they become noisy during development/packaging
 
 
@@ -156,6 +167,11 @@ class LoginDialog(QDialog):
         self._connect_signals()
 
         # Prevent closing via the 'X' button if desired, force use of buttons
+
+    def schedule_password_context_warmup(self) -> None:
+        """Warm Passlib on the next event-loop turn, after the dialog appears."""
+
+        QTimer.singleShot(0, warm_password_context)
 
     def _setup_ui(self):
         """Create the UI elements for the dialog."""

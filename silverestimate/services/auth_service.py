@@ -29,6 +29,12 @@ def _resolve_login_dialog():
     return LoginDialog
 
 
+def _schedule_password_context_warmup(dialog) -> None:
+    warmer = getattr(dialog, "schedule_password_context_warmup", None)
+    if callable(warmer):
+        warmer()
+
+
 @dataclass(frozen=True)
 class AuthenticationResult:
     """Outcome of the authentication flow."""
@@ -97,6 +103,7 @@ def run_authentication(
                 attempt,
             )
             login_dialog = login_dialog_cls(is_setup=False, parent=parent)
+            _schedule_password_context_warmup(login_dialog)
             result = login_dialog.exec()
 
             if result != QDialog.DialogCode.Accepted:
@@ -149,6 +156,7 @@ def run_authentication(
         time.time(),
     )
     setup_dialog = login_dialog_cls(is_setup=True, parent=parent)
+    _schedule_password_context_warmup(setup_dialog)
     result = setup_dialog.exec()
     if result == QDialog.DialogCode.Accepted:
         if logger:

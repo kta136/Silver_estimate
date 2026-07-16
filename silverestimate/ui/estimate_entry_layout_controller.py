@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import contextlib
 import os
-from typing import Optional, cast
+from typing import Optional
 
 from PyQt6 import sip
 from PyQt6.QtCore import Qt
@@ -48,6 +47,9 @@ from .modern_components import BottomStatusStrip, polish_dense_table
 
 class EstimateEntryLayoutController(HostProxy):
     """Own layout wiring, totals placement, and persisted UI preferences."""
+
+    _totals_panel_sidebar: TotalsPanel | None
+    _totals_panel_bottom: TotalsPanel | None
 
     def _setup_ui(self):
         self.host.setObjectName("EstimateEntryRoot")
@@ -118,27 +120,10 @@ class EstimateEntryLayoutController(HostProxy):
         )
         self._content_splitter.addWidget(self.item_table)
 
-        self._totals_panel_sidebar = TotalsPanel(layout_mode="sidebar")
-        self._totals_panel_sidebar.setSizePolicy(
-            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding
-        )
-        self._totals_panel_sidebar.setMinimumWidth(275)
-        self._totals_panel_sidebar.setMaximumWidth(420)
-
-        self._totals_panel_bottom = TotalsPanel(layout_mode="horizontal")
-        self._totals_panel_bottom.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum
-        )
-        self._totals_panel_bottom.setMinimumWidth(0)
-        self._totals_panel_bottom.setMaximumWidth(16777215)
-        self._totals_panel_bottom.setMaximumHeight(280)
-
-        self.totals_panel = self._totals_panel_sidebar
-        self._content_splitter.addWidget(self.totals_panel)
-
-        self._content_splitter.setStretchFactor(0, 1)
-        self._content_splitter.setStretchFactor(1, 0)
-        self._content_splitter.setSizes([1080, 300])
+        self._totals_position = self._read_totals_position_setting()
+        layout_mode = "horizontal" if self._totals_position == "bottom" else "sidebar"
+        self.totals_panel = self._create_totals_panel(layout_mode)
+        self._place_totals_panel(self._content_splitter, self._totals_position)
 
         layout.addWidget(self._content_splitter, 1)
         self.bottom_status_strip = BottomStatusStrip(self.host)
@@ -179,7 +164,7 @@ class EstimateEntryLayoutController(HostProxy):
         self.live_rate_meta_label = self.secondary_actions.live_rate_meta_label
         self.refresh_rate_button = self.secondary_actions.refresh_rate_button
 
-        self._sync_live_rate_card_placement("right")
+        self._sync_live_rate_card_placement(self._totals_position)
 
         self._bind_totals_panel_labels()
 
@@ -310,9 +295,13 @@ class EstimateEntryLayoutController(HostProxy):
             opener()
 
     def _move_live_rate_card_to_summary_top(self) -> None:
-        sidebar_panel = getattr(self, "_totals_panel_sidebar", None)
+        sidebar_panel = getattr(self, "totals_panel", None)
         live_rate_card = getattr(self.secondary_actions, "live_rate_container", None)
-        if sidebar_panel is None or live_rate_card is None:
+        if (
+            sidebar_panel is None
+            or sidebar_panel.layout_mode != "sidebar"
+            or live_rate_card is None
+        ):
             return
         live_rate_card.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
@@ -329,13 +318,7 @@ class EstimateEntryLayoutController(HostProxy):
 
     def _sync_live_rate_card_placement(self, totals_position: str) -> None:
         normalized = self._normalize_totals_position(totals_position)
-        sidebar_panel = getattr(self, "_totals_panel_sidebar", None)
-        if sidebar_panel is None:
-            return
-
         if normalized == "bottom":
-            with contextlib.suppress(AttributeError, RuntimeError, TypeError):
-                sidebar_panel.set_sidebar_top_widget(None)
             if hasattr(self.secondary_actions, "show_live_rate_in_header"):
                 self.secondary_actions.show_live_rate_in_header(show_divider=True)
             return
@@ -392,12 +375,6 @@ class EstimateEntryLayoutController(HostProxy):
         )
         self.item_table.row_deleted.connect(self._on_table_row_delete_requested)
         self.item_table.history_requested.connect(self.show_history)
-        self._totals_panel_sidebar.section_order_changed.connect(
-            self._on_totals_section_order_changed
-        )
-        self._totals_panel_bottom.section_order_changed.connect(
-            self._on_totals_section_order_changed
-        )
 
     def _bind_totals_panel_labels(self) -> None:
         self.mode_indicator_label = self.toolbar.mode_indicator_label
@@ -430,11 +407,12 @@ class EstimateEntryLayoutController(HostProxy):
         self, order, *, persist: bool = True, source_panel: TotalsPanel | None = None
     ) -> None:
         normalized = self._normalize_totals_section_order(order)
-        for panel in (self._totals_panel_sidebar, self._totals_panel_bottom):
-            if panel is None or sip.isdeleted(panel):
-                continue
-            if panel is source_panel and panel.section_order() == normalized:
-                continue
+        panel = getattr(self, "totals_panel", None)
+        if (
+            panel is not None
+            and not sip.isdeleted(panel)
+            and (panel is not source_panel or panel.section_order() != normalized)
+        ):
             panel.set_section_order(normalized)
         self._totals_section_order = list(normalized)
         self._bind_totals_panel_labels()
@@ -471,42 +449,20 @@ class EstimateEntryLayoutController(HostProxy):
         splitter_obj = getattr(self, "_content_splitter", None)
         if splitter_obj is None or sip.isdeleted(splitter_obj):
             return
-        splitter = cast(QSplitter, splitter_obj)
+        splitter = splitter_obj
 
-        sidebar_panel = self._totals_panel_sidebar
-        bottom_panel = self._totals_panel_bottom
+        desired_mode = "horizontal" if normalized == "bottom" else "sidebar"
+        current_panel = self.totals_panel
+        if current_panel.layout_mode != desired_mode:
+            section_order = current_panel.section_order()
+            if current_panel.layout_mode == "sidebar":
+                current_panel.set_sidebar_top_widget(None)
+            current_panel.setParent(None)
+            current_panel.deleteLater()
+            self.totals_panel = self._create_totals_panel(desired_mode)
+            self.totals_panel.set_section_order(section_order)
 
-        if normalized == "bottom":
-            if sidebar_panel.parent() is splitter:
-                sidebar_panel.setParent(cast(QWidget, None))
-            if bottom_panel.parent() is not splitter:
-                splitter.addWidget(bottom_panel)
-
-            splitter.setOrientation(Qt.Orientation.Vertical)
-            splitter.insertWidget(0, self.item_table)
-            splitter.insertWidget(1, bottom_panel)
-            splitter.setStretchFactor(0, 1)
-            splitter.setStretchFactor(1, 0)
-            splitter.setSizes([860, 200])
-            self.totals_panel = bottom_panel
-        else:
-            if bottom_panel.parent() is splitter:
-                bottom_panel.setParent(cast(QWidget, None))
-            if sidebar_panel.parent() is not splitter:
-                splitter.addWidget(sidebar_panel)
-
-            splitter.setOrientation(Qt.Orientation.Horizontal)
-            if normalized == "left":
-                splitter.insertWidget(0, sidebar_panel)
-                splitter.insertWidget(1, self.item_table)
-                splitter.setSizes([320, 1060])
-            else:
-                splitter.insertWidget(0, self.item_table)
-                splitter.insertWidget(1, sidebar_panel)
-                splitter.setSizes([1060, 320])
-            splitter.setStretchFactor(0, 1)
-            splitter.setStretchFactor(1, 0)
-            self.totals_panel = sidebar_panel
+        self._place_totals_panel(splitter, normalized)
 
         self._sync_live_rate_card_placement(normalized)
         self._bind_totals_panel_labels()
@@ -520,16 +476,77 @@ class EstimateEntryLayoutController(HostProxy):
                 self.logger.debug("Failed to save totals position setting: %s", exc)
 
     def _load_totals_position_setting(self) -> None:
-        default_position = "right"
+        self._apply_totals_position(self._read_totals_position_setting(), persist=False)
+
+    def _read_totals_position_setting(self) -> str:
         try:
             saved = self._settings().value(
                 "ui/estimate_totals_position",
-                defaultValue=default_position,
+                defaultValue="right",
                 type=str,
             )
         except AttributeError, RuntimeError, TypeError, ValueError:
-            saved = default_position
-        self._apply_totals_position(saved, persist=False)
+            saved = "right"
+        return self._normalize_totals_position(saved)
+
+    def _create_totals_panel(self, layout_mode: str) -> TotalsPanel:
+        panel = TotalsPanel(layout_mode=layout_mode)
+        if layout_mode == "sidebar":
+            panel.setSizePolicy(
+                QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding
+            )
+            panel.setMinimumWidth(275)
+            panel.setMaximumWidth(420)
+            self._totals_panel_sidebar = panel
+            self._totals_panel_bottom = None
+        else:
+            panel.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum
+            )
+            panel.setMinimumWidth(0)
+            panel.setMaximumWidth(16777215)
+            panel.setMaximumHeight(280)
+            self._totals_panel_sidebar = None
+            self._totals_panel_bottom = panel
+
+        section_order = getattr(self, "_totals_section_order", None)
+        if section_order:
+            panel.set_section_order(section_order)
+        breakdown_size = getattr(self, "_breakdown_font_size", None)
+        if breakdown_size is not None:
+            panel.set_breakdown_font_size(breakdown_size)
+        final_size = getattr(self, "_final_calc_font_size", None)
+        if final_size is not None:
+            panel.set_final_calc_font_size(final_size)
+        panel.section_order_changed.connect(self._on_totals_section_order_changed)
+        return panel
+
+    def _place_totals_panel(
+        self, splitter: QSplitter, normalized_position: str
+    ) -> None:
+        panel = self.totals_panel
+        if normalized_position == "bottom":
+            splitter.setOrientation(Qt.Orientation.Vertical)
+            splitter.insertWidget(0, self.item_table)
+            splitter.insertWidget(1, panel)
+            splitter.setStretchFactor(0, 1)
+            splitter.setStretchFactor(1, 0)
+            splitter.setSizes([860, 200])
+            return
+
+        splitter.setOrientation(Qt.Orientation.Horizontal)
+        if normalized_position == "left":
+            splitter.insertWidget(0, panel)
+            splitter.insertWidget(1, self.item_table)
+            splitter.setStretchFactor(0, 0)
+            splitter.setStretchFactor(1, 1)
+            splitter.setSizes([320, 1060])
+        else:
+            splitter.insertWidget(0, self.item_table)
+            splitter.insertWidget(1, panel)
+            splitter.setStretchFactor(0, 1)
+            splitter.setStretchFactor(1, 0)
+            splitter.setSizes([1060, 320])
 
     def _on_totals_position_requested(self, position: str) -> None:
         self._apply_totals_position(position, persist=True)
@@ -843,6 +860,10 @@ class EstimateEntryLayoutController(HostProxy):
             font = self.item_table.font()
             font.setPointSize(size_i)
             self.item_table.setFont(font)
+            model = self.item_table.model()
+            invalidate_style_cache = getattr(model, "invalidate_style_cache", None)
+            if callable(invalidate_style_cache):
+                invalidate_style_cache()
             row_height = max(24, min(32, size_i + 17))
             self.item_table.verticalHeader().setDefaultSectionSize(row_height)
             self.item_table.verticalHeader().setMinimumSectionSize(
@@ -866,12 +887,8 @@ class EstimateEntryLayoutController(HostProxy):
             return False
         size_i = max(7, min(16, size_i))
         try:
-            for panel in (
-                getattr(self, "_totals_panel_sidebar", None),
-                getattr(self, "_totals_panel_bottom", None),
-            ):
-                if panel is not None:
-                    panel.set_breakdown_font_size(size_i)
+            self._breakdown_font_size = size_i
+            self.totals_panel.set_breakdown_font_size(size_i)
             return True
         except Exception as exc:
             self.logger.warning("Failed to apply breakdown font size: %s", exc)
@@ -885,12 +902,8 @@ class EstimateEntryLayoutController(HostProxy):
             return False
         size_i = max(8, min(20, size_i))
         try:
-            for panel in (
-                getattr(self, "_totals_panel_sidebar", None),
-                getattr(self, "_totals_panel_bottom", None),
-            ):
-                if panel is not None:
-                    panel.set_final_calc_font_size(size_i)
+            self._final_calc_font_size = size_i
+            self.totals_panel.set_final_calc_font_size(size_i)
             return True
         except Exception as exc:
             self.logger.warning("Failed to apply final calculation font size: %s", exc)

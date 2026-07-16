@@ -7,7 +7,7 @@ from typing import Any, Optional
 from uuid import uuid4
 
 from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt, pyqtSignal
-from PyQt6.QtGui import QBrush, QColor
+from PyQt6.QtGui import QBrush, QColor, QFont
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.ui.estimate_entry_logic.column_specs import (
@@ -51,6 +51,18 @@ class EstimateTableModel(QAbstractTableModel):
     # Compatibility shim for older tests and callers that read the class attr.
     HEADERS = list(table_headers())
     _NUMERIC_COLUMNS = NUMERIC_COLUMNS
+    _TYPE_BACKGROUND_BRUSHES = {
+        EstimateLineCategory.RETURN: QBrush(QColor("#dbeafe")),
+        EstimateLineCategory.SILVER_BAR: QBrush(QColor("#fff7ed")),
+        EstimateLineCategory.REGULAR: QBrush(QColor("#f8fafc")),
+    }
+    _TYPE_FOREGROUND_BRUSHES = {
+        EstimateLineCategory.RETURN: QBrush(QColor("#1d4ed8")),
+        EstimateLineCategory.SILVER_BAR: QBrush(QColor("#b45309")),
+        EstimateLineCategory.REGULAR: QBrush(QColor("#334155")),
+    }
+    _CALCULATED_BACKGROUND_BRUSH = QBrush(QColor("#f1f5f9"))
+    _CALCULATED_FOREGROUND_BRUSH = QBrush(QColor("#0f172a"))
 
     def __init__(self, parent=None):
         """Initialize the table model.
@@ -60,13 +72,28 @@ class EstimateTableModel(QAbstractTableModel):
         """
         super().__init__(parent)
         self._rows: list[EstimateEntryRowState] = []
+        self._numeric_font_cache: QFont | None = None
+        self._numeric_font_cache_key: str | None = None
 
-    def _numeric_display_font(self):
+    def _numeric_display_font(self) -> QFont:
         parent = self.parent()
         base_font = (
             parent.font() if parent is not None and hasattr(parent, "font") else None
         )
-        return numeric_table_font(base_font)
+        cache_key = base_font.toString() if base_font is not None else ""
+        if (
+            self._numeric_font_cache is None
+            or cache_key != self._numeric_font_cache_key
+        ):
+            self._numeric_font_cache = numeric_table_font(base_font)
+            self._numeric_font_cache_key = cache_key
+        return self._numeric_font_cache
+
+    def invalidate_style_cache(self) -> None:
+        """Invalidate role values derived from the parent view's font."""
+
+        self._numeric_font_cache = None
+        self._numeric_font_cache_key = None
 
     @staticmethod
     def _raw_cell_value(row_data: EstimateEntryRowState, col: int) -> Any:
@@ -144,34 +171,30 @@ class EstimateTableModel(QAbstractTableModel):
             return self._numeric_display_font()
 
         if role == Qt.ItemDataRole.BackgroundRole and col == COL_TYPE:
-            category = row_data.category
-            if category is EstimateLineCategory.RETURN:
-                return QBrush(QColor("#dbeafe"))
-            if category is EstimateLineCategory.SILVER_BAR:
-                return QBrush(QColor("#fff7ed"))
-            return QBrush(QColor("#f8fafc"))
+            return self._TYPE_BACKGROUND_BRUSHES.get(
+                row_data.category,
+                self._TYPE_BACKGROUND_BRUSHES[EstimateLineCategory.REGULAR],
+            )
 
         if role == Qt.ItemDataRole.ForegroundRole and col == COL_TYPE:
-            category = row_data.category
-            if category is EstimateLineCategory.RETURN:
-                return QBrush(QColor("#1d4ed8"))
-            if category is EstimateLineCategory.SILVER_BAR:
-                return QBrush(QColor("#b45309"))
-            return QBrush(QColor("#334155"))
+            return self._TYPE_FOREGROUND_BRUSHES.get(
+                row_data.category,
+                self._TYPE_FOREGROUND_BRUSHES[EstimateLineCategory.REGULAR],
+            )
 
         if role == Qt.ItemDataRole.BackgroundRole and col in (
             COL_NET_WT,
             COL_WAGE_AMT,
             COL_FINE_WT,
         ):
-            return QBrush(QColor("#f1f5f9"))
+            return self._CALCULATED_BACKGROUND_BRUSH
 
         if role == Qt.ItemDataRole.ForegroundRole and col in (
             COL_NET_WT,
             COL_WAGE_AMT,
             COL_FINE_WT,
         ):
-            return QBrush(QColor("#0f172a"))
+            return self._CALCULATED_FOREGROUND_BRUSH
 
         if role == Qt.ItemDataRole.TextAlignmentRole:
             if col in self._NUMERIC_COLUMNS:

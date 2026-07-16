@@ -477,25 +477,25 @@ def test_widget_save_and_reload(qt_app, tmp_path, settings_stub, monkeypatch):
     from PyQt6.QtWidgets import QMessageBox as _QtMessageBox
 
     class _MsgBoxStub:
-        Yes = _QtMessageBox.Yes
-        No = _QtMessageBox.No
-        Ok = _QtMessageBox.Ok
+        Yes = _QtMessageBox.StandardButton.Yes
+        No = _QtMessageBox.StandardButton.No
+        Ok = _QtMessageBox.StandardButton.Ok
 
         @staticmethod
         def warning(*args, **kwargs):
-            return _QtMessageBox.Ok
+            return _MsgBoxStub.Ok
 
         @staticmethod
         def information(*args, **kwargs):
-            return _QtMessageBox.Ok
+            return _MsgBoxStub.Ok
 
         @staticmethod
         def critical(*args, **kwargs):
-            return _QtMessageBox.Ok
+            return _MsgBoxStub.Ok
 
         @staticmethod
         def question(*args, **kwargs):
-            return _QtMessageBox.Yes
+            return _MsgBoxStub.Yes
 
     # Patch the correct QMessageBox
     monkeypatch.setattr(
@@ -739,10 +739,14 @@ def test_totals_position_switching_and_persistence(qt_app, fake_db, settings_stu
     try:
         splitter = widget._content_splitter
         assert splitter.orientation() == Qt.Orientation.Horizontal
+        original_sidebar = widget.totals_panel
+        assert widget._totals_panel_sidebar is original_sidebar
+        assert widget._totals_panel_bottom is None
 
         widget._apply_totals_position("left")
         assert splitter.orientation() == Qt.Orientation.Horizontal
         assert splitter.widget(0) is widget.totals_panel
+        assert widget.totals_panel is original_sidebar
         assert (
             widget._settings().value("ui/estimate_totals_position", type=str) == "left"
         )
@@ -750,6 +754,9 @@ def test_totals_position_switching_and_persistence(qt_app, fake_db, settings_stu
         widget._on_totals_position_requested("bottom")
         assert splitter.orientation() == Qt.Orientation.Vertical
         assert splitter.widget(1) is widget.totals_panel
+        assert widget.totals_panel is not original_sidebar
+        assert widget._totals_panel_sidebar is None
+        assert widget._totals_panel_bottom is widget.totals_panel
         assert (
             widget._settings().value("ui/estimate_totals_position", type=str)
             == "bottom"
@@ -758,6 +765,8 @@ def test_totals_position_switching_and_persistence(qt_app, fake_db, settings_stu
         widget._on_totals_position_requested("right")
         assert splitter.orientation() == Qt.Orientation.Horizontal
         assert splitter.widget(1) is widget.totals_panel
+        assert widget._totals_panel_sidebar is widget.totals_panel
+        assert widget._totals_panel_bottom is None
         assert (
             widget._settings().value("ui/estimate_totals_position", type=str) == "right"
         )
@@ -772,7 +781,7 @@ def test_live_rate_card_moves_between_sidebar_and_header(qt_app, fake_db):
         widget.show()
         qt_app.processEvents()
 
-        sidebar_top_host = widget._totals_panel_sidebar._sidebar_top_host
+        sidebar_top_host = widget.totals_panel._sidebar_top_host
         live_rate_card = widget.secondary_actions.live_rate_container
 
         assert live_rate_card.parent() is sidebar_top_host
@@ -814,6 +823,7 @@ def test_live_rate_card_moves_between_sidebar_and_header(qt_app, fake_db):
         widget._apply_totals_position("right")
         qt_app.processEvents()
 
+        sidebar_top_host = widget.totals_panel._sidebar_top_host
         assert live_rate_card.parent() is sidebar_top_host
         assert widget.secondary_actions.live_rate_divider.isHidden()
         assert (
@@ -881,16 +891,17 @@ def test_totals_section_order_sync_and_persistence(qt_app, fake_db, settings_stu
         expected_order = TotalsPanel.normalize_section_order(new_order)
         widget._apply_totals_section_order(new_order, persist=True)
 
-        assert widget._totals_panel_sidebar.section_order() == expected_order
-        assert widget._totals_panel_bottom.section_order() == expected_order
+        assert widget.totals_panel.section_order() == expected_order
         assert widget._settings().value(
             "ui/estimate_totals_section_order", type=str
         ) == ",".join(expected_order)
 
+        widget._apply_totals_position("bottom")
+        assert widget.totals_panel.section_order() == expected_order
+
         widget_loaded = _make_widget(fake_db)
         try:
-            assert widget_loaded._totals_panel_sidebar.section_order() == expected_order
-            assert widget_loaded._totals_panel_bottom.section_order() == expected_order
+            assert widget_loaded.totals_panel.section_order() == expected_order
         finally:
             widget_loaded.deleteLater()
     finally:

@@ -12,7 +12,9 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QApplication,
+    QLabel,
     QMainWindow,
+    QMessageBox,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -55,6 +57,7 @@ class MainWindow(QMainWindow):
         *,
         settings_service: Optional["SettingsService"] = None,
         runtime_builder: MainWindowRuntimeBuilder = build_main_window_runtime,
+        defer_runtime: bool = False,
     ):
         super().__init__()
 
@@ -77,13 +80,37 @@ class MainWindow(QMainWindow):
         self.db: MainWindowDatabase = db_manager
         self.settings_service = settings_service
         self._runtime_builder = runtime_builder
-        self._taskbar_icon_handle = None
+        self._defer_runtime = bool(defer_runtime)
+        self._runtime_initialized = False
+        self._runtime_initialization_scheduled = False
+        self._runtime_initialization_failed = False
+        self._shell_shown_logged = False
+        self._closing = False
+        self._taskbar_icon_handle: int | None = None
         self._pending_status_message: Optional[tuple[str, int, str]] = None
         self.item_master_widget = None
         self.silver_bar_widget = None
         self.live_rate_controller: Optional["LiveRateController"] = None
 
         self._configure_window_shell()
+        self._apply_initial_window_state()
+
+        shell_ready_ms = (time.perf_counter() - self._startup_started_at) * 1000.0
+        self.logger.info(
+            '[telemetry] {"metric":"startup.main_window_shell_ready_ms",'
+            '"duration_ms":%.3f}',
+            shell_ready_ms,
+        )
+        if not self._defer_runtime:
+            self._initialize_runtime()
+
+    def _initialize_runtime(self) -> None:
+        if (
+            self._runtime_initialized
+            or self._runtime_initialization_failed
+            or self._closing
+        ):
+            return
 
         try:
             runtime = self._runtime_builder(
@@ -97,18 +124,35 @@ class MainWindow(QMainWindow):
             self._initialize_estimate_widget()
             self._initialize_live_rate()
             self._deliver_pending_status_message()
-            self._apply_initial_window_state()
+            self._remove_loading_page()
+            self._runtime_initialized = True
+            ready_ms = (time.perf_counter() - self._startup_started_at) * 1000.0
             self.logger.debug(
                 "[perf] startup.main_window_ready_ms=%.2f t_unix=%.6f",
-                (time.perf_counter() - self._startup_started_at) * 1000.0,
+                ready_ms,
                 time.time(),
+            )
+            self.logger.info(
+                '[telemetry] {"metric":"startup.main_window_ready_ms",'
+                '"duration_ms":%.3f}',
+                ready_ms,
             )
             QTimer.singleShot(0, self._log_first_idle_tick)
         except Exception as exc:
+            self._runtime_initialization_failed = True
             self.logger.critical("Failed to initialize widgets: %s", exc, exc_info=True)
-            raise StartupError(
-                f"Failed to initialize application widgets: {exc}"
-            ) from exc
+            message = f"Failed to initialize application widgets: {exc}"
+            if not self._defer_runtime:
+                from silverestimate.infrastructure.application import StartupError
+
+                raise StartupError(message) from exc
+            self._loading_label.setText(
+                "The application workspace could not be initialized."
+            )
+            QMessageBox.critical(self, "Initialization Error", message)
+            app = QApplication.instance()
+            if app is not None:
+                QTimer.singleShot(0, app.quit)
 
     def _configure_window_shell(self) -> None:
         from silverestimate.infrastructure.app_constants import APP_TITLE
@@ -151,6 +195,16 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget(self.central_widget)
         self._root_layout.addWidget(self.stack)
 
+        self._loading_page: QWidget | None = QWidget(self.stack)
+        self._loading_page.setObjectName("StartupShell")
+        loading_layout = QVBoxLayout(self._loading_page)
+        self._loading_label = QLabel("Preparing your workspace…", self._loading_page)
+        self._loading_label.setObjectName("StartupShellMessage")
+        self._loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        loading_layout.addWidget(self._loading_label)
+        self.stack.addWidget(self._loading_page)
+        self.stack.setCurrentWidget(self._loading_page)
+
         self._geometry_restored = False
         try:
             self._geometry_restored = self.settings_service.restore_geometry(self)
@@ -158,6 +212,38 @@ class MainWindow(QMainWindow):
             self.logger.debug("Failed to restore window geometry: %s", exc)
         if not self._geometry_restored:
             self.resize(1280, 800)
+
+    def _remove_loading_page(self) -> None:
+        loading_page = getattr(self, "_loading_page", None)
+        if loading_page is None:
+            return
+        self.stack.removeWidget(loading_page)
+        loading_page.deleteLater()
+        self._loading_page = None
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self._shell_shown_logged:
+            return
+        self._shell_shown_logged = True
+        shown_ms = (time.perf_counter() - self._startup_started_at) * 1000.0
+        self.logger.info(
+            '[telemetry] {"metric":"startup.main_window_shell_shown_ms",'
+            '"duration_ms":%.3f}',
+            shown_ms,
+        )
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        if (
+            self._defer_runtime
+            and not self._runtime_initialized
+            and not self._runtime_initialization_scheduled
+            and not self._runtime_initialization_failed
+            and not self._closing
+        ):
+            self._runtime_initialization_scheduled = True
+            QTimer.singleShot(0, self._initialize_runtime)
 
     def _attach_runtime(self, runtime: MainWindowRuntime) -> None:
         self.settings_service = runtime.settings_service
@@ -235,10 +321,16 @@ class MainWindow(QMainWindow):
 
     def _log_first_idle_tick(self) -> None:
         try:
+            first_idle_ms = (time.perf_counter() - self._startup_started_at) * 1000.0
             self.logger.debug(
                 "[perf] startup.main_window_first_idle_ms=%.2f t_unix=%.6f",
-                (time.perf_counter() - self._startup_started_at) * 1000.0,
+                first_idle_ms,
                 time.time(),
+            )
+            self.logger.info(
+                '[telemetry] {"metric":"startup.main_window_first_idle_ms",'
+                '"duration_ms":%.3f}',
+                first_idle_ms,
             )
         except Exception as exc:
             self.logger.debug("Failed to record first idle tick metric: %s", exc)
@@ -324,6 +416,7 @@ class MainWindow(QMainWindow):
             except Exception as exc:
                 self.logger.debug("Estimate exit confirmation failed: %s", exc)
 
+        self._closing = True
         self.logger.info("Application closing")
         try:
             settings_service = self.settings_service

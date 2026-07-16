@@ -12,6 +12,10 @@ from typing import Any, Optional
 from PyQt6.QtWidgets import QMessageBox, QWidget
 
 from silverestimate.infrastructure.app_constants import DB_PATH
+from silverestimate.infrastructure.data_migration import (
+    LegacyDatabaseMigrationError,
+    migrate_legacy_database,
+)
 from silverestimate.services.auth_service import (
     AuthenticationResult,
     perform_data_wipe,
@@ -68,6 +72,16 @@ class StartupController:
             "[perf] startup.auth_flow_start t_unix=%.6f",
             time.time(),
         )
+        try:
+            migrate_legacy_database(DB_PATH, logger=self._logger)
+        except LegacyDatabaseMigrationError as exc:
+            self._logger.critical("Legacy database migration failed: %s", exc)
+            QMessageBox.critical(
+                self._parent,
+                "Database Migration Error",
+                f"Unable to move the existing database to its new location: {exc}",
+            )
+            return StartupResult(status=StartupStatus.FAILED)
         try:
             auth_result = run_authentication(self._logger, parent=self._parent)
         except Exception as exc:  # pragma: no cover - defensive UX handling

@@ -21,8 +21,11 @@ No network request is included in the DDA parse timings.
 | `encrypted_flush` | 5 | 150 ms |
 | `dda_current.parse` | 20 | 20 ms |
 | `dda_sse.parse_apply` | 20 | 20 ms |
+| Frozen executable startup (`--artifact-smoke`) | 5 | 3,000 ms |
 
 `scripts/check_perf_budgets.py` fails when any configured metric is absent, has too few samples, contains malformed/non-finite/negative telemetry, or exceeds its p95 budget.
+
+`scripts/check_startup_budgets.py` measures the complete one-file executable process externally, including bootloader extraction and imports, and fails the Windows release build when its p95 exceeds the configured budget.
 
 ## Local run
 
@@ -30,6 +33,7 @@ No network request is included in the DDA parse timings.
 uv sync --frozen --extra dev
 uv run python scripts/run_performance_gate.py --output perf-metrics.log
 uv run python scripts/check_perf_budgets.py --log-file perf-metrics.log
+uv run python scripts/check_startup_budgets.py --artifact dist\SilverEstimate.exe --samples 5 --p95-budget-ms 3000
 ```
 
 The harness uses the production history query helpers, silver-bar snapshot repository, totals calculator, estimate-entry view model, encrypted-envelope writer, and DDA HTTP/SSE parsers. It is a repeatable regression gate, not a substitute for profiling interactive rendering on representative customer hardware.

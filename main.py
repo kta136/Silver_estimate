@@ -2,7 +2,11 @@
 import faulthandler
 import os
 import sys
+import time
 from contextlib import suppress
+
+PROCESS_START_PERF = time.perf_counter()
+PROCESS_START_UNIX = time.time()
 
 # Proactively hide the console as early as possible on Windows when not explicitly requested.
 if os.name == "nt" and os.environ.get("SILVER_SHOW_CONSOLE") != "1":
@@ -47,7 +51,11 @@ def main() -> int:
 
     from silverestimate.infrastructure.application import ApplicationBuilder
 
-    builder = ApplicationBuilder(main_window_factory=create_main_window)
+    builder = ApplicationBuilder(
+        main_window_factory=create_main_window,
+        startup_t0_perf=PROCESS_START_PERF,
+        startup_t0_unix=PROCESS_START_UNIX,
+    )
     return builder.run()
 
 

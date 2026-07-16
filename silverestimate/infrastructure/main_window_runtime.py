@@ -75,6 +75,7 @@ def create_main_window(*, db_manager: Any, logger: Optional[logging.Logger] = No
         db_manager=db_manager,
         logger=logger,
         runtime_builder=build_main_window_runtime,
+        defer_runtime=True,
     )
 
 

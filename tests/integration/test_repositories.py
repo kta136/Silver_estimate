@@ -87,6 +87,18 @@ def test_items_repository_roundtrip(fake_db):
     assert fake_db._flush_requested
 
 
+def test_current_schema_setup_uses_read_only_fast_path(fake_db):
+    statements = []
+    fake_db.conn.set_trace_callback(statements.append)
+
+    migrations.run_schema_setup(fake_db)
+
+    normalized = [statement.strip().upper() for statement in statements]
+    assert not any(statement.startswith("BEGIN IMMEDIATE") for statement in normalized)
+    assert not any("CREATE INDEX" in statement for statement in normalized)
+    assert not any("FOREIGN_KEY_CHECK" in statement for statement in normalized)
+
+
 def test_item_catalog_keyset_pages_do_not_duplicate_rows(fake_db):
     repo = ItemsRepository(fake_db)
     result = repo.upsert_item_catalog(

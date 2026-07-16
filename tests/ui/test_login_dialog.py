@@ -1,6 +1,7 @@
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLineEdit
 
+from silverestimate.ui import login_dialog as login_dialog_module
 from silverestimate.ui.login_dialog import LoginDialog
 
 
@@ -19,6 +20,19 @@ def test_login_dialog_separates_reset_action_from_primary_actions(qtbot):
         assert dialog.reset_button.objectName() == "LoginDangerButton"
     finally:
         dialog.deleteLater()
+
+
+def test_login_dialog_warms_password_context_on_idle(qtbot, monkeypatch):
+    dialog = LoginDialog(is_setup=False)
+    qtbot.addWidget(dialog)
+    calls = []
+    monkeypatch.setattr(
+        login_dialog_module, "_get_pwd_context", lambda: calls.append("warm")
+    )
+
+    dialog.schedule_password_context_warmup()
+
+    qtbot.waitUntil(lambda: calls == ["warm"])
 
 
 def test_setup_dialog_omits_reset_action_and_keeps_secondary_fields(qtbot):

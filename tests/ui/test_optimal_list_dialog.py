@@ -1,3 +1,5 @@
+from PyQt6.QtWidgets import QDialog
+
 from silverestimate.ui.silver_bar_management import OptimalListDialog
 
 
@@ -12,7 +14,7 @@ def test_optimal_list_dialog_accepts_valid_inputs(qtbot):
 
         dialog.accept()
 
-        assert dialog.result() == dialog.Accepted
+        assert dialog.result() == QDialog.DialogCode.Accepted
         assert dialog.min_target == 90.0
         assert dialog.max_target == 110.0
         assert dialog.list_name == "Target Batch"

@@ -5,6 +5,22 @@ All notable changes to the Silver Estimation App will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.02] - 2026-07-16
+
+### Added
+- Added automatic, verified migration from legacy working-directory database locations to the canonical database beneath the executable directory.
+- Added complete one-time QSettings migration from the legacy organization into the canonical settings store, preserving newer conflicting values.
+- Added startup performance telemetry and budget checks, plus focused database-path, settings-migration, print-rendering, and runtime regression tests.
+
+### Changed
+- Bumped the application/package version to `3.02` and refreshed Windows build and validation metadata.
+- Refined estimate-entry layout, totals, table-state handling, main-window interactions, login behavior, print rendering, and silver-bar management controls.
+- Replaced icon-font names with explicit semantic Qt-native icon mappings and deterministic theme-aware rendering.
+
+### Removed
+- Removed the QtAwesome dependency, PyInstaller hook, bundled resources, hidden imports, compatibility names, and local environment packages.
+- Removed relative runtime database selection and the QSettings legacy-store fallback after successful migration.
+
 ## [3.01] - 2026-07-15
 
 ### Added

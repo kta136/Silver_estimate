@@ -1,11 +1,11 @@
-# Silver Estimation App - v3.01
+# Silver Estimation App - v3.02
 
 A desktop application built with PyQt6 and an encrypted SQLite database for managing silver sales estimates - item-wise entries, silver bar inventory, returns, and print-ready outputs.
 
 [![Python](https://img.shields.io/badge/Python-3.14+-blue.svg)](https://www.python.org/)
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.11-green.svg)](https://www.riverbankcomputing.com/software/pyqt/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](#license)
-[![Source Version](https://img.shields.io/badge/source-v3.01-orange.svg)](CHANGELOG.md#301---2026-07-15)
+[![Source Version](https://img.shields.io/badge/source-v3.02-orange.svg)](CHANGELOG.md#302---2026-07-16)
 [![Latest Release](https://img.shields.io/github/v/release/kta136/Silver_estimate?label=stable%20release)](https://github.com/kta136/Silver_estimate/releases/latest)
 [![PR Validation](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml)
 [![Main Validation](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml)
@@ -22,7 +22,7 @@ A desktop application built with PyQt6 and an encrypted SQLite database for mana
 - [Download latest stable release](https://github.com/kta136/Silver_estimate/releases/latest)
 - [Documentation index](DOCS/README.md)
 - [Changelog](CHANGELOG.md)
-- [v3.01 changelog](CHANGELOG.md#301---2026-07-15)
+- [v3.02 changelog](CHANGELOG.md#302---2026-07-16)
 - [Deployment guide](DOCS/deployment-guide.md)
 
 > The source tree can be ahead of the latest packaged release. Use the release
@@ -152,7 +152,7 @@ python main.py
 
 First run notes:
 - You will be prompted to create a password.
-- The password encrypts the local database file at `database/estimation.db`.
+- The password encrypts the local database file at `<EXE folder>/database/estimation.db` (or the repository root during source runs).
 - Keep this password safe - encrypted data cannot be recovered without it.
 - Hashed credentials are stored in the system keyring; ensure your OS user account can access the default credential vault.
 
@@ -160,7 +160,7 @@ First run notes:
 
 - Encryption: `SILVDB01`, Argon2id, AES-256-GCM, authenticated metadata/chunk order, and streamed 1 MiB chunks
 - Passwords: Argon2 hashing (passlib) with hashes persisted in the OS keyring (Python `keyring`)
-- Files: Encrypted DB at `database/estimation.db` (ignored in Git)
+- Files: Encrypted DB at `<EXE folder>/database/estimation.db` (ignored in Git)
 - Logs: Written to `logs/` (ignored); avoid logging sensitive data
 - Temporary plaintext overwrite/removal is best-effort only; SSD wear levelling and copy-on-write filesystems can retain physical copies.
 
@@ -229,7 +229,7 @@ uv run pre-commit run --all-files
 - Prereqs: Python 3.14+, PowerShell
 - Fast iteration: `uv run nox -s build`
 - Clean rebuild: `python -m PyInstaller --clean --noconfirm SilverEstimate.spec` or `uv run nox -s build_clean`
-- Output: `dist/SilverEstimate.exe`, `dist/SilverEstimate-v3.01.exe`, and `dist/SilverEstimate-v3.01-win64.zip` on Windows
+- Output: `dist/SilverEstimate.exe`, `dist/SilverEstimate-v3.02.exe`, and `dist/SilverEstimate-v3.02-win64.zip` on Windows
 - Release/CI builds use the clean spec-based path; local `nox -s build` reuses PyInstaller caches for faster iteration
 - Packaged releases are Windows-only; macOS/Linux are untested development environments.
 
@@ -282,6 +282,12 @@ Copyright 2023-2026 Silver Estimation App
 ---
 
 ## Version History (highlights)
+
+### v3.02 (2026-07-16)
+- Uses the encrypted database under the executable directory through an absolute, working-directory-independent path
+- Moves verified legacy database files and all legacy QSettings values into their canonical locations automatically
+- Replaced QtAwesome with semantic Qt-native icons and removed its packaging/dependency residue
+- Added startup performance budgets and refined estimate, totals, login, print, and silver-bar interactions
 
 ### v3.01 (2026-07-15)
 - Delivered the full database, worker, encryption, DDA live-rate, architecture, performance, and Windows CI upgrade

@@ -173,6 +173,12 @@ class TotalsPanel(QWidget):
         self._sidebar_size_sync_timer.timeout.connect(self._sync_sidebar_item_sizes)
         self._setup_ui()
 
+    @property
+    def layout_mode(self) -> str:
+        """Return the immutable layout mode used to build this panel."""
+
+        return self._layout_mode
+
     def _normalize_section_order(self, order) -> list[str]:
         return self.normalize_section_order(order)
 

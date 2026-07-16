@@ -2,11 +2,6 @@
 
 import os
 
-from PyInstaller.utils.hooks import collect_data_files
-
-qtawesome_datas = sorted(collect_data_files("qtawesome"))
-
-
 def _normalized_path(path):
     return path.replace("\\", "/")
 
@@ -102,21 +97,17 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=qtawesome_datas,
+    datas=[],
     hiddenimports=[
         "passlib.handlers.argon2",
         "keyring.backends.Windows",
         "keyring.backends.fail",
         "keyring.backends.null",
-        "qtawesome",
-        "qtawesome.iconic_font",
     ],
-    hookspath=["pyinstaller_hooks"],
+    hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        "qtawesome.icon_browser",
-        "qtpy.tests",
     ],
     noarchive=False,
     optimize=0,

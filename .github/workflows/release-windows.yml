@@ -62,12 +62,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "signtool failed with exit code $LASTEXITCODE" }
           Remove-Item -LiteralPath $certificate -Force
 
-      - name: Verify frozen artifact starts
-        shell: pwsh
-        run: |
-          $env:SILVER_SHOW_CONSOLE = "1"
-          & dist\SilverEstimate.exe --artifact-smoke
-          if ($LASTEXITCODE -ne 0) { throw "Frozen artifact startup failed" }
+      - name: Verify frozen artifact startup budget
+        run: >-
+          uv run python scripts/check_startup_budgets.py
+          --artifact dist\SilverEstimate.exe
+          --samples 5
+          --p95-budget-ms 3000
 
       - name: Package artifact and generate SBOM/checksums
         shell: pwsh

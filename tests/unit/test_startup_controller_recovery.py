@@ -5,6 +5,7 @@ from silverestimate.controllers.startup_controller import (
     StartupController,
     StartupStatus,
 )
+from silverestimate.infrastructure.data_migration import LegacyDatabaseMigrationError
 from silverestimate.services.auth_service import AuthenticationResult
 
 
@@ -131,6 +132,56 @@ def test_authenticate_cancelled_skips_database_initialization(monkeypatch):
 
     assert result.status == StartupStatus.CANCELLED
     assert calls["db_init"] == 0
+
+
+def test_database_path_migration_runs_before_authentication(monkeypatch, tmp_path):
+    calls: list[str] = []
+    db_path = tmp_path / "exe" / "database" / "estimation.db"
+
+    def _migrate(path, *, logger=None):
+        del logger
+        assert path == str(db_path)
+        calls.append("migration")
+        return db_path
+
+    def _authenticate(*_args, **_kwargs):
+        calls.append("authentication")
+        return None
+
+    monkeypatch.setattr(startup_module, "DB_PATH", str(db_path))
+    monkeypatch.setattr(startup_module, "migrate_legacy_database", _migrate)
+    monkeypatch.setattr(startup_module, "run_authentication", _authenticate)
+
+    result = StartupController().authenticate_and_prepare()
+
+    assert result.status == StartupStatus.CANCELLED
+    assert calls == ["migration", "authentication"]
+
+
+def test_database_migration_failure_stops_before_authentication(monkeypatch):
+    calls = {"authentication": 0, "critical": None}
+
+    class _MessageBox:
+        @staticmethod
+        def critical(parent, title, message):
+            calls["critical"] = (parent, title, message)
+
+    def _fail_migration(*_args, **_kwargs):
+        raise LegacyDatabaseMigrationError("copy failed")
+
+    def _authenticate(*_args, **_kwargs):
+        calls["authentication"] += 1
+        return None
+
+    monkeypatch.setattr(startup_module, "QMessageBox", _MessageBox)
+    monkeypatch.setattr(startup_module, "migrate_legacy_database", _fail_migration)
+    monkeypatch.setattr(startup_module, "run_authentication", _authenticate)
+
+    result = StartupController().authenticate_and_prepare()
+
+    assert result.status == StartupStatus.FAILED
+    assert calls["authentication"] == 0
+    assert calls["critical"][1] == "Database Migration Error"
 
 
 def test_authenticate_wipe_skips_database_initialization(monkeypatch):

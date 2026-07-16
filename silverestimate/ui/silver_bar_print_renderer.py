@@ -7,6 +7,15 @@ import html as html_lib
 from PyQt6.QtCore import QDate
 
 
+def _row_value(row, key, default):
+    """Read a mapping-style row without relying on membership semantics."""
+    try:
+        value = row[key]
+    except (KeyError, IndexError, TypeError):
+        return default
+    return default if value is None else value
+
+
 class SilverBarPrintRenderer:
     """Render silver bar reports into HTML tables for preview and export."""
 
@@ -36,42 +45,13 @@ class SilverBarPrintRenderer:
         bar_count = 0
         if bars:
             for bar in bars:
-                bw = (
-                    bar["weight"]
-                    if "weight" in bar and bar["weight"] is not None
-                    else 0.0
-                )
-                bfw = (
-                    bar["fine_weight"]
-                    if "fine_weight" in bar and bar["fine_weight"] is not None
-                    else 0.0
-                )
-                bp = (
-                    bar["purity"]
-                    if "purity" in bar and bar["purity"] is not None
-                    else 0.0
-                )
-                bid = (
-                    bar["bar_id"]
-                    if "bar_id" in bar and bar["bar_id"] is not None
-                    else "N/A"
-                )
-                evch = (
-                    bar["estimate_voucher_no"]
-                    if "estimate_voucher_no" in bar
-                    and bar["estimate_voucher_no"] is not None
-                    else "N/A"
-                )
-                da = (
-                    bar["date_added"]
-                    if "date_added" in bar and bar["date_added"] is not None
-                    else ""
-                )
-                st = (
-                    bar["status"]
-                    if "status" in bar and bar["status"] is not None
-                    else ""
-                )
+                bw = _row_value(bar, "weight", 0.0)
+                bfw = _row_value(bar, "fine_weight", 0.0)
+                bp = _row_value(bar, "purity", 0.0)
+                bid = _row_value(bar, "bar_id", "N/A")
+                evch = _row_value(bar, "estimate_voucher_no", "N/A")
+                da = _row_value(bar, "date_added", "")
+                st = _row_value(bar, "status", "")
 
                 bar_count += 1
                 total_weight += bw
@@ -94,17 +74,8 @@ class SilverBarPrintRenderer:
     @staticmethod
     def generate_list_details_html(list_info, bars_in_list):
         """Generate HTML content for printing a single list's details."""
-        li = (
-            list_info["list_identifier"]
-            if "list_identifier" in list_info
-            and list_info["list_identifier"] is not None
-            else "N/A"
-        )
-        ln = (
-            list_info["list_note"]
-            if "list_note" in list_info and list_info["list_note"] is not None
-            else ""
-        )
+        li = _row_value(list_info, "list_identifier", "N/A")
+        ln = _row_value(list_info, "list_note", "")
         li_display = html_lib.escape(str(li))
         ln_display = html_lib.escape(str(ln)) if ln else "N/A"
 
@@ -135,21 +106,9 @@ class SilverBarPrintRenderer:
         bar_count = 0
         if bars_in_list:
             for idx, bar in enumerate(bars_in_list):
-                bw = (
-                    bar["weight"]
-                    if "weight" in bar and bar["weight"] is not None
-                    else 0.0
-                )
-                bfw = (
-                    bar["fine_weight"]
-                    if "fine_weight" in bar and bar["fine_weight"] is not None
-                    else 0.0
-                )
-                bp = (
-                    bar["purity"]
-                    if "purity" in bar and bar["purity"] is not None
-                    else 0.0
-                )
+                bw = _row_value(bar, "weight", 0.0)
+                bfw = _row_value(bar, "fine_weight", 0.0)
+                bp = _row_value(bar, "purity", 0.0)
 
                 bar_count += 1
                 total_weight += bw

@@ -5,6 +5,14 @@ All notable changes to the Silver Estimation App will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.05] - 2026-07-16
+
+### Fixed
+- Corrected silver-bar list and inventory printing so SQLite row values for weight, purity, fine weight, and totals no longer render as zero.
+
+### Changed
+- Bumped the application/package version to `3.05` for the corrected silver-bar printing build.
+
 ## [3.04] - 2026-07-16
 
 ### Changed

@@ -1,5 +1,6 @@
 import html
 import re
+import sqlite3
 
 from PyQt6.QtGui import QFont, QPageLayout, QPageSize
 
@@ -312,6 +313,31 @@ def test_generate_list_details_html_escapes_list_note(qt_app, settings_stub):
     assert "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;" in rendered
     assert "<b>fragile</b>" not in rendered
     assert "&lt;b&gt;fragile&lt;/b&gt;" in rendered
+
+
+def test_generate_list_details_html_reads_values_from_sqlite_rows(
+    qt_app, settings_stub
+):
+    manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    try:
+        bar = connection.execute(
+            "SELECT 12.5 AS weight, 99.2 AS purity, 12.4 AS fine_weight"
+        ).fetchone()
+
+        rendered = manager._generate_list_details_html(
+            {"list_identifier": "LIST-012", "list_note": "SQLite row"},
+            [bar],
+        )
+    finally:
+        connection.close()
+
+    assert "12.500" in rendered
+    assert "99.20" in rendered
+    assert "12.400" in rendered
+    assert "TOTAL Weight: 12.500 g" in rendered
+    assert "TOTAL Fine Wt: 12.400 g" in rendered
 
 
 def test_print_manager_preserves_portrait_orientation(qt_app, settings_stub):

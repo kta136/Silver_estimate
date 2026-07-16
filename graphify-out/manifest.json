@@ -9,11 +9,6 @@
     "ast_hash": "bc61b7f43bb4769d5f80e72a031934b2",
     "semantic_hash": "bc61b7f43bb4769d5f80e72a031934b2"
   },
-  ".claude/settings.local.json": {
-    "mtime": 1773577508.8571985,
-    "ast_hash": "6fddda2b922af0cddfab844cfe96d9dd",
-    "semantic_hash": "6fddda2b922af0cddfab844cfe96d9dd"
-  },
   "scripts/build_windows_local.ps1": {
     "mtime": 1781356199.6214752,
     "ast_hash": "2bf288c81ecb387c6df5f28faf6f7140",
@@ -75,8 +70,8 @@
     "semantic_hash": ""
   },
   "silverestimate/infrastructure/app_constants.py": {
-    "mtime": 1784188744.0738814,
-    "ast_hash": "9d4c5a4ad842eb8fd3cf8dc936bfac1c",
+    "mtime": 1784206243.7308364,
+    "ast_hash": "d5ae524dc788e83cff4b7507827c85f2",
     "semantic_hash": ""
   },
   "silverestimate/infrastructure/db_session.py": {
@@ -435,9 +430,9 @@
     "semantic_hash": "5c919df3797ccbbc95fff61b7748166d"
   },
   "silverestimate/ui/silver_bar_print_renderer.py": {
-    "mtime": 1784182650.9264493,
-    "ast_hash": "83fa1bd9fc7997266890c32f87ba2a2b",
-    "semantic_hash": "83fa1bd9fc7997266890c32f87ba2a2b"
+    "mtime": 1784206083.0865676,
+    "ast_hash": "64912123dbb2d1aceee4d4a6af839c89",
+    "semantic_hash": ""
   },
   "silverestimate/ui/silver_bar_selection_state_controller.py": {
     "mtime": 1779267004.8161824,
@@ -670,8 +665,8 @@
     "semantic_hash": ""
   },
   "tests/ui/test_print_manager.py": {
-    "mtime": 1784121240.3022027,
-    "ast_hash": "0476585038a320f9e41f49e56a59aa92",
+    "mtime": 1784206083.0875678,
+    "ast_hash": "df0ef56ed9db8b898ac86a2d1463cc1e",
     "semantic_hash": ""
   },
   "tests/ui/test_settings_dialog.py": {
@@ -900,13 +895,13 @@
     "semantic_hash": "c5d431d728d5184fdaac4ca4b6ce0f22"
   },
   "CHANGELOG.md": {
-    "mtime": 1784188744.0738814,
-    "ast_hash": "1f64e999660e60293cf290b7913a1825",
+    "mtime": 1784206243.7317946,
+    "ast_hash": "a9bb5b1beba6b3c66bd0a06a800f27ff",
     "semantic_hash": ""
   },
   "readme.md": {
-    "mtime": 1784188744.0774329,
-    "ast_hash": "e1412f1c8edcf94f54c6ce01d5ba5b14",
+    "mtime": 1784206243.7317946,
+    "ast_hash": "b8161a37e1d0062892a454d1ea4a2cf0",
     "semantic_hash": ""
   },
   ".github/pull_request_template.md": {
@@ -998,11 +993,6 @@
     "mtime": 1773319514.5070715,
     "ast_hash": "17fcfecc0691afb46ed2c2c09a0b7265",
     "semantic_hash": "17fcfecc0691afb46ed2c2c09a0b7265"
-  },
-  ".codex/hooks.json": {
-    "mtime": 1779262712.4774146,
-    "ast_hash": "1a6fb1c635b85ce2ac64b1bb7875073b",
-    "semantic_hash": ""
   },
   "AGENTS.md": {
     "mtime": 1784182650.883785,
@@ -1205,8 +1195,8 @@
     "semantic_hash": ""
   },
   "DOCS/README.md": {
-    "mtime": 1784188744.0774329,
-    "ast_hash": "8dcdae0e82d80bc768a687033cec7e1e",
+    "mtime": 1784206243.7372994,
+    "ast_hash": "1f998f5040c15116bf232c96a4e0202c",
     "semantic_hash": ""
   },
   "graphify-out/memory/query_20260715_140012_update_the_docs__github_page_etc.md": {
@@ -1262,6 +1252,11 @@
   "graphify-out/memory/query_20260716_080132_now_all_the_older_db_setttings_etc_have_been_migra.md": {
     "mtime": 1784188892.9635887,
     "ast_hash": "42e81f02ec0fbcb2d1ce55bf5822a5ac",
+    "semantic_hash": ""
+  },
+  "graphify-out/memory/query_20260716_080757_what_about_migrate_qsettings_and_retire_legacy_enc.md": {
+    "mtime": 1784189277.8030934,
+    "ast_hash": "5f81bc6cbee79c9a3c75df3f7eb6c396",
     "semantic_hash": ""
   }
 }

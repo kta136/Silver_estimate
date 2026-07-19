@@ -1,22 +1,82 @@
-import html
-import re
+import os
 import sqlite3
+from copy import deepcopy
+from pathlib import Path
 
-from PyQt6.QtGui import QFont, QPageLayout, QPageSize
+from PyQt6.QtCore import QMarginsF, QSizeF
+from PyQt6.QtGui import QFont, QFontDatabase, QPageLayout, QPageSize
+from PyQt6.QtPdf import QPdfDocument
+from PyQt6.QtPrintSupport import QPrinter
 
 from silverestimate.infrastructure.settings import get_app_settings
+from silverestimate.ui.estimate_print_document import EstimatePrintDocument
 from silverestimate.ui.print_manager import PrintManager
-from silverestimate.ui.print_payload_builder import PrintPreviewPayload
+from silverestimate.ui.print_payload_builder import HtmlPrintDocument
+from tests.factories import multi_section_print_estimate
 
 
 class _DbStub:
     pass
 
 
-def _extract_pre_lines(rendered: str) -> list[str]:
-    match = re.search(r"<pre>(.*)</pre>", rendered, re.DOTALL)
-    assert match is not None
-    return html.unescape(match.group(1)).splitlines()
+def _modern_layout(manager: PrintManager, estimate_data):
+    document = EstimatePrintDocument.from_mapping(estimate_data)
+    return manager._estimate_renderer.build_modern_layout(document)
+
+
+def _render_estimate_pdf(
+    manager: PrintManager,
+    estimate_data,
+    output_path,
+    *,
+    page_layout: QPageLayout | None = None,
+) -> None:
+    _ensure_print_test_font()
+    payload = manager.build_estimate_preview_payload(
+        estimate_data["header"]["voucher_no"],
+        estimate_data=estimate_data,
+    )
+    assert payload is not None
+    printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+    printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+    printer.setOutputFileName(str(output_path))
+    printer.setPageLayout(page_layout or manager.printer.pageLayout())
+    manager._render_document(printer, payload.document)
+
+
+def _ensure_print_test_font() -> None:
+    windows_dir = Path(os.environ.get("WINDIR", r"C:\Windows"))
+    font_dir = windows_dir / "Fonts"
+    families = set(QFontDatabase.families())
+    font_files = ()
+    if "Arial" not in families:
+        font_files += ("arial.ttf", "arialbd.ttf")
+    if "Courier New" not in families:
+        font_files += ("cour.ttf", "courbd.ttf")
+    for filename in font_files:
+        font_path = font_dir / filename
+        if font_path.exists():
+            QFontDatabase.addApplicationFont(str(font_path))
+
+
+def _pdf_pages(output_path) -> tuple[tuple[str, ...], QPdfDocument]:
+    document = QPdfDocument(None)
+    assert document.load(str(output_path)) == QPdfDocument.Error.None_
+    pages = tuple(document.getAllText(index).text() for index in range(document.pageCount()))
+    return pages, document
+
+
+def _long_estimate_data(item_count: int = 60):
+    estimate_data = multi_section_print_estimate()
+    template = estimate_data["items"][0]
+    rows = []
+    for index in range(1, item_count + 1):
+        item = deepcopy(template)
+        item["item_code"] = f"LONG{index:03d}"
+        item["item_name"] = f"Long Regular Item {index:03d} with descriptive name"
+        rows.append(item)
+    estimate_data["items"] = rows
+    return estimate_data
 
 
 def test_generate_silver_bars_html_escapes_dynamic_text(qt_app, settings_stub):
@@ -42,38 +102,7 @@ def test_generate_silver_bars_html_escapes_dynamic_text(qt_app, settings_stub):
     assert "SILVER BARS INVENTORY - &lt;all&gt;" in rendered
 
 
-def test_generate_estimate_thermal_escapes_note_html(qt_app, settings_stub):
-    manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
-    estimate_data = {
-        "header": {
-            "voucher_no": "V-001",
-            "date": "2026-02-13",
-            "silver_rate": 0.0,
-            "note": "<b>unsafe-note</b>",
-            "last_balance_silver": 0.0,
-            "last_balance_amount": 0.0,
-        },
-        "items": [],
-    }
-
-    rendered = manager._generate_estimate_thermal_format(estimate_data)
-
-    assert "<b>unsafe-note</b>" not in rendered
-    assert "&lt;b&gt;unsafe-note&lt;/b&gt;" in rendered
-
-
-def test_preformatted_print_html_allows_long_content_to_paginate(qt_app, settings_stub):
-    del qt_app, settings_stub
-
-    rendered = PrintManager._build_preformatted_html("first page\fsecond page")
-
-    assert "page-break-inside: auto" in rendered
-    assert "page-break-inside: avoid" not in rendered
-    assert rendered.count("<pre>") == 2
-    assert "page-break-after: always" in rendered
-
-
-def test_generate_estimate_new_format_uses_requested_column_precision(
+def test_estimate_modern_layout_uses_requested_column_precision(
     qt_app, settings_stub
 ):
     manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
@@ -103,14 +132,15 @@ def test_generate_estimate_new_format_uses_requested_column_precision(
         ],
     }
 
-    rendered = manager._generate_estimate_new_format(estimate_data)
-    lines = _extract_pre_lines(rendered)
+    layout = _modern_layout(manager, estimate_data)
+    lines = layout.lines
+    rendered = layout.normalized_text()
     item_line = next(line for line in lines if "Chain" in line)
     total_line = next(line for line in lines if "TOTAL" in line)
-    final_line = next(line for line in lines if "S.Cost : Rs." in line)
+    final_line = next(line for line in lines if "Fine Silver:" in line)
 
     assert "12.34" in item_line
-    assert " 5 " in item_line
+    assert "5.00" in item_line
     assert "7.34" in item_line
     assert "92.50" in item_line
     assert "11" in item_line
@@ -118,18 +148,18 @@ def test_generate_estimate_new_format_uses_requested_column_precision(
     assert item_line.rstrip().endswith("100")
 
     assert "12.34" in total_line
-    assert " 5 " in total_line
+    assert "5.00" in total_line
     assert "7.34" in total_line
     assert "1.23" in total_line
     assert total_line.rstrip().endswith("100")
 
-    assert "1.23 gm" in final_line
+    assert "Fine Silver: 1.23 g" in final_line
     assert "100" in final_line
-    assert "S.Cost : Rs. 12.4" in rendered
+    assert "Silver Cost: Rs. 12.4" in rendered
     assert "Total: Rs. 112.6" in rendered
 
 
-def test_generate_estimate_new_format_keeps_amount_totals_at_one_decimal(
+def test_estimate_modern_layout_keeps_amount_totals_at_one_decimal(
     qt_app, settings_stub
 ):
     manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
@@ -159,14 +189,15 @@ def test_generate_estimate_new_format_keeps_amount_totals_at_one_decimal(
         ],
     }
 
-    rendered = manager._generate_estimate_new_format(estimate_data)
-    lines = _extract_pre_lines(rendered)
+    layout = _modern_layout(manager, estimate_data)
+    lines = layout.lines
+    rendered = layout.normalized_text()
     item_line = next(line for line in lines if "Chain" in line)
     total_line = next(line for line in lines if "TOTAL" in line)
-    final_line = next(line for line in lines if "S.Cost : Rs." in line)
+    final_line = next(line for line in lines if "Fine Silver:" in line)
 
     assert "1.54" in item_line
-    assert "0" in item_line
+    assert "0.04" in item_line
     assert "1.50" in item_line
     assert "92.54" in item_line
     assert "1" in item_line
@@ -178,13 +209,13 @@ def test_generate_estimate_new_format_keeps_amount_totals_at_one_decimal(
     assert "1.23" in total_line
     assert total_line.rstrip().endswith("100")
 
-    assert "Silver: 0.3 g   Amount: Rs. 50.5" in rendered
-    assert "1.50 gm" in final_line
-    assert "S.Cost : Rs. 15.1" in rendered
+    assert "Silver: 0.27 g | Amount: Rs. 50.5" in rendered
+    assert "Fine Silver: 1.50 g" in final_line
+    assert "Silver Cost: Rs. 15.1" in rendered
     assert "Total: Rs. 165.9" in rendered
 
 
-def test_build_estimate_preview_payload_uses_selected_layout(qt_app, settings_stub):
+def test_build_estimate_preview_payload_uses_modern_layout(qt_app, settings_stub):
     manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
     estimate_data = {
         "header": {
@@ -198,30 +229,29 @@ def test_build_estimate_preview_payload_uses_selected_layout(qt_app, settings_st
         "items": [],
     }
 
-    manager.estimate_layout_mode = "thermal"
-    manager._generate_estimate_old_format = lambda data: "OLD"
-    manager._generate_estimate_new_format = lambda data: "NEW"
-    manager._generate_estimate_thermal_format = lambda data: "THERMAL"
-
     payload = manager.build_estimate_preview_payload(
         "V-002",
         estimate_data=estimate_data,
     )
 
     assert payload is not None
-    assert payload.html_content == "THERMAL"
+    assert isinstance(payload.document, EstimatePrintDocument)
+    assert payload.document.header.voucher_no == "V-002"
+    assert payload.document.format_key == "modern"
     assert payload.title == "Print Preview - Estimate V-002"
-    assert payload.table_mode is False
     assert payload.document_kind == "estimate"
     assert payload.identifier == "V-002"
     assert payload.suggested_filename == "Estimate-V-002.pdf"
-    assert payload.layout_mode == "thermal"
-    assert payload.available_layouts == ("old", "new", "thermal")
+    assert payload.format_key == "modern"
+    assert payload.available_formats == ("classic", "modern")
+    assert payload.format_factory is not None
 
-    switched = payload.layout_factory("new")
-    assert switched is not None
-    assert switched.html_content == "NEW"
-    assert switched.layout_mode == "new"
+    classic_payload = payload.format_factory("classic")
+
+    assert classic_payload is not None
+    assert isinstance(classic_payload.document, EstimatePrintDocument)
+    assert classic_payload.document.format_key == "classic"
+    assert classic_payload.format_key == "classic"
 
 
 def test_show_preview_delegates_to_preview_dialog(qt_app, settings_stub):
@@ -263,9 +293,10 @@ def test_build_silver_bar_list_preview_payload_marks_table_mode(qt_app, settings
     )
 
     assert payload is not None
-    assert payload.html_content == "LIST-HTML"
+    assert isinstance(payload.document, HtmlPrintDocument)
+    assert payload.document.html_content == "LIST-HTML"
     assert payload.title == "Print Preview - List LIST-010"
-    assert payload.table_mode is True
+    assert payload.document.table_mode is True
     assert payload.suggested_filename == "Silver-Bar-List-LIST-010.pdf"
 
 
@@ -286,9 +317,10 @@ def test_build_silver_bar_inventory_preview_payload_marks_table_mode(
     payload = manager.build_silver_bar_inventory_preview_payload("AVAILABLE")
 
     assert payload is not None
-    assert payload.html_content == "INVENTORY-AVAILABLE-1"
+    assert isinstance(payload.document, HtmlPrintDocument)
+    assert payload.document.html_content == "INVENTORY-AVAILABLE-1"
     assert payload.title == "Print Preview - Silver Bar Inventory"
-    assert payload.table_mode is True
+    assert payload.document.table_mode is True
     assert payload.suggested_filename == "Silver-Bar-Inventory.pdf"
 
 
@@ -368,11 +400,9 @@ def test_print_manager_uses_persisted_custom_page_size(qt_app, settings_stub):
     assert page_size.size(QPageSize.Unit.Millimeter).height() == 190.0
 
 
-def test_preview_layout_changes_become_default_for_next_estimate_preview(
-    qt_app, settings_stub
-):
+def test_legacy_layout_settings_migrate_to_classic_or_modern(qt_app, settings_stub):
     del qt_app, settings_stub
-    manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
+    settings = get_app_settings()
     estimate_data = {
         "header": {
             "voucher_no": "V-004",
@@ -385,22 +415,235 @@ def test_preview_layout_changes_become_default_for_next_estimate_preview(
         "items": [],
     }
 
-    manager._preview_controller._save_preview_defaults(
-        PrintPreviewPayload(
-            html_content="THERMAL",
-            title="Print Preview - Estimate V-004",
-            document_kind="estimate",
-            identifier="V-004",
-            suggested_filename="Estimate-V-004.pdf",
-            layout_mode="thermal",
-            available_layouts=("old", "new", "thermal"),
-        )
+    settings.setValue("print/estimate_layout", "old")
+    classic_manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
+    classic_payload = classic_manager.build_estimate_preview_payload(
+        "V-004",
+        estimate_data=estimate_data,
     )
-    payload = manager.build_estimate_preview_payload(
+    settings.setValue("print/estimate_layout", "new")
+    modern_manager = PrintManager(_DbStub(), print_font=QFont("Arial", 8))
+    modern_payload = modern_manager.build_estimate_preview_payload(
         "V-004",
         estimate_data=estimate_data,
     )
 
+    assert classic_payload is not None
+    assert modern_payload is not None
+    assert classic_manager.estimate_format == "classic"
+    assert modern_manager.estimate_format == "modern"
+    assert classic_payload.format_key == "classic"
+    assert modern_payload.format_key == "modern"
+
+
+def test_preview_print_font_change_updates_manager_and_persists(
+    qt_app,
+    settings_stub,
+):
+    del qt_app, settings_stub
+    active_font = QFont("Arial", 8)
+    active_font.float_size = 8.0
+    manager = PrintManager(_DbStub(), print_font=active_font)
+    selected_font = QFont("Arial", 12)
+    selected_font.setBold(True)
+    selected_font.float_size = 12.5
+
+    manager._set_print_font(selected_font)
+
+    settings = get_app_settings()
+    assert manager.print_font is active_font
+    assert active_font.float_size == 12.5
+    assert active_font.bold()
+    assert settings.value("font/family") == "Arial"
+    assert settings.value("font/size_float") == 12.5
+    assert settings.value("font/bold") is True
+
+
+def test_classic_estimate_painter_writes_previous_modern_style_without_html(
+    qt_app,
+    settings_stub,
+    tmp_path,
+):
+    del qt_app, settings_stub
+    get_app_settings().setValue("print/estimate_layout", "classic")
+    font = QFont("Courier New", 7)
+    font.float_size = 7.0
+    manager = PrintManager(_DbStub(), print_font=font)
+    output_path = tmp_path / "classic-estimate-direct.pdf"
+
+    _render_estimate_pdf(manager, multi_section_print_estimate(), output_path)
+    pages, document = _pdf_pages(output_path)
+    rendered = "\n".join(pages)
+
+    assert document.pageCount() >= 1
+    assert "ESTIMATE SLIP ONLY" in rendered
+    assert "Gross" in rendered
+    assert "Net" in rendered
+    assert "S.Per%" not in rendered
+    assert "%" in rendered
+    assert "Silver Bars" in rendered
+    assert "Quantity" not in rendered
+    assert "Gross (g)" not in rendered
+    assert "/Doz." not in rendered
+    assert "GOODS NOT RETURNABLE" not in rendered
+
+
+def test_direct_estimate_painter_writes_pdf(qt_app, settings_stub, tmp_path):
+    del qt_app, settings_stub
+    font = QFont("Courier New", 7)
+    font.float_size = 7.0
+    manager = PrintManager(_DbStub(), print_font=font)
+    payload = manager.build_estimate_preview_payload(
+        "EST-PARITY-001",
+        estimate_data=multi_section_print_estimate(),
+    )
     assert payload is not None
-    assert manager.estimate_layout_mode == "thermal"
-    assert payload.layout_mode == "thermal"
+    assert isinstance(payload.document, EstimatePrintDocument)
+
+    output_path = tmp_path / "modern-estimate-direct.pdf"
+    printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+    printer.setPageLayout(manager.printer.pageLayout())
+    printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+    printer.setOutputFileName(str(output_path))
+
+    manager._render_document(printer, payload.document)
+
+    assert output_path.read_bytes().startswith(b"%PDF-")
+    assert output_path.stat().st_size > 1_000
+
+
+def test_direct_estimate_painter_repeats_headers_and_keeps_summary_with_rows(
+    qt_app,
+    settings_stub,
+    tmp_path,
+):
+    del qt_app, settings_stub
+    font = QFont("Arial", 8)
+    font.float_size = 8.0
+    manager = PrintManager(_DbStub(), print_font=font)
+    estimate_data = _long_estimate_data()
+    output_path = tmp_path / "modern-estimate-multipage.pdf"
+    page_layout = QPageLayout(
+        QPageSize(QPageSize.PageSizeId.A4),
+        QPageLayout.Orientation.Landscape,
+        QMarginsF(10, 10, 10, 10),
+        QPageLayout.Unit.Millimeter,
+    )
+
+    _render_estimate_pdf(
+        manager,
+        estimate_data,
+        output_path,
+        page_layout=page_layout,
+    )
+    pages, document = _pdf_pages(output_path)
+
+    assert document.pageCount() >= 2
+    assert document.pagePointSize(0).width() > document.pagePointSize(0).height()
+    assert all("Voucher: EST-PARITY-001" in page for page in pages)
+    assert all("GOODS NOT RETURNABLE" not in page for page in pages)
+    assert all("Page " not in page for page in pages)
+    assert any("REGULAR GOODS (continued)" in page for page in pages[1:])
+    assert "Long Regular Item 060" in pages[-1]
+    assert "TOTAL" in pages[-1]
+    assert "FINAL SILVER & AMOUNT" in pages[-1]
+
+
+def test_direct_estimate_painter_elides_long_names_without_clipping(
+    qt_app,
+    settings_stub,
+    tmp_path,
+):
+    del qt_app, settings_stub
+    font = QFont("Arial", 8)
+    font.float_size = 8.0
+    manager = PrintManager(_DbStub(), print_font=font)
+    estimate_data = multi_section_print_estimate()
+    long_name = "Very long item name " + "with extra detail " * 20
+    estimate_data["items"][0]["item_name"] = long_name
+    output_path = tmp_path / "modern-estimate-long-name.pdf"
+
+    _render_estimate_pdf(manager, estimate_data, output_path)
+    pages, _document = _pdf_pages(output_path)
+    rendered = "\n".join(pages)
+
+    assert long_name not in rendered
+    assert "Very long item name" in rendered
+    assert "TOTAL" in rendered
+
+
+def test_direct_estimate_painter_handles_portrait_and_large_font(
+    qt_app,
+    settings_stub,
+    tmp_path,
+):
+    del qt_app, settings_stub
+    font = QFont("Arial", 11)
+    font.float_size = 11.0
+    manager = PrintManager(_DbStub(), print_font=font)
+    output_path = tmp_path / "modern-estimate-portrait-large-font.pdf"
+    page_layout = QPageLayout(
+        QPageSize(QPageSize.PageSizeId.A4),
+        QPageLayout.Orientation.Portrait,
+        QMarginsF(10, 10, 10, 10),
+        QPageLayout.Unit.Millimeter,
+    )
+
+    _render_estimate_pdf(
+        manager,
+        multi_section_print_estimate(),
+        output_path,
+        page_layout=page_layout,
+    )
+    pages, document = _pdf_pages(output_path)
+
+    assert document.pageCount() >= 1
+    assert document.pagePointSize(0).height() > document.pagePointSize(0).width()
+    assert "ESTIMATE SLIP ONLY" in pages[0]
+    assert "Gross (g)" not in pages[0]
+    assert "Poly (g)" not in pages[0]
+    assert "Net (g)" not in pages[0]
+    assert "Fine (g)" not in pages[0]
+    assert "Purity (%)" not in pages[0]
+    assert "Gross Poly Net %" in pages[0]
+    assert "Fine Lbr" in pages[0]
+    assert "Date:" not in pages[0]
+    assert "FINAL SILVER & AMOUNT" in pages[-1]
+
+
+def test_direct_estimate_painter_handles_custom_page_size(
+    qt_app,
+    settings_stub,
+    tmp_path,
+):
+    del qt_app, settings_stub
+    font = QFont("Arial", 7)
+    font.float_size = 7.0
+    manager = PrintManager(_DbStub(), print_font=font)
+    output_path = tmp_path / "modern-estimate-counter-slip.pdf"
+    page_size = QPageSize(
+        QSizeF(120.0, 190.0),
+        QPageSize.Unit.Millimeter,
+        "Counter Slip",
+    )
+    page_layout = QPageLayout(
+        page_size,
+        QPageLayout.Orientation.Portrait,
+        QMarginsF(6, 6, 6, 6),
+        QPageLayout.Unit.Millimeter,
+    )
+
+    _render_estimate_pdf(
+        manager,
+        multi_section_print_estimate(),
+        output_path,
+        page_layout=page_layout,
+    )
+    pages, document = _pdf_pages(output_path)
+    point_size = document.pagePointSize(0)
+
+    assert document.pageCount() >= 1
+    assert 335.0 < point_size.width() < 345.0
+    assert 535.0 < point_size.height() < 545.0
+    assert "Voucher: EST-PARITY-001" in pages[0]
+    assert "FINAL SILVER & AMOUNT" in pages[-1]

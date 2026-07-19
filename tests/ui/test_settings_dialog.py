@@ -61,6 +61,7 @@ def test_settings_dialog_uses_visible_arrow_controls(qt_app, settings_stub):
         assert isinstance(dialog.preview_zoom_spin, ThemedDoubleSpinBox)
         assert isinstance(dialog.totals_position_combo, ThemedComboBox)
         assert isinstance(dialog.printer_combo, ThemedComboBox)
+        assert isinstance(dialog.estimate_format_combo, ThemedComboBox)
         assert (
             dialog.sidebar.horizontalScrollBarPolicy()
             == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
@@ -123,8 +124,8 @@ def test_settings_apply_persists_print_preferences(qt_app, monkeypatch, settings
         dialog.printer_combo.setCurrentText("Warehouse Printer")
         dialog.page_size_combo.setCurrentText("Legal")
         dialog.orientation_combo.setCurrentText("Landscape")
-        dialog.estimate_layout_combo.setCurrentIndex(
-            dialog.estimate_layout_combo.findData("thermal")
+        dialog.estimate_format_combo.setCurrentIndex(
+            dialog.estimate_format_combo.findData("classic")
         )
 
         assert dialog.apply_settings() is True
@@ -133,7 +134,7 @@ def test_settings_apply_persists_print_preferences(qt_app, monkeypatch, settings
         assert settings.value("print/default_printer") == "Warehouse Printer"
         assert settings.value("print/page_size") == "Legal"
         assert settings.value("print/orientation") == "Landscape"
-        assert settings.value("print/estimate_layout") == "thermal"
+        assert settings.value("print/estimate_layout") == "classic"
     finally:
         dialog.deleteLater()
 
@@ -170,7 +171,8 @@ def test_settings_dialog_uses_defaults_for_invalid_print_settings(
         assert dialog.preview_zoom_spin.value() == 1.25
         assert dialog.page_size_combo.currentText() == "A4"
         assert dialog.orientation_combo.currentText() == "Landscape"
-        assert dialog.estimate_layout_combo.currentData() == "old"
+        assert settings.value("print/estimate_layout") == "modern"
+        assert dialog.estimate_format_combo.currentData() == "modern"
         assert dialog.printer_combo.currentData() == ""
     finally:
         dialog.deleteLater()

@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
-from typing import Callable, Mapping
+from dataclasses import dataclass, replace
+from typing import Callable
 
-from .print_format_spec import PrintRendererStrategy
+from .estimate_print_document import EstimatePrintDocument
+from .print_format_spec import (
+    DEFAULT_ESTIMATE_FORMAT,
+    ESTIMATE_FORMAT_SPECS,
+    normalize_estimate_format,
+)
 
 
 def _sanitize_filename_stem(value: str) -> str:
@@ -16,33 +21,39 @@ def _sanitize_filename_stem(value: str) -> str:
 
 
 @dataclass(frozen=True)
-class PrintPreviewPayload:
-    """Serialized preview payload that can be prepared before opening the dialog."""
+class HtmlPrintDocument:
+    """Legacy HTML document retained for silver-bar reports."""
 
     html_content: str
+    table_mode: bool = True
+
+
+PrintDocument = EstimatePrintDocument | HtmlPrintDocument
+
+
+@dataclass(frozen=True)
+class PrintPreviewPayload:
+    """Immutable document and metadata consumed by preview and output paths."""
+
+    document: PrintDocument
     title: str
-    table_mode: bool = False
     document_kind: str = "document"
     identifier: str = ""
     suggested_filename: str = "document.pdf"
-    layout_mode: str = ""
-    available_layouts: tuple[str, ...] = ()
-    layout_factory: Callable[[str], "PrintPreviewPayload | None"] | None = None
+    format_key: str = ""
+    available_formats: tuple[str, ...] = ()
+    format_factory: Callable[[str], PrintPreviewPayload | None] | None = None
 
 
 class PrintPayloadBuilder:
-    """Build preview payloads without owning preview or rendering UI behavior."""
+    """Build preview payloads without owning preview or output behavior."""
 
     def build_estimate_preview_payload(
         self,
         voucher_no,
         *,
-        layout_mode,
         fetch_estimate: Callable[[object], object],
-        render_old: Callable[[object], str],
-        render_new: Callable[[object], str],
-        render_thermal: Callable[[object], str],
-        renderer_strategies: Mapping[str, PrintRendererStrategy] | None = None,
+        format_key: str = DEFAULT_ESTIMATE_FORMAT,
         estimate_data=None,
     ) -> PrintPreviewPayload | None:
         resolved_data = (
@@ -51,37 +62,24 @@ class PrintPayloadBuilder:
         if not resolved_data:
             return None
 
-        def build_payload(selected_layout: str) -> PrintPreviewPayload:
-            normalized_layout = (selected_layout or "old").lower()
-            if renderer_strategies is not None:
-                strategy = renderer_strategies.get(normalized_layout)
-                if strategy is None:
-                    normalized_layout = "old"
-                    strategy = renderer_strategies[normalized_layout]
-                html_text = strategy.render(resolved_data)
-            elif normalized_layout == "new":
-                html_text = render_new(resolved_data)
-            elif normalized_layout == "thermal":
-                html_text = render_thermal(resolved_data)
-            else:
-                normalized_layout = "old"
-                html_text = render_old(resolved_data)
+        base_document = EstimatePrintDocument.from_mapping(resolved_data)
 
+        def build_payload(selected_format: str) -> PrintPreviewPayload:
+            normalized_format = normalize_estimate_format(selected_format)
             return PrintPreviewPayload(
-                html_content=html_text,
+                document=replace(base_document, format_key=normalized_format),
                 title=f"Print Preview - Estimate {voucher_no}",
-                table_mode=False,
                 document_kind="estimate",
                 identifier=str(voucher_no or ""),
                 suggested_filename=(
                     f"{_sanitize_filename_stem(f'Estimate-{voucher_no}')}.pdf"
                 ),
-                layout_mode=normalized_layout,
-                available_layouts=("old", "new", "thermal"),
-                layout_factory=build_payload,
+                format_key=normalized_format,
+                available_formats=tuple(ESTIMATE_FORMAT_SPECS),
+                format_factory=build_payload,
             )
 
-        return build_payload(layout_mode)
+        return build_payload(format_key)
 
     def build_silver_bar_inventory_preview_payload(
         self,
@@ -95,9 +93,11 @@ class PrintPayloadBuilder:
             return None
 
         return PrintPreviewPayload(
-            html_content=render_inventory(bars, status_filter),
+            document=HtmlPrintDocument(
+                render_inventory(bars, status_filter),
+                table_mode=True,
+            ),
             title="Print Preview - Silver Bar Inventory",
-            table_mode=True,
             document_kind="silver_bar_inventory",
             identifier=str(status_filter or "all"),
             suggested_filename="Silver-Bar-Inventory.pdf",
@@ -120,12 +120,22 @@ class PrintPayloadBuilder:
             else "N/A"
         )
         return PrintPreviewPayload(
-            html_content=render_list_details(list_info, bars_in_list),
+            document=HtmlPrintDocument(
+                render_list_details(list_info, bars_in_list),
+                table_mode=True,
+            ),
             title=f"Print Preview - List {identifier}",
-            table_mode=True,
             document_kind="silver_bar_list",
             identifier=str(identifier),
             suggested_filename=(
                 f"{_sanitize_filename_stem(f'Silver-Bar-List-{identifier}')}.pdf"
             ),
         )
+
+
+__all__ = [
+    "HtmlPrintDocument",
+    "PrintDocument",
+    "PrintPayloadBuilder",
+    "PrintPreviewPayload",
+]

@@ -1,0 +1,26 @@
+ESTIMATE SLIP ONLY
+Voucher: EST-PARITY-001 | Silver Rate: 101.25
+Note: Parity fixture
+[REGULAR GOODS]
+SNo | Item Name | Gross | Poly | Net | % | W. Rate | PCS | Fine | Lbr
+1 | Chain Deluxe | 200.34 | 0.25 | 200.09 | 92.50 | 15.75 | 2 | 185.08 | 190
+2 | Anklet Pair | 150.88 | 0.12 | 150.75 | 90.00 | 12.00 | 4 | 135.68 | 105
+ | TOTAL | 351.22 | 0.38 | 350.84 |  |  |  | 320.76 | 295
+[SILVER BARS]
+SNo | Item Name | Gross | Poly | Net | % | Fine | Lbr
+1 | Silver Bar 100g | 100.00 | 0.00 | 100.00 | 99.90 | 99.90 | 0
+2 | Silver Bar 50g | 50.00 | 0.00 | 50.00 | 99.50 | 49.75 | 0
+ | TOTAL | 150.00 | 0.00 | 150.00 |  | 149.65 | 0
+[RETURN GOODS]
+SNo | Item Name | Gross | Poly | Net | % | W. Rate | PCS | Fine | Lbr
+1 | Return Ring | 4.50 | 0.10 | 4.40 | 91.60 | 8.00 | 1 | 4.03 | 35
+2 | Return Chain | 6.25 | 0.25 | 6.00 | 92.50 | 7.50 | 1 | 5.55 | 45
+ | TOTAL | 10.75 | 0.35 | 10.40 |  |  |  | 9.58 | 80
+[RETURN SILVER BARS]
+SNo | Item Name | Gross | Poly | Net | % | Fine | Lbr
+1 | Return Silver Bar | 20.00 | 0.00 | 20.00 | 99.90 | 19.98 | 0
+ | TOTAL | 20.00 | 0.00 | 20.00 |  | 19.98 | 0
+[LAST BALANCE]
+Silver: 2.75 g | Amount: Rs. 1,250.5
+[FINAL SILVER & AMOUNT]
+Fine Silver: 144.30 g | Labour: Rs. 1,466 | Silver Cost: Rs. 14,610.2 | Total: Rs. 16,076.1

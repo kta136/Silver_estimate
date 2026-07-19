@@ -9,7 +9,7 @@ import time
 from typing import TYPE_CHECKING, Any, Callable, Optional, Protocol
 
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QIcon
+from PyQt6.QtGui import QFont, QIcon
 from PyQt6.QtWidgets import (
     QApplication,
     QLabel,
@@ -208,7 +208,8 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle(f"{APP_TITLE}[*]")
 
-        default_font = QApplication.font()
+        default_font = QFont("Arial", 8)
+        default_font.float_size = 8.0
         try:
             self.print_font = self.settings_service.load_print_font(default_font)
         except Exception as exc:

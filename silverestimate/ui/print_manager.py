@@ -1,79 +1,44 @@
 #!/usr/bin/env python
 import logging
-from typing import Callable
 
-from PyQt6.QtCore import QLocale, QObject, pyqtSignal
 from PyQt6.QtGui import QFont, QTextDocument
 from PyQt6.QtPrintSupport import QPrinter
 from PyQt6.QtWidgets import QMessageBox
 
 from silverestimate.infrastructure.settings import get_app_settings
+from silverestimate.services.settings_service import SettingsService
 
+from .estimate_print_document import EstimatePrintDocument
 from .estimate_print_renderer import EstimatePrintRenderer
-from .print_format_spec import build_estimate_strategies
+from .print_format_spec import DEFAULT_ESTIMATE_FORMAT, normalize_estimate_format
 from .print_page_settings import (
     PrintPageSettings,
     apply_print_page_settings_to_printer,
     load_print_page_settings,
 )
-from .print_payload_builder import PrintPayloadBuilder, PrintPreviewPayload
+from .print_payload_builder import (
+    HtmlPrintDocument,
+    PrintDocument,
+    PrintPayloadBuilder,
+    PrintPreviewPayload,
+)
 from .print_preview_controller import PrintPreviewController
 from .silver_bar_print_renderer import SilverBarPrintRenderer
 
 LOGGER = logging.getLogger(__name__)
 
 
-class PrintPreviewBuildWorker(QObject):
-    """Background worker that prepares preview payloads off the UI thread."""
-
-    preview_ready = pyqtSignal(int, object)
-    preview_error = pyqtSignal(int, str)
-    finished = pyqtSignal(int)
-
-    def __init__(
-        self,
-        request_id: int,
-        build_preview: Callable[[], object],
-    ) -> None:
-        super().__init__()
-        self._request_id = request_id
-        self._build_preview = build_preview
-
-    def run(self) -> None:
-        try:
-            payload = self._build_preview()
-            self.preview_ready.emit(self._request_id, payload)
-        except Exception as exc:
-            self.preview_error.emit(self._request_id, str(exc))
-        finally:
-            self.finished.emit(self._request_id)
-
-
 class PrintManager:
-    """Class to handle print functionality using manual formatting."""
+    """Coordinate typed print payloads, preview, PDF export, and printing."""
 
     def __init__(self, db_manager, print_font=None):
         """Initialize the print manager, accepting an optional print font."""
         self.db_manager = db_manager
-        # Store the custom print font if provided, otherwise use a default
-        if print_font:
+        if print_font is not None:
             self.print_font = print_font
         else:
-            # Default font if none is provided via settings
-            # Force Courier New for estimate slip, but use size/bold from settings
-            default_size = 7.0  # Default size if setting unavailable
-            font_size_int = int(round(getattr(print_font, "float_size", default_size)))
-            is_bold = getattr(
-                print_font, "bold", lambda: False
-            )()  # Check if bold exists and call
-            self.print_font = QFont("Courier New", font_size_int)
-            self.print_font.setBold(is_bold)
-            # Store float size for consistency if needed elsewhere, though not used directly here
-            self.print_font.float_size = (
-                float(font_size_int)
-                if not hasattr(print_font, "float_size")
-                else print_font.float_size
-            )
+            self.print_font = QFont("Arial", 8)
+            self.print_font.float_size = 8.0
 
         self.printer = QPrinter(QPrinter.PrinterMode.HighResolution)
         settings = get_app_settings()
@@ -85,67 +50,30 @@ class PrintManager:
         apply_print_page_settings_to_printer(self.printer, page_settings)
 
         try:
-            layout_mode = settings.value("print/estimate_layout", "old", type=str)
-            self.estimate_layout_mode = (layout_mode or "old").lower()
-            if self.estimate_layout_mode not in {"old", "new", "thermal"}:
-                self.estimate_layout_mode = "old"
+            self.estimate_format = normalize_estimate_format(
+                settings.value(
+                    "print/estimate_layout",
+                    DEFAULT_ESTIMATE_FORMAT,
+                    type=str,
+                )
+            )
         except Exception as exc:
-            LOGGER.debug("Failed to load estimate layout preference: %s", exc)
-            self.estimate_layout_mode = "old"
-        self._estimate_renderer = EstimatePrintRenderer(
-            currency_formatter=self._format_currency_locale
-        )
+            LOGGER.debug("Failed to load estimate format preference: %s", exc)
+            self.estimate_format = DEFAULT_ESTIMATE_FORMAT
+
+        self._estimate_renderer = EstimatePrintRenderer()
         self._payload_builder = PrintPayloadBuilder()
         self._preview_controller = PrintPreviewController(
             printer=self.printer,
-            render_document=self._print_html,
-            persist_estimate_layout=self._set_estimate_layout_mode,
+            render_document=self._render_document,
+            persist_estimate_format=self._set_estimate_format,
+            get_print_font=lambda: self.print_font,
+            persist_print_font=self._set_print_font,
         )
         self._silver_bar_renderer = SilverBarPrintRenderer()
 
-    def _set_estimate_layout_mode(self, layout_mode: str) -> None:
-        normalized = (layout_mode or "").strip().lower()
-        if normalized in {"old", "new", "thermal"}:
-            self.estimate_layout_mode = normalized
-
-    def format_indian_rupees(self, number):
-        """Formats a number into Indian Rupees notation (Lakhs, Crores)."""
-        # Ensure number is integer after rounding
-        num = int(round(number))
-        s = str(num)
-        n = len(s)
-        if n <= 3:
-            return s
-        # Format the last three digits
-        last_three = s[-3:]
-        # Format the remaining digits in groups of two
-        other_digits = s[:-3]
-        if not other_digits:
-            return last_three  # Handle cases like 123
-
-        # Reverse the other_digits string for easier processing
-        other_digits_rev = other_digits[::-1]
-        formatted_other_rev = ""
-        for i, digit in enumerate(other_digits_rev):
-            formatted_other_rev += digit
-            # Add comma after every second digit (except at the end)
-            if (i + 1) % 2 == 0 and (i + 1) != len(other_digits_rev):
-                formatted_other_rev += ","
-
-        # Reverse the formatted string back
-        formatted_other = formatted_other_rev[::-1]
-        return formatted_other + "," + last_three
-
-    def _format_currency_locale(self, number):
-        """Format currency using system locale with an ASCII rupee fallback."""
-        try:
-            locale = QLocale.system()
-            return locale.toCurrencyString(float(round(number)))
-        except Exception:
-            return f"Rs. {self.format_indian_rupees(int(round(number)))}"
-
     def print_estimate(self, voucher_no, parent_widget=None):
-        """Print an estimate using manual formatting and preview."""
+        """Preview and print an estimate through the selected direct painter."""
         try:
             payload = self.build_estimate_preview_payload(voucher_no)
             if payload is None:
@@ -171,23 +99,27 @@ class PrintManager:
         *,
         estimate_data=None,
     ) -> PrintPreviewPayload | None:
-        """Build the estimate preview HTML without opening UI widgets."""
+        """Build a typed estimate preview payload without opening UI widgets."""
         return self._payload_builder.build_estimate_preview_payload(
             voucher_no,
-            layout_mode=self.estimate_layout_mode,
             fetch_estimate=lambda current_voucher: (
                 self.db_manager.get_estimate_by_voucher(current_voucher)
             ),
-            render_old=self._generate_estimate_old_format,
-            render_new=self._generate_estimate_new_format,
-            render_thermal=self._generate_estimate_thermal_format,
-            renderer_strategies=build_estimate_strategies(
-                render_old=self._generate_estimate_old_format,
-                render_new=self._generate_estimate_new_format,
-                render_thermal=self._generate_estimate_thermal_format,
-            ),
+            format_key=self.estimate_format,
             estimate_data=estimate_data,
         )
+
+    def _set_estimate_format(self, format_key: str) -> None:
+        self.estimate_format = normalize_estimate_format(format_key)
+
+    def _set_print_font(self, font: QFont) -> None:
+        """Apply and persist a preview-selected estimate print font."""
+        size = float(getattr(font, "float_size", font.pointSizeF()))
+        self.print_font.setFamily(font.family())
+        self.print_font.setPointSizeF(max(1.0, size))
+        self.print_font.setBold(font.bold())
+        self.print_font.float_size = max(1.0, size)
+        SettingsService().save_print_font(self.print_font)
 
     def show_preview(
         self,
@@ -275,8 +207,26 @@ class PrintManager:
             render_list_details=self._generate_list_details_html,
         )
 
+    def _render_document(self, printer: QPrinter, document: PrintDocument) -> None:
+        """Render a typed estimate or a legacy HTML silver-bar report."""
+        if isinstance(document, EstimatePrintDocument):
+            self._estimate_renderer.paint(
+                printer,
+                document,
+                print_font=self.print_font,
+            )
+            return
+        if isinstance(document, HtmlPrintDocument):
+            self._print_html(
+                printer,
+                document.html_content,
+                table_mode=document.table_mode,
+            )
+            return
+        raise TypeError(f"Unsupported print document: {type(document).__name__}")
+
     def _print_html(self, printer, html_content, table_mode=False):
-        """Renders the HTML text (containing PRE or TABLE) to the printer."""
+        """Render legacy silver-bar HTML reports to the printer."""
         document = QTextDocument()
         if table_mode:
             table_font = QFont("Arial", 8)
@@ -297,22 +247,6 @@ class PrintManager:
         document.setHtml(html_content)
         document.setPageSize(printer.pageRect(QPrinter.Unit.Point).size())
         document.print(printer)
-
-    @staticmethod
-    def _build_preformatted_html(content: str, *, line_height: float = 1.0) -> str:
-        return EstimatePrintRenderer._build_preformatted_html(
-            content,
-            line_height=line_height,
-        )
-
-    def _generate_estimate_old_format(self, estimate_data):
-        return self._estimate_renderer.generate_old_format(estimate_data)
-
-    def _generate_estimate_new_format(self, estimate_data):
-        return self._estimate_renderer.generate_new_format(estimate_data)
-
-    def _generate_estimate_thermal_format(self, estimate_data):
-        return self._estimate_renderer.generate_thermal_format(estimate_data)
 
     def _generate_silver_bars_html_table(self, bars, status_filter=None):
         return self._silver_bar_renderer.generate_inventory_html_table(

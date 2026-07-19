@@ -1,64 +1,61 @@
-"""Shared print-format specifications and renderer strategy contracts."""
+"""Shared specifications for Classic and Modern estimate printing."""
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Protocol
 
 
 @dataclass(frozen=True)
 class PrintFormatSpec:
     key: str
-    document_kind: str
-    table_mode: bool
     font_family: str
     font_size: float
     line_height: float
 
 
-class PrintRendererStrategy(Protocol):
-    @property
-    def spec(self) -> PrintFormatSpec: ...
-
-    def render(self, payload: object) -> str: ...
-
-
-@dataclass(frozen=True)
-class FunctionRendererStrategy:
-    spec: PrintFormatSpec
-    renderer: Callable[[object], str]
-
-    def render(self, payload: object) -> str:
-        return self.renderer(payload)
-
-
+MODERN_ESTIMATE_FORMAT_SPEC = PrintFormatSpec(
+    "modern",
+    "Arial",
+    8.0,
+    1.0,
+)
+CLASSIC_ESTIMATE_FORMAT_SPEC = PrintFormatSpec(
+    "classic",
+    "Courier New",
+    7.0,
+    1.0,
+)
 ESTIMATE_FORMAT_SPECS: Mapping[str, PrintFormatSpec] = {
-    "old": PrintFormatSpec("old", "estimate", False, "Courier New", 7.0, 1.0),
-    "new": PrintFormatSpec("new", "estimate", False, "Courier New", 7.0, 1.0),
-    "thermal": PrintFormatSpec("thermal", "estimate", False, "Courier New", 7.0, 1.0),
+    "classic": CLASSIC_ESTIMATE_FORMAT_SPEC,
+    "modern": MODERN_ESTIMATE_FORMAT_SPEC,
 }
+ESTIMATE_FORMAT_LABELS: Mapping[str, str] = {
+    "classic": "Classic",
+    "modern": "Modern",
+}
+DEFAULT_ESTIMATE_FORMAT = "modern"
 
 
-def build_estimate_strategies(
-    *,
-    render_old: Callable[[object], str],
-    render_new: Callable[[object], str],
-    render_thermal: Callable[[object], str],
-) -> dict[str, PrintRendererStrategy]:
-    return {
-        "old": FunctionRendererStrategy(ESTIMATE_FORMAT_SPECS["old"], render_old),
-        "new": FunctionRendererStrategy(ESTIMATE_FORMAT_SPECS["new"], render_new),
-        "thermal": FunctionRendererStrategy(
-            ESTIMATE_FORMAT_SPECS["thermal"], render_thermal
-        ),
+def normalize_estimate_format(value: object) -> str:
+    """Normalize current and retired setting values to the two supported formats."""
+    normalized = str(value or "").strip().lower()
+    aliases = {
+        "classic": "classic",
+        "old": "classic",
+        "modern": "modern",
+        "new": "modern",
+        "thermal": "modern",
     }
+    return aliases.get(normalized, DEFAULT_ESTIMATE_FORMAT)
 
 
 __all__ = [
+    "CLASSIC_ESTIMATE_FORMAT_SPEC",
+    "DEFAULT_ESTIMATE_FORMAT",
+    "ESTIMATE_FORMAT_LABELS",
     "ESTIMATE_FORMAT_SPECS",
-    "FunctionRendererStrategy",
+    "MODERN_ESTIMATE_FORMAT_SPEC",
     "PrintFormatSpec",
-    "PrintRendererStrategy",
-    "build_estimate_strategies",
+    "normalize_estimate_format",
 ]

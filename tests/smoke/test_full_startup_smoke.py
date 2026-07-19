@@ -7,7 +7,7 @@ from typing import Callable
 
 import pytest
 from PyQt6.QtCore import QDate, Qt, QTimer
-from PyQt6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPixmap, QTextDocument
+from PyQt6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPixmap
 from PyQt6.QtPrintSupport import QPrinter, QPrintPreviewDialog
 from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox
 
@@ -525,16 +525,19 @@ def _capture_print_preview_screen(
     parent_widget,
     capture: _SmokeCapture,
 ) -> None:
-    from silverestimate.ui.print_payload_builder import PrintPreviewPayload
+    from silverestimate.ui.print_payload_builder import (
+        HtmlPrintDocument,
+        PrintPreviewPayload,
+    )
     from silverestimate.ui.print_preview_controller import PrintPreviewController
 
     captured = {"done": False}
 
-    def render_document(printer, html_content: str, table_mode: bool) -> None:
-        del table_mode
-        document = QTextDocument()
-        document.setHtml(html_content)
-        document.print(printer)
+    def render_document(printer, document) -> None:
+        assert isinstance(document, HtmlPrintDocument)
+        painter = QPainter(printer)
+        painter.drawText(20, 40, "Smoke Estimate 100")
+        painter.end()
 
     def capture_and_close(remaining: int = 100) -> None:
         preview = next(
@@ -559,29 +562,15 @@ def _capture_print_preview_screen(
                 widget.reject()
 
     payload = PrintPreviewPayload(
-        html_content="""
-        <html>
-          <body>
-            <h1>Smoke Estimate 100</h1>
-            <table border="1" cellspacing="0" cellpadding="6">
-              <tr><th>Code</th><th>Name</th><th>Net</th><th>Fine</th></tr>
-              <tr><td>RING001</td><td>Gold Ring</td><td>9.500</td><td>8.702</td></tr>
-            </table>
-          </body>
-        </html>
-        """,
+        document=HtmlPrintDocument("Smoke Estimate 100", table_mode=False),
         title="Print Preview - Smoke Estimate 100",
-        table_mode=False,
         document_kind="estimate",
         identifier="100",
         suggested_filename="Smoke-Estimate-100.pdf",
-        layout_mode="old",
-        available_layouts=("old",),
     )
     controller = PrintPreviewController(
         printer=QPrinter(QPrinter.PrinterMode.ScreenResolution),
         render_document=render_document,
-        persist_estimate_layout=lambda _layout: None,
     )
     QTimer.singleShot(0, capture_and_close)
     QTimer.singleShot(3000, force_close_preview)

@@ -431,7 +431,7 @@ class SettingsDialog(QDialog):
             QSizePolicy.Policy.Fixed,
         )
         self.print_font_button.setToolTip(
-            "Set font family, size, and style for printed estimates\nAffects only printed output, not screen display\nRecommended: Monospace fonts like Courier New\nClick to open font selection dialog"
+            "Set font family, size, and style for printed estimates\nAffects only printed output, not screen display\nRecommended: clean print fonts such as Arial or Segoe UI\nClick to open font selection dialog"
         )
         self.print_font_label = QLabel(
             self._get_font_display_text(self._current_print_font)
@@ -660,15 +660,15 @@ class SettingsDialog(QDialog):
         self.orientation_combo.currentIndexChanged.connect(self._mark_dirty)
         form_layout.addRow("Orientation:", self.orientation_combo)
 
-        # --- Estimate Layout ---
-        self.estimate_layout_combo = ThemedComboBox()
-        self.estimate_layout_combo.addItem("Classic (Old)", "old")
-        self.estimate_layout_combo.addItem("Modern (New)", "new")
-        self.estimate_layout_combo.addItem("Thermal (80mm)", "thermal")
-        self.estimate_layout_combo.setToolTip("Choose the estimate print layout")
-        self._polish_field_control(self.estimate_layout_combo, width=260)
-        self.estimate_layout_combo.currentIndexChanged.connect(self._mark_dirty)
-        form_layout.addRow("Estimate Layout:", self.estimate_layout_combo)
+        self.estimate_format_combo = ThemedComboBox()
+        self.estimate_format_combo.addItem("Classic", "classic")
+        self.estimate_format_combo.addItem("Modern", "modern")
+        self.estimate_format_combo.setToolTip(
+            "Choose the default estimate format; it can also be changed in preview"
+        )
+        self._polish_field_control(self.estimate_format_combo, width=240)
+        self.estimate_format_combo.currentIndexChanged.connect(self._mark_dirty)
+        form_layout.addRow("Estimate Format:", self.estimate_format_combo)
 
         # Load current values into controls
         self._load_print_settings_to_ui()
@@ -976,7 +976,7 @@ class SettingsDialog(QDialog):
             printer_combo=self.printer_combo,
             page_size_combo=self.page_size_combo,
             orientation_combo=self.orientation_combo,
-            estimate_layout_combo=self.estimate_layout_combo,
+            estimate_format_combo=self.estimate_format_combo,
         )
 
     def _resize_to_available_screen(self) -> None:
@@ -1027,8 +1027,8 @@ class SettingsDialog(QDialog):
     def _load_print_font_setting(self):
         """Loads the print font from QSettings."""
         # Reusing logic similar to MainWindow.load_settings
-        default_font = QFont("Courier New", 7)  # Sensible default for print
-        default_font_size = 7.0
+        default_font = QFont("Arial", 8)
+        default_font_size = 8.0
         default_font.float_size = default_font_size
 
         font_family = self.settings.value(
@@ -1189,13 +1189,12 @@ class SettingsDialog(QDialog):
                 self._print_settings_widgets()
             )
             logger.debug(
-                "Saved print settings: margins=%s zoom=%s printer=%s page_size=%s orientation=%s layout=%s",
+                "Saved print settings: margins=%s zoom=%s printer=%s page_size=%s orientation=%s",
                 self._print_settings_controller.serialize_margins(print_state.margins),
                 print_state.preview_zoom,
                 print_state.default_printer,
                 print_state.page_size,
                 print_state.orientation,
-                print_state.estimate_layout,
             )
 
             # Live Rates settings
@@ -1504,8 +1503,8 @@ class SettingsDialog(QDialog):
     def _restore_defaults(self):
         """Restore sensible default settings for this dialog and update the UI."""
         # Fonts
-        default_font = QFont("Courier New", 7)
-        default_font.float_size = 7.0
+        default_font = QFont("Arial", 8)
+        default_font.float_size = 8.0
         self._current_print_font = default_font
         self.print_font_label.setText(self._get_font_display_text(default_font))
 

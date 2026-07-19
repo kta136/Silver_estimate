@@ -8,7 +8,7 @@ import tempfile
 from typing import Callable
 
 from PyQt6.QtCore import QEvent, QObject, QSize, Qt
-from PyQt6.QtGui import QAction, QActionGroup, QPageLayout
+from PyQt6.QtGui import QAction, QActionGroup, QFont, QPageLayout
 from PyQt6.QtPrintSupport import (
     QPageSetupDialog,
     QPrintDialog,
@@ -31,13 +31,18 @@ from PyQt6.QtWidgets import (
 )
 
 from silverestimate.infrastructure.settings import get_app_settings
+from silverestimate.ui.custom_font_dialog import CustomFontDialog
 from silverestimate.ui.icons import get_icon
+from silverestimate.ui.print_format_spec import (
+    ESTIMATE_FORMAT_LABELS,
+    normalize_estimate_format,
+)
 from silverestimate.ui.print_page_settings import (
     copy_printer_page_layout,
     save_printer_page_settings,
     validate_quick_print_printer,
 )
-from silverestimate.ui.print_payload_builder import PrintPreviewPayload
+from silverestimate.ui.print_payload_builder import PrintDocument, PrintPreviewPayload
 from silverestimate.ui.theme_tokens import (
     CARD_BORDER,
     CARD_BORDER_SOFT,
@@ -52,13 +57,6 @@ from silverestimate.ui.themed_controls import ThemedComboBox, ThemedSpinBox
 from silverestimate.ui.window_sizing import resize_to_available_screen
 
 LOGGER = logging.getLogger(__name__)
-
-_LAYOUT_LABELS = {
-    "old": "Classic",
-    "new": "Modern",
-    "thermal": "Thermal",
-}
-
 
 class _PreviewWheelZoomFilter(QObject):
     """Translate Ctrl+wheel into preview zoom actions."""
@@ -101,12 +99,16 @@ class PrintPreviewController:
         self,
         *,
         printer: QPrinter,
-        render_document: Callable[[QPrinter, str, bool], None],
-        persist_estimate_layout: Callable[[str], None] | None = None,
+        render_document: Callable[[QPrinter, PrintDocument], None],
+        persist_estimate_format: Callable[[str], None] | None = None,
+        get_print_font: Callable[[], QFont] | None = None,
+        persist_print_font: Callable[[QFont], None] | None = None,
     ) -> None:
         self._printer = printer
         self._render_document = render_document
-        self._persist_estimate_layout = persist_estimate_layout
+        self._persist_estimate_format = persist_estimate_format
+        self._get_print_font = get_print_font
+        self._persist_print_font = persist_print_font
 
     def open_preview(
         self,
@@ -121,8 +123,7 @@ class PrintPreviewController:
         preview.paintRequested.connect(
             lambda printer: self._render_document(
                 printer,
-                state["payload"].html_content,
-                state["payload"].table_mode,
+                state["payload"].document,
             )
         )
 
@@ -212,14 +213,12 @@ class PrintPreviewController:
         save_printer_page_settings(settings, self._printer)
 
     def _save_payload_defaults(self, settings, payload: PrintPreviewPayload) -> None:
-        if payload.document_kind != "estimate":
+        if payload.document_kind != "estimate" or not payload.format_key:
             return
-        layout_mode = (payload.layout_mode or "").strip().lower()
-        if layout_mode not in _LAYOUT_LABELS:
-            return
-        settings.setValue("print/estimate_layout", layout_mode)
-        if self._persist_estimate_layout is not None:
-            self._persist_estimate_layout(layout_mode)
+        format_key = normalize_estimate_format(payload.format_key)
+        settings.setValue("print/estimate_layout", format_key)
+        if self._persist_estimate_format is not None:
+            self._persist_estimate_format(format_key)
 
     def _augment_preview_toolbar(
         self,
@@ -286,10 +285,14 @@ class PrintPreviewController:
             QWidget#PreviewPageNavigator QLabel {{
                 color: {FIELD_TEXT};
             }}
-            QComboBox#PreviewOrientationCombo,
-            QComboBox#PreviewLayoutCombo {{
+            QComboBox#PreviewOrientationCombo {{
                 min-width: 90px;
                 max-width: 100px;
+                min-height: 28px;
+            }}
+            QComboBox#PreviewFormatCombo {{
+                min-width: 90px;
+                max-width: 110px;
                 min-height: 28px;
             }}
             QSpinBox#PreviewPageSpin {{
@@ -298,8 +301,6 @@ class PrintPreviewController:
                 min-height: 28px;
             }}
             """)
-
-        payload = state["payload"]
 
         act_qprint = QAction(get_icon("print", widget=preview), "Print", preview)
         act_qprint.setToolTip("Send directly to the selected printer (Ctrl+Shift+P)")
@@ -345,16 +346,29 @@ class PrintPreviewController:
         orientation_combo = self._build_orientation_combo(preview)
         toolbar.addWidget(orientation_combo)
 
-        if payload.document_kind == "estimate" and payload.available_layouts:
-            layout_combo = self._build_layout_combo(preview, payload)
-            layout_combo.currentIndexChanged.connect(
-                lambda: self._switch_layout(
+        payload = state["payload"]
+        if payload.document_kind == "estimate" and payload.available_formats:
+            format_combo = self._build_format_combo(preview, payload)
+            format_combo.currentIndexChanged.connect(
+                lambda: self._switch_format(
                     preview,
-                    layout_combo.currentData(),
+                    format_combo.currentData(),
                     state,
                 )
             )
-            toolbar.addWidget(layout_combo)
+            toolbar.addWidget(format_combo)
+
+            if self._get_print_font is not None and self._persist_print_font is not None:
+                act_font = QAction(
+                    get_icon("settings", widget=preview),
+                    "Print Font",
+                    preview,
+                )
+                act_font.setToolTip(
+                    "Choose the estimate print font family, size, and weight"
+                )
+                act_font.triggered.connect(lambda: self._choose_print_font(preview))
+                toolbar.addAction(act_font)
 
         toolbar.addSeparator()
 
@@ -583,24 +597,59 @@ class PrintPreviewController:
         )
         return combo
 
-    def _build_layout_combo(
+    def _build_format_combo(
         self,
         preview: QPrintPreviewDialog,
         payload: PrintPreviewPayload,
     ) -> ThemedComboBox:
         combo = ThemedComboBox(preview)
-        combo.setObjectName("PreviewLayoutCombo")
+        combo.setObjectName("PreviewFormatCombo")
         combo.setMinimumWidth(90)
-        combo.setMaximumWidth(100)
+        combo.setMaximumWidth(110)
         combo.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        combo.setToolTip("Switch the estimate print layout without leaving preview")
-        for layout_mode in payload.available_layouts:
+        combo.setToolTip("Switch between Classic and Modern estimate formats")
+        for format_key in payload.available_formats:
             combo.addItem(
-                _LAYOUT_LABELS.get(layout_mode, layout_mode.title()), layout_mode
+                ESTIMATE_FORMAT_LABELS.get(format_key, format_key.title()),
+                format_key,
             )
-        index = combo.findData(payload.layout_mode)
+        index = combo.findData(payload.format_key)
         combo.setCurrentIndex(index if index >= 0 else 0)
         return combo
+
+    def _switch_format(
+        self,
+        preview: QPrintPreviewDialog,
+        format_key,
+        state: dict[str, PrintPreviewPayload],
+    ) -> None:
+        payload = state["payload"]
+        if not format_key or payload.format_factory is None:
+            return
+        next_payload = payload.format_factory(str(format_key))
+        if next_payload is None:
+            return
+        state["payload"] = next_payload
+        preview.setWindowTitle(next_payload.title)
+        preview_widget = preview.findChild(QPrintPreviewWidget)
+        if preview_widget:
+            preview_widget.updatePreview()
+        else:
+            preview.repaint()
+
+    def _choose_print_font(self, preview: QPrintPreviewDialog) -> None:
+        """Persist a selected estimate font and refresh the current preview."""
+        if self._get_print_font is None or self._persist_print_font is None:
+            return
+        dialog = CustomFontDialog(self._get_print_font(), preview)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        self._persist_print_font(dialog.get_selected_font())
+        preview_widget = preview.findChild(QPrintPreviewWidget)
+        if preview_widget:
+            preview_widget.updatePreview()
+        else:
+            preview.repaint()
 
     def _build_page_navigation_widget(
         self,
@@ -649,26 +698,6 @@ class PrintPreviewController:
         if viewport is not None:
             viewport.installEventFilter(filter_obj)
         preview._wheel_zoom_filter = filter_obj
-
-    def _switch_layout(
-        self,
-        preview: QPrintPreviewDialog,
-        layout_mode,
-        state: dict[str, PrintPreviewPayload],
-    ) -> None:
-        payload = state["payload"]
-        if not layout_mode or payload.layout_factory is None:
-            return
-        next_payload = payload.layout_factory(str(layout_mode))
-        if next_payload is None:
-            return
-        state["payload"] = next_payload
-        preview.setWindowTitle(next_payload.title)
-        preview_widget = preview.findChild(QPrintPreviewWidget)
-        if preview_widget:
-            preview_widget.updatePreview()
-        else:
-            preview.repaint()
 
     def _zoom_in(self, preview_widget: QPrintPreviewWidget) -> None:
         try:
@@ -775,8 +804,7 @@ class PrintPreviewController:
             copy_printer_page_layout(self._printer, pdf_printer)
             self._render_document(
                 pdf_printer,
-                payload.html_content,
-                payload.table_mode,
+                payload.document,
             )
             if not os.path.exists(temp_path) or os.path.getsize(temp_path) <= 0:
                 raise RuntimeError("PDF export produced an empty file.")
@@ -881,8 +909,7 @@ class PrintPreviewController:
                 return
             self._render_document(
                 self._printer,
-                payload.html_content,
-                payload.table_mode,
+                payload.document,
             )
             try:
                 preview.accept()

@@ -5,6 +5,22 @@ All notable changes to the Silver Estimation App will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.06] - 2026-07-19
+
+### Added
+- Added persistent Classic and Modern estimate-format selection in Settings and Print Preview.
+- Added print-font family, size, and weight controls directly to estimate preview with immediate refresh.
+- Added typed estimate print documents, direct `QPainter` rendering, multi-section print fixtures, and visual PDF regression coverage.
+
+### Changed
+- Reworked Modern printing into a full-width semantic A4 table with shared Gross, Poly, Net, %, Fine, and Lbr column anchors.
+- Preserved the former Modern/New fixed-width layout under the Classic name.
+- Simplified estimate headers to keep Voucher and Silver Rate on one row and removed the printed Date.
+
+### Removed
+- Removed obsolete estimate HTML generation and the unused legacy estimate formats.
+- Removed the estimate footer, `/Doz.` text, weight-unit suffixes from column headings, and the long Labour heading.
+
 ## [3.05] - 2026-07-16
 
 ### Fixed

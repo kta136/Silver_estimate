@@ -22,7 +22,7 @@ Qt views and dialogs
 - `SilverBarDialog` follows the same pattern through `SilverBarManagementFacade`.
 - `LatestRequestRunner[RequestT, ResultT]` owns one persistent worker, a monotonically increasing generation, cooperative cancellation, and at most one pending replacement request. Only the latest generation may deliver a result.
 - SQLite background work uses a connection owned by its worker thread and a progress handler bound to the cancellation event.
-- Printing uses shared `PrintFormatSpec` values and renderer strategies. Existing Classic, Modern, Thermal, inventory, and list output remains compatible.
+- Estimate printing offers two named formats over the same typed `EstimatePrintDocument`: Classic preserves the former Modern/New fixed-width column layout, while Modern uses the current full-width semantic table with shared column anchors, repeated headers, and kept totals. Both preview, export, and physical print paths use direct `QPainter` rendering and intentionally omit a footer. The selected default is persisted and can be switched inside preview; the estimate preview also exposes persistent print-font family, size, and weight settings with immediate refresh. Silver-bar inventory and list reports remain available through their existing HTML renderer.
 - Settings contains independently owned pages/controllers, including the DDA live-rate page and print-settings controller. Pages expose state/signals instead of reaching into transport code.
 - Shared display helpers keep user-facing dates in `DD/MM/YYYY` form and currency in Indian-grouped rupees across models and history dialogs.
 - History and management tables use shared dense-table styling and explicit empty states; settings surfaces saved/unsaved feedback without controller compatibility aliases.
@@ -80,5 +80,5 @@ SSE is primary. A disconnected stream polls current-rates every 10 seconds, sequ
 - Add repository reads, writes, and reconciliation to the corresponding role rather than the compatibility backend.
 - Use keyset cursors for user-visible collections.
 - Use `LatestRequestRunner` for replaceable UI work and cooperative stop events for long-running I/O.
-- Add print formats through a shared specification and renderer strategy.
+- Keep Classic and Modern estimate preview, PDF export, and physical printing on the shared typed document and direct painters. Preserve the former Modern/New fixed-width layout as Classic; add new structured print changes to Modern's semantic column/section model.
 - Keep DDA selection pinned to the stable item ID and `finalRate`.

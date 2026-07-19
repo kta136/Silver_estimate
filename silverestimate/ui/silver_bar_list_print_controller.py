@@ -4,14 +4,40 @@ from __future__ import annotations
 
 import logging
 import traceback
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QThread
+from PyQt6.QtCore import QObject, QThread, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox, QProgressDialog
 
 from ._host_proxy import HostProxy
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class _PrintPreviewBuildWorker(QObject):
+    """Prepare a silver-bar list preview away from the GUI thread."""
+
+    preview_ready = pyqtSignal(int, object)
+    preview_error = pyqtSignal(int, str)
+    finished = pyqtSignal(int)
+
+    def __init__(
+        self,
+        request_id: int,
+        build_preview: Callable[[], object],
+    ) -> None:
+        super().__init__()
+        self._request_id = request_id
+        self._build_preview = build_preview
+
+    def run(self) -> None:
+        try:
+            self.preview_ready.emit(self._request_id, self._build_preview())
+        except Exception as exc:
+            self.preview_error.emit(self._request_id, str(exc))
+        finally:
+            self.finished.emit(self._request_id)
 
 
 class SilverBarListPrintController(HostProxy):
@@ -43,7 +69,7 @@ class SilverBarListPrintController(HostProxy):
         )
 
         try:
-            from .print_manager import PrintManager, PrintPreviewBuildWorker
+            from .print_manager import PrintManager
 
             parent_context = self.host.parent()
             current_print_font = (
@@ -59,7 +85,7 @@ class SilverBarListPrintController(HostProxy):
                         bars_in_list,
                     )
                 ),
-                worker_cls=PrintPreviewBuildWorker,
+                worker_cls=_PrintPreviewBuildWorker,
             )
 
         except ImportError:

@@ -1,9 +1,11 @@
 from pathlib import Path
 
 from PyQt6.QtCore import QSizeF
-from PyQt6.QtGui import QPageLayout, QPageSize
+from PyQt6.QtGui import QFont, QPageLayout, QPageSize
 from PyQt6.QtPrintSupport import QPrinter, QPrintPreviewDialog, QPrintPreviewWidget
 from PyQt6.QtWidgets import (
+    QComboBox,
+    QDialog,
     QFileDialog,
     QMenu,
     QMessageBox,
@@ -13,7 +15,10 @@ from PyQt6.QtWidgets import (
 )
 
 from silverestimate.infrastructure.settings import get_app_settings
-from silverestimate.ui.print_payload_builder import PrintPreviewPayload
+from silverestimate.ui.print_payload_builder import (
+    HtmlPrintDocument,
+    PrintPreviewPayload,
+)
 from silverestimate.ui.print_preview_controller import PrintPreviewController
 
 
@@ -29,20 +34,33 @@ class _PreviewWidgetStub:
         self.zoom_factor = zoom_factor
 
 
+def _estimate_payload(format_key: str = "modern") -> PrintPreviewPayload:
+    def build(selected_format: str) -> PrintPreviewPayload:
+        return PrintPreviewPayload(
+            document=HtmlPrintDocument(
+                f"<html><body><p>{selected_format}</p></body></html>",
+                table_mode=False,
+            ),
+            title="Print Preview",
+            document_kind="estimate",
+            identifier="V-001",
+            suggested_filename="Estimate-V-001.pdf",
+            format_key=selected_format,
+            available_formats=("classic", "modern"),
+            format_factory=build,
+        )
+
+    return build(format_key)
+
+
 def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
     controller = PrintPreviewController(
         printer=QPrinter(),
         render_document=lambda *args: None,
+        get_print_font=lambda: QFont("Arial", 8),
+        persist_print_font=lambda _font: None,
     )
-    payload = PrintPreviewPayload(
-        html_content="<html><body><p>Preview</p></body></html>",
-        title="Print Preview",
-        document_kind="estimate",
-        identifier="V-001",
-        suggested_filename="Estimate-V-001.pdf",
-        layout_mode="new",
-        available_layouts=("old", "new", "thermal"),
-    )
+    payload = _estimate_payload()
     preview = QPrintPreviewDialog(controller._printer)
     qtbot.addWidget(preview)
     preview_widget = preview.findChild(QPrintPreviewWidget)
@@ -61,6 +79,13 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
     assert not toolbar.isFloatable()
     assert toolbar.iconSize().width() == 22
     assert preview.findChild(QWidget, "PreviewPageNavigator") is not None
+    format_combo = preview.findChild(QComboBox, "PreviewFormatCombo")
+    assert format_combo is not None
+    assert [format_combo.itemText(index) for index in range(format_combo.count())] == [
+        "Classic",
+        "Modern",
+    ]
+    assert format_combo.currentData() == "modern"
 
     action_texts = [action.text() for action in toolbar.actions() if action.text()]
 
@@ -83,6 +108,7 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
     expected_toolbar_actions = [
         "Print",
         "Export PDF",
+        "Print Font",
         "Fit Width",
         "Fit Page",
         "Zoom Out",
@@ -114,6 +140,63 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
     for action in [*toolbar.actions(), *more_menu.actions()]:
         if action.text() in set(expected_toolbar_actions + expected_menu_actions):
             assert not action.icon().isNull()
+
+
+def test_preview_print_font_dialog_persists_selection_and_refreshes(
+    monkeypatch,
+) -> None:
+    initial_font = QFont("Arial", 8)
+    selected_font = QFont("Arial", 12)
+    selected_font.setBold(True)
+    selected_font.float_size = 12.0
+    persisted_fonts = []
+
+    class _PreviewWidget:
+        def __init__(self) -> None:
+            self.update_calls = 0
+
+        def updatePreview(self) -> None:
+            self.update_calls += 1
+
+    class _Preview:
+        def __init__(self) -> None:
+            self.widget = _PreviewWidget()
+            self.repaint_calls = 0
+
+        def findChild(self, _widget_type):
+            return self.widget
+
+        def repaint(self) -> None:
+            self.repaint_calls += 1
+
+    class _FontDialog:
+        def __init__(self, font, parent) -> None:
+            assert font.family() == initial_font.family()
+            assert parent is preview
+
+        def exec(self):
+            return QDialog.DialogCode.Accepted
+
+        def get_selected_font(self):
+            return selected_font
+
+    controller = PrintPreviewController(
+        printer=QPrinter(),
+        render_document=lambda *args: None,
+        get_print_font=lambda: initial_font,
+        persist_print_font=persisted_fonts.append,
+    )
+    preview = _Preview()
+    monkeypatch.setattr(
+        "silverestimate.ui.print_preview_controller.CustomFontDialog",
+        _FontDialog,
+    )
+
+    controller._choose_print_font(preview)
+
+    assert persisted_fonts == [selected_font]
+    assert preview.widget.update_calls == 1
+    assert preview.repaint_calls == 0
 
 
 def test_preview_uses_fit_width_when_zoom_is_not_saved(qt_app, settings_stub):
@@ -149,11 +232,11 @@ def test_preview_defaults_persist_updated_print_preferences(
     qt_app, monkeypatch, settings_stub
 ):
     del qt_app, settings_stub
-    saved_layouts = []
+    persisted_formats = []
     controller = PrintPreviewController(
         printer=QPrinter(),
         render_document=lambda *args: None,
-        persist_estimate_layout=saved_layouts.append,
+        persist_estimate_format=persisted_formats.append,
     )
     monkeypatch.setattr(controller._printer, "printerName", lambda: "Warehouse Printer")
     controller._printer.setPageOrientation(QPageLayout.Orientation.Portrait)
@@ -171,15 +254,7 @@ def test_preview_defaults_persist_updated_print_preferences(
             actual_margins.bottom(),
         )
     )
-    payload = PrintPreviewPayload(
-        html_content="<html><body><p>Preview</p></body></html>",
-        title="Print Preview",
-        document_kind="estimate",
-        identifier="V-002",
-        suggested_filename="Estimate-V-002.pdf",
-        layout_mode="thermal",
-        available_layouts=("old", "new", "thermal"),
-    )
+    payload = _estimate_payload("classic")
 
     controller._save_preview_defaults(payload)
 
@@ -191,8 +266,23 @@ def test_preview_defaults_persist_updated_print_preferences(
     assert settings.value("print/page_width_mm") == 215.9
     assert settings.value("print/page_height_mm") == 355.6
     assert settings.value("print/margins") == expected_margins_str
-    assert settings.value("print/estimate_layout") == "thermal"
-    assert saved_layouts == ["thermal"]
+    assert settings.value("print/estimate_layout") == "classic"
+    assert persisted_formats == ["classic"]
+
+
+def test_preview_format_switch_rebuilds_current_estimate_payload(qtbot) -> None:
+    controller = PrintPreviewController(
+        printer=QPrinter(),
+        render_document=lambda *args: None,
+    )
+    preview = QPrintPreviewDialog(controller._printer)
+    qtbot.addWidget(preview)
+    state = {"payload": _estimate_payload("modern")}
+
+    controller._switch_format(preview, "classic", state)
+
+    assert state["payload"].format_key == "classic"
+    assert state["payload"].document.html_content.endswith("classic</p></body></html>")
 
 
 def test_preview_defaults_store_custom_page_size_dimensions(qt_app, settings_stub):
@@ -206,7 +296,10 @@ def test_preview_defaults_store_custom_page_size_dimensions(qt_app, settings_stu
     )
     controller._printer.setPageSize(custom_page)
     payload = PrintPreviewPayload(
-        html_content="<html><body><p>Preview</p></body></html>",
+        document=HtmlPrintDocument(
+            "<html><body><p>Preview</p></body></html>",
+            table_mode=False,
+        ),
         title="Print Preview",
         document_kind="silver_bar_list",
         identifier="LIST-001",
@@ -229,7 +322,10 @@ def test_quick_print_closes_preview_without_success_popup(monkeypatch):
         render_document=lambda *args: render_calls.append(args),
     )
     payload = PrintPreviewPayload(
-        html_content="<html><body><p>Preview</p></body></html>",
+        document=HtmlPrintDocument(
+            "<html><body><p>Preview</p></body></html>",
+            table_mode=False,
+        ),
         title="Print Preview",
         document_kind="estimate",
         identifier="V-003",
@@ -266,7 +362,10 @@ def test_quick_print_failure_keeps_preview_open_and_shows_error(monkeypatch):
         render_document=lambda *args: (_ for _ in ()).throw(RuntimeError("offline")),
     )
     payload = PrintPreviewPayload(
-        html_content="<html><body><p>Preview</p></body></html>",
+        document=HtmlPrintDocument(
+            "<html><body><p>Preview</p></body></html>",
+            table_mode=False,
+        ),
         title="Print Preview",
         document_kind="estimate",
         identifier="V-004",
@@ -305,7 +404,10 @@ def test_quick_print_blocks_missing_printer_before_render(monkeypatch):
         render_document=lambda *args: render_calls.append(args),
     )
     payload = PrintPreviewPayload(
-        html_content="<html><body><p>Preview</p></body></html>",
+        document=HtmlPrintDocument(
+            "<html><body><p>Preview</p></body></html>",
+            table_mode=False,
+        ),
         title="Print Preview",
         document_kind="estimate",
         identifier="V-005",
@@ -347,8 +449,8 @@ def test_export_pdf_writes_temp_then_replaces_target(
     target.write_bytes(b"old-pdf")
     render_targets = []
 
-    def _render_pdf(printer, html_content, table_mode):
-        del html_content, table_mode
+    def _render_pdf(printer, document):
+        del document
         output_path = Path(printer.outputFileName())
         render_targets.append(output_path)
         output_path.write_bytes(b"%PDF-1.4\nok\n")
@@ -358,7 +460,10 @@ def test_export_pdf_writes_temp_then_replaces_target(
         render_document=_render_pdf,
     )
     payload = PrintPreviewPayload(
-        html_content="<html><body><p>Preview</p></body></html>",
+        document=HtmlPrintDocument(
+            "<html><body><p>Preview</p></body></html>",
+            table_mode=False,
+        ),
         title="Print Preview",
         document_kind="estimate",
         identifier="V-006",
@@ -392,8 +497,8 @@ def test_export_pdf_empty_temp_keeps_existing_file(
     target = tmp_path / "estimate.pdf"
     target.write_bytes(b"old-pdf")
 
-    def _render_empty_pdf(printer, html_content, table_mode):
-        del html_content, table_mode
+    def _render_empty_pdf(printer, document):
+        del document
         Path(printer.outputFileName()).write_bytes(b"")
 
     controller = PrintPreviewController(
@@ -401,7 +506,10 @@ def test_export_pdf_empty_temp_keeps_existing_file(
         render_document=_render_empty_pdf,
     )
     payload = PrintPreviewPayload(
-        html_content="<html><body><p>Preview</p></body></html>",
+        document=HtmlPrintDocument(
+            "<html><body><p>Preview</p></body></html>",
+            table_mode=False,
+        ),
         title="Print Preview",
         document_kind="estimate",
         identifier="V-007",

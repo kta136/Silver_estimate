@@ -7,6 +7,10 @@ from PyQt6.QtPrintSupport import QPrinterInfo
 from PyQt6.QtWidgets import QComboBox, QDoubleSpinBox, QSpinBox
 
 from silverestimate.infrastructure.settings import SettingsStore
+from silverestimate.ui.print_format_spec import (
+    DEFAULT_ESTIMATE_FORMAT,
+    normalize_estimate_format,
+)
 from silverestimate.ui.print_page_settings import (
     DEFAULT_ORIENTATION,
     DEFAULT_PAGE_SIZE,
@@ -23,8 +27,6 @@ from silverestimate.ui.print_page_settings import (
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_PREVIEW_ZOOM = 1.25
-DEFAULT_ESTIMATE_LAYOUT = "old"
-SUPPORTED_ESTIMATE_LAYOUTS = ("old", "new", "thermal")
 
 
 @dataclass(frozen=True)
@@ -37,7 +39,7 @@ class PrintSettingsState:
     page_width_mm: float = 0.0
     page_height_mm: float = 0.0
     orientation: str = DEFAULT_ORIENTATION
-    estimate_layout: str = DEFAULT_ESTIMATE_LAYOUT
+    estimate_format: str = DEFAULT_ESTIMATE_FORMAT
 
 
 @dataclass(frozen=True)
@@ -50,7 +52,7 @@ class PrintSettingsWidgets:
     printer_combo: QComboBox
     page_size_combo: QComboBox
     orientation_combo: QComboBox
-    estimate_layout_combo: QComboBox
+    estimate_format_combo: QComboBox
 
 
 class SettingsPrintController:
@@ -62,16 +64,14 @@ class SettingsPrintController:
     def load_state(self) -> PrintSettingsState:
         page_settings = load_print_page_settings(self._settings)
         preview_zoom = self._load_preview_zoom()
-        estimate_layout = self._validated_value(
-            self._settings.value(
-                "print/estimate_layout",
-                DEFAULT_ESTIMATE_LAYOUT,
-                type=str,
-            ),
-            supported=SUPPORTED_ESTIMATE_LAYOUTS,
-            default=DEFAULT_ESTIMATE_LAYOUT,
-            setting_name="print/estimate_layout",
+        raw_estimate_format = self._settings.value(
+            "print/estimate_layout",
+            DEFAULT_ESTIMATE_FORMAT,
+            type=str,
         )
+        estimate_format = normalize_estimate_format(raw_estimate_format)
+        if str(raw_estimate_format or "").strip().lower() != estimate_format:
+            self._settings.setValue("print/estimate_layout", estimate_format)
         return PrintSettingsState(
             margins=page_settings.margins,
             preview_zoom=preview_zoom,
@@ -81,7 +81,7 @@ class SettingsPrintController:
             page_width_mm=page_settings.page_width_mm,
             page_height_mm=page_settings.page_height_mm,
             orientation=page_settings.orientation,
-            estimate_layout=estimate_layout,
+            estimate_format=estimate_format,
         )
 
     def load_to_ui(self, widgets: PrintSettingsWidgets) -> PrintSettingsState:
@@ -116,9 +116,10 @@ class SettingsPrintController:
         if idx_orientation >= 0:
             widgets.orientation_combo.setCurrentIndex(idx_orientation)
 
-        idx_layout = widgets.estimate_layout_combo.findData(state.estimate_layout)
-        if idx_layout >= 0:
-            widgets.estimate_layout_combo.setCurrentIndex(idx_layout)
+        idx_format = widgets.estimate_format_combo.findData(state.estimate_format)
+        if idx_format >= 0:
+            widgets.estimate_format_combo.setCurrentIndex(idx_format)
+
         return state
 
     def save_from_ui(self, widgets: PrintSettingsWidgets) -> PrintSettingsState:
@@ -154,8 +155,9 @@ class SettingsPrintController:
             page_width_mm=page_width_mm,
             page_height_mm=page_height_mm,
             orientation=widgets.orientation_combo.currentText() or DEFAULT_ORIENTATION,
-            estimate_layout=widgets.estimate_layout_combo.currentData()
-            or DEFAULT_ESTIMATE_LAYOUT,
+            estimate_format=(
+                widgets.estimate_format_combo.currentData() or DEFAULT_ESTIMATE_FORMAT
+            ),
         )
         self.save_state(state)
         return state
@@ -174,7 +176,7 @@ class SettingsPrintController:
             ),
         )
         self._settings.setValue("print/preview_zoom", float(state.preview_zoom))
-        self._settings.setValue("print/estimate_layout", state.estimate_layout)
+        self._settings.setValue("print/estimate_layout", state.estimate_format)
 
     def apply_defaults_to_ui(self, widgets: PrintSettingsWidgets) -> PrintSettingsState:
         state = PrintSettingsState()
@@ -195,9 +197,10 @@ class SettingsPrintController:
         if idx_orientation >= 0:
             widgets.orientation_combo.setCurrentIndex(idx_orientation)
 
-        idx_layout = widgets.estimate_layout_combo.findData(state.estimate_layout)
-        if idx_layout >= 0:
-            widgets.estimate_layout_combo.setCurrentIndex(idx_layout)
+        idx_format = widgets.estimate_format_combo.findData(state.estimate_format)
+        if idx_format >= 0:
+            widgets.estimate_format_combo.setCurrentIndex(idx_format)
+
         return state
 
     def refresh_printer_list(self, combo: QComboBox) -> None:
@@ -226,21 +229,3 @@ class SettingsPrintController:
         except TypeError, ValueError:
             LOGGER.warning("Invalid preview zoom in settings: %r", raw_value)
             return DEFAULT_PREVIEW_ZOOM
-
-    @staticmethod
-    def _validated_value(
-        value: str | None,
-        *,
-        supported: tuple[str, ...],
-        default: str,
-        setting_name: str,
-    ) -> str:
-        if value in supported:
-            return value
-        LOGGER.warning(
-            "Invalid %s setting value %r; using %s",
-            setting_name,
-            value,
-            default,
-        )
-        return default

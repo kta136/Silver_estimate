@@ -20,8 +20,9 @@ from silverestimate.persistence.silver_bar_synchronization_repository import (
 from silverestimate.ui.estimate_entry import EstimateEntryWidget
 from silverestimate.ui.estimate_entry_facade import EstimateEntryFacade
 from silverestimate.ui.print_format_spec import (
+    CLASSIC_ESTIMATE_FORMAT_SPEC,
     ESTIMATE_FORMAT_SPECS,
-    FunctionRendererStrategy,
+    MODERN_ESTIMATE_FORMAT_SPEC,
 )
 from silverestimate.ui.settings_live_rates_page import LiveRatesSettingsPage
 from silverestimate.ui.silver_bar_management import SilverBarDialog
@@ -65,12 +66,12 @@ def test_live_rate_settings_are_an_independent_page() -> None:
     assert callable(LiveRatesSettingsPage.save)
 
 
-def test_print_strategy_carries_shared_format_spec() -> None:
-    strategy = FunctionRendererStrategy(
-        ESTIMATE_FORMAT_SPECS["new"], lambda payload: f"rendered:{payload}"
-    )
-    assert strategy.spec.document_kind == "estimate"
-    assert strategy.render("voucher") == "rendered:voucher"
+def test_classic_and_modern_are_the_only_estimate_formats() -> None:
+    assert tuple(ESTIMATE_FORMAT_SPECS) == ("classic", "modern")
+    assert ESTIMATE_FORMAT_SPECS["classic"] is CLASSIC_ESTIMATE_FORMAT_SPEC
+    assert ESTIMATE_FORMAT_SPECS["modern"] is MODERN_ESTIMATE_FORMAT_SPEC
+    assert CLASSIC_ESTIMATE_FORMAT_SPEC.key == "classic"
+    assert MODERN_ESTIMATE_FORMAT_SPEC.key == "modern"
 
 
 def test_explicit_facade_methods_delegate_without_dynamic_widget_composition() -> None:

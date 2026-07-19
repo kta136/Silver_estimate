@@ -8,6 +8,7 @@ from .estimate_items import (
     silver_bar_item,
     wage_calculation_cases,
 )
+from .print_estimates import multi_section_print_estimate
 
 __all__ = [
     "regular_item",
@@ -18,4 +19,5 @@ __all__ = [
     "WageCalculationCase",
     "fine_calculation_cases",
     "wage_calculation_cases",
+    "multi_section_print_estimate",
 ]

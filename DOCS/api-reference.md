@@ -104,9 +104,9 @@ This guide documents the primary controller, service, and persistence APIs expos
     DatabaseManager(db_path: str, password: str)
 
 Responsibilities:
-- Create/delete the decrypted temp database, manage WAL checkpoints, and re-encrypt changes on flush/close.
+- Open the live SQLCipher database directly through the keyed broker and expose repository compatibility cursors.
 - Expose repository accessors: items_repo, estimates_repo, silver_bars_repo.
-- Coordinate cache controllers, flush scheduling, and recovery helpers.
+- Detect/create/migrate storage, validate the controlled driver, and serialize maintenance operations.
 
 Key Public Methods:
 - **setup_database() -> None** – ensure schema and migrations are applied.
@@ -114,9 +114,11 @@ Key Public Methods:
 - **save_estimate_with_returns(... ) -> bool** – transactional save for headers/items, with bar sync.
 - **get_estimate_by_voucher(voucher_no: str) -> Optional[dict]** – retrieve composite estimate payloads.
 - **delete_all_estimates() / delete_single_estimate(voucher_no)** – destructive operations used by MainCommands.
-- **request_flush(delay_seconds: float = 2.0)** and **flush_to_encrypted()** – trigger generation-aware streamed `SILVDB01` encryption cycles.
-- **close()** – commit outstanding work, stop flush scheduler, remove temp files.
-- **Static helpers**: `check_recovery_candidate` and `recover_encrypt_plain_to_encrypted`.
+- **open_read_connection(cancel_event=None)** – return a keyed read-only worker connection owned by the caller.
+- **create_encrypted_backup(destination=None) -> MaintenanceOutcome** – export and validate a `.sedbbackup` archive.
+- **stage_encrypted_restore(path, archive_password) -> MaintenanceOutcome** – validate and stage restore activation for the next open.
+- **change_passwords(new_password) -> MaintenanceOutcome** – copy, validate, switch, and retain rollback material.
+- **close()** – commit, checkpoint when possible, and close the live encrypted connection.
 
 New integrations should favour the role-specific repositories below instead of adding more forwarding methods to `DatabaseManager`.
 
@@ -124,7 +126,7 @@ New integrations should favour the role-specific repositories below instead of a
 - **get_item_by_code(code: str)** – fetch item rows with cache support.
 - **get_items_page(...) -> Page[dict, ItemCursor]** – keyset page of up to 1,000 filtered items.
 - **search_items(search_term: str) / get_all_items()** – compatibility list helpers.
-- **add_item(...) / update_item(...) / delete_item(code: str)** – maintain catalog entries and trigger flushes.
+- **add_item(...) / update_item(...) / delete_item(code: str)** – maintain catalog entries in direct SQLCipher transactions.
 
 ### EstimatesRepository (silverestimate/persistence/estimates_repository.py)
 - **generate_voucher_no() -> str** – sequential voucher generator with error fallback.
@@ -147,10 +149,10 @@ New integrations should favour the role-specific repositories below instead of a
 ## Supporting Types
 
 - **ItemCacheController (silverestimate/infrastructure/item_cache.py)** - shared cache utilised by ItemsRepository for hot lookups.
-- **FlushScheduler (silverestimate/persistence/flush_scheduler.py)** - debounced commit/encrypt worker invoked by DatabaseManager.request_flush.
+- **SqlCipherConnectionBroker (silverestimate/persistence/database_driver.py)** - owns the raw database key, verifies the controlled SQLCipher runtime, configures direct live and worker connections, and serializes maintenance operations.
+- **KdfMetadata and maintenance journals (silverestimate/persistence/storage_metadata.py)** - strict versioned KDF, backup, migration, rekey, and restore records with canonical JSON and atomic publication.
 - **InlineStatusController (silverestimate/ui/inline_status.py)** - helper used across UI widgets to surface status messages without tight UI coupling.
 - **CredentialStore (silverestimate/security/credential_store.py)** - OS keyring abstraction for hashed credentials.
-- **TempDatabaseStore (silverestimate/persistence/temp_database_store.py)** - owns marked temporary SQLite creation, recovery metadata, and guarded cleanup.
 - **Display formatting (silverestimate/ui/display_formatting.py)** - `format_display_date()` and `format_rupees()` provide consistent user-facing dates and Indian-number currency grouping.
 
 ## UI Facades

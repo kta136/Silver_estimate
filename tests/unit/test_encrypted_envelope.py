@@ -16,8 +16,8 @@ from silverestimate.security.encrypted_envelope import (
     EnvelopeWrongPasswordError,
     decrypt_envelope_to_path,
     read_envelope_metadata,
-    write_envelope,
 )
+from tests.legacy_envelope_writer import write_envelope
 
 KEY = b"k" * 32
 OTHER_KEY = b"x" * 32

@@ -2,7 +2,7 @@
 
 ## Runtime shape
 
-Silver Estimate is a PyQt6 desktop application with a local encrypted SQLite database. Windows 10/11 is the supported packaged platform; macOS and Linux are untested development environments.
+Silver Estimate is a PyQt6 desktop application with a local SQLCipher database. Windows 10/11 is the supported packaged platform; macOS and Linux are lint/type development environments.
 
 ```text
 Qt views and dialogs
@@ -12,8 +12,10 @@ Qt views and dialogs
        -> query repositories
        -> command repositories
        -> synchronization repositories
-  -> thread-local SQLite connections
-  -> streamed SILVDB01 encrypted snapshot
+  -> SqlCipherConnectionBroker
+       -> owner-thread write connection
+       -> keyed, cancellable worker read connections
+  -> encrypted database, WAL, and journals
 ```
 
 ## UI and controller boundaries
@@ -52,13 +54,27 @@ Silver-bar persistence is separated into `SilverBarQueryRepository`, `SilverBarC
 
 ## Encrypted database lifecycle
 
-The active format is the versioned `SILVDB01` envelope described in the security guide. A session works on a permission-restricted temporary SQLite database. Flushes snapshot SQLite, stream the snapshot through authenticated 1 MiB AES-GCM chunks, verify the new envelope, and replace the encrypted file atomically.
+The active format is SQLCipher. `DatabaseManager` derives a raw 32-byte key from
+the exact version-1 Argon2id metadata in `estimation.kdf.json` and passes it to
+`SqlCipherConnectionBroker`. Every connection is keyed before reading
+`sqlite_master`, verifies the controlled driver, authenticates the database,
+and then applies foreign keys, WAL, `synchronous=NORMAL`, memory-only temporary
+storage, the application cache size, and `mmap_size=0`.
 
-`FlushScheduler` tracks dirty and flushed generations. A request received during encryption sets a pending flag; a second flush begins after the active one. Unchanged generations do not rewrite the encrypted file.
+Worker APIs carry a connection factory, never a database path or raw key.
+Maintenance mode blocks new readers and cancels/drains current readers before
+migration, backup, restore, rekey, or wipe. `QLockFile` ownership is acquired
+before authentication or storage mutation.
 
-Every plaintext temporary directory contains an ownership marker with owner, PID, creation time, database filename, and encrypted-database identity. Recovery and cleanup operate only on matching marked directories.
+`SILVDB01` is read only by the one-time importer. It decrypts inside a marked
+application-owned workspace, exports to a keyed target with
+`sqlcipher_export()`, compares counts and deterministic typed digests, validates
+the target, retains the original envelope, and removes plaintext and sidecars on
+all exits. It cannot write a new live envelope.
 
-`DatabaseManager` constructs `TempDatabaseStore` directly with the application settings provider; no compatibility wrapper sits between lifecycle coordination and the store.
+Encrypted `.sedbbackup` archives contain a SQLCipher database, its KDF metadata,
+and a digested non-secret manifest. Restore and password change use staged
+copy-and-switch activation with journals and retained encrypted rollback files.
 
 ## DDA live-rate path
 

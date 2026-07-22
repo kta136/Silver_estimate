@@ -53,6 +53,15 @@ def _seed_worker_db(path: Path) -> None:
         conn.close()
 
 
+def _factory(path: Path):
+    def connect(_cancel_event=None):
+        connection = sqlite3.connect(path)
+        connection.row_factory = sqlite3.Row
+        return connection
+
+    return connect
+
+
 def test_available_worker_filters_unassigned_stock_only(qt_app, tmp_path):
     del qt_app
     db_path = tmp_path / "bars.sqlite"
@@ -60,7 +69,7 @@ def test_available_worker_filters_unassigned_stock_only(qt_app, tmp_path):
 
     request = _BarsLoadRequest(
         "available",
-        str(db_path),
+        _factory(db_path),
         {
             "weight_query": None,
             "weight_tolerance": 0.001,
@@ -88,7 +97,7 @@ def test_list_worker_returns_keyset_page_and_total_count(qt_app, tmp_path):
 
     request = _BarsLoadRequest(
         "list",
-        str(db_path),
+        _factory(db_path),
         {"list_id": 1, "limit": 1, "offset": 0},
         None,
         False,

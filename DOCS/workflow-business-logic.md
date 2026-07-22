@@ -70,7 +70,7 @@ Issued list → Reactivated → Assigned
 4. Secondary password triggers data wipe
 
 #### Data Protection
-1. Versioned `SILVDB01` AES-256-GCM encryption at rest
+1. Direct SQLCipher page encryption for the live database, WAL, and journals
 2. Authenticated canonical metadata and ordered 1 MiB chunks
 3. Argon2id key derivation once per normal startup
 4. Argon2id parameters and salt stored in the authenticated envelope header

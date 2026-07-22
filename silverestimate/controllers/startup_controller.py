@@ -12,6 +12,8 @@ from typing import Any, Optional
 from PyQt6.QtWidgets import QMessageBox, QWidget
 
 from silverestimate.infrastructure.app_constants import DB_PATH
+from silverestimate.security import credential_store
+from silverestimate.security.credential_store import CredentialStoreError
 from silverestimate.services.auth_service import (
     AuthenticationResult,
     perform_data_wipe,
@@ -124,6 +126,51 @@ class StartupController:
         db_manager = self._initialize_database(auth_result.password or "")
         if db_manager is None:
             return StartupResult(status=StartupStatus.FAILED)
+        if auth_result.pending_main_hash and auth_result.pending_backup_hash:
+            try:
+                credential_store.set_password_hash(
+                    "main", auth_result.pending_main_hash, logger=self._logger
+                )
+                credential_store.set_password_hash(
+                    "backup", auth_result.pending_backup_hash, logger=self._logger
+                )
+                for kind in (
+                    "pending_main",
+                    "pending_backup",
+                    "recovery_main",
+                    "recovery_backup",
+                ):
+                    credential_store.delete_password_hash(kind, logger=self._logger)
+            except CredentialStoreError as exc:
+                db_manager.close()
+                perform_data_wipe(
+                    db_path=DB_PATH,
+                    logger=self._logger,
+                    silent=True,
+                    parent=self._parent,
+                )
+                QMessageBox.critical(
+                    self._parent,
+                    "Setup Error",
+                    f"The database was created but credentials could not be committed: {exc}",
+                )
+                return StartupResult(status=StartupStatus.FAILED)
+            QMessageBox.information(
+                self._parent, "Setup Complete", "Passwords created successfully."
+            )
+        elif auth_result.rollback_pending_credentials:
+            for kind in (
+                "pending_main",
+                "pending_backup",
+                "recovery_main",
+                "recovery_backup",
+            ):
+                try:
+                    credential_store.delete_password_hash(kind, logger=self._logger)
+                except CredentialStoreError:
+                    self._logger.warning(
+                        "Could not clear rolled-back pending credential %s", kind
+                    )
         return StartupResult(status=StartupStatus.OK, db=db_manager)
 
     def _initialize_database(self, password: str) -> Optional[Any]:
@@ -142,57 +189,6 @@ class StartupController:
                 f"Unable to prepare database directory: {exc}",
             )
             return None
-
-        try:
-            candidate = db_cls.check_recovery_candidate(DB_PATH)
-        except Exception as exc:  # pragma: no cover - defensive logging
-            self._logger.error(
-                "Recovery candidate check failed: %s", exc, exc_info=True
-            )
-            candidate = None
-
-        if candidate:
-            self._logger.warning("Found recovery candidate: %s", candidate)
-            message = (
-                "A newer unsaved database state was found from a previous session.\n"
-                "Would you like to recover it now?"
-            )
-            reply = QMessageBox.question(
-                self._parent,
-                "Recover Unsaved Data",
-                message,
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.Yes,
-            )
-            if reply == QMessageBox.StandardButton.Yes:
-                try:
-                    if db_cls.recover_encrypt_plain_to_encrypted(
-                        candidate,
-                        DB_PATH,
-                        password,
-                        logger=self._logger,
-                    ):
-                        self._logger.info("Recovery successful; continuing startup")
-                    else:
-                        self._logger.error(
-                            "Recovery failed; continuing with last encrypted state"
-                        )
-                except Exception as exc:  # pragma: no cover - best effort logging
-                    self._logger.error(
-                        "Recovery operation raised error: %s", exc, exc_info=True
-                    )
-            else:
-                try:
-                    db_cls.discard_recovery_candidate(
-                        candidate,
-                        DB_PATH,
-                        logger=self._logger,
-                    )
-                except Exception as exc:  # pragma: no cover - defensive cleanup
-                    self._logger.warning(
-                        "Could not discard declined recovery candidate: %s",
-                        exc,
-                    )
 
         try:
             db_manager = db_cls(DB_PATH, password=password)

@@ -53,9 +53,22 @@ class CredentialBackendStatus:
     reason: str = ""
 
 
+SUPPORTED_CREDENTIAL_KINDS = (
+    "main",
+    "backup",
+    "pending_main",
+    "pending_backup",
+    "recovery_main",
+    "recovery_backup",
+)
+
 _ENTRIES = {
     "main": "main_password_hash",
     "backup": "backup_password_hash",
+    "pending_main": "pending_main_password_hash",
+    "pending_backup": "pending_backup_password_hash",
+    "recovery_main": "recovery_main_password_hash",
+    "recovery_backup": "recovery_backup_password_hash",
 }
 
 

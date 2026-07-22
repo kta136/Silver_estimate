@@ -11,7 +11,7 @@ def _row_value(row, key, default):
     """Read a mapping-style row without relying on membership semantics."""
     try:
         value = row[key]
-    except (KeyError, IndexError, TypeError):
+    except KeyError, IndexError, TypeError:
         return default
     return default if value is None else value
 

@@ -50,7 +50,7 @@ from .window_sizing import resize_to_available_screen
 
 @dataclass(frozen=True)
 class _HistoryLoadRequest:
-    db_path: str
+    connection_factory: Callable[[threading.Event | None], Any]
     date_from: str
     date_to: str
     voucher_search: str
@@ -63,7 +63,9 @@ def _load_history_page(
     request: _HistoryLoadRequest,
     cancel_event: threading.Event,
 ) -> tuple[_HistoryLoadRequest, Page[dict[str, Any], EstimateHistoryCursor]]:
-    with cancellable_sqlite_connection(request.db_path, cancel_event) as connection:
+    with cancellable_sqlite_connection(
+        request.connection_factory, cancel_event
+    ) as connection:
         page = fetch_estimate_history_page(
             connection.cursor(),
             date_from=request.date_from,
@@ -416,12 +418,8 @@ class EstimateHistoryDialog(QDialog):
         except Exception as exc:
             self.logger.debug("Failed to disable history action buttons: %s", exc)
 
-        temp_db_path = getattr(self.db_manager, "temp_db_path", None)
-        if (
-            not isinstance(temp_db_path, str)
-            or not temp_db_path
-            or temp_db_path == ":memory:"
-        ):
+        connection_factory = getattr(self.db_manager, "open_read_connection", None)
+        if not callable(connection_factory):
             try:
                 rows = self._load_estimates_sync()
                 self._populate_table(rows, started_at=started_at, append=append)
@@ -432,7 +430,7 @@ class EstimateHistoryDialog(QDialog):
             return
 
         request = _HistoryLoadRequest(
-            temp_db_path,
+            connection_factory,
             self.date_from.date().toString("yyyy-MM-dd"),
             self.date_to.date().toString("yyyy-MM-dd"),
             self.voucher_search.text().strip(),

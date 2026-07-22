@@ -1,9 +1,9 @@
 import logging
-import sqlite3
 from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
+from sqlcipher3 import dbapi2 as sqlite3
 
 from silverestimate.infrastructure.item_cache import ItemCacheController
 from silverestimate.persistence import migrations
@@ -24,7 +24,6 @@ class FakeDB:
         self._sql_get_item_by_code = None
         self._c_insert_estimate_item = None
         self._sql_insert_estimate_item = None
-        self._flush_requested = False
         self.last_error = None
 
     def _table_exists(self, table_name: str) -> bool:
@@ -66,9 +65,6 @@ class FakeDB:
         )
         return True
 
-    def request_flush(self) -> None:
-        self._flush_requested = True
-
 
 @pytest.fixture()
 def fake_db():
@@ -87,7 +83,6 @@ def test_items_repository_roundtrip(fake_db):
     fetched = repo.get_item_by_code("ITM001")
     assert fetched["name"] == "Sample Item"
     assert fetched["tunch"] == "92 + wastage"
-    assert fake_db._flush_requested
 
 
 def test_estimate_lookup_resolves_current_master_tunch(fake_db):
@@ -132,16 +127,17 @@ def test_items_tunch_database_accepts_text(fake_db):
     assert (row["tunch"], row["storage_type"]) == ("92 + wastage", "text")
 
 
-def test_current_schema_setup_uses_read_only_fast_path(fake_db):
+def test_current_schema_setup_revalidates_mandatory_indexes_and_foreign_keys(fake_db):
     statements = []
     fake_db.conn.set_trace_callback(statements.append)
 
     migrations.run_schema_setup(fake_db)
 
     normalized = [statement.strip().upper() for statement in statements]
-    assert not any(statement.startswith("BEGIN IMMEDIATE") for statement in normalized)
-    assert not any("CREATE INDEX" in statement for statement in normalized)
-    assert not any("FOREIGN_KEY_CHECK" in statement for statement in normalized)
+    assert any(statement.startswith("BEGIN IMMEDIATE") for statement in normalized)
+    assert any("CREATE INDEX" in statement for statement in normalized)
+    assert any("FOREIGN_KEY_CHECK" in statement for statement in normalized)
+    assert any(statement.startswith("COMMIT") for statement in normalized)
 
 
 def test_item_catalog_keyset_pages_do_not_duplicate_rows(fake_db):

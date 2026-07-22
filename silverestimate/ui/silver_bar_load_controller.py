@@ -7,7 +7,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any, TypeAlias, cast
+from typing import Any, Callable, TypeAlias, cast
 
 from PyQt6.QtWidgets import QMessageBox
 
@@ -27,7 +27,7 @@ from ._host_proxy import HostProxy
 @dataclass(frozen=True)
 class _BarsLoadRequest:
     target: str
-    db_path: str
+    connection_factory: Callable[[threading.Event | None], Any]
     payload: dict[str, Any]
     cursor: AvailableBarCursor | BarListCursor | None
     append: bool
@@ -51,7 +51,7 @@ def _load_bars_page(
 ) -> tuple[_BarsLoadRequest, _BarsPage]:
     try:
         snapshot = SilverBarsSnapshotRepository(
-            request.db_path,
+            request.connection_factory,
             cancel_event=cancel_event,
         )
         page: _BarsPage
@@ -179,8 +179,8 @@ class SilverBarLoadController(HostProxy):
 
         started_at = time.perf_counter()
         page: _BarsPage
-        db_path = getattr(self.db_manager, "temp_db_path", None)
-        if not db_path:
+        connection_factory = getattr(self.db_manager, "open_read_connection", None)
+        if not callable(connection_factory):
             try:
                 if target == "available":
                     getter = getattr(
@@ -229,7 +229,7 @@ class SilverBarLoadController(HostProxy):
                         page = Page(tuple(dict(row) for row in rows), total, None)
                 request = _BarsLoadRequest(
                     target,
-                    "",
+                    cast(Any, connection_factory),
                     payload,
                     cursor,
                     append,
@@ -245,7 +245,7 @@ class SilverBarLoadController(HostProxy):
         return runner.submit(
             _BarsLoadRequest(
                 target,
-                str(db_path),
+                connection_factory,
                 payload,
                 cursor,
                 append,

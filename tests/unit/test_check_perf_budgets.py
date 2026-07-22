@@ -11,7 +11,7 @@ METRICS = {
     "silver_bar_history.page": (20, 20.0),
     "estimate_totals.recompute": (20, 5.0),
     "view_model.synchronize": (20, 5.0),
-    "encrypted_flush": (5, 50.0),
+    "encrypted_backup_export": (5, 50.0),
     "dda_current.parse": (20, 1.0),
     "dda_sse.parse_apply": (20, 1.0),
 }
@@ -55,7 +55,7 @@ def test_perf_gate_requires_every_configured_metric(tmp_path: Path) -> None:
 def test_perf_gate_rejects_malformed_telemetry(tmp_path: Path) -> None:
     log_path = tmp_path / "perf.log"
     log_path.write_text(
-        f"{_valid_telemetry()}\n[perf] encrypted_flush=not-a-number\n",
+        f"{_valid_telemetry()}\n[perf] encrypted_backup_export=not-a-number\n",
         encoding="utf-8",
     )
 
@@ -67,20 +67,23 @@ def test_perf_gate_rejects_malformed_telemetry(tmp_path: Path) -> None:
 
 def test_perf_gate_rejects_insufficient_samples(tmp_path: Path) -> None:
     log_path = tmp_path / "perf.log"
-    telemetry = _valid_telemetry().replace("[perf] encrypted_flush=50.00ms\n", "", 1)
+    telemetry = _valid_telemetry().replace(
+        "[perf] encrypted_backup_export=50.00ms\n", "", 1
+    )
     log_path.write_text(telemetry, encoding="utf-8")
 
     result = _run_script("--log-file", str(log_path))
 
     assert result.returncode == 1
     assert "insufficient samples" in result.stdout
-    assert "encrypted_flush" in result.stdout
+    assert "encrypted_backup_export" in result.stdout
 
 
 def test_perf_gate_rejects_exceeded_p95(tmp_path: Path) -> None:
     log_path = tmp_path / "perf.log"
     telemetry = _valid_telemetry().replace(
-        "[perf] encrypted_flush=50.00ms", "[perf] encrypted_flush=999.00ms"
+        "[perf] encrypted_backup_export=50.00ms",
+        "[perf] encrypted_backup_export=999.00ms",
     )
     log_path.write_text(telemetry, encoding="utf-8")
 
@@ -88,7 +91,7 @@ def test_perf_gate_rejects_exceeded_p95(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     assert "Perf budget violations" in result.stdout
-    assert "encrypted_flush" in result.stdout
+    assert "encrypted_backup_export" in result.stdout
 
 
 def test_perf_gate_accepts_complete_telemetry(tmp_path: Path) -> None:

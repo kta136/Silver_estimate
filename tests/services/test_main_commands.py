@@ -160,8 +160,8 @@ class _ThreadStub:
 class _WorkerStub:
     instances: list["_WorkerStub"] = []
 
-    def __init__(self, *, db_path, file_path):
-        self.db_path = db_path
+    def __init__(self, *, connection_factory, file_path):
+        self.connection_factory = connection_factory
         self.file_path = file_path
         self.finished = _SignalStub()
         self.error = _SignalStub()
@@ -554,7 +554,8 @@ def test_create_item_catalog_backup_starts_worker(monkeypatch):
     started: list[dict[str, str]] = []
 
     class _DB:
-        temp_db_path = "/tmp/catalog.sqlite"
+        def open_read_connection(self):
+            return object()
 
     commands = _make_commands(db_manager=_DB())
     monkeypatch.setattr(
@@ -567,18 +568,18 @@ def test_create_item_catalog_backup_starts_worker(monkeypatch):
 
     assert started == [
         {
-            "db_path": "/tmp/catalog.sqlite",
+            "connection_factory": commands.db.open_read_connection,
             "file_path": "backup.json.seitems.json",
         }
     ]
 
 
-def test_create_item_catalog_backup_requires_temp_db_path(monkeypatch):
+def test_create_item_catalog_backup_requires_connection_factory(monkeypatch):
     _install_stubs(monkeypatch)
     _FileDialogStub.next_save_result = ("backup", "Silver Estimate Item Catalog")
 
     class _DB:
-        temp_db_path = None
+        open_read_connection = None
 
     commands = _make_commands(db_manager=_DB())
 
@@ -593,7 +594,7 @@ def test_start_item_catalog_export_worker_rejects_duplicate(monkeypatch):
     commands._catalog_export_thread = object()
 
     commands._start_item_catalog_export_worker(
-        db_path="/tmp/catalog.sqlite",
+        connection_factory=lambda: object(),
         file_path="backup.seitems.json",
     )
 
@@ -607,7 +608,7 @@ def test_start_item_catalog_export_worker_wires_thread_and_cleanup(monkeypatch):
     commands = _make_commands(main_window=types.SimpleNamespace())
 
     commands._start_item_catalog_export_worker(
-        db_path="/tmp/catalog.sqlite",
+        connection_factory=lambda: object(),
         file_path="backup.seitems.json",
     )
 

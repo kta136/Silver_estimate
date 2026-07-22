@@ -72,11 +72,20 @@ def _seed_snapshot_db(path: Path) -> None:
         conn.close()
 
 
+def _connection_factory(path: Path):
+    def open_connection(_cancel_event=None):
+        connection = sqlite3.connect(path)
+        connection.row_factory = sqlite3.Row
+        return connection
+
+    return open_connection
+
+
 def test_snapshot_repository_available_page_returns_total_and_rows(tmp_path):
     db_path = tmp_path / "snapshot.sqlite"
     _seed_snapshot_db(db_path)
 
-    repo = SilverBarsSnapshotRepository(str(db_path))
+    repo = SilverBarsSnapshotRepository(_connection_factory(db_path))
     rows, total_count = repo.get_available_bars_page(limit=1)
 
     assert total_count == 2
@@ -90,7 +99,7 @@ def test_snapshot_repository_available_page_applies_date_range_filter(tmp_path):
     db_path = tmp_path / "snapshot.sqlite"
     _seed_snapshot_db(db_path)
 
-    repo = SilverBarsSnapshotRepository(str(db_path))
+    repo = SilverBarsSnapshotRepository(_connection_factory(db_path))
     rows, total_count = repo.get_available_bars_page(
         date_range=("2026-02-10 10:30:00", "2026-02-10 11:30:00"),
         limit=100,
@@ -104,7 +113,7 @@ def test_snapshot_repository_list_page_returns_limited_rows_and_total(tmp_path):
     db_path = tmp_path / "snapshot.sqlite"
     _seed_snapshot_db(db_path)
 
-    repo = SilverBarsSnapshotRepository(str(db_path))
+    repo = SilverBarsSnapshotRepository(_connection_factory(db_path))
     rows, total_count = repo.get_bars_in_list_page(1, limit=1, offset=0)
 
     assert total_count == 2
@@ -117,7 +126,7 @@ def test_snapshot_repository_history_search_filters_by_note_and_status(tmp_path)
     db_path = tmp_path / "snapshot.sqlite"
     _seed_snapshot_db(db_path)
 
-    repo = SilverBarsSnapshotRepository(str(db_path))
+    repo = SilverBarsSnapshotRepository(_connection_factory(db_path))
     rows = repo.search_history_bars(
         voucher_term="Delta",
         weight_text="13.0",

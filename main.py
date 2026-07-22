@@ -38,9 +38,49 @@ with suppress(Exception):
 def main() -> int:
     """Start the SilverEstimate application and return the exit code."""
     if "--artifact-smoke" in sys.argv:
-        from silverestimate.infrastructure.app_constants import APP_VERSION
+        import json
+        import tempfile
+        from pathlib import Path
 
-        print(f"SilverEstimate {APP_VERSION} artifact startup OK")
+        from silverestimate.infrastructure.app_constants import APP_VERSION
+        from silverestimate.persistence.database_driver import (
+            SqlCipherConnectionBroker,
+        )
+        from silverestimate.security import credential_store
+
+        credential_kinds = credential_store.SUPPORTED_CREDENTIAL_KINDS
+        for kind in credential_kinds:
+            credential_store._get_secure_id(kind)  # noqa: SLF001
+
+        with tempfile.TemporaryDirectory(
+            prefix="silverestimate-artifact-smoke-"
+        ) as tmp:
+            database = Path(tmp) / "artifact-smoke.db"
+            broker = SqlCipherConnectionBroker(database, os.urandom(32))
+            connection, identity = broker.open_writer(create=True)
+            connection.execute("CREATE TABLE smoke(value TEXT NOT NULL)")
+            connection.execute("INSERT INTO smoke VALUES ('encrypted-runtime-ok')")
+            connection.commit()
+            connection.close()
+            plaintext_header = database.read_bytes().startswith(b"SQLite format 3\x00")
+            if plaintext_header:
+                raise RuntimeError(
+                    "Frozen artifact created a plaintext SQLite database"
+                )
+
+        print(
+            json.dumps(
+                {
+                    "app_version": APP_VERSION,
+                    "artifact_startup": "ok",
+                    "cipher_version": identity.sqlcipher_version,
+                    "credential_kinds": list(credential_kinds),
+                    "crypto_provider": identity.crypto_provider,
+                    "sqlite_version": identity.sqlite_version,
+                },
+                sort_keys=True,
+            )
+        )
         return 0
     if os.name == "nt" and os.environ.get("SILVER_SHOW_CONSOLE") != "1":
         from silverestimate.infrastructure.windows_integration import (

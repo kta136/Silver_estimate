@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import sqlite3
 from datetime import datetime
 from typing import Any, Iterable, List, Mapping, Optional, Tuple
 
@@ -13,6 +12,7 @@ from silverestimate.domain.pagination import (
     Page,
     SilverBarHistoryCursor,
 )
+from silverestimate.persistence.database_driver import dbapi as sqlite3
 from silverestimate.persistence.silver_bars_queries import (
     build_available_bars_queries,
     build_bars_in_list_queries,
@@ -165,7 +165,6 @@ class _SilverBarsRepositoryBackend:
                 (list_id,),
             )
             conn.commit()
-            self._request_flush()
             return True
         except sqlite3.Error as exc:
             try:
@@ -202,7 +201,6 @@ class _SilverBarsRepositoryBackend:
                 (list_id,),
             )
             conn.commit()
-            self._request_flush()
             return True
         except sqlite3.Error as exc:
             try:
@@ -410,7 +408,6 @@ class _SilverBarsRepositoryBackend:
                 transfer_rows,
             )
             conn.commit()
-            self._request_flush()
             return len(valid_ids), failed
         except sqlite3.Error as exc:
             try:
@@ -548,7 +545,6 @@ class _SilverBarsRepositoryBackend:
                 transfer_rows,
             )
             conn.commit()
-            self._request_flush()
             return len(valid_rows), failed
         except sqlite3.Error as exc:
             try:
@@ -1094,7 +1090,6 @@ class _SilverBarsRepositoryBackend:
                     added += 1
 
             conn.commit()
-            self._request_flush()
             return added, failed
         except sqlite3.Error as exc:
             conn.rollback()
@@ -1279,16 +1274,6 @@ class _SilverBarsRepositoryBackend:
                 )
 
     # ------------------------------------------------------------------
-
-    def _request_flush(self) -> None:
-        try:
-            requester = getattr(self._db, "request_flush", None)
-            if callable(requester):
-                requester()
-        except Exception as exc:  # pragma: no cover - log only
-            self._logger.error(
-                "Exception during silver-bar flush: %s", exc, exc_info=True
-            )
 
     @staticmethod
     def _normalize_bar_ids(bar_ids: Iterable[int]) -> List[int]:

@@ -6,7 +6,7 @@
 - 50,000 silver bars;
 - 10,000 estimate headers and 50,000 estimate lines;
 - 500 estimate-entry view-model rows;
-- one 10 MiB plaintext snapshot for encrypted flush measurement.
+- one 10 MiB SQLCipher database for keyed open, export, backup, and integrity-check measurement.
 
 No network request is included in the DDA parse timings.
 
@@ -18,7 +18,7 @@ No network request is included in the DDA parse timings.
 | `silver_bar_history.page` | 20 | 250 ms |
 | `estimate_totals.recompute` | 20 | 60 ms |
 | `view_model.synchronize` | 20 | 120 ms |
-| `encrypted_flush` | 5 | 150 ms |
+| `encrypted_backup_export` | 5 | 350 ms |
 | `dda_current.parse` | 20 | 20 ms |
 | `dda_sse.parse_apply` | 20 | 20 ms |
 | Frozen executable startup (`--artifact-smoke`) | 5 | 3,000 ms |
@@ -36,7 +36,7 @@ uv run python scripts/check_perf_budgets.py --log-file perf-metrics.log
 uv run python scripts/check_startup_budgets.py --artifact dist\SilverEstimate.exe --samples 5 --p95-budget-ms 3000
 ```
 
-The harness uses the production history query helpers, silver-bar snapshot repository, totals calculator, estimate-entry view model, encrypted-envelope writer, and DDA HTTP/SSE parsers. It is a repeatable regression gate, not a substitute for profiling interactive rendering on representative customer hardware.
+The harness uses the production history query helpers, keyed silver-bar read repository, totals calculator, estimate-entry view model, SQLCipher export/validation path, and DDA HTTP/SSE parsers. It is a repeatable regression gate, not a substitute for profiling interactive rendering on representative customer hardware.
 
 ## Runtime telemetry
 

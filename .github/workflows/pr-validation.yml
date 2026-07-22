@@ -53,6 +53,11 @@ jobs:
       - run: uv python install 3.14
       - name: Sync frozen development environment
         run: uv sync --frozen --extra dev
+      - name: Verify committed SQLCipher runtime
+        shell: pwsh
+        run: |
+          uv run python scripts/verify_sqlcipher_runtime.py --wheel vendor/sqlcipher/sqlcipher3-0.6.2+silverestimate.4.17.0.1-cp314-cp314-win_amd64.whl --provenance vendor/sqlcipher/PROVENANCE.json
+          uv run python scripts/verify_sqlcipher_runtime.py --provenance vendor/sqlcipher/PROVENANCE.json
       - name: Complete tests, smoke coverage, performance, and global coverage
         run: uv run nox -s tests_full
       - name: Changed-line coverage

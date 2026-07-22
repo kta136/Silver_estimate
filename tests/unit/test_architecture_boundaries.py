@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+from pathlib import Path
 
 from silverestimate.persistence.repository_results import (
     RepositoryFailureKind,
@@ -127,3 +128,24 @@ def test_explicit_facade_methods_delegate_without_dynamic_widget_composition() -
             getattr(facade, method_name)(*required_args)
 
         assert getattr(facade, "table_adapter", 1) == 1
+
+
+def test_production_database_access_is_confined_to_sqlcipher_broker() -> None:
+    root = Path(__file__).resolve().parents[2]
+    imports = [
+        path.relative_to(root).as_posix()
+        for path in (root / "silverestimate").rglob("*.py")
+        if "import sqlite3" in path.read_text(encoding="utf-8")
+    ]
+    assert imports == ["silverestimate/persistence/database_driver.py"]
+
+    removed = (
+        "database_lifecycle.py",
+        "database_startup.py",
+        "encrypted_database_store.py",
+        "flush_scheduler.py",
+        "sqlite_database_runtime.py",
+        "temp_database_store.py",
+    )
+    persistence = root / "silverestimate" / "persistence"
+    assert not [name for name in removed if (persistence / name).exists()]

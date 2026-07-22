@@ -72,6 +72,6 @@ Signing is intentionally non-blocking until `WINDOWS_SIGNING_CERTIFICATE_BASE64`
 
 ## Manual release smoke
 
-Before promoting a stable release, verify the current production `SILVDB01` database, rejection of unsupported encrypted formats, estimate create/edit/delete, paged searches and Load more, Agra Mohar SSE updates, forced SSE outage with 10-second polling, offline timestamp display, password rotation, every print layout, and simulated crash recovery.
+Before promoting a stable release, verify the committed SQLCipher 4.17.x wheel against its recorded SHA-256 and native inventory, probe the installed and frozen runtimes, migrate a production `SILVDB01` copy, reject plaintext and unsupported metadata, exercise encrypted backup/restore and copy-switch password rotation with injected interruption, and verify estimate/paging/rate/print workflows. Rebuilding the native wheel is required only when deliberately replacing the bundled dependency.
 
-Temporary plaintext secure deletion is best-effort on SSD and copy-on-write storage. Production devices should use Windows device encryption/BitLocker and a trusted user account.
+Normal runtime database files, WAL, and journals are SQLCipher encrypted. The marked one-time legacy migration workspace is the only plaintext database exception and is cleaned on all exits and next startup. Production devices should still use Windows device encryption/BitLocker and a trusted account because SQLCipher does not protect live process memory, hibernation, or a compromised user.

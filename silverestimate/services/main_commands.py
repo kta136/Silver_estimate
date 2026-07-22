@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Any, Callable, Optional
 
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 from PyQt6.QtWidgets import QCheckBox, QFileDialog, QInputDialog, QMessageBox
@@ -13,19 +13,23 @@ class _ItemCatalogExportWorker(QObject):
     finished = pyqtSignal(int)
     error = pyqtSignal(str)
 
-    def __init__(self, *, db_path: str, file_path: str) -> None:
+    def __init__(
+        self, *, connection_factory: Callable[[], Any], file_path: str
+    ) -> None:
         super().__init__()
-        self.db_path = db_path
+        self.connection_factory = connection_factory
         self.file_path = file_path
 
     def run(self) -> None:
         from silverestimate.services.item_catalog_transfer import (
             export_item_catalog_rows,
-            load_item_catalog_rows_from_db_path,
+            load_item_catalog_rows_from_connection_factory,
         )
 
         try:
-            rows = load_item_catalog_rows_from_db_path(self.db_path)
+            rows = load_item_catalog_rows_from_connection_factory(
+                self.connection_factory
+            )
             count = export_item_catalog_rows(rows, self.file_path)
         except Exception as exc:
             self.error.emit(str(exc))
@@ -226,17 +230,17 @@ class MainCommands:
         if not file_path:
             return
 
-        db_path = getattr(self.db, "temp_db_path", None)
-        if not isinstance(db_path, str) or not db_path:
+        connection_factory = getattr(self.db, "open_read_connection", None)
+        if not callable(connection_factory):
             QMessageBox.critical(
                 self.main_window,
                 "Export Failed",
-                "Temporary database path not available.",
+                "Encrypted database connection not available.",
             )
             return
 
         self._start_item_catalog_export_worker(
-            db_path=db_path,
+            connection_factory=connection_factory,
             file_path=ensure_catalog_file_suffix(file_path),
         )
 
@@ -285,7 +289,7 @@ class MainCommands:
             )
 
     def _start_item_catalog_export_worker(
-        self, *, db_path: str, file_path: str
+        self, *, connection_factory: Callable[[], Any], file_path: str
     ) -> None:
         if getattr(self, "_catalog_export_thread", None) is not None:
             QMessageBox.information(
@@ -295,7 +299,9 @@ class MainCommands:
             )
             return
 
-        worker = _ItemCatalogExportWorker(db_path=db_path, file_path=file_path)
+        worker = _ItemCatalogExportWorker(
+            connection_factory=connection_factory, file_path=file_path
+        )
         thread = QThread(self.main_window)
         worker.moveToThread(thread)
         thread.started.connect(worker.run)

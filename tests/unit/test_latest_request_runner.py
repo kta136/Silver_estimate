@@ -77,8 +77,14 @@ def test_sqlite_worker_progress_handler_interrupts_query(tmp_path):
         connection.commit()
 
     cancel_event = threading.Event()
+
+    def connection_factory(event):
+        connection = sqlite3.connect(database_path)
+        connection.set_progress_handler(lambda: int(event.is_set()), 1)
+        return connection
+
     with cancellable_sqlite_connection(
-        str(database_path), cancel_event, progress_opcodes=1
+        connection_factory, cancel_event, progress_opcodes=1
     ) as connection:
         cancel_event.set()
         started_at = time.perf_counter()

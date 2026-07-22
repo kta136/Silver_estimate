@@ -9,9 +9,10 @@ Linux are untested development environments.
 | Guide | Use it for |
 |---|---|
 | [Project architecture](project-architecture.md) | Runtime boundaries, repositories, workers, encryption flow, and extension rules |
+| [Modernization roadmap](modernization-roadmap.md) | Ordered SQLCipher, PySide6, dependency, architecture, testing, and release plan |
 | [Workflow and business logic](workflow-business-logic.md) | Estimate, item, silver-bar, authentication, backup, and UI workflows |
 | [Data model and relationships](data-model-relationships.md) | Schema v8 tables, foreign keys, indexes, and migration history |
-| [Security architecture](security-architecture.md) | Authentication, keyring storage, `SILVDB01`, recovery, and threat limitations |
+| [Security architecture](security-architecture.md) | Authentication, SQLCipher/keyring boundaries, migration/recovery, and threat limitations |
 | [API reference](api-reference.md) | Primary controllers, services, repositories, helpers, and UI entry points |
 | [Deployment guide](deployment-guide.md) | Frozen environment, validation, Windows builds, tags, signing, and releases |
 | [Performance baselines](performance-baseline-thresholds.md) | Deterministic datasets, p95 budgets, and CI enforcement |

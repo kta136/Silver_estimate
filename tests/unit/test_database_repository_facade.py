@@ -66,11 +66,11 @@ class _FacadeHarness(DatabaseRepositoryFacadeMixin):
         self.estimates_repo = _StubEstimateRepo()
         self.silver_bars_repo = _StubSilverBarsRepo()
         self._item_cache_controller = _StubItemCacheController()
-        self.temp_db_path = "/tmp/db.sqlite"
+        self.open_read_connection = lambda: object()
         self.last_error = "existing"
 
 
-def test_item_facade_delegates_and_preload_uses_temp_db_path():
+def test_item_facade_delegates_and_preload_uses_keyed_connection_factory():
     facade = _FacadeHarness()
 
     assert facade.add_item("ITM001", "Sample", 92.5, "WT", 10.0) == "added"
@@ -91,7 +91,7 @@ def test_item_facade_delegates_and_preload_uses_temp_db_path():
         ("upsert_item_catalog", ({"code": "ITM001"},), True),
         ("get_items_by_codes", ("ITM001", "ITM002")),
     ]
-    assert facade._item_cache_controller.calls == ["/tmp/db.sqlite"]
+    assert facade._item_cache_controller.calls == [facade.open_read_connection]
 
 
 def test_estimate_facade_clears_last_error_before_delegating():

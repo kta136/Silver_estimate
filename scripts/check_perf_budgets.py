@@ -23,7 +23,7 @@ METRIC_BUDGETS: dict[str, MetricBudget] = {
     "silver_bar_history.page": MetricBudget(250.0, 20),
     "estimate_totals.recompute": MetricBudget(60.0, 20),
     "view_model.synchronize": MetricBudget(120.0, 20),
-    "encrypted_flush": MetricBudget(150.0, 5),
+    "encrypted_backup_export": MetricBudget(350.0, 5),
     "dda_current.parse": MetricBudget(20.0, 20),
     "dda_sse.parse_apply": MetricBudget(20.0, 20),
 }

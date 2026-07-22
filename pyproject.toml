@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools>=77.0.3", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,8 +7,9 @@ name = "silverestimate"
 dynamic = ["version"]
 description = "A desktop application for managing silver sales estimates with encrypted data storage"
 readme = "readme.md"
-requires-python = ">=3.14"
-license = {text = "Proprietary"}
+requires-python = ">=3.14,<3.15"
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
 authors = [
     {name = "Silver Estimation App", email = "noreply@silverestimate.app"}
 ]
@@ -16,7 +17,6 @@ keywords = ["silver", "estimation", "inventory", "pyqt6", "encryption"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: End Users/Desktop",
-    "License :: Other/Proprietary License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.14",
     "Operating System :: Microsoft :: Windows",
@@ -31,7 +31,11 @@ dependencies = [
     "passlib[argon2]>=1.7.4",
     "argon2_cffi>=21.3.0",
     "keyring>=24.3.0",
+    "sqlcipher3==0.6.2+silverestimate.4.17.0.1; sys_platform == 'win32'",
 ]
+
+[tool.uv.sources]
+sqlcipher3 = { path = "vendor/sqlcipher/sqlcipher3-0.6.2+silverestimate.4.17.0.1-cp314-cp314-win_amd64.whl" }
 
 [project.optional-dependencies]
 dev = [
@@ -106,7 +110,7 @@ max-complexity = 15
 "tests/**/*.py" = ["PLR0913", "PLR0915"]
 "silverestimate/controllers/live_rate_controller.py" = ["PLR0913"]
 "silverestimate/controllers/navigation_controller.py" = ["PLR0915"]
-"silverestimate/controllers/startup_controller.py" = ["PLR0911"]
+"silverestimate/controllers/startup_controller.py" = ["C901", "PLR0911", "PLR0912"]
 "silverestimate/domain/estimate_totals.py" = ["PLR0913"]
 "silverestimate/infrastructure/application.py" = ["PLR0912", "PLR0913"]
 "silverestimate/infrastructure/logger.py" = ["PLR0913"]
@@ -119,6 +123,7 @@ max-complexity = 15
 "silverestimate/persistence/flush_scheduler.py" = ["PLR0913"]
 "silverestimate/persistence/items_repository.py" = ["PLR0911", "PLR0912"]
 "silverestimate/persistence/migrations.py" = ["C901", "PLR0912"]
+"silverestimate/persistence/database_manager.py" = ["PLR0915"]
 "silverestimate/persistence/silver_bars_queries.py" = ["PLR0913", "PLR0915"]
 "silverestimate/persistence/silver_bars_repository.py" = ["C901", "PLR0912", "PLR0913", "PLR0915"]
 "silverestimate/persistence/silver_bars_snapshot_repository.py" = ["PLR0913"]
@@ -142,7 +147,7 @@ max-complexity = 15
 "silverestimate/ui/models/*.py" = ["B008", "C901", "PLR0911", "PLR0912"]
 "silverestimate/ui/print_payload_builder.py" = ["PLR0913"]
 "silverestimate/ui/print_preview_controller.py" = ["PLR0915"]
-"silverestimate/ui/settings_dialog.py" = ["PLR0911", "PLR0912", "PLR0915"]
+"silverestimate/ui/settings_dialog.py" = ["C901", "PLR0911", "PLR0912", "PLR0915"]
 "silverestimate/ui/shared_screen_theme.py" = ["PLR0913"]
 "silverestimate/ui/silver_bar_history.py" = ["PLR0915"]
 "silverestimate/ui/silver_bar_list_print_controller.py" = ["PLR0913"]
@@ -176,6 +181,7 @@ module = [
     "PyQt6.*",
     "keyring.*",
     "passlib.*",
+    "sqlcipher3.*",
 ]
 ignore_missing_imports = true
 follow_imports = "skip"
@@ -187,20 +193,16 @@ module = [
     "silverestimate.infrastructure.app_constants",
     "silverestimate.infrastructure.paths",
     "silverestimate.infrastructure.settings",
-    "silverestimate.persistence.temp_database_store",
-    "silverestimate.persistence.encrypted_database_store",
-    "silverestimate.persistence.database_startup",
+    "silverestimate.persistence.database_driver",
+    "silverestimate.persistence.storage_metadata",
     "silverestimate.persistence.items_repository",
     "silverestimate.security.encryption",
     "silverestimate.security.credential_store",
     "silverestimate.services.estimate_calculator",
     "silverestimate.services.estimate_repository",
-    "silverestimate.persistence.flush_scheduler",
     "silverestimate.persistence.migrations",
-    "silverestimate.persistence.database_lifecycle",
     "silverestimate.persistence.silver_bars_queries",
     "silverestimate.persistence.silver_bars_snapshot_repository",
-    "silverestimate.persistence.sqlite_database_runtime",
     "silverestimate.presenter.estimate_entry_presenter",
     "silverestimate.infrastructure.application",
     "silverestimate.ui._host_proxy",

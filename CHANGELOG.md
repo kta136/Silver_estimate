@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased - SQLCipher live storage cutover
+
+- Replaced the live SILVDB01/plaintext-snapshot lifecycle with direct keyed
+  SQLCipher connections so database, WAL, rollback, and statement-journal page
+  content remains encrypted during active sessions.
+- Added exact atomic Argon2id KDF metadata, strict SQLCipher 4.17.x runtime and
+  compile-option checks, keyed worker readers, maintenance draining, and
+  QLockFile single-instance ownership.
+- Added verified one-time SILVDB01 migration with retained source backup,
+  encrypted `.sedbbackup` create/restore, restart activation, and recoverable
+  copy-and-switch password rotation.
+- Removed the snapshot scheduler, plaintext temp store, lifecycle coordinator,
+  legacy envelope writer from production, repository flush requests, and
+  plaintext recovery candidates.
+- Added the bundled and hash-verified SQLCipher 4.17.0 CPython 3.14 Windows x64
+  wheel, provenance/native inventory, strict runtime verification, manual
+  candidate-build workflow, encrypted runtime/canary tests, and frozen artifact
+  smoke coverage.
+- Fixed packaged startup authentication by registering the pending and recovery
+  credential kinds used by first-run setup and copy-and-switch password recovery.
+
 All notable changes to the Silver Estimation App will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
@@ -12,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added item-catalog backup and restore support for nullable free-text Tunch values.
 
 ### Changed
+- Relicensed the project from proprietary terms to the GNU General Public License v3.0 only (`GPL-3.0-only`) to align distribution terms with PyQt6.
 - Changed `items.tunch` from a constrained number to free text through schema version 8 while preserving existing values and estimate-item links.
 - Increased Modern estimate spacing to two row heights between goods groups and made table dividers explicit, including PCS to Fine.
 

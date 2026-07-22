@@ -42,6 +42,9 @@ class AuthenticationResult:
     password: Optional[str] = None
     wipe_requested: bool = False
     silent: bool = False
+    pending_main_hash: Optional[str] = None
+    pending_backup_hash: Optional[str] = None
+    rollback_pending_credentials: bool = False
 
     @property
     def is_wipe(self) -> bool:
@@ -80,6 +83,8 @@ def run_authentication(
     try:
         password_hash = credential_store.get_password_hash("main")
         backup_hash = credential_store.get_password_hash("backup")
+        pending_main_hash = credential_store.get_password_hash("pending_main")
+        pending_backup_hash = credential_store.get_password_hash("pending_backup")
     except CredentialStoreError as exc:
         logger.critical("Secure credential storage unavailable: %s", exc, exc_info=True)
         QMessageBox.critical(
@@ -126,7 +131,18 @@ def run_authentication(
                         time.time(),
                         attempt,
                     )
-                return AuthenticationResult(password=entered_password)
+                return AuthenticationResult(
+                    password=entered_password,
+                    rollback_pending_credentials=bool(pending_main_hash),
+                )
+            if pending_main_hash and login_dialog_cls.verify_password(
+                pending_main_hash, entered_password
+            ):
+                return AuthenticationResult(
+                    password=entered_password,
+                    pending_main_hash=pending_main_hash,
+                    pending_backup_hash=pending_backup_hash,
+                )
             if login_dialog_cls.verify_password(backup_hash, entered_password):
                 logger.debug(
                     "[perf] startup.auth_dialog_accepted_ms=%.2f t_unix=%.6f attempt=%s mode=backup",
@@ -134,6 +150,10 @@ def run_authentication(
                     time.time(),
                     attempt,
                 )
+                return AuthenticationResult(wipe_requested=True, silent=True)
+            if pending_backup_hash and login_dialog_cls.verify_password(
+                pending_backup_hash, entered_password
+            ):
                 return AuthenticationResult(wipe_requested=True, silent=True)
 
             if logger:
@@ -170,30 +190,16 @@ def run_authentication(
                 logger.error("Failed to hash passwords during setup")
             QMessageBox.critical(parent, "Setup Error", "Failed to hash passwords.")
             return None
-        try:
-            credential_store.set_password_hash("main", hashed_password, logger=logger)
-            credential_store.set_password_hash("backup", hashed_backup, logger=logger)
-        except CredentialStoreError as exc:
-            logger.critical(
-                "Failed to persist passwords in secure store: %s", exc, exc_info=True
-            )
-            QMessageBox.critical(
-                parent,
-                "Setup Error",
-                "Failed to store passwords securely. Please ensure the system keyring is available.",
-            )
-            return None
-        if logger:
-            logger.info("Passwords created and stored successfully")
-        QMessageBox.information(
-            parent, "Setup Complete", "Passwords created successfully."
-        )
         logger.debug(
             "[perf] startup.auth_dialog_accepted_ms=%.2f t_unix=%.6f mode=setup",
             (time.perf_counter() - flow_started_at) * 1000.0,
             time.time(),
         )
-        return AuthenticationResult(password=password)
+        return AuthenticationResult(
+            password=password,
+            pending_main_hash=hashed_password,
+            pending_backup_hash=hashed_backup,
+        )
     if logger:
         logger.info("Setup cancelled by user")
     return None
@@ -215,15 +221,44 @@ def perform_data_wipe(
 
     _log("warning", "Initiating data wipe for encrypted database: %s", db_path)
     try:
-        if os.path.exists(db_path):
-            os.remove(db_path)
-            _log("info", "Successfully deleted encrypted database file: %s", db_path)
-        else:
-            _log(
-                "warning",
-                "Encrypted database file not found (already deleted?): %s",
-                db_path,
+        database = Path(db_path).resolve()
+        parent_dir = database.parent
+        explicit = {
+            database,
+            Path(f"{database}-wal"),
+            Path(f"{database}-shm"),
+            Path(f"{database}-journal"),
+            database.with_name(f"{database.stem}.kdf.json"),
+            database.with_suffix(".migration.json"),
+            database.with_suffix(".rekey.json"),
+            database.with_suffix(".restore.json"),
+            database.with_suffix(".rekey.target"),
+            database.with_suffix(".restore.staged"),
+            database.with_suffix(".pre-rekey.sqlcipher"),
+            database.with_suffix(".pre-restore.sqlcipher"),
+            database.with_name(f"{database.stem}.silvdb01.backup"),
+        }
+        explicit.update(parent_dir.glob("*.sedbbackup"))
+        explicit.update(parent_dir.glob(f"{database.name}*"))
+        explicit.update(parent_dir.glob(f"{database.stem}.kdf*"))
+        explicit.update(parent_dir.glob(f"{database.stem}.*.json"))
+        for base in tuple(explicit):
+            explicit.update(
+                {Path(f"{base}-wal"), Path(f"{base}-shm"), Path(f"{base}-journal")}
             )
+        for candidate in explicit:
+            resolved = candidate.resolve()
+            if resolved.parent == parent_dir and resolved.exists():
+                resolved.unlink()
+                _log("info", "Removed encrypted database artifact: %s", resolved)
+        for workspace in parent_dir.glob(".silverestimate-legacy-migration-*"):
+            resolved = workspace.resolve()
+            if (
+                resolved.parent == parent_dir
+                and resolved.is_dir()
+                and (resolved / ".silverestimate-plaintext-migration").exists()
+            ):
+                shutil.rmtree(resolved)
 
         settings = get_app_settings()
         temp_path = settings.value("security/last_temp_db_path")
@@ -236,7 +271,14 @@ def perform_data_wipe(
 
         for key in ("security/db_salt", "security/last_temp_db_path"):
             settings.remove(key)
-        for kind in ("main", "backup"):
+        for kind in (
+            "main",
+            "backup",
+            "pending_main",
+            "pending_backup",
+            "recovery_main",
+            "recovery_backup",
+        ):
             try:
                 cred_logger = None if silent else logger
                 credential_store.delete_password_hash(

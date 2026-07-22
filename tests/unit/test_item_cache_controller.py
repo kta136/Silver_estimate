@@ -54,7 +54,13 @@ def test_item_cache_background_preload_success_and_guards(tmp_path) -> None:
 
     cache = ItemCacheController()
     cache.start_preload(None)
-    cache.start_preload(str(db_path))
+
+    def factory():
+        connection = sqlite3.connect(db_path)
+        connection.row_factory = sqlite3.Row
+        return connection
+
+    cache.start_preload(factory)
     assert cache._thread is not None
     cache._thread.join(2)
     assert cache.get("A1")["purity"] == 92.5
@@ -62,7 +68,7 @@ def test_item_cache_background_preload_success_and_guards(tmp_path) -> None:
     assert "" in cache.cache
 
     completed_thread = cache._thread
-    cache.start_preload(str(db_path))
+    cache.start_preload(factory)
     assert cache._thread is completed_thread
 
     release = threading.Event()
@@ -70,7 +76,7 @@ def test_item_cache_background_preload_success_and_guards(tmp_path) -> None:
     cache._preloaded = False
     cache._thread = waiting
     waiting.start()
-    cache.start_preload(str(db_path))
+    cache.start_preload(factory)
     assert cache._thread is waiting
     release.set()
     waiting.join()
@@ -80,7 +86,8 @@ def test_item_cache_preload_failure_and_thread_start_failure(
     tmp_path, monkeypatch
 ) -> None:
     cache = ItemCacheController()
-    cache.start_preload(str(tmp_path / "missing" / "items.sqlite"))
+    missing = tmp_path / "missing" / "items.sqlite"
+    cache.start_preload(lambda: sqlite3.connect(missing))
     assert cache._thread is not None
     cache._thread.join(2)
     assert cache.cache == {}
@@ -94,5 +101,5 @@ def test_item_cache_preload_failure_and_thread_start_failure(
             raise RuntimeError("cannot start")
 
     monkeypatch.setattr(threading, "Thread", StartFailureThread)
-    cache.start_preload(str(tmp_path / "items.sqlite"))
+    cache.start_preload(lambda: sqlite3.connect(tmp_path / "items.sqlite"))
     assert cache._thread is None

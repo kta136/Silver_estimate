@@ -73,13 +73,22 @@ def _seed_history_worker_db(path: Path) -> None:
         conn.close()
 
 
+def _factory(path: Path):
+    def connect(_cancel_event=None):
+        connection = sqlite3.connect(path)
+        connection.row_factory = sqlite3.Row
+        return connection
+
+    return connect
+
+
 def test_history_worker_filters_rows_from_snapshot_repository(qt_app, tmp_path):
     del qt_app
     db_path = tmp_path / "history-worker.sqlite"
     _seed_history_worker_db(db_path)
 
     request = _BarsHistoryRequest(
-        str(db_path),
+        _factory(db_path),
         "Worker B",
         "11.0",
         "Issued",
@@ -95,6 +104,10 @@ def test_history_worker_filters_rows_from_snapshot_repository(qt_app, tmp_path):
 
 def test_history_worker_emits_error_for_missing_snapshot_db(qt_app):
     del qt_app
-    request = _BarsHistoryRequest("", "", "", "All Statuses", None, False)
-    with pytest.raises(RuntimeError, match="Temporary database path is unavailable"):
+
+    def unavailable(_cancel_event=None):
+        raise RuntimeError("Encrypted database connection is unavailable")
+
+    request = _BarsHistoryRequest(unavailable, "", "", "All Statuses", None, False)
+    with pytest.raises(RuntimeError, match="Encrypted database connection"):
         _load_bars_history_page(request, threading.Event())

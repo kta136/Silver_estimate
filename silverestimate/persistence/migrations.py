@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
-import sqlite3
 from typing import TYPE_CHECKING
+
+from silverestimate.persistence.database_driver import dbapi as sqlite3
 
 CURRENT_SCHEMA_VERSION = 8
 
@@ -28,7 +29,11 @@ def run_schema_setup(db: "DatabaseManager") -> None:
         current_version = db._check_schema_version()
         logger.info("Current database schema version: %s", current_version)
         if current_version == CURRENT_SCHEMA_VERSION:
-            logger.debug("Database schema is current; skipping migration checks.")
+            conn.execute("BEGIN IMMEDIATE")
+            _ensure_indexes(db)
+            _validate_schema(db)
+            conn.commit()
+            logger.debug("Database schema and mandatory indexes are current.")
             return
         if current_version > CURRENT_SCHEMA_VERSION:
             raise RuntimeError(

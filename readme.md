@@ -4,7 +4,7 @@ A desktop application built with PyQt6 and an encrypted SQLite database for mana
 
 [![Python](https://img.shields.io/badge/Python-3.14+-blue.svg)](https://www.python.org/)
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.11-green.svg)](https://www.riverbankcomputing.com/software/pyqt/)
-[![License](https://img.shields.io/badge/License-Proprietary-red.svg)](#license)
+[![License: GPL v3](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE)
 [![Source Version](https://img.shields.io/badge/source-v3.07-orange.svg)](CHANGELOG.md#307---2026-07-22)
 [![Latest Release](https://img.shields.io/github/v/release/kta136/Silver_estimate?label=stable%20release)](https://github.com/kta136/Silver_estimate/releases/latest)
 [![PR Validation](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml)
@@ -56,8 +56,8 @@ The app helps silver shops to:
 - Print formatted estimate slips with Indian rupee formatting
 - Follow live Agra Mohar rates through anonymous HTTPS/SSE updates with an offline snapshot
 - Keep the desktop UI in a strict light theme across Windows dark mode, dialogs, popups, and print preview controls
-- Store all data locally with file-level encryption
-- Back up and restore item catalogs
+- Store the live database, WAL, and journals locally with SQLCipher encryption
+- Create encrypted full-database backups and explicit plaintext item-catalog exports
 
 ## Architecture
 
@@ -66,7 +66,7 @@ The app helps silver shops to:
 - **Presenter**: `silverestimate/presenter/estimate_entry_presenter.py` coordinates estimate workflows, keeping UI widgets thin and testable.
 - **Controllers**: Startup, navigation, and live-rate controllers bootstrap the app, wire menus/toolbars, and manage background refresh cadence.
 - **Services**: `MainCommands`, `SettingsService`, `LiveRateService`, and `AuthService` encapsulate reusable logic; authentication relies on the secure credential store.
-- **Persistence**: `DatabaseManager` plus query/command/synchronization repositories manage atomic schema v6 migrations, keyset pages, the decrypted working copy, WAL checkpoints, and streamed AES-GCM snapshots.
+- **Persistence**: `DatabaseManager`, `SqlCipherConnectionBroker`, and role-specific repositories manage direct encrypted connections, atomic schema v8 migrations, keyset pages, encrypted WAL/journals, maintenance draining, and staged recovery.
 - **Security & infrastructure**: OS keyring-backed credential storage (`silverestimate/security/credential_store.py`), Qt6 startup bootstrap (`silverestimate/infrastructure/qt_bootstrap.py`), structured logging with optional cleanup scheduler, and QSettings helpers maintain app state safely.
 
 ### DDA Agra Mohar Live Rate
@@ -95,7 +95,8 @@ See also: `DOCS/project-architecture.md`.
 - Return processing and last balance handling
 
 ### Security
-- Encrypted database: versioned `SILVDB01` Argon2id/AES-256-GCM envelope with authenticated 1 MiB chunks
+- Encrypted database: SQLCipher 4.17.x with a raw Argon2id-derived 256-bit key and exact versioned KDF metadata
+- Encrypted `.sedbbackup` full-database backup and restart-activated restore; `.seitems.json` catalog exports remain plaintext by request
 - Password hashing: Argon2 with hashes stored in the OS keyring (Python `keyring`)
 - Secure settings store: non-sensitive preferences via QSettings
 
@@ -158,7 +159,7 @@ First run notes:
 
 ## Security
 
-- Encryption: `SILVDB01`, Argon2id, AES-256-GCM, authenticated metadata/chunk order, and streamed 1 MiB chunks
+- Encryption: bundled and hash-verified SQLCipher 4.17.x for CPython 3.14 x64, Argon2id raw keys, encrypted database/WAL/journal pages, and a read-only SILVDB01 migration importer
 - Passwords: Argon2 hashing (passlib) with hashes persisted in the OS keyring (Python `keyring`)
 - Files: Encrypted DB at `<EXE folder>/database/estimation.db` (ignored in Git)
 - Logs: Written to `logs/` (ignored); avoid logging sensitive data
@@ -275,9 +276,10 @@ For support and troubleshooting:
 
 ## License
 
-This project is proprietary software. All rights reserved.
+This project is free software licensed under the
+[GNU General Public License v3.0 only](LICENSE) (`GPL-3.0-only`).
 
-Copyright 2023-2026 Silver Estimation App
+Copyright (C) 2023-2026 Silver Estimation App
 
 ---
 
@@ -298,7 +300,7 @@ Copyright 2023-2026 Silver Estimation App
 
 ### v3.04 (2026-07-16)
 - Retires the completed legacy database-location and QSettings-organization migration paths
-- Accepts only the authenticated `SILVDB01` Argon2id database format
+- Accepts SQLCipher data with exact KDF metadata, migrates authenticated `SILVDB01` once, and rejects plaintext SQLite headers
 - Removes PBKDF2, raw encrypted-payload support, and settings-owned database salts
 
 ### v3.03 (2026-07-16)
@@ -400,7 +402,7 @@ Copyright 2023-2026 Silver Estimation App
 - Harden shutdown so duplicate DatabaseManager closes no longer raise false critical temp-file warnings
 
 ### v1.72.5 (2025-09-14)
-- Ensure encryption reads a complete WAL snapshot before sealing
-- Serialise encryption with explicit locks
+- Ensure every secondary reader is keyed before schema access
+- Serialize migration, backup, restore, rekey, and wipe through broker maintenance mode
 
 [See full changelog](CHANGELOG.md)

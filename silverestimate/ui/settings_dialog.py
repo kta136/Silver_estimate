@@ -8,12 +8,14 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QFormLayout,
     QFrame,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QListView,
@@ -744,6 +746,22 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(backup_group)
 
+        database_backup_group = QGroupBox("Encrypted Database Backup")
+        database_backup_layout = QVBoxLayout(database_backup_group)
+        create_database_backup = QPushButton("Create Encrypted Database Backup...")
+        create_database_backup.setToolTip(
+            "Create a validated .sedbbackup containing only SQLCipher-encrypted data"
+        )
+        create_database_backup.clicked.connect(self._create_database_backup)
+        database_backup_layout.addWidget(create_database_backup)
+        restore_database_backup = QPushButton("Stage Encrypted Database Restore...")
+        restore_database_backup.setToolTip(
+            "Validate and stage an encrypted restore; activation requires restart"
+        )
+        restore_database_backup.clicked.connect(self._stage_database_restore)
+        database_backup_layout.addWidget(restore_database_backup)
+        layout.addWidget(database_backup_group)
+
         layout.addStretch()  # Push content up
         widget.setLayout(layout)
         return widget
@@ -1344,62 +1362,58 @@ class SettingsDialog(QDialog):
             )
             return
 
-        # 6. Persist new hashes in secure store
+        # 6. Persist recoverable pending hashes, switch the database, then promote.
         try:
+            stored_backup_hash = credential_store.get_password_hash("backup")
+            credential_store.set_password_hash(
+                "pending_main", new_main_hash, logger=logger
+            )
+            credential_store.set_password_hash(
+                "pending_backup", new_secondary_hash, logger=logger
+            )
+            credential_store.set_password_hash(
+                "recovery_main", stored_main_hash, logger=logger
+            )
+            if stored_backup_hash:
+                credential_store.set_password_hash(
+                    "recovery_backup", stored_backup_hash, logger=logger
+                )
+            dbm = getattr(self.main_window, "db", None)
+            if dbm is None:
+                raise RuntimeError("Encrypted database connection is unavailable")
+            outcome = dbm.change_passwords(new_main_pw)
+            if getattr(outcome.status, "name", "") != "SUCCESS":
+                for kind in (
+                    "pending_main",
+                    "pending_backup",
+                    "recovery_main",
+                    "recovery_backup",
+                ):
+                    credential_store.delete_password_hash(kind, logger=logger)
+                QMessageBox.warning(
+                    self, "Password Change Rolled Back", outcome.message
+                )
+                return
             credential_store.set_password_hash("main", new_main_hash, logger=logger)
             credential_store.set_password_hash(
                 "backup", new_secondary_hash, logger=logger
             )
-
-            QMessageBox.information(self, "Success", "Passwords changed successfully.")
-            # Clear fields after success
-            self.current_password_input.clear()
-            self.new_password_input.clear()
-            self.confirm_new_password_input.clear()
-            self.new_secondary_password_input.clear()
-            self.confirm_new_secondary_password_input.clear()
-
-            # Attempt to re-encrypt the database immediately with the new password if DB is available
-            try:
-                dbm = getattr(self.main_window, "db", None)
-                if dbm is not None:
-                    self.statusBarMsg = getattr(
-                        self.main_window, "show_status_message", None
-                    )
-                    if callable(self.statusBarMsg):
-                        self.statusBarMsg(
-                            "Re-encrypting database with new password...",
-                            3000,
-                            level="info",
-                        )
-                    reenc_ok = dbm.reencrypt_with_new_password(new_main_pw)
-                    if reenc_ok:
-                        QMessageBox.information(
-                            self,
-                            "Password Updated",
-                            "Passwords changed and database re-encrypted successfully.",
-                        )
-                    else:
-                        QMessageBox.information(
-                            self,
-                            "Restart Recommended",
-                            "Passwords changed. Please restart the application to ensure the new password is used for database access.",
-                        )
-                else:
-                    QMessageBox.information(
-                        self,
-                        "Restart Required",
-                        "Passwords changed. Please restart the application for the new password to take effect for database access.",
-                    )
-            except Exception as _re:
-                logging.getLogger(__name__).warning(
-                    f"Live re-encryption failed or skipped: {_re}"
-                )
-                QMessageBox.information(
-                    self,
-                    "Restart Required",
-                    "Passwords changed. Please restart the application for the new password to take effect for database access.",
-                )
+            for kind in (
+                "pending_main",
+                "pending_backup",
+                "recovery_main",
+                "recovery_backup",
+            ):
+                credential_store.delete_password_hash(kind, logger=logger)
+            QMessageBox.information(self, "Password Updated", outcome.message)
+            for field in (
+                self.current_password_input,
+                self.new_password_input,
+                self.confirm_new_password_input,
+                self.new_secondary_password_input,
+                self.confirm_new_secondary_password_input,
+            ):
+                field.clear()
 
         except Exception as e:
             QMessageBox.critical(
@@ -1410,6 +1424,54 @@ class SettingsDialog(QDialog):
             logging.getLogger(__name__).error(
                 "Error saving new password hashes:", exc_info=True
             )
+
+    def _create_database_backup(self) -> None:
+        dbm = getattr(self.main_window, "db", None)
+        if dbm is None:
+            QMessageBox.critical(self, "Backup Error", "Database is unavailable.")
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Create Encrypted Database Backup",
+            "silverestimate.sedbbackup",
+            "Silver Estimate Encrypted Backup (*.sedbbackup)",
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".sedbbackup"):
+            path += ".sedbbackup"
+        try:
+            outcome = dbm.create_encrypted_backup(path)
+            QMessageBox.information(self, "Encrypted Backup Created", outcome.message)
+        except Exception as exc:
+            QMessageBox.critical(self, "Backup Error", str(exc))
+
+    def _stage_database_restore(self) -> None:
+        dbm = getattr(self.main_window, "db", None)
+        if dbm is None:
+            QMessageBox.critical(self, "Restore Error", "Database is unavailable.")
+            return
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Restore Encrypted Database Backup",
+            "",
+            "Silver Estimate Encrypted Backup (*.sedbbackup)",
+        )
+        if not path:
+            return
+        password, accepted = QInputDialog.getText(
+            self,
+            "Backup Password",
+            "Enter the main password that protected this backup:",
+            QLineEdit.EchoMode.Password,
+        )
+        if not accepted:
+            return
+        try:
+            outcome = dbm.stage_encrypted_restore(path, password)
+            QMessageBox.information(self, "Restore Staged", outcome.message)
+        except Exception as exc:
+            QMessageBox.critical(self, "Restore Error", str(exc))
 
     def _handle_manual_log_cleanup(self):
         """Handle manual log cleanup button click."""

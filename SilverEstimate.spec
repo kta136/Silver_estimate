@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 import os
+from PyInstaller.utils.hooks import collect_dynamic_libs
 
 def _normalized_path(path):
     return path.replace("\\", "/")
@@ -96,13 +97,19 @@ def _filter_frozen_entries(entries):
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=[],
-    datas=[],
+    binaries=collect_dynamic_libs("sqlcipher3"),
+    datas=[
+        ("vendor/sqlcipher/PROVENANCE.json", "vendor/sqlcipher"),
+        ("LICENSE", "."),
+        ("THIRD_PARTY_NOTICES.md", "."),
+    ],
     hiddenimports=[
         "passlib.handlers.argon2",
         "keyring.backends.Windows",
         "keyring.backends.fail",
         "keyring.backends.null",
+        "sqlcipher3.dbapi2",
+        "sqlcipher3._sqlite3",
     ],
     hookspath=[],
     hooksconfig={},

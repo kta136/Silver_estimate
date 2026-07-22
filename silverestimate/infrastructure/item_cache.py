@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import logging
-import sqlite3
 import threading
 from collections.abc import Iterable
-from typing import Any, Dict, Optional, cast
+from typing import Any, Callable, Dict, Optional, cast
 
 
 class ItemCacheController:
@@ -68,9 +67,9 @@ class ItemCacheController:
             self._cache = replacement
             self._preloaded = True
 
-    def start_preload(self, db_path: Optional[str]) -> None:
-        """Warm the cache using a dedicated SQLite connection in the background."""
-        if not db_path:
+    def start_preload(self, connection_factory: Optional[Callable[[], Any]]) -> None:
+        """Warm the cache using a keyed broker connection in the background."""
+        if not connection_factory:
             return
         if self._preloaded:
             return
@@ -81,8 +80,7 @@ class ItemCacheController:
             local_cache: dict[str, dict[str, Any]] = {}
             conn = None
             try:
-                conn = sqlite3.connect(db_path)
-                conn.row_factory = sqlite3.Row
+                conn = connection_factory()
                 cur = conn.cursor()
                 cur.execute(
                     "SELECT code, name, tunch, purity, wage_type, wage_rate FROM items"

@@ -4,7 +4,7 @@ import os
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, Callable, cast
 
 from PyQt6.QtCore import QLocale, QModelIndex, Qt, QTimer
 from PyQt6.QtGui import QDoubleValidator
@@ -39,7 +39,7 @@ from silverestimate.ui.themed_controls import ThemedComboBox
 
 @dataclass(frozen=True)
 class _ItemLoadRequest:
-    db_path: str
+    connection_factory: Callable[[threading.Event | None], Any]
     search_term: str
     cursor: ItemCursor | None
     append: bool
@@ -50,7 +50,9 @@ def _load_item_page(
     request: _ItemLoadRequest,
     cancel_event: threading.Event,
 ) -> tuple[_ItemLoadRequest, Page[dict[str, Any], ItemCursor]]:
-    with cancellable_sqlite_connection(request.db_path, cancel_event) as connection:
+    with cancellable_sqlite_connection(
+        request.connection_factory, cancel_event
+    ) as connection:
         page = fetch_item_catalog_page(
             connection.cursor(),
             request.search_term,
@@ -389,10 +391,10 @@ class ItemMasterWidget(QWidget):
             return
 
         started_at = time.perf_counter()
-        temp_db_path = getattr(self.db_manager, "temp_db_path", None)
-        if isinstance(temp_db_path, str) and temp_db_path:
+        connection_factory = getattr(self.db_manager, "open_read_connection", None)
+        if callable(connection_factory):
             request = _ItemLoadRequest(
-                temp_db_path,
+                connection_factory,
                 normalized_term,
                 self._item_cursor,
                 append,

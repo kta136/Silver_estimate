@@ -1,0 +1,40 @@
+name: Build controlled SQLCipher wheel
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wheel:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          architecture: x64
+      - name: Install generation dependencies
+        shell: pwsh
+        run: choco install strawberryperl nasm tcl -y --no-progress
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Build and probe candidate from pinned sources
+        shell: pwsh
+        run: ./scripts/build_sqlcipher_wheel.ps1
+      - name: Install and probe candidate runtime
+        shell: pwsh
+        run: |
+          python -m pip install --force-reinstall dist/sqlcipher/*.whl
+          python scripts/verify_sqlcipher_runtime.py --provenance vendor/sqlcipher/PROVENANCE.json
+      - name: Native dependency inventory
+        shell: pwsh
+        run: |
+          Get-ChildItem dist/sqlcipher/*.whl | Get-FileHash -Algorithm SHA256
+          Get-ChildItem .venv -Recurse -Include *.pyd,*.dll -ErrorAction SilentlyContinue | Select-Object FullName,Length
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sqlcipher3-cp314-win-amd64
+          path: dist/sqlcipher/*

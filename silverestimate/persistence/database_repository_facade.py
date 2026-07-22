@@ -13,7 +13,7 @@ class DatabaseRepositoryFacadeMixin:
         estimates_repo: Any
         silver_bars_repo: Any
         _item_cache_controller: Any | None
-        temp_db_path: str | None
+        database_path: str
         last_error: str | None
 
     def get_item_by_code(self, code):
@@ -27,7 +27,7 @@ class DatabaseRepositoryFacadeMixin:
         controller = getattr(self, "_item_cache_controller", None)
         if not controller:
             return
-        controller.start_preload(self.temp_db_path)
+        controller.start_preload(getattr(self, "open_read_connection", None))
 
     def search_items(self, search_term):
         return self.items_repo.search_items(search_term)

@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import logging
-import sqlite3
 from typing import Any, Iterable, Optional
 
 from silverestimate.domain.item_validation import ItemValidationError, validate_item
 from silverestimate.domain.pagination import ItemCursor, Page
+from silverestimate.persistence.database_driver import dbapi as sqlite3
 
 ITEM_CATALOG_COLUMNS = "code, name, tunch, purity, wage_type, wage_rate"
 
@@ -15,7 +15,7 @@ ITEM_CATALOG_COLUMNS = "code, name, tunch, purity, wage_type, wage_rate"
 def fetch_item_catalog_rows(
     cursor: sqlite3.Cursor,
     search_term: str,
-) -> list[sqlite3.Row]:
+) -> list[Any]:
     """Return item-master rows while preserving current search semantics."""
     term = (search_term or "").strip()
     if not term:
@@ -23,7 +23,7 @@ def fetch_item_catalog_rows(
             "SELECT code, name, tunch, purity, wage_type, wage_rate "
             "FROM items ORDER BY code COLLATE NOCASE"
         )
-        return cursor.fetchall()
+        return list(cursor.fetchall())
 
     prefix_pattern = f"{term}%"
     cursor.execute(
@@ -38,7 +38,7 @@ def fetch_item_catalog_rows(
         """,
         (prefix_pattern, prefix_pattern, prefix_pattern),
     )
-    prefix_rows = cursor.fetchall()
+    prefix_rows: list[Any] = list(cursor.fetchall())
     if prefix_rows:
         return prefix_rows
 
@@ -58,7 +58,7 @@ def fetch_item_catalog_rows(
         """,
         (pattern, pattern, pattern),
     )
-    return cursor.fetchall()
+    return list(cursor.fetchall())
 
 
 def fetch_item_catalog_page(
@@ -389,7 +389,6 @@ class ItemsRepository:
                 ),
             )
             conn.commit()
-            self._request_flush()
             self._invalidate_cache(validated.code)
             return True
         except ItemValidationError as exc:
@@ -435,7 +434,6 @@ class ItemsRepository:
             )
             conn.commit()
             if cursor.rowcount > 0:
-                self._request_flush()
                 self._invalidate_cache(validated.code)
                 return True
             return False
@@ -525,7 +523,6 @@ class ItemsRepository:
             conn.rollback()
             return None
 
-        self._request_flush()
         cursor.execute(f"SELECT {ITEM_CATALOG_COLUMNS} FROM items")  # nosec B608
         catalog_rows = [dict(row) for row in cursor.fetchall()]
         cache_controller = self._cache_controller
@@ -552,7 +549,6 @@ class ItemsRepository:
             cursor.execute("DELETE FROM items WHERE code = ?", (code,))
             conn.commit()
             if cursor.rowcount > 0:
-                self._request_flush()
                 self._invalidate_cache(code)
                 return True
             return False
@@ -562,16 +558,6 @@ class ItemsRepository:
             return False
 
     # --- helpers -----------------------------------------------------------------
-
-    def _request_flush(self) -> None:
-        try:
-            requester = getattr(self._db, "request_flush", None)
-            if callable(requester):
-                requester()
-        except Exception as exc:  # pragma: no cover - log only
-            self._logger.error(
-                "Exception during post-item flush: %s", exc, exc_info=True
-            )
 
     def _invalidate_cache(self, code: str) -> None:
         try:

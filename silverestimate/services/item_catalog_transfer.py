@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import contextlib
 import json
-import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
@@ -56,32 +54,28 @@ def export_item_catalog_rows(raw_items: list[Any], file_path: str) -> int:
     return len(items)
 
 
-def load_item_catalog_rows_from_db_path(db_path: str) -> list[dict[str, Any]]:
-    """Read item rows from a temp SQLite database using a dedicated connection."""
-    if not db_path:
-        raise ItemCatalogTransferError("Temporary database path not available.")
+def load_item_catalog_rows_from_connection_factory(
+    connection_factory: Any,
+) -> list[dict[str, Any]]:
+    """Read item rows through a keyed broker connection."""
+    if not callable(connection_factory):
+        raise ItemCatalogTransferError("Encrypted database connection unavailable.")
 
-    conn = None
     try:
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT code, name, tunch, purity, wage_type, wage_rate "
-            "FROM items ORDER BY code COLLATE NOCASE"
-        )
-        return [
-            _normalize_item_mapping(row, context=f"catalog row {index + 1}")
-            for index, row in enumerate(cursor.fetchall())
-        ]
-    except sqlite3.Error as exc:
+        with connection_factory() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT code, name, tunch, purity, wage_type, wage_rate "
+                "FROM items ORDER BY code COLLATE NOCASE"
+            )
+            return [
+                _normalize_item_mapping(row, context=f"catalog row {index + 1}")
+                for index, row in enumerate(cursor.fetchall())
+            ]
+    except Exception as exc:
         raise ItemCatalogTransferError(
             f"Could not read item catalog from database: {exc}"
         ) from exc
-    finally:
-        if conn is not None:
-            with contextlib.suppress(Exception):
-                conn.close()
 
 
 def import_item_catalog(

@@ -27,6 +27,11 @@ jobs:
       - run: uv python install 3.14
       - name: Sync frozen development environment
         run: uv sync --frozen --extra dev
+      - name: Verify committed SQLCipher runtime
+        shell: pwsh
+        run: |
+          uv run python scripts/verify_sqlcipher_runtime.py --wheel vendor/sqlcipher/sqlcipher3-0.6.2+silverestimate.4.17.0.1-cp314-cp314-win_amd64.whl --provenance vendor/sqlcipher/PROVENANCE.json
+          uv run python scripts/verify_sqlcipher_runtime.py --provenance vendor/sqlcipher/PROVENANCE.json
 
       - name: Verify tag equals APP_VERSION
         shell: pwsh
@@ -77,7 +82,7 @@ jobs:
           $zip = "SilverEstimate-$tag-win64.zip"
           $sbom = "SilverEstimate-$tag.cdx.json"
           Copy-Item -LiteralPath dist\SilverEstimate.exe -Destination $exe
-          Compress-Archive -LiteralPath $exe -DestinationPath $zip -Force
+          Compress-Archive -LiteralPath $exe,LICENSE,THIRD_PARTY_NOTICES.md,vendor\sqlcipher\PROVENANCE.json -DestinationPath $zip -Force
           uv run cyclonedx-py environment --output-format JSON --output-file $sbom
           foreach ($artifact in @($exe, $zip, $sbom)) {
             $hash = (Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash.ToLower()

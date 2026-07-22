@@ -1,5 +1,4 @@
 import logging
-import types
 
 from PyQt6.QtWidgets import QDialog
 
@@ -62,8 +61,10 @@ def test_run_authentication_first_time(monkeypatch, settings_stub):
     assert isinstance(result, auth_service.AuthenticationResult)
     assert result.password == "primary-pass"
     assert result.wipe_requested is False
-    assert credential_store.get_password_hash("main") == "hashed-primary-pass"
-    assert credential_store.get_password_hash("backup") == "hashed-backup-pass"
+    assert result.pending_main_hash == "hashed-primary-pass"
+    assert result.pending_backup_hash == "hashed-backup-pass"
+    assert credential_store.get_password_hash("main") is None
+    assert credential_store.get_password_hash("backup") is None
 
 
 def test_run_authentication_existing_password(monkeypatch, settings_stub):
@@ -293,14 +294,10 @@ def test_perform_data_wipe_failure_notifies_user(tmp_path, monkeypatch, settings
 
     credential_store.set_password_hash("main", "hash")
 
-    def _boom(path):  # noqa: ARG001
+    def _boom(path, *, missing_ok=False):  # noqa: ARG001
         raise OSError("boom")
 
-    monkeypatch.setattr(
-        auth_service,
-        "os",
-        types.SimpleNamespace(remove=_boom, path=auth_service.os.path),
-    )
+    monkeypatch.setattr(auth_service.Path, "unlink", _boom)
     monkeypatch.setattr(auth_service, "QMessageBox", _MessageBoxStub)
 
     result = auth_service.perform_data_wipe(

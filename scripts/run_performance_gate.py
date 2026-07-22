@@ -14,11 +14,14 @@ from pathlib import Path
 from typing import TypeVar
 
 from silverestimate.domain.estimate_models import EstimateLine, EstimateLineCategory
+from silverestimate.persistence.database_driver import (
+    SqlCipherConnectionBroker,
+    export_database,
+)
 from silverestimate.persistence.estimates_repository import fetch_estimate_history_page
 from silverestimate.persistence.silver_bars_snapshot_repository import (
     SilverBarsSnapshotRepository,
 )
-from silverestimate.security.encrypted_envelope import Argon2Metadata, write_envelope
 from silverestimate.services.dda_rate_fetcher import (
     DDA_AGRA_MOHAR_ITEM_ID,
     parse_current_rates,
@@ -207,6 +210,30 @@ def _dda_payload() -> dict[str, object]:
     }
 
 
+def _measure_encrypted_exports(temp_root: Path) -> None:
+    encrypted_source = temp_root / "ten-mib.sqlcipher"
+    source_broker = SqlCipherConnectionBroker(encrypted_source, b"K" * 32)
+    source, _ = source_broker.open_writer(create=True)
+    try:
+        source.execute("CREATE TABLE payload(value BLOB NOT NULL)")
+        source.execute(
+            "INSERT INTO payload(value) VALUES (zeroblob(?))",
+            (ENCRYPTED_PLAINTEXT_SIZE,),
+        )
+        source.commit()
+        for sample in range(FLUSH_SAMPLES):
+            encrypted = temp_root / f"backup-{sample}.sqlcipher"
+            duration, _ = _measure(
+                lambda encrypted=encrypted: export_database(
+                    source, encrypted, b"B" * 32
+                )
+            )
+            assert encrypted.stat().st_size >= ENCRYPTED_PLAINTEXT_SIZE
+            _emit("encrypted_backup_export", duration)
+    finally:
+        source.close()
+
+
 def run(output_path: Path) -> None:
     now = datetime(2026, 7, 15, 9, 30, tzinfo=timezone.utc)
     rows = tuple(
@@ -242,7 +269,13 @@ def run(output_path: Path) -> None:
         temp_root = Path(temp_dir)
         database_path = temp_root / "scale.sqlite"
         create_deterministic_dataset(database_path)
-        snapshot_repository = SilverBarsSnapshotRepository(str(database_path))
+
+        def open_snapshot(_cancel_event=None):
+            snapshot = sqlite3.connect(database_path)
+            snapshot.row_factory = sqlite3.Row
+            return snapshot
+
+        snapshot_repository = SilverBarsSnapshotRepository(open_snapshot)
         connection = sqlite3.connect(database_path)
         connection.row_factory = sqlite3.Row
         try:
@@ -297,26 +330,7 @@ def run(output_path: Path) -> None:
         finally:
             connection.close()
 
-        plaintext = temp_root / "ten-mib.sqlite"
-        plaintext.write_bytes(b"S" * ENCRYPTED_PLAINTEXT_SIZE)
-        metadata = Argon2Metadata(
-            salt=b"deterministic-salt-for-perf",
-            time_cost=3,
-            memory_cost_kib=64 * 1024,
-            parallelism=4,
-        )
-        for sample in range(FLUSH_SAMPLES):
-            encrypted = temp_root / f"flush-{sample}.silvdb"
-            duration, result = _measure(
-                lambda encrypted=encrypted: write_envelope(
-                    plaintext,
-                    encrypted,
-                    b"K" * 32,
-                    argon2=metadata,
-                )
-            )
-            assert result.plaintext_size == ENCRYPTED_PLAINTEXT_SIZE
-            _emit("encrypted_flush", duration)
+        _measure_encrypted_exports(temp_root)
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text("", encoding="utf-8")

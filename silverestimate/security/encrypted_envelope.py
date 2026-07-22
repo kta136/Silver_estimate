@@ -187,62 +187,6 @@ def read_envelope_metadata(
         return _parse_header(_read_exact(source, header_length, "header"))
 
 
-def write_envelope(
-    plaintext_path: str | os.PathLike[str],
-    output_path: str | os.PathLike[str],
-    key: bytes,
-    *,
-    argon2: Argon2Metadata,
-    chunk_size: int = DEFAULT_CHUNK_SIZE,
-) -> EnvelopeMetadata:
-    """Stream ``plaintext_path`` into an authenticated current envelope."""
-    if len(key) != 32:
-        raise ValueError("AES-256-GCM requires a 32-byte key.")
-    if not 64 * 1024 <= chunk_size <= 16 * 1024 * 1024:
-        raise ValueError("Envelope chunk size must be between 64 KiB and 16 MiB.")
-    plaintext_size = os.path.getsize(plaintext_path)
-    chunk_count = max(1, math.ceil(plaintext_size / chunk_size))
-    header: dict[str, Any] = {
-        "chunk_count": chunk_count,
-        "chunk_size": chunk_size,
-        "cipher": "AES-256-GCM",
-        "format_version": FORMAT_VERSION,
-        "kdf": {
-            "algorithm": "argon2id",
-            "memory_cost_kib": argon2.memory_cost_kib,
-            "parallelism": argon2.parallelism,
-            "salt": base64.b64encode(argon2.salt).decode("ascii"),
-            "time_cost": argon2.time_cost,
-        },
-        "key_check": _key_check(key),
-        "plaintext_size": plaintext_size,
-    }
-    header["header_checksum"] = _header_checksum(header)
-    header_bytes = _canonical_json(header)
-    if len(header_bytes) > MAX_HEADER_SIZE:
-        raise ValueError("Envelope header exceeds the maximum supported size.")
-    prefix = MAGIC + _HEADER_LENGTH.pack(len(header_bytes)) + header_bytes
-    aesgcm = AESGCM(key)
-
-    with open(plaintext_path, "rb") as source, open(output_path, "wb") as output:
-        output.write(prefix)
-        for index in range(chunk_count):
-            chunk = source.read(chunk_size)
-            if index < chunk_count - 1 and len(chunk) != chunk_size:
-                raise OSError("Plaintext snapshot changed while it was encrypted.")
-            chunk_prefix = _CHUNK_PREFIX.pack(index, len(chunk))
-            nonce = os.urandom(NONCE_SIZE)
-            ciphertext = aesgcm.encrypt(nonce, chunk, prefix + chunk_prefix)
-            output.write(chunk_prefix)
-            output.write(nonce)
-            output.write(ciphertext)
-        if source.read(1):
-            raise OSError("Plaintext snapshot grew while it was encrypted.")
-        output.flush()
-        os.fsync(output.fileno())
-    return _parse_header(header_bytes)
-
-
 def decrypt_envelope_to_path(
     encrypted_path: str | os.PathLike[str],
     output_path: str | os.PathLike[str],
@@ -355,5 +299,4 @@ __all__ = [
     "MAGIC",
     "decrypt_envelope_to_path",
     "read_envelope_metadata",
-    "write_envelope",
 ]

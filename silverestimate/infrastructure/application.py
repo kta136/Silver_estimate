@@ -11,12 +11,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import PyQt6.QtCore as QtCore
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QLockFile, Qt
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication, QMessageBox, QWidget
 
 from silverestimate.infrastructure import qt_bootstrap
-from silverestimate.infrastructure.app_constants import APP_TITLE
+from silverestimate.infrastructure.app_constants import APP_TITLE, DB_PATH
 from silverestimate.infrastructure.logger import (
     LogCleanupScheduler,
     get_log_config,
@@ -53,6 +53,7 @@ class ApplicationContext:
     dialog_parent: Optional[QWidget] = None
     startup_t0_perf: float = 0.0
     startup_t0_unix: float = 0.0
+    instance_lock: Optional[QLockFile] = None
 
     def shutdown(self) -> None:
         """Release resources created during startup."""
@@ -75,6 +76,9 @@ class ApplicationContext:
             except Exception as exc:
                 if self.logger:
                     self.logger.debug("Failed to close database on exit: %s", exc)
+        if self.instance_lock is not None:
+            self.instance_lock.unlock()
+            self.instance_lock = None
 
 
 class ApplicationBuilder:
@@ -151,6 +155,8 @@ class ApplicationBuilder:
                 context.startup_t0_unix,
             )
         self._configure_qt(context)
+        if not self._acquire_instance_lock(context):
+            return 0
         if context.logger:
             qt_ready_ms = (time.perf_counter() - context.startup_t0_perf) * 1000.0
             context.logger.debug(
@@ -169,6 +175,32 @@ class ApplicationBuilder:
         )
         self._log_startup_telemetry(context, "startup.main_window_created_ms")
         return self._enter_event_loop(context)
+
+    def _acquire_instance_lock(self, context: ApplicationContext) -> bool:
+        """Hold a QLockFile before authentication or any database mutation."""
+        lock_path = Path(DB_PATH).resolve().with_suffix(".lock")
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        lock = QLockFile(str(lock_path))
+        lock.setStaleLockTime(30_000)
+        if not lock.tryLock(0):
+            # Qt removes a lock only when its recorded process is no longer live.
+            if lock.removeStaleLockFile() and lock.tryLock(0):
+                if context.logger:
+                    context.logger.warning(
+                        "Removed demonstrably stale lock %s", lock_path
+                    )
+            else:
+                if context.logger:
+                    context.logger.warning(
+                        "Another Silver Estimate instance owns %s", lock_path
+                    )
+                self._show_message_box(
+                    "Silver Estimate Already Running",
+                    "Another Silver Estimate instance is already using this database.",
+                )
+                return False
+        context.instance_lock = lock
+        return True
 
     def _log_startup_telemetry(
         self,

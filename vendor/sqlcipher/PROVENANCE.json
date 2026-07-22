@@ -1,0 +1,87 @@
+{
+  "build": {
+    "architecture": "win_amd64",
+    "compiler": "MSVC 19.44.35228 x64 Release",
+    "cpython": "3.14",
+    "defines": [
+      "SQLITE_HAS_CODEC=1",
+      "SQLITE_TEMP_STORE=2",
+      "SQLITE_THREADSAFE=1",
+      "SQLITE_EXTRA_INIT=sqlcipher_extra_init",
+      "SQLITE_EXTRA_SHUTDOWN=sqlcipher_extra_shutdown",
+      "SQLITE_ENABLE_FTS5=1",
+      "SQLITE_ENABLE_JSON1=1"
+    ],
+    "link_flags": [
+      "/INCREMENTAL:NO",
+      "/LTCG",
+      "/DLL",
+      "/Brepro"
+    ],
+    "native_inventory": [
+      {
+        "imports": [
+          "python314.dll",
+          "KERNEL32.dll",
+          "VCRUNTIME140.dll",
+          "api-ms-win-crt-stdio-l1-1-0.dll",
+          "api-ms-win-crt-runtime-l1-1-0.dll",
+          "api-ms-win-crt-time-l1-1-0.dll",
+          "api-ms-win-crt-heap-l1-1-0.dll",
+          "api-ms-win-crt-string-l1-1-0.dll",
+          "api-ms-win-crt-utility-l1-1-0.dll",
+          "api-ms-win-crt-convert-l1-1-0.dll",
+          "api-ms-win-crt-environment-l1-1-0.dll",
+          "api-ms-win-crt-filesystem-l1-1-0.dll",
+          "WS2_32.dll",
+          "ADVAPI32.dll",
+          "CRYPT32.dll",
+          "USER32.dll",
+          "api-ms-win-crt-math-l1-1-0.dll"
+        ],
+        "path": "sqlcipher3/_sqlite3.cp314-win_amd64.pyd",
+        "sha256": "02f36657ccc8bb202d09e2c2ec9be072559baca309516e346c0d350d6c4df247",
+        "size": 5942272
+      }
+    ],
+    "openssl_configure": [
+      "VC-WIN64A",
+      "no-shared",
+      "no-tests",
+      "no-zlib"
+    ],
+    "wheel": "sqlcipher3-0.6.2+silverestimate.4.17.0.1-cp314-cp314-win_amd64.whl",
+    "wheel_sha256": "3edf46a000bde887b311e08f55a418bd4b089896fe2e875a09bacedfb4628702",
+    "wheel_size": 2565166,
+    "windows_sdk": "10.0.26100.0"
+  },
+  "format_version": 1,
+  "runtime": {
+    "cipher_provider": "openssl",
+    "cipher_version": "4.17.0 community",
+    "sqlite_version": "3.53.3"
+  },
+  "sources": {
+    "openssl": {
+      "commit": "7b371d80d959ec9ab4139d09d78e83c090de9779",
+      "license": "Apache-2.0",
+      "revision": "f52b9f81a985dc1e45b28cd7b5671feb32815b83",
+      "tag": "openssl-3.6.0",
+      "version": "3.6.0"
+    },
+    "sqlcipher": {
+      "commit": "810db22f575ee7cf94ea96a3e91622b5fcece3dc",
+      "license": "BSD-3-Clause",
+      "revision": "f9788efa8ac4dfed75c03e4756b1666a1d0845da",
+      "tag": "v4.17.0",
+      "version": "4.17.0"
+    },
+    "sqlcipher3": {
+      "commit": "14fc2632676b20011e0bba64fdda49763a2dd2ec",
+      "license": "MIT",
+      "revision": "14fc2632676b20011e0bba64fdda49763a2dd2ec",
+      "tag": "0.6.2",
+      "version": "0.6.2+silverestimate.4.17.0.1"
+    }
+  }
+}

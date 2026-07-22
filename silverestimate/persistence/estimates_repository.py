@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import logging
-import sqlite3
 from datetime import datetime
 from typing import Any, Iterable, List, Optional
 
 from silverestimate.domain.pagination import EstimateHistoryCursor, Page
+from silverestimate.persistence.database_driver import dbapi as sqlite3
 
 
 def fetch_estimate_history_rows(
@@ -584,7 +584,6 @@ class EstimatesRepository:
                     )
 
             conn.commit()
-            self._request_flush()
             self._set_last_error(None)
             return True
         except sqlite3.IntegrityError as exc:
@@ -624,7 +623,6 @@ class EstimatesRepository:
             cursor.execute("DELETE FROM estimate_items")
             cursor.execute("DELETE FROM estimates")
             conn.commit()
-            self._request_flush()
             return True
         except sqlite3.Error as exc:
             conn.rollback()
@@ -667,7 +665,6 @@ class EstimatesRepository:
                 silver_repo.cleanup_empty_lists(affected_lists)
 
             conn.commit()
-            self._request_flush()
             if deleted_estimate_count > 0:
                 self._logger.info(
                     "Deleted estimate %s with %s items and %s silver bars.",
@@ -793,13 +790,3 @@ class EstimatesRepository:
         return None
 
     # ------------------------------------------------------------------
-
-    def _request_flush(self) -> None:
-        try:
-            requester = getattr(self._db, "request_flush", None)
-            if callable(requester):
-                requester()
-        except Exception as exc:  # pragma: no cover - log only
-            self._logger.error(
-                "Exception during post-estimate flush: %s", exc, exc_info=True
-            )

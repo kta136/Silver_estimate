@@ -3,7 +3,7 @@ import logging
 import threading
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, cast
+from typing import Any, Callable, cast
 
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (
@@ -48,7 +48,7 @@ from silverestimate.ui.window_sizing import resize_to_available_screen
 
 @dataclass(frozen=True)
 class _BarsHistoryRequest:
-    db_path: str
+    connection_factory: Callable[[threading.Event | None], Any]
     voucher_term: str
     weight_text: str
     status_text: str
@@ -61,7 +61,7 @@ def _load_bars_history_page(
     cancel_event: threading.Event,
 ) -> tuple[_BarsHistoryRequest, Page[dict[str, Any], SilverBarHistoryCursor]]:
     snapshot = SilverBarsSnapshotRepository(
-        request.db_path,
+        request.connection_factory,
         cancel_event=cancel_event,
     )
     page = snapshot.search_history_bars_page(
@@ -490,14 +490,14 @@ class SilverBarHistoryDialog(QDialog):
         elif self._bars_cursor is None:
             return
         self.load_more_button.setEnabled(False)
-        db_path = getattr(self.db_manager, "temp_db_path", None)
-        if not db_path:
+        connection_factory = getattr(self.db_manager, "open_read_connection", None)
+        if not callable(connection_factory):
             self._load_bars_fallback(payload, append=append)
             return
 
         self._bars_load_runner.submit(
             _BarsHistoryRequest(
-                str(db_path),
+                connection_factory,
                 str(payload.get("voucher_term") or "").strip(),
                 str(payload.get("weight_text") or "").strip(),
                 str(payload.get("status_text") or "All Statuses").strip(),
@@ -559,7 +559,7 @@ class SilverBarHistoryDialog(QDialog):
                 normalized = tuple(dict(row) for row in rows)
                 page = Page(normalized, len(normalized), None)
             request = _BarsHistoryRequest(
-                "",
+                cast(Any, None),
                 str(payload.get("voucher_term") or "").strip(),
                 str(payload.get("weight_text") or "").strip(),
                 str(payload.get("status_text") or "All Statuses").strip(),

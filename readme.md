@@ -165,6 +165,12 @@ First run notes:
 - Logs: Written to `logs/` (ignored); avoid logging sensitive data
 - Temporary plaintext overwrite/removal is best-effort only; SSD wear levelling and copy-on-write filesystems can retain physical copies.
 
+Legacy status: `SILVDB01` is not a live database format anymore. The application
+can read it only to perform a one-time migration to SQLCipher, after which normal
+startup uses `estimation.db` plus `estimation.kdf.json`. The original encrypted
+envelope is retained as `estimation.silvdb01.backup`; it is not opened during
+normal operation and is never rewritten by the application.
+
 ## Configuration
 
 - Settings: Qt QSettings (`SETTINGS_ORG`, `SETTINGS_APP`) in `silverestimate/infrastructure/app_constants.py`

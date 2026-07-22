@@ -567,29 +567,33 @@ transaction journal containing no key material may be needed to resume safely.
 
 ### 8.11 Legacy support and removal schedule
 
-Migration release:
+Current migration release status:
 
 - read and migrate `SILVDB01`;
 - never create a new live `SILVDB01` database;
-- retain the original backup;
-- provide an explicit rollback/export path.
+- retain the original as `estimation.silvdb01.backup`;
+- use SQLCipher exclusively after successful activation;
+- keep only the read-only envelope importer in production;
+- envelope writing, flush scheduling, the plaintext temp-database runtime, and
+  plaintext crash-recovery candidates are already removed.
 
-Following release:
+Installed-system confirmation gate:
 
-- keep the read-only importer;
-- collect migration success/failure telemetry only if it contains no customer
-  data and the product has an appropriate consent model; otherwise rely on
-  local diagnostic logs;
-- fix edge cases without reintroducing a live legacy backend.
+- migrate the sole installed system from its actual application directory;
+- close and reopen the application successfully against `estimation.db`;
+- verify representative estimate, item, and silver-bar data;
+- create and validate an encrypted `.sedbbackup`;
+- retain a copy of the final release capable of importing SILVDB01.
 
 Retirement release:
 
-- remove envelope writing, flush scheduling, temp-database runtime, and crash
-  recovery candidates;
+- remove the read-only SILVDB01 detection/import path and legacy envelope reader;
 - retain a standalone offline conversion tool only if skipped-version upgrades
   must remain supported;
 - remove `cryptography` if no approved feature still needs it;
-- update security and deployment documentation to describe SQLCipher only.
+- update security and deployment documentation to describe SQLCipher-only
+  runtime support;
+- do not automatically delete an existing `estimation.silvdb01.backup`.
 
 Because this installation is currently operated on one system, the maintainer
 can confirm migration before removing support. Even so, the retained encrypted
@@ -611,6 +615,11 @@ legacy backup should not be deleted automatically without an explicit policy.
   plain SQLite production driver.
 
 ## 9. Phase 4: PyQt6-to-PySide6 migration
+
+The living, agent-oriented implementation checklist for this phase is maintained
+in the [PySide6 migration execution plan](pyside6-migration-execution-plan.md).
+That plan owns milestone status, verification evidence, decisions, and handoff
+notes; this roadmap remains the source of sequencing and acceptance policy.
 
 ### 9.1 Why migrate
 
@@ -1155,8 +1164,9 @@ The modernization is successful when:
 
 ### Release M+2: compatibility retirement
 
-- remove SILVDB01 writing, temporary runtime DB, flush scheduler, and recovery
-  candidates;
+- after installed-system confirmation, remove the read-only SILVDB01 importer
+  and envelope reader; the writer, temporary runtime DB, flush scheduler, and
+  plaintext recovery candidates are already absent;
 - remove `cryptography` if no approved use remains;
 - complete the silver-bar repository split;
 - begin estimate-entry and settings composition work.

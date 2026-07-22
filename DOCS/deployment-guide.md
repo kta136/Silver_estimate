@@ -75,3 +75,19 @@ Signing is intentionally non-blocking until `WINDOWS_SIGNING_CERTIFICATE_BASE64`
 Before promoting a stable release, verify the committed SQLCipher 4.17.x wheel against its recorded SHA-256 and native inventory, probe the installed and frozen runtimes, migrate a production `SILVDB01` copy, reject plaintext and unsupported metadata, exercise encrypted backup/restore and copy-switch password rotation with injected interruption, and verify estimate/paging/rate/print workflows. Rebuilding the native wheel is required only when deliberately replacing the bundled dependency.
 
 Normal runtime database files, WAL, and journals are SQLCipher encrypted. The marked one-time legacy migration workspace is the only plaintext database exception and is cleaned on all exits and next startup. Production devices should still use Windows device encryption/BitLocker and a trusted account because SQLCipher does not protect live process memory, hibernation, or a compromised user.
+
+### Installed-system SILVDB01 acceptance
+
+Before retiring the compatibility importer on the single supported installation:
+
+1. Back up the complete installed application/data directory.
+2. Run the migration from the replacement EXE in that same directory.
+3. Confirm `estimation.db`, `estimation.kdf.json`, and
+   `estimation.silvdb01.backup` exist and the live file is not a `SILVDB01`
+   envelope.
+4. Close the application, reopen it, authenticate, and verify representative
+   estimate, item, and silver-bar records.
+5. Create and validate an encrypted `.sedbbackup` archive.
+
+Keep `estimation.silvdb01.backup` until an explicit retention decision is made.
+It is a retained recovery artifact, not the live database.

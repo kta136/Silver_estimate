@@ -51,6 +51,14 @@ table counts, validates schema/integrity/foreign keys, and atomically publishes
 the result. Startup removes interrupted marked workspaces. The application no
 longer writes SILVDB01 envelopes or retains plaintext recovery candidates.
 
+The presence of the importer or `estimation.silvdb01.backup` does not mean that
+SILVDB01 remains an active storage format. Normal reads, writes, WAL activity,
+backup, restore, and password rotation use SQLCipher exclusively. Importer
+retirement is allowed only after the sole installed system has migrated,
+reopened the SQLCipher database on a later process start, and created a verified
+encrypted backup. Retirement does not imply automatic deletion of the retained
+legacy envelope.
+
 `.sedbbackup` archives contain an encrypted SQLCipher database, exact KDF
 metadata, and a digested non-secret manifest. Restore validates the historical
 password and archive before exporting to a current-key staged database. A

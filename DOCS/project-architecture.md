@@ -72,6 +72,12 @@ application-owned workspace, exports to a keyed target with
 the target, retains the original envelope, and removes plaintext and sidecars on
 all exits. It cannot write a new live envelope.
 
+This importer is a temporary upgrade boundary, not a second database backend.
+After the installed system has completed migration, restarted successfully from
+`estimation.db`, and produced a verified encrypted backup, a compatibility
+retirement release may remove the importer and its envelope-reading dependency.
+That retirement must not automatically delete `estimation.silvdb01.backup`.
+
 Encrypted `.sedbbackup` archives contain a SQLCipher database, its KDF metadata,
 and a digested non-secret manifest. Restore and password change use staged
 copy-and-switch activation with journals and retained encrypted rollback files.

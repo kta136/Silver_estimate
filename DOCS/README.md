@@ -10,6 +10,7 @@ Linux are untested development environments.
 |---|---|
 | [Project architecture](project-architecture.md) | Runtime boundaries, repositories, workers, encryption flow, and extension rules |
 | [Modernization roadmap](modernization-roadmap.md) | Ordered SQLCipher, PySide6, dependency, architecture, testing, and release plan |
+| [PySide6 migration execution plan](pyside6-migration-execution-plan.md) | Living milestones, verification gates, evidence, decisions, and agent handoffs for the binding migration |
 | [Workflow and business logic](workflow-business-logic.md) | Estimate, item, silver-bar, authentication, backup, and UI workflows |
 | [Data model and relationships](data-model-relationships.md) | Schema v8 tables, foreign keys, indexes, and migration history |
 | [Security architecture](security-architecture.md) | Authentication, SQLCipher/keyring boundaries, migration/recovery, and threat limitations |

@@ -20,6 +20,9 @@
   smoke coverage.
 - Fixed packaged startup authentication by registering the pending and recovery
   credential kinds used by first-run setup and copy-and-switch password recovery.
+- Clarified that SILVDB01 remains only as a one-time read-only importer and a
+  retained `estimation.silvdb01.backup`, with an installed-system confirmation
+  gate before importer retirement.
 
 All notable changes to the Silver Estimation App will be documented in this file.
 

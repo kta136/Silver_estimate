@@ -85,7 +85,7 @@ class ItemCacheController:
                 conn.row_factory = sqlite3.Row
                 cur = conn.cursor()
                 cur.execute(
-                    "SELECT code, name, purity, wage_type, wage_rate FROM items"
+                    "SELECT code, name, tunch, purity, wage_type, wage_rate FROM items"
                 )
                 rows = cur.fetchall()
                 for row in rows:
@@ -94,6 +94,7 @@ class ItemCacheController:
                         local_cache[key] = {
                             "code": row["code"],
                             "name": row["name"],
+                            "tunch": row["tunch"],
                             "purity": row["purity"],
                             "wage_type": row["wage_type"],
                             "wage_rate": row["wage_rate"],

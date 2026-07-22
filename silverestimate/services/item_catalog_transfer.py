@@ -12,7 +12,8 @@ from typing import Any, Mapping
 from silverestimate.domain.item_validation import validate_item
 
 ITEM_CATALOG_FORMAT = "silverestimate.item_catalog"
-ITEM_CATALOG_VERSION = 1
+ITEM_CATALOG_VERSION = 2
+SUPPORTED_ITEM_CATALOG_VERSIONS = {1, ITEM_CATALOG_VERSION}
 ITEM_CATALOG_FILE_FILTER = (
     "Silver Estimate Item Catalog (*.seitems.json);;JSON Files (*.json)"
 )
@@ -66,7 +67,8 @@ def load_item_catalog_rows_from_db_path(db_path: str) -> list[dict[str, Any]]:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT code, name, purity, wage_type, wage_rate FROM items ORDER BY code COLLATE NOCASE"
+            "SELECT code, name, tunch, purity, wage_type, wage_rate "
+            "FROM items ORDER BY code COLLATE NOCASE"
         )
         return [
             _normalize_item_mapping(row, context=f"catalog row {index + 1}")
@@ -123,7 +125,7 @@ def load_item_catalog_file(file_path: str) -> list[dict[str, Any]]:
     if payload.get("format") != ITEM_CATALOG_FORMAT:
         raise ItemCatalogTransferError("Unsupported catalog file format.")
     version = payload.get("version")
-    if version != ITEM_CATALOG_VERSION:
+    if version not in SUPPORTED_ITEM_CATALOG_VERSIONS:
         raise ItemCatalogTransferError(
             f"Unsupported catalog file version: {version!r}."
         )
@@ -175,6 +177,7 @@ def _normalize_item_mapping(raw_item: Any, *, context: str) -> dict[str, Any]:
             purity=float(data.get("purity", 0.0)),
             wage_type=str(data.get("wage_type", "") or ""),
             wage_rate=float(data.get("wage_rate", 0.0)),
+            tunch=data.get("tunch"),
         )
     except (TypeError, ValueError) as exc:
         raise ItemCatalogTransferError(f"Invalid {context}: {exc}") from exc
@@ -182,6 +185,7 @@ def _normalize_item_mapping(raw_item: Any, *, context: str) -> dict[str, Any]:
     return {
         "code": validated.code,
         "name": validated.name,
+        "tunch": validated.tunch,
         "purity": validated.purity,
         "wage_type": validated.wage_type,
         "wage_rate": validated.wage_rate,

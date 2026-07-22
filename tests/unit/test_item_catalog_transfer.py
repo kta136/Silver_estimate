@@ -40,6 +40,7 @@ def test_export_item_catalog_writes_native_backup_file(tmp_path):
             {
                 "code": "it001",
                 "name": "Sample",
+                "tunch": "91.25 + loss",
                 "purity": 92.5,
                 "wage_type": "P",
                 "wage_rate": 10.0,
@@ -58,6 +59,7 @@ def test_export_item_catalog_writes_native_backup_file(tmp_path):
         {
             "code": "IT001",
             "name": "Sample",
+            "tunch": "91.25 + loss",
             "purity": 92.5,
             "wage_type": "PC",
             "wage_rate": 10.0,
@@ -87,6 +89,7 @@ def test_import_item_catalog_validates_and_normalizes_records(tmp_path):
                     {
                         "code": "it001",
                         "name": "Updated",
+                        "tunch": "Market",
                         "purity": 91.5,
                         "wage_type": "P",
                         "wage_rate": 9.0,
@@ -112,6 +115,7 @@ def test_import_item_catalog_validates_and_normalizes_records(tmp_path):
         {
             "code": "IT001",
             "name": "Updated",
+            "tunch": "Market",
             "purity": 91.5,
             "wage_type": "PC",
             "wage_rate": 9.0,
@@ -119,6 +123,7 @@ def test_import_item_catalog_validates_and_normalizes_records(tmp_path):
         {
             "code": "NEW002",
             "name": "New",
+            "tunch": None,
             "purity": 80.0,
             "wage_type": "WT",
             "wage_rate": 4.5,
@@ -172,6 +177,39 @@ def test_load_item_catalog_file_rejects_wrong_format(tmp_path):
         ItemCatalogTransferError, match="Unsupported catalog file format"
     ):
         load_item_catalog_file(str(path))
+
+
+def test_load_item_catalog_file_accepts_v1_with_blank_tunch(tmp_path):
+    path = tmp_path / "catalog-v1.seitems.json"
+    path.write_text(
+        json.dumps(
+            {
+                "format": ITEM_CATALOG_FORMAT,
+                "version": 1,
+                "items": [
+                    {
+                        "code": "OLD001",
+                        "name": "Legacy",
+                        "purity": 90.0,
+                        "wage_type": "WT",
+                        "wage_rate": 5.0,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert load_item_catalog_file(str(path)) == [
+        {
+            "code": "OLD001",
+            "name": "Legacy",
+            "tunch": None,
+            "purity": 90.0,
+            "wage_type": "WT",
+            "wage_rate": 5.0,
+        }
+    ]
 
 
 def test_load_item_catalog_file_rejects_wrong_version(tmp_path):

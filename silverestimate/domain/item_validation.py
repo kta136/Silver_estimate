@@ -19,19 +19,21 @@ class ValidatedItem:
     purity: float
     wage_type: str
     wage_rate: float
+    tunch: str | None = None
 
 
 class ItemValidationError(ValueError):
     """Raised when item domain constraints are violated."""
 
 
-def validate_item(
+def validate_item(  # noqa: PLR0913 - stable public field-by-field validation API
     *,
     code: str,
     name: str,
     purity: float,
     wage_type: str,
     wage_rate: float,
+    tunch: object = None,
 ) -> ValidatedItem:
     normalized_code = (code or "").strip().upper()
     normalized_name = (name or "").strip()
@@ -60,10 +62,13 @@ def validate_item(
     if wage_rate_value > MAX_WAGE_RATE:
         raise ItemValidationError(f"Wage rate must be <= {MAX_WAGE_RATE:,.0f}.")
 
+    tunch_value = str(tunch).strip() if tunch is not None else ""
+
     return ValidatedItem(
         code=normalized_code,
         name=normalized_name,
         purity=purity_value,
         wage_type=normalized_type,
         wage_rate=wage_rate_value,
+        tunch=tunch_value or None,
     )

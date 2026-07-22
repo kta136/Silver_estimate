@@ -14,6 +14,7 @@ from .print_format_spec import CLASSIC_ESTIMATE_FORMAT_SPEC
 
 _SNO_WIDTH = 3
 _NAME_WIDTH = 18
+_TUNCH_WIDTH = 7
 _GROSS_WIDTH = 9
 _POLY_WIDTH = 9
 _NET_WIDTH = 9
@@ -70,6 +71,7 @@ class _SectionSpec:
 class _RowValues:
     sno: str = ""
     name: str = ""
+    tunch: str | None = None
     gross: float | None = None
     poly: float | None = None
     net: float | None = None
@@ -85,11 +87,20 @@ def build_classic_estimate_layout(
 ) -> ClassicEstimateLayout:
     """Build the former Modern/New fixed-width format from typed data."""
     header = document.header
+    show_tunch = document.show_tunch
+    line_width = _line_width(show_tunch)
     regular, bars, returns, returned_bars = _split_items(document.items)
-    lines = [_title_line(header.note), _voucher_line(header.voucher_no, header.silver_rate)]
-    separator = "=" * _LINE_WIDTH
-    dash = "-" * _LINE_WIDTH
-    column_header = _column_header()
+    lines = [
+        _title_line(header.note, line_width=line_width),
+        _voucher_line(
+            header.voucher_no,
+            header.silver_rate,
+            line_width=line_width,
+        ),
+    ]
+    separator = "=" * line_width
+    dash = "-" * line_width
+    column_header = _column_header(show_tunch=show_tunch, line_width=line_width)
     lines.extend((separator, column_header, separator))
 
     totals: list[_Totals] = []
@@ -110,6 +121,8 @@ def build_classic_estimate_layout(
                 column_header=column_header,
                 dash=dash,
                 separator=separator,
+                show_tunch=show_tunch,
+                line_width=line_width,
             )
         )
     while len(totals) < 4:
@@ -131,9 +144,9 @@ def build_classic_estimate_layout(
         )
         lines.extend(
             (
-                "* * Last Balance * *".center(_LINE_WIDTH),
+                "* * Last Balance * *".center(line_width),
                 dash,
-                balance.center(_LINE_WIDTH),
+                balance.center(line_width),
                 dash,
             )
         )
@@ -156,7 +169,7 @@ def build_classic_estimate_layout(
     total_cost = net_wage + silver_cost
     lines.extend(
         (
-            "Final Silver & Amount".center(_LINE_WIDTH),
+            "Final Silver & Amount".center(line_width),
             separator,
             _final_line(
                 net_fine,
@@ -164,6 +177,7 @@ def build_classic_estimate_layout(
                 silver_cost,
                 total_cost,
                 include_cost=header.silver_rate > 0,
+                line_width=line_width,
             ),
             separator,
         )
@@ -188,7 +202,12 @@ def paint_classic_estimate(
         page_rect = printer.pageRect(QPrinter.Unit.DevicePixel)
         page_width = max(1.0, float(page_rect.width()))
         page_height = max(1.0, float(page_rect.height()))
-        font, metrics = _fit_font(font, printer, page_width)
+        font, metrics = _fit_font(
+            font,
+            printer,
+            page_width,
+            line_width=_line_width(document.show_tunch),
+        )
         line_height = max(1.0, metrics.height() * 1.08)
         lines_per_page = max(1, floor(page_height / line_height))
         painter.setFont(font)
@@ -211,7 +230,7 @@ def _resolve_font(print_font: QFont | None) -> QFont:
     configured_size = getattr(print_font, "float_size", spec.font_size)
     try:
         point_size = float(configured_size)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         point_size = spec.font_size
     font = QFont(spec.font_family)
     font.setPointSizeF(max(1.0, point_size))
@@ -223,9 +242,11 @@ def _fit_font(
     font: QFont,
     printer: QPrinter,
     page_width: float,
+    *,
+    line_width: int,
 ) -> tuple[QFont, QFontMetricsF]:
     metrics = QFontMetricsF(font, printer)
-    required = metrics.horizontalAdvance("M" * _LINE_WIDTH)
+    required = metrics.horizontalAdvance("M" * line_width)
     if required <= page_width or required <= 0:
         return font, metrics
     fitted = QFont(font)
@@ -249,27 +270,35 @@ def _split_items(
     )
 
 
-def _title_line(note: str) -> str:
+def _line_width(show_tunch: bool) -> int:
+    return _LINE_WIDTH + (_TUNCH_WIDTH + 1 if show_tunch else 0)
+
+
+def _title_line(note: str, *, line_width: int) -> str:
     title = "* * ESTIMATE SLIP ONLY * *"
     normalized_note = note.strip()
     if not normalized_note:
-        return title.center(_LINE_WIDTH)
-    available = max(0, _LINE_WIDTH - len(title) - 5)
+        return title.center(line_width)
+    available = max(0, line_width - len(title) - 5)
     combined = f"{title}     {_truncate(normalized_note, available)}"
-    return combined.center(_LINE_WIDTH)[:_LINE_WIDTH]
+    return combined.center(line_width)[:line_width]
 
 
-def _voucher_line(voucher_no: str, silver_rate: float) -> str:
+def _voucher_line(voucher_no: str, silver_rate: float, *, line_width: int) -> str:
     voucher = voucher_no.ljust(15)
     rate = f"S.Rate :{silver_rate:10.1f}"
-    return f"{voucher}{' ' * max(1, _LINE_WIDTH - len(voucher) - len(rate))}{rate}"
+    return f"{voucher}{' ' * max(1, line_width - len(voucher) - len(rate))}{rate}"
 
 
-def _column_header() -> str:
-    return " ".join(
+def _column_header(*, show_tunch: bool, line_width: int) -> str:
+    parts = [
+        "SNo".ljust(_SNO_WIDTH),
+        "Item Name".ljust(_NAME_WIDTH),
+    ]
+    if show_tunch:
+        parts.append("Tunch".ljust(_TUNCH_WIDTH))
+    parts.extend(
         (
-            "SNo".ljust(_SNO_WIDTH),
-            "Item Name".ljust(_NAME_WIDTH),
             "Gross".ljust(_GROSS_WIDTH),
             "Poly".ljust(_POLY_WIDTH),
             "Net".ljust(_NET_WIDTH),
@@ -279,19 +308,22 @@ def _column_header() -> str:
             "Fine".ljust(_FINE_WIDTH),
             "Lbr".ljust(_LABOUR_WIDTH),
         )
-    )[:_LINE_WIDTH]
+    )
+    return " ".join(parts)[:line_width]
 
 
-def _append_section(
+def _append_section(  # noqa: PLR0913 - explicit fixed-width rendering context
     lines: list[str],
     section: _SectionSpec,
     *,
     column_header: str,
     dash: str,
     separator: str,
+    show_tunch: bool,
+    line_width: int,
 ) -> _Totals:
     if section.title:
-        lines.extend((section.title.center(_LINE_WIDTH), dash, column_header, dash))
+        lines.extend((section.title.center(line_width), dash, column_header, dash))
     totals = _Totals()
     for index, item in enumerate(section.items, start=1):
         totals.fine += item.fine
@@ -304,17 +336,18 @@ def _append_section(
                 _RowValues(
                     sno=str(index),
                     name=item.item_name,
+                    tunch=item.tunch,
                     gross=item.gross,
                     poly=item.poly,
                     net=item.net_wt,
                     purity=item.purity,
-                    wage_rate=(
-                        item.wage_rate if section.include_wage_rate else None
-                    ),
+                    wage_rate=(item.wage_rate if section.include_wage_rate else None),
                     pieces=item.pieces if section.include_pieces else None,
                     fine=item.fine,
                     labour=item.wage,
-                )
+                ),
+                show_tunch=show_tunch,
+                line_width=line_width,
             )
         )
     lines.extend(
@@ -328,7 +361,9 @@ def _append_section(
                     net=totals.net,
                     fine=totals.fine,
                     labour=totals.wage,
-                )
+                ),
+                show_tunch=show_tunch,
+                line_width=line_width,
             ),
             separator,
         )
@@ -336,20 +371,31 @@ def _append_section(
     return totals
 
 
-def _row_line(row: _RowValues) -> str:
-    parts = (
+def _row_line(
+    row: _RowValues,
+    *,
+    show_tunch: bool,
+    line_width: int,
+) -> str:
+    parts = [
         str(row.sno or "")[:_SNO_WIDTH].ljust(_SNO_WIDTH),
         str(row.name or "")[:_NAME_WIDTH].ljust(_NAME_WIDTH),
-        _number(row.gross, _GROSS_WIDTH, decimals=2),
-        _number(row.poly, _POLY_WIDTH, decimals=0),
-        _number(row.net, _NET_WIDTH, decimals=2),
-        _number(row.purity, _PURITY_WIDTH, decimals=2),
-        _number(row.wage_rate, _WAGE_RATE_WIDTH, decimals=2),
-        _number(row.pieces, _PIECES_WIDTH, decimals=0),
-        _number(row.fine, _FINE_WIDTH, decimals=2),
-        _number(row.labour, _LABOUR_WIDTH, decimals=0),
+    ]
+    if show_tunch:
+        parts.append(_text(row.tunch, _TUNCH_WIDTH))
+    parts.extend(
+        (
+            _number(row.gross, _GROSS_WIDTH, decimals=2),
+            _number(row.poly, _POLY_WIDTH, decimals=0),
+            _number(row.net, _NET_WIDTH, decimals=2),
+            _number(row.purity, _PURITY_WIDTH, decimals=2),
+            _number(row.wage_rate, _WAGE_RATE_WIDTH, decimals=2),
+            _number(row.pieces, _PIECES_WIDTH, decimals=0),
+            _number(row.fine, _FINE_WIDTH, decimals=2),
+            _number(row.labour, _LABOUR_WIDTH, decimals=0),
+        )
     )
-    return " ".join(parts)[:_LINE_WIDTH]
+    return " ".join(parts)[:line_width]
 
 
 def _number(value: float | None, width: int, *, decimals: int) -> str:
@@ -359,26 +405,31 @@ def _number(value: float | None, width: int, *, decimals: int) -> str:
     return text[:width].ljust(width)
 
 
-def _final_line(
+def _text(value: str | None, width: int) -> str:
+    return str(value or "")[:width].ljust(width)
+
+
+def _final_line(  # noqa: PLR0913 - explicit fixed-width summary inputs
     net_fine: float,
     net_wage: float,
     silver_cost: float,
     total_cost: float,
     *,
     include_cost: bool,
+    line_width: int,
 ) -> str:
     fine = f"{_grouped(net_fine, decimals=2)} gm"
     wage = _grouped(net_wage, decimals=0)
     prefix = f"{' ' * (_SNO_WIDTH + 1)}{fine.rjust(max(_FINE_WIDTH, len(fine)))} "
     if not include_cost:
         return f"{prefix}{('Rs. ' + _grouped(total_cost, decimals=1)).rjust(_LABOUR_WIDTH)}"[
-            :_LINE_WIDTH
+            :line_width
         ]
     prefix += wage.rjust(max(_LABOUR_WIDTH, len(wage)))
     cost = ("S.Cost : Rs. " + _grouped(silver_cost, decimals=1)).rjust(22)
     total = ("Total: Rs. " + _grouped(total_cost, decimals=1)).rjust(18)
-    spacing = max(1, _LINE_WIDTH - len(prefix) - len(cost) - len(total) - 1)
-    return f"{prefix}{' ' * spacing}{cost} {total}"[:_LINE_WIDTH]
+    spacing = max(1, line_width - len(prefix) - len(cost) - len(total) - 1)
+    return f"{prefix}{' ' * spacing}{cost} {total}"[:line_width]
 
 
 def _grouped(value: float, *, decimals: int) -> str:

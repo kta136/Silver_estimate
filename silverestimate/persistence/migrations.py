@@ -6,7 +6,7 @@ import logging
 import sqlite3
 from typing import TYPE_CHECKING
 
-CURRENT_SCHEMA_VERSION = 6
+CURRENT_SCHEMA_VERSION = 8
 
 if TYPE_CHECKING:  # pragma: no cover
     from silverestimate.persistence.database_manager import DatabaseManager
@@ -23,6 +23,7 @@ def run_schema_setup(db: "DatabaseManager") -> None:
         return
 
     logger.info("Starting database setup check...")
+    restore_foreign_keys = False
     try:
         current_version = db._check_schema_version()
         logger.info("Current database schema version: %s", current_version)
@@ -35,6 +36,12 @@ def run_schema_setup(db: "DatabaseManager") -> None:
                 f"{current_version} is newer than supported version "
                 f"{CURRENT_SCHEMA_VERSION}."
             )
+
+        if _items_tunch_requires_rebuild(db, current_version):
+            foreign_keys_row = conn.execute("PRAGMA foreign_keys").fetchone()
+            restore_foreign_keys = bool(foreign_keys_row and foreign_keys_row[0])
+            if restore_foreign_keys:
+                conn.execute("PRAGMA foreign_keys = OFF")
 
         conn.execute("BEGIN IMMEDIATE")
 
@@ -52,6 +59,9 @@ def run_schema_setup(db: "DatabaseManager") -> None:
         logger.critical("FATAL Database setup error: %s", exc, exc_info=True)
         conn.rollback()
         raise
+    finally:
+        if restore_foreign_keys:
+            conn.execute("PRAGMA foreign_keys = ON")
 
 
 def _ensure_core_tables(db: "DatabaseManager", current_version: int) -> None:
@@ -64,7 +74,8 @@ def _ensure_core_tables(db: "DatabaseManager", current_version: int) -> None:
             name TEXT NOT NULL,
             purity REAL DEFAULT 0,
             wage_type TEXT DEFAULT 'P',
-            wage_rate REAL DEFAULT 0
+            wage_rate REAL DEFAULT 0,
+            tunch TEXT
         )
         """)
     cursor.execute("""
@@ -284,6 +295,71 @@ def _apply_versioned_migrations(db: "DatabaseManager", current_version: int) -> 
         )
         _stage_schema_version(db, 6)
 
+    if current_version < 7:
+        logger.info(
+            "Performing schema migration to version 7: Adding optional item Tunch..."
+        )
+        if not db._column_exists("items", "tunch"):
+            cursor.execute("ALTER TABLE items ADD COLUMN tunch TEXT")
+        _stage_schema_version(db, 7)
+
+    _migrate_tunch_to_text(db, current_version)
+
+
+def _migrate_tunch_to_text(db: "DatabaseManager", current_version: int) -> None:
+    if current_version >= 8:
+        return
+    db.logger.info(
+        "Performing schema migration to version 8: Storing item Tunch as text..."
+    )
+    if _items_tunch_requires_rebuild(db, current_version):
+        _rebuild_items_with_text_tunch(db)
+    _stage_schema_version(db, 8)
+
+
+def _items_tunch_requires_rebuild(
+    db: "DatabaseManager",
+    current_version: int,
+) -> bool:
+    if current_version >= 8 or not db._column_exists("items", "tunch"):
+        return False
+    cursor = db.cursor
+    assert cursor is not None
+    cursor.execute("PRAGMA table_info(items)")
+    for row in cursor.fetchall():
+        name = row["name"] if isinstance(row, sqlite3.Row) else row[1]
+        if name == "tunch":
+            declared_type = row["type"] if isinstance(row, sqlite3.Row) else row[2]
+            return str(declared_type or "").strip().upper() != "TEXT"
+    return False
+
+
+def _rebuild_items_with_text_tunch(db: "DatabaseManager") -> None:
+    cursor = db.cursor
+    assert cursor is not None
+    cursor.execute(
+        """
+        CREATE TABLE items_v8 (
+            code TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            purity REAL DEFAULT 0,
+            wage_type TEXT DEFAULT 'P',
+            wage_rate REAL DEFAULT 0,
+            tunch TEXT
+        )
+        """
+    )
+    cursor.execute(
+        """
+        INSERT INTO items_v8 (code, name, purity, wage_type, wage_rate, tunch)
+        SELECT code, name, purity, wage_type, wage_rate,
+               CASE WHEN tunch IS NULL THEN NULL ELSE CAST(tunch AS TEXT) END
+        FROM items
+        """
+    )
+    cursor.execute("DROP TABLE items")
+    cursor.execute("ALTER TABLE items_v8 RENAME TO items")
+
 
 def _stage_schema_version(db: "DatabaseManager", version: int) -> None:
     if db._update_schema_version(version) is not True:
@@ -397,7 +473,7 @@ def _validate_schema(db: "DatabaseManager") -> None:
     assert cursor is not None
 
     required_columns = {
-        "items": {"code", "name", "purity", "wage_type", "wage_rate"},
+        "items": {"code", "name", "purity", "wage_type", "wage_rate", "tunch"},
         "estimates": {
             "voucher_no",
             "voucher_no_int",

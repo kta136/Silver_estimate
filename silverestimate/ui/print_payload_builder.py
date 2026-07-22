@@ -43,6 +43,8 @@ class PrintPreviewPayload:
     format_key: str = ""
     available_formats: tuple[str, ...] = ()
     format_factory: Callable[[str], PrintPreviewPayload | None] | None = None
+    show_tunch: bool = False
+    tunch_visibility_factory: Callable[[bool], PrintPreviewPayload | None] | None = None
 
 
 class PrintPayloadBuilder:
@@ -55,6 +57,7 @@ class PrintPayloadBuilder:
         fetch_estimate: Callable[[object], object],
         format_key: str = DEFAULT_ESTIMATE_FORMAT,
         estimate_data=None,
+        show_tunch: bool = False,
     ) -> PrintPreviewPayload | None:
         resolved_data = (
             estimate_data if estimate_data is not None else fetch_estimate(voucher_no)
@@ -64,10 +67,17 @@ class PrintPayloadBuilder:
 
         base_document = EstimatePrintDocument.from_mapping(resolved_data)
 
-        def build_payload(selected_format: str) -> PrintPreviewPayload:
+        def build_payload(
+            selected_format: str,
+            tunch_visible: bool,
+        ) -> PrintPreviewPayload:
             normalized_format = normalize_estimate_format(selected_format)
             return PrintPreviewPayload(
-                document=replace(base_document, format_key=normalized_format),
+                document=replace(
+                    base_document,
+                    format_key=normalized_format,
+                    show_tunch=bool(tunch_visible),
+                ),
                 title=f"Print Preview - Estimate {voucher_no}",
                 document_kind="estimate",
                 identifier=str(voucher_no or ""),
@@ -76,10 +86,18 @@ class PrintPayloadBuilder:
                 ),
                 format_key=normalized_format,
                 available_formats=tuple(ESTIMATE_FORMAT_SPECS),
-                format_factory=build_payload,
+                format_factory=lambda next_format: build_payload(
+                    next_format,
+                    tunch_visible,
+                ),
+                show_tunch=bool(tunch_visible),
+                tunch_visibility_factory=lambda visible: build_payload(
+                    normalized_format,
+                    visible,
+                ),
             )
 
-        return build_payload(format_key)
+        return build_payload(format_key, show_tunch)
 
     def build_silver_bar_inventory_preview_payload(
         self,

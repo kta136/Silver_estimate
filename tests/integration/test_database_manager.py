@@ -148,7 +148,9 @@ def test_database_manager_item_catalog_backup_roundtrip(tmp_path, settings_stub)
 
     source = DatabaseManager(str(db_path), "test-password")
     try:
-        assert source.items_repo.add_item("ITM001", "Original", 92.5, "WT", 10.0)
+        assert source.items_repo.add_item(
+            "ITM001", "Original", 92.5, "WT", 10.0, tunch="91.25 + loss"
+        )
         assert source.items_repo.add_item("ITM002", "Second", 80.0, "P", 5.0)
         exported = export_item_catalog(source, str(backup_path))
         assert exported == 2
@@ -167,6 +169,7 @@ def test_database_manager_item_catalog_backup_roundtrip(tmp_path, settings_stub)
         assert target.items_repo.get_item_by_code("ITM001") == {
             "code": "ITM001",
             "name": "Original",
+            "tunch": "91.25 + loss",
             "purity": 92.5,
             "wage_type": "WT",
             "wage_rate": 10.0,
@@ -174,6 +177,7 @@ def test_database_manager_item_catalog_backup_roundtrip(tmp_path, settings_stub)
         assert target.items_repo.get_item_by_code("ITM002") == {
             "code": "ITM002",
             "name": "Second",
+            "tunch": None,
             "purity": 80.0,
             "wage_type": "PC",
             "wage_rate": 5.0,
@@ -181,6 +185,7 @@ def test_database_manager_item_catalog_backup_roundtrip(tmp_path, settings_stub)
         assert target.items_repo.get_item_by_code("KEEP01") == {
             "code": "KEEP01",
             "name": "Keep",
+            "tunch": None,
             "purity": 75.0,
             "wage_type": "WT",
             "wage_rate": 3.0,
@@ -198,7 +203,9 @@ def test_database_manager_item_catalog_restore_can_replace_existing_catalog(
 
     source = DatabaseManager(str(db_path), "test-password")
     try:
-        assert source.items_repo.add_item("ITM001", "Original", 92.5, "WT", 10.0)
+        assert source.items_repo.add_item(
+            "ITM001", "Original", 92.5, "WT", 10.0, tunch="91.25 + loss"
+        )
         assert source.items_repo.add_item("ITM002", "Second", 80.0, "P", 5.0)
         assert export_item_catalog(source, str(backup_path)) == 2
     finally:
@@ -220,6 +227,7 @@ def test_database_manager_item_catalog_restore_can_replace_existing_catalog(
         assert target.items_repo.get_item_by_code("ITM001") == {
             "code": "ITM001",
             "name": "Original",
+            "tunch": "91.25 + loss",
             "purity": 92.5,
             "wage_type": "WT",
             "wage_rate": 10.0,
@@ -227,6 +235,7 @@ def test_database_manager_item_catalog_restore_can_replace_existing_catalog(
         assert target.items_repo.get_item_by_code("ITM002") == {
             "code": "ITM002",
             "name": "Second",
+            "tunch": None,
             "purity": 80.0,
             "wage_type": "PC",
             "wage_rate": 5.0,

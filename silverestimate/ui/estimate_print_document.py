@@ -30,6 +30,11 @@ def _flag(value: object) -> bool:
     return bool(value)
 
 
+def _optional_text(value: object) -> str | None:
+    normalized = str(value).strip() if value is not None else ""
+    return normalized or None
+
+
 @dataclass(frozen=True)
 class EstimatePrintHeader:
     voucher_no: str
@@ -78,6 +83,7 @@ class EstimatePrintItem:
     wage: float
     is_return: bool = False
     is_silver_bar: bool = False
+    tunch: str | None = None
 
     @classmethod
     def from_mapping(cls, value: object, *, index: int) -> EstimatePrintItem:
@@ -85,12 +91,8 @@ class EstimatePrintItem:
         gross = _number(source.get("gross"), field=f"items[{index}].gross")
         poly = _number(source.get("poly"), field=f"items[{index}].poly")
         return cls(
-            item_code=str(
-                source.get("item_code") or source.get("code") or ""
-            ).strip(),
-            item_name=str(
-                source.get("item_name") or source.get("name") or ""
-            ).strip(),
+            item_code=str(source.get("item_code") or source.get("code") or "").strip(),
+            item_name=str(source.get("item_name") or source.get("name") or "").strip(),
             gross=gross,
             poly=poly,
             net_wt=_number(
@@ -114,6 +116,7 @@ class EstimatePrintItem:
             wage=_number(source.get("wage"), field=f"items[{index}].wage"),
             is_return=_flag(source.get("is_return")),
             is_silver_bar=_flag(source.get("is_silver_bar")),
+            tunch=_optional_text(source.get("tunch")),
         )
 
 
@@ -122,6 +125,7 @@ class EstimatePrintDocument:
     header: EstimatePrintHeader
     items: tuple[EstimatePrintItem, ...]
     format_key: str = DEFAULT_ESTIMATE_FORMAT
+    show_tunch: bool = False
 
     @classmethod
     def from_mapping(
@@ -129,12 +133,19 @@ class EstimatePrintDocument:
         value: object,
         *,
         format_key: str = DEFAULT_ESTIMATE_FORMAT,
+        show_tunch: bool = False,
     ) -> EstimatePrintDocument:
         normalized_format = normalize_estimate_format(format_key)
         if isinstance(value, cls):
-            if value.format_key == normalized_format:
+            if value.format_key == normalized_format and value.show_tunch == bool(
+                show_tunch
+            ):
                 return value
-            return replace(value, format_key=normalized_format)
+            return replace(
+                value,
+                format_key=normalized_format,
+                show_tunch=bool(show_tunch),
+            )
         source = _mapping(value, field="estimate print document")
         raw_items = source.get("items") or ()
         if isinstance(raw_items, str | bytes) or not hasattr(raw_items, "__iter__"):
@@ -146,6 +157,7 @@ class EstimatePrintDocument:
                 for index, item in enumerate(raw_items)
             ),
             format_key=normalized_format,
+            show_tunch=bool(show_tunch),
         )
 
 

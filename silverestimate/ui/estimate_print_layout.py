@@ -119,6 +119,13 @@ REGULAR_COLUMNS = (
     EstimatePrintColumn("wage", "Lbr", 0.92, 0.08, "right"),
 )
 
+REGULAR_COLUMNS_WITH_TUNCH = (
+    EstimatePrintColumn("sno", "SNo", 0.00, 0.04, "center"),
+    EstimatePrintColumn("name", "Item Name", 0.04, 0.18, "left"),
+    EstimatePrintColumn("tunch", "Tunch", 0.22, 0.07, "right"),
+    *REGULAR_COLUMNS[2:],
+)
+
 SILVER_BAR_COLUMNS = (
     EstimatePrintColumn("sno", "SNo", 0.00, 0.04, "center"),
     EstimatePrintColumn("name", "Item Name", 0.04, 0.25, "left"),
@@ -130,6 +137,13 @@ SILVER_BAR_COLUMNS = (
     EstimatePrintColumn("wage", "Lbr", 0.92, 0.08, "right"),
 )
 
+SILVER_BAR_COLUMNS_WITH_TUNCH = (
+    EstimatePrintColumn("sno", "SNo", 0.00, 0.04, "center"),
+    EstimatePrintColumn("name", "Item Name", 0.04, 0.18, "left"),
+    EstimatePrintColumn("tunch", "Tunch", 0.22, 0.07, "right"),
+    *SILVER_BAR_COLUMNS[2:],
+)
+
 
 def build_modern_estimate_layout(
     document: EstimatePrintDocument,
@@ -139,13 +153,25 @@ def build_modern_estimate_layout(
     sections_with_totals = tuple(
         result
         for result in (
-            _build_section("regular", "REGULAR GOODS", regular),
-            _build_section("silver_bars", "SILVER BARS", bars, is_bar=True),
+            _build_section(
+                "regular",
+                "REGULAR GOODS",
+                regular,
+                show_tunch=document.show_tunch,
+            ),
+            _build_section(
+                "silver_bars",
+                "SILVER BARS",
+                bars,
+                is_bar=True,
+                show_tunch=document.show_tunch,
+            ),
             _build_section(
                 "return_goods",
                 "RETURN GOODS",
                 returns,
                 is_return=True,
+                show_tunch=document.show_tunch,
             ),
             _build_section(
                 "return_silver_bars",
@@ -153,6 +179,7 @@ def build_modern_estimate_layout(
                 returned_bars,
                 is_bar=True,
                 is_return=True,
+                show_tunch=document.show_tunch,
             ),
         )
         if result is not None
@@ -162,20 +189,32 @@ def build_modern_estimate_layout(
     return _complete_layout(document.header, sections, totals_by_key)
 
 
-def _build_section(
+def _build_section(  # noqa: PLR0913 - explicit semantic section inputs
     key: str,
     title: str,
     items: tuple[EstimatePrintItem, ...],
     *,
     is_bar: bool = False,
     is_return: bool = False,
+    show_tunch: bool = False,
 ) -> tuple[EstimatePrintSection, _SectionTotals] | None:
     if not items:
         return None
     totals = _totals(items)
-    columns = SILVER_BAR_COLUMNS if is_bar else REGULAR_COLUMNS
+    columns: tuple[EstimatePrintColumn, ...]
+    if show_tunch:
+        columns = (
+            SILVER_BAR_COLUMNS_WITH_TUNCH if is_bar else REGULAR_COLUMNS_WITH_TUNCH
+        )
+    else:
+        columns = SILVER_BAR_COLUMNS if is_bar else REGULAR_COLUMNS
     rows = tuple(
-        _item_row(item, index=index, is_bar=is_bar)
+        _item_row(
+            item,
+            index=index,
+            is_bar=is_bar,
+            show_tunch=show_tunch,
+        )
         for index, item in enumerate(items, start=1)
     )
     section = EstimatePrintSection(
@@ -183,7 +222,11 @@ def _build_section(
         title=title,
         columns=columns,
         rows=rows,
-        total_row=_total_row(totals, is_bar=is_bar),
+        total_row=_total_row(
+            totals,
+            is_bar=is_bar,
+            show_tunch=show_tunch,
+        ),
         is_return=is_return,
     )
     return section, totals
@@ -194,11 +237,16 @@ def _item_row(
     *,
     index: int,
     is_bar: bool,
+    show_tunch: bool,
 ) -> EstimatePrintRow:
     values: tuple[str, ...]
-    common = (
+    leading: tuple[str, ...] = (
         str(index),
         item.item_name,
+    )
+    if show_tunch:
+        leading += (_tunch(item.tunch),)
+    common = leading + (
         _weight(item.gross),
         _weight(item.poly),
         _weight(item.net_wt),
@@ -219,11 +267,20 @@ def _item_row(
     return EstimatePrintRow(values)
 
 
-def _total_row(totals: _SectionTotals, *, is_bar: bool) -> EstimatePrintRow:
+def _total_row(
+    totals: _SectionTotals,
+    *,
+    is_bar: bool,
+    show_tunch: bool,
+) -> EstimatePrintRow:
     values: tuple[str, ...]
-    common = (
+    leading: tuple[str, ...] = (
         "",
         "TOTAL",
+    )
+    if show_tunch:
+        leading += ("",)
+    common = leading + (
         _weight(totals.gross),
         _weight(totals.poly),
         _weight(totals.net),
@@ -269,19 +326,19 @@ def _complete_layout(
         EstimatePrintMetric("Labour", f"Rs. {_amount(net_wage, decimals=0)}"),
     ]
     if header.silver_rate > 0:
-        final_metrics.append(
-            EstimatePrintMetric(
-                "Silver Cost",
-                f"Rs. {_amount(silver_cost, decimals=1)}",
+        final_metrics.extend(
+            (
+                EstimatePrintMetric(
+                    "Silver Cost",
+                    f"Rs. {_amount(silver_cost, decimals=1)}",
+                ),
+                EstimatePrintMetric(
+                    "Total",
+                    f"Rs. {_amount(total_cost, decimals=1)}",
+                    emphasis=True,
+                ),
             )
         )
-    final_metrics.append(
-        EstimatePrintMetric(
-            "Total",
-            f"Rs. {_amount(total_cost, decimals=1)}",
-            emphasis=True,
-        )
-    )
     return ModernEstimateLayout(
         voucher_no=header.voucher_no,
         silver_rate=_amount(header.silver_rate, decimals=2),
@@ -317,7 +374,9 @@ def _split_items(
     tuple[EstimatePrintItem, ...],
     tuple[EstimatePrintItem, ...],
 ]:
-    regular = tuple(item for item in items if not item.is_return and not item.is_silver_bar)
+    regular = tuple(
+        item for item in items if not item.is_return and not item.is_silver_bar
+    )
     bars = tuple(item for item in items if not item.is_return and item.is_silver_bar)
     returns = tuple(item for item in items if item.is_return and not item.is_silver_bar)
     returned_bars = tuple(
@@ -342,6 +401,10 @@ def _zero_totals() -> _SectionTotals:
 
 def _weight(value: float) -> str:
     return _decimal(value, decimals=2, grouped=True)
+
+
+def _tunch(value: str | None) -> str:
+    return str(value or "")
 
 
 def _pieces(value: float) -> str:

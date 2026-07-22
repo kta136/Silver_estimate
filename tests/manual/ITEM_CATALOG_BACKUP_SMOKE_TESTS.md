@@ -17,6 +17,7 @@ Use this checklist after changes to the item catalog backup/restore workflow.
 - [ ] Open the saved file in a text editor
 - [ ] Verify it is JSON with top-level keys `format`, `version`, `exported_at`, and `items`
 - [ ] Verify `format` is `silverestimate.item_catalog`
+- [ ] Verify `version` is `2` and each item includes its optional `tunch` value
 
 ## Scenario 2: Restore Into Empty Catalog
 
@@ -27,7 +28,7 @@ Use this checklist after changes to the item catalog backup/restore workflow.
 - [ ] Confirm the restore
 - [ ] Verify the completion dialog shows inserted records and zero unexpected errors
 - [ ] Open `Item Master`
-- [ ] Verify all exported item codes are present with correct name, purity, wage type, and wage rate
+- [ ] Verify all exported item codes are present with exact Tunch text (including blanks), name, purity, wage type, and wage rate
 
 ## Scenario 3: Restore Into Populated Catalog
 

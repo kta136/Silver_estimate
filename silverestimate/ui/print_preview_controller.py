@@ -17,6 +17,7 @@ from PyQt6.QtPrintSupport import (
     QPrintPreviewWidget,
 )
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QDialog,
     QFileDialog,
     QHBoxLayout,
@@ -58,10 +59,11 @@ from silverestimate.ui.window_sizing import resize_to_available_screen
 
 LOGGER = logging.getLogger(__name__)
 
+
 class _PreviewWheelZoomFilter(QObject):
     """Translate Ctrl+wheel into preview zoom actions."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - injected preview collaborators
         self,
         *,
         zoom_in: Callable[[], None],
@@ -95,18 +97,20 @@ class _PreviewWheelZoomFilter(QObject):
 class PrintPreviewController:
     """Own the preview dialog and related export/print actions."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         *,
         printer: QPrinter,
         render_document: Callable[[QPrinter, PrintDocument], None],
         persist_estimate_format: Callable[[str], None] | None = None,
+        persist_tunch_visibility: Callable[[bool], None] | None = None,
         get_print_font: Callable[[], QFont] | None = None,
         persist_print_font: Callable[[QFont], None] | None = None,
     ) -> None:
         self._printer = printer
         self._render_document = render_document
         self._persist_estimate_format = persist_estimate_format
+        self._persist_tunch_visibility = persist_tunch_visibility
         self._get_print_font = get_print_font
         self._persist_print_font = persist_print_font
 
@@ -213,12 +217,16 @@ class PrintPreviewController:
         save_printer_page_settings(settings, self._printer)
 
     def _save_payload_defaults(self, settings, payload: PrintPreviewPayload) -> None:
-        if payload.document_kind != "estimate" or not payload.format_key:
+        if payload.document_kind != "estimate":
             return
-        format_key = normalize_estimate_format(payload.format_key)
-        settings.setValue("print/estimate_layout", format_key)
-        if self._persist_estimate_format is not None:
-            self._persist_estimate_format(format_key)
+        if payload.format_key:
+            format_key = normalize_estimate_format(payload.format_key)
+            settings.setValue("print/estimate_layout", format_key)
+            if self._persist_estimate_format is not None:
+                self._persist_estimate_format(format_key)
+        settings.setValue("print/show_tunch", bool(payload.show_tunch))
+        if self._persist_tunch_visibility is not None:
+            self._persist_tunch_visibility(bool(payload.show_tunch))
 
     def _augment_preview_toolbar(
         self,
@@ -358,7 +366,26 @@ class PrintPreviewController:
             )
             toolbar.addWidget(format_combo)
 
-            if self._get_print_font is not None and self._persist_print_font is not None:
+            if payload.tunch_visibility_factory is not None:
+                tunch_checkbox = QCheckBox("Show Tunch", preview)
+                tunch_checkbox.setObjectName("PreviewTunchCheckbox")
+                tunch_checkbox.setChecked(bool(payload.show_tunch))
+                tunch_checkbox.setToolTip(
+                    "Show or hide the optional Tunch column in this estimate"
+                )
+                tunch_checkbox.toggled.connect(
+                    lambda visible: self._switch_tunch_visibility(
+                        preview,
+                        visible,
+                        state,
+                    )
+                )
+                toolbar.addWidget(tunch_checkbox)
+
+            if (
+                self._get_print_font is not None
+                and self._persist_print_font is not None
+            ):
                 act_font = QAction(
                     get_icon("settings", widget=preview),
                     "Print Font",
@@ -627,6 +654,26 @@ class PrintPreviewController:
         if not format_key or payload.format_factory is None:
             return
         next_payload = payload.format_factory(str(format_key))
+        if next_payload is None:
+            return
+        state["payload"] = next_payload
+        preview.setWindowTitle(next_payload.title)
+        preview_widget = preview.findChild(QPrintPreviewWidget)
+        if preview_widget:
+            preview_widget.updatePreview()
+        else:
+            preview.repaint()
+
+    def _switch_tunch_visibility(
+        self,
+        preview: QPrintPreviewDialog,
+        visible: bool,
+        state: dict[str, PrintPreviewPayload],
+    ) -> None:
+        payload = state["payload"]
+        if payload.tunch_visibility_factory is None:
+            return
+        next_payload = payload.tunch_visibility_factory(bool(visible))
         if next_payload is None:
             return
         state["payload"] = next_payload

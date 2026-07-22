@@ -5,6 +5,19 @@ All notable changes to the Silver Estimation App will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.07] - 2026-07-22
+
+### Added
+- Added optional Tunch columns to Classic and Modern estimate printing, with preview visibility controls and current item-master values.
+- Added item-catalog backup and restore support for nullable free-text Tunch values.
+
+### Changed
+- Changed `items.tunch` from a constrained number to free text through schema version 8 while preserving existing values and estimate-item links.
+- Increased Modern estimate spacing to two row heights between goods groups and made table dividers explicit, including PCS to Fine.
+
+### Fixed
+- Hid the Modern final Silver Cost and Total metrics when the silver rate is zero.
+
 ## [3.06] - 2026-07-19
 
 ### Added

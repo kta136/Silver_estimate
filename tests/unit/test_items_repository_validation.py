@@ -18,7 +18,8 @@ class _DbStub:
                 name TEXT,
                 purity REAL,
                 wage_type TEXT,
-                wage_rate REAL
+                wage_rate REAL,
+                tunch TEXT
             )
             """)
         self.conn.commit()
@@ -53,5 +54,21 @@ def test_update_item_rejects_negative_wage_rate():
         assert not repo.update_item("OK1", "Still Valid", 95.0, "WT", -1.0)
         db.cursor.execute("SELECT wage_rate FROM items WHERE code = 'OK1'")
         assert db.cursor.fetchone()["wage_rate"] == 10.0
+    finally:
+        db.close()
+
+
+def test_tunch_is_optional_text_and_normalizes_non_string_inputs():
+    db = _DbStub()
+    try:
+        repo = ItemsRepository(db)
+
+        assert repo.add_item("BLANK", "Blank", 95.0, "WT", 10.0)
+        assert repo.add_item("TEXT", "Text", 95.0, "WT", 10.0, tunch=" 92 + loss ")
+        assert repo.add_item("ZERO", "Zero", 95.0, "WT", 10.0, tunch=0)
+
+        assert repo.get_item_by_code("BLANK")["tunch"] is None
+        assert repo.get_item_by_code("TEXT")["tunch"] == "92 + loss"
+        assert repo.get_item_by_code("ZERO")["tunch"] == "0"
     finally:
         db.close()

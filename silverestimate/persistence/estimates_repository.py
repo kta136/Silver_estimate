@@ -226,7 +226,11 @@ class EstimatesRepository:
                 conn.rollback()
                 return None
             cursor.execute(
-                "SELECT * FROM estimate_items WHERE voucher_no = ? ORDER BY is_return, is_silver_bar, id",
+                "SELECT ei.*, i.tunch AS tunch "
+                "FROM estimate_items ei "
+                "LEFT JOIN items i ON i.code = ei.item_code COLLATE NOCASE "
+                "WHERE ei.voucher_no = ? "
+                "ORDER BY ei.is_return, ei.is_silver_bar, ei.id",
                 (voucher_no,),
             )
             items = cursor.fetchall()
@@ -366,7 +370,10 @@ class EstimatesRepository:
             try:
                 # Placeholder count is generated locally; values remain parameterized.
                 cursor.execute(
-                    f"SELECT * FROM estimate_items WHERE voucher_no IN ({placeholders}) ORDER BY voucher_no, id",  # nosec B608
+                    f"SELECT ei.*, i.tunch AS tunch FROM estimate_items ei "
+                    f"LEFT JOIN items i ON i.code = ei.item_code COLLATE NOCASE "
+                    f"WHERE ei.voucher_no IN ({placeholders}) "
+                    f"ORDER BY ei.voucher_no, ei.id",  # nosec B608
                     chunk,
                 )
                 for row in cursor.fetchall():

@@ -61,12 +61,25 @@ class PrintManager:
             LOGGER.debug("Failed to load estimate format preference: %s", exc)
             self.estimate_format = DEFAULT_ESTIMATE_FORMAT
 
+        try:
+            self.show_tunch = bool(
+                settings.value(
+                    "print/show_tunch",
+                    defaultValue=False,
+                    type=bool,
+                )
+            )
+        except Exception as exc:
+            LOGGER.debug("Failed to load Tunch print preference: %s", exc)
+            self.show_tunch = False
+
         self._estimate_renderer = EstimatePrintRenderer()
         self._payload_builder = PrintPayloadBuilder()
         self._preview_controller = PrintPreviewController(
             printer=self.printer,
             render_document=self._render_document,
             persist_estimate_format=self._set_estimate_format,
+            persist_tunch_visibility=self._set_tunch_visibility,
             get_print_font=lambda: self.print_font,
             persist_print_font=self._set_print_font,
         )
@@ -107,10 +120,14 @@ class PrintManager:
             ),
             format_key=self.estimate_format,
             estimate_data=estimate_data,
+            show_tunch=self.show_tunch,
         )
 
     def _set_estimate_format(self, format_key: str) -> None:
         self.estimate_format = normalize_estimate_format(format_key)
+
+    def _set_tunch_visibility(self, visible: bool) -> None:
+        self.show_tunch = bool(visible)
 
     def _set_print_font(self, font: QFont) -> None:
         """Apply and persist a preview-selected estimate print font."""

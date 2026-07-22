@@ -799,11 +799,32 @@ class EstimateEntryWorkflowController(HostProxy):
             skipped = ", ".join(str(row) for row in preparation.skipped_rows)
             self._status(f"Preview skipped invalid rows: {skipped}", 5000)
 
+        item_codes = [item.code for item in preparation.payload.items if item.code]
+        catalog_items: dict[str, dict] = {}
+        try:
+            getter = getattr(self.db_manager, "get_items_by_codes", None)
+            if callable(getter):
+                catalog_items = {
+                    str(code or "").strip().upper(): dict(row or {})
+                    for code, row in dict(getter(item_codes) or {}).items()
+                }
+        except Exception as exc:
+            self.logger.warning(
+                "Could not resolve current Tunch values for preview: %s",
+                exc,
+                exc_info=True,
+            )
+
+        def current_tunch(code: str):
+            row = catalog_items.get(str(code or "").strip().upper())
+            return None if row is None else row.get("tunch")
+
         items = [
             {
                 "id": item.row_number,
                 "item_code": item.code,
                 "item_name": item.name,
+                "tunch": current_tunch(item.code),
                 "gross": item.gross,
                 "poly": item.poly,
                 "net_wt": item.net_wt,

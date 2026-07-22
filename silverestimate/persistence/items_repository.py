@@ -9,7 +9,7 @@ from typing import Any, Iterable, Optional
 from silverestimate.domain.item_validation import ItemValidationError, validate_item
 from silverestimate.domain.pagination import ItemCursor, Page
 
-ITEM_CATALOG_COLUMNS = "code, name, purity, wage_type, wage_rate"
+ITEM_CATALOG_COLUMNS = "code, name, tunch, purity, wage_type, wage_rate"
 
 
 def fetch_item_catalog_rows(
@@ -20,7 +20,7 @@ def fetch_item_catalog_rows(
     term = (search_term or "").strip()
     if not term:
         cursor.execute(
-            "SELECT code, name, purity, wage_type, wage_rate "
+            "SELECT code, name, tunch, purity, wage_type, wage_rate "
             "FROM items ORDER BY code COLLATE NOCASE"
         )
         return cursor.fetchall()
@@ -28,10 +28,10 @@ def fetch_item_catalog_rows(
     prefix_pattern = f"{term}%"
     cursor.execute(
         """
-        SELECT code, name, purity, wage_type, wage_rate
+        SELECT code, name, tunch, purity, wage_type, wage_rate
         FROM items WHERE code LIKE ? COLLATE NOCASE
         UNION ALL
-        SELECT code, name, purity, wage_type, wage_rate FROM items
+        SELECT code, name, tunch, purity, wage_type, wage_rate FROM items
         WHERE name LIKE ? COLLATE NOCASE
           AND code NOT LIKE ? COLLATE NOCASE
         ORDER BY code COLLATE NOCASE
@@ -48,10 +48,10 @@ def fetch_item_catalog_rows(
     pattern = f"%{term}%"
     cursor.execute(
         """
-        SELECT code, name, purity, wage_type, wage_rate
+        SELECT code, name, tunch, purity, wage_type, wage_rate
         FROM items WHERE code LIKE ? COLLATE NOCASE
         UNION ALL
-        SELECT code, name, purity, wage_type, wage_rate FROM items
+        SELECT code, name, tunch, purity, wage_type, wage_rate FROM items
         WHERE name LIKE ? COLLATE NOCASE
           AND code NOT LIKE ? COLLATE NOCASE
         ORDER BY code COLLATE NOCASE
@@ -249,7 +249,7 @@ class ItemsRepository:
         try:
             if not term:
                 cursor.execute(
-                    "SELECT code, name, purity, wage_type, wage_rate "
+                    "SELECT code, name, tunch, purity, wage_type, wage_rate "
                     "FROM items ORDER BY code COLLATE NOCASE LIMIT ?",
                     (fetch_size,),
                 )
@@ -259,7 +259,7 @@ class ItemsRepository:
                 contains = f"%{term}%"
                 cursor.execute(
                     """
-                    SELECT code, name, purity, wage_type, wage_rate
+                    SELECT code, name, tunch, purity, wage_type, wage_rate
                     FROM items
                     WHERE code LIKE ? COLLATE NOCASE OR name LIKE ? COLLATE NOCASE
                     ORDER BY
@@ -354,8 +354,14 @@ class ItemsRepository:
             self._fallback_cache.update(rows_by_code)
         return rows_by_code
 
-    def add_item(
-        self, code: str, name: str, purity: float, wage_type: str, wage_rate: float
+    def add_item(  # noqa: PLR0913 - compatibility-preserving repository API
+        self,
+        code: str,
+        name: str,
+        purity: float,
+        wage_type: str,
+        wage_rate: float,
+        tunch: object = None,
     ) -> bool:
         conn, cursor = self._conn, self._cursor
         if not conn or not cursor:
@@ -367,15 +373,19 @@ class ItemsRepository:
                 purity=purity,
                 wage_type=wage_type,
                 wage_rate=wage_rate,
+                tunch=tunch,
             )
             cursor.execute(
-                "INSERT INTO items (code, name, purity, wage_type, wage_rate) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO items "
+                "(code, name, purity, wage_type, wage_rate, tunch) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
                 (
                     validated.code,
                     validated.name,
                     validated.purity,
                     validated.wage_type,
                     validated.wage_rate,
+                    validated.tunch,
                 ),
             )
             conn.commit()
@@ -390,8 +400,14 @@ class ItemsRepository:
             conn.rollback()
             return False
 
-    def update_item(
-        self, code: str, name: str, purity: float, wage_type: str, wage_rate: float
+    def update_item(  # noqa: PLR0913 - compatibility-preserving repository API
+        self,
+        code: str,
+        name: str,
+        purity: float,
+        wage_type: str,
+        wage_rate: float,
+        tunch: object = None,
     ) -> bool:
         conn, cursor = self._conn, self._cursor
         if not conn or not cursor:
@@ -403,14 +419,17 @@ class ItemsRepository:
                 purity=purity,
                 wage_type=wage_type,
                 wage_rate=wage_rate,
+                tunch=tunch,
             )
             cursor.execute(
-                "UPDATE items SET name = ?, purity = ?, wage_type = ?, wage_rate = ? WHERE code = ?",
+                "UPDATE items SET name = ?, purity = ?, wage_type = ?, "
+                "wage_rate = ?, tunch = ? WHERE code = ?",
                 (
                     validated.name,
                     validated.purity,
                     validated.wage_type,
                     validated.wage_rate,
+                    validated.tunch,
                     validated.code,
                 ),
             )
@@ -450,6 +469,7 @@ class ItemsRepository:
                     purity=float(payload.get("purity", 0.0)),
                     wage_type=str(payload.get("wage_type", "") or ""),
                     wage_rate=float(payload.get("wage_rate", 0.0)),
+                    tunch=payload.get("tunch"),
                 )
                 if validated.code in seen_codes:
                     self._logger.warning(
@@ -471,13 +491,14 @@ class ItemsRepository:
             conn.execute("BEGIN")
             cursor.executemany(
                 """
-                INSERT INTO items (code, name, purity, wage_type, wage_rate)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO items (code, name, purity, wage_type, wage_rate, tunch)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(code) DO UPDATE SET
                     name = excluded.name,
                     purity = excluded.purity,
                     wage_type = excluded.wage_type,
-                    wage_rate = excluded.wage_rate
+                    wage_rate = excluded.wage_rate,
+                    tunch = excluded.tunch
                 """,
                 [
                     (
@@ -486,6 +507,7 @@ class ItemsRepository:
                         item.purity,
                         item.wage_type,
                         item.wage_rate,
+                        item.tunch,
                     )
                     for item in normalized_items
                 ],

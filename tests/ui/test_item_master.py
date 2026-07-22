@@ -14,6 +14,7 @@ class _StubDbManager:
             {
                 "code": "ITM001",
                 "name": "Ring",
+                "tunch": None,
                 "purity": 92.5,
                 "wage_type": "WT",
                 "wage_rate": 10.0,
@@ -21,6 +22,7 @@ class _StubDbManager:
             {
                 "code": "ITM002",
                 "name": "Anklet",
+                "tunch": "87 + loss",
                 "purity": 80.0,
                 "wage_type": "PC",
                 "wage_rate": 5.0,
@@ -86,6 +88,8 @@ def test_item_master_selection_populates_form_and_clear_resets(qtbot):
         widget.on_item_selected()
 
         assert widget.name_edit.text() == "Anklet"
+        assert widget.tunch_edit.text() == "87 + loss"
+        assert widget.tunch_edit.validator() is None
         assert widget.purity_edit.text() == "80.0"
         assert widget.wage_type_combo.currentText() == "PC"
         assert widget.wage_rate_edit.text() == "5.0"
@@ -95,6 +99,7 @@ def test_item_master_selection_populates_form_and_clear_resets(qtbot):
         widget.clear_form()
 
         assert widget.code_edit.text() == ""
+        assert widget.tunch_edit.text() == ""
         assert widget.update_button.isHidden() is True
         assert widget.delete_button.isEnabled() is False
         assert widget.add_button.isHidden() is False
@@ -129,15 +134,18 @@ def test_item_master_async_snapshot_load_populates_rows(qtbot, tmp_path):
                 name TEXT NOT NULL,
                 purity REAL DEFAULT 0,
                 wage_type TEXT DEFAULT 'WT',
-                wage_rate REAL DEFAULT 0
+                wage_rate REAL DEFAULT 0,
+                tunch TEXT
             )
             """
         )
         conn.executemany(
-            "INSERT INTO items (code, name, purity, wage_type, wage_rate) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO items "
+            "(code, name, purity, wage_type, wage_rate, tunch) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
             [
-                ("ITM001", "Ring", 92.5, "WT", 10.0),
-                ("ITM002", "Anklet", 80.0, "PC", 5.0),
+                ("ITM001", "Ring", 92.5, "WT", 10.0, None),
+                ("ITM002", "Anklet", 80.0, "PC", 5.0, "87 + loss"),
             ],
         )
         conn.commit()

@@ -80,11 +80,56 @@ def fake_db():
 
 def test_items_repository_roundtrip(fake_db):
     repo = ItemsRepository(fake_db)
-    added = repo.add_item("ITM001", "Sample Item", 92.5, "P", 10.0)
+    added = repo.add_item(
+        "ITM001", "Sample Item", 92.5, "P", 10.0, tunch="92 + wastage"
+    )
     assert added
     fetched = repo.get_item_by_code("ITM001")
     assert fetched["name"] == "Sample Item"
+    assert fetched["tunch"] == "92 + wastage"
     assert fake_db._flush_requested
+
+
+def test_estimate_lookup_resolves_current_master_tunch(fake_db):
+    items_repo = ItemsRepository(fake_db)
+    estimates_repo = EstimatesRepository(fake_db)
+    assert items_repo.add_item(
+        "LIVE1", "Live Tunch Item", 92.5, "WT", 10.0, tunch="91.25%"
+    )
+    fake_db.cursor.execute(
+        "INSERT INTO estimates (voucher_no, date) VALUES ('T-1', '2026-07-19')"
+    )
+    fake_db.cursor.execute(
+        "INSERT INTO estimate_items (voucher_no, item_code, item_name) "
+        "VALUES ('T-1', 'LIVE1', 'Live Tunch Item')"
+    )
+    fake_db.conn.commit()
+
+    loaded = estimates_repo.get_estimate_by_voucher("T-1")
+    assert loaded["items"][0]["tunch"] == "91.25%"
+
+    assert items_repo.update_item(
+        "LIVE1", "Live Tunch Item", 92.5, "WT", 10.0, tunch="Market"
+    )
+    loaded = estimates_repo.get_estimate_by_voucher("T-1")
+    assert loaded["items"][0]["tunch"] == "Market"
+
+    assert items_repo.update_item("LIVE1", "Live Tunch Item", 92.5, "WT", 10.0)
+    loaded = estimates_repo.get_estimate_by_voucher("T-1")
+    assert loaded["items"][0]["tunch"] is None
+
+
+def test_items_tunch_database_accepts_text(fake_db):
+    fake_db.cursor.execute(
+        "INSERT INTO items "
+        "(code, name, purity, wage_type, wage_rate, tunch) "
+        "VALUES ('TEXTT', 'Text Tunch', 90, 'WT', 0, '92 + wastage')"
+    )
+
+    row = fake_db.cursor.execute(
+        "SELECT tunch, typeof(tunch) AS storage_type FROM items WHERE code='TEXTT'"
+    ).fetchone()
+    assert (row["tunch"], row["storage_type"]) == ("92 + wastage", "text")
 
 
 def test_current_schema_setup_uses_read_only_fast_path(fake_db):
@@ -149,10 +194,16 @@ def test_estimate_history_keyset_page_reads_header_totals(fake_db):
     assert [row["voucher_no"] for row in second.items] == ["1"]
 
 
-def test_schema_setup_upgrades_to_v6_and_adds_line_key_columns(fake_db):
+def test_schema_setup_upgrades_to_v8_and_adds_text_tunch(fake_db):
     fake_db.cursor.execute("SELECT MAX(version) AS v FROM schema_version")
     row = fake_db.cursor.fetchone()
-    assert row["v"] == 6
+    assert row["v"] == 8
+    assert fake_db._column_exists("items", "tunch")
+    columns = {
+        column["name"]: column["type"]
+        for column in fake_db.conn.execute("PRAGMA table_info(items)").fetchall()
+    }
+    assert columns["tunch"].upper() == "TEXT"
     assert fake_db._column_exists("estimates", "voucher_no_int")
     assert fake_db._column_exists("estimate_items", "wage_type")
     assert fake_db._column_exists("estimate_items", "line_key")
@@ -186,7 +237,7 @@ def test_migration_v6_rebuilds_persisted_history_totals():
     db = FakeDB()
     try:
         migrations.run_schema_setup(db)
-        db.cursor.execute("DELETE FROM schema_version WHERE version = 6")
+        db.cursor.execute("DELETE FROM schema_version WHERE version >= 6")
         db.cursor.execute(
             "INSERT INTO estimates "
             "(voucher_no, voucher_no_int, date, total_gross, total_net) "
@@ -210,6 +261,54 @@ def test_migration_v6_rebuilds_persisted_history_totals():
             "SELECT total_gross, total_net FROM estimates WHERE voucher_no='9'"
         ).fetchone()
         assert tuple(row) == (10.0, 8.0)
+    finally:
+        db.conn.close()
+
+
+def test_migration_v8_converts_numeric_tunch_to_text_without_losing_item_links():
+    db = FakeDB()
+    try:
+        migrations.run_schema_setup(db)
+        db.cursor.execute(
+            "INSERT INTO items (code, name, purity, wage_type, wage_rate, tunch) "
+            "VALUES ('LEGACY', 'Legacy', 92.5, 'WT', 10, '91.25')"
+        )
+        db.cursor.execute(
+            "INSERT INTO estimates (voucher_no, date) VALUES ('T-8', '2026-07-22')"
+        )
+        db.cursor.execute(
+            "INSERT INTO estimate_items (voucher_no, item_code, item_name) "
+            "VALUES ('T-8', 'LEGACY', 'Legacy')"
+        )
+        db.conn.commit()
+        db.conn.execute("PRAGMA foreign_keys = OFF")
+        db.cursor.execute(
+            "CREATE TABLE items_v7 ("
+            "code TEXT PRIMARY KEY, name TEXT NOT NULL, purity REAL DEFAULT 0, "
+            "wage_type TEXT DEFAULT 'P', wage_rate REAL DEFAULT 0, "
+            "tunch REAL CHECK (tunch IS NULL OR (tunch >= 0 AND tunch <= 100)))"
+        )
+        db.cursor.execute(
+            "INSERT INTO items_v7 SELECT code, name, purity, wage_type, "
+            "wage_rate, tunch FROM items"
+        )
+        db.cursor.execute("DROP TABLE items")
+        db.cursor.execute("ALTER TABLE items_v7 RENAME TO items")
+        db.cursor.execute("DELETE FROM schema_version WHERE version >= 8")
+        db.conn.commit()
+        db.conn.execute("PRAGMA foreign_keys = ON")
+
+        migrations.run_schema_setup(db)
+
+        item = db.conn.execute(
+            "SELECT tunch, typeof(tunch) AS storage_type FROM items WHERE code='LEGACY'"
+        ).fetchone()
+        estimate_item = db.conn.execute(
+            "SELECT item_code FROM estimate_items WHERE voucher_no='T-8'"
+        ).fetchone()
+        assert (item["tunch"], item["storage_type"]) == ("91.25", "text")
+        assert estimate_item["item_code"] == "LEGACY"
+        assert db.conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
     finally:
         db.conn.close()
 
@@ -265,7 +364,7 @@ def test_migration_v3_backfills_numeric_vouchers_from_legacy_schema():
         assert rows["AB-1"] is None
 
         db.cursor.execute("SELECT MAX(version) AS v FROM schema_version")
-        assert db.cursor.fetchone()["v"] == 6
+        assert db.cursor.fetchone()["v"] == 8
     finally:
         db.conn.close()
 
@@ -599,12 +698,14 @@ def test_get_estimates_uses_bulk_item_query(fake_db):
     item_queries_bulk = [
         stmt
         for stmt in statements
-        if "from estimate_items where voucher_no in" in stmt.lower()
+        if "from estimate_items ei" in stmt.lower()
+        and "ei.voucher_no in" in stmt.lower()
     ]
     item_queries_per_voucher = [
         stmt
         for stmt in statements
-        if "from estimate_items where voucher_no =" in stmt.lower()
+        if "from estimate_items ei" in stmt.lower()
+        and "ei.voucher_no =" in stmt.lower()
     ]
     assert len(item_queries_bulk) == 1
     assert item_queries_per_voucher == []

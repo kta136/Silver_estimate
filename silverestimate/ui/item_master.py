@@ -153,7 +153,7 @@ class ItemMasterWidget(QWidget):
         header_label.setObjectName("ItemMasterTitleLabel")
         header_row.addWidget(header_label)
         subtitle_label = QLabel(
-            "Maintain catalog codes, purity defaults, and wage settings."
+            "Maintain catalog codes, Tunch, purity defaults, and wage settings."
         )
         subtitle_label.setObjectName("ItemMasterSubtitleLabel")
         subtitle_label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
@@ -198,6 +198,17 @@ class ItemMasterWidget(QWidget):
         self.name_edit.setToolTip("Descriptive name of the item.")
         form_vbox.addWidget(name_lbl)
         form_vbox.addWidget(self.name_edit)
+
+        # Tunch
+        tunch_lbl = QLabel("Tunch")
+        tunch_lbl.setObjectName("ItemMasterFieldLabel")
+        self.tunch_edit = QLineEdit()
+        self.tunch_edit.setPlaceholderText("Optional text")
+        self.tunch_edit.setToolTip(
+            "Optional Tunch text. Leave blank when no value exists."
+        )
+        form_vbox.addWidget(tunch_lbl)
+        form_vbox.addWidget(self.tunch_edit)
 
         # Purity
         purity_lbl = QLabel("Purity (%)")
@@ -330,8 +341,9 @@ class ItemMasterWidget(QWidget):
         self.items_table.setShowGrid(False)
         self.items_table.setColumnWidth(0, 110)
         self.items_table.setColumnWidth(2, 95)
-        self.items_table.setColumnWidth(3, 90)
-        self.items_table.setColumnWidth(4, 110)
+        self.items_table.setColumnWidth(3, 95)
+        self.items_table.setColumnWidth(4, 90)
+        self.items_table.setColumnWidth(5, 110)
         install_table_empty_state(
             self.items_table,
             "No catalog items match the current search.",
@@ -521,6 +533,8 @@ class ItemMasterWidget(QWidget):
 
         code = str(payload.get("code") or "")
         name = str(payload.get("name") or "")
+        raw_tunch = payload.get("tunch")
+        tunch_str = "" if raw_tunch is None else str(raw_tunch)
         purity_str = str(
             payload.get("purity") if payload.get("purity") is not None else 0.0
         )
@@ -531,6 +545,7 @@ class ItemMasterWidget(QWidget):
 
         self.code_edit.setText(code)
         self.name_edit.setText(name)
+        self.tunch_edit.setText(tunch_str)
         self.purity_edit.setText(purity_str)
         self.wage_rate_edit.setText(wage_rate_str)
 
@@ -555,6 +570,7 @@ class ItemMasterWidget(QWidget):
         self.code_edit.setReadOnly(False)
         self.code_edit.setStyleSheet("")
         self.name_edit.clear()
+        self.tunch_edit.clear()
         self.purity_edit.clear()
         self.wage_type_combo.setCurrentIndex(0)
         self.wage_rate_edit.clear()
@@ -602,6 +618,7 @@ class ItemMasterWidget(QWidget):
         """Add a new item to the database."""
         code = self.code_edit.text().strip()
         name = self.name_edit.text().strip()
+        tunch = self.tunch_edit.text().strip() or None
         purity = self._parse_float(self.purity_edit.text(), 0.0)
         wage_type = self.wage_type_combo.currentText()
         wage_rate = self._parse_float(self.wage_rate_edit.text(), 0.0)
@@ -613,6 +630,7 @@ class ItemMasterWidget(QWidget):
                 purity=purity,
                 wage_type=wage_type,
                 wage_rate=wage_rate,
+                tunch=tunch,
             )
         except ItemValidationError as exc:
             QMessageBox.warning(self, "Input Error", str(exc))
@@ -636,6 +654,7 @@ class ItemMasterWidget(QWidget):
             validated.purity,
             validated.wage_type,
             validated.wage_rate,
+            tunch=validated.tunch,
         )
         if success:
             self.show_status(f"Item '{validated.code}' added successfully.", 3000)
@@ -653,6 +672,7 @@ class ItemMasterWidget(QWidget):
         """Update an existing item in the database."""
         code = self.code_edit.text().strip()
         name = self.name_edit.text().strip()
+        tunch = self.tunch_edit.text().strip() or None
         purity = self._parse_float(self.purity_edit.text(), 0.0)
         wage_type = self.wage_type_combo.currentText()
         wage_rate = self._parse_float(self.wage_rate_edit.text(), 0.0)
@@ -664,6 +684,7 @@ class ItemMasterWidget(QWidget):
                 purity=purity,
                 wage_type=wage_type,
                 wage_rate=wage_rate,
+                tunch=tunch,
             )
         except ItemValidationError as exc:
             QMessageBox.warning(self, "Input Error", str(exc))
@@ -676,6 +697,7 @@ class ItemMasterWidget(QWidget):
             validated.purity,
             validated.wage_type,
             validated.wage_rate,
+            tunch=validated.tunch,
         )
         if success:
             self.show_status(f"Item '{validated.code}' updated successfully.", 3000)

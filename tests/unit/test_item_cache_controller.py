@@ -39,11 +39,15 @@ def test_item_cache_background_preload_success_and_guards(tmp_path) -> None:
     db_path = tmp_path / "items.sqlite"
     connection = sqlite3.connect(db_path)
     connection.execute(
-        "CREATE TABLE items (code TEXT, name TEXT, purity REAL, wage_type TEXT, wage_rate REAL)"
+        "CREATE TABLE items "
+        "(code TEXT, name TEXT, tunch TEXT, purity REAL, wage_type TEXT, wage_rate REAL)"
     )
     connection.executemany(
-        "INSERT INTO items VALUES (?, ?, ?, ?, ?)",
-        [("a1", "Alpha", 92.5, "P", 1.0), (None, "No code", 0, "P", 0)],
+        "INSERT INTO items VALUES (?, ?, ?, ?, ?, ?)",
+        [
+            ("a1", "Alpha", "91 + loss", 92.5, "P", 1.0),
+            (None, "No code", None, 0, "P", 0),
+        ],
     )
     connection.commit()
     connection.close()
@@ -54,6 +58,7 @@ def test_item_cache_background_preload_success_and_guards(tmp_path) -> None:
     assert cache._thread is not None
     cache._thread.join(2)
     assert cache.get("A1")["purity"] == 92.5
+    assert cache.get("A1")["tunch"] == "91 + loss"
     assert "" in cache.cache
 
     completed_thread = cache._thread

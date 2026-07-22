@@ -35,6 +35,7 @@ _TOTAL_BG = QColor("#f3f4f6")
 _ALTERNATE_ROW_BG = QColor("#f8fafc")
 _FINAL_BG = QColor("#1f2937")
 _WHITE = QColor("#ffffff")
+_SECTION_GAP_ROWS = 2.0
 
 
 @dataclass(frozen=True)
@@ -155,7 +156,7 @@ class EstimatePrintRenderer:
         configured_size = getattr(print_font, "float_size", spec.font_size)
         try:
             point_size = float(configured_size)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             point_size = spec.font_size
         font.setPointSizeF(max(1.0, point_size))
         return font
@@ -172,6 +173,7 @@ def _build_style(base_font: QFont, printer: QPrinter) -> _PaintStyle:
     section_metrics = QFontMetricsF(section_font, printer)
     summary_metrics = QFontMetricsF(summary_font, printer)
     base_height = max(1.0, base_metrics.height())
+    row_height = base_height * 1.55
     resolution = max(72, int(printer.resolution()))
     return _PaintStyle(
         base_font=base_font,
@@ -191,9 +193,9 @@ def _build_style(base_font: QFont, printer: QPrinter) -> _PaintStyle:
         header_gap=base_height * 0.45,
         section_header_height=section_metrics.height() * 1.45,
         column_header_height=bold_metrics.height() * 1.75,
-        row_height=base_height * 1.55,
+        row_height=row_height,
         total_height=bold_metrics.height() * 1.65,
-        section_gap=base_height * 0.65,
+        section_gap=row_height * _SECTION_GAP_ROWS,
         metric_title_height=bold_metrics.height() * 1.45,
         metric_row_height=summary_metrics.height() * 2.65,
         summary_gap=base_height * 0.65,
@@ -274,9 +276,7 @@ def _paginate_section(
             if page.used_height:
                 _new_page(pages)
                 continue
-            raise ValueError(
-                f"The printable page is too small for {section.title}."
-            )
+            raise ValueError(f"The printable page is too small for {section.title}.")
 
         fragment = _SectionFragment(
             section=section,
@@ -357,9 +357,7 @@ def _move_last_rows_to_summary_page(
             include_total=False,
         )
         previous_page.used_height -= (
-            move_count * style.row_height
-            + style.total_height
-            + style.section_gap
+            move_count * style.row_height + style.total_height + style.section_gap
         )
     else:
         previous_page.fragments.pop()
@@ -378,28 +376,19 @@ def _move_last_rows_to_summary_page(
             continued=True,
         )
     )
-    summary_page.used_height += (
-        fixed_height + move_count * style.row_height
-    )
+    summary_page.used_height += fixed_height + move_count * style.row_height
 
 
 def _header_height(layout: ModernEstimateLayout, style: _PaintStyle) -> float:
     note_height = style.note_height if layout.note else 0.0
-    return (
-        style.title_height
-        + style.metadata_height
-        + note_height
-        + style.header_gap
-    )
+    return style.title_height + style.metadata_height + note_height + style.header_gap
 
 
 def _summary_height(layout: ModernEstimateLayout, style: _PaintStyle) -> float:
     height = style.metric_title_height + style.metric_row_height
     if layout.last_balance_metrics:
         height += (
-            style.metric_title_height
-            + style.metric_row_height
-            + style.summary_gap
+            style.metric_title_height + style.metric_row_height + style.summary_gap
         )
     return height
 
@@ -595,21 +584,15 @@ def _draw_table_row(
             padding=style.padding,
             fit_to_width=fit_to_width,
         )
-        painter.setPen(style.thin_pen)
-        if cell_rect.left() > 0.0:
-            painter.drawLine(
-                int(cell_rect.left()),
-                int(cell_rect.top()),
-                int(cell_rect.left()),
-                int(cell_rect.bottom()),
-            )
-        if cell_rect.right() < page_width:
-            painter.drawLine(
-                int(cell_rect.right()),
-                int(cell_rect.top()),
-                int(cell_rect.right()),
-                int(cell_rect.bottom()),
-            )
+
+    painter.setPen(style.thin_pen)
+    for divider_x in _column_divider_positions(columns, page_width):
+        painter.drawLine(
+            int(divider_x),
+            int(row_rect.top()),
+            int(divider_x),
+            int(row_rect.bottom()),
+        )
 
 
 def _column_rects(
@@ -625,6 +608,20 @@ def _column_rects(
         width = page_width - x if end_ratio >= 1.0 else page_width * column.width_ratio
         rects.append(QRectF(x, y, width, height))
     return tuple(rects)
+
+
+def _column_divider_positions(
+    columns: tuple[EstimatePrintColumn, ...],
+    page_width: float,
+) -> tuple[float, ...]:
+    """Return every internal column edge once, including edges around gaps."""
+    ratios = {
+        round(ratio, 10)
+        for column in columns
+        for ratio in (column.start_ratio, column.start_ratio + column.width_ratio)
+        if 0.0 < ratio < 1.0
+    }
+    return tuple(page_width * ratio for ratio in sorted(ratios))
 
 
 def _draw_summary(
@@ -688,7 +685,9 @@ def _draw_metric_block(
         rect = QRectF(
             metric_width * index,
             y,
-            metric_width if index < len(metrics) - 1 else page_width - metric_width * index,
+            metric_width
+            if index < len(metrics) - 1
+            else page_width - metric_width * index,
             style.metric_row_height,
         )
         painter.fillRect(rect, _TOTAL_BG if metric.emphasis else _WHITE)

@@ -17,13 +17,14 @@ silver_bars (1) ----< (M) bar_transfers
 ### 1. items
 **Purpose**: Master catalog of silver items
 
-| Column     | Type    | Constraints        | Description              |
-|------------|---------|-------------------|--------------------------|
-| code       | TEXT    | PRIMARY KEY       | Unique item identifier   |
-| name       | TEXT    | NOT NULL          | Item description         |
-| purity     | REAL    | DEFAULT 0         | Silver purity %          |
-| wage_type  | TEXT    | DEFAULT 'P'       | 'PC' or 'WT'            |
-| wage_rate  | REAL    | DEFAULT 0         | Rate per piece/weight    |
+| Column     | Type    | Constraints                         | Description                         |
+|------------|---------|-------------------------------------|-------------------------------------|
+| code       | TEXT    | PRIMARY KEY                         | Unique item identifier              |
+| name       | TEXT    | NOT NULL                            | Item description                    |
+| tunch      | TEXT    | NULL                                | Optional free-text Tunch value for print |
+| purity     | REAL    | DEFAULT 0                           | Silver purity %                     |
+| wage_type  | TEXT    | DEFAULT 'P'                         | 'PC' or 'WT'                        |
+| wage_rate  | REAL    | DEFAULT 0                           | Rate per piece/weight               |
 
 ### 2. estimates
 **Purpose**: Estimate header records
@@ -149,6 +150,7 @@ silver_bars (1) ----< (M) bar_transfers
 5. **Wage Types**: PC (per piece) or WT (per weight)
 6. **Status Values**: `In Stock`, `Assigned`, `Issued`, and `Sold`
 7. **Stable Line Identity**: `estimate_items.line_key` links a source line to `silver_bars.source_line_key`
+8. **Tunch**: Optional free-text item-master value; estimates resolve the current master value when printed
 
 ## Schema Evolution
 
@@ -170,6 +172,13 @@ silver_bars (1) ----< (M) bar_transfers
 ### Version 5 → 6
 - Recomputed stored regular-item `total_gross` and `total_net` estimate summaries.
 - Added/validated the silver-bar availability index used by filtered keyset pages.
+
+### Version 6 → 7
+- Added nullable `items.tunch`.
+- Tunch remains an item-master value and is not copied into `estimate_items`.
+
+### Version 7 → 8
+- Changed `items.tunch` from a constrained numeric value to free text, preserving existing values during migration.
 
 Schema creation, all pending migrations, mandatory indexes, validation, and the
 schema-version write run in one transaction. Any failure rolls the full setup

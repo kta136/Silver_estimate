@@ -4,6 +4,7 @@ from PyQt6.QtCore import QSizeF
 from PyQt6.QtGui import QFont, QPageLayout, QPageSize
 from PyQt6.QtPrintSupport import QPrinter, QPrintPreviewDialog, QPrintPreviewWidget
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QFileDialog,
@@ -35,7 +36,10 @@ class _PreviewWidgetStub:
 
 
 def _estimate_payload(format_key: str = "modern") -> PrintPreviewPayload:
-    def build(selected_format: str) -> PrintPreviewPayload:
+    def build(
+        selected_format: str,
+        show_tunch: bool = False,
+    ) -> PrintPreviewPayload:
         return PrintPreviewPayload(
             document=HtmlPrintDocument(
                 f"<html><body><p>{selected_format}</p></body></html>",
@@ -47,7 +51,9 @@ def _estimate_payload(format_key: str = "modern") -> PrintPreviewPayload:
             suggested_filename="Estimate-V-001.pdf",
             format_key=selected_format,
             available_formats=("classic", "modern"),
-            format_factory=build,
+            format_factory=lambda next_format: build(next_format, show_tunch),
+            show_tunch=show_tunch,
+            tunch_visibility_factory=lambda visible: build(selected_format, visible),
         )
 
     return build(format_key)
@@ -86,6 +92,9 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
         "Modern",
     ]
     assert format_combo.currentData() == "modern"
+    tunch_checkbox = preview.findChild(QCheckBox, "PreviewTunchCheckbox")
+    assert tunch_checkbox is not None
+    assert tunch_checkbox.isChecked() is False
 
     action_texts = [action.text() for action in toolbar.actions() if action.text()]
 
@@ -233,10 +242,12 @@ def test_preview_defaults_persist_updated_print_preferences(
 ):
     del qt_app, settings_stub
     persisted_formats = []
+    persisted_tunch = []
     controller = PrintPreviewController(
         printer=QPrinter(),
         render_document=lambda *args: None,
         persist_estimate_format=persisted_formats.append,
+        persist_tunch_visibility=persisted_tunch.append,
     )
     monkeypatch.setattr(controller._printer, "printerName", lambda: "Warehouse Printer")
     controller._printer.setPageOrientation(QPageLayout.Orientation.Portrait)
@@ -267,7 +278,9 @@ def test_preview_defaults_persist_updated_print_preferences(
     assert settings.value("print/page_height_mm") == 355.6
     assert settings.value("print/margins") == expected_margins_str
     assert settings.value("print/estimate_layout") == "classic"
+    assert settings.value("print/show_tunch", type=bool) is False
     assert persisted_formats == ["classic"]
+    assert persisted_tunch == [False]
 
 
 def test_preview_format_switch_rebuilds_current_estimate_payload(qtbot) -> None:
@@ -283,6 +296,23 @@ def test_preview_format_switch_rebuilds_current_estimate_payload(qtbot) -> None:
 
     assert state["payload"].format_key == "classic"
     assert state["payload"].document.html_content.endswith("classic</p></body></html>")
+
+
+def test_preview_tunch_toggle_refreshes_and_survives_format_switch(qtbot) -> None:
+    controller = PrintPreviewController(
+        printer=QPrinter(),
+        render_document=lambda *args: None,
+    )
+    preview = QPrintPreviewDialog(controller._printer)
+    qtbot.addWidget(preview)
+    state = {"payload": _estimate_payload("modern")}
+
+    controller._switch_tunch_visibility(preview, True, state)
+
+    assert state["payload"].show_tunch is True
+    controller._switch_format(preview, "classic", state)
+    assert state["payload"].format_key == "classic"
+    assert state["payload"].show_tunch is True
 
 
 def test_preview_defaults_store_custom_page_size_dimensions(qt_app, settings_stub):

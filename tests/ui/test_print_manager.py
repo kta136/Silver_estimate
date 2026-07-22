@@ -62,7 +62,9 @@ def _ensure_print_test_font() -> None:
 def _pdf_pages(output_path) -> tuple[tuple[str, ...], QPdfDocument]:
     document = QPdfDocument(None)
     assert document.load(str(output_path)) == QPdfDocument.Error.None_
-    pages = tuple(document.getAllText(index).text() for index in range(document.pageCount()))
+    pages = tuple(
+        document.getAllText(index).text() for index in range(document.pageCount())
+    )
     return pages, document
 
 
@@ -102,9 +104,7 @@ def test_generate_silver_bars_html_escapes_dynamic_text(qt_app, settings_stub):
     assert "SILVER BARS INVENTORY - &lt;all&gt;" in rendered
 
 
-def test_estimate_modern_layout_uses_requested_column_precision(
-    qt_app, settings_stub
-):
+def test_estimate_modern_layout_uses_requested_column_precision(qt_app, settings_stub):
     manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
     estimate_data = {
         "header": {
@@ -252,6 +252,39 @@ def test_build_estimate_preview_payload_uses_modern_layout(qt_app, settings_stub
     assert isinstance(classic_payload.document, EstimatePrintDocument)
     assert classic_payload.document.format_key == "classic"
     assert classic_payload.format_key == "classic"
+
+
+def test_estimate_payload_uses_remembered_tunch_visibility(qt_app, settings_stub):
+    get_app_settings().setValue("print/show_tunch", True)
+    manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
+    estimate_data = {
+        "header": {
+            "voucher_no": "V-TUNCH",
+            "date": "2026-07-19",
+            "silver_rate": 0.0,
+        },
+        "items": [],
+    }
+
+    payload = manager.build_estimate_preview_payload(
+        "V-TUNCH",
+        estimate_data=estimate_data,
+    )
+
+    assert payload is not None
+    assert payload.show_tunch is True
+    assert payload.document.show_tunch is True
+    assert payload.tunch_visibility_factory is not None
+
+    hidden_payload = payload.tunch_visibility_factory(False)
+    assert hidden_payload is not None
+    assert hidden_payload.show_tunch is False
+    assert hidden_payload.document.show_tunch is False
+    assert hidden_payload.format_factory is not None
+    hidden_classic = hidden_payload.format_factory("classic")
+    assert hidden_classic is not None
+    assert hidden_classic.show_tunch is False
+    assert hidden_classic.document.show_tunch is False
 
 
 def test_show_preview_delegates_to_preview_dialog(qt_app, settings_stub):

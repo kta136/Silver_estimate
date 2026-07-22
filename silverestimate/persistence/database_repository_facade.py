@@ -45,11 +45,19 @@ class DatabaseRepositoryFacadeMixin:
     def get_all_items(self):
         return self.items_repo.get_all_items()
 
-    def add_item(self, code, name, purity, wage_type, wage_rate):
-        return self.items_repo.add_item(code, name, purity, wage_type, wage_rate)
+    def add_item(self, code, name, purity, wage_type, wage_rate, tunch=None):
+        if tunch is None:
+            return self.items_repo.add_item(code, name, purity, wage_type, wage_rate)
+        return self.items_repo.add_item(
+            code, name, purity, wage_type, wage_rate, tunch=tunch
+        )
 
-    def update_item(self, code, name, purity, wage_type, wage_rate):
-        return self.items_repo.update_item(code, name, purity, wage_type, wage_rate)
+    def update_item(self, code, name, purity, wage_type, wage_rate, tunch=None):
+        if tunch is None:
+            return self.items_repo.update_item(code, name, purity, wage_type, wage_rate)
+        return self.items_repo.update_item(
+            code, name, purity, wage_type, wage_rate, tunch=tunch
+        )
 
     def upsert_item_catalog(self, items, *, replace_existing=False):
         return self.items_repo.upsert_item_catalog(

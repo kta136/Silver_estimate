@@ -991,6 +991,11 @@ def test_build_current_estimate_preview_data_reports_skipped_rows(
     workflow_host, monkeypatch
 ):
     host, controller = workflow_host
+    host.db_manager = types.SimpleNamespace(
+        get_items_by_codes=lambda codes: {
+            "REG001": {"code": "REG001", "tunch": "91 + loss"}
+        }
+    )
     host.view_model.set_voucher_metadata(
         voucher_number="PX01",
         voucher_date="2026-03-20",
@@ -1042,6 +1047,7 @@ def test_build_current_estimate_preview_data_reports_skipped_rows(
     assert preview["header"]["voucher_no"] == "PX01"
     assert preview["header"]["note"] == "preview note"
     assert preview["items"][0]["item_code"] == "REG001"
+    assert preview["items"][0]["tunch"] == "91 + loss"
     assert preview["items"][0]["is_return"] == 0
 
 

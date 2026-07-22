@@ -10,15 +10,16 @@ from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
 class ItemMasterTableModel(QAbstractTableModel):
     """Expose catalog items to the item-master table view."""
 
-    HEADERS = ["Code", "Name", "Purity (%)", "Wage Type", "Wage Rate"]
+    HEADERS = ["Code", "Name", "Tunch", "Purity (%)", "Wage Type", "Wage Rate"]
     HEADER_TOOLTIPS = [
         "Item Code",
         "Item Name",
+        "Optional Tunch text",
         "Default Purity",
         "Default Wage Calc Type",
         "Default Wage Rate",
     ]
-    _NUMERIC_COLUMNS = {2, 4}
+    _NUMERIC_COLUMNS = {3, 5}
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -132,9 +133,10 @@ class ItemMasterTableModel(QAbstractTableModel):
         mapping = {
             0: "code",
             1: "name",
-            2: "purity",
-            3: "wage_type",
-            4: "wage_rate",
+            2: "tunch",
+            3: "purity",
+            4: "wage_type",
+            5: "wage_rate",
         }
         return mapping.get(column, "")
 
@@ -147,13 +149,20 @@ class ItemMasterTableModel(QAbstractTableModel):
                 required_keys = {"code", "name", "purity", "wage_type", "wage_rate"}
                 if required_keys.issubset(available_keys):
                     return {
-                        key: row_mapping[key]
-                        for key in ("code", "name", "purity", "wage_type", "wage_rate")
+                        "code": row_mapping["code"],
+                        "name": row_mapping["name"],
+                        "tunch": (
+                            row_mapping["tunch"] if "tunch" in available_keys else None
+                        ),
+                        "purity": row_mapping["purity"],
+                        "wage_type": row_mapping["wage_type"],
+                        "wage_rate": row_mapping["wage_rate"],
                     }
         if isinstance(row, dict):
             return {
                 "code": row.get("code"),
                 "name": row.get("name"),
+                "tunch": row.get("tunch"),
                 "purity": row.get("purity"),
                 "wage_type": row.get("wage_type"),
                 "wage_rate": row.get("wage_rate"),
@@ -161,6 +170,7 @@ class ItemMasterTableModel(QAbstractTableModel):
         return {
             "code": "",
             "name": "",
+            "tunch": None,
             "purity": 0.0,
             "wage_type": "WT",
             "wage_rate": 0.0,

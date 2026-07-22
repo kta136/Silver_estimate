@@ -310,8 +310,8 @@
     "semantic_hash": ""
   },
   "silverestimate/ui/estimate_print_renderer.py": {
-    "mtime": 1784712671.4401298,
-    "ast_hash": "44da2a69e881d7c79e49d53f34d1da23",
+    "mtime": 1784720590.8867788,
+    "ast_hash": "1b56ca3d2f4507c184816f593b6fee6a",
     "semantic_hash": ""
   },
   "silverestimate/ui/estimate_table_formatting.py": {
@@ -1205,8 +1205,8 @@
     "semantic_hash": ""
   },
   "tests/unit/test_estimate_print_renderer.py": {
-    "mtime": 1784712509.5424278,
-    "ast_hash": "00f15cb2d4c93afc05566a43ed40ab3e",
+    "mtime": 1784720622.5263803,
+    "ast_hash": "b4b2bdf89a1dec38d86c361436e90a16",
     "semantic_hash": ""
   },
   "scripts/check_startup_budgets.py": {
@@ -1275,8 +1275,8 @@
     "semantic_hash": ""
   },
   "silverestimate/ui/estimate_print_layout.py": {
-    "mtime": 1784712784.5928571,
-    "ast_hash": "78213ab0d9bdc76cc29d9531531b8c4f",
+    "mtime": 1784720590.8867788,
+    "ast_hash": "46b66f61e5876e3b6e7a5b73161d46a7",
     "semantic_hash": ""
   },
   "output/pdf/modern-estimate-a4-semantic.pdf": {

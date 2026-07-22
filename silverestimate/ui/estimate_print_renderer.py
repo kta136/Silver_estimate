@@ -35,7 +35,7 @@ _TOTAL_BG = QColor("#f3f4f6")
 _ALTERNATE_ROW_BG = QColor("#f8fafc")
 _FINAL_BG = QColor("#1f2937")
 _WHITE = QColor("#ffffff")
-_SECTION_GAP_ROWS = 2.0
+_REGULAR_SECTION_GAP_ROWS = 2.0
 
 
 @dataclass(frozen=True)
@@ -195,7 +195,7 @@ def _build_style(base_font: QFont, printer: QPrinter) -> _PaintStyle:
         column_header_height=bold_metrics.height() * 1.75,
         row_height=row_height,
         total_height=bold_metrics.height() * 1.65,
-        section_gap=row_height * _SECTION_GAP_ROWS,
+        section_gap=row_height * _REGULAR_SECTION_GAP_ROWS,
         metric_title_height=bold_metrics.height() * 1.45,
         metric_row_height=summary_metrics.height() * 2.65,
         summary_gap=base_height * 0.65,
@@ -288,7 +288,10 @@ def _paginate_section(
         page.used_height += header_height + take * style.row_height
         row_index += take
         if include_total:
-            page.used_height += style.total_height + style.section_gap
+            page.used_height += style.total_height + _section_gap_height(
+                section,
+                style,
+            )
             break
         _new_page(pages)
         continued = True
@@ -335,7 +338,8 @@ def _move_last_rows_to_summary_page(
         return
 
     header_height = style.section_header_height + style.column_header_height
-    fixed_height = header_height + style.total_height + style.section_gap
+    section_gap = _section_gap_height(fragment.section, style)
+    fixed_height = header_height + style.total_height + section_gap
     available_for_rows = capacity - summary_height - fixed_height
     max_rows = int(available_for_rows // style.row_height)
     if max_rows <= 0:
@@ -357,7 +361,7 @@ def _move_last_rows_to_summary_page(
             include_total=False,
         )
         previous_page.used_height -= (
-            move_count * style.row_height + style.total_height + style.section_gap
+            move_count * style.row_height + style.total_height + section_gap
         )
     else:
         previous_page.fragments.pop()
@@ -365,7 +369,7 @@ def _move_last_rows_to_summary_page(
             header_height
             + move_count * style.row_height
             + style.total_height
-            + style.section_gap
+            + section_gap
         )
 
     summary_page.fragments.append(
@@ -545,8 +549,15 @@ def _draw_section_fragment(
             background=_TOTAL_BG,
             strong_border=True,
         )
-        y += style.total_height + style.section_gap
+        y += style.total_height + _section_gap_height(section, style)
     return y
+
+
+def _section_gap_height(
+    section: EstimatePrintSection,
+    style: _PaintStyle,
+) -> float:
+    return style.section_gap if section.key == "regular" else 0.0
 
 
 def _draw_table_row(

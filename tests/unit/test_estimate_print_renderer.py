@@ -8,9 +8,10 @@ from pathlib import Path
 from silverestimate.ui.estimate_print_document import EstimatePrintDocument
 from silverestimate.ui.estimate_print_layout import REGULAR_COLUMNS
 from silverestimate.ui.estimate_print_renderer import (
-    _SECTION_GAP_ROWS,
+    _REGULAR_SECTION_GAP_ROWS,
     EstimatePrintRenderer,
     _column_divider_positions,
+    _section_gap_height,
 )
 from tests.factories import multi_section_print_estimate
 
@@ -158,8 +159,39 @@ def test_zero_silver_rate_omits_cost_and_total_metrics() -> None:
     assert "Total:" not in layout.normalized_text()
 
 
-def test_modern_table_draws_pcs_fine_divider_and_uses_two_row_group_gaps() -> None:
+def test_modern_table_draws_pcs_fine_divider_and_only_gaps_after_regular() -> None:
+    renderer = EstimatePrintRenderer()
+    layout = renderer.build_modern_layout(
+        EstimatePrintDocument.from_mapping(multi_section_print_estimate())
+    )
+    style = type("Style", (), {"section_gap": 24.0})()
     divider_positions = _column_divider_positions(REGULAR_COLUMNS, 100.0)
 
     assert 82.0 in divider_positions
-    assert _SECTION_GAP_ROWS == 2.0
+    assert _REGULAR_SECTION_GAP_ROWS == 2.0
+    assert tuple(
+        _section_gap_height(section, style) for section in layout.sections
+    ) == (
+        24.0,
+        0.0,
+        0.0,
+        0.0,
+    )
+
+
+def test_zero_labour_omits_labour_metric() -> None:
+    estimate_data = deepcopy(multi_section_print_estimate())
+    estimate_data["header"]["last_balance_amount"] = 0
+    for item in estimate_data["items"]:
+        item["wage"] = 0
+
+    layout = EstimatePrintRenderer().build_modern_layout(
+        EstimatePrintDocument.from_mapping(estimate_data)
+    )
+
+    assert tuple(metric.label for metric in layout.final_metrics) == (
+        "Fine Silver",
+        "Silver Cost",
+        "Total",
+    )
+    assert "Labour:" not in layout.normalized_text()

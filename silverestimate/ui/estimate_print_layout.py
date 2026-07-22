@@ -321,10 +321,11 @@ def _complete_layout(
     total_cost = net_wage + silver_cost
 
     last_balance = _last_balance_metrics(header)
-    final_metrics = [
-        EstimatePrintMetric("Fine Silver", f"{_weight(net_fine)} g"),
-        EstimatePrintMetric("Labour", f"Rs. {_amount(net_wage, decimals=0)}"),
-    ]
+    final_metrics = [EstimatePrintMetric("Fine Silver", f"{_weight(net_fine)} g")]
+    if net_wage != 0.0:
+        final_metrics.append(
+            EstimatePrintMetric("Labour", f"Rs. {_amount(net_wage, decimals=0)}")
+        )
     if header.silver_rate > 0:
         final_metrics.extend(
             (

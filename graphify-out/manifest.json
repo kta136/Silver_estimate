@@ -15,8 +15,8 @@
     "semantic_hash": ""
   },
   "scripts/check_perf_budgets.py": {
-    "mtime": 1784804736.4651575,
-    "ast_hash": "278230505ddf6d5cac897f22efbeee89",
+    "mtime": 1784804911.343482,
+    "ast_hash": "169ebd611a97e0bea1d734c46d6599e0",
     "semantic_hash": ""
   },
   "silverestimate/__init__.py": {
@@ -660,8 +660,8 @@
     "semantic_hash": "e31b870fd7d837971836e0b075e7ab7e"
   },
   "tests/unit/test_check_perf_budgets.py": {
-    "mtime": 1784804736.4651575,
-    "ast_hash": "ee2623d52284d5a1d5437b84587ec056",
+    "mtime": 1784804911.3300297,
+    "ast_hash": "e8ee1f3b7dfbbe0a79643892750dda14",
     "semantic_hash": ""
   },
   "tests/unit/test_database_repository_facade.py": {
@@ -835,8 +835,8 @@
     "semantic_hash": ""
   },
   "CHANGELOG.md": {
-    "mtime": 1784801860.042593,
-    "ast_hash": "e540787528fd4ca24e7a0d0dfefec7e4",
+    "mtime": 1784805685.4867094,
+    "ast_hash": "e881e8990e85c8ce6f5f92d08241dd99",
     "semantic_hash": ""
   },
   "readme.md": {
@@ -1130,8 +1130,8 @@
     "semantic_hash": "aa5f23c85c5a72e6c5d4a028b5798d60"
   },
   "DOCS/README.md": {
-    "mtime": 1784801633.62817,
-    "ast_hash": "af7cb5ba6466fe4b1a9d9e4a9cd789ad",
+    "mtime": 1784805685.4867094,
+    "ast_hash": "974ca01efe8c741828c8942d634b445c",
     "semantic_hash": ""
   },
   "graphify-out/memory/query_20260715_140012_update_the_docs__github_page_etc.md": {
@@ -1455,8 +1455,8 @@
     "semantic_hash": "37d1d3ec822d0acbce61402a63fb1119"
   },
   "DOCS/modernization-roadmap.md": {
-    "mtime": 1784803038.6276922,
-    "ast_hash": "aa8fe9e07c0f9e508db7f7da61891ab7",
+    "mtime": 1784805733.1725047,
+    "ast_hash": "7e31f0f69f6eb0e3d6ca6bae08357c18",
     "semantic_hash": ""
   },
   "THIRD_PARTY_NOTICES.md": {
@@ -1468,11 +1468,6 @@
     "mtime": 1784730557.3003125,
     "ast_hash": "33d69b1ce1b1a2399315bda1468c09db",
     "semantic_hash": "33d69b1ce1b1a2399315bda1468c09db"
-  },
-  "DOCS/pyside6-migration-execution-plan.md": {
-    "mtime": 1784804220.1181166,
-    "ast_hash": "c478d48fd6d8b272be869ca5a5ebd291",
-    "semantic_hash": ""
   },
   "tests/unit/test_qt_object_lifetime.py": {
     "mtime": 1784792697.6915257,

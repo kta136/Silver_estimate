@@ -38,9 +38,8 @@
 - Clarified that SILVDB01 remains only as a one-time read-only importer and a
   retained `estimation.silvdb01.backup`, with an installed-system confirmation
   gate before importer retirement.
-- Retained the last green M0 binding baseline only as rollback evidence until
-  final migration closure; the new executable is accepted against the current
-  PySide6 release contract.
+- Closed the binding migration after the local Windows source, UI, SQLCipher,
+  performance, standalone, and one-file release gates passed.
 
 All notable changes to the Silver Estimation App will be documented in this file.
 

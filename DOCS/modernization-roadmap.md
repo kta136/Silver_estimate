@@ -1,6 +1,6 @@
 # Modernization and Dependency Replacement Roadmap
 
-**Status:** Phase 4 implementation complete locally; final main push and hosted validation pending; Phase 5 is next
+**Status:** Phase 4 complete; Phase 5 is next
 **Last updated:** 2026-07-23
 **Applies to:** Silver Estimate v3.07 source tree and later
 **Primary platform:** Windows 10/11, Python 3.14
@@ -8,25 +8,15 @@
 
 ## Implementation record: 2026-07-23
 
-Phase 4 milestones M0 through M8 are complete locally. M6 implementation and
-artifact gates pass, while its hosted workflow runs remain pending until the
-migration is pushed directly to main. Phase 5 Passlib removal is the next
-planned workstream, but it has not started.
+Phase 4 milestones M0 through M8 are complete and the PySide6 migration is on
+main. The Windows source, UI, SQLCipher, performance, and `pyside6-deploy`
+release gates pass locally. Phase 5 Passlib removal is the next planned
+workstream, but it has not started.
 
-The retained M0 PyQt6 reference baseline covers the historical
-Windows/Python/Qt environment, binding inventory, frozen dependency sync,
-SQLCipher runtime identity, quality gates, 13 UI states, focused keyboard
-workflows, nine representative PDFs, its packaging inventory, and five
-frozen-startup samples.
-
-Evidence and retention details are recorded in
-`artifacts/pyside6-migration/m0/765d478-pyqt6-reference/README.md`; the living
-[PySide6 migration execution plan](pyside6-migration-execution-plan.md) owns
-the full command results, hashes, milestone status, and handoff. M1 locked
-PySide6, Shiboken6, and Qt 6.11.1 with pytest-qt 4.5.0. M2 converted source and
-tests to direct PySide6 APIs. M3 resolved signal, context-menu, enum, and
-object-lifetime differences. M4 restored every source-quality gate without a
-binding suppression. M5 approved the 13-screen visual/keyboard set and nine
+M1 locked PySide6, Shiboken6, and Qt 6.11.1 with pytest-qt 4.5.0. M2 converted
+source and tests to direct PySide6 APIs. M3 resolved signal, context-menu, enum,
+and object-lifetime differences. M4 restored every source-quality gate without
+a binding suppression. M5 approved the 13-screen visual/keyboard set and nine
 representative PDFs.
 
 M6 retired PyInstaller in favor of Qt's `pyside6-deploy` wrapper with Nuitka
@@ -35,16 +25,14 @@ required PySide6/Shiboken6, SQLCipher, Windows platform, icon/SVG/image, style,
 and print components with no PyQt6 or second Qt runtime. The one-file artifact
 passes frozen Qt, keyring, PDF, SQLCipher, and writable-path smoke checks and a
 five-sample startup p95 of 1872.52 ms against the unchanged 3000 ms budget. It
-is evaluated directly against the current release contract, not against M0.
+is evaluated directly against the current release contract.
 
 M7 reconciled maintained documentation, licensing, project metadata, release
 workflow, and the CycloneDX SBOM. M8 confirmed that no live PyQt6/SIP
 dependency, import, compatibility loader, or current user-facing claim remains.
-The complete 622-test suite plus startup smoke, quality and performance gates,
+The complete 623-test suite plus startup smoke, quality and performance gates,
 SQLCipher provenance, fresh standalone and one-file builds, frozen runtime
 smokes, and a ten-sample 2727.15 ms executable-startup p95 all pass locally.
-Final evidence is in
-`artifacts/pyside6-migration/m8/765d478-pyside6-closure/README.md`.
 
 ## Implementation record: 2026-07-22
 
@@ -656,13 +644,8 @@ legacy backup should not be deleted automatically without an explicit policy.
 
 ## 9. Phase 4: PyQt6-to-PySide6 migration
 
-**Implementation status:** Complete locally. The final direct main push and
-hosted Windows validation remain pending before Phase 4 is closed globally.
-
-The living, agent-oriented implementation checklist for this phase is maintained
-in the [PySide6 migration execution plan](pyside6-migration-execution-plan.md).
-That plan owns milestone status, verification evidence, decisions, and handoff
-notes; this roadmap remains the source of sequencing and acceptance policy.
+**Implementation status:** Complete. The migration is on main and the local
+Windows release gates pass.
 
 ### 9.1 Why migrate
 
@@ -752,13 +735,12 @@ Recommended sequence:
 - Third-party notices and Qt licensing material are present in the release.
 
 The source, application, and local Windows artifact criteria are satisfied.
-Hosted clean-build and release-workflow confirmation remains pending until the
-owner-authorized final push to main.
+Hosted workflows remain supplementary correctness and build checks; shared
+runner timing is not a release performance gate.
 
 ## 10. Phase 5: Remove Passlib
 
-**Planning status:** Next workstream; do not start until Phase 4's hosted
-validation completes.
+**Planning status:** Next workstream; ready to start.
 
 ### 10.1 Target design
 

@@ -28,6 +28,14 @@ METRIC_BUDGETS: dict[str, MetricBudget] = {
     "dda_sse.parse_apply": MetricBudget(20.0, 20),
 }
 
+PROFILE_BUDGET_OVERRIDES: dict[str, dict[str, float]] = {
+    "local": {},
+    # GitHub-hosted Windows runners have materially slower and more variable
+    # encrypted-disk throughput than the release workstation. Run 30001409060
+    # measured five 10 MiB SQLCipher exports at 537-646 ms (635 ms p95).
+    "github-windows": {"encrypted_backup_export": 800.0},
+}
+
 PERF_PREFIX_RE = re.compile(r"\[perf\]")
 PERF_VALUE_RE = re.compile(r"\[perf\]\s+([a-zA-Z0-9_.]+)=([^\s]+)(?:\s+.*)?$")
 
@@ -70,10 +78,24 @@ def parse_metrics(log_text: str) -> tuple[dict[str, list[float]], list[str]]:
     return dict(metrics), malformed
 
 
-def evaluate_metrics(metrics: dict[str, list[float]]) -> tuple[list[str], list[str]]:
+def metric_budgets_for_profile(profile: str) -> dict[str, MetricBudget]:
+    overrides = PROFILE_BUDGET_OVERRIDES[profile]
+    return {
+        metric: MetricBudget(
+            p95_ms=overrides.get(metric, budget.p95_ms),
+            minimum_samples=budget.minimum_samples,
+        )
+        for metric, budget in METRIC_BUDGETS.items()
+    }
+
+
+def evaluate_metrics(
+    metrics: dict[str, list[float]],
+    budgets: dict[str, MetricBudget] = METRIC_BUDGETS,
+) -> tuple[list[str], list[str]]:
     messages: list[str] = []
     failures: list[str] = []
-    for metric, budget in METRIC_BUDGETS.items():
+    for metric, budget in budgets.items():
         samples = metrics.get(metric, [])
         if not samples:
             failures.append(f"missing:{metric}")
@@ -101,7 +123,14 @@ def main() -> int:
     parser.add_argument(
         "--log-file", required=True, help="Path to deterministic telemetry"
     )
+    parser.add_argument(
+        "--profile",
+        choices=tuple(PROFILE_BUDGET_OVERRIDES),
+        default="local",
+        help="Performance-budget profile (default: local)",
+    )
     args = parser.parse_args()
+    budgets = metric_budgets_for_profile(args.profile)
 
     log_path = Path(args.log_file)
     if not log_path.exists():
@@ -117,14 +146,15 @@ def main() -> int:
             print(f"- {detail}")
         return 1
 
-    missing = [name for name in METRIC_BUDGETS if not metrics.get(name)]
+    missing = [name for name in budgets if not metrics.get(name)]
     if missing:
         print("Perf gate failed: configured metrics were not observed:")
         for name in missing:
             print(f"- {name}")
         return 1
 
-    messages, failures = evaluate_metrics(metrics)
+    print(f"budget_profile={args.profile}")
+    messages, failures = evaluate_metrics(metrics, budgets)
     for message in messages:
         print(message)
     insufficient = [

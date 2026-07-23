@@ -102,3 +102,28 @@ def test_perf_gate_accepts_complete_telemetry(tmp_path: Path) -> None:
 
     assert result.returncode == 0
     assert "All configured performance metrics" in result.stdout
+
+
+def test_github_windows_profile_does_not_weaken_local_export_budget(
+    tmp_path: Path,
+) -> None:
+    log_path = tmp_path / "perf.log"
+    telemetry = _valid_telemetry().replace(
+        "[perf] encrypted_backup_export=50.00ms",
+        "[perf] encrypted_backup_export=650.00ms",
+    )
+    log_path.write_text(telemetry, encoding="utf-8")
+
+    local_result = _run_script("--log-file", str(log_path))
+    hosted_result = _run_script(
+        "--log-file",
+        str(log_path),
+        "--profile",
+        "github-windows",
+    )
+
+    assert local_result.returncode == 1
+    assert "budget=350.00ms" in local_result.stdout
+    assert hosted_result.returncode == 0
+    assert "budget_profile=github-windows" in hosted_result.stdout
+    assert "budget=800.00ms" in hosted_result.stdout

@@ -17,6 +17,7 @@ jobs:
     timeout-minutes: 75
     env:
       QT_QPA_PLATFORM: offscreen
+      SILVERESTIMATE_PERF_BUDGET_PROFILE: github-windows
       SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
       SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
     steps:

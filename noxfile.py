@@ -211,7 +211,16 @@ def tests_full(session: nox.Session) -> None:
         "--output",
         str(perf_log),
     )
-    session.run("python", "scripts/check_perf_budgets.py", "--log-file", str(perf_log))
+    budget_args = [
+        "python",
+        "scripts/check_perf_budgets.py",
+        "--log-file",
+        str(perf_log),
+    ]
+    budget_profile = os.environ.get("SILVERESTIMATE_PERF_BUDGET_PROFILE")
+    if budget_profile:
+        budget_args.extend(("--profile", budget_profile))
+    session.run(*budget_args)
     session.run(
         "python", "-m", "coverage", "report", "--show-missing", "--fail-under=75"
     )

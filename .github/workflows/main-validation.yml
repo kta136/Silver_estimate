@@ -37,6 +37,7 @@ jobs:
     timeout-minutes: 60
     env:
       QT_QPA_PLATFORM: offscreen
+      SILVERESTIMATE_PERF_BUDGET_PROFILE: github-windows
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6

@@ -25,6 +25,14 @@ No network request is included in the DDA parse timings.
 
 `scripts/check_perf_budgets.py` fails when any configured metric is absent, has too few samples, contains malformed/non-finite/negative telemetry, or exceeds its p95 budget.
 
+The default `local` profile owns the budgets above. GitHub-hosted Windows
+workflows select the `github-windows` profile. It preserves every threshold
+except `encrypted_backup_export`, which is 800 ms for the shared runner while
+remaining 350 ms locally. Main-validation run `30001409060` measured its five
+10 MiB SQLCipher exports at 537-646 ms (635 ms p95); the runner-specific
+ceiling prevents host disk/CPU variance from weakening the representative
+workstation gate.
+
 `scripts/check_startup_budgets.py` measures the complete one-file executable process externally, including bootloader extraction and imports, and fails the Windows release build when its p95 exceeds the configured budget.
 
 ## Local run
@@ -33,6 +41,7 @@ No network request is included in the DDA parse timings.
 uv sync --frozen --extra dev
 uv run python scripts/run_performance_gate.py --output perf-metrics.log
 uv run python scripts/check_perf_budgets.py --log-file perf-metrics.log
+uv run python scripts/check_perf_budgets.py --log-file perf-metrics.log --profile github-windows
 uv run python scripts/check_startup_budgets.py --artifact dist\SilverEstimate.exe --samples 5 --p95-budget-ms 3000
 ```
 

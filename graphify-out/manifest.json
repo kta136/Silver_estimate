@@ -5,8 +5,8 @@
     "semantic_hash": ""
   },
   "noxfile.py": {
-    "mtime": 1784800561.3058,
-    "ast_hash": "5dbe5c2469a6da6cc0013f8d7b40f0e3",
+    "mtime": 1784804714.4802065,
+    "ast_hash": "0e5589be6308d7d5951500465b125b15",
     "semantic_hash": ""
   },
   "scripts/build_windows_local.ps1": {
@@ -15,9 +15,9 @@
     "semantic_hash": ""
   },
   "scripts/check_perf_budgets.py": {
-    "mtime": 1784804006.2917778,
-    "ast_hash": "a572201203bc4439e89aa0f9293054f4",
-    "semantic_hash": "a572201203bc4439e89aa0f9293054f4"
+    "mtime": 1784804736.4651575,
+    "ast_hash": "278230505ddf6d5cac897f22efbeee89",
+    "semantic_hash": ""
   },
   "silverestimate/__init__.py": {
     "mtime": 1773319514.5410416,
@@ -660,9 +660,9 @@
     "semantic_hash": "e31b870fd7d837971836e0b075e7ab7e"
   },
   "tests/unit/test_check_perf_budgets.py": {
-    "mtime": 1784804006.3157837,
-    "ast_hash": "dbc34a05365b98c5f76a266a14fe16ab",
-    "semantic_hash": "dbc34a05365b98c5f76a266a14fe16ab"
+    "mtime": 1784804736.4651575,
+    "ast_hash": "ee2623d52284d5a1d5437b84587ec056",
+    "semantic_hash": ""
   },
   "tests/unit/test_database_repository_facade.py": {
     "mtime": 1784725373.591942,
@@ -870,18 +870,18 @@
     "semantic_hash": "8b14b3c432d0c48bce315ac5d65734ba"
   },
   ".github/workflows/main-validation.yml": {
-    "mtime": 1784804133.0565534,
-    "ast_hash": "4c9b43c3a6b7b342584431338d7a5a88",
+    "mtime": 1784804714.4849503,
+    "ast_hash": "7a694579e9fb30575be2640a9f5281e7",
     "semantic_hash": ""
   },
   ".github/workflows/pr-validation.yml": {
-    "mtime": 1784804133.0081275,
-    "ast_hash": "b9eab61ca1380b3aeb5238cfc4c1c3ec",
+    "mtime": 1784804714.4849503,
+    "ast_hash": "f4e69e7047324341d0fd480fb5002e27",
     "semantic_hash": ""
   },
   ".github/workflows/release-windows.yml": {
-    "mtime": 1784801633.6231234,
-    "ast_hash": "d8d732ab740d7f225a349a460c0b7881",
+    "mtime": 1784804714.4849503,
+    "ast_hash": "2135e2753074c9721fa72354bd522f5e",
     "semantic_hash": ""
   },
   "DOCS/api-reference.md": {
@@ -900,9 +900,9 @@
     "semantic_hash": ""
   },
   "DOCS/performance-baseline-thresholds.md": {
-    "mtime": 1784726467.6636004,
-    "ast_hash": "967b8e83759b6632dddc8039bd9d2a64",
-    "semantic_hash": "967b8e83759b6632dddc8039bd9d2a64"
+    "mtime": 1784804714.4849503,
+    "ast_hash": "def88a33076c912f41431c4edec3ec4e",
+    "semantic_hash": ""
   },
   "DOCS/project-architecture.md": {
     "mtime": 1784801633.629076,
@@ -1040,8 +1040,8 @@
     "semantic_hash": "d6e27105583e3cc428fbeebe8c9044bf"
   },
   "silverestimate/security/credential_store.py": {
-    "mtime": 1784804264.1011515,
-    "ast_hash": "622d482fbe5d015dd69118272cbca0ba",
+    "mtime": 1784804297.9167168,
+    "ast_hash": "0558531a7319fd8c3c34bea3dc0b021f",
     "semantic_hash": ""
   },
   "silverestimate/security/encrypted_envelope.py": {

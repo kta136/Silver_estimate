@@ -1,7 +1,7 @@
 import types
 
 import pytest
-from PySide6.QtCore import QDate, QEventLoop, Qt, QTimer
+from PySide6.QtCore import QDate, QEventLoop, QSize, Qt, QTimer
 from PySide6.QtWidgets import (
     QDialog,
     QHeaderView,
@@ -810,6 +810,18 @@ def test_live_rate_card_moves_between_sidebar_and_header(qt_app, fake_db):
         )
         assert widget.live_rate_value_label.minimumWidth() >= 150
         assert widget.live_rate_value_label.font().pointSize() >= 12
+        assert (
+            widget.live_rate_value_label.geometry().left()
+            > widget.secondary_actions.live_rate_title_label.geometry().right()
+        )
+        assert (
+            abs(
+                widget.live_rate_value_label.geometry().center().y()
+                - widget.secondary_actions.live_rate_title_label.geometry().center().y()
+            )
+            <= 2
+        )
+        assert widget.refresh_rate_button.iconSize() == QSize(14, 14)
         assert widget.live_rate_meta_label.width() <= 76
         assert (
             abs(

@@ -1,4 +1,4 @@
-# Silver Estimation App - v3.09
+# Silver Estimation App - v3.10
 
 A Windows desktop application built with PySide6 and a local SQLCipher database
 for managing silver sales estimates, item-wise entries, silver-bar inventory,
@@ -7,7 +7,7 @@ returns, and print-ready outputs.
 [![Python](https://img.shields.io/badge/Python-3.14+-blue.svg)](https://www.python.org/)
 [![PySide6](https://img.shields.io/badge/PySide6-6.11-green.svg)](https://doc.qt.io/qtforpython-6/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE)
-[![Source Version](https://img.shields.io/badge/source-v3.09-orange.svg)](CHANGELOG.md#309---2026-07-23)
+[![Source Version](https://img.shields.io/badge/source-v3.10-orange.svg)](CHANGELOG.md#310---2026-07-23)
 [![Latest Release](https://img.shields.io/github/v/release/kta136/Silver_estimate?label=stable%20release)](https://github.com/kta136/Silver_estimate/releases/latest)
 [![PR Validation](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml)
 [![Main Validation](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml)
@@ -24,7 +24,7 @@ returns, and print-ready outputs.
 - [Download latest stable release](https://github.com/kta136/Silver_estimate/releases/latest)
 - [Documentation index](DOCS/README.md)
 - [Changelog](CHANGELOG.md)
-- [v3.09 changelog](CHANGELOG.md#309---2026-07-23)
+- [v3.10 changelog](CHANGELOG.md#310---2026-07-23)
 - [Deployment guide](DOCS/deployment-guide.md)
 
 > The source tree can be ahead of the latest packaged release. Use the release
@@ -237,7 +237,7 @@ uv run pre-commit run --all-files
 - Fast iteration: `uv run nox -s build`
 - Inspectable standalone build: `uv run nox -s build_standalone standalone_artifact_smoke`
 - Clean one-file rebuild: `uv run nox -s build_clean artifact_smoke`
-- Output: `dist/SilverEstimate.exe`, `dist/SilverEstimate-v3.09.exe`, and `dist/SilverEstimate-v3.09-win64.zip` on Windows
+- Output: `dist/SilverEstimate.exe`, `dist/SilverEstimate-v3.10.exe`, and `dist/SilverEstimate-v3.10-win64.zip` on Windows
 - Release/CI builds use Qt's `pyside6-deploy`, the committed `pysidedeploy.spec`, and locked Nuitka 4.1.3
 - Packaged releases are Windows-only; macOS/Linux are untested development environments.
 
@@ -291,6 +291,11 @@ Copyright (C) 2023-2026 Silver Estimation App
 ---
 
 ## Version History (highlights)
+
+### v3.10 (2026-07-23)
+- Introduces a simplified silver-and-rupee application icon designed for clear Windows shell rendering
+- Uses the new icon consistently in runtime windows, frozen builds, and deployment validation
+- Removes the superseded icon artwork and temporary versioned icon filenames
 
 ### v3.09 (2026-07-23)
 - Removes the retired SILVDB01, AES-GCM envelope, and plaintext migration paths

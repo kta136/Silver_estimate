@@ -188,13 +188,15 @@ class SecondaryActionsBar(QWidget):
         rate_layout.setContentsMargins(6, 5, 6, 5)
         rate_layout.setSpacing(6)
 
-        rate_text_layout = QVBoxLayout()
+        rate_text_layout = QHBoxLayout()
         rate_text_layout.setContentsMargins(4, 0, 4, 0)
-        rate_text_layout.setSpacing(1)
+        rate_text_layout.setSpacing(8)
 
         self.live_rate_title_label = QLabel("Live silver rate")
         self.live_rate_title_label.setObjectName("LiveRateTitle")
-        rate_text_layout.addWidget(self.live_rate_title_label)
+        rate_text_layout.addWidget(
+            self.live_rate_title_label, 0, Qt.AlignmentFlag.AlignVCenter
+        )
 
         self.live_rate_value_label = QLabel("Loading…")
         self.live_rate_value_label.setObjectName("LiveRateValue")
@@ -209,7 +211,9 @@ class SecondaryActionsBar(QWidget):
         rate_font.setPointSize(12)
         rate_font.setBold(True)
         self.live_rate_value_label.setFont(rate_font)
-        rate_text_layout.addWidget(self.live_rate_value_label)
+        rate_text_layout.addWidget(
+            self.live_rate_value_label, 1, Qt.AlignmentFlag.AlignVCenter
+        )
         rate_layout.addLayout(rate_text_layout, 1)
 
         refresh_stack = QVBoxLayout()
@@ -225,6 +229,7 @@ class SecondaryActionsBar(QWidget):
         self._configure_icon_button(
             self.refresh_rate_button, label="Refresh Silver Rate"
         )
+        self.refresh_rate_button.setIconSize(QSize(14, 14))
         self.refresh_rate_button.setFixedSize(QSize(34, 32))
         self.refresh_rate_button.setSizePolicy(
             QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed

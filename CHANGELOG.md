@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## [3.10] - 2026-07-23
+
+### Changed
+
+- Replaced the application artwork with a simplified silver-and-rupee icon that
+  remains legible from the Windows 16 px shell size through the 256 px tile.
+- Updated runtime startup, the main window, `pyside6-deploy`, frozen-artifact
+  smoke checks, and standalone deployment validation to use the canonical icon.
+
+### Removed
+
+- Removed the superseded application icon artwork and its temporary versioned
+  filenames so packaged builds contain only the current icon.
+
 ## [3.09] - 2026-07-23
 
 ### Removed

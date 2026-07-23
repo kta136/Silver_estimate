@@ -1,7 +1,7 @@
 # Silver Estimate Documentation
 
 This directory contains the maintained technical and operational documentation
-for the v3.09 source tree. Packaged releases support Windows 10/11; macOS and
+for the v3.10 source tree. Packaged releases support Windows 10/11; macOS and
 Linux are untested development environments.
 
 ## Start here
@@ -18,7 +18,7 @@ Linux are untested development environments.
 
 ## Project status
 
-- Source version: `3.09`
+- Source version: `3.10`
 - Runtime: Python 3.14, PySide6/Shiboken6 6.11, and Qt 6.11
 - Packaged platform: Windows 10/11
 - Stable downloads: [GitHub Releases](https://github.com/kta136/Silver_estimate/releases/latest)

@@ -33,7 +33,7 @@ uv run nox -s build_standalone
 uv run nox -s standalone_artifact_smoke
 uv run nox -s build_clean
 uv run nox -s artifact_smoke
-uv run python scripts/check_startup_budgets.py --artifact dist\SilverEstimate-v3.09.exe --samples 5 --p95-budget-ms 3000
+uv run python scripts/check_startup_budgets.py --artifact dist\SilverEstimate-v3.10.exe --samples 5 --p95-budget-ms 3000
 ```
 
 The standalone build is a diagnostic artifact at

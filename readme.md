@@ -1,4 +1,4 @@
-# Silver Estimation App - v3.07
+# Silver Estimation App - v3.08
 
 A Windows desktop application built with PySide6 and a local SQLCipher database
 for managing silver sales estimates, item-wise entries, silver-bar inventory,
@@ -7,7 +7,7 @@ returns, and print-ready outputs.
 [![Python](https://img.shields.io/badge/Python-3.14+-blue.svg)](https://www.python.org/)
 [![PySide6](https://img.shields.io/badge/PySide6-6.11-green.svg)](https://doc.qt.io/qtforpython-6/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE)
-[![Source Version](https://img.shields.io/badge/source-v3.07-orange.svg)](CHANGELOG.md#307---2026-07-22)
+[![Source Version](https://img.shields.io/badge/source-v3.08-orange.svg)](CHANGELOG.md#308---2026-07-23)
 [![Latest Release](https://img.shields.io/github/v/release/kta136/Silver_estimate?label=stable%20release)](https://github.com/kta136/Silver_estimate/releases/latest)
 [![PR Validation](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml)
 [![Main Validation](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml)
@@ -24,7 +24,7 @@ returns, and print-ready outputs.
 - [Download latest stable release](https://github.com/kta136/Silver_estimate/releases/latest)
 - [Documentation index](DOCS/README.md)
 - [Changelog](CHANGELOG.md)
-- [v3.07 changelog](CHANGELOG.md#307---2026-07-22)
+- [v3.08 changelog](CHANGELOG.md#308---2026-07-23)
 - [Deployment guide](DOCS/deployment-guide.md)
 
 > The source tree can be ahead of the latest packaged release. Use the release
@@ -162,7 +162,9 @@ First run notes:
 ## Security
 
 - Encryption: bundled and hash-verified SQLCipher 4.17.x for CPython 3.14 x64, Argon2id raw keys, encrypted database/WAL/journal pages, and a read-only SILVDB01 migration importer
-- Passwords: Argon2 hashing (passlib) with hashes persisted in the OS keyring (Python `keyring`)
+- Passwords: direct Argon2id hashing with `argon2-cffi`; PHC hashes are persisted
+  in the OS keyring (Python `keyring`) and upgraded after successful login when
+  the policy changes
 - Files: Encrypted DB at `<EXE folder>/database/estimation.db` (ignored in Git)
 - Logs: Written to `logs/` (ignored); avoid logging sensitive data
 - Temporary plaintext overwrite/removal is best-effort only; SSD wear levelling and copy-on-write filesystems can retain physical copies.
@@ -196,7 +198,8 @@ Key areas of the codebase:
 - `silverestimate/ui/print_page_settings.py` – Qt6 print/page helper functions used by settings, preview, quick print, and PDF export paths.
 - `silverestimate/services/` – auth, settings, live-rate, main commands, and repository adapters.
 - `silverestimate/persistence/` – `DatabaseManager`, repositories, migrations, and flush scheduler.
-- `silverestimate/security/` – AES-GCM utilities and keyring-backed credential storage.
+- `silverestimate/security/` – AES-GCM utilities, the Argon2id password policy,
+  and keyring-backed credential storage.
 - `silverestimate/infrastructure/` – logging, settings helpers, and app constants.
 - `DOCS/` – indexed deep-dive documentation for architecture, deployment, security, data relationships, APIs, and business workflows.
 
@@ -239,7 +242,7 @@ uv run pre-commit run --all-files
 - Fast iteration: `uv run nox -s build`
 - Inspectable standalone build: `uv run nox -s build_standalone standalone_artifact_smoke`
 - Clean one-file rebuild: `uv run nox -s build_clean artifact_smoke`
-- Output: `dist/SilverEstimate.exe`, `dist/SilverEstimate-v3.07.exe`, and `dist/SilverEstimate-v3.07-win64.zip` on Windows
+- Output: `dist/SilverEstimate.exe`, `dist/SilverEstimate-v3.08.exe`, and `dist/SilverEstimate-v3.08-win64.zip` on Windows
 - Release/CI builds use Qt's `pyside6-deploy`, the committed `pysidedeploy.spec`, and locked Nuitka 4.1.3
 - Packaged releases are Windows-only; macOS/Linux are untested development environments.
 
@@ -293,6 +296,12 @@ Copyright (C) 2023-2026 Silver Estimation App
 ---
 
 ## Version History (highlights)
+
+### v3.08 (2026-07-23)
+- Migrates the complete desktop runtime from PyQt6 to PySide6 6.11
+- Replaces PyInstaller with `pyside6-deploy` and a locked Nuitka toolchain
+- Removes Passlib in favor of direct `argon2-cffi` password hashing with compatible rehash-on-login upgrades
+- Completes the direct SQLCipher live-storage cutover and frozen Windows validation
 
 ### v3.07 (2026-07-22)
 - Adds optional free-text Tunch values throughout item management, backups, and estimate printing

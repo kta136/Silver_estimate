@@ -5,6 +5,7 @@ from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QTableWidget
 
 from silverestimate.infrastructure.settings import get_app_settings
+from silverestimate.security import credential_store
 from silverestimate.ui.settings_dialog import SettingsDialog
 from silverestimate.ui.themed_controls import (
     ThemedComboBox,
@@ -15,18 +16,32 @@ from silverestimate.ui.themed_controls import (
 
 class _MessageBoxStub:
     critical_calls = []
+    information_calls = []
+    warning_calls = []
 
     @classmethod
     def reset(cls):
         cls.critical_calls = []
+        cls.information_calls = []
+        cls.warning_calls = []
 
     @classmethod
     def critical(cls, *args, **kwargs):
         cls.critical_calls.append((args, kwargs))
         return None
 
+    @classmethod
+    def information(cls, *args, **kwargs):
+        cls.information_calls.append((args, kwargs))
+        return None
 
-def _make_main_window(estimate_widget):
+    @classmethod
+    def warning(cls, *args, **kwargs):
+        cls.warning_calls.append((args, kwargs))
+        return None
+
+
+def _make_main_window(estimate_widget, *, db=None):
     return types.SimpleNamespace(
         print_font=QFont("Arial", 10),
         estimate_widget=estimate_widget,
@@ -36,7 +51,7 @@ def _make_main_window(estimate_widget):
         delete_all_data=lambda: None,
         reconfigure_rate_visibility_from_settings=lambda: True,
         reconfigure_rate_timer_from_settings=lambda: True,
-        db=object(),
+        db=db or object(),
     )
 
 
@@ -347,5 +362,78 @@ def test_settings_apply_calls_public_estimate_widget_methods(
         assert calls["final"] == 1
         assert calls["position"] == 1
         assert not _MessageBoxStub.critical_calls
+    finally:
+        dialog.deleteLater()
+
+
+def test_password_change_uses_auth_service_and_preserves_keyring_names(
+    qt_app,
+    monkeypatch,
+    settings_stub,
+):
+    del qt_app
+    _MessageBoxStub.reset()
+    credential_store.set_password_hash("main", "old-main-hash")
+    credential_store.set_password_hash("backup", "old-backup-hash")
+    changed_passwords = []
+
+    class _DatabaseStub:
+        @staticmethod
+        def change_passwords(password):
+            changed_passwords.append(password)
+            return types.SimpleNamespace(
+                status=types.SimpleNamespace(name="SUCCESS"),
+                message="Password updated.",
+            )
+
+    estimate_widget = types.SimpleNamespace(
+        apply_table_font_size=lambda size: True,
+        apply_breakdown_font_size=lambda size: True,
+        apply_final_calc_font_size=lambda size: True,
+        apply_totals_position=lambda value: True,
+    )
+    dialog = SettingsDialog(
+        main_window_ref=_make_main_window(estimate_widget, db=_DatabaseStub())
+    )
+    monkeypatch.setattr(
+        "silverestimate.ui.settings_dialog.QMessageBox",
+        _MessageBoxStub,
+    )
+    monkeypatch.setattr(
+        "silverestimate.ui.settings_dialog.verify_password",
+        lambda stored, provided, logger=None: (
+            stored == "old-main-hash" and provided == "current-password"
+        ),
+    )
+    monkeypatch.setattr(
+        "silverestimate.ui.settings_dialog.hash_password",
+        lambda password, logger=None: f"argon2-{password}",
+    )
+    try:
+        dialog.current_password_input.setText("current-password")
+        dialog.new_password_input.setText("new-main-password")
+        dialog.confirm_new_password_input.setText("new-main-password")
+        dialog.new_secondary_password_input.setText("new-recovery-password")
+        dialog.confirm_new_secondary_password_input.setText("new-recovery-password")
+
+        dialog._handle_password_change()
+
+        assert changed_passwords == ["new-main-password"]
+        assert credential_store.get_password_hash("main") == (
+            "argon2-new-main-password"
+        )
+        assert credential_store.get_password_hash("backup") == (
+            "argon2-new-recovery-password"
+        )
+        for kind in (
+            "pending_main",
+            "pending_backup",
+            "recovery_main",
+            "recovery_backup",
+        ):
+            assert credential_store.get_password_hash(kind) is None
+        assert _MessageBoxStub.information_calls
+        assert not _MessageBoxStub.critical_calls
+        assert not _MessageBoxStub.warning_calls
     finally:
         dialog.deleteLater()

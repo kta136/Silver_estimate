@@ -8,8 +8,9 @@ import shutil
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QDialog, QMessageBox, QWidget
 
 from silverestimate.infrastructure.app_constants import DB_PATH, LOG_DIR
@@ -17,7 +18,14 @@ from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.security import credential_store
 from silverestimate.security.credential_store import CredentialStoreError
 
+if TYPE_CHECKING:
+    from silverestimate.security.password_service import (
+        PasswordHashService,
+        PasswordVerification,
+    )
+
 LoginDialog = None
+_password_service: PasswordHashService | None = None
 
 
 def _resolve_login_dialog():
@@ -29,10 +37,110 @@ def _resolve_login_dialog():
     return LoginDialog
 
 
-def _schedule_password_context_warmup(dialog) -> None:
-    warmer = getattr(dialog, "schedule_password_context_warmup", None)
-    if callable(warmer):
-        warmer()
+def _get_password_service() -> PasswordHashService:
+    global _password_service
+    if _password_service is None:
+        from silverestimate.security.password_service import PasswordHashService
+
+        _password_service = PasswordHashService()
+    return _password_service
+
+
+def _warm_password_service() -> None:
+    try:
+        _get_password_service()
+    except Exception:
+        logging.getLogger(__name__).debug(
+            "Password service warm-up failed",
+            exc_info=True,
+        )
+
+
+def _schedule_password_service_warmup() -> None:
+    QTimer.singleShot(0, _warm_password_service)
+
+
+def hash_password(
+    password: str,
+    *,
+    logger: logging.Logger | None = None,
+) -> str | None:
+    """Hash a new password without exposing the security implementation to UI code."""
+    logger = logger or logging.getLogger(__name__)
+    try:
+        return _get_password_service().hash_password(password)
+    except Exception:
+        logger.error("Password hashing failed", exc_info=True)
+        return None
+
+
+def _verify_password_hash(
+    stored_hash: str,
+    provided_password: str,
+    *,
+    logger: logging.Logger,
+) -> PasswordVerification:
+    from silverestimate.security.password_service import (
+        MalformedPasswordHashError,
+        PasswordHashError,
+        PasswordVerification,
+    )
+
+    try:
+        return _get_password_service().verify_password(
+            stored_hash,
+            provided_password,
+        )
+    except MalformedPasswordHashError:
+        logger.error("Stored password hash is malformed", exc_info=True)
+    except PasswordHashError:
+        logger.error("Password verification failed", exc_info=True)
+    except Exception:
+        logger.error("Password verifier is unavailable", exc_info=True)
+    return PasswordVerification(verified=False)
+
+
+def verify_password(
+    stored_hash: str,
+    provided_password: str,
+    *,
+    logger: logging.Logger | None = None,
+) -> bool:
+    """Return whether a password matches, logging malformed hashes separately."""
+    return _verify_password_hash(
+        stored_hash,
+        provided_password,
+        logger=logger or logging.getLogger(__name__),
+    ).verified
+
+
+def _verify_credential_password(
+    kind: str,
+    stored_hash: str,
+    provided_password: str,
+    *,
+    logger: logging.Logger,
+) -> PasswordVerification:
+    verification = _verify_password_hash(
+        stored_hash,
+        provided_password,
+        logger=logger,
+    )
+    if verification.verified and verification.replacement_hash:
+        try:
+            credential_store.set_password_hash(
+                kind,
+                verification.replacement_hash,
+                logger=logger,
+            )
+            logger.info("Upgraded the %s password hash to the current policy", kind)
+        except CredentialStoreError:
+            logger.warning(
+                "Could not persist the upgraded %s password hash",
+                kind,
+                exc_info=True,
+            )
+    return verification
 
 
 @dataclass(frozen=True)
@@ -108,7 +216,7 @@ def run_authentication(
                 attempt,
             )
             login_dialog = login_dialog_cls(is_setup=False, parent=parent)
-            _schedule_password_context_warmup(login_dialog)
+            _schedule_password_service_warmup()
             result = login_dialog.exec()
 
             if result != QDialog.DialogCode.Accepted:
@@ -122,7 +230,13 @@ def run_authentication(
                 return AuthenticationResult(wipe_requested=True, silent=False)
 
             entered_password = login_dialog.get_password()
-            if login_dialog_cls.verify_password(password_hash, entered_password):
+            main_verification = _verify_credential_password(
+                "main",
+                password_hash,
+                entered_password,
+                logger=logger,
+            )
+            if main_verification.verified:
                 if logger:
                     logger.info("Authentication successful on attempt %s", attempt)
                     logger.debug(
@@ -135,15 +249,29 @@ def run_authentication(
                     password=entered_password,
                     rollback_pending_credentials=bool(pending_main_hash),
                 )
-            if pending_main_hash and login_dialog_cls.verify_password(
-                pending_main_hash, entered_password
-            ):
-                return AuthenticationResult(
-                    password=entered_password,
-                    pending_main_hash=pending_main_hash,
-                    pending_backup_hash=pending_backup_hash,
+            if pending_main_hash:
+                pending_main_verification = _verify_credential_password(
+                    "pending_main",
+                    pending_main_hash,
+                    entered_password,
+                    logger=logger,
                 )
-            if login_dialog_cls.verify_password(backup_hash, entered_password):
+                if pending_main_verification.verified:
+                    return AuthenticationResult(
+                        password=entered_password,
+                        pending_main_hash=(
+                            pending_main_verification.replacement_hash
+                            or pending_main_hash
+                        ),
+                        pending_backup_hash=pending_backup_hash,
+                    )
+            backup_verification = _verify_credential_password(
+                "backup",
+                backup_hash,
+                entered_password,
+                logger=logger,
+            )
+            if backup_verification.verified:
                 logger.debug(
                     "[perf] startup.auth_dialog_accepted_ms=%.2f t_unix=%.6f attempt=%s mode=backup",
                     (time.perf_counter() - flow_started_at) * 1000.0,
@@ -151,10 +279,15 @@ def run_authentication(
                     attempt,
                 )
                 return AuthenticationResult(wipe_requested=True, silent=True)
-            if pending_backup_hash and login_dialog_cls.verify_password(
-                pending_backup_hash, entered_password
-            ):
-                return AuthenticationResult(wipe_requested=True, silent=True)
+            if pending_backup_hash:
+                pending_backup_verification = _verify_credential_password(
+                    "pending_backup",
+                    pending_backup_hash,
+                    entered_password,
+                    logger=logger,
+                )
+                if pending_backup_verification.verified:
+                    return AuthenticationResult(wipe_requested=True, silent=True)
 
             if logger:
                 logger.warning(
@@ -176,15 +309,15 @@ def run_authentication(
         time.time(),
     )
     setup_dialog = login_dialog_cls(is_setup=True, parent=parent)
-    _schedule_password_context_warmup(setup_dialog)
+    _schedule_password_service_warmup()
     result = setup_dialog.exec()
     if result == QDialog.DialogCode.Accepted:
         if logger:
             logger.info("First-time setup completed")
         password = setup_dialog.get_password()
         backup_password = setup_dialog.get_backup_password()
-        hashed_password = login_dialog_cls.hash_password(password)
-        hashed_backup = login_dialog_cls.hash_password(backup_password)
+        hashed_password = hash_password(password, logger=logger)
+        hashed_backup = hash_password(backup_password, logger=logger)
         if not hashed_password or not hashed_backup:
             if logger:
                 logger.error("Failed to hash passwords during setup")

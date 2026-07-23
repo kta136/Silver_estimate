@@ -1,4 +1,3 @@
-import logging
 from contextlib import suppress
 
 from PySide6.QtCore import Qt, QTimer
@@ -20,31 +19,6 @@ from silverestimate.infrastructure.windows_integration import bring_window_to_fr
 
 from .shared_screen_theme import build_management_screen_stylesheet
 from .window_sizing import resize_to_available_screen
-
-_pwd_context = None
-
-
-def _get_pwd_context():
-    global _pwd_context
-    if _pwd_context is None:
-        from passlib.context import CryptContext
-
-        _pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
-    return _pwd_context
-
-
-def warm_password_context() -> None:
-    """Load the verifier while the authentication dialog is idle."""
-
-    try:
-        _get_pwd_context()
-    except Exception:
-        logging.getLogger(__name__).debug(
-            "Password verifier warm-up failed", exc_info=True
-        )
-
-
-# Optional: Filter specific passlib warnings if they become noisy during development/packaging
 
 
 class LoginDialog(QDialog):
@@ -167,11 +141,6 @@ class LoginDialog(QDialog):
         self._connect_signals()
 
         # Prevent closing via the 'X' button if desired, force use of buttons
-
-    def schedule_password_context_warmup(self) -> None:
-        """Warm Passlib on the next event-loop turn, after the dialog appears."""
-
-        QTimer.singleShot(0, warm_password_context)
 
     def _setup_ui(self):
         """Create the UI elements for the dialog."""
@@ -511,48 +480,3 @@ class LoginDialog(QDialog):
                 return
             self.reset_requested = True
             self.accept()  # Close the dialog, main logic will check the flag
-
-    # --- Static methods for hashing and verification ---
-
-    @staticmethod
-    def hash_password(password):
-        """Hashes a password using the configured passlib context (Argon2)."""
-        if not password:
-            return None
-        try:
-            # Passlib handles encoding and salt generation automatically
-            hashed = _get_pwd_context().hash(password)
-            return hashed
-        except Exception:
-            logging.getLogger(__name__).error("Error hashing password:", exc_info=True)
-            return None
-
-    @staticmethod
-    def verify_password(stored_hash, provided_password):
-        """Verifies a provided password against a stored hash using passlib."""
-        if not stored_hash or not provided_password:
-            return False
-        try:
-            # pwd_context.verify handles hash validation and comparison.
-            return _get_pwd_context().verify(provided_password, stored_hash)
-        except ValueError:  # Catches potential issues like malformed hash string
-            logging.getLogger(__name__).warning(
-                "Error comparing password hash (invalid format?)", exc_info=True
-            )
-            return False
-        except Exception as exc:
-            try:
-                from passlib.exc import UnknownHashError
-
-                is_unknown = isinstance(exc, UnknownHashError)
-            except Exception:
-                is_unknown = False
-            if is_unknown:
-                logging.getLogger(__name__).warning(
-                    f"Unknown hash format encountered: {stored_hash[:10]}..."
-                )
-                return False
-            logging.getLogger(__name__).error(
-                "Error verifying password:", exc_info=True
-            )
-            return False

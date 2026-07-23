@@ -182,8 +182,6 @@ def tests_full(session: nox.Session) -> None:
         "pytest",
         "-W",
         "error",
-        "-W",
-        "ignore:'crypt' is deprecated and slated for removal in Python 3.13:DeprecationWarning",
         "tests",
         "--ignore=tests/smoke",
         "--cov=silverestimate",

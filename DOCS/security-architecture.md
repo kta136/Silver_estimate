@@ -9,6 +9,13 @@ committed only after the new encrypted database opens, migrates, and validates.
 Password rotation uses pending and recovery keyring records so interruption can
 be resolved without losing access to the retained old database.
 
+`PasswordHashService` uses `argon2-cffi` directly with an explicit Argon2id
+policy: time cost 3, 65,536 KiB memory, parallelism 4, a 16-byte random salt,
+and a 32-byte hash. It distinguishes an ordinary password mismatch from a
+malformed stored PHC hash. Existing Passlib-generated Argon2id records remain
+valid; after successful verification, a record is rehashed and replaced only
+when `check_needs_rehash()` reports that its parameters are outdated.
+
 `estimation.kdf.json` contains public, versioned KDF bootstrap data. Version 1 is
 accepted only when it exactly specifies Argon2id, a 16-byte salt, time cost 3,
 65,536 KiB memory, parallelism 4, and a 32-byte output. Missing, malformed,

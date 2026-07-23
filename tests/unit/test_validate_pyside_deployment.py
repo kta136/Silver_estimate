@@ -43,3 +43,20 @@ def test_validate_deployment_rejects_forbidden_plugin(tmp_path):
 
     with pytest.raises(ValueError, match="qoffscreen"):
         deployment_validator.validate_deployment(root, report)
+
+
+def test_validate_deployment_rejects_passlib_in_compilation_report(tmp_path):
+    root = tmp_path / "SilverEstimate.dist"
+    report = tmp_path / "nuitka-report.xml"
+    _write_deployment(root)
+    _write_report(report)
+    report.write_text(
+        report.read_text(encoding="utf-8").replace(
+            "</report>",
+            '<module name="passlib.handlers.argon2" /></report>',
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="passlib"):
+        deployment_validator.validate_deployment(root, report)

@@ -3,6 +3,7 @@ import logging
 from PySide6.QtWidgets import QDialog
 
 from silverestimate.security import credential_store
+from silverestimate.security.password_service import PasswordVerification
 from silverestimate.services import auth_service
 
 
@@ -33,6 +34,28 @@ class _MessageBoxStub:
         return None
 
 
+class _PasswordServiceStub:
+    def __init__(
+        self,
+        *,
+        matches=(),
+        replacements=None,
+    ):
+        self._matches = set(matches)
+        self._replacements = replacements or {}
+
+    @staticmethod
+    def hash_password(value):
+        return f"hashed-{value}"
+
+    def verify_password(self, stored, provided):
+        verified = (stored, provided) in self._matches
+        return PasswordVerification(
+            verified=verified,
+            replacement_hash=self._replacements.get(stored) if verified else None,
+        )
+
+
 def test_run_authentication_first_time(monkeypatch, settings_stub):
     _MessageBoxStub.reset()
 
@@ -49,11 +72,8 @@ def test_run_authentication_first_time(monkeypatch, settings_stub):
         def get_backup_password(self):
             return "backup-pass"
 
-        @staticmethod
-        def hash_password(value):
-            return f"hashed-{value}"
-
     monkeypatch.setattr(auth_service, "LoginDialog", _SetupDialog)
+    monkeypatch.setattr(auth_service, "_password_service", _PasswordServiceStub())
     monkeypatch.setattr(auth_service, "QMessageBox", _MessageBoxStub)
 
     result = auth_service.run_authentication(logging.getLogger("test-auth-setup"))
@@ -85,11 +105,12 @@ def test_run_authentication_existing_password(monkeypatch, settings_stub):
         def get_password(self):
             return "secret"
 
-        @staticmethod
-        def verify_password(stored, provided):
-            return stored == "stored-hash" and provided == "secret"
-
     monkeypatch.setattr(auth_service, "LoginDialog", _LoginDialog)
+    monkeypatch.setattr(
+        auth_service,
+        "_password_service",
+        _PasswordServiceStub(matches={("stored-hash", "secret")}),
+    )
     monkeypatch.setattr(auth_service, "QMessageBox", _MessageBoxStub)
 
     result = auth_service.run_authentication(logging.getLogger("test-auth-login"))
@@ -121,15 +142,16 @@ def test_run_authentication_uses_lazy_login_dialog_resolver(monkeypatch, setting
         def get_password(self):
             return "secret"
 
-        @staticmethod
-        def verify_password(stored, provided):
-            return stored == "stored-hash" and provided == "secret"
-
     def _resolver():
         calls["resolver"] += 1
         return _LoginDialog
 
     monkeypatch.setattr(auth_service, "_resolve_login_dialog", _resolver)
+    monkeypatch.setattr(
+        auth_service,
+        "_password_service",
+        _PasswordServiceStub(matches={("stored-hash", "secret")}),
+    )
     monkeypatch.setattr(auth_service, "QMessageBox", _MessageBoxStub)
 
     result = auth_service.run_authentication(logging.getLogger("test-auth-lazy"))
@@ -159,15 +181,12 @@ def test_run_authentication_secondary_password_triggers_silent_wipe(
         def get_password(self):
             return "panic"
 
-        @staticmethod
-        def verify_password(stored, provided):
-            if stored == "stored-hash":
-                return False
-            if stored == "backup-hash":
-                return provided == "panic"
-            return False
-
     monkeypatch.setattr(auth_service, "LoginDialog", _LoginDialog)
+    monkeypatch.setattr(
+        auth_service,
+        "_password_service",
+        _PasswordServiceStub(matches={("backup-hash", "panic")}),
+    )
     monkeypatch.setattr(auth_service, "QMessageBox", _MessageBoxStub)
 
     result = auth_service.run_authentication(logging.getLogger("test-auth-secondary"))
@@ -201,11 +220,12 @@ def test_run_authentication_retries_after_incorrect_password(
         def get_password(self):
             return "wrong-pass" if self._attempt == 1 else "secret"
 
-        @staticmethod
-        def verify_password(stored, provided):
-            return stored == "stored-hash" and provided == "secret"
-
     monkeypatch.setattr(auth_service, "LoginDialog", _LoginDialog)
+    monkeypatch.setattr(
+        auth_service,
+        "_password_service",
+        _PasswordServiceStub(matches={("stored-hash", "secret")}),
+    )
     monkeypatch.setattr(auth_service, "QMessageBox", _MessageBoxStub)
 
     result = auth_service.run_authentication(logging.getLogger("test-auth-retry"))
@@ -215,6 +235,65 @@ def test_run_authentication_retries_after_incorrect_password(
     assert result.wipe_requested is False
     assert attempts["count"] == 2
     assert len(_MessageBoxStub.warning_calls) == 1
+
+
+def test_run_authentication_upgrades_a_legacy_hash_after_login(
+    monkeypatch,
+    settings_stub,
+):
+    _MessageBoxStub.reset()
+    credential_store.set_password_hash("main", "legacy-main-hash")
+    credential_store.set_password_hash("backup", "backup-hash")
+
+    class _LoginDialog:
+        def __init__(self, is_setup=False, parent=None):
+            assert is_setup is False
+
+        def exec(self):
+            return QDialog.DialogCode.Accepted
+
+        def was_reset_requested(self):
+            return False
+
+        def get_password(self):
+            return "secret"
+
+    monkeypatch.setattr(auth_service, "LoginDialog", _LoginDialog)
+    monkeypatch.setattr(
+        auth_service,
+        "_password_service",
+        _PasswordServiceStub(
+            matches={("legacy-main-hash", "secret")},
+            replacements={"legacy-main-hash": "current-main-hash"},
+        ),
+    )
+    monkeypatch.setattr(auth_service, "QMessageBox", _MessageBoxStub)
+
+    result = auth_service.run_authentication(logging.getLogger("test-auth-rehash"))
+
+    assert isinstance(result, auth_service.AuthenticationResult)
+    assert result.password == "secret"
+    assert credential_store.get_password_hash("main") == "current-main-hash"
+
+
+def test_verify_password_contains_an_unavailable_verifier(monkeypatch, caplog):
+    class _UnavailablePasswordService:
+        @staticmethod
+        def verify_password(stored, provided):
+            raise RuntimeError("unavailable")
+
+    monkeypatch.setattr(
+        auth_service,
+        "_password_service",
+        _UnavailablePasswordService(),
+    )
+
+    assert not auth_service.verify_password(
+        "stored-hash",
+        "provided-password",
+        logger=logging.getLogger("test-auth-unavailable-verifier"),
+    )
+    assert "Password verifier is unavailable" in caplog.text
 
 
 def test_perform_data_wipe_removes_files(tmp_path, monkeypatch, settings_stub):

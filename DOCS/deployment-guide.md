@@ -33,7 +33,7 @@ uv run nox -s build_standalone
 uv run nox -s standalone_artifact_smoke
 uv run nox -s build_clean
 uv run nox -s artifact_smoke
-uv run python scripts/check_startup_budgets.py --artifact dist\SilverEstimate-v3.07.exe --samples 5 --p95-budget-ms 3000
+uv run python scripts/check_startup_budgets.py --artifact dist\SilverEstimate-v3.08.exe --samples 5 --p95-budget-ms 3000
 ```
 
 The standalone build is a diagnostic artifact at
@@ -49,10 +49,11 @@ The clean one-file build produces:
 
 The canonical configuration is `pysidedeploy.spec`. It selects the Windows
 platform, icon/SVG/image, widget, and print-support components; embeds required
-assets and notices; forces the dynamic keyring, Passlib, and SQLCipher imports;
-and excludes unused Qt/QML/media plugins. The committed compiler selection lets
-Nuitka use its supported Windows toolchain with the same command locally and on
-hosted runners.
+assets and notices; forces the dynamic keyring and SQLCipher imports; includes
+the direct `argon2-cffi` password service; rejects Passlib from the compilation
+report; and excludes unused Qt/QML/media plugins. The committed compiler
+selection lets Nuitka use its supported Windows toolchain with the same command
+locally and on hosted runners.
 
 `--artifact-smoke` initializes the Windows Qt platform, icon and SVG support,
 Windows Credential Manager backend, PDF renderer, and encrypted SQLCipher

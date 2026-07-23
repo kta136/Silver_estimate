@@ -35,6 +35,8 @@ def _validate_payload(payload: dict[str, Any], artifact: Path) -> None:
         raise ValueError("Artifact did not initialize the Windows Qt platform plugin")
     if payload.get("svg_image_format") is not True:
         raise ValueError("Artifact did not initialize SVG image support")
+    if payload.get("password_hashing") is not True:
+        raise ValueError("Artifact did not verify direct Argon2id password hashing")
     if int(payload.get("pdf_bytes", 0)) < 1_000:
         raise ValueError("Artifact did not render a PDF")
     if payload.get("artifact_startup") != "ok":

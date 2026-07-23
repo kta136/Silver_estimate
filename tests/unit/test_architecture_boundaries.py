@@ -149,3 +149,21 @@ def test_production_database_access_is_confined_to_sqlcipher_broker() -> None:
     )
     persistence = root / "silverestimate" / "persistence"
     assert not [name for name in removed if (persistence / name).exists()]
+
+
+def test_password_hashing_is_confined_to_the_security_service() -> None:
+    root = Path(__file__).resolve().parents[2]
+    ui_root = root / "silverestimate" / "ui"
+    forbidden_ui_references = {
+        path.relative_to(root).as_posix(): reference
+        for path in ui_root.rglob("*.py")
+        for reference in ("import argon2", "from argon2", "passlib")
+        if reference in path.read_text(encoding="utf-8").lower()
+    }
+
+    assert not forbidden_ui_references
+    password_service = (
+        root / "silverestimate" / "security" / "password_service.py"
+    ).read_text(encoding="utf-8")
+    assert "PasswordHasher" in password_service
+    assert "check_needs_rehash" in password_service

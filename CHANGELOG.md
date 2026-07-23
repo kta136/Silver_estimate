@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased - SQLCipher live storage cutover
+## Unreleased
+
+## [3.08] - 2026-07-23
 
 - Replaced the PyQt6 runtime with PySide6/Shiboken6 6.11.1 and Qt 6.11.1
   without a compatibility layer or SQLCipher data-format change.
@@ -17,6 +19,9 @@
   printing, Windows Credential Manager, SQLCipher, and writable runtime paths.
 - Updated pull-request, main, release, and local Windows build flows to produce
   and validate the `pyside6-deploy` artifacts directly.
+- Replaced Passlib with a UI-independent `argon2-cffi` password service while
+  preserving existing Argon2id hashes, keyring entry names, and automatic
+  rehash-on-success policy upgrades.
 - Replaced the live SILVDB01/plaintext-snapshot lifecycle with direct keyed
   SQLCipher connections so database, WAL, rollback, and statement-journal page
   content remains encrypted during active sessions.

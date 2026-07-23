@@ -52,7 +52,12 @@ This guide documents the primary controller, service, and persistence APIs expos
 
 ### Authentication (silverestimate/services/auth_service.py)
 - **run_authentication(logger: Optional[logging.Logger] = None, *, parent: Optional[QWidget] = None) -> Optional[AuthenticationResult]** - drives setup/login with retry-on-invalid-password behavior; returns `None` only when the dialog is cancelled, otherwise returns an `AuthenticationResult` describing the password provided or a wipe request (with silent flag when triggered by the recovery password).
+- **hash_password(password: str, *, logger=None) -> Optional[str] / verify_password(stored_hash: str, provided_password: str, *, logger=None) -> bool** - UI-facing authentication helpers that delegate to the password security service without placing cryptography in Qt widgets.
 - **perform_data_wipe(db_path: str = DB_PATH, logger: Optional[logging.Logger] = None, *, silent: bool = False) -> bool** - deletes the encrypted DB, removes temporary plaintext, clears credentials, and, when `silent=True`, purges application log files without emitting wipe-related log entries.
+
+### Password Hashing (silverestimate/security/password_service.py)
+- **PasswordHashService.hash_password(password: str) -> str** - creates an Argon2id PHC hash using the explicit application policy.
+- **PasswordHashService.verify_password(stored_hash: str, provided_password: str) -> PasswordVerification** - distinguishes mismatch from malformed storage and returns a replacement hash only when the verified record needs rehashing.
 
 ### Credential Store (silverestimate/security/credential_store.py)
 - **get_backend_status() -> CredentialBackendStatus** - reports whether the active operating-system keyring backend is trusted and usable.

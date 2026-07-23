@@ -23,7 +23,7 @@ repos:
         additional_dependencies:
           - PySide6>=6.11.1,<6.12
           - cryptography>=42.0.0
-          - argon2-cffi>=21.3.0
+          - argon2-cffi>=25.1.0,<26
 
   # General pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks

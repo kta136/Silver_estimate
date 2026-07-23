@@ -1,8 +1,8 @@
 # Modernization and Dependency Replacement Roadmap
 
-**Status:** Phase 4 complete; Phase 5 is next
+**Status:** Phase 5 complete; Phase 6 is next
 **Last updated:** 2026-07-23
-**Applies to:** Silver Estimate v3.07 source tree and later
+**Applies to:** Silver Estimate v3.08 source tree and later
 **Primary platform:** Windows 10/11, Python 3.14
 **Project license:** GPL-3.0-only
 
@@ -10,8 +10,8 @@
 
 Phase 4 milestones M0 through M8 are complete and the PySide6 migration is on
 main. The Windows source, UI, SQLCipher, performance, and `pyside6-deploy`
-release gates pass locally. Phase 5 Passlib removal is the next planned
-workstream, but it has not started.
+release gates pass locally. Phase 5 Passlib removal is also complete. Phase 6,
+the real silver-bar repository split, is the next workstream.
 
 M1 locked PySide6, Shiboken6, and Qt 6.11.1 with pytest-qt 4.5.0. M2 converted
 source and tests to direct PySide6 APIs. M3 resolved signal, context-menu, enum,
@@ -33,6 +33,17 @@ dependency, import, compatibility loader, or current user-facing claim remains.
 The complete 623-test suite plus startup smoke, quality and performance gates,
 SQLCipher provenance, fresh standalone and one-file builds, frozen runtime
 smokes, and a ten-sample 2727.15 ms executable-startup p95 all pass locally.
+
+Phase 5 replaced Passlib with a UI-independent password service using
+`argon2-cffi` 25.1.0. The service preserves existing Argon2id PHC hashes,
+distinguishes mismatch from malformed storage, and persists a replacement hash
+after successful verification only when the policy requires rehashing.
+`LoginDialog` no longer owns cryptography, keyring entry names are unchanged,
+and the deployment contract rejects Passlib from the frozen payload and Nuitka
+report. Ruff, mypy, Bandit, 637 tests plus startup smoke, local performance
+budgets, 84% coverage, fresh standalone and one-file builds, frozen Argon2id,
+keyring, SQLCipher, Qt, SVG, and PDF smokes all pass. The one-file executable's
+five-sample startup p95 is 2107.91 ms against the unchanged 3000 ms budget.
 
 ## Implementation record: 2026-07-22
 
@@ -740,7 +751,7 @@ runner timing is not a release performance gate.
 
 ## 10. Phase 5: Remove Passlib
 
-**Planning status:** Next workstream; ready to start.
+**Implementation status:** Complete.
 
 ### 10.1 Target design
 
@@ -777,6 +788,9 @@ the resulting PHC hash through `CredentialStore`.
   distinguishable.
 - No password hashing code remains in Qt widgets.
 - Only one runtime Argon2 package and policy path remains.
+
+All acceptance criteria are satisfied. Passlib is absent from the lockfile,
+installed environment, Nuitka report, and frozen payload.
 
 ## 11. Phases 6-11: architecture completion
 

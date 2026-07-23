@@ -30,6 +30,7 @@ REQUIRED_FILES = (
 )
 
 FORBIDDEN_PATH_FRAGMENTS = (
+    "/passlib/",
     "pyqt6",
     "/qml/",
     "qt6bluetooth",
@@ -52,12 +53,17 @@ FORBIDDEN_PATH_FRAGMENTS = (
 )
 
 REQUIRED_REPORT_MODULES = (
+    "argon2._password_hasher",
     "keyring.backends.Windows",
     "keyring.backends.fail",
     "keyring.backends.null",
-    "passlib.handlers.argon2",
     "sqlcipher3._sqlite3",
     "sqlcipher3.dbapi2",
+)
+
+FORBIDDEN_REPORT_MODULE_PREFIXES = (
+    "PyQt6",
+    "passlib",
 )
 
 
@@ -100,8 +106,16 @@ def validate_deployment(root: Path, report: Path) -> dict[str, int]:
         raise ValueError(
             f"Required modules are absent from the Nuitka report: {missing_modules}"
         )
-    if "PyQt6" in report_text:
-        raise ValueError("The Nuitka report unexpectedly contains PyQt6")
+    forbidden_modules = [
+        prefix
+        for prefix in FORBIDDEN_REPORT_MODULE_PREFIXES
+        if f'name="{prefix}' in report_text
+    ]
+    if forbidden_modules:
+        raise ValueError(
+            "The Nuitka report unexpectedly contains forbidden modules: "
+            f"{forbidden_modules}"
+        )
 
     return {
         "file_count": len(inventory),

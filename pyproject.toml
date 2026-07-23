@@ -35,8 +35,7 @@ classifiers = [
 dependencies = [
     "PySide6>=6.11.1,<6.12",
     "cryptography>=42.0.0",
-    "passlib[argon2]>=1.7.4",
-    "argon2_cffi>=21.3.0",
+    "argon2-cffi>=25.1.0,<26",
     "keyring>=24.3.0",
     "sqlcipher3==0.6.2+silverestimate.4.17.0.1; sys_platform == 'win32'",
 ]
@@ -185,7 +184,6 @@ exclude = [
 [[tool.mypy.overrides]]
 module = [
     "keyring.*",
-    "passlib.*",
     "sqlcipher3.*",
 ]
 ignore_missing_imports = true

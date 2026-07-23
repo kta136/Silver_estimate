@@ -53,6 +53,7 @@ def _run_artifact_smoke() -> int:
         SqlCipherConnectionBroker,
     )
     from silverestimate.security import credential_store
+    from silverestimate.security.password_service import PasswordHashService
 
     os.environ.setdefault(
         "QT_QPA_PLATFORM", "windows" if os.name == "nt" else "offscreen"
@@ -65,6 +66,19 @@ def _run_artifact_smoke() -> int:
         for image_format in QImageReader.supportedImageFormats()
     }
     credential_status = credential_store.get_backend_status()
+    password_service = PasswordHashService()
+    synthetic_password = "silverestimate-artifact-smoke-password"
+    synthetic_password_hash = password_service.hash_password(synthetic_password)
+    password_verification = password_service.verify_password(
+        synthetic_password_hash,
+        synthetic_password,
+    )
+    password_hashing = (
+        password_verification.verified
+        and password_verification.replacement_hash is None
+    )
+    if not password_hashing:
+        raise RuntimeError("Frozen artifact failed Argon2id password verification")
 
     with tempfile.TemporaryDirectory(prefix="silverestimate-artifact-smoke-") as tmp:
         temp_root = Path(tmp)
@@ -102,6 +116,7 @@ def _run_artifact_smoke() -> int:
                 "icon_available": icon_available,
                 "keyring_available": credential_status.available,
                 "keyring_backend": credential_status.backend_name,
+                "password_hashing": password_hashing,
                 "pdf_bytes": pdf_bytes,
                 "qt_platform": app.platformName(),
                 "runtime_root": str(get_runtime_root()),

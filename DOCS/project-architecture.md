@@ -68,6 +68,13 @@ Maintenance mode blocks new readers and cancels/drains current readers before
 migration, backup, restore, rekey, or wipe. `QLockFile` ownership is acquired
 before authentication or storage mutation.
 
+Password verification is separate from Qt widgets and database-key derivation.
+`PasswordHashService` owns the direct `argon2-cffi` Argon2id policy and
+compatibility with existing PHC hashes. `AuthService` owns login-time
+verification, opportunistic rehash persistence, and the distinction between
+credential mismatch and malformed credential data. `CredentialStore` remains
+the only keyring boundary.
+
 `SILVDB01` is read only by the one-time importer. It decrypts inside a marked
 application-owned workspace, exports to a keyed target with
 `sqlcipher_export()`, compares counts and deterministic typed digests, validates

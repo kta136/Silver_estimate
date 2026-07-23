@@ -35,11 +35,11 @@ from PySide6.QtWidgets import (
 from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.security import credential_store
 from silverestimate.security.credential_store import CredentialStoreError
+from silverestimate.services.auth_service import hash_password, verify_password
 
 # Import dependent dialogs and modules
 from .custom_font_dialog import CustomFontDialog
 from .icons import get_icon
-from .login_dialog import LoginDialog  # Needed for password verification/hashing
 from .settings_live_rates_page import LiveRatesSettingsPage
 from .settings_print_controller import PrintSettingsWidgets, SettingsPrintController
 from .shared_screen_theme import build_management_screen_stylesheet
@@ -1347,8 +1347,10 @@ class SettingsDialog(QDialog):
             return
 
         # 1. Validate Current Password
-        if not stored_main_hash or not LoginDialog.verify_password(
-            stored_main_hash, current_password
+        if not stored_main_hash or not verify_password(
+            stored_main_hash,
+            current_password,
+            logger=logger,
         ):
             QMessageBox.warning(
                 self, "Password Change Failed", "Incorrect current password."
@@ -1400,8 +1402,8 @@ class SettingsDialog(QDialog):
             return
 
         # 5. Hash New Passwords
-        new_main_hash = LoginDialog.hash_password(new_main_pw)
-        new_secondary_hash = LoginDialog.hash_password(new_secondary_pw)
+        new_main_hash = hash_password(new_main_pw, logger=logger)
+        new_secondary_hash = hash_password(new_secondary_pw, logger=logger)
 
         if not new_main_hash or not new_secondary_hash:
             QMessageBox.critical(

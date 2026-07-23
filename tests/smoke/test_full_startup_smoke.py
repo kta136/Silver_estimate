@@ -16,6 +16,7 @@ from silverestimate.controllers.startup_controller import (
     StartupController,
     StartupStatus,
 )
+from silverestimate.security.password_service import PasswordVerification
 from silverestimate.services import auth_service
 from silverestimate.ui.application_theme import apply_light_application_theme
 from silverestimate.ui.estimate_entry_logic.constants import (
@@ -116,22 +117,27 @@ class _StubLiveRateController:
         return None
 
 
-class _SmokePasswordContext:
+class _SmokePasswordService:
     def __init__(self) -> None:
         from argon2 import PasswordHasher
 
         self._hasher = PasswordHasher(time_cost=1, memory_cost=8192, parallelism=1)
 
-    def hash(self, password: str) -> str:
+    def hash_password(self, password: str) -> str:
         return self._hasher.hash(password)
 
-    def verify(self, password: str, password_hash: str) -> bool:
+    def verify_password(
+        self,
+        password_hash: str,
+        password: str,
+    ) -> PasswordVerification:
         from argon2.exceptions import VerificationError
 
         try:
-            return bool(self._hasher.verify(password_hash, password))
+            verified = bool(self._hasher.verify(password_hash, password))
         except VerificationError:
-            return False
+            verified = False
+        return PasswordVerification(verified=verified)
 
 
 @dataclass
@@ -236,10 +242,7 @@ def smoke_environment(monkeypatch, settings_stub, tmp_path):
         "silverestimate.ui.login_dialog.bring_window_to_front",
         lambda *_args, **_kwargs: None,
     )
-    monkeypatch.setattr(
-        "silverestimate.ui.login_dialog._get_pwd_context",
-        lambda: _SmokePasswordContext(),
-    )
+    monkeypatch.setattr(auth_service, "_password_service", _SmokePasswordService())
     monkeypatch.setattr(
         "PySide6.QtWidgets.QApplication.quit",
         lambda self=None: None,

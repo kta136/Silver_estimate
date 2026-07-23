@@ -1575,7 +1575,6 @@ name = "silverestimate"
 source = { editable = "." }
 dependencies = [
     { name = "argon2-cffi" },
-    { name = "cryptography" },
     { name = "keyring" },
     { name = "pyside6" },
     { name = "sqlcipher3", marker = "sys_platform == 'win32'" },
@@ -1603,7 +1602,6 @@ dev = [
 requires-dist = [
     { name = "argon2-cffi", specifier = ">=25.1.0,<26" },
     { name = "bandit", extras = ["toml"], marker = "extra == 'dev'", specifier = ">=1.7.9" },
-    { name = "cryptography", specifier = ">=42.0.0" },
     { name = "cyclonedx-bom", marker = "extra == 'dev'", specifier = ">=7.2.1" },
     { name = "diff-cover", marker = "extra == 'dev'", specifier = ">=9.7.1" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.0.0" },

@@ -25,10 +25,7 @@ from silverestimate.persistence.database_driver import (
     Error,
     ReadConnection,
     SqlCipherConnectionBroker,
-    configure_connection,
     export_database,
-    open_plaintext_legacy,
-    require_driver,
 )
 from silverestimate.persistence.database_repository_facade import (
     DatabaseRepositoryFacadeMixin,
@@ -36,7 +33,6 @@ from silverestimate.persistence.database_repository_facade import (
 from silverestimate.persistence.storage_metadata import (
     BackupManifest,
     KdfMetadata,
-    MigrationJournal,
     RekeyJournal,
     RestoreJournal,
     StorageMetadataError,
@@ -45,13 +41,6 @@ from silverestimate.persistence.storage_metadata import (
     write_journal,
 )
 from silverestimate.security import encryption as crypto_utils
-from silverestimate.security.encrypted_envelope import (
-    MAGIC as LEGACY_MAGIC,
-)
-from silverestimate.security.encrypted_envelope import (
-    decrypt_envelope_to_path,
-    read_envelope_metadata,
-)
 
 SQLITE_HEADER = b"SQLite format 3\x00"
 BACKUP_FORMAT_VERSION = 1
@@ -60,7 +49,6 @@ JOURNAL_VERSION = 1
 
 class StorageFormat(Enum):
     MISSING = auto()
-    LEGACY_SILVDB01 = auto()
     PLAINTEXT_SQLITE = auto()
     SQLCIPHER = auto()
 
@@ -68,7 +56,6 @@ class StorageFormat(Enum):
 class DatabaseOpenStatus(Enum):
     CREATED = auto()
     OPENED = auto()
-    MIGRATED_LEGACY = auto()
     RESTORE_ACTIVATED = auto()
 
 
@@ -92,8 +79,6 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
     def __init__(self, db_path: str, password: str):
         self.logger = logging.getLogger(__name__)
         self.database_path = str(Path(db_path).resolve())
-        # Compatibility is intentionally path-only; it is never a plaintext temp DB.
-        self.encrypted_db_path = self.database_path
         self.last_error: str | None = None
         self.conn: Connection | None = None
         self.cursor: Any | None = None
@@ -105,16 +90,14 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         self._path = Path(self.database_path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._metadata_path = self._path.with_name(f"{self._path.stem}.kdf.json")
-        self._migration_journal = self._path.with_suffix(".migration.json")
         self._rekey_journal = self._path.with_suffix(".rekey.json")
         self._restore_journal = self._path.with_suffix(".restore.json")
-        self._cleanup_interrupted_legacy_workspace()
         self._recover_missing_live_from_journal()
 
         storage_format = self.detect_storage(self._path)
         if storage_format is StorageFormat.PLAINTEXT_SQLITE:
             raise StorageMetadataError(
-                "Plaintext SQLite application databases are forbidden; import a SILVDB01 backup"
+                "Plaintext SQLite application databases are unsupported"
             )
         if storage_format is StorageFormat.MISSING:
             self._metadata = KdfMetadata.create()
@@ -136,11 +119,7 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
             self.open_status = DatabaseOpenStatus.CREATED
             return
 
-        if storage_format is StorageFormat.LEGACY_SILVDB01:
-            self._migrate_legacy(password)
-            self.open_status = DatabaseOpenStatus.MIGRATED_LEGACY
-        else:
-            self.open_status = DatabaseOpenStatus.OPENED
+        self.open_status = DatabaseOpenStatus.OPENED
 
         self._metadata = KdfMetadata.read(self._metadata_path)
         self.key = self._derive_key(password, self._metadata)
@@ -153,7 +132,6 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         self._bind_connection()
         self.setup_database()
         self.validate_database(self.conn)
-        self._migration_journal.unlink(missing_ok=True)
 
     @staticmethod
     def detect_storage(path: str | Path) -> StorageFormat:
@@ -161,8 +139,6 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         if not candidate.exists() or candidate.stat().st_size == 0:
             return StorageFormat.MISSING
         header = candidate.read_bytes()[: len(SQLITE_HEADER)]
-        if header.startswith(LEGACY_MAGIC):
-            return StorageFormat.LEGACY_SILVDB01
         if header == SQLITE_HEADER:
             return StorageFormat.PLAINTEXT_SQLITE
         return StorageFormat.SQLCIPHER
@@ -245,17 +221,6 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
 
     def _check_schema_version(self) -> int:
         if not self._table_exists("schema_version"):
-            assert self.conn is not None and self.cursor is not None
-            self.cursor.execute(
-                "CREATE TABLE schema_version ("
-                "id INTEGER PRIMARY KEY, version INTEGER NOT NULL, "
-                "applied_date TEXT NOT NULL)"
-            )
-            self.cursor.execute(
-                "INSERT INTO schema_version(version, applied_date) VALUES (0, ?)",
-                (datetime.now().strftime("%Y-%m-%d %H:%M:%S"),),
-            )
-            self.conn.commit()
             return 0
         assert self.cursor is not None
         row = self.cursor.execute("SELECT MAX(version) FROM schema_version").fetchone()
@@ -270,9 +235,9 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         return True
 
     def setup_database(self) -> None:
-        from silverestimate.persistence import migrations
+        from silverestimate.persistence import schema
 
-        migrations.run_schema_setup(self)
+        schema.run_schema_setup(self)
 
     @staticmethod
     def validate_database(connection: Connection) -> None:
@@ -287,7 +252,7 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
             raise DatabaseError(
                 f"Foreign-key validation failed with {len(violations)} violation(s)"
             )
-        from silverestimate.persistence.migrations import CURRENT_SCHEMA_VERSION
+        from silverestimate.persistence.schema import CURRENT_SCHEMA_VERSION
 
         required_tables = {
             "items",
@@ -494,10 +459,6 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
     def change_passwords(self, new_password: str) -> MaintenanceOutcome:
         return self._copy_switch_rekey(new_password)
 
-    def reencrypt_with_new_password(self, new_password: str) -> bool:
-        """Compatibility wrapper; new callers should inspect ``change_passwords``."""
-        return self._copy_switch_rekey(new_password).status is MaintenanceStatus.SUCCESS
-
     def _copy_switch_rekey(self, new_password: str) -> MaintenanceOutcome:
         old_key = self.key
         new_metadata = KdfMetadata.create()
@@ -571,177 +532,6 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         finally:
             connection.close()
         return identity
-
-    def _migrate_legacy(self, password: str) -> None:
-        metadata = read_envelope_metadata(self._path)
-        legacy_key = crypto_utils.derive_key(
-            password,
-            metadata.argon2.salt,
-            time_cost=metadata.argon2.time_cost,
-            memory_cost_kib=metadata.argon2.memory_cost_kib,
-            parallelism=metadata.argon2.parallelism,
-            logger=self.logger,
-        )
-        backup = self._path.with_name(f"{self._path.stem}.silvdb01.backup")
-        if not backup.exists():
-            shutil.copy2(self._path, backup)
-        source_hash = sha256_file(self._path)
-        if sha256_file(backup) != source_hash:
-            raise StorageMetadataError("Retained SILVDB01 backup digest mismatch")
-        workspace = Path(
-            tempfile.mkdtemp(
-                prefix=".silverestimate-legacy-migration-", dir=self._path.parent
-            )
-        )
-        marker = workspace / ".silverestimate-plaintext-migration"
-        marker.write_text("application-owned one-time plaintext workspace\n")
-        plaintext = workspace / "legacy.sqlite"
-        target = self._path.with_suffix(".migrating")
-        new_metadata = KdfMetadata.create()
-        new_key = self._derive_key(password, new_metadata)
-        write_journal(
-            self._migration_journal,
-            MigrationJournal(
-                version=JOURNAL_VERSION,
-                phase="decrypting",
-                source_sha256=source_hash,
-                backup_path=str(backup),
-                target_path=str(target),
-            ),
-        )
-        try:
-            decrypt_envelope_to_path(self._path, plaintext, legacy_key)
-            self._assert_plaintext_sqlite(plaintext)
-            source_counts, source_digests = self._database_fingerprints_plaintext(
-                plaintext
-            )
-            self._remove_database_family(target)
-            driver = require_driver()
-            probe = driver.connect(":memory:")
-            try:
-                identity = configure_connection(
-                    probe,
-                    raw_key=os.urandom(32),
-                    writer=False,
-                    authenticate=False,
-                )
-            finally:
-                probe.close()
-            source = driver.connect(str(plaintext))
-            try:
-                # This is the only production plaintext connection and is confined to
-                # the marked migration workspace.
-                source.execute("PRAGMA temp_store = MEMORY")
-                source.execute("PRAGMA mmap_size = 0")
-                source.execute("SELECT count(*) FROM sqlite_master").fetchone()
-                export_database(source, target, new_key)
-            finally:
-                source.close()
-            target_counts, target_digests = self._database_fingerprints_cipher(
-                target, new_key
-            )
-            if source_counts != target_counts or source_digests != target_digests:
-                raise DatabaseError("Legacy migration count/digest comparison failed")
-            self._prepare_external_schema(target, new_key)
-            new_metadata.write(self._metadata_path)
-            os.replace(target, self._path)
-            self._migration_journal.unlink(missing_ok=True)
-            self.driver_identity = identity
-        finally:
-            self._remove_database_family(target)
-            shutil.rmtree(workspace, ignore_errors=True)
-
-    def _prepare_external_schema(self, path: Path, key: bytes) -> None:
-        """Migrate and validate a staged target before it can become live."""
-        broker = SqlCipherConnectionBroker(path, key, logger=self.logger)
-        connection, _ = broker.open_writer()
-        self.conn = connection
-        try:
-            self._bind_connection()
-            self.setup_database()
-            self.validate_database(connection)
-        finally:
-            connection.close()
-            self.conn = None
-            self.cursor = None
-            self._session.clear()
-
-    @staticmethod
-    def _assert_plaintext_sqlite(path: Path) -> None:
-        if path.read_bytes()[: len(SQLITE_HEADER)] != SQLITE_HEADER:
-            raise DatabaseError("Legacy envelope did not contain a SQLite database")
-
-    @staticmethod
-    def _typed_digest(rows: list[tuple[Any, ...]]) -> str:
-        digest = hashlib.sha256()
-        for row in rows:
-            encoded = []
-            for value in row:
-                if value is None:
-                    encoded.append(["null", None])
-                elif isinstance(value, bytes):
-                    encoded.append(["blob", value.hex()])
-                elif isinstance(value, int):
-                    encoded.append(["int", str(value)])
-                elif isinstance(value, float):
-                    encoded.append(["real", value.hex()])
-                else:
-                    encoded.append(["text", str(value)])
-            digest.update(json.dumps(encoded, separators=(",", ":")).encode())
-            digest.update(b"\n")
-        return digest.hexdigest()
-
-    @classmethod
-    def _fingerprints(cls, connection: Any) -> tuple[dict[str, int], dict[str, str]]:
-        tables = [
-            str(row[0])
-            for row in connection.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' "
-                "AND name NOT LIKE 'sqlite_%' ORDER BY name"
-            )
-        ]
-        counts: dict[str, int] = {}
-        digests: dict[str, str] = {}
-        for table in tables:
-            quoted = table.replace('"', '""')
-            columns = [
-                str(row[1])
-                for row in connection.execute(f'PRAGMA table_info("{quoted}")')
-            ]
-            order = ",".join(
-                f'"{column.replace(chr(34), chr(34) * 2)}"' for column in columns
-            )
-            rows = [
-                tuple(row)
-                for row in connection.execute(
-                    f'SELECT * FROM "{quoted}"'
-                    + (f" ORDER BY {order}" if order else "")
-                )
-            ]
-            counts[table] = len(rows)
-            digests[table] = cls._typed_digest(rows)
-        return counts, digests
-
-    @classmethod
-    def _database_fingerprints_plaintext(
-        cls, path: Path
-    ) -> tuple[dict[str, int], dict[str, str]]:
-        connection = open_plaintext_legacy(path)
-        try:
-            return cls._fingerprints(connection)
-        finally:
-            connection.close()
-
-    @classmethod
-    def _database_fingerprints_cipher(
-        cls, path: Path, key: bytes
-    ) -> tuple[dict[str, int], dict[str, str]]:
-        broker = SqlCipherConnectionBroker(path, key)
-        connection, _ = broker.open_writer()
-        try:
-            return cls._fingerprints(connection)
-        finally:
-            connection.close()
 
     def _activate_pending_restore(self) -> None:
         if not self._restore_journal.exists():
@@ -821,23 +611,6 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
                     "Interrupted restore has no recoverable database"
                 )
             os.replace(retained, self._path)
-
-    def _cleanup_interrupted_legacy_workspace(self) -> None:
-        prefix = ".silverestimate-legacy-migration-"
-        for child in self._path.parent.glob(f"{prefix}*"):
-            try:
-                resolved = child.resolve()
-                if (
-                    child.is_dir()
-                    and resolved.parent == self._path.parent.resolve()
-                    and child.name.startswith(prefix)
-                    and (child / ".silverestimate-plaintext-migration").exists()
-                ):
-                    shutil.rmtree(resolved)
-            except OSError as exc:
-                self.logger.warning(
-                    "Could not clean legacy workspace %s: %s", child, exc
-                )
 
     @staticmethod
     def _remove_database_family(path: Path) -> None:

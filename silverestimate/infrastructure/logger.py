@@ -8,6 +8,7 @@ from pathlib import Path
 import PySide6.QtCore as QtCore
 from PySide6.QtCore import QtMsgType
 
+from silverestimate.infrastructure.paths import get_runtime_root
 from silverestimate.infrastructure.settings import get_app_settings
 
 # Global variable to store the cleanup scheduler instance
@@ -70,8 +71,8 @@ def setup_logging(
     # Create log directory if it doesn't exist
     log_path = Path(log_dir)
     archived_path = log_path / "archived"
-    log_path.mkdir(exist_ok=True)
-    archived_path.mkdir(exist_ok=True)
+    log_path.mkdir(parents=True, exist_ok=True)
+    archived_path.mkdir(parents=True, exist_ok=True)
 
     # Configure root logger
     root_logger = logging.getLogger()
@@ -355,7 +356,7 @@ def get_log_config():
             False,
         )
 
-    log_dir = os.environ.get("SILVER_APP_LOG_DIR", "logs")
+    log_dir = os.environ.get("SILVER_APP_LOG_DIR") or str(get_runtime_root() / "logs")
 
     enable_info = _coerce_bool_setting(
         settings.value("logging/enable_info", True, type=bool),

@@ -106,13 +106,13 @@ silver_bars (1) ----< (M) bar_transfers
 | notes         | TEXT    |                                           | Transfer notes      |
 
 ### 7. schema_version
-**Purpose**: Database migration tracking
+**Purpose**: Current schema-format gate
 
 | Column       | Type    | Constraints        | Description           |
 |--------------|---------|-------------------|-----------------------|
 | id           | INTEGER | PRIMARY KEY       | Version ID            |
 | version      | INTEGER | NOT NULL          | Schema version number |
-| applied_date | TEXT    | NOT NULL          | Migration timestamp   |
+| applied_date | TEXT    | NOT NULL          | Schema creation timestamp |
 
 ## Data Relationships & Cascading Rules
 
@@ -152,7 +152,11 @@ silver_bars (1) ----< (M) bar_transfers
 7. **Stable Line Identity**: `estimate_items.line_key` links a source line to `silver_bars.source_line_key`
 8. **Tunch**: Optional free-text item-master value; estimates resolve the current master value when printed
 
-## Schema Evolution
+## Historical Schema Versions
+
+The current runtime does not contain upgrade branches for these versions. It
+creates fresh databases directly at version 8 and accepts existing databases
+only when they already report version 8.
 
 ### Version 0 → 1
 - Established the silver-bar/list/transfer schema and normalized missing baseline columns.
@@ -178,11 +182,10 @@ silver_bars (1) ----< (M) bar_transfers
 - Tunch remains an item-master value and is not copied into `estimate_items`.
 
 ### Version 7 → 8
-- Changed `items.tunch` from a constrained numeric value to free text, preserving existing values during migration.
+- Changed `items.tunch` from a constrained numeric value to free text.
 
-Schema creation, all pending migrations, mandatory indexes, validation, and the
-schema-version write run in one transaction. Any failure rolls the full setup
-back instead of leaving a partially upgraded database.
+Fresh schema creation, mandatory indexes, validation, and the schema-version
+write run in one transaction. Any failure rolls the full setup back.
 
 ## Performance-Critical Indexes
 

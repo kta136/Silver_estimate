@@ -1,6 +1,9 @@
 import pytest
 
-from silverestimate.persistence.database_manager import DatabaseManager
+from silverestimate.persistence.database_manager import (
+    DatabaseManager,
+    MaintenanceStatus,
+)
 from silverestimate.services.item_catalog_transfer import (
     export_item_catalog,
     import_item_catalog,
@@ -128,7 +131,8 @@ def test_database_manager_does_not_retain_plaintext_password(tmp_path, settings_
     try:
         assert not hasattr(manager, "password")
         old_key = manager.key
-        assert manager.reencrypt_with_new_password("rotated-password") is True
+        outcome = manager.change_passwords("rotated-password")
+        assert outcome.status is MaintenanceStatus.SUCCESS
         assert manager.key != old_key
         assert not hasattr(manager, "password")
     finally:

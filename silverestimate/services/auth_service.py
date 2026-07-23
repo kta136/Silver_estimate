@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import shutil
 import time
 from dataclasses import dataclass
@@ -115,31 +114,22 @@ def verify_password(
 
 
 def _verify_credential_password(
-    kind: str,
     stored_hash: str,
     provided_password: str,
     *,
     logger: logging.Logger,
 ) -> PasswordVerification:
+    started_at = time.perf_counter()
     verification = _verify_password_hash(
         stored_hash,
         provided_password,
         logger=logger,
     )
-    if verification.verified and verification.replacement_hash:
-        try:
-            credential_store.set_password_hash(
-                kind,
-                verification.replacement_hash,
-                logger=logger,
-            )
-            logger.info("Upgraded the %s password hash to the current policy", kind)
-        except CredentialStoreError:
-            logger.warning(
-                "Could not persist the upgraded %s password hash",
-                kind,
-                exc_info=True,
-            )
+    logger.info(
+        '[telemetry] {"metric":"startup.password_hash_verify_ms",'
+        '"duration_ms":%.3f}',
+        (time.perf_counter() - started_at) * 1000.0,
+    )
     return verification
 
 
@@ -231,7 +221,6 @@ def run_authentication(
 
             entered_password = login_dialog.get_password()
             main_verification = _verify_credential_password(
-                "main",
                 password_hash,
                 entered_password,
                 logger=logger,
@@ -251,7 +240,6 @@ def run_authentication(
                 )
             if pending_main_hash:
                 pending_main_verification = _verify_credential_password(
-                    "pending_main",
                     pending_main_hash,
                     entered_password,
                     logger=logger,
@@ -259,14 +247,10 @@ def run_authentication(
                 if pending_main_verification.verified:
                     return AuthenticationResult(
                         password=entered_password,
-                        pending_main_hash=(
-                            pending_main_verification.replacement_hash
-                            or pending_main_hash
-                        ),
+                        pending_main_hash=pending_main_hash,
                         pending_backup_hash=pending_backup_hash,
                     )
             backup_verification = _verify_credential_password(
-                "backup",
                 backup_hash,
                 entered_password,
                 logger=logger,
@@ -281,7 +265,6 @@ def run_authentication(
                 return AuthenticationResult(wipe_requested=True, silent=True)
             if pending_backup_hash:
                 pending_backup_verification = _verify_credential_password(
-                    "pending_backup",
                     pending_backup_hash,
                     entered_password,
                     logger=logger,
@@ -362,14 +345,12 @@ def perform_data_wipe(
             Path(f"{database}-shm"),
             Path(f"{database}-journal"),
             database.with_name(f"{database.stem}.kdf.json"),
-            database.with_suffix(".migration.json"),
             database.with_suffix(".rekey.json"),
             database.with_suffix(".restore.json"),
             database.with_suffix(".rekey.target"),
             database.with_suffix(".restore.staged"),
             database.with_suffix(".pre-rekey.sqlcipher"),
             database.with_suffix(".pre-restore.sqlcipher"),
-            database.with_name(f"{database.stem}.silvdb01.backup"),
         }
         explicit.update(parent_dir.glob("*.sedbbackup"))
         explicit.update(parent_dir.glob(f"{database.name}*"))
@@ -384,26 +365,8 @@ def perform_data_wipe(
             if resolved.parent == parent_dir and resolved.exists():
                 resolved.unlink()
                 _log("info", "Removed encrypted database artifact: %s", resolved)
-        for workspace in parent_dir.glob(".silverestimate-legacy-migration-*"):
-            resolved = workspace.resolve()
-            if (
-                resolved.parent == parent_dir
-                and resolved.is_dir()
-                and (resolved / ".silverestimate-plaintext-migration").exists()
-            ):
-                shutil.rmtree(resolved)
 
         settings = get_app_settings()
-        temp_path = settings.value("security/last_temp_db_path")
-        if isinstance(temp_path, str) and temp_path and os.path.exists(temp_path):
-            try:
-                os.remove(temp_path)
-                _log("info", "Removed temporary plaintext DB: %s", temp_path)
-            except OSError as exc:
-                _log("warning", "Could not remove temporary plaintext DB: %s", exc)
-
-        for key in ("security/db_salt", "security/last_temp_db_path"):
-            settings.remove(key)
         for kind in (
             "main",
             "backup",
@@ -426,7 +389,7 @@ def perform_data_wipe(
             _clear_log_artifacts()
         _log(
             "info",
-            "Cleared password hashes and database salt from application settings.",
+            "Cleared password hashes and current encrypted database artifacts.",
         )
         return True
     except Exception as exc:

@@ -6,7 +6,7 @@ import pytest
 from sqlcipher3 import dbapi2 as sqlite3
 
 from silverestimate.infrastructure.item_cache import ItemCacheController
-from silverestimate.persistence import migrations
+from silverestimate.persistence import schema
 from silverestimate.persistence.estimates_repository import EstimatesRepository
 from silverestimate.persistence.items_repository import ItemsRepository
 from silverestimate.persistence.silver_bars_repository import SilverBarsRepository
@@ -41,18 +41,6 @@ class FakeDB:
 
     def _check_schema_version(self) -> int:
         if not self._table_exists("schema_version"):
-            self.cursor.execute("""
-                CREATE TABLE schema_version (
-                    id INTEGER PRIMARY KEY,
-                    version INTEGER NOT NULL,
-                    applied_date TEXT NOT NULL
-                )
-            """)
-            self.cursor.execute(
-                "INSERT INTO schema_version (version, applied_date) VALUES (?, ?)",
-                (0, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
-            )
-            self.conn.commit()
             return 0
         self.cursor.execute("SELECT MAX(version) FROM schema_version")
         row = self.cursor.fetchone()
@@ -69,7 +57,7 @@ class FakeDB:
 @pytest.fixture()
 def fake_db():
     db = FakeDB()
-    migrations.run_schema_setup(db)
+    schema.run_schema_setup(db)
     yield db
     db.conn.close()
 
@@ -131,7 +119,7 @@ def test_current_schema_setup_revalidates_mandatory_indexes_and_foreign_keys(fak
     statements = []
     fake_db.conn.set_trace_callback(statements.append)
 
-    migrations.run_schema_setup(fake_db)
+    schema.run_schema_setup(fake_db)
 
     normalized = [statement.strip().upper() for statement in statements]
     assert any(statement.startswith("BEGIN IMMEDIATE") for statement in normalized)
@@ -190,7 +178,7 @@ def test_estimate_history_keyset_page_reads_header_totals(fake_db):
     assert [row["voucher_no"] for row in second.items] == ["1"]
 
 
-def test_schema_setup_upgrades_to_v8_and_adds_text_tunch(fake_db):
+def test_schema_setup_creates_current_v8_schema(fake_db):
     fake_db.cursor.execute("SELECT MAX(version) AS v FROM schema_version")
     row = fake_db.cursor.fetchone()
     assert row["v"] == 8
@@ -214,102 +202,19 @@ def test_schema_setup_upgrades_to_v8_and_adds_text_tunch(fake_db):
 def test_schema_setup_rolls_back_all_domain_changes_when_version_stage_fails():
     class FailingDB(FakeDB):
         def _update_schema_version(self, new_version: int) -> bool:
-            if new_version == 4:
-                raise sqlite3.OperationalError("injected migration failure")
-            return super()._update_schema_version(new_version)
+            raise sqlite3.OperationalError("injected schema creation failure")
 
     db = FailingDB()
     try:
         with pytest.raises(sqlite3.OperationalError, match="injected"):
-            migrations.run_schema_setup(db)
-        db.cursor.execute("SELECT MAX(version) FROM schema_version")
-        assert db.cursor.fetchone()[0] == 0
+            schema.run_schema_setup(db)
+        assert db._table_exists("schema_version") is False
         assert db._table_exists("items") is False
     finally:
         db.conn.close()
 
 
-def test_migration_v6_rebuilds_persisted_history_totals():
-    db = FakeDB()
-    try:
-        migrations.run_schema_setup(db)
-        db.cursor.execute("DELETE FROM schema_version WHERE version >= 6")
-        db.cursor.execute(
-            "INSERT INTO estimates "
-            "(voucher_no, voucher_no_int, date, total_gross, total_net) "
-            "VALUES ('9', 9, '2026-07-15', 999, 999)"
-        )
-        db.cursor.executemany(
-            "INSERT INTO estimate_items "
-            "(voucher_no, gross, net_wt, is_return, is_silver_bar) "
-            "VALUES (?, ?, ?, ?, ?)",
-            [
-                ("9", 10.0, 8.0, 0, 0),
-                ("9", 4.0, 3.0, 1, 0),
-                ("9", 2.0, 2.0, 0, 1),
-            ],
-        )
-        db.conn.commit()
-
-        migrations.run_schema_setup(db)
-
-        row = db.conn.execute(
-            "SELECT total_gross, total_net FROM estimates WHERE voucher_no='9'"
-        ).fetchone()
-        assert tuple(row) == (10.0, 8.0)
-    finally:
-        db.conn.close()
-
-
-def test_migration_v8_converts_numeric_tunch_to_text_without_losing_item_links():
-    db = FakeDB()
-    try:
-        migrations.run_schema_setup(db)
-        db.cursor.execute(
-            "INSERT INTO items (code, name, purity, wage_type, wage_rate, tunch) "
-            "VALUES ('LEGACY', 'Legacy', 92.5, 'WT', 10, '91.25')"
-        )
-        db.cursor.execute(
-            "INSERT INTO estimates (voucher_no, date) VALUES ('T-8', '2026-07-22')"
-        )
-        db.cursor.execute(
-            "INSERT INTO estimate_items (voucher_no, item_code, item_name) "
-            "VALUES ('T-8', 'LEGACY', 'Legacy')"
-        )
-        db.conn.commit()
-        db.conn.execute("PRAGMA foreign_keys = OFF")
-        db.cursor.execute(
-            "CREATE TABLE items_v7 ("
-            "code TEXT PRIMARY KEY, name TEXT NOT NULL, purity REAL DEFAULT 0, "
-            "wage_type TEXT DEFAULT 'P', wage_rate REAL DEFAULT 0, "
-            "tunch REAL CHECK (tunch IS NULL OR (tunch >= 0 AND tunch <= 100)))"
-        )
-        db.cursor.execute(
-            "INSERT INTO items_v7 SELECT code, name, purity, wage_type, "
-            "wage_rate, tunch FROM items"
-        )
-        db.cursor.execute("DROP TABLE items")
-        db.cursor.execute("ALTER TABLE items_v7 RENAME TO items")
-        db.cursor.execute("DELETE FROM schema_version WHERE version >= 8")
-        db.conn.commit()
-        db.conn.execute("PRAGMA foreign_keys = ON")
-
-        migrations.run_schema_setup(db)
-
-        item = db.conn.execute(
-            "SELECT tunch, typeof(tunch) AS storage_type FROM items WHERE code='LEGACY'"
-        ).fetchone()
-        estimate_item = db.conn.execute(
-            "SELECT item_code FROM estimate_items WHERE voucher_no='T-8'"
-        ).fetchone()
-        assert (item["tunch"], item["storage_type"]) == ("91.25", "text")
-        assert estimate_item["item_code"] == "LEGACY"
-        assert db.conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
-    finally:
-        db.conn.close()
-
-
-def test_migration_v3_backfills_numeric_vouchers_from_legacy_schema():
+def test_schema_setup_rejects_historical_versions_without_mutation():
     db = FakeDB()
     try:
         db.cursor.execute("""
@@ -321,110 +226,14 @@ def test_migration_v3_backfills_numeric_vouchers_from_legacy_schema():
         """)
         db.cursor.execute(
             "INSERT INTO schema_version (version, applied_date) VALUES (?, ?)",
-            (2, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
-        )
-        db.cursor.execute("""
-            CREATE TABLE estimates (
-                voucher_no TEXT PRIMARY KEY,
-                date TEXT NOT NULL,
-                silver_rate REAL DEFAULT 0,
-                total_gross REAL DEFAULT 0,
-                total_net REAL DEFAULT 0,
-                total_fine REAL DEFAULT 0,
-                total_wage REAL DEFAULT 0,
-                note TEXT,
-                last_balance_silver REAL DEFAULT 0,
-                last_balance_amount REAL DEFAULT 0
-            )
-        """)
-        db.cursor.execute(
-            "INSERT INTO estimates (voucher_no, date) VALUES (?, ?)",
-            ("100", "2025-01-01"),
-        )
-        db.cursor.execute(
-            "INSERT INTO estimates (voucher_no, date) VALUES (?, ?)",
-            ("AB-1", "2025-01-02"),
+            (7, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
         )
         db.conn.commit()
 
-        migrations.run_schema_setup(db)
-
-        assert db._column_exists("estimates", "voucher_no_int")
-        db.cursor.execute(
-            "SELECT voucher_no, voucher_no_int FROM estimates ORDER BY voucher_no"
-        )
-        rows = {
-            row["voucher_no"]: row["voucher_no_int"] for row in db.cursor.fetchall()
-        }
-        assert rows["100"] == 100
-        assert rows["AB-1"] is None
-
-        db.cursor.execute("SELECT MAX(version) AS v FROM schema_version")
-        assert db.cursor.fetchone()["v"] == 8
-    finally:
-        db.conn.close()
-
-
-def test_migration_v4_adds_estimate_item_wage_type_without_backfill():
-    db = FakeDB()
-    try:
-        db.cursor.execute("""
-            CREATE TABLE schema_version (
-                id INTEGER PRIMARY KEY,
-                version INTEGER NOT NULL,
-                applied_date TEXT NOT NULL
-            )
-        """)
-        db.cursor.execute(
-            "INSERT INTO schema_version (version, applied_date) VALUES (?, ?)",
-            (3, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
-        )
-        db.cursor.execute("""
-            CREATE TABLE estimates (
-                voucher_no TEXT PRIMARY KEY,
-                voucher_no_int INTEGER,
-                date TEXT NOT NULL,
-                silver_rate REAL DEFAULT 0,
-                total_gross REAL DEFAULT 0,
-                total_net REAL DEFAULT 0,
-                total_fine REAL DEFAULT 0,
-                total_wage REAL DEFAULT 0,
-                note TEXT,
-                last_balance_silver REAL DEFAULT 0,
-                last_balance_amount REAL DEFAULT 0
-            )
-        """)
-        db.cursor.execute("""
-            CREATE TABLE estimate_items (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                voucher_no TEXT,
-                item_code TEXT,
-                item_name TEXT,
-                gross REAL DEFAULT 0,
-                poly REAL DEFAULT 0,
-                net_wt REAL DEFAULT 0,
-                purity REAL DEFAULT 0,
-                wage_rate REAL DEFAULT 0,
-                pieces INTEGER DEFAULT 1,
-                wage REAL DEFAULT 0,
-                fine REAL DEFAULT 0,
-                is_return INTEGER DEFAULT 0,
-                is_silver_bar INTEGER DEFAULT 0
-            )
-        """)
-        db.cursor.execute(
-            "INSERT INTO estimate_items (voucher_no, item_code, item_name) VALUES (?, ?, ?)",
-            ("100", "ITM001", "Item"),
-        )
-        db.conn.commit()
-
-        migrations.run_schema_setup(db)
-
-        assert db._column_exists("estimate_items", "wage_type")
-        assert db._column_exists("estimate_items", "line_key")
-        assert db._column_exists("silver_bars", "source_line_key")
-        db.cursor.execute("SELECT wage_type FROM estimate_items")
-        assert db.cursor.fetchone()["wage_type"] is None
+        with pytest.raises(RuntimeError, match="Unsupported database schema version 7"):
+            schema.run_schema_setup(db)
+        assert db._check_schema_version() == 7
+        assert db._table_exists("items") is False
     finally:
         db.conn.close()
 

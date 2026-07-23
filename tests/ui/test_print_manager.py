@@ -434,42 +434,6 @@ def test_print_manager_uses_persisted_custom_page_size(qt_app, settings_stub):
     assert page_size.size(QPageSize.Unit.Millimeter).height() == 190.0
 
 
-def test_legacy_layout_settings_migrate_to_classic_or_modern(qt_app, settings_stub):
-    del qt_app, settings_stub
-    settings = get_app_settings()
-    estimate_data = {
-        "header": {
-            "voucher_no": "V-004",
-            "date": "2026-02-13",
-            "silver_rate": 0.0,
-            "note": "",
-            "last_balance_silver": 0.0,
-            "last_balance_amount": 0.0,
-        },
-        "items": [],
-    }
-
-    settings.setValue("print/estimate_layout", "old")
-    classic_manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
-    classic_payload = classic_manager.build_estimate_preview_payload(
-        "V-004",
-        estimate_data=estimate_data,
-    )
-    settings.setValue("print/estimate_layout", "new")
-    modern_manager = PrintManager(_DbStub(), print_font=QFont("Arial", 8))
-    modern_payload = modern_manager.build_estimate_preview_payload(
-        "V-004",
-        estimate_data=estimate_data,
-    )
-
-    assert classic_payload is not None
-    assert modern_payload is not None
-    assert classic_manager.estimate_format == "classic"
-    assert modern_manager.estimate_format == "modern"
-    assert classic_payload.format_key == "classic"
-    assert modern_payload.format_key == "modern"
-
-
 def test_preview_print_font_change_updates_manager_and_persists(
     qt_app,
     settings_stub,

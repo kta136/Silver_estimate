@@ -24,9 +24,6 @@ from silverestimate.persistence.storage_metadata import (
     sha256_file,
     write_journal,
 )
-from silverestimate.security.encrypted_envelope import Argon2Metadata
-from silverestimate.security.encryption import derive_key
-from tests.legacy_envelope_writer import write_envelope
 
 
 def test_live_database_wal_and_rollback_journal_hide_plaintext_canary(tmp_path):
@@ -78,52 +75,6 @@ def test_wrong_password_tampered_metadata_and_plaintext_database_fail_closed(tmp
     assert DatabaseManager.detect_storage(plaintext) is StorageFormat.PLAINTEXT_SQLITE
     with pytest.raises(StorageMetadataError, match="Plaintext SQLite"):
         DatabaseManager(str(plaintext), "password")
-
-
-def test_legacy_silvdb01_is_migrated_once_and_retained(tmp_path):
-    import sqlite3
-
-    plaintext = tmp_path / "legacy.sqlite"
-    connection = sqlite3.connect(plaintext)
-    connection.execute(
-        "CREATE TABLE items(code TEXT PRIMARY KEY, name TEXT NOT NULL, "
-        "purity REAL DEFAULT 0, wage_type TEXT DEFAULT 'P', "
-        "wage_rate REAL DEFAULT 0, tunch TEXT)"
-    )
-    connection.execute("INSERT INTO items(code,name) VALUES ('OLD1', 'Legacy item')")
-    connection.commit()
-    connection.close()
-    metadata = Argon2Metadata(
-        salt=b"0123456789abcdef",
-        time_cost=3,
-        memory_cost_kib=65_536,
-        parallelism=4,
-    )
-    key = derive_key(
-        "legacy-password",
-        metadata.salt,
-        time_cost=metadata.time_cost,
-        memory_cost_kib=metadata.memory_cost_kib,
-        parallelism=metadata.parallelism,
-    )
-    live = tmp_path / "estimation.db"
-    write_envelope(plaintext, live, key, argon2=metadata)
-    plaintext.unlink()
-
-    manager = DatabaseManager(str(live), "legacy-password")
-    try:
-        assert manager.open_status is DatabaseOpenStatus.MIGRATED_LEGACY
-        assert (
-            manager.conn.execute("SELECT name FROM items WHERE code='OLD1'").fetchone()[
-                0
-            ]
-            == "Legacy item"
-        )
-    finally:
-        manager.close()
-    assert (tmp_path / "estimation.silvdb01.backup").exists()
-    assert not list(tmp_path.glob(".silverestimate-legacy-migration-*"))
-    assert not live.read_bytes().startswith(b"SILVDB01")
 
 
 def test_encrypted_backup_historical_password_restore_and_rekey(tmp_path):

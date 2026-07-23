@@ -199,6 +199,11 @@ class StartupController:
                 (time.perf_counter() - db_t0) * 1000.0,
                 time.time(),
             )
+            self._logger.info(
+                '[telemetry] {"metric":"startup.database_initialize_ms",'
+                '"duration_ms":%.3f}',
+                (time.perf_counter() - db_t0) * 1000.0,
+            )
             return db_manager
         except Exception as exc:
             self._logger.critical(

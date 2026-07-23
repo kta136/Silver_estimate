@@ -7,7 +7,9 @@ both during local development and in compiled/frozen application builds.
 
 from __future__ import annotations
 
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -37,6 +39,14 @@ def get_database_path() -> Path:
     return get_runtime_root() / "database" / "estimation.db"
 
 
+def get_fallback_log_dir() -> Path:
+    """Return a per-user log directory that should remain writable on Windows."""
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        return Path(local_app_data) / "SilverEstimate" / "logs"
+    return Path(tempfile.gettempdir()) / "SilverEstimate" / "logs"
+
+
 def get_asset_path(*relative_parts: str) -> Path:
     """
     Build an absolute path to an asset located beneath the repository root.
@@ -54,5 +64,6 @@ __all__ = [
     "get_app_root",
     "get_asset_path",
     "get_database_path",
+    "get_fallback_log_dir",
     "get_runtime_root",
 ]

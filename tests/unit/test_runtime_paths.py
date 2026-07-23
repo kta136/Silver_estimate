@@ -15,3 +15,9 @@ def test_database_path_uses_nuitka_containing_directory(monkeypatch, tmp_path):
     monkeypatch.setattr(paths, "__compiled__", compiled, raising=False)
 
     assert paths.get_database_path() == tmp_path / "database" / "estimation.db"
+
+
+def test_fallback_log_dir_uses_local_app_data(monkeypatch, tmp_path):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+    assert paths.get_fallback_log_dir() == tmp_path / "SilverEstimate" / "logs"

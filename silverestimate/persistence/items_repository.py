@@ -354,7 +354,7 @@ class ItemsRepository:
             self._fallback_cache.update(rows_by_code)
         return rows_by_code
 
-    def add_item(  # noqa: PLR0913 - compatibility-preserving repository API
+    def add_item(  # noqa: PLR0913 - stable repository API
         self,
         code: str,
         name: str,
@@ -399,7 +399,7 @@ class ItemsRepository:
             conn.rollback()
             return False
 
-    def update_item(  # noqa: PLR0913 - compatibility-preserving repository API
+    def update_item(  # noqa: PLR0913 - stable repository API
         self,
         code: str,
         name: str,

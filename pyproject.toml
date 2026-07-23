@@ -34,7 +34,6 @@ classifiers = [
 
 dependencies = [
     "PySide6>=6.11.1,<6.12",
-    "cryptography>=42.0.0",
     "argon2-cffi>=25.1.0,<26",
     "keyring>=24.3.0",
     "sqlcipher3==0.6.2+silverestimate.4.17.0.1; sys_platform == 'win32'",
@@ -120,19 +119,13 @@ max-complexity = 15
 "silverestimate/infrastructure/application.py" = ["PLR0912", "PLR0913"]
 "silverestimate/infrastructure/logger.py" = ["PLR0913"]
 "silverestimate/infrastructure/windows_integration.py" = ["PLR0911"]
-"silverestimate/persistence/database_lifecycle.py" = ["PLR0913"]
 "silverestimate/persistence/database_repository_facade.py" = ["PLR0913"]
-"silverestimate/persistence/database_startup.py" = ["PLR0913"]
-"silverestimate/persistence/encrypted_database_store.py" = ["PLR0911", "PLR0913"]
 "silverestimate/persistence/estimates_repository.py" = ["PLR0913"]
-"silverestimate/persistence/flush_scheduler.py" = ["PLR0913"]
 "silverestimate/persistence/items_repository.py" = ["PLR0911", "PLR0912"]
-"silverestimate/persistence/migrations.py" = ["C901", "PLR0912"]
 "silverestimate/persistence/database_manager.py" = ["PLR0915"]
 "silverestimate/persistence/silver_bars_queries.py" = ["PLR0913", "PLR0915"]
 "silverestimate/persistence/silver_bars_repository.py" = ["C901", "PLR0912", "PLR0913", "PLR0915"]
 "silverestimate/persistence/silver_bars_snapshot_repository.py" = ["PLR0913"]
-"silverestimate/security/encrypted_envelope.py" = ["PLR0912", "PLR0915"]
 "silverestimate/security/encryption.py" = ["PLR0913"]
 "silverestimate/services/auth_service.py" = ["C901", "PLR0911", "PLR0912", "PLR0915"]
 "silverestimate/services/dda_rate_stream.py" = ["PLR0913"]
@@ -203,7 +196,7 @@ module = [
     "silverestimate.security.credential_store",
     "silverestimate.services.estimate_calculator",
     "silverestimate.services.estimate_repository",
-    "silverestimate.persistence.migrations",
+    "silverestimate.persistence.schema",
     "silverestimate.persistence.silver_bars_queries",
     "silverestimate.persistence.silver_bars_snapshot_repository",
     "silverestimate.presenter.estimate_entry_presenter",
@@ -225,7 +218,6 @@ module = [
     "silverestimate.persistence.silver_bar_query_repository",
     "silverestimate.persistence.repository_results",
     "silverestimate.persistence.silver_bar_synchronization_repository",
-    "silverestimate.security.encrypted_envelope",
     "silverestimate.services.dda_rate_fetcher",
     "silverestimate.services.dda_rate_stream",
     "silverestimate.ui.estimate_entry_facade",
@@ -257,10 +249,7 @@ markers = [
     "unit: marks tests as unit tests",
     "smoke: marks opt-in smoke tests that exercise full application startup",
 ]
-filterwarnings = [
-    "error",
-    "ignore:'crypt' is deprecated and slated for removal in Python 3.13:DeprecationWarning",
-]
+filterwarnings = ["error"]
 
 [tool.coverage.run]
 source = ["silverestimate"]
@@ -269,7 +258,6 @@ omit = [
     "*/test_*.py",
     "*/__pycache__/*",
     "*/site-packages/*",
-    "*/migrations/*",
 ]
 
 [tool.coverage.report]

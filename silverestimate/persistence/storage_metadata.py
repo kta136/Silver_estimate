@@ -139,15 +139,6 @@ class BackupManifest:
 
 
 @dataclass(frozen=True)
-class MigrationJournal:
-    version: int
-    phase: str
-    source_sha256: str
-    backup_path: str
-    target_path: str
-
-
-@dataclass(frozen=True)
 class RekeyJournal:
     version: int
     phase: str
@@ -177,7 +168,7 @@ def sha256_file(path: str | Path) -> str:
 
 def write_journal(
     path: str | Path,
-    journal: MigrationJournal | RekeyJournal | RestoreJournal,
+    journal: RekeyJournal | RestoreJournal,
 ) -> None:
     atomic_write_json(path, asdict(journal))
 
@@ -185,7 +176,6 @@ def write_journal(
 __all__ = [
     "BackupManifest",
     "KdfMetadata",
-    "MigrationJournal",
     "RekeyJournal",
     "RestoreJournal",
     "StorageMetadataError",

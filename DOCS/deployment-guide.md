@@ -33,7 +33,7 @@ uv run nox -s build_standalone
 uv run nox -s standalone_artifact_smoke
 uv run nox -s build_clean
 uv run nox -s artifact_smoke
-uv run python scripts/check_startup_budgets.py --artifact dist\SilverEstimate-v3.08.exe --samples 5 --p95-budget-ms 3000
+uv run python scripts/check_startup_budgets.py --artifact dist\SilverEstimate-v3.09.exe --samples 5 --p95-budget-ms 3000
 ```
 
 The standalone build is a diagnostic artifact at
@@ -46,6 +46,28 @@ The clean one-file build produces:
 - `dist/SilverEstimate.exe`;
 - `dist/SilverEstimate-v<APP_VERSION>.exe`;
 - `dist/SilverEstimate-v<APP_VERSION>-win64.zip`.
+
+For a local release build, run `scripts\build_windows_local.ps1`. The script
+requires the locked `uv` environment and Python 3.14, removes the stale
+unversioned artifact before compilation, builds the one-file loader with MSVC,
+and runs the frozen artifact under a system-only `PATH`. It also inspects the
+outer PE import table and rejects the build if it requires anything beyond
+`KERNEL32.dll` and `SHELL32.dll`. This prevents accidental dependencies on a
+developer machine's Universal CRT installation. The script rejects copy
+mismatches and prints the deliverable's SHA-256 hash.
+
+The frozen application writes an early bootstrap trace to
+`logs/SilverEstimate-startup.log` beside the executable. If that directory is
+not writable, diagnostics and normal logs fall back to
+`%LOCALAPPDATA%\SilverEstimate\logs`. Early import failures use a native Windows
+error dialog, so they remain visible even when Qt itself cannot load. The
+one-file executable attaches to an existing console without creating one for
+normal Explorer launches; run it from Command Prompt to capture loader output.
+
+The application and its encrypted database are portable and live together, so
+place the executable in a user-writable directory. Do not run it directly from
+inside the zip or from a protected directory such as `Program Files` unless its
+data directory has explicitly been made writable.
 
 The canonical configuration is `pysidedeploy.spec`. It selects the Windows
 platform, icon/SVG/image, widget, and print-support components; embeds required
@@ -104,7 +126,7 @@ matching tag workflow completes successfully.
 
 Signing is intentionally non-blocking until `WINDOWS_SIGNING_CERTIFICATE_BASE64` and `WINDOWS_SIGNING_CERTIFICATE_PASSWORD` are configured. Once production credentials are available, remove `continue-on-error` after validating the timestamp and certificate chain.
 
-Nuitka 4.1.3 is the newest stable release available for this migration and
+Nuitka 4.1.3 is the selected stable release for the current toolchain and
 adds Python 3.14 support, but still labels Python 3.14 experimental during the
 build. The executable must not be promoted until the hosted Windows build,
 artifact smoke, complete tests, and startup budget all pass with the locked
@@ -115,22 +137,10 @@ release requirements. It is not compared with the retired M0 PyQt6 executable.
 
 ## Manual release smoke
 
-Before promoting a stable release, verify the committed SQLCipher 4.17.x wheel against its recorded SHA-256 and native inventory, probe the installed and frozen runtimes, migrate a production `SILVDB01` copy, reject plaintext and unsupported metadata, exercise encrypted backup/restore and copy-switch password rotation with injected interruption, and verify estimate/paging/rate/print workflows. Rebuilding the native wheel is required only when deliberately replacing the bundled dependency.
+Before promoting a stable release, verify the committed SQLCipher 4.17.x wheel against its recorded SHA-256 and native inventory, probe the installed and frozen runtimes, reject plaintext and unsupported schema/KDF metadata, exercise encrypted backup/restore and copy-switch password rotation with injected interruption, and verify estimate/paging/rate/print workflows. Rebuilding the native wheel is required only when deliberately replacing the bundled dependency.
 
-Normal runtime database files, WAL, and journals are SQLCipher encrypted. The marked one-time legacy migration workspace is the only plaintext database exception and is cleaned on all exits and next startup. Production devices should still use Windows device encryption/BitLocker and a trusted account because SQLCipher does not protect live process memory, hibernation, or a compromised user.
+Normal runtime database files, WAL, and journals are SQLCipher encrypted. Production devices should still use Windows device encryption/BitLocker and a trusted account because SQLCipher does not protect live process memory, hibernation, or a compromised user.
 
-### Installed-system SILVDB01 acceptance
-
-Before retiring the compatibility importer on the single supported installation:
-
-1. Back up the complete installed application/data directory.
-2. Run the migration from the replacement EXE in that same directory.
-3. Confirm `estimation.db`, `estimation.kdf.json`, and
-   `estimation.silvdb01.backup` exist and the live file is not a `SILVDB01`
-   envelope.
-4. Close the application, reopen it, authenticate, and verify representative
-   estimate, item, and silver-bar records.
-5. Create and validate an encrypted `.sedbbackup` archive.
-
-Keep `estimation.silvdb01.backup` until an explicit retention decision is made.
-It is a retained recovery artifact, not the live database.
+The retired `SILVDB01` importer is not part of release validation. Any separately
+retained pre-SQLCipher backup requires an older release or an external recovery
+procedure and is never selected as the live database.

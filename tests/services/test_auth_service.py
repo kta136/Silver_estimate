@@ -39,10 +39,8 @@ class _PasswordServiceStub:
         self,
         *,
         matches=(),
-        replacements=None,
     ):
         self._matches = set(matches)
-        self._replacements = replacements or {}
 
     @staticmethod
     def hash_password(value):
@@ -50,10 +48,7 @@ class _PasswordServiceStub:
 
     def verify_password(self, stored, provided):
         verified = (stored, provided) in self._matches
-        return PasswordVerification(
-            verified=verified,
-            replacement_hash=self._replacements.get(stored) if verified else None,
-        )
+        return PasswordVerification(verified=verified)
 
 
 def test_run_authentication_first_time(monkeypatch, settings_stub):
@@ -237,45 +232,6 @@ def test_run_authentication_retries_after_incorrect_password(
     assert len(_MessageBoxStub.warning_calls) == 1
 
 
-def test_run_authentication_upgrades_a_legacy_hash_after_login(
-    monkeypatch,
-    settings_stub,
-):
-    _MessageBoxStub.reset()
-    credential_store.set_password_hash("main", "legacy-main-hash")
-    credential_store.set_password_hash("backup", "backup-hash")
-
-    class _LoginDialog:
-        def __init__(self, is_setup=False, parent=None):
-            assert is_setup is False
-
-        def exec(self):
-            return QDialog.DialogCode.Accepted
-
-        def was_reset_requested(self):
-            return False
-
-        def get_password(self):
-            return "secret"
-
-    monkeypatch.setattr(auth_service, "LoginDialog", _LoginDialog)
-    monkeypatch.setattr(
-        auth_service,
-        "_password_service",
-        _PasswordServiceStub(
-            matches={("legacy-main-hash", "secret")},
-            replacements={"legacy-main-hash": "current-main-hash"},
-        ),
-    )
-    monkeypatch.setattr(auth_service, "QMessageBox", _MessageBoxStub)
-
-    result = auth_service.run_authentication(logging.getLogger("test-auth-rehash"))
-
-    assert isinstance(result, auth_service.AuthenticationResult)
-    assert result.password == "secret"
-    assert credential_store.get_password_hash("main") == "current-main-hash"
-
-
 def test_verify_password_contains_an_unavailable_verifier(monkeypatch, caplog):
     class _UnavailablePasswordService:
         @staticmethod
@@ -300,12 +256,8 @@ def test_perform_data_wipe_removes_files(tmp_path, monkeypatch, settings_stub):
     _MessageBoxStub.reset()
     db_file = tmp_path / "estimation.db"
     db_file.write_text("encrypted")
-    temp_file = tmp_path / "temp.sqlite"
-    temp_file.write_text("temp")
 
-    settings = settings_stub()
-    settings.setValue("security/db_salt", b"salt")
-    settings.setValue("security/last_temp_db_path", str(temp_file))
+    settings_stub()
     credential_store.set_password_hash("main", "hash")
     credential_store.set_password_hash("backup", "backup")
 
@@ -317,11 +269,8 @@ def test_perform_data_wipe_removes_files(tmp_path, monkeypatch, settings_stub):
 
     assert result is True
     assert not db_file.exists()
-    assert not temp_file.exists()
     assert credential_store.get_password_hash("main") is None
     assert credential_store.get_password_hash("backup") is None
-    for key in ("security/db_salt", "security/last_temp_db_path"):
-        assert settings.value(key) is None
 
 
 def test_perform_data_wipe_silent_removes_logs(tmp_path, monkeypatch, settings_stub):
@@ -334,8 +283,7 @@ def test_perform_data_wipe_silent_removes_logs(tmp_path, monkeypatch, settings_s
     (log_root / "silver_app.log").write_text("log")
     (log_root / "archived" / "old.log").write_text("old log")
 
-    settings = settings_stub()
-    settings.setValue("security/db_salt", b"salt")
+    settings_stub()
     credential_store.set_password_hash("main", "hash")
 
     def _get_log_config():

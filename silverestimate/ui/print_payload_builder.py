@@ -22,7 +22,7 @@ def _sanitize_filename_stem(value: str) -> str:
 
 @dataclass(frozen=True)
 class HtmlPrintDocument:
-    """Legacy HTML document retained for silver-bar reports."""
+    """HTML document used by current silver-bar reports."""
 
     html_content: str
     table_mode: bool = True

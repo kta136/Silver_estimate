@@ -137,18 +137,20 @@ def test_production_database_access_is_confined_to_sqlcipher_broker() -> None:
         for path in (root / "silverestimate").rglob("*.py")
         if "import sqlite3" in path.read_text(encoding="utf-8")
     ]
-    assert imports == ["silverestimate/persistence/database_driver.py"]
+    assert not imports
 
     removed = (
         "database_lifecycle.py",
         "database_startup.py",
         "encrypted_database_store.py",
         "flush_scheduler.py",
+        "migrations.py",
         "sqlite_database_runtime.py",
         "temp_database_store.py",
     )
     persistence = root / "silverestimate" / "persistence"
     assert not [name for name in removed if (persistence / name).exists()]
+    assert not (root / "silverestimate" / "security" / "encrypted_envelope.py").exists()
 
 
 def test_password_hashing_is_confined_to_the_security_service() -> None:
@@ -166,4 +168,4 @@ def test_password_hashing_is_confined_to_the_security_service() -> None:
         root / "silverestimate" / "security" / "password_service.py"
     ).read_text(encoding="utf-8")
     assert "PasswordHasher" in password_service
-    assert "check_needs_rehash" in password_service
+    assert "check_needs_rehash" not in password_service

@@ -434,7 +434,7 @@ def test_incremental_rebuild_after_apply_loaded_estimate(qt_app, fake_db):
         widget.deleteLater()
 
 
-def test_incremental_failure_does_not_use_legacy_fallback(qt_app, fake_db):
+def test_incremental_failure_does_not_use_removed_full_recalculation(qt_app, fake_db):
     widget = _make_widget(fake_db)
     try:
         table = _set_row(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import threading
 import time
 import traceback
 from dataclasses import dataclass
@@ -23,7 +24,7 @@ from silverestimate.infrastructure.logger import (
     qt_message_handler,
     setup_logging,
 )
-from silverestimate.infrastructure.paths import get_asset_path
+from silverestimate.infrastructure.paths import get_asset_path, get_fallback_log_dir
 from silverestimate.infrastructure.windows_integration import set_app_user_model_id
 from silverestimate.ui.application_theme import apply_light_application_theme
 
@@ -54,6 +55,7 @@ class ApplicationContext:
     startup_t0_perf: float = 0.0
     startup_t0_unix: float = 0.0
     instance_lock: Optional[QLockFile] = None
+    startup_preload_thread: Optional[threading.Thread] = None
 
     def shutdown(self) -> None:
         """Release resources created during startup."""
@@ -101,6 +103,7 @@ class ApplicationBuilder:
         app_name: str = "silver_app",
         startup_t0_perf: float | None = None,
         startup_t0_unix: float | None = None,
+        startup_preloader: Callable[[], None] | None = None,
     ) -> None:
         self._main_window_factory = main_window_factory
         self._startup_controller_factory = startup_controller_factory
@@ -114,6 +117,7 @@ class ApplicationBuilder:
         self._app_name = app_name
         self._startup_t0_perf = startup_t0_perf
         self._startup_t0_unix = startup_t0_unix
+        self._startup_preloader = startup_preloader
 
     def run(self) -> int:
         """Build and execute the application, returning an exit code."""
@@ -165,6 +169,7 @@ class ApplicationBuilder:
                 time.time(),
             )
             self._log_startup_telemetry(context, "startup.qt_ready_ms", qt_ready_ms)
+        self._schedule_startup_preload(context)
         db_manager, early_exit = self._authenticate(context)
         self._log_startup_telemetry(context, "startup.authentication_complete_ms")
         if early_exit is not None:
@@ -221,19 +226,67 @@ class ApplicationBuilder:
             elapsed_ms,
         )
 
-    def _configure_logging(self, context: ApplicationContext) -> None:
-        logs_dir = Path("logs")
-        logs_dir.mkdir(exist_ok=True)
+    def _schedule_startup_preload(self, context: ApplicationContext) -> None:
+        """Warm safe post-login imports in the background once a dialog event loop runs."""
+        startup_preloader = self._startup_preloader
+        if startup_preloader is None:
+            return
 
+        def run_preloader() -> None:
+            started_at = time.perf_counter()
+            try:
+                startup_preloader()
+            except Exception as exc:
+                if context.logger:
+                    context.logger.debug(
+                        "Post-login runtime preload failed: %s",
+                        exc,
+                        exc_info=True,
+                    )
+            finally:
+                if context.logger:
+                    duration_ms = (time.perf_counter() - started_at) * 1000.0
+                    context.logger.info(
+                        '[telemetry] {"metric":"startup.login_preload_ms",'
+                        '"duration_ms":%.3f}',
+                        duration_ms,
+                    )
+
+        def start_preloader() -> None:
+            if context.startup_preload_thread is not None:
+                return
+            thread = threading.Thread(
+                target=run_preloader,
+                name="silverestimate-startup-preload",
+                daemon=True,
+            )
+            context.startup_preload_thread = thread
+            thread.start()
+
+        timer_type = getattr(QtCore, "QTimer", None)
+        single_shot = getattr(timer_type, "singleShot", None)
+        if callable(single_shot):
+            single_shot(0, start_preloader)
+        else:
+            start_preloader()
+
+    def _configure_logging(self, context: ApplicationContext) -> None:
         log_config = self._log_config_getter()
-        logger = self._logging_setup(
-            app_name=self._app_name,
-            log_dir=log_config["log_dir"],
-            debug_mode=log_config["debug_mode"],
-            enable_info=log_config["enable_info"],
-            enable_error=log_config["enable_error"],
-            enable_debug=log_config["enable_debug"],
-        )
+        try:
+            logger = self._setup_configured_logging(log_config)
+        except OSError as exc:
+            primary_log_dir = Path(log_config["log_dir"]).resolve()
+            fallback_log_dir = get_fallback_log_dir().resolve()
+            if primary_log_dir == fallback_log_dir:
+                raise
+            log_config = {**log_config, "log_dir": str(fallback_log_dir)}
+            logger = self._setup_configured_logging(log_config)
+            logger.warning(
+                "Primary log directory %s was unavailable (%s); using %s",
+                primary_log_dir,
+                exc,
+                fallback_log_dir,
+            )
         context.logger = logger
         logger.info("%s starting", APP_TITLE)
         logger.debug("Logging configuration: %s", log_config)
@@ -256,6 +309,16 @@ class ApplicationBuilder:
                     exc,
                     exc_info=True,
                 )
+
+    def _setup_configured_logging(self, log_config: dict[str, Any]) -> logging.Logger:
+        return self._logging_setup(
+            app_name=self._app_name,
+            log_dir=log_config["log_dir"],
+            debug_mode=log_config["debug_mode"],
+            enable_info=log_config["enable_info"],
+            enable_error=log_config["enable_error"],
+            enable_debug=log_config["enable_debug"],
+        )
 
     def _configure_qt(self, context: ApplicationContext) -> None:
         qt_bootstrap.configure_qt_before_application()
@@ -402,10 +465,25 @@ class ApplicationBuilder:
 
     def _show_message_box(self, title: str, message: str) -> None:
         try:
-            QMessageBox.critical(None, title, message)
+            if QApplication.instance() is not None:
+                QMessageBox.critical(None, title, message)
+                return
         except Exception as exc:
             logging.getLogger(__name__).debug(
                 "Failed to display startup error dialog: %s", exc
+            )
+        if sys.platform != "win32":
+            return
+        try:
+            import ctypes
+
+            windll = getattr(ctypes, "windll", None)
+            user32 = getattr(windll, "user32", None)
+            if user32 is not None:
+                user32.MessageBoxW(None, message, title, 0x10)
+        except Exception as exc:
+            logging.getLogger(__name__).debug(
+                "Failed to display native startup error dialog: %s", exc
             )
 
     def _handle_unexpected_exception(

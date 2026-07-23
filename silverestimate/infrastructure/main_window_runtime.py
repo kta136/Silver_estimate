@@ -4,7 +4,20 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from importlib import import_module
 from typing import Any, Optional
+
+POST_AUTH_RUNTIME_MODULES = (
+    "silverestimate.persistence.database_manager",
+    "silverestimate.controllers.live_rate_controller",
+    "silverestimate.controllers.navigation_controller",
+    "silverestimate.services.estimate_repository",
+    "silverestimate.services.main_commands",
+    "silverestimate.services.navigation_service",
+    "silverestimate.services.settings_service",
+    "silverestimate.ui.estimate_entry",
+    "silverestimate.ui.main_window",
+)
 
 
 @dataclass(frozen=True)
@@ -17,6 +30,12 @@ class MainWindowRuntime:
     navigation_controller: Any
     live_rate_controller: Any
     estimate_widget: Any
+
+
+def preload_post_auth_runtime() -> None:
+    """Import post-login modules while the operator is entering the password."""
+    for module_name in POST_AUTH_RUNTIME_MODULES:
+        import_module(module_name)
 
 
 def build_main_window_runtime(
@@ -81,6 +100,8 @@ def create_main_window(*, db_manager: Any, logger: Optional[logging.Logger] = No
 
 __all__ = [
     "MainWindowRuntime",
+    "POST_AUTH_RUNTIME_MODULES",
     "build_main_window_runtime",
     "create_main_window",
+    "preload_post_auth_runtime",
 ]

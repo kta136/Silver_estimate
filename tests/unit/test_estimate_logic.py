@@ -1,4 +1,4 @@
-"""Calculator-focused tests replacing legacy EstimateLogic mixin coverage."""
+"""Calculator-focused estimate-logic tests."""
 
 import pytest
 

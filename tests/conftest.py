@@ -67,7 +67,7 @@ class _SettingsStub:
     def status(self):
         return 0
 
-    def sync(self):  # QSettings compatibility
+    def sync(self):  # QSettings test double API
         return True
 
     @classmethod

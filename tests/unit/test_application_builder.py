@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import types
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
 from silverestimate.controllers.startup_controller import StartupResult, StartupStatus
 from silverestimate.infrastructure import application as application_module
-from silverestimate.infrastructure.application import ApplicationBuilder, StartupError
+from silverestimate.infrastructure.application import (
+    ApplicationBuilder,
+    ApplicationContext,
+    StartupError,
+)
 
 
 class StubLogger:
@@ -250,6 +255,29 @@ def test_run_initialises_main_window_and_enters_event_loop(tmp_path, stub_qt):
     assert stub_app.instance_ref.palette is not None
     assert "QMenuBar" in stub_app.instance_ref.stylesheet
     assert message_box.last_call is None
+
+
+def test_startup_preloader_runs_once_in_background(tmp_path, stub_qt):
+    calls = []
+    builder = _make_builder(
+        StartupResult(status=StartupStatus.CANCELLED),
+        lambda **_kwargs: object(),
+        tmp_path,
+    )
+    builder._startup_preloader = lambda: calls.append("preloaded")
+    logger = StubLogger()
+    context = ApplicationContext(logger=cast(Any, logger))
+
+    builder._schedule_startup_preload(context)
+    builder._schedule_startup_preload(context)
+
+    assert context.startup_preload_thread is not None
+    context.startup_preload_thread.join(timeout=2)
+    assert calls == ["preloaded"]
+    assert any(
+        record[0] == "info" and "startup.login_preload_ms" in record[1]
+        for record in logger.records
+    )
 
 
 def test_run_handles_startup_error_from_main_window(tmp_path, stub_qt):

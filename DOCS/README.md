@@ -1,7 +1,7 @@
 # Silver Estimate Documentation
 
 This directory contains the maintained technical and operational documentation
-for the v3.08 source tree. Packaged releases support Windows 10/11; macOS and
+for the v3.09 source tree. Packaged releases support Windows 10/11; macOS and
 Linux are untested development environments.
 
 ## Start here
@@ -9,17 +9,16 @@ Linux are untested development environments.
 | Guide | Use it for |
 |---|---|
 | [Project architecture](project-architecture.md) | Runtime boundaries, repositories, workers, encryption flow, and extension rules |
-| [Modernization roadmap](modernization-roadmap.md) | Ordered SQLCipher, PySide6, dependency, architecture, testing, and release plan |
 | [Workflow and business logic](workflow-business-logic.md) | Estimate, item, silver-bar, authentication, backup, and UI workflows |
-| [Data model and relationships](data-model-relationships.md) | Schema v8 tables, foreign keys, indexes, and migration history |
-| [Security architecture](security-architecture.md) | Authentication, SQLCipher/keyring boundaries, migration/recovery, and threat limitations |
+| [Data model and relationships](data-model-relationships.md) | Schema v8 tables, foreign keys, indexes, and version history |
+| [Security architecture](security-architecture.md) | Authentication, SQLCipher/keyring boundaries, recovery, and threat limitations |
 | [API reference](api-reference.md) | Primary controllers, services, repositories, helpers, and UI entry points |
 | [Deployment guide](deployment-guide.md) | Frozen environment, validation, Windows builds, tags, signing, and releases |
 | [Performance baselines](performance-baseline-thresholds.md) | Deterministic datasets, p95 budgets, and CI enforcement |
 
 ## Project status
 
-- Source version: `3.08`
+- Source version: `3.09`
 - Runtime: Python 3.14, PySide6/Shiboken6 6.11, and Qt 6.11
 - Packaged platform: Windows 10/11
 - Stable downloads: [GitHub Releases](https://github.com/kta136/Silver_estimate/releases/latest)

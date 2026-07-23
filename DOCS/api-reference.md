@@ -57,7 +57,7 @@ This guide documents the primary controller, service, and persistence APIs expos
 
 ### Password Hashing (silverestimate/security/password_service.py)
 - **PasswordHashService.hash_password(password: str) -> str** - creates an Argon2id PHC hash using the explicit application policy.
-- **PasswordHashService.verify_password(stored_hash: str, provided_password: str) -> PasswordVerification** - distinguishes mismatch from malformed storage and returns a replacement hash only when the verified record needs rehashing.
+- **PasswordHashService.verify_password(stored_hash: str, provided_password: str) -> PasswordVerification** - distinguishes mismatch from malformed storage.
 
 ### Credential Store (silverestimate/security/credential_store.py)
 - **get_backend_status() -> CredentialBackendStatus** - reports whether the active operating-system keyring backend is trusted and usable.
@@ -111,10 +111,10 @@ This guide documents the primary controller, service, and persistence APIs expos
 Responsibilities:
 - Open the live SQLCipher database directly through the keyed broker and expose repository compatibility cursors.
 - Expose repository accessors: items_repo, estimates_repo, silver_bars_repo.
-- Detect/create/migrate storage, validate the controlled driver, and serialize maintenance operations.
+- Detect/create current storage, validate the controlled driver and schema, and serialize maintenance operations.
 
 Key Public Methods:
-- **setup_database() -> None** – ensure schema and migrations are applied.
+- **setup_database() -> None** – create a fresh schema v8 or validate an existing schema v8.
 - **generate_voucher_no() -> str** – delegate to `EstimatesRepository` through the repository facade.
 - **save_estimate_with_returns(... ) -> bool** – transactional save for headers/items, with bar sync.
 - **get_estimate_by_voucher(voucher_no: str) -> Optional[dict]** – retrieve composite estimate payloads.
@@ -130,7 +130,7 @@ New integrations should favour the role-specific repositories below instead of a
 ### ItemsRepository (silverestimate/persistence/items_repository.py)
 - **get_item_by_code(code: str)** – fetch item rows with cache support.
 - **get_items_page(...) -> Page[dict, ItemCursor]** – keyset page of up to 1,000 filtered items.
-- **search_items(search_term: str) / get_all_items()** – compatibility list helpers.
+- **search_items(search_term: str) / get_all_items()** – list-oriented query helpers.
 - **add_item(...) / update_item(...) / delete_item(code: str)** – maintain catalog entries in direct SQLCipher transactions.
 
 ### EstimatesRepository (silverestimate/persistence/estimates_repository.py)
@@ -141,7 +141,7 @@ New integrations should favour the role-specific repositories below instead of a
 - **delete_single_estimate(voucher_no: str) -> bool** – cleanup helper used by DatabaseManager.
 
 ### SilverBarsRepository (silverestimate/persistence/silver_bars_repository.py)
-- Compatibility facade over `SilverBarQueryRepository`, `SilverBarCommandRepository`, and `SilverBarSynchronizationRepository`.
+- Public facade over `SilverBarQueryRepository`, `SilverBarCommandRepository`, and `SilverBarSynchronizationRepository`.
 - **create_list(note: Optional[str] = None) -> Optional[int] / get_lists(include_issued: bool = True)** – manage bar list metadata.
 - **assign_bar_to_list(bar_id: int, list_id: int, note: str = ...) -> bool** – move bars into lists with transfer logging.
 - **remove_bar_from_list(bar_id: int, note: str = ...) -> bool** – reverse assignments, recording transfer history.
@@ -155,7 +155,7 @@ New integrations should favour the role-specific repositories below instead of a
 
 - **ItemCacheController (silverestimate/infrastructure/item_cache.py)** - shared cache utilised by ItemsRepository for hot lookups.
 - **SqlCipherConnectionBroker (silverestimate/persistence/database_driver.py)** - owns the raw database key, verifies the controlled SQLCipher runtime, configures direct live and worker connections, and serializes maintenance operations.
-- **KdfMetadata and maintenance journals (silverestimate/persistence/storage_metadata.py)** - strict versioned KDF, backup, migration, rekey, and restore records with canonical JSON and atomic publication.
+- **KdfMetadata and maintenance journals (silverestimate/persistence/storage_metadata.py)** - strict versioned KDF plus backup, rekey, and restore records with canonical JSON and atomic publication.
 - **InlineStatusController (silverestimate/ui/inline_status.py)** - helper used across UI widgets to surface status messages without tight UI coupling.
 - **CredentialStore (silverestimate/security/credential_store.py)** - OS keyring abstraction for hashed credentials.
 - **Display formatting (silverestimate/ui/display_formatting.py)** - `format_display_date()` and `format_rupees()` provide consistent user-facing dates and Indian-number currency grouping.

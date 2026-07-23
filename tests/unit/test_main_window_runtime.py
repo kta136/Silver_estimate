@@ -1,6 +1,19 @@
 from silverestimate.infrastructure import main_window_runtime
 
 
+def test_preload_post_auth_runtime_imports_deferred_dependencies(monkeypatch):
+    imported = []
+    monkeypatch.setattr(
+        main_window_runtime,
+        "import_module",
+        lambda module_name: imported.append(module_name),
+    )
+
+    main_window_runtime.preload_post_auth_runtime()
+
+    assert imported == list(main_window_runtime.POST_AUTH_RUNTIME_MODULES)
+
+
 def test_create_main_window_defers_heavy_runtime(monkeypatch):
     captured = {}
 

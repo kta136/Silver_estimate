@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## [3.09] - 2026-07-23
+
+### Removed
+
+- Removed the retired `SILVDB01` importer, AES-GCM envelope reader, plaintext
+  migration workspace, importer tests, and direct `cryptography` dependency.
+- Removed historical schema v1-v8 upgrade branches; fresh databases are created
+  directly at schema v8 and non-current schemas now fail closed.
+- Removed password-policy rehash persistence, retired print-layout aliases, the
+  compatibility-only re-encryption wrapper, and completed migration tooling.
+
 ## [3.08] - 2026-07-23
 
 - Replaced the PyQt6 runtime with PySide6/Shiboken6 6.11.1 and Qt 6.11.1

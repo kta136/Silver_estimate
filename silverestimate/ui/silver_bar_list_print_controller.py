@@ -4,40 +4,18 @@ from __future__ import annotations
 
 import logging
 import traceback
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QObject, QThread, Signal
+from PySide6.QtCore import QObject, QThread
 from PySide6.QtWidgets import QMessageBox, QProgressDialog
 
 from ._host_proxy import HostProxy
+from .preview_build_worker import PreviewBuildCallbackRouter, PreviewBuildWorker
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class _PrintPreviewBuildWorker(QObject):
-    """Prepare a silver-bar list preview away from the GUI thread."""
-
-    preview_ready = Signal(int, object)
-    preview_error = Signal(int, str)
-    finished = Signal(int)
-
-    def __init__(
-        self,
-        request_id: int,
-        build_preview: Callable[[], object],
-    ) -> None:
-        super().__init__()
-        self._request_id = request_id
-        self._build_preview = build_preview
-
-    def run(self) -> None:
-        try:
-            self.preview_ready.emit(self._request_id, self._build_preview())
-        except Exception as exc:
-            self.preview_error.emit(self._request_id, str(exc))
-        finally:
-            self.finished.emit(self._request_id)
+_PrintPreviewBuildWorker = PreviewBuildWorker
 
 
 class SilverBarListPrintController(HostProxy):
@@ -140,34 +118,36 @@ class SilverBarListPrintController(HostProxy):
             active_workers = self._active_print_preview_workers
         active_workers[thread] = worker
 
-        thread.started.connect(worker.run)
-        worker.preview_ready.connect(
-            lambda rid, payload: self._on_list_print_preview_ready(
+        callback_router = PreviewBuildCallbackRouter(
+            on_ready=lambda rid, payload: self._on_list_print_preview_ready(
                 rid,
                 payload,
                 thread=thread,
                 worker=worker,
                 print_manager=print_manager,
                 progress=progress,
-            )
-        )
-        worker.preview_error.connect(
-            lambda rid, message: self._on_list_print_preview_error(
+            ),
+            on_error=lambda rid, message: self._on_list_print_preview_error(
                 rid,
                 message,
                 thread=thread,
                 worker=worker,
                 progress=progress,
-            )
-        )
-        worker.finished.connect(
-            lambda rid: self._finish_list_print_preview_build(
+            ),
+            on_finished=lambda rid: self._finish_list_print_preview_build(
                 rid,
                 thread=thread,
                 worker=worker,
                 progress=progress,
-            )
+                callback_router=callback_router,
+            ),
+            parent=self.host,
         )
+
+        thread.started.connect(worker.run)
+        worker.preview_ready.connect(callback_router.handle_ready)
+        worker.preview_error.connect(callback_router.handle_error)
+        worker.finished.connect(callback_router.handle_finished)
         thread.start()
 
     def _on_list_print_preview_ready(
@@ -224,6 +204,7 @@ class SilverBarListPrintController(HostProxy):
         thread,
         worker,
         progress,
+        callback_router: QObject | None = None,
     ) -> None:
         del request_id
         try:
@@ -243,6 +224,8 @@ class SilverBarListPrintController(HostProxy):
             self.logger.debug("Failed to stop list preview worker thread: %s", exc)
         try:
             worker.deleteLater()
+            if callback_router is not None:
+                callback_router.deleteLater()
             thread.deleteLater()
         except Exception as exc:
             self.logger.debug("Failed to delete list preview worker: %s", exc)

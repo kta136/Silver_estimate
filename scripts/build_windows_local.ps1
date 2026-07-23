@@ -4,6 +4,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $appConstants = Join-Path $repoRoot "silverestimate\infrastructure\app_constants.py"
 $deployConfig = Join-Path $repoRoot "pysidedeploy.spec"
+$artifactValidator = Join-Path $repoRoot "scripts\validate_frozen_artifact.py"
 $distDir = Join-Path $repoRoot "dist"
 $requiredPython = [version]"3.14"
 $nuitkaVersion = "4.1.3"
@@ -35,7 +36,9 @@ function Test-PythonForBuild([string]$pythonExe) {
         return $false
     }
     $version = Get-PythonVersion -pythonExe $pythonExe
-    return $version -and $version -ge $requiredPython
+    return $version -and
+        $version.Major -eq $requiredPython.Major -and
+        $version.Minor -eq $requiredPython.Minor
 }
 
 function Get-Python314FromLauncher {
@@ -117,27 +120,20 @@ function Find-WindowsPython {
 
 function Sync-ProjectDependencies([string]$pythonExe) {
     $uv = Get-Command uv -ErrorAction SilentlyContinue
-    if ($uv) {
-        & $uv.Source sync --extra dev --python $pythonExe --locked
-        if (-not $?) {
-            throw "uv dependency sync failed."
-        }
-
-        $venvPython = Join-Path $repoRoot ".venv\Scripts\python.exe"
-        if (Test-PythonForBuild -pythonExe $venvPython) {
-            return $venvPython
-        }
+    if (-not $uv) {
+        throw "uv is required for a locked release build but was not found on PATH."
     }
 
-    & $pythonExe -m pip install --upgrade pip
-    if (-not $?) {
-        throw "pip upgrade failed."
+    & $uv.Source sync --extra dev --python $pythonExe --locked
+    if ($LASTEXITCODE -ne 0) {
+        throw "uv dependency sync failed with exit code $LASTEXITCODE."
     }
-    & $pythonExe -m pip install -e ".[dev]"
-    if (-not $?) {
-        throw "project dependency install failed."
+
+    $venvPython = Join-Path $repoRoot ".venv\Scripts\python.exe"
+    if (-not (Test-PythonForBuild -pythonExe $venvPython)) {
+        throw "Locked dependency sync did not produce a Python 3.14 virtual environment."
     }
-    return $pythonExe
+    return $venvPython
 }
 
 function Get-PySideDeploy([string]$pythonExe) {
@@ -149,50 +145,211 @@ function Get-PySideDeploy([string]$pythonExe) {
     return $deployExe
 }
 
+function Find-Dumpbin {
+    $onPath = Get-Command dumpbin.exe -ErrorAction SilentlyContinue
+    if ($onPath) {
+        return $onPath.Source
+    }
+
+    $searchRoots = @(
+        "C:\BuildTools\VC\Tools\MSVC",
+        (Join-Path ${env:ProgramFiles} "Microsoft Visual Studio"),
+        (Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio")
+    )
+    foreach ($root in $searchRoots) {
+        if (-not (Test-Path -LiteralPath $root)) {
+            continue
+        }
+        $candidate = Get-ChildItem -LiteralPath $root -Recurse -Filter "dumpbin.exe" -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -like "*\bin\Hostx64\x64\dumpbin.exe" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+        if ($candidate) {
+            return $candidate.FullName
+        }
+    }
+    throw "64-bit dumpbin.exe is required for native dependency discovery."
+}
+
+function Remove-DistBuildDirectory([string]$target) {
+    if (-not (Test-Path -LiteralPath $target)) {
+        return
+    }
+    $resolvedDist = [IO.Path]::GetFullPath($distDir).TrimEnd("\")
+    $resolvedTarget = [IO.Path]::GetFullPath($target).TrimEnd("\")
+    if (
+        $resolvedTarget -eq $resolvedDist -or
+        -not $resolvedTarget.StartsWith("$resolvedDist\", [StringComparison]::OrdinalIgnoreCase)
+    ) {
+        throw "Refusing to remove build directory outside dist: $resolvedTarget"
+    }
+    Remove-Item -LiteralPath $resolvedTarget -Recurse -Force
+}
+
+function Get-Sha256([string]$path) {
+    $stream = [IO.File]::OpenRead($path)
+    try {
+        $sha256 = [Security.Cryptography.SHA256]::Create()
+        try {
+            return [BitConverter]::ToString($sha256.ComputeHash($stream)).Replace("-", "")
+        }
+        finally {
+            $sha256.Dispose()
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
+function Invoke-PySideDeployBuild(
+    [string]$deployExe,
+    [string]$configFile,
+    [string]$mode,
+    [string]$dumpbinExe
+) {
+    $previousPath = $env:PATH
+    try {
+        $env:PATH = "$(Split-Path -Parent $dumpbinExe);$previousPath"
+        & $deployExe --config-file $configFile --force --mode $mode --nuitka-version $nuitkaVersion
+        if ($LASTEXITCODE -ne 0) {
+            throw "pyside6-deploy $mode build failed with exit code $LASTEXITCODE."
+        }
+    }
+    finally {
+        $env:PATH = $previousPath
+    }
+}
+
+function Invoke-ArtifactValidation([string]$pythonExe, [string]$artifact) {
+    if (-not (Test-Path -LiteralPath $artifactValidator)) {
+        throw "Frozen artifact validator is unavailable at $artifactValidator"
+    }
+
+    $previousPath = $env:PATH
+    $hadConsoleOverride = Test-Path "Env:\SILVER_SHOW_CONSOLE"
+    $previousConsoleOverride = $env:SILVER_SHOW_CONSOLE
+    try {
+        # Do not let Python, Qt, OpenSSL, or VC runtime files installed on the
+        # build machine satisfy a missing dependency in the frozen artifact.
+        $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+        $env:SILVER_SHOW_CONSOLE = "1"
+        & $pythonExe $artifactValidator --artifact $artifact
+        if ($LASTEXITCODE -ne 0) {
+            throw "Frozen artifact validation failed with exit code $LASTEXITCODE."
+        }
+    }
+    finally {
+        $env:PATH = $previousPath
+        if ($hadConsoleOverride) {
+            $env:SILVER_SHOW_CONSOLE = $previousConsoleOverride
+        }
+        else {
+            Remove-Item "Env:\SILVER_SHOW_CONSOLE" -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Invoke-NativeOnefileValidation(
+    [string]$dumpbinExe,
+    [string]$artifact
+) {
+    $dumpbinOutput = @(& $dumpbinExe /nologo /dependents $artifact)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Native dependency inspection failed with exit code $LASTEXITCODE."
+    }
+
+    $dependencies = @(
+        $dumpbinOutput |
+            ForEach-Object {
+                if ($_ -match '^\s+([A-Za-z0-9._-]+\.dll)\s*$') {
+                    $Matches[1].ToLowerInvariant()
+                }
+            } |
+            Sort-Object -Unique
+    )
+    $allowedSystemDependencies = @("kernel32.dll", "shell32.dll")
+    $unexpectedDependencies = @(
+        $dependencies | Where-Object { $allowedSystemDependencies -notcontains $_ }
+    )
+    if ($unexpectedDependencies.Count -gt 0) {
+        throw (
+            "One-file loader has non-system startup dependencies: " +
+            ($unexpectedDependencies -join ", ")
+        )
+    }
+    foreach ($requiredDependency in $allowedSystemDependencies) {
+        if ($dependencies -notcontains $requiredDependency) {
+            throw "One-file loader is missing expected dependency $requiredDependency"
+        }
+    }
+    Write-Host "One-file native dependencies: $($dependencies -join ', ')"
+}
+
+if ($env:OS -ne "Windows_NT" -or -not [Environment]::Is64BitOperatingSystem) {
+    throw "The local release build requires 64-bit Windows."
+}
+
 $pythonExe = Find-WindowsPython
 
 $version = Get-AppVersion
 $versionedExe = Join-Path $distDir "SilverEstimate-v$version.exe"
-$versionedZip = Join-Path $distDir "SilverEstimate-v$version-win64.zip"
 $baseExe = Join-Path $distDir "SilverEstimate.exe"
-$temporaryDeployConfig = Join-Path $repoRoot ".pysidedeploy-local-onefile.spec"
+$standaloneDir = Join-Path $distDir "SilverEstimate.dist"
+$portableDir = Join-Path $distDir "SilverEstimate-v$version-portable"
+$portableZip = Join-Path $distDir "SilverEstimate-v$version-portable-win64.zip"
+$versionedZip = Join-Path $distDir "SilverEstimate-v$version-win64.zip"
+$temporaryOnefileConfig = Join-Path $repoRoot ".pysidedeploy-local-onefile.spec"
 
 Push-Location $repoRoot
 try {
     $buildPython = Sync-ProjectDependencies -pythonExe $pythonExe
     $deployExe = Get-PySideDeploy -pythonExe $buildPython
+    $dumpbinExe = Find-Dumpbin
 
-    Copy-Item -LiteralPath $deployConfig -Destination $temporaryDeployConfig -Force
-    & $deployExe --config-file $temporaryDeployConfig --force --mode onefile --nuitka-version $nuitkaVersion
-    if (-not $?) {
-        throw "pyside6-deploy build failed."
+    New-Item -ItemType Directory -Path $distDir -Force | Out-Null
+    if (Test-Path -LiteralPath $baseExe) {
+        Remove-Item -LiteralPath $baseExe -Force
+    }
+    Remove-DistBuildDirectory -target $standaloneDir
+    Remove-DistBuildDirectory -target $portableDir
+    foreach ($obsoleteArtifact in @($portableZip, $versionedZip)) {
+        if (Test-Path -LiteralPath $obsoleteArtifact) {
+            Remove-Item -LiteralPath $obsoleteArtifact -Force
+        }
     }
 
-    if (-not (Test-Path $baseExe)) {
+    Copy-Item -LiteralPath $deployConfig -Destination $temporaryOnefileConfig -Force
+    Invoke-PySideDeployBuild `
+        -deployExe $deployExe `
+        -configFile $temporaryOnefileConfig `
+        -mode "onefile" `
+        -dumpbinExe $dumpbinExe
+
+    if (-not (Test-Path -LiteralPath $baseExe -PathType Leaf)) {
         throw "Build did not produce $baseExe"
     }
+    Invoke-ArtifactValidation -pythonExe $buildPython -artifact $baseExe
+    Invoke-NativeOnefileValidation -dumpbinExe $dumpbinExe -artifact $baseExe
 
-    if (Test-Path $versionedExe) {
-        Remove-Item -Force $versionedExe
+    if (Test-Path -LiteralPath $versionedExe) {
+        Remove-Item -LiteralPath $versionedExe -Force
     }
-    if (Test-Path $versionedZip) {
-        Remove-Item -Force $versionedZip
+
+    Copy-Item -LiteralPath $baseExe -Destination $versionedExe -Force
+    $baseHash = Get-Sha256 -path $baseExe
+    $versionedHash = Get-Sha256 -path $versionedExe
+    if ($baseHash -ne $versionedHash) {
+        throw "Versioned executable does not match the validated build artifact."
     }
 
-    Copy-Item -Force $baseExe $versionedExe
-    Compress-Archive -LiteralPath @(
-        $versionedExe,
-        (Join-Path $repoRoot "LICENSE"),
-        (Join-Path $repoRoot "THIRD_PARTY_NOTICES.md"),
-        (Join-Path $repoRoot "vendor\sqlcipher\PROVENANCE.json")
-    ) -DestinationPath $versionedZip
-
+    Remove-Item -LiteralPath $baseExe -Force
     Write-Host "Windows executable: $versionedExe"
-    Write-Host "Windows archive: $versionedZip"
+    Write-Host "Executable SHA-256: $versionedHash"
 }
 finally {
-    if (Test-Path -LiteralPath $temporaryDeployConfig) {
-        Remove-Item -LiteralPath $temporaryDeployConfig -Force
+    if (Test-Path -LiteralPath $temporaryOnefileConfig) {
+        Remove-Item -LiteralPath $temporaryOnefileConfig -Force
     }
     Pop-Location
 }

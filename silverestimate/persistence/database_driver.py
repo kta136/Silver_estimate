@@ -305,13 +305,6 @@ def export_database(
         source.execute(f"DETACH DATABASE {schema}")
 
 
-def open_plaintext_legacy(path: str | Path) -> Any:
-    """Open plaintext only for the isolated one-time legacy importer."""
-    import sqlite3
-
-    return sqlite3.connect(path)
-
-
 __all__ = [
     "Connection",
     "Cursor",
@@ -328,7 +321,6 @@ __all__ = [
     "SqlCipherConnectionBroker",
     "configure_connection",
     "export_database",
-    "open_plaintext_legacy",
     "require_driver",
     "verify_driver",
 ]

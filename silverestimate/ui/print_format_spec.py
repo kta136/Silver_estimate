@@ -38,16 +38,13 @@ DEFAULT_ESTIMATE_FORMAT = "modern"
 
 
 def normalize_estimate_format(value: object) -> str:
-    """Normalize current and retired setting values to the two supported formats."""
+    """Return a supported estimate format, defaulting invalid values to Modern."""
     normalized = str(value or "").strip().lower()
-    aliases = {
-        "classic": "classic",
-        "old": "classic",
-        "modern": "modern",
-        "new": "modern",
-        "thermal": "modern",
-    }
-    return aliases.get(normalized, DEFAULT_ESTIMATE_FORMAT)
+    return (
+        normalized
+        if normalized in ESTIMATE_FORMAT_SPECS
+        else DEFAULT_ESTIMATE_FORMAT
+    )
 
 
 __all__ = [

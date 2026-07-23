@@ -37,7 +37,6 @@ class PasswordVerification:
     """Result of verifying a password against a stored Argon2 hash."""
 
     verified: bool
-    replacement_hash: str | None = None
 
 
 class PasswordHashService:
@@ -67,7 +66,7 @@ class PasswordHashService:
         stored_hash: str,
         provided_password: str,
     ) -> PasswordVerification:
-        """Verify a password and return a stronger replacement hash when needed."""
+        """Verify a password against a current Argon2id PHC hash."""
         if not stored_hash:
             raise MalformedPasswordHashError("Stored password hash is empty")
         try:
@@ -76,9 +75,17 @@ class PasswordHashService:
             raise MalformedPasswordHashError(
                 "Stored password hash is not a valid Argon2 PHC string"
             ) from exc
-        if parameters.type is not Type.ID:
+        if (
+            parameters.type is not Type.ID
+            or parameters.version != 19
+            or parameters.time_cost != PASSWORD_TIME_COST
+            or parameters.memory_cost != PASSWORD_MEMORY_COST_KIB
+            or parameters.parallelism != PASSWORD_PARALLELISM
+            or parameters.hash_len != PASSWORD_HASH_LENGTH
+            or parameters.salt_len != PASSWORD_SALT_LENGTH
+        ):
             raise MalformedPasswordHashError(
-                "Stored password hash does not use Argon2id"
+                "Stored password hash does not use the current Argon2id policy"
             )
         if not provided_password:
             return PasswordVerification(verified=False)
@@ -96,17 +103,4 @@ class PasswordHashService:
                 "Stored password hash cannot be verified"
             ) from exc
 
-        try:
-            needs_rehash = self._hasher.check_needs_rehash(stored_hash)
-        except InvalidHashError as exc:
-            raise MalformedPasswordHashError(
-                "Stored password hash is not a valid Argon2 PHC string"
-            ) from exc
-
-        replacement_hash = (
-            self.hash_password(provided_password) if needs_rehash else None
-        )
-        return PasswordVerification(
-            verified=True,
-            replacement_hash=replacement_hash,
-        )
+        return PasswordVerification(verified=True)

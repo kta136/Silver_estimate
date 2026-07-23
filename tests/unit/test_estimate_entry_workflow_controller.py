@@ -5,7 +5,7 @@ import types
 from typing import Any
 
 import pytest
-from PySide6.QtCore import QDate, QObject, Signal
+from PySide6.QtCore import QDate, QObject, QThread, Signal
 from PySide6.QtWidgets import (
     QDateEdit,
     QDialog,
@@ -22,6 +22,7 @@ from silverestimate.ui.estimate_entry_workflow_controller import (
     EstimateEntryWorkflowController,
     _EstimatePreviewBuildWorker,
 )
+from silverestimate.ui.preview_build_worker import PreviewBuildCallbackRouter
 from silverestimate.ui.view_models import EstimateEntryRowState, EstimateEntryViewModel
 
 
@@ -342,6 +343,43 @@ def test_preview_worker_emits_error_and_finished():
 
     assert errors == [(7, "boom")]
     assert finished == [7]
+
+
+def test_preview_callbacks_are_marshaled_to_gui_thread(qt_app, qtbot):
+    host = QWidget()
+    qtbot.addWidget(host)
+    worker = _EstimatePreviewBuildWorker(11, lambda: {"ok": True})
+    thread = QThread(host)
+    worker.moveToThread(thread)
+    callbacks = []
+
+    def record_finished(request_id):
+        callbacks.append(
+            ("finished", request_id, QThread.currentThread() is qt_app.thread())
+        )
+        thread.quit()
+
+    router = PreviewBuildCallbackRouter(
+        on_ready=lambda request_id, _payload: callbacks.append(
+            ("ready", request_id, QThread.currentThread() is qt_app.thread())
+        ),
+        on_error=lambda request_id, _message: callbacks.append(
+            ("error", request_id, QThread.currentThread() is qt_app.thread())
+        ),
+        on_finished=record_finished,
+        parent=host,
+    )
+    thread.started.connect(worker.run)
+    worker.preview_ready.connect(router.handle_ready)
+    worker.preview_error.connect(router.handle_error)
+    worker.finished.connect(router.handle_finished)
+    thread.start()
+
+    qtbot.waitUntil(lambda: len(callbacks) == 2, timeout=1000)
+    qtbot.waitUntil(lambda: not thread.isRunning(), timeout=1000)
+
+    assert callbacks == [("ready", 11, True), ("finished", 11, True)]
+    assert thread.wait(1000)
 
 
 def test_format_currency_falls_back_for_bad_locale(workflow_host, monkeypatch):

@@ -88,7 +88,7 @@ Issued list → Reactivated → Assigned
 1. Generate native `.seitems.json` catalog backup
 2. Include format/version metadata
 3. Export all items in catalog
-4. Preserve round-trip import compatibility
+4. Preserve round-trip import fidelity
 
 ## Business Rules
 

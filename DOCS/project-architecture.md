@@ -35,13 +35,15 @@ Views cancel work, disconnect delivery, and let workers exit normally during shu
 
 ## Persistence
 
-Schema setup is a single transaction. Migrations, backfills, mandatory indexes, validation, and the schema-version write either commit together or roll back together. Version 6 recomputes stored estimate headers and adds the silver-bar availability index:
+Fresh schema-v8 creation, mandatory indexes, validation, and the schema-version
+write run in a single transaction. Existing databases must already be version 8;
+historical and unversioned schemas fail closed. The silver-bar availability index is:
 
 ```sql
 (status, list_id, weight, date_added DESC, bar_id DESC)
 ```
 
-Mandatory indexes are created under savepoints so every failure can be reported before the migration rolls back. Final validation checks tables, columns, indexes, foreign keys, and schema version.
+Mandatory indexes are created under savepoints so every failure can be reported before the transaction rolls back. Final validation checks tables, columns, indexes, foreign keys, and schema version.
 
 Keyset pages keep result size bounded:
 
@@ -52,7 +54,7 @@ Keyset pages keep result size bounded:
 
 History reads stored header totals. Estimate line items are loaded only when a record is opened or printed. Catalog imports use bulk upserts and replace the immutable item-cache mapping once after the transaction.
 
-Silver-bar persistence is separated into `SilverBarQueryRepository`, `SilverBarCommandRepository`, and `SilverBarSynchronizationRepository` behind the compatibility `SilverBarsRepository` facade. New synchronization calls return `SilverBarSyncResult`, preserving success/failure information.
+Silver-bar persistence is separated into `SilverBarQueryRepository`, `SilverBarCommandRepository`, and `SilverBarSynchronizationRepository` behind the public `SilverBarsRepository` facade. New synchronization calls return `SilverBarSyncResult`, preserving success/failure information.
 
 ## Encrypted database lifecycle
 
@@ -65,27 +67,19 @@ storage, the application cache size, and `mmap_size=0`.
 
 Worker APIs carry a connection factory, never a database path or raw key.
 Maintenance mode blocks new readers and cancels/drains current readers before
-migration, backup, restore, rekey, or wipe. `QLockFile` ownership is acquired
+backup, restore, rekey, or wipe. `QLockFile` ownership is acquired
 before authentication or storage mutation.
 
 Password verification is separate from Qt widgets and database-key derivation.
-`PasswordHashService` owns the direct `argon2-cffi` Argon2id policy and
-compatibility with existing PHC hashes. `AuthService` owns login-time
-verification, opportunistic rehash persistence, and the distinction between
+`PasswordHashService` owns and strictly enforces the direct `argon2-cffi`
+Argon2id policy.
+`AuthService` owns login-time verification and the distinction between
 credential mismatch and malformed credential data. `CredentialStore` remains
 the only keyring boundary.
 
-`SILVDB01` is read only by the one-time importer. It decrypts inside a marked
-application-owned workspace, exports to a keyed target with
-`sqlcipher_export()`, compares counts and deterministic typed digests, validates
-the target, retains the original envelope, and removes plaintext and sidecars on
-all exits. It cannot write a new live envelope.
-
-This importer is a temporary upgrade boundary, not a second database backend.
-After the installed system has completed migration, restarted successfully from
-`estimation.db`, and produced a verified encrypted backup, a compatibility
-retirement release may remove the importer and its envelope-reading dependency.
-That retirement must not automatically delete `estimation.silvdb01.backup`.
+The `SILVDB01` importer and its AES-GCM dependency have been retired. Existing
+files must be current schema-v8 SQLCipher databases with exact KDF metadata.
+Plaintext, unversioned, and historical-schema files fail closed.
 
 Encrypted `.sedbbackup` archives contain a SQLCipher database, its KDF metadata,
 and a digested non-secret manifest. Restore and password change use staged
@@ -101,7 +95,7 @@ SSE is primary. A disconnected stream polls current-rates every 10 seconds, sequ
 
 ## Quality boundaries
 
-- Ruff enables Bugbear, Simplify, Performance, McCabe complexity, and the selected Pylint complexity rules. Complexity is capped at 15; explicit file-level exceptions document legacy hotspots.
+- Ruff enables Bugbear, Simplify, Performance, McCabe complexity, and the selected Pylint complexity rules. Complexity is capped at 15; explicit file-level exceptions document complex hotspots.
 - Mypy fully checks all modules and applies strict-definition/generic/call rules to domain pagination, async runners, encryption, DDA transports, new repository roles, facades, settings pages, and print specifications.
 - The Windows CI gate enforces 75% global coverage, 90% changed-line coverage,
   deterministic p95 budgets, offscreen Qt smoke, curated `pyside6-deploy`
@@ -110,7 +104,7 @@ SSE is primary. A disconnected stream polls current-rates every 10 seconds, sequ
 ## Extension rules
 
 - Add a typed domain type before adding another dictionary-shaped cross-layer contract.
-- Add repository reads, writes, and reconciliation to the corresponding role rather than the compatibility backend.
+- Add repository reads, writes, and reconciliation to the corresponding role rather than the public facade.
 - Use keyset cursors for user-visible collections.
 - Use `LatestRequestRunner` for replaceable UI work and cooperative stop events for long-running I/O.
 - Keep Classic and Modern estimate preview, PDF export, and physical printing on the shared typed document and direct painters. Preserve the former Modern/New fixed-width layout as Classic; add new structured print changes to Modern's semantic column/section model.

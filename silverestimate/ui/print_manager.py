@@ -223,7 +223,7 @@ class PrintManager:
         )
 
     def _render_document(self, printer: QPrinter, document: PrintDocument) -> None:
-        """Render a typed estimate or a legacy HTML silver-bar report."""
+        """Render a typed estimate or an HTML silver-bar report."""
         if isinstance(document, EstimatePrintDocument):
             self._estimate_renderer.paint(
                 printer,
@@ -241,7 +241,7 @@ class PrintManager:
         raise TypeError(f"Unsupported print document: {type(document).__name__}")
 
     def _print_html(self, printer, html_content, table_mode=False):
-        """Render legacy silver-bar HTML reports to the printer."""
+        """Render silver-bar HTML reports to the printer."""
         document = QTextDocument()
         if table_mode:
             table_font = QFont("Arial", 8)

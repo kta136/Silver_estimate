@@ -1,4 +1,5 @@
-from PyQt6.QtGui import QFont
+import pytest
+from PySide6.QtGui import QFont
 
 from silverestimate.ui.custom_font_dialog import CustomFontDialog
 
@@ -22,7 +23,7 @@ def test_custom_font_dialog_returns_selected_font(qtbot):
         selected = dialog.get_selected_font()
 
         assert selected.pointSize() == 12
-        assert selected.float_size == 11.5
+        assert selected.pointSizeF() == pytest.approx(11.5)
         assert selected.bold() is True
     finally:
         dialog.deleteLater()

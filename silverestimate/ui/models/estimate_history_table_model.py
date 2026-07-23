@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
+from PySide6.QtCore import (
+    QAbstractTableModel,
+    QModelIndex,
+    QPersistentModelIndex,
+    Qt,
+)
 
 from silverestimate.ui.display_formatting import format_display_date, format_rupees
 
@@ -45,12 +50,16 @@ class EstimateHistoryTableModel(QAbstractTableModel):
         self._sort_column: int | None = None
         self._sort_order = Qt.SortOrder.AscendingOrder
 
-    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
+    def rowCount(
+        self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
+    ) -> int:
         if parent.isValid():
             return 0
         return len(self._rows)
 
-    def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
+    def columnCount(
+        self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
+    ) -> int:
         if parent.isValid():
             return 0
         return len(self.HEADERS)
@@ -69,7 +78,11 @@ class EstimateHistoryTableModel(QAbstractTableModel):
             return self.HEADERS[section]
         return None
 
-    def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
+    def data(
+        self,
+        index: QModelIndex | QPersistentModelIndex,
+        role: int = Qt.ItemDataRole.DisplayRole,
+    ) -> Any:
         if not index.isValid():
             return None
         row = self.row_payload(index.row())

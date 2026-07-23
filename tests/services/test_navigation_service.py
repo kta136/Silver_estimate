@@ -2,7 +2,7 @@ import logging
 import sys
 import types
 
-from PyQt6.QtWidgets import QDialog
+from PySide6.QtWidgets import QDialog
 
 from silverestimate.services.navigation_service import NavigationService
 

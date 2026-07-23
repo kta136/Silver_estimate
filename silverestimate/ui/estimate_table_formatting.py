@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QLocale
+from PySide6.QtCore import QLocale
 
 
 def get_estimate_table_locale() -> QLocale:

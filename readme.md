@@ -1,9 +1,11 @@
 # Silver Estimation App - v3.07
 
-A desktop application built with PyQt6 and an encrypted SQLite database for managing silver sales estimates - item-wise entries, silver bar inventory, returns, and print-ready outputs.
+A Windows desktop application built with PySide6 and a local SQLCipher database
+for managing silver sales estimates, item-wise entries, silver-bar inventory,
+returns, and print-ready outputs.
 
 [![Python](https://img.shields.io/badge/Python-3.14+-blue.svg)](https://www.python.org/)
-[![PyQt6](https://img.shields.io/badge/PyQt6-6.11-green.svg)](https://www.riverbankcomputing.com/software/pyqt/)
+[![PySide6](https://img.shields.io/badge/PySide6-6.11-green.svg)](https://doc.qt.io/qtforpython-6/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE)
 [![Source Version](https://img.shields.io/badge/source-v3.07-orange.svg)](CHANGELOG.md#307---2026-07-22)
 [![Latest Release](https://img.shields.io/github/v/release/kta136/Silver_estimate?label=stable%20release)](https://github.com/kta136/Silver_estimate/releases/latest)
@@ -61,7 +63,7 @@ The app helps silver shops to:
 
 ## Architecture
 
-- **UI layer**: PyQt6 widgets in `silverestimate/ui/` handle estimate entry, item master, silver bar management, history, and supporting dialogs.
+- **UI layer**: PySide6 widgets in `silverestimate/ui/` handle estimate entry, item master, silver bar management, history, and supporting dialogs.
 - **Theme layer**: `silverestimate/ui/application_theme.py`, `theme_tokens.py`, `shared_screen_theme.py`, and `themed_controls.py` keep the app on a strict light theme and preserve visible combo/spinbox arrows under Qt stylesheets.
 - **Presenter**: `silverestimate/presenter/estimate_entry_presenter.py` coordinates estimate workflows, keeping UI widgets thin and testable.
 - **Controllers**: Startup, navigation, and live-rate controllers bootstrap the app, wire menus/toolbars, and manage background refresh cadence.
@@ -211,7 +213,7 @@ uv run pre-commit run --all-files
 
 ## Testing
 
-- Tests live under `tests/` and use pytest (with `pytest-qt` pinned to PyQt6 for UI hooks).
+- Tests live under `tests/` and use pytest with the `pytest-qt` PySide6 backend.
 - Local smoke command: `pytest -v tests/test_security.py tests/services/test_auth_service.py`
 - Full startup UI smoke with screenshots: `uv run nox -s smoke_ui`
   - Creates an isolated encrypted test database with fixed smoke passwords.
@@ -235,9 +237,10 @@ uv run pre-commit run --all-files
 ### Build Locally (Windows)
 - Prereqs: Python 3.14+, PowerShell
 - Fast iteration: `uv run nox -s build`
-- Clean rebuild: `python -m PyInstaller --clean --noconfirm SilverEstimate.spec` or `uv run nox -s build_clean`
+- Inspectable standalone build: `uv run nox -s build_standalone standalone_artifact_smoke`
+- Clean one-file rebuild: `uv run nox -s build_clean artifact_smoke`
 - Output: `dist/SilverEstimate.exe`, `dist/SilverEstimate-v3.07.exe`, and `dist/SilverEstimate-v3.07-win64.zip` on Windows
-- Release/CI builds use the clean spec-based path; local `nox -s build` reuses PyInstaller caches for faster iteration
+- Release/CI builds use Qt's `pyside6-deploy`, the committed `pysidedeploy.spec`, and locked Nuitka 4.1.3
 - Packaged releases are Windows-only; macOS/Linux are untested development environments.
 
 ### GitHub Release (Windows CI)

@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Optional
 
-from PyQt6 import sip
-from PyQt6.QtCore import QTimer
-from PyQt6.QtWidgets import QLabel
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QLabel
+from shiboken6 import isValid
 
 from .estimate_entry_theme import refresh_widget_style
 
@@ -30,8 +30,10 @@ class InlineStatusController:
 
     @staticmethod
     def _qt_object_available(obj: Any) -> bool:
+        if obj is None:
+            return False
         try:
-            return not sip.isdeleted(obj)
+            return isValid(obj)
         except TypeError:
             return obj is not None
         except RuntimeError:

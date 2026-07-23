@@ -2,7 +2,7 @@ import sqlite3
 import time
 import types
 
-from PyQt6.QtCore import QItemSelectionModel
+from PySide6.QtCore import QItemSelectionModel
 
 from silverestimate.domain.pagination import Page
 from silverestimate.ui.item_master import ItemMasterWidget

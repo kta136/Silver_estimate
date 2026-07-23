@@ -1,7 +1,7 @@
 import logging
 
-from PyQt6.QtCore import QItemSelectionModel
-from PyQt6.QtWidgets import QApplication, QFrame, QMessageBox
+from PySide6.QtCore import QItemSelectionModel
+from PySide6.QtWidgets import QApplication, QFrame, QMessageBox
 
 from silverestimate.ui.silver_bar_list_print_controller import (
     SilverBarListPrintController,

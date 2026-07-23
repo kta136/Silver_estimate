@@ -6,9 +6,9 @@ import contextlib
 import time
 from typing import TYPE_CHECKING, Any
 
-from PyQt6 import sip
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtWidgets import QAbstractItemView, QApplication
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import QAbstractItemView, QApplication
+from shiboken6 import isValid
 
 from ._host_proxy import HostProxy
 from .adapters import EstimateTableAdapter
@@ -43,8 +43,10 @@ class EstimateEntryTableController(HostProxy):
 
     @staticmethod
     def _qt_object_available(obj: Any) -> bool:
+        if obj is None:
+            return False
         try:
-            return not sip.isdeleted(obj)
+            return isValid(obj)
         except TypeError:
             return obj is not None
         except RuntimeError:
@@ -400,7 +402,7 @@ class EstimateEntryTableController(HostProxy):
 
     def focus_on_code_column(self, row):
         try:
-            if sip.isdeleted(self.host):
+            if not isValid(self.host):
                 return
         except RuntimeError:
             return
@@ -422,7 +424,7 @@ class EstimateEntryTableController(HostProxy):
                 self.logger.debug("Failed to focus code column: %s", exc)
 
         timer = getattr(self, "_code_focus_timer", None)
-        if timer is None or sip.isdeleted(timer):
+        if timer is None or not isValid(timer):
             timer = QTimer(self.host)
             timer.setSingleShot(True)
             timer.timeout.connect(
@@ -439,7 +441,7 @@ class EstimateEntryTableController(HostProxy):
     def _safe_edit_item(self, row, col):
         try:
             table = self.item_table
-            if not table or sip.isdeleted(table) or not table.isVisible():
+            if not table or not isValid(table) or not table.isVisible():
                 return
             if self._loading_estimate:
                 return
@@ -453,7 +455,7 @@ class EstimateEntryTableController(HostProxy):
                     return
 
             model = table.model()
-            if model and not sip.isdeleted(model):
+            if model and isValid(model):
                 index = model.index(row, col)
                 if index.isValid() and (
                     model.flags(index) & Qt.ItemFlag.ItemIsEditable
@@ -470,7 +472,7 @@ class EstimateEntryTableController(HostProxy):
 
     def _is_table_valid(self) -> bool:
         try:
-            return self.item_table is not None and not sip.isdeleted(self.item_table)
+            return self.item_table is not None and isValid(self.item_table)
         except RuntimeError:
             return False
 

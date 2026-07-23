@@ -7,7 +7,7 @@
 repos:
   # Fast linting and import sorting with Ruff
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.5
+    rev: v0.15.22
     hooks:
       - id: ruff
         args: [--fix, --config=pyproject.toml]
@@ -15,17 +15,19 @@ repos:
 
   # Type checking with mypy
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.8.0
+    rev: v2.3.0
     hooks:
       - id: mypy
-        args: [--config-file=pyproject.toml]
+        args: [--config-file=pyproject.toml, silverestimate]
+        pass_filenames: false
         additional_dependencies:
-          - PyQt6-stubs>=20250824
-        exclude: ^tests/
+          - PySide6>=6.11.1,<6.12
+          - cryptography>=42.0.0
+          - argon2-cffi>=21.3.0
 
   # General pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v6.0.0
     hooks:
       # Prevent large files from being committed
       - id: check-added-large-files
@@ -49,7 +51,7 @@ repos:
 
       # Ensure files end with newline
       - id: end-of-file-fixer
-        exclude: ^(.*\.md|.*\.txt)$
+        exclude: ^(graphify-out/|.*\.(md|txt)$)
 
       # Remove trailing whitespace
       - id: trailing-whitespace
@@ -61,7 +63,7 @@ repos:
       # Fix mixed line endings
       - id: mixed-line-ending
         args: [--fix=lf]
-        exclude: ^(.*\.bat|.*\.ps1)$
+        exclude: ^(graphify-out/|.*\.(bat|ps1)$)
 
       # Check Python syntax
       - id: check-ast
@@ -71,10 +73,11 @@ repos:
 
   # Security checks with bandit
   - repo: https://github.com/PyCQA/bandit
-    rev: 1.7.6
+    rev: 1.9.4
     hooks:
       - id: bandit
-        args: [-c, pyproject.toml, -r, silverestimate]
+        args: [-c, pyproject.toml, -r, silverestimate, -ll, -ii]
+        pass_filenames: false
         additional_dependencies: ["bandit[toml]"]
 
 # Configuration for pre-commit ci (if using pre-commit.ci service)

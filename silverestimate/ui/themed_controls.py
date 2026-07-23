@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Literal
 
-from PyQt6.QtCore import QPointF, QRect, Qt
-from PyQt6.QtGui import QColor, QPainter, QPaintEvent, QPolygonF
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QPointF, QRect, Qt
+from PySide6.QtGui import QColor, QPainter, QPaintEvent, QPolygonF
+from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
     QDoubleSpinBox,
@@ -118,7 +118,7 @@ def _paint_combo_arrow(widget) -> None:
 class ThemedSpinBox(QSpinBox):
     """Spin box that redraws visible up/down arrows after QSS styling."""
 
-    def paintEvent(self, event: QPaintEvent | None) -> None:
+    def paintEvent(self, event: QPaintEvent) -> None:
         super().paintEvent(event)
         _paint_spinbox_arrows(self)
 
@@ -126,7 +126,7 @@ class ThemedSpinBox(QSpinBox):
 class ThemedDoubleSpinBox(QDoubleSpinBox):
     """Double spin box that redraws visible up/down arrows after QSS styling."""
 
-    def paintEvent(self, event: QPaintEvent | None) -> None:
+    def paintEvent(self, event: QPaintEvent) -> None:
         super().paintEvent(event)
         _paint_spinbox_arrows(self)
 
@@ -134,7 +134,7 @@ class ThemedDoubleSpinBox(QDoubleSpinBox):
 class ThemedDateEdit(QDateEdit):
     """Date edit that redraws visible up/down arrows after QSS styling."""
 
-    def paintEvent(self, event: QPaintEvent | None) -> None:
+    def paintEvent(self, event: QPaintEvent) -> None:
         super().paintEvent(event)
         _paint_spinbox_arrows(self)
 
@@ -142,7 +142,7 @@ class ThemedDateEdit(QDateEdit):
 class ThemedComboBox(QComboBox):
     """Combo box that redraws a visible dropdown arrow after QSS styling."""
 
-    def paintEvent(self, event: QPaintEvent | None) -> None:
+    def paintEvent(self, event: QPaintEvent) -> None:
         super().paintEvent(event)
         _paint_combo_arrow(self)
 
@@ -150,6 +150,6 @@ class ThemedComboBox(QComboBox):
 class ThemedFontComboBox(QFontComboBox):
     """Font combo box with the same visible dropdown arrow treatment."""
 
-    def paintEvent(self, event: QPaintEvent | None) -> None:
+    def paintEvent(self, event: QPaintEvent) -> None:
         super().paintEvent(event)
         _paint_combo_arrow(self)

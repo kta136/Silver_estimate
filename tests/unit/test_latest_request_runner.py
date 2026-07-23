@@ -3,8 +3,8 @@ import threading
 import time
 from contextlib import closing
 
-from PyQt6.QtCore import QThread
-from PyQt6.QtWidgets import QApplication
+from PySide6.QtCore import QThread
+from PySide6.QtWidgets import QApplication
 
 from silverestimate.infrastructure.latest_request_runner import (
     LatestRequestRunner,

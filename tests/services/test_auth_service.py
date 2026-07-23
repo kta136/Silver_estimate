@@ -1,6 +1,6 @@
 import logging
 
-from PyQt6.QtWidgets import QDialog
+from PySide6.QtWidgets import QDialog
 
 from silverestimate.security import credential_store
 from silverestimate.services import auth_service

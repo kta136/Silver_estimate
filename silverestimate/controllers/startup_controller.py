@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any, Optional
 
-from PyQt6.QtWidgets import QMessageBox, QWidget
+from PySide6.QtWidgets import QMessageBox, QWidget
 
 from silverestimate.infrastructure.app_constants import DB_PATH
 from silverestimate.security import credential_store

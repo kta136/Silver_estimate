@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt6.QtCore import QSize, Qt, pyqtSignal
-from PyQt6.QtGui import QKeySequence, QShortcut
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -34,14 +34,14 @@ class SecondaryActionsBar(QWidget):
     """
 
     # Signals
-    delete_row_clicked = pyqtSignal()
-    return_mode_toggled = pyqtSignal(bool)
-    silver_bar_mode_toggled = pyqtSignal(bool)
-    last_balance_clicked = pyqtSignal()
-    history_clicked = pyqtSignal()
-    silver_bars_clicked = pyqtSignal()
-    refresh_rate_clicked = pyqtSignal()
-    delete_estimate_clicked = pyqtSignal()
+    delete_row_clicked = Signal()
+    return_mode_toggled = Signal(bool)
+    silver_bar_mode_toggled = Signal(bool)
+    last_balance_clicked = Signal()
+    history_clicked = Signal()
+    silver_bars_clicked = Signal()
+    refresh_rate_clicked = Signal()
+    delete_estimate_clicked = Signal()
 
     def __init__(
         self,

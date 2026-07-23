@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 import logging
 
-from PyQt6.QtGui import QFont, QTextDocument
-from PyQt6.QtPrintSupport import QPrinter
-from PyQt6.QtWidgets import QMessageBox
+from PySide6.QtGui import QFont, QTextDocument
+from PySide6.QtPrintSupport import QPrinter
+from PySide6.QtWidgets import QMessageBox
 
 from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.services.settings_service import SettingsService
@@ -38,7 +38,6 @@ class PrintManager:
             self.print_font = print_font
         else:
             self.print_font = QFont("Arial", 8)
-            self.print_font.float_size = 8.0
 
         self.printer = QPrinter(QPrinter.PrinterMode.HighResolution)
         settings = get_app_settings()
@@ -131,11 +130,10 @@ class PrintManager:
 
     def _set_print_font(self, font: QFont) -> None:
         """Apply and persist a preview-selected estimate print font."""
-        size = float(getattr(font, "float_size", font.pointSizeF()))
+        size = font.pointSizeF()
         self.print_font.setFamily(font.family())
         self.print_font.setPointSizeF(max(1.0, size))
         self.print_font.setBold(font.bold())
-        self.print_font.float_size = max(1.0, size)
         SettingsService().save_print_font(self.print_font)
 
     def show_preview(
@@ -250,9 +248,8 @@ class PrintManager:
             document.setDefaultFont(table_font)
         else:
             # Estimate slip: Use the stored print_font settings
-            font_size_int = int(
-                round(getattr(self.print_font, "float_size", 7.0))
-            )  # Default 7pt
+            font_size = self.print_font.pointSizeF()
+            font_size_int = int(round(font_size if font_size > 0 else 7.0))
             # Force Courier New for alignment, but use stored size/bold
             font_to_use = QFont("Courier New", font_size_int)
             is_bold = getattr(
@@ -263,7 +260,7 @@ class PrintManager:
 
         document.setHtml(html_content)
         document.setPageSize(printer.pageRect(QPrinter.Unit.Point).size())
-        document.print(printer)
+        document.print_(printer)
 
     def _generate_silver_bars_html_table(self, bars, status_filter=None):
         return self._silver_bar_renderer.generate_inventory_html_table(

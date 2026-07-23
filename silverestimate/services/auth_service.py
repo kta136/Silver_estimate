@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
-from PyQt6.QtWidgets import QDialog, QMessageBox, QWidget
+from PySide6.QtWidgets import QDialog, QMessageBox, QWidget
 
 from silverestimate.infrastructure.app_constants import DB_PATH, LOG_DIR
 from silverestimate.infrastructure.settings import get_app_settings

@@ -5,13 +5,13 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Optional
 
-from PyQt6.QtCore import QObject, QThread, pyqtSignal
-from PyQt6.QtWidgets import QCheckBox, QFileDialog, QInputDialog, QMessageBox
+from PySide6.QtCore import QObject, QThread, Signal
+from PySide6.QtWidgets import QCheckBox, QFileDialog, QInputDialog, QMessageBox
 
 
 class _ItemCatalogExportWorker(QObject):
-    finished = pyqtSignal(int)
-    error = pyqtSignal(str)
+    finished = Signal(int)
+    error = Signal(str)
 
     def __init__(
         self, *, connection_factory: Callable[[], Any], file_path: str

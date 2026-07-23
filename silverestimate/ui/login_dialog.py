@@ -1,8 +1,8 @@
 import logging
 from contextlib import suppress
 
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QDialog,

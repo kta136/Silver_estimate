@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PyQt6.QtGui import QFont, QFontDatabase, QFontInfo
+from PySide6.QtGui import QFont, QFontDatabase, QFontInfo
 
 
 def numeric_table_font(base_font: QFont | None = None) -> QFont:

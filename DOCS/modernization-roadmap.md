@@ -1,10 +1,50 @@
 # Modernization and Dependency Replacement Roadmap
 
-**Status:** SQLCipher workstream complete under the bundled-wheel policy
-**Last updated:** 2026-07-22
+**Status:** Phase 4 implementation complete locally; final main push and hosted validation pending; Phase 5 is next
+**Last updated:** 2026-07-23
 **Applies to:** Silver Estimate v3.07 source tree and later
 **Primary platform:** Windows 10/11, Python 3.14
 **Project license:** GPL-3.0-only
+
+## Implementation record: 2026-07-23
+
+Phase 4 milestones M0 through M8 are complete locally. M6 implementation and
+artifact gates pass, while its hosted workflow runs remain pending until the
+migration is pushed directly to main. Phase 5 Passlib removal is the next
+planned workstream, but it has not started.
+
+The retained M0 PyQt6 reference baseline covers the historical
+Windows/Python/Qt environment, binding inventory, frozen dependency sync,
+SQLCipher runtime identity, quality gates, 13 UI states, focused keyboard
+workflows, nine representative PDFs, its packaging inventory, and five
+frozen-startup samples.
+
+Evidence and retention details are recorded in
+`artifacts/pyside6-migration/m0/765d478-pyqt6-reference/README.md`; the living
+[PySide6 migration execution plan](pyside6-migration-execution-plan.md) owns
+the full command results, hashes, milestone status, and handoff. M1 locked
+PySide6, Shiboken6, and Qt 6.11.1 with pytest-qt 4.5.0. M2 converted source and
+tests to direct PySide6 APIs. M3 resolved signal, context-menu, enum, and
+object-lifetime differences. M4 restored every source-quality gate without a
+binding suppression. M5 approved the 13-screen visual/keyboard set and nine
+representative PDFs.
+
+M6 retired PyInstaller in favor of Qt's `pyside6-deploy` wrapper with Nuitka
+4.1.3 and zstandard 0.25.0. The inspected standalone payload contains the
+required PySide6/Shiboken6, SQLCipher, Windows platform, icon/SVG/image, style,
+and print components with no PyQt6 or second Qt runtime. The one-file artifact
+passes frozen Qt, keyring, PDF, SQLCipher, and writable-path smoke checks and a
+five-sample startup p95 of 1872.52 ms against the unchanged 3000 ms budget. It
+is evaluated directly against the current release contract, not against M0.
+
+M7 reconciled maintained documentation, licensing, project metadata, release
+workflow, and the CycloneDX SBOM. M8 confirmed that no live PyQt6/SIP
+dependency, import, compatibility loader, or current user-facing claim remains.
+The complete 622-test suite plus startup smoke, quality and performance gates,
+SQLCipher provenance, fresh standalone and one-file builds, frozen runtime
+smokes, and a ten-sample 2727.15 ms executable-startup p95 all pass locally.
+Final evidence is in
+`artifacts/pyside6-migration/m8/765d478-pyside6-closure/README.md`.
 
 ## Implementation record: 2026-07-22
 
@@ -254,7 +294,7 @@ The target architecture has four important boundaries:
 | 11 | Shared paged-screen/background infrastructure | After major facades are removed | Less repeated worker/dialog code |
 | 12 | HTTP/SSE transport evaluation | Independent, lower urgency | Standard transport behavior if justified |
 | 13 | Security-tool rationalization | Before next release pipeline revision | Deterministic advisory and license gates |
-| 14 | Packaging benchmark | After PySide6 | Evidence-based PyInstaller/Nuitka choice |
+| 14 | `pyside6-deploy` packaging cutover | After PySide6 | Curated Nuitka standalone and one-file release artifacts |
 | 15 | Failure, visual, and upgrade testing | Required throughout | Safe migrations and stable user experience |
 | 16 | Release hardening and documentation cleanup | Final gate per release | Signed, traceable, supportable artifact |
 
@@ -616,6 +656,9 @@ legacy backup should not be deleted automatically without an explicit policy.
 
 ## 9. Phase 4: PyQt6-to-PySide6 migration
 
+**Implementation status:** Complete locally. The final direct main push and
+hosted Windows validation remain pending before Phase 4 is closed globally.
+
 The living, agent-oriented implementation checklist for this phase is maintained
 in the [PySide6 migration execution plan](pyside6-migration-execution-plan.md).
 That plan owns milestone status, verification evidence, decisions, and handoff
@@ -673,8 +716,8 @@ Recommended sequence:
 6. Change pytest-qt configuration to `pyside6`.
 7. Remove PyQt-specific mypy exclusions and the stub dependency; use PySide6's
    shipped typing as the baseline.
-8. Update PyInstaller collection/filter logic from `PyQt6/Qt6` paths to the
-   actual PySide6 artifact layout.
+8. Replace the PyInstaller build with a committed `pysidedeploy.spec` and
+   locked Nuitka toolchain.
 9. Validate platform, image format, SVG, icon, and print-support plugins.
 10. Run the full unit, integration, UI, smoke, performance, build, and frozen
     artifact suites on Windows.
@@ -690,7 +733,8 @@ Recommended sequence:
 - Print preview internals are already customized and require focused testing.
 - Font metrics can change line and page breaks even when the Qt version is
   nominally equivalent.
-- The PyInstaller plugin tree and exclusions will differ from the current spec.
+- Nuitka plugin discovery and one-file extraction must be validated from the
+  generated standalone inventory and compilation report.
 - Python 3.14 and the chosen PySide6 patch version must be tested together; do
   not rely only on package metadata.
 
@@ -707,7 +751,14 @@ Recommended sequence:
   required Qt modules/plugins.
 - Third-party notices and Qt licensing material are present in the release.
 
+The source, application, and local Windows artifact criteria are satisfied.
+Hosted clean-build and release-workflow confirmation remains pending until the
+owner-authorized final push to main.
+
 ## 10. Phase 5: Remove Passlib
+
+**Planning status:** Next workstream; do not start until Phase 4's hosted
+validation completes.
 
 ### 10.1 Target design
 
@@ -735,7 +786,7 @@ the resulting PHC hash through `CredentialStore`.
 - Preserve the existing keyring entry names so credential migration is not
   coupled to the library migration.
 - Remove `passlib[argon2]`, Passlib mypy exclusions, warning filters, and the
-  PyInstaller hidden import.
+  forced Nuitka module inclusion.
 
 ### 10.3 Acceptance criteria
 
@@ -945,31 +996,24 @@ The release pipeline should fail when:
 - the final artifact includes an unintended SQLite or Qt binary;
 - the lockfile changed without an accompanying dependency review.
 
-## 14. Phase 14: packaging decision
+## 14. Phase 14: `pyside6-deploy` packaging cutover
 
-Keep PyInstaller while SQLCipher and PySide6 are being migrated. Changing the
-database engine, Qt binding, and freezer simultaneously would make failures
-difficult to isolate.
+The owner selected Qt's `pyside6-deploy` wrapper after the PySide6 source,
+visual, keyboard, and print gates stabilized. PyInstaller is retired from the
+active build and dependency graph.
 
-After PySide6 is stable, compare the current PyInstaller build with
-`pyside6-deploy`/Nuitka using the same clean Windows runner.
+The new artifact is accepted against the current PySide6 release contract:
 
-Measure:
+- a locked Python 3.14, PySide6 6.11, Nuitka, and zstandard toolchain;
+- an inspectable standalone artifact before one-file packaging;
+- required SQLCipher, keyring, image, SVG, icon, and print support;
+- no PyQt6, QML, Quick, media, duplicate Qt runtime, or unintended plugins;
+- a writable database root outside the one-file extraction directory;
+- repeatable signing, SBOM, checksum, upgrade, and rollback behavior;
+- the unchanged release startup budget and complete Windows workflow gates.
 
-- cold and warm startup;
-- time until the first editable control accepts input;
-- archive and installed size;
-- build time and reproducibility;
-- antivirus reputation/false positives;
-- one-file extraction behavior;
-- SQLCipher, keyring, image, SVG, icon, and print plugin inclusion;
-- crash diagnostics and symbol availability;
-- ability to sign the executable and installer;
-- upgrade and rollback behavior.
-
-Select the new freezer only if it produces a measured operational improvement.
-Otherwise retain PyInstaller and replace its PyQt-specific filters with
-PySide6-specific filters.
+The new executable is not compared with the retired M0 PyQt6 build. M0 remains
+historical migration evidence only.
 
 ## 15. Phase 15: verification strategy
 
@@ -1065,8 +1109,8 @@ upgrade cleanup.
 | `urllib` HTTP/SSE | Evaluate replacement | Lower priority | Existing code is robust; standard client may reduce transport code |
 | Safety | Replace with `pip-audit` | CI revision | Smaller, open PyPA/OSV-oriented advisory path |
 | CycloneDX tool | Keep pending comparison | CI revision | Remove only if replacement SBOM is equivalent |
-| PyInstaller | Keep initially | Through PySide6 | Known build path and useful control baseline |
-| `pyside6-deploy`/Nuitka | Benchmark | After PySide6 | Switch only on measured improvement |
+| PyInstaller | Remove | Packaging cutover | Retired after the PySide6 application gates stabilized |
+| `pyside6-deploy`/Nuitka | Adopt | Current Windows release path | Official Qt wrapper with inspectable standalone and one-file outputs |
 | SQLAlchemy/Alembic | Do not add | Final | ORM/migration abstraction does not solve local SQLCipher/thread concerns |
 | `aiosqlite` | Do not add | Final | Current worker-thread model is appropriate |
 | Pydantic for internal models | Do not add presently | Reconsider if external schemas grow | Dataclasses and explicit validation are sufficient |
@@ -1176,7 +1220,7 @@ The modernization is successful when:
 - complete estimate-entry, settings, and print decomposition;
 - tighten typing and complexity gates;
 - evaluate HTTP/SSE replacement;
-- benchmark `pyside6-deploy`/Nuitka;
+- harden `pyside6-deploy`/Nuitka packaging and signing;
 - finalize installer signing, upgrade, and rollback automation.
 
 Each release should be independently usable and supportable. Rewrite cost is
@@ -1207,13 +1251,11 @@ Primary current implementation references:
 - [Deployment guide](deployment-guide.md)
 - [Performance baselines](performance-baseline-thresholds.md)
 - [`pyproject.toml`](../pyproject.toml)
-- [`SilverEstimate.spec`](../SilverEstimate.spec)
+- [`pysidedeploy.spec`](../pysidedeploy.spec)
 - [`encrypted_envelope.py`](../silverestimate/security/encrypted_envelope.py)
-- [`encrypted_database_store.py`](../silverestimate/persistence/encrypted_database_store.py)
-- [`temp_database_store.py`](../silverestimate/persistence/temp_database_store.py)
+- [`database_driver.py`](../silverestimate/persistence/database_driver.py)
 - [`database_manager.py`](../silverestimate/persistence/database_manager.py)
-- [`database_lifecycle.py`](../silverestimate/persistence/database_lifecycle.py)
-- [`flush_scheduler.py`](../silverestimate/persistence/flush_scheduler.py)
+- [`storage_metadata.py`](../silverestimate/persistence/storage_metadata.py)
 - [`silver_bars_repository.py`](../silverestimate/persistence/silver_bars_repository.py)
 - [`estimate_entry_facade.py`](../silverestimate/ui/estimate_entry_facade.py)
 - [`settings_dialog.py`](../silverestimate/ui/settings_dialog.py)

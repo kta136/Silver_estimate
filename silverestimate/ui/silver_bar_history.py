@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, cast
 
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QDialog,
@@ -251,9 +251,11 @@ class SilverBarHistoryDialog(QDialog):
         self.max_rows_spin.setMaximumWidth(132)
         default_limit = 500
         try:
-            default_limit = get_app_settings().value(
+            stored_limit = get_app_settings().value(
                 "silver_bar/history_max_rows", defaultValue=500, type=int
             )
+            if isinstance(stored_limit, (int, float, str, bytes, bytearray)):
+                default_limit = int(stored_limit)
         except Exception as exc:
             self.logger.debug(
                 "Could not read persisted history max rows setting: %s", exc

@@ -1,7 +1,7 @@
 import pytest
-from PyQt6.QtCore import QItemSelectionModel, Qt
-from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QDialog, QLabel
+from PySide6.QtCore import QItemSelectionModel, Qt
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QDialog, QLabel
 
 from silverestimate.ui.item_selection_dialog import ItemSelectionDialog
 

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt6.QtCore import QSize, Qt, pyqtSignal
-from PyQt6.QtGui import QKeySequence, QShortcut
-from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QSizePolicy, QWidget
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtWidgets import QHBoxLayout, QPushButton, QSizePolicy, QWidget
 
 from silverestimate.ui.icons import get_icon
 
@@ -14,9 +14,9 @@ from silverestimate.ui.icons import get_icon
 class PrimaryActionsBar(QWidget):
     """Primary action buttons styled to match the classic estimate form."""
 
-    save_clicked = pyqtSignal()
-    print_clicked = pyqtSignal()
-    new_clicked = pyqtSignal()
+    save_clicked = Signal()
+    print_clicked = Signal()
+    new_clicked = Signal()
 
     def __init__(
         self,

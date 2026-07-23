@@ -1,6 +1,6 @@
 import logging
 
-from PyQt6.QtWidgets import QComboBox, QDialog
+from PySide6.QtWidgets import QComboBox, QDialog
 
 from silverestimate.ui.silver_bar_optimization_controller import (
     SilverBarOptimizationController,
@@ -64,7 +64,7 @@ def test_optimization_controller_creates_and_selects_generated_list(
     qt_app, monkeypatch
 ):
     del qt_app
-    from PyQt6.QtWidgets import QMessageBox
+    from PySide6.QtWidgets import QMessageBox
 
     host = _OptimizationHost()
     controller = SilverBarOptimizationController(host)

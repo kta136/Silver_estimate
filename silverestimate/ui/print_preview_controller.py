@@ -7,16 +7,16 @@ import os
 import tempfile
 from typing import Callable
 
-from PyQt6.QtCore import QEvent, QObject, QSize, Qt
-from PyQt6.QtGui import QAction, QActionGroup, QFont, QPageLayout
-from PyQt6.QtPrintSupport import (
+from PySide6.QtCore import QEvent, QObject, QSize, Qt
+from PySide6.QtGui import QAction, QActionGroup, QFont, QPageLayout
+from PySide6.QtPrintSupport import (
     QPageSetupDialog,
     QPrintDialog,
     QPrinter,
     QPrintPreviewDialog,
     QPrintPreviewWidget,
 )
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
     QFileDialog,
@@ -113,6 +113,7 @@ class PrintPreviewController:
         self._persist_tunch_visibility = persist_tunch_visibility
         self._get_print_font = get_print_font
         self._persist_print_font = persist_print_font
+        self._wheel_zoom_filters: dict[int, _PreviewWheelZoomFilter] = {}
 
     def open_preview(
         self,
@@ -175,10 +176,15 @@ class PrintPreviewController:
                     LOGGER.debug("Failed to apply fit-width preview zoom: %s", exc)
 
             default_zoom = 1.25
-            zoom_factor = settings.value(
+            zoom_value = settings.value(
                 "print/preview_zoom",
                 defaultValue=default_zoom,
                 type=float,
+            )
+            zoom_factor = (
+                float(zoom_value)
+                if isinstance(zoom_value, (int, float, str))
+                else default_zoom
             )
             zoom_factor = max(0.1, min(zoom_factor, 5.0))
             LOGGER.debug("Applying zoom factor: %s", zoom_factor)
@@ -487,7 +493,10 @@ class PrintPreviewController:
                 preview_widget,
             )
             page_navigation_action = QWidgetAction(more_menu)
-            page_navigation_action.setDefaultWidget(page_spin.parentWidget())
+            page_navigation_widget = page_spin.parentWidget()
+            if page_navigation_widget is None:
+                raise RuntimeError("Page navigation controls have no container.")
+            page_navigation_action.setDefaultWidget(page_navigation_widget)
             more_menu.addAction(page_navigation_action)
 
             act_next = QAction(
@@ -744,7 +753,11 @@ class PrintPreviewController:
         viewport = getattr(preview_widget, "viewport", lambda: None)()
         if viewport is not None:
             viewport.installEventFilter(filter_obj)
-        preview._wheel_zoom_filter = filter_obj
+        preview_key = id(preview)
+        self._wheel_zoom_filters[preview_key] = filter_obj
+        preview.destroyed.connect(
+            lambda _obj=None, key=preview_key: self._wheel_zoom_filters.pop(key, None)
+        )
 
     def _zoom_in(self, preview_widget: QPrintPreviewWidget) -> None:
         try:
@@ -886,7 +899,9 @@ class PrintPreviewController:
 
     def _default_pdf_path(self, suggested_filename: str) -> str:
         settings = get_app_settings()
-        last_export_dir = settings.value("print/last_export_dir", "", type=str) or ""
+        last_export_dir = str(
+            settings.value("print/last_export_dir", "", type=str) or ""
+        )
         if last_export_dir and os.path.isdir(last_export_dir):
             return os.path.join(last_export_dir, suggested_filename)
         return suggested_filename

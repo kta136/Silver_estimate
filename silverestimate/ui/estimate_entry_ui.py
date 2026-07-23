@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """Estimate entry table delegates."""
 
-from PyQt6.QtCore import QEvent, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QDoubleValidator, QIntValidator
-from PyQt6.QtWidgets import QLineEdit, QStyledItemDelegate
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
+from PySide6.QtGui import QDoubleValidator, QIntValidator
+from PySide6.QtWidgets import QLineEdit, QStyledItemDelegate
 
 from silverestimate.ui import estimate_table_formatting
 from silverestimate.ui.numeric_font import numeric_table_font
@@ -17,8 +17,8 @@ from .estimate_entry_logic.column_specs import (
 class NumericDelegate(QStyledItemDelegate):
     """Delegate that validates and normalizes numeric table cell input."""
 
-    reverse_requested = pyqtSignal()
-    manual_row_navigation_requested = pyqtSignal()
+    reverse_requested = Signal()
+    manual_row_navigation_requested = Signal()
 
     @staticmethod
     def _style_editor(editor: QLineEdit) -> None:
@@ -33,6 +33,7 @@ class NumericDelegate(QStyledItemDelegate):
         col = index.column()
         locale = estimate_table_formatting.get_estimate_table_locale()
         spec = get_column_spec(col)
+        validator: QIntValidator | QDoubleValidator
 
         if spec is not None and spec.precision == 0:
             validator = QIntValidator(0, 999999, editor)
@@ -144,7 +145,7 @@ class NumericDelegate(QStyledItemDelegate):
 class CodeDelegate(QStyledItemDelegate):
     """Delegate that normalizes code edits and preserves Enter navigation."""
 
-    advance_requested = pyqtSignal()
+    advance_requested = Signal()
 
     @staticmethod
     def _normalize_code(value) -> str:

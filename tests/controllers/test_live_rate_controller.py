@@ -2,7 +2,7 @@ import logging
 import types
 from datetime import datetime, timezone
 
-from PyQt6.QtCore import QObject
+from PySide6.QtCore import QObject
 
 import silverestimate.controllers.live_rate_controller as live_rate_module
 from silverestimate.controllers.live_rate_controller import LiveRateController

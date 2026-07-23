@@ -53,8 +53,8 @@ jobs:
       - name: Offscreen Qt startup smoke
         run: uv run nox -s smoke_ui
 
-      - name: Build executable from canonical spec
-        run: uv run python -m PyInstaller --clean --noconfirm SilverEstimate.spec
+      - name: Build executable with pyside6-deploy
+        run: uv run nox -s build_clean
 
       - name: Optional Windows code-signing hook
         if: ${{ env.SIGNING_CERTIFICATE_BASE64 != '' }}
@@ -84,6 +84,7 @@ jobs:
           Copy-Item -LiteralPath dist\SilverEstimate.exe -Destination $exe
           Compress-Archive -LiteralPath $exe,LICENSE,THIRD_PARTY_NOTICES.md,vendor\sqlcipher\PROVENANCE.json -DestinationPath $zip -Force
           uv run cyclonedx-py environment --output-format JSON --output-file $sbom
+          uv run python scripts/augment_release_sbom.py --sbom $sbom
           foreach ($artifact in @($exe, $zip, $sbom)) {
             $hash = (Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash.ToLower()
             "$hash  $artifact" | Set-Content -LiteralPath "$artifact.sha256" -NoNewline

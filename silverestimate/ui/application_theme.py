@@ -1,11 +1,11 @@
-"""Application-level light theme helpers for PyQt widgets."""
+"""Application-level light theme helpers for Qt widgets."""
 
 from __future__ import annotations
 
 import logging
 from typing import Protocol
 
-from PyQt6.QtGui import QColor, QFont, QPalette
+from PySide6.QtGui import QColor, QFont, QPalette
 
 from .theme_tokens import (
     CARD_BORDER,

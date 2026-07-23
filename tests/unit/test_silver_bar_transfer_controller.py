@@ -1,8 +1,8 @@
 import csv
 import logging
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QComboBox, QDialog, QTableView
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QComboBox, QDialog, QTableView
 
 from silverestimate.ui.models import (
     AvailableSilverBarsTableModel,
@@ -96,7 +96,7 @@ def test_transfer_controller_adds_all_filtered_rows_and_refreshes(qtbot, monkeyp
     controller = SilverBarTransferController(host)
     qtbot.addWidget(host)
 
-    from PyQt6.QtWidgets import QMessageBox
+    from PySide6.QtWidgets import QMessageBox
 
     monkeypatch.setattr(
         QMessageBox,
@@ -134,7 +134,7 @@ def test_transfer_controller_exports_current_list_to_csv(qtbot, monkeypatch, tmp
 
     export_path = tmp_path / "bars.csv"
 
-    from PyQt6.QtWidgets import QFileDialog, QMessageBox
+    from PySide6.QtWidgets import QFileDialog, QMessageBox
 
     monkeypatch.setattr(
         QFileDialog,

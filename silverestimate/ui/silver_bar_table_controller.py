@@ -5,8 +5,8 @@ from __future__ import annotations
 import time
 import traceback
 
-from PyQt6.QtCore import QItemSelectionModel, Qt
-from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox
+from PySide6.QtCore import QItemSelectionModel, Qt
+from PySide6.QtWidgets import QApplication, QMenu, QMessageBox
 
 from ._host_proxy import HostProxy
 

@@ -1,9 +1,8 @@
-import contextlib
 import types
 
 import pytest
-from PyQt6.QtCore import QDate, QEventLoop, Qt, QTimer
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QDate, QEventLoop, Qt, QTimer
+from PySide6.QtWidgets import (
     QDialog,
     QHeaderView,
     QLineEdit,
@@ -160,8 +159,6 @@ def _make_widget(db_manager):
     repository = _RepositoryStub(db_manager)
     widget = EstimateEntryWidget(db_manager, main_window_stub, repository)
     widget.presenter.handle_item_code = lambda row, code: False
-    with contextlib.suppress(TypeError):
-        widget.item_table.cellChanged.disconnect(widget.handle_cell_changed)
     return widget
 
 
@@ -183,6 +180,21 @@ def test_widget_generates_voucher_on_init(qt_app, fake_db):
     try:
         assert fake_db.generate_calls == 1
         assert widget.voucher_edit.text() == "TEST123"
+    finally:
+        widget.deleteLater()
+
+
+def test_load_estimate_signal_connection_is_idempotent(qt_app, fake_db):
+    widget = _make_widget(fake_db)
+    load_calls = []
+    widget.presenter.load_estimate = lambda voucher_no: load_calls.append(voucher_no)
+
+    try:
+        widget.reconnect_load_estimate()
+        widget.reconnect_load_estimate()
+        widget.voucher_edit.returnPressed.emit()
+
+        assert load_calls == ["TEST123"]
     finally:
         widget.deleteLater()
 
@@ -474,7 +486,7 @@ def test_widget_save_and_reload(qt_app, tmp_path, settings_stub, monkeypatch):
     _set_row(widget, 2, silver_bar_item(gross=2.0, poly=0.0, purity=99.9, wage_rate=0))
     widget.toggle_silver_bar_mode()
 
-    from PyQt6.QtWidgets import QMessageBox as _QtMessageBox
+    from PySide6.QtWidgets import QMessageBox as _QtMessageBox
 
     class _MsgBoxStub:
         Yes = _QtMessageBox.StandardButton.Yes
@@ -908,7 +920,9 @@ def test_totals_section_order_sync_and_persistence(qt_app, fake_db, settings_stu
         widget.deleteLater()
 
 
-def test_column_width_auto_fits_content_expand_and_shrink(qt_app, fake_db):
+def test_column_width_auto_fits_content_expand_and_shrink(
+    qt_app, fake_db, settings_stub
+):
     widget = _make_widget(fake_db)
     try:
         table = widget.item_table
@@ -937,7 +951,7 @@ def test_column_width_auto_fits_content_expand_and_shrink(qt_app, fake_db):
         widget.deleteLater()
 
 
-def test_column_autofit_defaults_to_explicit_mode(qt_app, fake_db):
+def test_column_autofit_defaults_to_explicit_mode(qt_app, fake_db, settings_stub):
     widget = _make_widget(fake_db)
     try:
         col = COL_ITEM_NAME
@@ -948,7 +962,7 @@ def test_column_autofit_defaults_to_explicit_mode(qt_app, fake_db):
         widget.deleteLater()
 
 
-def test_non_autofit_uses_native_stretch_for_item_name(qt_app, fake_db):
+def test_non_autofit_uses_native_stretch_for_item_name(qt_app, fake_db, settings_stub):
     widget = _make_widget(fake_db)
     try:
         header = widget.item_table.horizontalHeader()
@@ -958,7 +972,9 @@ def test_non_autofit_uses_native_stretch_for_item_name(qt_app, fake_db):
         widget.deleteLater()
 
 
-def test_non_autofit_prioritizes_item_weights_over_wage_and_pieces(qt_app, fake_db):
+def test_non_autofit_prioritizes_item_weights_over_wage_and_pieces(
+    qt_app, fake_db, settings_stub
+):
     widget = _make_widget(fake_db)
     try:
         table = widget.item_table

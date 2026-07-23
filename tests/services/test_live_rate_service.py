@@ -2,7 +2,7 @@ import logging
 import threading
 from datetime import datetime, timezone
 
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
+from PySide6.QtCore import QObject, Signal, Slot
 
 from silverestimate.services.dda_rate_fetcher import (
     DDA_AGRA_MOHAR_ITEM_ID,
@@ -35,10 +35,10 @@ def _snapshot():
 
 
 class _Worker(QObject):
-    rate_received = pyqtSignal(object)
-    feed_status_received = pyqtSignal(object)
-    connection_state_changed = pyqtSignal(str)
-    stream_error = pyqtSignal(str)
+    rate_received = Signal(object)
+    feed_status_received = Signal(object)
+    connection_state_changed = Signal(str)
+    stream_error = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -143,7 +143,7 @@ def test_worker_rate_is_delivered_to_qobject_receiver_on_gui_thread(qtbot):
     handled_on = []
 
     class _Receiver(QObject):
-        @pyqtSlot(object)
+        @Slot(object)
         def handle(self, _snapshot):
             handled_on.append(threading.get_ident())
 

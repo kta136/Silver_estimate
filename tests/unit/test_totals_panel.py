@@ -1,7 +1,7 @@
 """Tests for TotalsPanel component."""
 
 import pytest
-from PyQt6.QtCore import Qt
+from PySide6.QtCore import Qt
 
 from silverestimate.domain.estimate_models import CategoryTotals, TotalsResult
 from silverestimate.ui.estimate_entry_components.totals_panel import TotalsPanel

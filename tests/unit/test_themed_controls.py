@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from PyQt6.QtGui import QColor
-from PyQt6.QtWidgets import QVBoxLayout, QWidget
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
 from silverestimate.ui.theme_tokens import HEADER_TEXT

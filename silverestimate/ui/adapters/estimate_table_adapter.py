@@ -3,9 +3,9 @@ from __future__ import annotations
 import weakref
 from typing import Any, Mapping
 
-from PyQt6 import sip
-from PyQt6.QtCore import QTimer
-from PyQt6.QtWidgets import QMessageBox
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QMessageBox
+from shiboken6 import isValid
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
 
@@ -36,7 +36,7 @@ class EstimateTableAdapter:
         if owner is None:
             return
         try:
-            if sip.isdeleted(owner):
+            if not isValid(owner):
                 return
             owner.focus_on_code_column(row)
         except RuntimeError:
@@ -44,8 +44,10 @@ class EstimateTableAdapter:
 
     @staticmethod
     def _qt_object_available(obj: Any) -> bool:
+        if obj is None:
+            return False
         try:
-            return not sip.isdeleted(obj)
+            return isValid(obj)
         except TypeError:
             return obj is not None
         except RuntimeError:

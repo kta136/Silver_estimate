@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import floor
 
-from PyQt6.QtCore import QRectF, Qt
-from PyQt6.QtGui import QFont, QFontMetricsF, QPainter
-from PyQt6.QtPrintSupport import QPrinter
+from PySide6.QtCore import QRectF, Qt
+from PySide6.QtGui import QFont, QFontMetricsF, QPainter
+from PySide6.QtPrintSupport import QPrinter
 
 from .estimate_print_document import EstimatePrintDocument, EstimatePrintItem
 from .print_format_spec import CLASSIC_ESTIMATE_FORMAT_SPEC
@@ -227,10 +227,8 @@ def paint_classic_estimate(
 
 def _resolve_font(print_font: QFont | None) -> QFont:
     spec = CLASSIC_ESTIMATE_FORMAT_SPEC
-    configured_size = getattr(print_font, "float_size", spec.font_size)
-    try:
-        point_size = float(configured_size)
-    except TypeError, ValueError:
+    point_size = print_font.pointSizeF() if print_font is not None else spec.font_size
+    if point_size <= 0:
         point_size = spec.font_size
     font = QFont(spec.font_family)
     font.setPointSizeF(max(1.0, point_size))

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from PyQt6.QtWidgets import QInputDialog, QLineEdit, QMessageBox
+from PySide6.QtWidgets import QInputDialog, QLineEdit, QMessageBox
 
 from ._host_proxy import HostProxy
 

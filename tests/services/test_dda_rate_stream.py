@@ -4,7 +4,7 @@ import time
 from datetime import datetime, timezone
 
 import pytest
-from PyQt6.QtCore import pyqtSignal
+from PySide6.QtCore import Signal
 
 from silverestimate.services.dda_rate_fetcher import (
     DDA_AGRA_MOHAR_ITEM_ID,
@@ -109,7 +109,7 @@ def _sse(event, payload):
     ]
 
 
-def test_worker_declares_required_class_level_pyqt_signals():
+def test_worker_declares_required_class_level_signals():
     for name in (
         "rate_received",
         "feed_status_received",
@@ -117,7 +117,7 @@ def test_worker_declares_required_class_level_pyqt_signals():
         "stream_error",
     ):
         assert name in DdaRateStreamWorker.__dict__
-        assert type(DdaRateStreamWorker.__dict__[name]) is type(pyqtSignal(object))
+        assert type(DdaRateStreamWorker.__dict__[name]) is type(Signal(object))
 
 
 def test_stream_request_is_seeded_once_anonymous_and_desktop_surface():

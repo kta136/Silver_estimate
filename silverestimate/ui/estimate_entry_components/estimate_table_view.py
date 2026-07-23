@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any, Optional
 
-from PyQt6.QtCore import QItemSelection, QModelIndex, Qt, pyqtSignal
-from PyQt6.QtGui import QAction, QColor, QPalette
-from PyQt6.QtWidgets import QAbstractItemView, QHeaderView, QMenu, QTableView
+from PySide6.QtCore import QItemSelection, QModelIndex, Qt, Signal
+from PySide6.QtGui import QAction, QColor, QPalette
+from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QMenu, QTableView
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.ui.icons import get_icon
@@ -26,17 +26,17 @@ class EstimateTableView(QTableView):
     Exposes model-first helper APIs consumed by estimate-entry runtime code.
     """
 
-    item_lookup_requested = pyqtSignal(int, str)  # row, code
-    row_deleted = pyqtSignal(int)  # row index
-    cell_edited = pyqtSignal(int, int)  # row, column
-    history_requested = pyqtSignal()
-    column_layout_reset_requested = pyqtSignal()
+    item_lookup_requested = Signal(int, str)  # row, code
+    row_deleted = Signal(int)  # row index
+    cell_edited = Signal(int, int)  # row, column
+    history_requested = Signal()
+    column_layout_reset_requested = Signal()
 
     # Retained for existing signal wiring in EstimateEntryWidget.
-    cellChanged = pyqtSignal(int, int)  # row, column
-    cellClicked = pyqtSignal(int, int)  # row, column
-    itemSelectionChanged = pyqtSignal()  # no args
-    currentCellChanged = pyqtSignal(
+    cellChanged = Signal(int, int)  # row, column
+    cellClicked = Signal(int, int)  # row, column
+    itemSelectionChanged = Signal()  # no args
+    currentCellChanged = Signal(
         int, int, int, int
     )  # currentRow, currentCol, prevRow, prevCol
 

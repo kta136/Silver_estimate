@@ -10,10 +10,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
-import PyQt6.QtCore as QtCore
-from PyQt6.QtCore import QLockFile, Qt
-from PyQt6.QtGui import QIcon
-from PyQt6.QtWidgets import QApplication, QMessageBox, QWidget
+import PySide6.QtCore as QtCore
+from PySide6.QtCore import QLockFile, Qt
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QApplication, QMessageBox, QWidget
 
 from silverestimate.infrastructure import qt_bootstrap
 from silverestimate.infrastructure.app_constants import APP_TITLE, DB_PATH
@@ -28,7 +28,7 @@ from silverestimate.infrastructure.windows_integration import set_app_user_model
 from silverestimate.ui.application_theme import apply_light_application_theme
 
 if TYPE_CHECKING:
-    from PyQt6.QtWidgets import QMainWindow
+    from PySide6.QtWidgets import QMainWindow
 
     from silverestimate.persistence.database_manager import DatabaseManager
 
@@ -286,7 +286,7 @@ class ApplicationBuilder:
         # Hidden parent widget for dialogs shown before the main window exists.
         # Some tests monkeypatch QApplication with a lightweight stub; skip
         # QWidget creation there to avoid requiring a real Qt app instance.
-        if type(app).__module__.startswith("PyQt6."):
+        if type(app).__module__.startswith("PySide6."):
             dialog_parent = QWidget()
             dialog_parent.setAttribute(
                 Qt.WidgetAttribute.WA_DontShowOnScreen,

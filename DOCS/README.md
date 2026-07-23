@@ -21,7 +21,7 @@ Linux are untested development environments.
 ## Project status
 
 - Source version: `3.07`
-- Runtime: Python 3.14 and PyQt6 6.11
+- Runtime: Python 3.14, PySide6/Shiboken6 6.11, and Qt 6.11
 - Packaged platform: Windows 10/11
 - Stable downloads: [GitHub Releases](https://github.com/kta136/Silver_estimate/releases/latest)
 - Change history: [CHANGELOG.md](../CHANGELOG.md)

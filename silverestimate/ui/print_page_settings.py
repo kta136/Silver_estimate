@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from PyQt6.QtCore import QMarginsF, QSizeF
-from PyQt6.QtGui import QPageLayout, QPageSize
-from PyQt6.QtPrintSupport import QPrinter, QPrinterInfo
+from PySide6.QtCore import QMarginsF, QSizeF
+from PySide6.QtGui import QPageLayout, QPageSize
+from PySide6.QtPrintSupport import QPrinter, QPrinterInfo
 
 LOGGER = logging.getLogger(__name__)
 

@@ -3,9 +3,10 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $appConstants = Join-Path $repoRoot "silverestimate\infrastructure\app_constants.py"
-$specPath = Join-Path $repoRoot "SilverEstimate.spec"
+$deployConfig = Join-Path $repoRoot "pysidedeploy.spec"
 $distDir = Join-Path $repoRoot "dist"
 $requiredPython = [version]"3.14"
+$nuitkaVersion = "4.1.3"
 
 function Get-AppVersion {
     $match = Select-String -Path $appConstants -Pattern 'APP_VERSION = "([^"]+)"'
@@ -139,15 +140,13 @@ function Sync-ProjectDependencies([string]$pythonExe) {
     return $pythonExe
 }
 
-function Ensure-PyInstaller([string]$pythonExe) {
-    & $pythonExe -m PyInstaller --version | Out-Null
-    if ($?) {
-        return
+function Get-PySideDeploy([string]$pythonExe) {
+    $scriptsDir = Split-Path -Parent $pythonExe
+    $deployExe = Join-Path $scriptsDir "pyside6-deploy.exe"
+    if (-not (Test-Path $deployExe)) {
+        throw "pyside6-deploy is unavailable at $deployExe"
     }
-    & $pythonExe -m pip install pyinstaller
-    if (-not $?) {
-        throw "PyInstaller installation failed."
-    }
+    return $deployExe
 }
 
 $pythonExe = Find-WindowsPython
@@ -156,15 +155,17 @@ $version = Get-AppVersion
 $versionedExe = Join-Path $distDir "SilverEstimate-v$version.exe"
 $versionedZip = Join-Path $distDir "SilverEstimate-v$version-win64.zip"
 $baseExe = Join-Path $distDir "SilverEstimate.exe"
+$temporaryDeployConfig = Join-Path $repoRoot ".pysidedeploy-local-onefile.spec"
 
 Push-Location $repoRoot
 try {
     $buildPython = Sync-ProjectDependencies -pythonExe $pythonExe
-    Ensure-PyInstaller -pythonExe $buildPython
+    $deployExe = Get-PySideDeploy -pythonExe $buildPython
 
-    & $buildPython -m PyInstaller --clean --noconfirm $specPath
+    Copy-Item -LiteralPath $deployConfig -Destination $temporaryDeployConfig -Force
+    & $deployExe --config-file $temporaryDeployConfig --force --mode onefile --nuitka-version $nuitkaVersion
     if (-not $?) {
-        throw "PyInstaller build failed."
+        throw "pyside6-deploy build failed."
     }
 
     if (-not (Test-Path $baseExe)) {
@@ -179,11 +180,19 @@ try {
     }
 
     Copy-Item -Force $baseExe $versionedExe
-    Compress-Archive -Path $versionedExe -DestinationPath $versionedZip
+    Compress-Archive -LiteralPath @(
+        $versionedExe,
+        (Join-Path $repoRoot "LICENSE"),
+        (Join-Path $repoRoot "THIRD_PARTY_NOTICES.md"),
+        (Join-Path $repoRoot "vendor\sqlcipher\PROVENANCE.json")
+    ) -DestinationPath $versionedZip
 
     Write-Host "Windows executable: $versionedExe"
     Write-Host "Windows archive: $versionedZip"
 }
 finally {
+    if (Test-Path -LiteralPath $temporaryDeployConfig) {
+        Remove-Item -LiteralPath $temporaryDeployConfig -Force
+    }
     Pop-Location
 }

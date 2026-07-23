@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
-from PyQt6.QtWidgets import QMenuBar, QMessageBox
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction, QActionGroup, QKeySequence
+from PySide6.QtWidgets import QMenuBar, QMessageBox
 
 from silverestimate.infrastructure.app_constants import APP_VERSION
 from silverestimate.ui.icons import get_icon

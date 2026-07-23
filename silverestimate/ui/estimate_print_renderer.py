@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 
-from PyQt6.QtCore import QRectF, Qt
-from PyQt6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen
-from PyQt6.QtPrintSupport import QPrinter
+from PySide6.QtCore import QRectF, Qt
+from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen
+from PySide6.QtPrintSupport import QPrinter
 
 from .estimate_classic_renderer import (
     ClassicEstimateLayout,
@@ -122,6 +122,7 @@ class EstimatePrintRenderer:
             )
         layout = self.build_modern_layout(document)
         base_font = self._resolve_font(print_font)
+        _minimize_bottom_page_margin(printer)
         painter = QPainter()
         if not painter.begin(printer):
             raise RuntimeError("Could not initialize the estimate print painter.")
@@ -153,13 +154,22 @@ class EstimatePrintRenderer:
     def _resolve_font(print_font: QFont | None) -> QFont:
         spec = MODERN_ESTIMATE_FORMAT_SPEC
         font = QFont(print_font) if print_font is not None else QFont(spec.font_family)
-        configured_size = getattr(print_font, "float_size", spec.font_size)
-        try:
-            point_size = float(configured_size)
-        except TypeError, ValueError:
+        point_size = (
+            print_font.pointSizeF() if print_font is not None else spec.font_size
+        )
+        if point_size <= 0:
             point_size = spec.font_size
         font.setPointSizeF(max(1.0, point_size))
         return font
+
+
+def _minimize_bottom_page_margin(printer: QPrinter) -> None:
+    """Use the printer's minimum supported bottom margin for Modern estimates."""
+    page_layout = printer.pageLayout()
+    unit = page_layout.units()
+    margins = page_layout.margins(unit)
+    margins.setBottom(page_layout.minimumMargins().bottom())
+    printer.setPageMargins(margins, unit)
 
 
 def _build_style(base_font: QFont, printer: QPrinter) -> _PaintStyle:

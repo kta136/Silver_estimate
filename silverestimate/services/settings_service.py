@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from PyQt6.QtGui import QFont
+from PySide6.QtGui import QFont
 
 from silverestimate.infrastructure.settings import QSettings, get_app_settings
 
@@ -17,15 +17,14 @@ class FontSettings:
     bold: bool
 
     def to_qfont(self) -> QFont:
-        font = QFont(self.family, int(round(self.size)))
+        font = QFont(self.family)
+        font.setPointSizeF(self.size)
         font.setBold(self.bold)
-        font.float_size = self.size
         return font
 
     @classmethod
     def from_qfont(cls, font: QFont) -> "FontSettings":
-        size = getattr(font, "float_size", float(font.pointSize()))
-        return cls(font.family(), float(size), font.bold())
+        return cls(font.family(), font.pointSizeF(), font.bold())
 
 
 class SettingsService:
@@ -34,12 +33,20 @@ class SettingsService:
 
     # --- Fonts ---------------------------------------------------------
     def load_print_font(self, default_font: QFont) -> QFont:
-        family = self._settings.value("font/family", default_font.family(), type=str)
-        size = self._settings.value(
+        family_value = self._settings.value(
+            "font/family", default_font.family(), type=str
+        )
+        size_value = self._settings.value(
             "font/size_float", default_font.pointSizeF(), type=float
         )
-        bold = self._settings.value("font/bold", default_font.bold(), type=bool)
-        size = max(5.0, float(size))
+        bold_value = self._settings.value("font/bold", default_font.bold(), type=bool)
+        family = str(family_value or default_font.family())
+        try:
+            size = float(size_value) if isinstance(size_value, (int, float, str)) else 0
+        except ValueError:
+            size = 0
+        size = max(5.0, size or default_font.pointSizeF())
+        bold = bold_value if isinstance(bold_value, bool) else default_font.bold()
         return FontSettings(family, size, bold).to_qfont()
 
     def save_print_font(self, font: QFont) -> None:
@@ -54,9 +61,11 @@ class SettingsService:
             "ui/table_font_size", defaultValue=int(default_size), type=int
         )
         try:
-            return int(size)
+            if isinstance(size, (int, float, str, bytes, bytearray)):
+                return int(size)
         except TypeError, ValueError:
-            return int(default_size)
+            pass
+        return int(default_size)
 
     def save_table_font_size(self, size: int) -> None:
         self._settings.setValue("ui/table_font_size", int(size))

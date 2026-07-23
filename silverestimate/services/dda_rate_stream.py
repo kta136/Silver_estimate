@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Any, Protocol, cast
 from urllib.parse import urlencode
 
-from PyQt6.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 
 from silverestimate.services.dda_rate_fetcher import (
     DDA_AGRA_MOHAR_ITEM_ID,
@@ -147,10 +147,10 @@ def apply_sse_rate_event(
 class DdaRateStreamWorker(QObject):
     """Hydrate over HTTPS, then maintain the rate through a blocking SSE stream."""
 
-    rate_received = pyqtSignal(object)
-    feed_status_received = pyqtSignal(object)
-    connection_state_changed = pyqtSignal(str)
-    stream_error = pyqtSignal(str)
+    rate_received = Signal(object)
+    feed_status_received = Signal(object)
+    connection_state_changed = Signal(str)
+    stream_error = Signal(str)
 
     def __init__(
         self,

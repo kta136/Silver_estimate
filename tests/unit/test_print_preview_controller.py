@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from PyQt6.QtCore import QSizeF
-from PyQt6.QtGui import QFont, QPageLayout, QPageSize
-from PyQt6.QtPrintSupport import QPrinter, QPrintPreviewDialog, QPrintPreviewWidget
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QSizeF
+from PySide6.QtGui import QFont, QPageLayout, QPageSize
+from PySide6.QtPrintSupport import QPrinter, QPrintPreviewDialog, QPrintPreviewWidget
+from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
@@ -156,8 +156,8 @@ def test_preview_print_font_dialog_persists_selection_and_refreshes(
 ) -> None:
     initial_font = QFont("Arial", 8)
     selected_font = QFont("Arial", 12)
+    selected_font.setPointSizeF(12.0)
     selected_font.setBold(True)
-    selected_font.float_size = 12.0
     persisted_fonts = []
 
     class _PreviewWidget:

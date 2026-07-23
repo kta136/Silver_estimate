@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from PyQt6.QtCore import QEvent, Qt
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QEvent, Qt
+from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import html as html_lib
 
-from PyQt6.QtCore import QDate
+from PySide6.QtCore import QDate
 
 
 def _row_value(row, key, default):

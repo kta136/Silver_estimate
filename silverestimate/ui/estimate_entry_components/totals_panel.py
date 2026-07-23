@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QFormLayout,
     QFrame,
@@ -25,7 +25,7 @@ from silverestimate.ui.estimate_table_formatting import format_indian_number
 class _SummarySectionsListWidget(QListWidget):
     """List widget that swaps cards when dropped onto another card."""
 
-    swap_requested = pyqtSignal(int, int)
+    swap_requested = Signal(int, int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -61,7 +61,7 @@ class TotalsPanel(QWidget):
     and final calculations (Net Fine Weight, Net Wage, Grand Total).
     """
 
-    section_order_changed = pyqtSignal(list)
+    section_order_changed = Signal(list)
 
     if TYPE_CHECKING:
         overall_gross_label: QLabel
@@ -601,8 +601,6 @@ class TotalsPanel(QWidget):
         target_width = max(0, viewport.width() - 8)
         for idx in range(self._summary_sections_list.count()):
             item = self._summary_sections_list.item(idx)
-            if item is None:
-                continue
             card = self._summary_sections_list.itemWidget(item)
             card.setMinimumWidth(target_width)
             card.adjustSize()
@@ -720,8 +718,6 @@ class TotalsPanel(QWidget):
             return
         for index in range(self._summary_sections_list.count()):
             item = self._summary_sections_list.item(index)
-            if item is None:
-                continue
             if item.data(Qt.ItemDataRole.UserRole) == section_key:
                 item.setHidden(not visible)
                 break

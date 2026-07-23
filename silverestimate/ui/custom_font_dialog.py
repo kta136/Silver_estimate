@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 import sys
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QDialog,
@@ -22,7 +22,7 @@ from .window_sizing import resize_to_available_screen
 class CustomFontDialog(QDialog):
     """A custom dialog for selecting font properties with decimal sizes and min size 5."""
 
-    fontSelected = pyqtSignal(QFont)
+    fontSelected = Signal(QFont)
 
     def __init__(self, initial_font=None, parent=None):
         super().__init__(parent)
@@ -192,9 +192,7 @@ class CustomFontDialog(QDialog):
         """Update the preview label font based on current selections."""
         font = self.font_combo.currentFont()
         size = self.size_spinbox.value()
-        # QFont uses integer point sizes, QDoubleSpinBox value might be float
-        # QFont.setPointSizeF() exists but might not be universally reliable, setPointSize is safer
-        font.setPointSize(int(round(size)))  # Round to nearest integer for QFont
+        font.setPointSizeF(size)
         font.setBold(self.bold_checkbox.isChecked())
         self.preview_label.setFont(font)
 
@@ -202,11 +200,8 @@ class CustomFontDialog(QDialog):
         """Return the QFont object based on the dialog's settings."""
         font = self.font_combo.currentFont()
         size = self.size_spinbox.value()
-        # Store the float size for potential future use, but apply rounded int size
-        font.setPointSize(int(round(size)))
+        font.setPointSizeF(size)
         font.setBold(self.bold_checkbox.isChecked())
-        # Add the float size as a custom property if needed for saving/loading exact value
-        font.float_size = size
         return font
 
     def accept(self):
@@ -225,6 +220,6 @@ if __name__ == "__main__":
         import logging
 
         logging.getLogger(__name__).debug(
-            f"Selected Font: {font.family()}, Size: {getattr(font, 'float_size', font.pointSize())} (applied as {font.pointSize()}pt), Bold: {font.bold()}"
+            f"Selected Font: {font.family()}, Size: {font.pointSizeF():.1f}pt, Bold: {font.bold()}"
         )
     sys.exit()

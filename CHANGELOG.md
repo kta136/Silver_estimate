@@ -2,6 +2,21 @@
 
 ## Unreleased - SQLCipher live storage cutover
 
+- Replaced the PyQt6 runtime with PySide6/Shiboken6 6.11.1 and Qt 6.11.1
+  without a compatibility layer or SQLCipher data-format change.
+- Completed binding-specific signal, enum, context-menu, QObject-lifetime,
+  typing, keyboard, visual, print, and performance validation under PySide6.
+- Updated maintained documentation, project metadata, notices, and release
+  SBOM generation for PySide6, embedded CPython, and the native Qt runtime.
+- Replaced PyInstaller packaging with Qt's `pyside6-deploy` wrapper and a
+  locked Nuitka 4.1.3/zstandard 0.25.0 toolchain.
+- Added curated standalone inventory validation before the one-file build,
+  including required Qt plugins, legal files, SQLCipher provenance, and
+  rejection of unused Qt/PyQt payloads.
+- Added frozen startup validation for the Windows Qt platform, icons, SVG,
+  printing, Windows Credential Manager, SQLCipher, and writable runtime paths.
+- Updated pull-request, main, release, and local Windows build flows to produce
+  and validate the `pyside6-deploy` artifacts directly.
 - Replaced the live SILVDB01/plaintext-snapshot lifecycle with direct keyed
   SQLCipher connections so database, WAL, rollback, and statement-journal page
   content remains encrypted during active sessions.
@@ -23,6 +38,9 @@
 - Clarified that SILVDB01 remains only as a one-time read-only importer and a
   retained `estimation.silvdb01.backup`, with an installed-system confirmation
   gate before importer retirement.
+- Retained the last green M0 binding baseline only as rollback evidence until
+  final migration closure; the new executable is accepted against the current
+  PySide6 release contract.
 
 All notable changes to the Silver Estimation App will be documented in this file.
 

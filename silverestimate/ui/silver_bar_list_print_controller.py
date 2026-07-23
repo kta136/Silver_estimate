@@ -7,8 +7,8 @@ import traceback
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QObject, QThread, pyqtSignal
-from PyQt6.QtWidgets import QMessageBox, QProgressDialog
+from PySide6.QtCore import QObject, QThread, Signal
+from PySide6.QtWidgets import QMessageBox, QProgressDialog
 
 from ._host_proxy import HostProxy
 
@@ -18,9 +18,9 @@ _LOGGER = logging.getLogger(__name__)
 class _PrintPreviewBuildWorker(QObject):
     """Prepare a silver-bar list preview away from the GUI thread."""
 
-    preview_ready = pyqtSignal(int, object)
-    preview_error = pyqtSignal(int, str)
-    finished = pyqtSignal(int)
+    preview_ready = Signal(int, object)
+    preview_error = Signal(int, str)
+    finished = Signal(int)
 
     def __init__(
         self,

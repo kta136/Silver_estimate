@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, TypeAlias, cast
 
-from PyQt6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QMessageBox
 
 from silverestimate.domain.pagination import (
     AvailableBarCursor,

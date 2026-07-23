@@ -7,8 +7,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, cast
 
-from PyQt6.QtCore import QDate, Qt
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QDate, Qt
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QDialog,
     QFrame,
@@ -567,6 +567,8 @@ class EstimateHistoryDialog(QDialog):
         else:
             text += " in current date range"
         self.results_summary_label.setText(text)
+        text_width = self.results_summary_label.fontMetrics().horizontalAdvance(text)
+        self.results_summary_label.setMinimumWidth(max(150, text_width + 24))
         self._update_bottom_status(loaded)
 
     def _update_selected_details(self) -> None:

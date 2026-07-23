@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import traceback
 
-from PyQt6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QMessageBox
 
 from ._host_proxy import HostProxy
 from .silver_bar_optimization import find_optimal_combination

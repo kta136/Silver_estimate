@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 import logging  # Ensure logging is available for getLogger calls
 
-from PyQt6.QtCore import QSize, Qt, QTimer, QUrl, pyqtSignal
-from PyQt6.QtGui import QDesktopServices, QFont, QGuiApplication
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QSize, Qt, QTimer, QUrl, Signal
+from PySide6.QtGui import QDesktopServices, QFont
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
     QDialog,
@@ -60,11 +60,43 @@ from .theme_tokens import (
 from .themed_controls import ThemedComboBox, ThemedDoubleSpinBox, ThemedSpinBox
 
 
+def _coerce_bool_setting(value: object, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if normalized in {"0", "false", "no", "off", "disabled"}:
+            return False
+    if isinstance(value, (int, float)):
+        return value != 0
+    return default
+
+
+def _coerce_int_setting(value: object, default: int) -> int:
+    if isinstance(value, (int, float, str, bytes, bytearray)):
+        try:
+            return int(value)
+        except TypeError, ValueError:
+            pass
+    return default
+
+
+def _coerce_float_setting(value: object, default: float) -> float:
+    if isinstance(value, (int, float, str)):
+        try:
+            return float(value)
+        except ValueError:
+            pass
+    return default
+
+
 class SettingsDialog(QDialog):
     """Centralized dialog for application settings."""
 
     # Signal to indicate settings that require application restart or redraw
-    settings_applied = pyqtSignal()
+    settings_applied = Signal()
 
     def __init__(self, main_window_ref, parent=None):
         super().__init__(parent)
@@ -284,7 +316,10 @@ class SettingsDialog(QDialog):
 
         # Remember last page
         try:
-            last_idx = int(self.settings.value("ui/settings_last_tab", 0, type=int))
+            last_idx = _coerce_int_setting(
+                self.settings.value("ui/settings_last_tab", 0, type=int),
+                0,
+            )
         except Exception:
             last_idx = 0
         last_idx = max(0, min(last_idx, len(page_defs) - 1))
@@ -551,7 +586,7 @@ class SettingsDialog(QDialog):
                 item = QTableWidgetItem(value)
                 if col >= 2:
                     item.setTextAlignment(
-                        int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                        Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
                     )
                 table.setItem(row, col, item)
         table.verticalHeader().setVisible(False)
@@ -719,7 +754,7 @@ class SettingsDialog(QDialog):
         layout.addLayout(button_layout)
 
         # --- Item Backup section ---
-        from PyQt6.QtWidgets import QGroupBox
+        from PySide6.QtWidgets import QGroupBox
 
         backup_group = QGroupBox("Item Master Backup")
         backup_layout = QVBoxLayout(backup_group)
@@ -792,7 +827,10 @@ class SettingsDialog(QDialog):
         self.debug_mode_checkbox.setToolTip(
             "Enable detailed debug logging (may affect performance)"
         )
-        debug_mode = self.settings.value("logging/debug_mode", False, type=bool)
+        debug_mode = _coerce_bool_setting(
+            self.settings.value("logging/debug_mode", False, type=bool),
+            False,
+        )
         self.debug_mode_checkbox.setChecked(debug_mode)
         self.debug_mode_checkbox.toggled.connect(self._mark_dirty)
         debug_layout.addWidget(self.debug_mode_checkbox)
@@ -816,7 +854,10 @@ class SettingsDialog(QDialog):
         self.enable_info_checkbox.setToolTip(
             "Log normal application events (INFO level)"
         )
-        enable_info = self.settings.value("logging/enable_info", True, type=bool)
+        enable_info = _coerce_bool_setting(
+            self.settings.value("logging/enable_info", True, type=bool),
+            True,
+        )
         self.enable_info_checkbox.setChecked(enable_info)
         self.enable_info_checkbox.toggled.connect(self._mark_dirty)
         log_levels_layout.addWidget(self.enable_info_checkbox)
@@ -826,8 +867,9 @@ class SettingsDialog(QDialog):
             "Enable Critical Logs (ERROR and CRITICAL)"
         )
         self.enable_critical_checkbox.setToolTip("Log errors and critical issues")
-        enable_critical = self.settings.value(
-            "logging/enable_critical", True, type=bool
+        enable_critical = _coerce_bool_setting(
+            self.settings.value("logging/enable_critical", True, type=bool),
+            True,
         )
         self.enable_critical_checkbox.setChecked(enable_critical)
         self.enable_critical_checkbox.toggled.connect(self._mark_dirty)
@@ -840,7 +882,10 @@ class SettingsDialog(QDialog):
         self.enable_debug_checkbox.setToolTip(
             "Log detailed debug information (only when Debug Mode is enabled)"
         )
-        enable_debug = self.settings.value("logging/enable_debug", True, type=bool)
+        enable_debug = _coerce_bool_setting(
+            self.settings.value("logging/enable_debug", True, type=bool),
+            True,
+        )
         self.enable_debug_checkbox.setChecked(enable_debug)
         self.enable_debug_checkbox.toggled.connect(self._mark_dirty)
         log_levels_layout.addWidget(self.enable_debug_checkbox)
@@ -864,7 +909,10 @@ class SettingsDialog(QDialog):
         self.auto_cleanup_checkbox.setToolTip(
             "Automatically delete log files older than the specified number of days"
         )
-        auto_cleanup = self.settings.value("logging/auto_cleanup", False, type=bool)
+        auto_cleanup = _coerce_bool_setting(
+            self.settings.value("logging/auto_cleanup", False, type=bool),
+            False,
+        )
         self.auto_cleanup_checkbox.setChecked(auto_cleanup)
         cleanup_layout.addWidget(self.auto_cleanup_checkbox)
 
@@ -874,7 +922,10 @@ class SettingsDialog(QDialog):
         self.cleanup_days_spin = ThemedSpinBox()
         self.cleanup_days_spin.setRange(1, 365)
         self.cleanup_days_spin.setSuffix(" days")
-        cleanup_days = self.settings.value("logging/cleanup_days", 1, type=int)
+        cleanup_days = _coerce_int_setting(
+            self.settings.value("logging/cleanup_days", 1, type=int),
+            1,
+        )
         self.cleanup_days_spin.setValue(cleanup_days)
         self.cleanup_days_spin.setEnabled(auto_cleanup)
         self._polish_field_control(self.cleanup_days_spin, width=150)
@@ -999,10 +1050,7 @@ class SettingsDialog(QDialog):
 
     def _resize_to_available_screen(self) -> None:
         """Keep the settings dialog usable at larger Windows scale factors."""
-        screen = self.screen() or QGuiApplication.primaryScreen()
-        if screen is None:
-            self.resize(860, 720)
-            return
+        screen = self.screen()
         available = screen.availableGeometry()
         target_width = min(900, max(self.minimumWidth(), available.width() - 80))
         target_height = min(760, max(self.minimumHeight(), available.height() - 80))
@@ -1036,9 +1084,7 @@ class SettingsDialog(QDialog):
         """Generate display text for a QFont object."""
         if not font:
             return "Default"
-        size = getattr(
-            font, "float_size", font.pointSizeF()
-        )  # Use float size if available
+        size = font.pointSizeF()
         style = " Bold" if font.bold() else ""
         return f"{font.family()}, {size:.1f}pt{style}"
 
@@ -1047,22 +1093,26 @@ class SettingsDialog(QDialog):
         # Reusing logic similar to MainWindow.load_settings
         default_font = QFont("Arial", 8)
         default_font_size = 8.0
-        default_font.float_size = default_font_size
 
-        font_family = self.settings.value(
-            "font/family", default_font.family(), type=str
+        font_family = str(
+            self.settings.value("font/family", default_font.family(), type=str)
+            or default_font.family()
         )
-        font_size_float = self.settings.value(
-            "font/size_float", default_font_size, type=float
+        font_size_float = _coerce_float_setting(
+            self.settings.value("font/size_float", default_font_size, type=float),
+            default_font_size,
         )
-        font_bold = self.settings.value("font/bold", default_font.bold(), type=bool)
+        font_bold = _coerce_bool_setting(
+            self.settings.value("font/bold", default_font.bold(), type=bool),
+            default_font.bold(),
+        )
 
         # Ensure minimum size
         font_size_float = max(5.0, font_size_float)
 
-        loaded_font = QFont(font_family, int(round(font_size_float)))
+        loaded_font = QFont(font_family)
+        loaded_font.setPointSizeF(font_size_float)
         loaded_font.setBold(font_bold)
-        loaded_font.float_size = font_size_float
         return loaded_font
 
     def _load_table_font_size_setting(self):
@@ -1107,16 +1157,17 @@ class SettingsDialog(QDialog):
         max_size: int,
     ) -> int:
         value = self.settings.value(key, defaultValue=default_size, type=int)
-        try:
-            numeric_value = int(value)
-        except TypeError, ValueError:
+        numeric_value = _coerce_int_setting(value, default_size)
+        if numeric_value == default_size and value not in (
+            default_size,
+            str(default_size),
+        ):
             logging.getLogger(__name__).warning(
                 "Invalid integer setting for %s: %r; using %s",
                 key,
                 value,
                 default_size,
             )
-            return default_size
         return max(min_size, min(numeric_value, max_size))
 
     def _load_print_settings_to_ui(self):
@@ -1159,9 +1210,7 @@ class SettingsDialog(QDialog):
         try:
             # Save Print Font
             font_to_save = self._current_print_font
-            float_size = getattr(
-                font_to_save, "float_size", float(font_to_save.pointSize())
-            )
+            float_size = font_to_save.pointSizeF()
             self.settings.setValue("font/family", font_to_save.family())
             self.settings.setValue("font/size_float", float(float_size))
             self.settings.setValue("font/bold", bool(font_to_save.bold()))
@@ -1497,8 +1546,8 @@ class SettingsDialog(QDialog):
                 )
 
                 # Show busy cursor during cleanup
-                from PyQt6.QtCore import Qt
-                from PyQt6.QtGui import QCursor
+                from PySide6.QtCore import Qt
+                from PySide6.QtGui import QCursor
 
                 self.setCursor(QCursor(Qt.CursorShape.WaitCursor))
 
@@ -1566,7 +1615,6 @@ class SettingsDialog(QDialog):
         """Restore sensible default settings for this dialog and update the UI."""
         # Fonts
         default_font = QFont("Arial", 8)
-        default_font.float_size = 8.0
         self._current_print_font = default_font
         self.print_font_label.setText(self._get_font_display_text(default_font))
 
@@ -1626,12 +1674,7 @@ class SettingsDialog(QDialog):
                 and self.print_font_sample is not None
             ) and self._current_print_font:
                 sample_font = QFont(self._current_print_font)
-                # Respect fractional size stored in float_size if present
-                size_f = getattr(
-                    self._current_print_font,
-                    "float_size",
-                    float(self._current_print_font.pointSize()),
-                )
+                size_f = self._current_print_font.pointSizeF()
                 if size_f:
                     sample_font.setPointSizeF(max(5.0, float(size_f)))
                 self.print_font_sample.setFont(sample_font)
@@ -1645,7 +1688,7 @@ class SettingsDialog(QDialog):
 if __name__ == "__main__":
     import sys
 
-    from PyQt6.QtWidgets import QApplication, QMainWindow
+    from PySide6.QtWidgets import QApplication, QMainWindow
 
     class DummyMainWindow(QMainWindow):
         def __init__(self):

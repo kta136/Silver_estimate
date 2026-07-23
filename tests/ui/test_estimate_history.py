@@ -1,5 +1,5 @@
-from PyQt6.QtCore import QItemSelectionModel
-from PyQt6.QtWidgets import QFrame
+from PySide6.QtCore import QItemSelectionModel
+from PySide6.QtWidgets import QFrame
 
 from silverestimate.domain.pagination import Page
 from silverestimate.ui.estimate_history import EstimateHistoryDialog
@@ -121,6 +121,12 @@ def test_populate_table_uses_model_rows_and_selection_lookup(qtbot, monkeypatch)
             dialog.results_summary_label.text()
             == "2 of 2 estimates in current date range"
         )
+        assert dialog.results_summary_label.minimumWidth() >= (
+            dialog.results_summary_label.fontMetrics().horizontalAdvance(
+                dialog.results_summary_label.text()
+            )
+            + 24
+        )
 
         target_row = next(
             row
@@ -166,7 +172,8 @@ def test_estimate_history_uses_compact_top_controls(qtbot, monkeypatch):
         assert "QCalendarWidget QToolButton" in dialog.styleSheet()
         assert header_card.height() <= 54
         assert filter_card.height() <= 56
-        assert dialog.estimates_table.viewport().height() >= 548
+        # Native Windows metrics can differ from the offscreen plugin by one pixel.
+        assert dialog.estimates_table.viewport().height() >= 546
     finally:
         dialog.close()
         dialog.deleteLater()

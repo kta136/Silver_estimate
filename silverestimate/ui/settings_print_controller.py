@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from PyQt6.QtPrintSupport import QPrinterInfo
-from PyQt6.QtWidgets import QComboBox, QDoubleSpinBox, QSpinBox
+from PySide6.QtPrintSupport import QPrinterInfo
+from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QSpinBox
 
 from silverestimate.infrastructure.settings import SettingsStore
 from silverestimate.ui.print_format_spec import (

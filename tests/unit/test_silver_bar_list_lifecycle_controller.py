@@ -1,7 +1,7 @@
 import logging
 
-from PyQt6.QtCore import QItemSelectionModel, Qt
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QItemSelectionModel, Qt
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
     QDialog,
@@ -98,7 +98,7 @@ class _LifecycleHost(QDialog):
 def test_lifecycle_controller_creates_list_from_selection_and_assigns_bars(
     qtbot, monkeypatch
 ):
-    from PyQt6.QtWidgets import QInputDialog, QMessageBox
+    from PySide6.QtWidgets import QInputDialog, QMessageBox
 
     host = _LifecycleHost()
     controller = SilverBarListLifecycleController(host)

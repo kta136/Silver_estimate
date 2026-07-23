@@ -1,8 +1,12 @@
 """Tests for EstimateTableView component."""
 
 import pytest
-from PyQt6.QtGui import QPalette
+from PySide6.QtGui import QPalette
+from PySide6.QtWidgets import QMenu
 
+from silverestimate.ui.estimate_entry_components import (
+    estimate_table_view as view_module,
+)
 from silverestimate.ui.estimate_entry_components.estimate_table_view import (
     EstimateTableView,
 )
@@ -245,12 +249,13 @@ def test_history_requested_signal(table_view):
 def test_context_menu_actions_have_icons(table_view, monkeypatch):
     captured = {}
 
-    def _fake_exec(menu, *_args, **_kwargs):
-        captured["actions"] = [
-            (action.text(), action.icon()) for action in menu.actions()
-        ]
+    class _CapturingMenu(QMenu):
+        def exec(self, *_args, **_kwargs):
+            captured["actions"] = [
+                (action.text(), action.icon()) for action in self.actions()
+            ]
 
-    monkeypatch.setattr("PyQt6.QtWidgets.QMenu.exec", _fake_exec)
+    monkeypatch.setattr(view_module, "QMenu", _CapturingMenu)
 
     table_view._show_context_menu(table_view.rect().center())
 

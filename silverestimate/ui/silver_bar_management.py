@@ -7,7 +7,7 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QButtonGroup,
     QDialog,
     QFrame,

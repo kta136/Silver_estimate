@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from PyQt6.QtCore import Qt
+from PySide6.QtCore import Qt
 
 from silverestimate.infrastructure.settings import get_app_settings
 

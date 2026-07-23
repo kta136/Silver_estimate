@@ -1,6 +1,6 @@
-from PyQt6.QtCore import QSize
-from PyQt6.QtGui import QIcon
-from PyQt6.QtWidgets import QWidget
+from PySide6.QtCore import QSize
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QWidget
 
 from silverestimate.ui import icons
 

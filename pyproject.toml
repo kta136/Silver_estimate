@@ -13,20 +13,27 @@ license-files = ["LICENSE"]
 authors = [
     {name = "Silver Estimation App", email = "noreply@silverestimate.app"}
 ]
-keywords = ["silver", "estimation", "inventory", "pyqt6", "encryption"]
+keywords = [
+    "silver",
+    "estimation",
+    "inventory",
+    "pyside6",
+    "qt6",
+    "sqlcipher",
+    "windows",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
+    "Environment :: Win32 (MS Windows)",
     "Intended Audience :: End Users/Desktop",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.14",
     "Operating System :: Microsoft :: Windows",
-    "Framework :: PyQt6",
     "Topic :: Office/Business",
 ]
 
 dependencies = [
-    "PyQt6>=6.11,<6.12",
-    "PyQt6-Qt6==6.11.1; sys_platform == 'win32'",
+    "PySide6>=6.11.1,<6.12",
     "cryptography>=42.0.0",
     "passlib[argon2]>=1.7.4",
     "argon2_cffi>=21.3.0",
@@ -50,10 +57,9 @@ dev = [
     "nox>=2024.4.15",
     # Pre-commit hooks
     "pre-commit>=3.3.0",
-    # Type stubs
-    "PyQt6-stubs>=20250824",
     # Development tools
-    "pyinstaller>=6.0.0",
+    "Nuitka==4.1.3",
+    "zstandard==0.25.0",
     "bandit[toml]>=1.7.9",
     "safety>=3.7.0",
     "diff-cover>=9.7.1",
@@ -178,7 +184,6 @@ exclude = [
 
 [[tool.mypy.overrides]]
 module = [
-    "PyQt6.*",
     "keyring.*",
     "passlib.*",
     "sqlcipher3.*",
@@ -241,7 +246,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-qt_api = "pyqt6"
+qt_api = "pyside6"
 addopts = [
     "--verbose",
     "--capture=no",

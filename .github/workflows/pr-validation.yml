@@ -64,9 +64,13 @@ jobs:
         run: uv run diff-cover coverage.xml --compare-branch origin/main --fail-under=90
       - name: Offscreen Qt startup smoke
         run: uv run nox -s smoke_ui
-      - name: PyInstaller build verification
+      - name: PySide6 standalone deployment verification
+        run: uv run nox -s build_standalone
+      - name: Standalone artifact startup
+        run: uv run nox -s standalone_artifact_smoke
+      - name: PySide6 one-file deployment verification
         run: uv run nox -s build_clean
-      - name: Frozen artifact startup
+      - name: One-file artifact startup
         run: uv run nox -s artifact_smoke
       - uses: actions/upload-artifact@v4
         with:
@@ -75,6 +79,7 @@ jobs:
             coverage.xml
             perf-metrics.log
             artifacts/smoke-ui/**
+            artifacts/pyside6-deploy/**
             dist/SilverEstimate-v*-win64.zip
           if-no-files-found: error
           retention-days: 14

@@ -1,7 +1,8 @@
 import types
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import QTableWidget
 
 from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.ui.settings_dialog import SettingsDialog
@@ -75,6 +76,11 @@ def test_settings_dialog_uses_visible_arrow_controls(qt_app, settings_stub):
         )
         assert dialog.print_font_button.minimumWidth() >= 180
         assert dialog.table_font_size_spin.maximumWidth() <= 180
+        preview_table = dialog.findChild(QTableWidget, "SettingsPreviewTable")
+        assert preview_table is not None
+        assert preview_table.item(0, 2).textAlignment() == (
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
     finally:
         dialog.deleteLater()
 

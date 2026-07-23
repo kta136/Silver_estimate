@@ -5,8 +5,8 @@ import types
 from typing import Any
 
 import pytest
-from PyQt6.QtCore import QDate, QObject, pyqtSignal
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QDate, QObject, Signal
+from PySide6.QtWidgets import (
     QDateEdit,
     QDialog,
     QDoubleSpinBox,
@@ -176,7 +176,7 @@ class _ReturnSignalStub:
 
 
 class _VoucherEditStub(QObject):
-    returnPressed = pyqtSignal()
+    returnPressed = Signal()
 
     def __init__(self) -> None:
         super().__init__()

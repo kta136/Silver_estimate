@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import (
     QCheckBox,
     QFormLayout,
     QGroupBox,
@@ -26,7 +26,7 @@ class LiveRateSettingsState:
 class LiveRatesSettingsPage(QWidget):
     """Own live-rate controls, persistence, and enable-state synchronization."""
 
-    changed = pyqtSignal()
+    changed = Signal()
 
     def __init__(self, settings: SettingsStore, parent: QWidget | None = None) -> None:
         super().__init__(parent)

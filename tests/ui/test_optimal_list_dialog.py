@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QDialog
+from PySide6.QtWidgets import QDialog
 
 from silverestimate.ui.silver_bar_management import OptimalListDialog
 

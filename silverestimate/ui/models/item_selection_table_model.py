@@ -5,8 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
-from PyQt6.QtGui import QColor
+from PySide6.QtCore import (
+    QAbstractTableModel,
+    QModelIndex,
+    QPersistentModelIndex,
+    Qt,
+)
+from PySide6.QtGui import QColor
 
 
 @dataclass(frozen=True)
@@ -31,12 +36,16 @@ class ItemSelectionTableModel(QAbstractTableModel):
         self._query_upper = ""
         self._highlight = QColor(255, 246, 196)
 
-    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
+    def rowCount(
+        self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
+    ) -> int:
         if parent.isValid():
             return 0
         return len(self._rows)
 
-    def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
+    def columnCount(
+        self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
+    ) -> int:
         if parent.isValid():
             return 0
         return len(self.HEADERS)
@@ -55,7 +64,11 @@ class ItemSelectionTableModel(QAbstractTableModel):
             return self.HEADERS[section]
         return None
 
-    def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
+    def data(
+        self,
+        index: QModelIndex | QPersistentModelIndex,
+        role: int = Qt.ItemDataRole.DisplayRole,
+    ) -> Any:
         if not index.isValid():
             return None
         record = self.row_payload(index.row())

@@ -1,8 +1,8 @@
 """Tests for EstimateTableModel."""
 
 import pytest
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QTableView
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QTableView
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.ui.estimate_entry_logic.column_specs import (

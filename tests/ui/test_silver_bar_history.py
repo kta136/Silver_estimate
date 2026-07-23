@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from silverestimate.ui.silver_bar_history import SilverBarHistoryDialog
 

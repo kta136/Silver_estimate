@@ -7,7 +7,7 @@ from dataclasses import replace
 from datetime import datetime
 from typing import TYPE_CHECKING, Callable, Dict, Optional, cast
 
-from PyQt6.QtCore import (
+from PySide6.QtCore import (
     QDate,
     QLocale,
     QObject,
@@ -15,9 +15,9 @@ from PyQt6.QtCore import (
     Qt,
     QThread,
     QTimer,
-    pyqtSignal,
+    Signal,
 )
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
@@ -43,9 +43,9 @@ from .themed_controls import ThemedDoubleSpinBox
 class _EstimatePreviewBuildWorker(QObject):
     """Background worker that prepares print-preview HTML off the UI thread."""
 
-    preview_ready = pyqtSignal(int, object)
-    preview_error = pyqtSignal(int, str)
-    finished = pyqtSignal(int)
+    preview_ready = Signal(int, object)
+    preview_error = Signal(int, str)
+    finished = Signal(int)
 
     def __init__(
         self,
@@ -90,25 +90,11 @@ class EstimateEntryWorkflowController(HostProxy):
                 return str(value)
 
     def generate_voucher(self):
-        try:
-            self.voucher_edit.returnPressed.disconnect(self.safe_load_estimate)
-        except (TypeError, RuntimeError) as exc:
-            self.logger.debug(
-                "Could not disconnect voucher returnPressed handler: %s", exc
-            )
-
         if self.presenter:
             self.presenter.generate_voucher()
         if hasattr(self, "delete_estimate_button"):
             self.delete_estimate_button.setEnabled(False)
         self._estimate_loaded = False
-
-        try:
-            self.voucher_edit.returnPressed.connect(self.safe_load_estimate)
-        except (TypeError, RuntimeError) as exc:
-            self.logger.debug(
-                "Could not reconnect voucher returnPressed handler: %s", exc
-            )
 
     def load_estimate(self):
         if self.initializing or not self.presenter:

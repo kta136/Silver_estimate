@@ -12,8 +12,8 @@ from dataclasses import dataclass
 from math import cos, pi, sin
 from typing import Final, cast
 
-from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import (
+from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtGui import (
     QColor,
     QIcon,
     QPainter,
@@ -22,7 +22,7 @@ from PyQt6.QtGui import (
     QPixmap,
     QPolygonF,
 )
-from PyQt6.QtWidgets import QApplication, QStyle, QWidget
+from PySide6.QtWidgets import QApplication, QStyle, QWidget
 
 
 @dataclass(frozen=True)

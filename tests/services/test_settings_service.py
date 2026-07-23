@@ -47,6 +47,12 @@ def _build_service(monkeypatch, values):
     return settings_service.SettingsService()
 
 
+def test_load_table_font_size_accepts_numeric_setting(monkeypatch):
+    service = _build_service(monkeypatch, {"ui/table_font_size": "12"})
+
+    assert service.load_table_font_size() == 12
+
+
 def test_restore_geometry_returns_false_when_qt_restore_fails(monkeypatch):
     service = _build_service(
         monkeypatch,

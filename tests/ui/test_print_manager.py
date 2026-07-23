@@ -3,10 +3,11 @@ import sqlite3
 from copy import deepcopy
 from pathlib import Path
 
-from PyQt6.QtCore import QMarginsF, QSizeF
-from PyQt6.QtGui import QFont, QFontDatabase, QPageLayout, QPageSize
-from PyQt6.QtPdf import QPdfDocument
-from PyQt6.QtPrintSupport import QPrinter
+import pytest
+from PySide6.QtCore import QMarginsF, QSizeF
+from PySide6.QtGui import QFont, QFontDatabase, QPageLayout, QPageSize
+from PySide6.QtPdf import QPdfDocument
+from PySide6.QtPrintSupport import QPrinter
 
 from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.ui.estimate_print_document import EstimatePrintDocument
@@ -475,17 +476,16 @@ def test_preview_print_font_change_updates_manager_and_persists(
 ):
     del qt_app, settings_stub
     active_font = QFont("Arial", 8)
-    active_font.float_size = 8.0
     manager = PrintManager(_DbStub(), print_font=active_font)
     selected_font = QFont("Arial", 12)
+    selected_font.setPointSizeF(12.5)
     selected_font.setBold(True)
-    selected_font.float_size = 12.5
 
     manager._set_print_font(selected_font)
 
     settings = get_app_settings()
     assert manager.print_font is active_font
-    assert active_font.float_size == 12.5
+    assert active_font.pointSizeF() == pytest.approx(12.5)
     assert active_font.bold()
     assert settings.value("font/family") == "Arial"
     assert settings.value("font/size_float") == 12.5
@@ -500,7 +500,6 @@ def test_classic_estimate_painter_writes_previous_modern_style_without_html(
     del qt_app, settings_stub
     get_app_settings().setValue("print/estimate_layout", "classic")
     font = QFont("Courier New", 7)
-    font.float_size = 7.0
     manager = PrintManager(_DbStub(), print_font=font)
     output_path = tmp_path / "classic-estimate-direct.pdf"
 
@@ -524,7 +523,6 @@ def test_classic_estimate_painter_writes_previous_modern_style_without_html(
 def test_direct_estimate_painter_writes_pdf(qt_app, settings_stub, tmp_path):
     del qt_app, settings_stub
     font = QFont("Courier New", 7)
-    font.float_size = 7.0
     manager = PrintManager(_DbStub(), print_font=font)
     payload = manager.build_estimate_preview_payload(
         "EST-PARITY-001",
@@ -545,6 +543,41 @@ def test_direct_estimate_painter_writes_pdf(qt_app, settings_stub, tmp_path):
     assert output_path.stat().st_size > 1_000
 
 
+def test_modern_estimate_painter_uses_minimum_bottom_margin(
+    qt_app,
+    settings_stub,
+    tmp_path,
+):
+    del qt_app, settings_stub
+    manager = PrintManager(_DbStub(), print_font=QFont("Arial", 8))
+    payload = manager.build_estimate_preview_payload(
+        "EST-PARITY-001",
+        estimate_data=multi_section_print_estimate(),
+    )
+    assert payload is not None
+
+    printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+    printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+    printer.setOutputFileName(str(tmp_path / "modern-minimum-bottom-margin.pdf"))
+    printer.setPageLayout(
+        QPageLayout(
+            QPageSize(QPageSize.PageSizeId.A4),
+            QPageLayout.Orientation.Landscape,
+            QMarginsF(10, 3, 12, 15),
+            QPageLayout.Unit.Millimeter,
+        )
+    )
+    minimum_bottom = printer.pageLayout().minimumMargins().bottom()
+
+    manager._render_document(printer, payload.document)
+
+    margins = printer.pageLayout().margins(QPageLayout.Unit.Millimeter)
+    assert margins.left() == pytest.approx(10)
+    assert margins.top() == pytest.approx(3)
+    assert margins.right() == pytest.approx(12)
+    assert margins.bottom() == pytest.approx(minimum_bottom)
+
+
 def test_direct_estimate_painter_repeats_headers_and_keeps_summary_with_rows(
     qt_app,
     settings_stub,
@@ -552,7 +585,6 @@ def test_direct_estimate_painter_repeats_headers_and_keeps_summary_with_rows(
 ):
     del qt_app, settings_stub
     font = QFont("Arial", 8)
-    font.float_size = 8.0
     manager = PrintManager(_DbStub(), print_font=font)
     estimate_data = _long_estimate_data()
     output_path = tmp_path / "modern-estimate-multipage.pdf"
@@ -589,7 +621,6 @@ def test_direct_estimate_painter_elides_long_names_without_clipping(
 ):
     del qt_app, settings_stub
     font = QFont("Arial", 8)
-    font.float_size = 8.0
     manager = PrintManager(_DbStub(), print_font=font)
     estimate_data = multi_section_print_estimate()
     long_name = "Very long item name " + "with extra detail " * 20
@@ -612,7 +643,6 @@ def test_direct_estimate_painter_handles_portrait_and_large_font(
 ):
     del qt_app, settings_stub
     font = QFont("Arial", 11)
-    font.float_size = 11.0
     manager = PrintManager(_DbStub(), print_font=font)
     output_path = tmp_path / "modern-estimate-portrait-large-font.pdf"
     page_layout = QPageLayout(
@@ -651,7 +681,6 @@ def test_direct_estimate_painter_handles_custom_page_size(
 ):
     del qt_app, settings_stub
     font = QFont("Arial", 7)
-    font.float_size = 7.0
     manager = PrintManager(_DbStub(), print_font=font)
     output_path = tmp_path / "modern-estimate-counter-slip.pdf"
     page_size = QPageSize(

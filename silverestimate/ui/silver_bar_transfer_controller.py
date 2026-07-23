@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import csv
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
 from ._host_proxy import HostProxy
 

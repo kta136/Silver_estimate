@@ -25,8 +25,29 @@ Pinned tag object: `f52b9f81a985dc1e45b28cd7b5671feb32815b83`;
 peeled commit: `7b371d80d959ec9ab4139d09d78e83c090de9779`.
 Source and license: <https://github.com/openssl/openssl>.
 
-## Python, PyQt6, Qt, cryptography, argon2-cffi, keyring, and other packages
+## PySide6 6.11.1, Shiboken6 6.11.1, and Qt 6.11.1
+
+Copyright The Qt Company Ltd. and contributors. PySide6 and Shiboken6 are
+available under LGPL-3.0-only, GPL-2.0-only, GPL-3.0-only, and commercial
+terms; Qt modules retain their applicable GPL/LGPL/commercial terms.
+Source and license: <https://code.qt.io/cgit/pyside/pyside-setup.git/> and
+<https://doc.qt.io/qt-6/licensing.html>.
+
+## Build tooling: Nuitka 4.1.3 and zstandard 0.25.0
+
+Nuitka is the build compiler used through `pyside6-deploy` and is licensed
+under AGPL-3.0-or-later. Its generated target code is covered by the additional
+Nuitka Runtime Library Exception. The zstandard Python package is licensed
+under BSD-3-Clause. These build packages are not shipped as importable runtime
+packages; their applicable generated/runtime code remains governed by the
+upstream terms.
+Sources and licenses:
+<https://github.com/Nuitka/Nuitka/blob/develop/LICENSE.txt>,
+<https://github.com/Nuitka/Nuitka/blob/develop/LICENSE-RUNTIME.txt>, and
+<https://github.com/indygreg/python-zstandard/blob/main/LICENSE>.
+
+## Python, cryptography, argon2-cffi, keyring, and other packages
 
 These components retain their respective upstream licenses and notices. Exact
 versions and license identifiers are recorded in the release CycloneDX SBOM.
-Qt/PyQt redistribution must continue to satisfy the selected GPL/LGPL terms.
+Qt/PySide redistribution must continue to satisfy the selected GPL/LGPL terms.

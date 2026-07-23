@@ -6,7 +6,7 @@ import contextlib
 import logging
 from collections.abc import Callable
 
-from PyQt6.QtCore import QObject, QThread, pyqtSignal
+from PySide6.QtCore import QObject, QThread, Signal
 
 from silverestimate.infrastructure.settings import SettingsReader, get_app_settings
 from silverestimate.services.dda_rate_stream import DdaRateStreamWorker
@@ -15,10 +15,10 @@ from silverestimate.services.dda_rate_stream import DdaRateStreamWorker
 class LiveRateService(QObject):
     """Own exactly one cooperative DDA stream worker and its Qt thread."""
 
-    rate_updated = pyqtSignal(object)
-    feed_status_updated = pyqtSignal(object)
-    connection_state_changed = pyqtSignal(str)
-    stream_error = pyqtSignal(str)
+    rate_updated = Signal(object)
+    feed_status_updated = Signal(object)
+    connection_state_changed = Signal(str)
+    stream_error = Signal(str)
 
     def __init__(
         self,

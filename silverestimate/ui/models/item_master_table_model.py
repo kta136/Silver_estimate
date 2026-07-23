@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
+from PySide6.QtCore import (
+    QAbstractTableModel,
+    QModelIndex,
+    QPersistentModelIndex,
+    Qt,
+)
 
 
 class ItemMasterTableModel(QAbstractTableModel):
@@ -27,12 +32,16 @@ class ItemMasterTableModel(QAbstractTableModel):
         self._sort_column: int | None = None
         self._sort_order = Qt.SortOrder.AscendingOrder
 
-    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
+    def rowCount(
+        self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
+    ) -> int:
         if parent.isValid():
             return 0
         return len(self._rows)
 
-    def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
+    def columnCount(
+        self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
+    ) -> int:
         if parent.isValid():
             return 0
         return len(self.HEADERS)
@@ -53,7 +62,11 @@ class ItemMasterTableModel(QAbstractTableModel):
             return self.HEADER_TOOLTIPS[section]
         return None
 
-    def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
+    def data(
+        self,
+        index: QModelIndex | QPersistentModelIndex,
+        role: int = Qt.ItemDataRole.DisplayRole,
+    ) -> Any:
         if not index.isValid():
             return None
         payload = self.row_payload(index.row())

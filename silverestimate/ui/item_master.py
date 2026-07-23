@@ -6,9 +6,9 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, cast
 
-from PyQt6.QtCore import QLocale, QModelIndex, Qt, QTimer
-from PyQt6.QtGui import QDoubleValidator
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QLocale, QModelIndex, Qt, QTimer
+from PySide6.QtGui import QDoubleValidator
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QFrame,
     QHBoxLayout,

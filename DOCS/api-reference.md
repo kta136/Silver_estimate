@@ -94,7 +94,7 @@ This guide documents the primary controller, service, and persistence APIs expos
 
 - Source policy: public DDA HTTPS/SSE, exact item ID `cmomws5tw000004i5k5t6yrnw`, `PER_KG`, and `finalRate` only. No API key is sent.
 - **DdaCurrentRatesClient.fetch_current() -> DdaRateSnapshot** – hydrate/reconcile from `/api/v1/rates/current`.
-- **DdaRateStreamWorker** – class-level `pyqtSignal` delivery for rate, feed status, connection state, and errors; consumes `/sse/rates`, sequence-checks events, and polls current-rates every 10 seconds only while disconnected.
+- **DdaRateStreamWorker** – class-level PySide6 `Signal` delivery for rate, feed status, connection state, and errors; consumes `/sse/rates`, sequence-checks events, and polls current-rates every 10 seconds only while disconnected.
 - **start() / stop()** – start the stream thread or cooperatively close the active response and exit.
 - **refresh_now()** – request an anonymous current-rates reconciliation.
 

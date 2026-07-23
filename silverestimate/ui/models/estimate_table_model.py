@@ -6,8 +6,14 @@ from dataclasses import replace
 from typing import Any, Optional
 from uuid import uuid4
 
-from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt, pyqtSignal
-from PyQt6.QtGui import QBrush, QColor, QFont
+from PySide6.QtCore import (
+    QAbstractTableModel,
+    QModelIndex,
+    QPersistentModelIndex,
+    Qt,
+    Signal,
+)
+from PySide6.QtGui import QBrush, QColor, QFont
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.ui.estimate_entry_logic.column_specs import (
@@ -45,7 +51,7 @@ class EstimateTableModel(QAbstractTableModel):
     """
 
     # Signal emitted when data changes (row, column, old_value, new_value)
-    data_changed_detailed = pyqtSignal(int, int, object, object)
+    data_changed_detailed = Signal(int, int, object, object)
 
     _NUMERIC_COLUMNS = NUMERIC_COLUMNS
     _TYPE_BACKGROUND_BRUSHES = {
@@ -130,19 +136,27 @@ class EstimateTableModel(QAbstractTableModel):
         normalized = str(value or "").strip().upper()
         return "PC" if normalized == "PC" else "WT"
 
-    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
+    def rowCount(
+        self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
+    ) -> int:
         """Return the number of rows in the model."""
         if parent.isValid():
             return 0
         return len(self._rows)
 
-    def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
+    def columnCount(
+        self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
+    ) -> int:
         """Return the number of columns in the model."""
         if parent.isValid():
             return 0
         return column_count()
 
-    def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
+    def data(
+        self,
+        index: QModelIndex | QPersistentModelIndex,
+        role: int = Qt.ItemDataRole.DisplayRole,
+    ) -> Any:
         """Return data for the given index and role.
 
         Args:
@@ -202,7 +216,10 @@ class EstimateTableModel(QAbstractTableModel):
         return None
 
     def setData(
-        self, index: QModelIndex, value: Any, role: int = Qt.ItemDataRole.EditRole
+        self,
+        index: QModelIndex | QPersistentModelIndex,
+        value: Any,
+        role: int = Qt.ItemDataRole.EditRole,
     ) -> bool:
         """Set data for the given index.
 
@@ -320,7 +337,7 @@ class EstimateTableModel(QAbstractTableModel):
         elif orientation == Qt.Orientation.Vertical:
             return section + 1  # Row numbers starting from 1
 
-    def flags(self, index: QModelIndex) -> Qt.ItemFlag:
+    def flags(self, index: QModelIndex | QPersistentModelIndex) -> Qt.ItemFlag:
         """Return the item flags for the given index.
 
         Args:

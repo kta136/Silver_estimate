@@ -2,7 +2,9 @@
 
 ## Runtime shape
 
-Silver Estimate is a PyQt6 desktop application with a local SQLCipher database. Windows 10/11 is the supported packaged platform; macOS and Linux are lint/type development environments.
+Silver Estimate is a PySide6 desktop application with a local SQLCipher
+database. Windows 10/11 is the supported packaged platform; macOS and Linux are
+lint/type development environments.
 
 ```text
 Qt views and dialogs
@@ -94,7 +96,9 @@ SSE is primary. A disconnected stream polls current-rates every 10 seconds, sequ
 
 - Ruff enables Bugbear, Simplify, Performance, McCabe complexity, and the selected Pylint complexity rules. Complexity is capped at 15; explicit file-level exceptions document legacy hotspots.
 - Mypy fully checks all modules and applies strict-definition/generic/call rules to domain pagination, async runners, encryption, DDA transports, new repository roles, facades, settings pages, and print specifications.
-- The Windows CI gate enforces 75% global coverage, 90% changed-line coverage, deterministic p95 budgets, offscreen Qt smoke, PyInstaller build, and frozen-artifact startup.
+- The Windows CI gate enforces 75% global coverage, 90% changed-line coverage,
+  deterministic p95 budgets, offscreen Qt smoke, curated `pyside6-deploy`
+  standalone/one-file builds, and frozen-artifact startup.
 
 ## Extension rules
 

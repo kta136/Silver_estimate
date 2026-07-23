@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import Callable
 
 import pytest
-from PyQt6.QtCore import QDate, Qt, QTimer
-from PyQt6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPixmap
-from PyQt6.QtPrintSupport import QPrinter, QPrintPreviewDialog
-from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox
+from PySide6.QtCore import QDate, Qt, QTimer
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPixmap
+from PySide6.QtPrintSupport import QPrinter, QPrintPreviewDialog
+from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
 from silverestimate.controllers import startup_controller as startup_module
 from silverestimate.controllers.startup_controller import (
@@ -141,18 +141,20 @@ class _SmokeCapture:
 
     @staticmethod
     def _minimum_canvas(pixmap: QPixmap) -> QPixmap:
-        target_width = max(SMOKE_SCREENSHOT_MIN_WIDTH, pixmap.width())
-        target_height = max(SMOKE_SCREENSHOT_MIN_HEIGHT, pixmap.height())
-        if target_width == pixmap.width() and target_height == pixmap.height():
-            return pixmap
+        source = QPixmap(pixmap)
+        source.setDevicePixelRatio(1.0)
+        target_width = max(SMOKE_SCREENSHOT_MIN_WIDTH, source.width())
+        target_height = max(SMOKE_SCREENSHOT_MIN_HEIGHT, source.height())
+        if target_width == source.width() and target_height == source.height():
+            return source
 
         canvas = QPixmap(target_width, target_height)
         canvas.fill(QColor("#f3f6fb"))
         painter = QPainter(canvas)
         try:
-            x = (target_width - pixmap.width()) // 2
-            y = (target_height - pixmap.height()) // 2
-            painter.drawPixmap(x, y, pixmap)
+            x = (target_width - source.width()) // 2
+            y = (target_height - source.height()) // 2
+            painter.drawPixmap(x, y, source)
         finally:
             painter.end()
         return canvas
@@ -239,7 +241,7 @@ def smoke_environment(monkeypatch, settings_stub, tmp_path):
         lambda: _SmokePasswordContext(),
     )
     monkeypatch.setattr(
-        "PyQt6.QtWidgets.QApplication.quit",
+        "PySide6.QtWidgets.QApplication.quit",
         lambda self=None: None,
     )
 

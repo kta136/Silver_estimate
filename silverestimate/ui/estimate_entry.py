@@ -7,8 +7,8 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, cast
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtWidgets import QApplication, QWidget
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtWidgets import QApplication, QWidget
 
 from silverestimate.domain.estimate_models import EstimateLineCategory, TotalsResult
 from silverestimate.presenter import (
@@ -66,7 +66,7 @@ class EstimateEntryWidget(EstimateEntryFacade, QWidget):
 
         def __getattr__(self, name: str) -> Any: ...
 
-    live_rate_fetched = pyqtSignal(object)
+    live_rate_fetched = Signal(object)
     EDITABLE_ENTRY_COLS = (
         COL_CODE,
         COL_GROSS,
@@ -98,6 +98,7 @@ class EstimateEntryWidget(EstimateEntryFacade, QWidget):
 
         self.initializing = True
         self._loading_estimate = False
+        self._load_estimate_connected = False
         self._estimate_loaded = False
         self._unsaved_changes = False
         self._unsaved_block = 0
@@ -338,10 +339,7 @@ class EstimateEntryWidget(EstimateEntryFacade, QWidget):
         QTimer.singleShot(0, lambda: self._safe_edit_item(0, COL_CODE))
 
     def reconnect_load_estimate(self):
-        try:
-            self.voucher_edit.returnPressed.disconnect(self.safe_load_estimate)
-        except (TypeError, RuntimeError) as exc:
-            self.logger.debug(
-                "Could not disconnect voucher returnPressed handler: %s", exc
-            )
+        if self._load_estimate_connected:
+            return
         self.voucher_edit.returnPressed.connect(self.safe_load_estimate)
+        self._load_estimate_connected = True

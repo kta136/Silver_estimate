@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from PyQt6.QtGui import QGuiApplication
-from PyQt6.QtWidgets import QWidget
+from PySide6.QtWidgets import QWidget
 
 
 def resize_to_available_screen(
@@ -15,11 +14,7 @@ def resize_to_available_screen(
 ) -> None:
     """Resize a window without exceeding the available desktop geometry."""
 
-    screen = widget.screen() or QGuiApplication.primaryScreen()
-    if screen is None:
-        widget.resize(preferred_width, preferred_height)
-        return
-
+    screen = widget.screen()
     available = screen.availableGeometry()
     width_margin = min(margin, max(0, available.width() // 8))
     height_margin = min(margin, max(0, available.height() // 8))

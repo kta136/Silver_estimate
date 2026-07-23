@@ -1,5 +1,5 @@
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QLineEdit
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QLineEdit
 
 from silverestimate.ui import login_dialog as login_dialog_module
 from silverestimate.ui.login_dialog import LoginDialog

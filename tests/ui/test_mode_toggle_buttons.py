@@ -1,11 +1,10 @@
 """Tests for mode toggle button functionality (Ctrl+R and Ctrl+B)."""
 
-import contextlib
 import types
 
 import pytest
-from PyQt6.QtCore import Qt
-from PyQt6.QtTest import QTest
+from PySide6.QtCore import QCoreApplication, QEvent, Qt
+from PySide6.QtTest import QTest
 
 from silverestimate.ui.estimate_entry import EstimateEntryWidget
 from silverestimate.ui.estimate_entry_logic import COL_TYPE
@@ -56,13 +55,18 @@ def _make_widget(db_manager):
     repository = _RepositoryStub(db_manager)
     widget = EstimateEntryWidget(db_manager, main_window_stub, repository)
     widget.presenter.handle_item_code = lambda row, code: False
-    with contextlib.suppress(TypeError, AttributeError):
-        widget.item_table.cellChanged.disconnect(widget.handle_cell_changed)
     return widget
 
 
 def _wait_for_initialized(qtbot, widget):
     qtbot.waitUntil(lambda: widget.item_table.rowCount() > 0, timeout=2000)
+
+
+def _make_shortcut_widget(db_manager):
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    widget = _make_widget(db_manager)
+    widget.show()
+    return widget
 
 
 def test_return_mode_button_updates_row_type(qtbot, fake_db):
@@ -195,7 +199,7 @@ def test_mode_toggles_are_mutually_exclusive(qtbot, fake_db):
 
 
 def test_ctrl_r_keyboard_shortcut_toggles_return_mode(qtbot, fake_db):
-    widget = _make_widget(fake_db)
+    widget = _make_shortcut_widget(fake_db)
     try:
         _wait_for_initialized(qtbot, widget)
         assert not widget.return_mode
@@ -230,7 +234,7 @@ def test_ctrl_r_keyboard_shortcut_toggles_return_mode(qtbot, fake_db):
 
 
 def test_ctrl_b_keyboard_shortcut_toggles_silver_bar_mode(qtbot, fake_db):
-    widget = _make_widget(fake_db)
+    widget = _make_shortcut_widget(fake_db)
     try:
         _wait_for_initialized(qtbot, widget)
         assert not widget.silver_bar_mode
@@ -265,7 +269,7 @@ def test_ctrl_b_keyboard_shortcut_toggles_silver_bar_mode(qtbot, fake_db):
 
 
 def test_keyboard_shortcuts_respect_mutual_exclusion(qtbot, fake_db):
-    widget = _make_widget(fake_db)
+    widget = _make_shortcut_widget(fake_db)
     try:
         _wait_for_initialized(qtbot, widget)
 

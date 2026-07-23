@@ -5,8 +5,8 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Optional
 
-from PyQt6 import sip
-from PyQt6.QtWidgets import QDoubleSpinBox
+from PySide6.QtWidgets import QDoubleSpinBox
+from shiboken6 import isValid
 
 from silverestimate.domain.estimate_models import (
     CategoryTotals,
@@ -117,7 +117,7 @@ class EstimateEntryTotalsController(HostProxy):
 
     def _schedule_totals_recalc(self, delay_ms: int | None = None) -> None:
         timer = getattr(self, "_totals_timer", None)
-        if timer is None or sip.isdeleted(timer):
+        if timer is None or not isValid(timer):
             self.calculate_totals()
             return
         if delay_ms is None:

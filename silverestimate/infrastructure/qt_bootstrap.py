@@ -7,8 +7,8 @@ import sys
 from collections.abc import MutableMapping
 from typing import Any
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QGuiApplication
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QGuiApplication
 
 QT_QPA_PLATFORM = "QT_QPA_PLATFORM"
 WINDOWS_QPA_PLATFORM = "windows"

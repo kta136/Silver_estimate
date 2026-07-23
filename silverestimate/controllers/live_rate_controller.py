@@ -6,7 +6,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import replace
 
-from PyQt6.QtCore import QDateTime, QLocale, QObject, QTimer
+from PySide6.QtCore import QDateTime, QLocale, QObject, QTimer
 
 from silverestimate.infrastructure.settings import SettingsReader, get_app_settings
 from silverestimate.services.dda_rate_fetcher import DdaRateSnapshot

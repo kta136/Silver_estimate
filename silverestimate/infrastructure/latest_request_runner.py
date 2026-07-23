@@ -6,7 +6,7 @@ import threading
 from collections.abc import Callable
 from typing import Generic, TypeVar
 
-from PyQt6.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 
 RequestT = TypeVar("RequestT")
 ResultT = TypeVar("ResultT")
@@ -24,9 +24,9 @@ class LatestRequestRunner(QObject, Generic[RequestT, ResultT]):
     stale results from reaching the UI.
     """
 
-    result = pyqtSignal(int, object)
-    failed = pyqtSignal(int, object)
-    settled = pyqtSignal(int)
+    result = Signal(int, object)
+    failed = Signal(int, object)
+    settled = Signal(int)
 
     def __init__(
         self,

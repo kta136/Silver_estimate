@@ -35,53 +35,89 @@ with suppress(Exception):
     faulthandler.enable()
 
 
+def _run_artifact_smoke() -> int:
+    import json
+    import tempfile
+    from pathlib import Path
+
+    from PySide6.QtGui import QIcon, QImageReader, QTextDocument
+    from PySide6.QtPrintSupport import QPrinter
+    from PySide6.QtWidgets import QApplication
+
+    from silverestimate.infrastructure.app_constants import APP_VERSION
+    from silverestimate.infrastructure.paths import (
+        get_asset_path,
+        get_runtime_root,
+    )
+    from silverestimate.persistence.database_driver import (
+        SqlCipherConnectionBroker,
+    )
+    from silverestimate.security import credential_store
+
+    os.environ.setdefault(
+        "QT_QPA_PLATFORM", "windows" if os.name == "nt" else "offscreen"
+    )
+    app = QApplication.instance() or QApplication([])
+    icon_path = get_asset_path("assets", "icons", "silverestimate.ico")
+    icon_available = icon_path.is_file() and not QIcon(str(icon_path)).isNull()
+    image_formats = {
+        bytes(image_format).decode("ascii").lower()
+        for image_format in QImageReader.supportedImageFormats()
+    }
+    credential_status = credential_store.get_backend_status()
+
+    with tempfile.TemporaryDirectory(prefix="silverestimate-artifact-smoke-") as tmp:
+        temp_root = Path(tmp)
+        database = temp_root / "artifact-smoke.db"
+        broker = SqlCipherConnectionBroker(database, os.urandom(32))
+        connection, identity = broker.open_writer(create=True)
+        connection.execute("CREATE TABLE smoke(value TEXT NOT NULL)")
+        connection.execute("INSERT INTO smoke VALUES ('encrypted-runtime-ok')")
+        connection.commit()
+        connection.close()
+        plaintext_header = database.read_bytes().startswith(b"SQLite format 3\x00")
+        if plaintext_header:
+            raise RuntimeError("Frozen artifact created a plaintext SQLite database")
+
+        pdf_path = temp_root / "artifact-smoke.pdf"
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+        printer.setOutputFileName(str(pdf_path))
+        document = QTextDocument()
+        document.setHtml("<h1>SilverEstimate artifact smoke</h1>")
+        document.print_(printer)
+        pdf_bytes = pdf_path.stat().st_size
+        if pdf_bytes < 1_000:
+            raise RuntimeError("Frozen artifact failed to render a PDF")
+
+    app.processEvents()
+    print(
+        json.dumps(
+            {
+                "app_version": APP_VERSION,
+                "artifact_startup": "ok",
+                "cipher_version": identity.sqlcipher_version,
+                "credential_kinds": list(credential_store.SUPPORTED_CREDENTIAL_KINDS),
+                "crypto_provider": identity.crypto_provider,
+                "icon_available": icon_available,
+                "keyring_available": credential_status.available,
+                "keyring_backend": credential_status.backend_name,
+                "pdf_bytes": pdf_bytes,
+                "qt_platform": app.platformName(),
+                "runtime_root": str(get_runtime_root()),
+                "sqlite_version": identity.sqlite_version,
+                "svg_image_format": "svg" in image_formats,
+            },
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
 def main() -> int:
     """Start the SilverEstimate application and return the exit code."""
     if "--artifact-smoke" in sys.argv:
-        import json
-        import tempfile
-        from pathlib import Path
-
-        from silverestimate.infrastructure.app_constants import APP_VERSION
-        from silverestimate.persistence.database_driver import (
-            SqlCipherConnectionBroker,
-        )
-        from silverestimate.security import credential_store
-
-        credential_kinds = credential_store.SUPPORTED_CREDENTIAL_KINDS
-        for kind in credential_kinds:
-            credential_store._get_secure_id(kind)  # noqa: SLF001
-
-        with tempfile.TemporaryDirectory(
-            prefix="silverestimate-artifact-smoke-"
-        ) as tmp:
-            database = Path(tmp) / "artifact-smoke.db"
-            broker = SqlCipherConnectionBroker(database, os.urandom(32))
-            connection, identity = broker.open_writer(create=True)
-            connection.execute("CREATE TABLE smoke(value TEXT NOT NULL)")
-            connection.execute("INSERT INTO smoke VALUES ('encrypted-runtime-ok')")
-            connection.commit()
-            connection.close()
-            plaintext_header = database.read_bytes().startswith(b"SQLite format 3\x00")
-            if plaintext_header:
-                raise RuntimeError(
-                    "Frozen artifact created a plaintext SQLite database"
-                )
-
-        print(
-            json.dumps(
-                {
-                    "app_version": APP_VERSION,
-                    "artifact_startup": "ok",
-                    "cipher_version": identity.sqlcipher_version,
-                    "credential_kinds": list(credential_kinds),
-                    "crypto_provider": identity.crypto_provider,
-                    "sqlite_version": identity.sqlite_version,
-                },
-                sort_keys=True,
-            )
-        )
-        return 0
+        return _run_artifact_smoke()
     if os.name == "nt" and os.environ.get("SILVER_SHOW_CONSOLE") != "1":
         from silverestimate.infrastructure.windows_integration import (
             hide_console_window,

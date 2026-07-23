@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QDate, Qt, pyqtSignal
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QDate, Qt, Signal
+from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QDateEdit,
     QDoubleSpinBox,
@@ -24,10 +24,10 @@ class VoucherToolbar(QWidget):
     """
 
     # Signals
-    load_clicked = pyqtSignal()
-    voucher_number_changed = pyqtSignal(str)
-    date_changed = pyqtSignal(QDate)
-    note_changed = pyqtSignal(str)
+    load_clicked = Signal()
+    voucher_number_changed = Signal(str)
+    date_changed = Signal(QDate)
+    note_changed = Signal(str)
 
     def __init__(self, parent=None):
         """Initialize the voucher toolbar.

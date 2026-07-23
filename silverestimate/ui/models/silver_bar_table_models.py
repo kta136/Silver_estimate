@@ -4,8 +4,13 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
-from PyQt6.QtGui import QBrush, QColor
+from PySide6.QtCore import (
+    QAbstractTableModel,
+    QModelIndex,
+    QPersistentModelIndex,
+    Qt,
+)
+from PySide6.QtGui import QBrush, QColor
 
 from silverestimate.ui.display_formatting import format_display_date
 
@@ -20,12 +25,16 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
         self._sort_column: Optional[int] = None
         self._sort_order = Qt.SortOrder.AscendingOrder
 
-    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
+    def rowCount(
+        self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
+    ) -> int:
         if parent.isValid():
             return 0
         return len(self._rows)
 
-    def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
+    def columnCount(
+        self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
+    ) -> int:
         if parent.isValid():
             return 0
         return len(self.HEADERS)
@@ -44,7 +53,11 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
             return self.HEADERS[section]
         return None
 
-    def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
+    def data(
+        self,
+        index: QModelIndex | QPersistentModelIndex,
+        role: int = Qt.ItemDataRole.DisplayRole,
+    ) -> Any:
         if not index.isValid():
             return None
         row = self.row_payload(index.row())
@@ -154,7 +167,7 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
     def value_key(self, column: int) -> str:
         raise NotImplementedError
 
-    def text_alignment(self, column: int) -> Optional[int]:
+    def text_alignment(self, column: int) -> Optional[Qt.AlignmentFlag]:
         del column
         return None
 
@@ -282,9 +295,9 @@ class _ManagementSilverBarsTableModel(_BaseSilverBarTableModel):
             return (primary is None, primary, self._bar_id_sort_value(row))
         return (primary is None, primary)
 
-    def text_alignment(self, column: int) -> Optional[int]:
+    def text_alignment(self, column: int) -> Optional[Qt.AlignmentFlag]:
         if column in (1, 2, 3):
-            return int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         return None
 
     def background_brush(self, row: int) -> Optional[QBrush]:
@@ -401,9 +414,9 @@ class HistorySilverBarsTableModel(_BaseSilverBarTableModel):
             return (primary is None, primary, self._bar_id_sort_value(row))
         return (primary is None, primary)
 
-    def text_alignment(self, column: int) -> Optional[int]:
+    def text_alignment(self, column: int) -> Optional[Qt.AlignmentFlag]:
         if column in (0, 2, 3, 4):
-            return int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         return None
 
     def background_brush(self, row: int) -> Optional[QBrush]:
@@ -474,9 +487,9 @@ class IssuedSilverBarListsTableModel(_BaseSilverBarTableModel):
                 return 0
         return str(row.get(self.value_key(column)) or "").casefold()
 
-    def text_alignment(self, column: int) -> Optional[int]:
+    def text_alignment(self, column: int) -> Optional[Qt.AlignmentFlag]:
         if column in (0, 5):
-            return int(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter)
+            return Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter
         return None
 
 
@@ -548,9 +561,9 @@ class HistoryListBarsTableModel(_BaseSilverBarTableModel):
             return (primary is None, primary, self._bar_id_sort_value(row))
         return (primary is None, primary)
 
-    def text_alignment(self, column: int) -> Optional[int]:
+    def text_alignment(self, column: int) -> Optional[Qt.AlignmentFlag]:
         if column in (0, 2, 3, 4):
-            return int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         return None
 
     def background_brush(self, row: int) -> Optional[QBrush]:

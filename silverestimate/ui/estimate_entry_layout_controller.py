@@ -5,10 +5,9 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from PyQt6 import sip
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import (
     QHBoxLayout,
     QMenu,
     QSizePolicy,
@@ -17,6 +16,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from shiboken6 import isValid
 
 from silverestimate.infrastructure.settings import get_app_settings
 
@@ -410,7 +410,7 @@ class EstimateEntryLayoutController(HostProxy):
         panel = getattr(self, "totals_panel", None)
         if (
             panel is not None
-            and not sip.isdeleted(panel)
+            and isValid(panel)
             and (panel is not source_panel or panel.section_order() != normalized)
         ):
             panel.set_section_order(normalized)
@@ -447,7 +447,7 @@ class EstimateEntryLayoutController(HostProxy):
     def _apply_totals_position(self, position: str, *, persist: bool = True) -> None:
         normalized = self._normalize_totals_position(position)
         splitter_obj = getattr(self, "_content_splitter", None)
-        if splitter_obj is None or sip.isdeleted(splitter_obj):
+        if splitter_obj is None or not isValid(splitter_obj):
             return
         splitter = splitter_obj
 
@@ -614,7 +614,7 @@ class EstimateEntryLayoutController(HostProxy):
         self, saved_widths: dict[int, int] | None = None
     ) -> None:
         table = getattr(self, "item_table", None)
-        if table is None or sip.isdeleted(table):
+        if table is None or not isValid(table):
             return
 
         widths = dict(self._default_column_widths())
@@ -646,13 +646,13 @@ class EstimateEntryLayoutController(HostProxy):
             return
 
         table = getattr(self, "item_table", None)
-        if table is None or sip.isdeleted(table):
+        if table is None or not isValid(table):
             return
         if column < 0 or column >= table.columnCount():
             return
 
         model = table.model()
-        if model is None or sip.isdeleted(model):
+        if model is None or not isValid(model):
             return
 
         limits = self._column_width_limits()
@@ -689,7 +689,7 @@ class EstimateEntryLayoutController(HostProxy):
         if not force and not self._is_continuous_column_autofit_enabled():
             return
         table = getattr(self, "item_table", None)
-        if table is None or sip.isdeleted(table):
+        if table is None or not isValid(table):
             return
 
         if columns is None:
@@ -721,7 +721,7 @@ class EstimateEntryLayoutController(HostProxy):
             columns = list(range(table.columnCount()))
 
         model = table.model()
-        if model is None or sip.isdeleted(model):
+        if model is None or not isValid(model):
             return
 
         metrics = table.fontMetrics()
@@ -817,7 +817,7 @@ class EstimateEntryLayoutController(HostProxy):
         if self._auto_fit_columns_by_content:
             return
         table = getattr(self, "item_table", None)
-        if table is None or sip.isdeleted(table):
+        if table is None or not isValid(table):
             return
         current_widths = {
             col: table.columnWidth(col)

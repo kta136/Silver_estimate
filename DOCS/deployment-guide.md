@@ -47,7 +47,9 @@ The clean one-file build produces:
 - `dist/SilverEstimate-v<APP_VERSION>.exe`;
 - `dist/SilverEstimate-v<APP_VERSION>-win64.zip`.
 
-For a local release build, run `scripts\build_windows_local.ps1`. The script
+For a local release build, run `scripts\build_windows_local.cmd`. The launcher
+quotes the PowerShell script path so repositories stored in workspace paths
+containing spaces are supported. The PowerShell script
 requires the locked `uv` environment and Python 3.14, removes the stale
 unversioned artifact before compilation, builds the one-file loader with MSVC,
 and runs the frozen artifact under a system-only `PATH`. It also inspects the

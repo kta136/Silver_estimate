@@ -240,6 +240,7 @@ uv run pre-commit run --all-files
 - Fast iteration: `uv run nox -s build`
 - Inspectable standalone build: `uv run nox -s build_standalone standalone_artifact_smoke`
 - Clean one-file rebuild: `uv run nox -s build_clean artifact_smoke`
+- Validated local Windows build: `scripts\build_windows_local.cmd` (safe when the workspace path contains spaces)
 - Output: `dist/SilverEstimate.exe`, `dist/SilverEstimate-v3.10.exe`, and `dist/SilverEstimate-v3.10-win64.zip` on Windows
 - Release/CI builds use Qt's `pyside6-deploy`, the committed `pysidedeploy.spec`, and locked Nuitka 4.1.3
 - Packaged releases are Windows-only; macOS/Linux are untested development environments.

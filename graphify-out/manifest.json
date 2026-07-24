@@ -835,8 +835,8 @@
     "semantic_hash": ""
   },
   "readme.md": {
-    "mtime": 1784881555.1264853,
-    "ast_hash": "8e38c710ae3e9a7b1a1e9b574b0d2a35",
+    "mtime": 1784882608.8153536,
+    "ast_hash": "e468c5bd6fdbd6bab99435fe44c6c51e",
     "semantic_hash": ""
   },
   ".github/pull_request_template.md": {
@@ -890,8 +890,8 @@
     "semantic_hash": ""
   },
   "DOCS/deployment-guide.md": {
-    "mtime": 1784881555.1274774,
-    "ast_hash": "839079e1880986827a6cab55516ff274",
+    "mtime": 1784882608.8153536,
+    "ast_hash": "ac5d16d379ce848f49e5ec00313f7584",
     "semantic_hash": ""
   },
   "DOCS/performance-baseline-thresholds.md": {
@@ -1875,8 +1875,8 @@
     "semantic_hash": ""
   },
   "tests/unit/test_build_windows_local_script.py": {
-    "mtime": 1784815424.5285382,
-    "ast_hash": "92c9086621e65093d6d1afc80f106fe5",
+    "mtime": 1784882635.572744,
+    "ast_hash": "f32bef5f5abd5c1b3f7a9949a15e6ac0",
     "semantic_hash": ""
   },
   "silverestimate/ui/preview_build_worker.py": {

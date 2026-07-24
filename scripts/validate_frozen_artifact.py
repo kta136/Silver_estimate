@@ -9,6 +9,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+DEFAULT_ARTIFACT_TIMEOUT_SECONDS = 90.0
+
 
 def _validate_payload(payload: dict[str, Any], artifact: Path) -> None:
     artifact_parent = artifact.resolve().parent
@@ -47,10 +49,16 @@ def _validate_payload(payload: dict[str, Any], artifact: Path) -> None:
         raise ValueError("Artifact did not load the OpenSSL crypto provider")
 
 
-def validate_artifact(artifact: Path) -> dict[str, Any]:
+def validate_artifact(
+    artifact: Path,
+    *,
+    timeout_seconds: float = DEFAULT_ARTIFACT_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
     """Run ``artifact`` and validate its encrypted-runtime self-report."""
     if not artifact.is_file():
         raise ValueError(f"Frozen artifact is missing: {artifact}")
+    if timeout_seconds <= 0:
+        raise ValueError("Artifact timeout must be positive")
 
     env = os.environ.copy()
     env["SILVER_SHOW_CONSOLE"] = "1"
@@ -58,7 +66,7 @@ def validate_artifact(artifact: Path) -> dict[str, Any]:
         [str(artifact), "--artifact-smoke"],
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=timeout_seconds,
         check=False,
         env=env,
     )
@@ -83,9 +91,22 @@ def validate_artifact(artifact: Path) -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--artifact", type=Path, required=True)
+    parser.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=DEFAULT_ARTIFACT_TIMEOUT_SECONDS,
+    )
     args = parser.parse_args()
 
-    print(json.dumps(validate_artifact(args.artifact.resolve()), sort_keys=True))
+    print(
+        json.dumps(
+            validate_artifact(
+                args.artifact.resolve(),
+                timeout_seconds=args.timeout_seconds,
+            ),
+            sort_keys=True,
+        )
+    )
     return 0
 
 

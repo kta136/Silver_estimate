@@ -45,10 +45,12 @@ def test_validate_artifact_passes_configured_cold_start_timeout(
     artifact = tmp_path / "SilverEstimate.exe"
     artifact.write_bytes(b"MZ")
     recorded_timeout = None
+    recorded_qt_platform = None
 
     def _run(*args, timeout, **kwargs):
-        nonlocal recorded_timeout
+        nonlocal recorded_qt_platform, recorded_timeout
         recorded_timeout = timeout
+        recorded_qt_platform = kwargs["env"]["QT_QPA_PLATFORM"]
         return SimpleNamespace(
             returncode=0,
             stdout=json.dumps(_valid_payload(artifact)),
@@ -60,3 +62,4 @@ def test_validate_artifact_passes_configured_cold_start_timeout(
     validate_artifact(artifact, timeout_seconds=75.0)
 
     assert recorded_timeout == 75.0
+    assert recorded_qt_platform == "windows"

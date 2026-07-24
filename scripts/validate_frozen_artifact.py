@@ -62,6 +62,7 @@ def validate_artifact(
 
     env = os.environ.copy()
     env["SILVER_SHOW_CONSOLE"] = "1"
+    env["QT_QPA_PLATFORM"] = "windows"
     result = subprocess.run(
         [str(artifact), "--artifact-smoke"],
         capture_output=True,

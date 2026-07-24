@@ -1830,8 +1830,8 @@
     "semantic_hash": ""
   },
   "scripts/validate_frozen_artifact.py": {
-    "mtime": 1784883646.2072637,
-    "ast_hash": "0c592dad1a44bb57936cbdc9581cba21",
+    "mtime": 1784884590.6940129,
+    "ast_hash": "4cc7662031afb36f953dad38038173b3",
     "semantic_hash": ""
   },
   "scripts/validate_pyside_deployment.py": {
@@ -1865,8 +1865,8 @@
     "semantic_hash": ""
   },
   "tests/unit/test_validate_frozen_artifact.py": {
-    "mtime": 1784883646.2209897,
-    "ast_hash": "583fba5137be42f0309139d9722aabd3",
+    "mtime": 1784884590.6961396,
+    "ast_hash": "5259d40b4f8519997f73d878246b9525",
     "semantic_hash": ""
   },
   "tests/unit/test_main_startup_diagnostics.py": {

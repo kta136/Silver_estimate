@@ -1,16 +1,16 @@
 # Graph Report - Silver Estimate  (2026-07-24)
 
 ## Corpus Check
-- 256 files · ~633,392 words
+- 256 files · ~633,406 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 4677 nodes · 10341 edges · 346 communities (213 shown, 133 thin omitted)
+- 4677 nodes · 10341 edges · 348 communities (213 shown, 135 thin omitted)
 - Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 864 edges (avg confidence: 0.56)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `461e03be`
+- Built from commit: `25dbc490`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -274,10 +274,12 @@
 - __init__.py
 - __init__.py
 - _item_to_dict
+- OptimalListDialog
 - repository
 - Shiboken6
 - SIP
 - SQLCipher
+- _HttpResponse
 - Estimate Classic Compact Header A4
 - Nox
 - PyInstaller
@@ -347,7 +349,7 @@
 - **Modern Header Variants** — tmp_modern_header_14pt, tmp_modern_header_8pt, tmp_modern_header_landscape_11pt, tmp_modern_header_portrait_11pt [INFERRED 0.90]
 - **Estimate PDF Examples** — tmp_pdfs_estimate_classic_a4_1, tmp_pdfs_estimate_classic_a4, tmp_pdfs_estimate_classic_compact_header_a4, tmp_pdfs_estimate_classic_short_headers_a4, tmp_pdfs_estimate_modern_a4_1, tmp_pdfs_estimate_modern_a4, tmp_pdfs_estimate_modern_compact_header_a4, tmp_pdfs_estimate_modern_rebalanced_columns_a4, tmp_pdfs_estimate_modern_short_headers_a4, tmp_pdfs_modern_estimate_portrait_header_fit [INFERRED 0.80]
 
-## Communities (346 total, 133 thin omitted)
+## Communities (348 total, 135 thin omitted)
 
 ### Community 1 - "SettingsDialog"
 Cohesion: 0.05
@@ -427,11 +429,11 @@ Nodes (9): Any, Own reconciliation of estimate rows with mutable inventory rows.
 
 ### Community 22 - "_SilverBarsRepositoryBackend"
 Cohesion: 0.07
-Nodes (38): HttpOpen, DdaCurrentRatesClient, DdaRateContractError, DdaRateError, DdaRateTransportError, DdaSnapshotStore, _HttpResponse, _matching_item() (+30 more)
+Nodes (36): HttpOpen, DdaCurrentRatesClient, DdaRateContractError, DdaRateError, DdaRateTransportError, DdaSnapshotStore, _matching_item(), _nonnegative_int() (+28 more)
 
 ### Community 23 - "EstimateEntryPresenter"
-Cohesion: 0.24
-Nodes (8): EstimateHistoryCursor, fetch_estimate_history_page(), fetch_estimate_history_rows(), Any, Cursor, Estimate repository handling header and item CRUD operations., Return a keyset page using persisted estimate-header summaries., Return estimate-history rows with regular-item aggregates in one query.
+Cohesion: 0.15
+Nodes (17): EstimateHistoryCursor, Cooperative, latest-request-only background execution for Qt controllers., Raised by cooperative work when cancellation has been requested., RequestCancelledError, fetch_estimate_history_page(), fetch_estimate_history_rows(), Any, Cursor (+9 more)
 
 ### Community 24 - "test_estimate_table_view.py"
 Cohesion: 0.10
@@ -519,7 +521,7 @@ Nodes (11): Dialog for managing silver bars and grouping them into lists., Silve
 
 ### Community 46 - "SettingsStore"
 Cohesion: 0.15
-Nodes (27): _CurrentClient, _rate_payload(), _Response, _snapshot(), _snapshot_payload(), _sse(), _Store, test_connect_consume_closes_response_and_rejects_http_error() (+19 more)
+Nodes (30): DdaRateStreamWorker, QObject, Hydrate over HTTPS, then maintain the rate through a blocking SSE stream., _CurrentClient, _rate_payload(), _Response, _snapshot(), _snapshot_payload() (+22 more)
 
 ### Community 47 - "credential_store.py"
 Cohesion: 0.07
@@ -622,8 +624,8 @@ Cohesion: 0.22
 Nodes (25): EstimatePrintHeader, EstimatePrintItem, _amount(), build_modern_estimate_layout(), _build_section(), _complete_layout(), _decimal(), EstimatePrintMetric (+17 more)
 
 ### Community 74 - "Totals Panel UI"
-Cohesion: 0.15
-Nodes (9): Request, DdaRateStreamWorker, Protocol, QObject, Hydrate over HTTPS, then maintain the rate through a blocking SSE stream., Wake the loop and force an anonymous current-rates reconciliation., Cooperatively stop and close the active response to unblock reads., Run in a dedicated ``QThread`` until :meth:`stop` is called. (+1 more)
+Cohesion: 0.14
+Nodes (6): Request, Protocol, Wake the loop and force an anonymous current-rates reconciliation., Cooperatively stop and close the active response to unblock reads., Run in a dedicated ``QThread`` until :meth:`stop` is called., _StreamResponse
 
 ### Community 75 - "estimate_items.py"
 Cohesion: 0.11
@@ -642,8 +644,8 @@ Cohesion: 0.19
 Nodes (24): advisory(), _artifact_extension(), artifact_smoke(), bandit(), build(), build_clean(), build_standalone(), ci() (+16 more)
 
 ### Community 79 - "test_qt_bootstrap.py"
-Cohesion: 0.16
-Nodes (16): Cooperative, latest-request-only background execution for Qt controllers., Raised by cooperative work when cancellation has been requested., RequestCancelledError, cancellable_sqlite_connection(), Any, Event, SQLite helpers for cooperative background requests., Open a worker-local keyed connection with cooperative cancellation. (+8 more)
+Cohesion: 0.28
+Nodes (7): cancellable_sqlite_connection(), Any, Event, SQLite helpers for cooperative background requests., Open a worker-local keyed connection with cooperative cancellation., test_shutdown_cooperatively_cancels_active_request(), test_sqlite_worker_progress_handler_interrupts_query()
 
 ### Community 80 - "SilverBarHistoryDialog"
 Cohesion: 0.14
@@ -768,10 +770,6 @@ Nodes (3): NavigationController, Logger, Encapsulate MainWindow menu wiring.
 ### Community 112 - "SilverBarListPrintController"
 Cohesion: 0.11
 Nodes (6): Handle create/edit/delete/issue flows for silver-bar lists., SilverBarListLifecycleController, _LifecycleDbStub, _LifecycleHost, QDialog, test_lifecycle_controller_creates_list_from_selection_and_assigns_bars()
-
-### Community 113 - "StorageMetadataError"
-Cohesion: 0.11
-Nodes (6): OptimalListDialog, QDialog, Collect target weight inputs for optimal list generation., Own table utilities, totals refresh, and context menus., SilverBarTableController, test_optimal_list_dialog_accepts_valid_inputs()
 
 ### Community 114 - "get_app_settings"
 Cohesion: 0.17
@@ -985,10 +983,14 @@ Nodes (24): QStyledItemDelegate, column_count(), column_uses_blank_zero_editor()
 Cohesion: 0.62
 Nodes (6): Path, test_validate_deployment_accepts_required_inventory(), test_validate_deployment_rejects_forbidden_plugin(), test_validate_deployment_rejects_passlib_in_compilation_report(), _write_deployment(), _write_report()
 
+### Community 262 - "OptimalListDialog"
+Cohesion: 0.21
+Nodes (4): OptimalListDialog, QDialog, Collect target weight inputs for optimal list generation., test_optimal_list_dialog_accepts_valid_inputs()
+
 ## Knowledge Gaps
 - **94 isolated node(s):** `silverestimate`, `PrintFormatSpec`, `Status`, `StandardButton`, `Icon` (+89 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **133 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **135 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Work-memory lessons
 

@@ -1,16 +1,16 @@
 # Graph Report - Silver Estimate  (2026-07-24)
 
 ## Corpus Check
-- 256 files · ~633,313 words
+- 256 files · ~633,312 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 4675 nodes · 10335 edges · 344 communities (213 shown, 131 thin omitted)
+- 4675 nodes · 10335 edges · 345 communities (214 shown, 131 thin omitted)
 - Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 863 edges (avg confidence: 0.56)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `b02ec674`
+- Built from commit: `ff0a6eba`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -92,6 +92,7 @@
 - Totals Panel UI
 - estimate_items.py
 - LiveRateController
+- Page
 - SilverBarQueryRepository
 - test_qt_bootstrap.py
 - SilverBarHistoryDialog
@@ -345,7 +346,7 @@
 - **Modern Header Variants** — tmp_modern_header_14pt, tmp_modern_header_8pt, tmp_modern_header_landscape_11pt, tmp_modern_header_portrait_11pt [INFERRED 0.90]
 - **Estimate PDF Examples** — tmp_pdfs_estimate_classic_a4_1, tmp_pdfs_estimate_classic_a4, tmp_pdfs_estimate_classic_compact_header_a4, tmp_pdfs_estimate_classic_short_headers_a4, tmp_pdfs_estimate_modern_a4_1, tmp_pdfs_estimate_modern_a4, tmp_pdfs_estimate_modern_compact_header_a4, tmp_pdfs_estimate_modern_rebalanced_columns_a4, tmp_pdfs_estimate_modern_short_headers_a4, tmp_pdfs_modern_estimate_portrait_header_fit [INFERRED 0.80]
 
-## Communities (344 total, 131 thin omitted)
+## Communities (345 total, 131 thin omitted)
 
 ### Community 1 - "SettingsDialog"
 Cohesion: 0.05
@@ -356,8 +357,8 @@ Cohesion: 0.06
 Nodes (42): ensure_catalog_file_suffix(), export_item_catalog(), export_item_catalog_rows(), import_item_catalog(), ItemCatalogTransferError, load_item_catalog_file(), load_item_catalog_rows_from_connection_factory(), _normalize_item_mapping() (+34 more)
 
 ### Community 3 - "MainCommands"
-Cohesion: 0.05
-Nodes (25): EstimateEntryViewModel, Reset the stored rows., Return an immutable view of the row data., Return only rows that have an assigned code., Assign stable line keys for active rows that do not yet have one., Yield `EstimateLine` objects for active rows., Update the numeric inputs that influence totals., Update the interaction modes tracked by the widget. (+17 more)
+Cohesion: 0.14
+Nodes (7): Return only rows that have an assigned code., Assign stable line keys for active rows that do not yet have one., Yield `EstimateLine` objects for active rows., Return the presenter-facing view state snapshot., Compute totals using the current snapshot., Return True when the row does not contain a code., Convert this row into the lightweight line model used for totals.
 
 ### Community 4 - "test_estimate_entry_integration.py"
 Cohesion: 0.15
@@ -368,16 +369,16 @@ Cohesion: 0.33
 Nodes (20): QPointF, _draw_arrow(), _draw_check(), _draw_close(), _draw_double_arrow(), _draw_gear(), _draw_page(), _draw_page_navigation() (+12 more)
 
 ### Community 6 - "ItemSelectionDialog"
-Cohesion: 0.06
-Nodes (36): EstimateHistoryCursor, Page, A stable page of rows and the cursor needed to continue the query., Cooperative, latest-request-only background execution for Qt controllers., Raised by cooperative work when cancellation has been requested., RequestCancelledError, fetch_estimate_history_page(), Estimate repository handling header and item CRUD operations. (+28 more)
+Cohesion: 0.08
+Nodes (21): EstimateHistoryDialog, QDialog, Set up the user interface., Resolve the earliest estimate date, falling back to today., Load estimates based on search criteria (runs queries in a background thread)., Get the selected voucher number., Handle dialog acceptance and return the selected voucher., Print the selected estimate. (+13 more)
 
 ### Community 7 - "estimate_history.py"
 Cohesion: 0.10
 Nodes (3): Any, Stable dialog API with explicit controller ownership., SilverBarManagementFacade
 
 ### Community 8 - "SilverBarManagementFacade"
-Cohesion: 0.10
-Nodes (19): EstimateLineCategory, Enumeration of line item categories used in totals breakdown., Map UI text to the corresponding category., Return the user-friendly display name for this category., EstimateEntryPersistenceService, Run save using the presenter and return the outcome plus preparation info., Convert persisted SaveItem entries into view-model row states., Container for save payload and any row-level validation issues. (+11 more)
+Cohesion: 0.05
+Nodes (36): EstimateLineCategory, Enumeration of line item categories used in totals breakdown., Map UI text to the corresponding category., Return the user-friendly display name for this category., EstimateEntryPersistenceService, Run save using the presenter and return the outcome plus preparation info., Convert persisted SaveItem entries into view-model row states., Container for save payload and any row-level validation issues. (+28 more)
 
 ### Community 9 - "EstimateHistoryDialog"
 Cohesion: 0.08
@@ -392,15 +393,15 @@ Cohesion: 0.07
 Nodes (15): QDialog, Set up the user interface., Load all silver bars with their current status and list information., Populate the bars table with data., Load all issued lists., Search bars based on current filter criteria., Clear all search filters., Handle selection change in issued lists table. (+7 more)
 
 ### Community 12 - "test_full_startup_smoke.py"
-Cohesion: 0.14
-Nodes (9): Any, Protocol, Subset of QSettings used by read-only call sites., Subset of QSettings used by writable call sites., SettingsReader, SettingsStore, _HttpResponse, Logger (+1 more)
+Cohesion: 0.10
+Nodes (15): Any, Protocol, Subset of QSettings used by read-only call sites., Subset of QSettings used by writable call sites., SettingsReader, SettingsStore, DdaRateError, DdaRateTransportError (+7 more)
 
 ### Community 13 - "PrintManager"
 Cohesion: 0.05
 Nodes (35): QDate, QWidget, Voucher toolbar component for estimate entry., Connect internal widget signals., Set the voucher number.          Args:             number: The voucher number to, Get the current voucher number.          Returns:             The voucher number, Set the estimate date.          Args:             date: The date to set, Get the current estimate date.          Returns:             The selected date (+27 more)
 
 ### Community 15 - "SilverBarsRepository"
-Cohesion: 0.07
+Cohesion: 0.08
 Nodes (6): QItemSelection, EstimateTableView, Any, QModelIndex, QTableView, Table view for displaying and editing estimate entries.      This component disp
 
 ### Community 16 - "EstimateEntryViewModel"
@@ -424,8 +425,8 @@ Cohesion: 0.06
 Nodes (3): Cursor, Encapsulate silver bar list and inventory persistence logic., _SilverBarsRepositoryBackend
 
 ### Community 22 - "_SilverBarsRepositoryBackend"
-Cohesion: 0.07
-Nodes (33): HttpOpen, DdaCurrentRatesClient, DdaRateError, DdaRateTransportError, DdaSnapshotStore, _matching_item(), _nonnegative_int(), parse_current_rates() (+25 more)
+Cohesion: 0.09
+Nodes (27): HttpOpen, DdaCurrentRatesClient, DdaSnapshotStore, _matching_item(), _nonnegative_int(), parse_current_rates(), _parse_datetime(), _positive_finite_number() (+19 more)
 
 ### Community 23 - "EstimateEntryPresenter"
 Cohesion: 0.10
@@ -440,8 +441,8 @@ Cohesion: 0.10
 Nodes (9): LiveRateWidgetGetter, LiveRateController, Logger, QObject, Own live-rate presentation state without duplicating network transports., DdaRateSnapshot, Verified customer-facing Agra Mohar rate and stream position., StatusCallback (+1 more)
 
 ### Community 26 - "LoginDialog"
-Cohesion: 0.13
-Nodes (23): HtmlPrintDocument, PrintPayloadBuilder, PrintPreviewPayload, Preview payload construction helpers extracted from PrintManager., HTML document used by current silver-bar reports., Immutable document and metadata consumed by preview and output paths., Build preview payloads without owning preview or output behavior., _sanitize_filename_stem() (+15 more)
+Cohesion: 0.10
+Nodes (28): normalize_estimate_format(), PrintFormatSpec, Shared specifications for Classic and Modern estimate printing., Return a supported estimate format, defaulting invalid values to Modern., HtmlPrintDocument, PrintPayloadBuilder, PrintPreviewPayload, Preview payload construction helpers extracted from PrintManager. (+20 more)
 
 ### Community 28 - "EstimateEntryWorkflowController"
 Cohesion: 0.13
@@ -457,7 +458,7 @@ Nodes (17): ItemSelectionDialog, QDialog, Dialog for selecting an item when code
 
 ### Community 31 - "DatabaseManager"
 Cohesion: 0.05
-Nodes (33): Get all row data.          Returns:             A list of all rows, Set all rows at once.          Args:             rows: The new list of rows, EstimateEntryRowState, Represents a single row captured from the estimate entry grid., Test retrieving row data., Test retrieving all rows., Test setting all rows at once., Unchanged code edits should not emit change signals. (+25 more)
+Nodes (35): Get all row data.          Returns:             A list of all rows, Set all rows at once.          Args:             rows: The new list of rows, EstimateEntryRowState, Represents a single row captured from the estimate entry grid., Replace rows with the provided iterable., Insert or replace the row at the provided index., Test retrieving row data., Test retrieving all rows. (+27 more)
 
 ### Community 32 - "DdaRateStreamWorker"
 Cohesion: 0.08
@@ -500,8 +501,8 @@ Cohesion: 0.09
 Nodes (30): _build(), estimate_totals(), fine_calculation_cases(), FineCalculationCase, Any, Representative data for fine-weight calculations., Representative data for wage calculations., Hypothesis strategy producing realistic fine-weight scenarios. (+22 more)
 
 ### Community 42 - "EstimateRepository"
-Cohesion: 0.10
-Nodes (4): first_navigation_column(), EstimateEntryTableController, Any, Handle row management, focus, editing, and cell navigation.
+Cohesion: 0.11
+Nodes (3): EstimateEntryTableController, Any, Handle row management, focus, editing, and cell navigation.
 
 ### Community 43 - "test_estimate_entry_widget.py"
 Cohesion: 0.07
@@ -536,8 +537,8 @@ Cohesion: 0.09
 Nodes (41): QPageLayout, QPageSize, QPdfDocument, get_app_settings(), QSettings, Return the canonical application settings store., PrintManager, Build a typed estimate preview payload without opening UI widgets. (+33 more)
 
 ### Community 51 - "EstimatePrintDocument"
-Cohesion: 0.07
-Nodes (43): normalize_estimate_format(), PrintFormatSpec, Shared specifications for Classic and Modern estimate printing., Return a supported estimate format, defaulting invalid values to Modern., Initialize the print manager, accepting an optional print font., apply_print_page_settings_to_printer(), available_printer_names(), _clean_text() (+35 more)
+Cohesion: 0.09
+Nodes (36): Initialize the print manager, accepting an optional print font., apply_print_page_settings_to_printer(), available_printer_names(), _clean_text(), _coerce_positive_float(), copy_printer_page_layout(), default_printer_name(), load_margins() (+28 more)
 
 ### Community 52 - "apply_light_application_theme"
 Cohesion: 0.21
@@ -560,8 +561,8 @@ Cohesion: 0.12
 Nodes (17): EstimateEntryPresenter, LoadedEstimate, Presenter for the estimate entry experience., Representation of a fully loaded estimate., Orchestrates estimate-entry workflows independent of the Qt widget., Retrieve an estimate and convert it into presenter-friendly objects., Let the user pick a historic estimate and load it into the view., Persist the estimate and synchronize related silver bar metadata. (+9 more)
 
 ### Community 57 - "_BaseSilverBarTableModel"
-Cohesion: 0.06
-Nodes (30): ItemValidationError, ValueError, Domain-level validation rules for item master records., Raised when item domain constraints are violated., validate_item(), ValidatedItem, ItemCursor, fetch_item_catalog_page() (+22 more)
+Cohesion: 0.08
+Nodes (16): ItemMasterWidget, QWidget, Load items from the database into the table., Search for items based on the search term., Handle item selection in the table., Clear the form fields and reset button states., Add a new item to the database., Widget for managing silver item catalog. (+8 more)
 
 ### Community 58 - "ApplicationBuilder"
 Cohesion: 0.19
@@ -601,7 +602,7 @@ Nodes (20): PasswordVerification, Result of verifying a password against a store
 
 ### Community 68 - "_SettingsStub"
 Cohesion: 0.10
-Nodes (15): _BarsPage, _BarsLoadError, _BarsLoadRequest, _load_bars_page(), Event, Exception, RuntimeError, Async loading controller for silver-bar management. (+7 more)
+Nodes (16): _BarsPage, AvailableBarCursor, _BarsLoadError, _BarsLoadRequest, _load_bars_page(), Event, Exception, RuntimeError (+8 more)
 
 ### Community 69 - "NumericDelegate"
 Cohesion: 0.14
@@ -620,8 +621,8 @@ Cohesion: 0.11
 Nodes (27): BaseException, _enable_native_fault_log(), _is_frozen_runtime(), main(), Path, Display an error without importing Qt, which may be the failed dependency., Return whether the process is running from a frozen/compiled artifact., Start the SilverEstimate application and return the exit code. (+19 more)
 
 ### Community 73 - "Any"
-Cohesion: 0.22
-Nodes (25): EstimatePrintHeader, EstimatePrintItem, _amount(), build_modern_estimate_layout(), _build_section(), _complete_layout(), _decimal(), EstimatePrintMetric (+17 more)
+Cohesion: 0.18
+Nodes (26): EstimatePrintHeader, EstimatePrintItem, _amount(), build_modern_estimate_layout(), _build_section(), _complete_layout(), _decimal(), EstimatePrintMetric (+18 more)
 
 ### Community 74 - "Totals Panel UI"
 Cohesion: 0.14
@@ -634,6 +635,10 @@ Nodes (24): Any, Enum, Logger, QWidget, Application startup orchestration for au
 ### Community 76 - "LiveRateController"
 Cohesion: 0.13
 Nodes (18): QStyle, Secondary actions bar component for estimate entry., # NOTE: return_toggle_button and silver_bar_toggle_button are connected external, clear_icon_cache(), get_icon(), IconSpec, QIcon, QWidget (+10 more)
+
+### Community 77 - "Page"
+Cohesion: 0.09
+Nodes (35): ItemValidationError, ValueError, Domain-level validation rules for item master records., Raised when item domain constraints are violated., validate_item(), ValidatedItem, EstimateHistoryCursor, ItemCursor (+27 more)
 
 ### Community 78 - "SilverBarQueryRepository"
 Cohesion: 0.19
@@ -652,16 +657,16 @@ Cohesion: 0.14
 Nodes (8): EstimateTableAdapter, Any, Encapsulate table manipulation for EstimateEntryWidget., __getattr__(), Factory namespace for UI adapters used by EstimateEntryWidget., test_layout_operations_ignore_deleted_table_wrapper(), test_table_controller_rejects_deleted_table_wrapper(), test_totals_recalculation_falls_back_when_timer_wrapper_is_deleted()
 
 ### Community 82 - "test_sqlcipher_storage.py"
-Cohesion: 0.08
-Nodes (40): AvailableBarCursor, BarListCursor, Typed keyset-pagination primitives shared by repositories and UI loaders., SilverBarHistoryCursor, Read-only silver-bar persistence component., build_available_bars_queries(), build_bars_in_list_queries(), build_history_bars_query() (+32 more)
+Cohesion: 0.09
+Nodes (37): BarListCursor, SilverBarHistoryCursor, build_available_bars_queries(), build_bars_in_list_queries(), build_history_bars_query(), normalize_row_limit(), PagedSqlStatements, Any (+29 more)
 
 ### Community 83 - "EstimateTableAdapter"
 Cohesion: 0.24
-Nodes (5): PrintSettingsState, PrintSettingsWidgets, QComboBox, Owns print-settings persistence and widget synchronization., SettingsPrintController
+Nodes (7): Silver bar print rendering helpers extracted from PrintManager., Read a mapping-style row without relying on membership semantics., Render silver bar reports into HTML tables for preview and export., Generate HTML table for the general inventory report., Generate HTML content for printing a single list's details., _row_value(), SilverBarPrintRenderer
 
 ### Community 84 - "icons.py"
-Cohesion: 0.16
-Nodes (37): EstimatePrintColumn, EstimatePrintSection, ModernEstimateLayout, One table column anchored to the shared printable-width grid., A print section with its own useful columns and totals., Complete semantic representation consumed by the direct painter., Stable textual projection retained for tests and diagnostics., _build_style() (+29 more)
+Cohesion: 0.18
+Nodes (36): EstimatePrintColumn, EstimatePrintSection, ModernEstimateLayout, One table column anchored to the shared printable-width grid., A print section with its own useful columns and totals., Complete semantic representation consumed by the direct painter., _build_style(), _column_rects() (+28 more)
 
 ### Community 85 - "get_icon"
 Cohesion: 0.13
@@ -796,8 +801,8 @@ Cohesion: 0.22
 Nodes (6): PrintDocument, QFont, QPrinter, Apply and persist a preview-selected estimate print font., Render a typed estimate or an HTML silver-bar report., Render silver-bar HTML reports to the printer.
 
 ### Community 122 - "LogCleanupScheduler"
-Cohesion: 0.10
-Nodes (18): RequestT, LatestRequestRunner, Event, QObject, ResultT, RuntimeError, Run one request at a time and retain at most one pending replacement.      The w, Cancel older work, queue ``request``, and return its generation ID. (+10 more)
+Cohesion: 0.12
+Nodes (14): RequestT, LatestRequestRunner, Event, QObject, ResultT, RuntimeError, Cooperative, latest-request-only background execution for Qt controllers., Run one request at a time and retain at most one pending replacement.      The w (+6 more)
 
 ### Community 123 - "test_estimate_logic.py"
 Cohesion: 0.40
@@ -977,7 +982,7 @@ Nodes (3): Item Catalog Backup Smoke Tests, Item Catalog Backup Workflow, Item M
 
 ### Community 179 - "estimate_entry_table_controller.py"
 Cohesion: 0.08
-Nodes (37): Table view component for estimate entry., column_count(), columns_for_editor_type(), default_column_widths(), EstimateColumnSpec, get_column_spec(), header_for_column(), is_auto_edit_column() (+29 more)
+Nodes (37): column_count(), columns_for_editor_type(), default_column_widths(), EstimateColumnSpec, first_navigation_column(), get_column_spec(), header_for_column(), is_auto_edit_column() (+29 more)
 
 ### Community 183 - "test_validate_pyside_deployment.py"
 Cohesion: 0.62

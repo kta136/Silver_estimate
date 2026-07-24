@@ -472,19 +472,18 @@ class ApplicationBuilder:
             logging.getLogger(__name__).debug(
                 "Failed to display startup error dialog: %s", exc
             )
-        if sys.platform != "win32":
-            return
-        try:
-            import ctypes
+        if sys.platform == "win32":
+            try:
+                import ctypes
 
-            windll = getattr(ctypes, "windll", None)
-            user32 = getattr(windll, "user32", None)
-            if user32 is not None:
-                user32.MessageBoxW(None, message, title, 0x10)
-        except Exception as exc:
-            logging.getLogger(__name__).debug(
-                "Failed to display native startup error dialog: %s", exc
-            )
+                windll = getattr(ctypes, "windll", None)
+                user32 = getattr(windll, "user32", None)
+                if user32 is not None:
+                    user32.MessageBoxW(None, message, title, 0x10)
+            except Exception as exc:
+                logging.getLogger(__name__).debug(
+                    "Failed to display native startup error dialog: %s", exc
+                )
 
     def _handle_unexpected_exception(
         self,

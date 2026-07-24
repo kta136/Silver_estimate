@@ -16,11 +16,18 @@ and a 32-byte hash. Stored hashes must match that exact policy; weaker or unknow
 parameters fail closed. The service distinguishes an ordinary password mismatch
 from malformed or unsupported credential data.
 
-`estimation.kdf.json` contains public, versioned KDF bootstrap data. Version 1 is
-accepted only when it exactly specifies Argon2id, a 16-byte salt, time cost 3,
-65,536 KiB memory, parallelism 4, and a 32-byte output. Missing, malformed,
-unknown, or weakened metadata fails closed. The derived 32-byte value is supplied
-to SQLCipher as a raw key and is never persisted.
+The live database is machine-bound. SQLCipher's first 16 bytes supply the public
+per-database salt. Argon2id applies time cost 3, 65,536 KiB memory, parallelism 4,
+and a 32-byte output; an HMAC construction then combines that result with a random
+256-bit device secret forced into local-machine Windows Credential Manager
+storage. The final 32-byte value is supplied to SQLCipher as a raw key and is
+never persisted. A password and copied database are therefore insufficient
+without the originating PC's secret.
+
+An already-authenticated local `estimation.db` plus `estimation.kdf.json` is
+copy-switched once into the machine-bound single-file format. Startup refuses to
+adopt any existing database when local password credentials are absent, and a
+bound database with a missing device secret fails closed.
 
 ## Live SQLCipher boundary
 
@@ -42,23 +49,23 @@ rollback, and statement journals. WAL/journal headers and SHM coordination
 metadata can still exist, but must not contain application records. The frozen
 artifact smoke test creates and opens an encrypted database and verifies the
 native driver identity rather than merely importing it. It also verifies that
-the packaged credential-store map contains the main, backup, pending, and
-recovery identifiers required by startup and copy-and-switch rekey recovery.
+the packaged credential-store map contains the main, backup, pending, recovery,
+and device-binding identifiers required by startup and copy-and-switch recovery.
 
 ## Backup, restore, and rekey
 
 Storage detection is explicit: a missing file means first run, a plaintext
 SQLite header is rejected, and every existing file must authenticate through
-SQLCipher with exact KDF metadata. The schema must already be version 8; older,
-newer, and unversioned schemas fail closed.
+SQLCipher with the local device-bound key. The schema must already be version 8;
+older, newer, and unversioned schemas fail closed.
 
-`.sedbbackup` archives contain an encrypted SQLCipher database, exact KDF
-metadata, and a digested non-secret manifest. Restore validates the historical
-password and archive before exporting to a current-key staged database. A
-pending journal activates it on restart, retains the pre-restore database, and
-rolls back on validation failure. Password changes likewise export to a new-key
-target, validate, drain connections, retain the old encrypted database and
-metadata, switch atomically, reopen, and only then promote keyring hashes.
+`.sedbbackup` archives contain a machine-bound SQLCipher database and a digested
+non-secret manifest carrying the device-binding fingerprint. Restore rejects a
+foreign PC before validating the historical password and exporting to a
+current-key staged database. A pending journal activates it on restart and rolls
+back on validation failure. Password changes likewise export to a new-key target,
+validate, drain connections, switch atomically, reopen, and only then promote
+keyring hashes; rollback files are removed after successful validation.
 
 ## Operational controls
 
@@ -67,9 +74,9 @@ metadata, switch atomically, reopen, and only then promote keyring hashes.
   demonstrably stale lock.
 - Maintenance mode blocks new worker connections and cooperatively drains active
   readers before storage mutation.
-- Data wipe removes the live database, WAL/SHM/journals, KDF and operation
+- Data wipe removes the live database, WAL/SHM/journals, legacy KDF and operation
   journals, staged/retained databases, in-application encrypted backups, and
-  related keyring entries.
+  related keyring entries including the device-binding secret.
 - Logs must not contain passwords, raw keys, complete database rows, or
   credential values.
 - Bandit medium/high findings block pull requests, main, and release workflows.
@@ -86,6 +93,8 @@ and valid sequences. Unknown fields are ignored for forward compatibility.
 SQLCipher is encryption at rest. It does not protect plaintext already in live
 process memory, malware, keyloggers, a compromised logged-in account, malicious
 printers, hibernation images, filesystem snapshots, or SSD remanence.
+Loss of the originating Windows credential vault, user profile, or PC makes the
+machine-bound database and its encrypted backups unrecoverable by design.
 User-requested `.seitems.json` catalog exports are intentionally plaintext and
 are outside the encrypted `.sedbbackup` guarantee. Full-disk encryption and a
 trusted device/account remain recommended.

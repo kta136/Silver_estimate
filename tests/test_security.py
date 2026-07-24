@@ -26,3 +26,22 @@ def test_derive_key_requires_password_and_salt():
         encryption.derive_key("", salt)
     with pytest.raises(ValueError):
         encryption.derive_key("password", b"")
+
+
+def test_device_bound_key_requires_the_original_device_secret():
+    salt = b"S" * 16
+    options = {
+        "time_cost": 1,
+        "memory_cost_kib": 8,
+        "parallelism": 1,
+    }
+
+    original = encryption.derive_device_bound_key(
+        "password", salt, b"A" * 32, **options
+    )
+    foreign = encryption.derive_device_bound_key(
+        "password", salt, b"B" * 32, **options
+    )
+
+    assert original != foreign
+    assert len(original) == 32

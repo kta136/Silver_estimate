@@ -130,9 +130,10 @@ class BackupManifest:
     version: int
     created_utc: str
     database_sha256: str
-    kdf_sha256: str
     schema_version: int
     sqlcipher_version: str
+    device_binding_fingerprint: str | None = None
+    kdf_sha256: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -143,7 +144,18 @@ class RekeyJournal:
     version: int
     phase: str
     old_database_sha256: str
-    old_metadata_sha256: str
+    target_path: str
+    retained_path: str
+    old_metadata_sha256: str | None = None
+    retained_metadata_path: str | None = None
+
+
+@dataclass(frozen=True)
+class BindingMigrationJournal:
+    version: int
+    phase: str
+    old_database_sha256: str
+    target_sha256: str
     target_path: str
     retained_path: str
     retained_metadata_path: str
@@ -168,13 +180,14 @@ def sha256_file(path: str | Path) -> str:
 
 def write_journal(
     path: str | Path,
-    journal: RekeyJournal | RestoreJournal,
+    journal: BindingMigrationJournal | RekeyJournal | RestoreJournal,
 ) -> None:
     atomic_write_json(path, asdict(journal))
 
 
 __all__ = [
     "BackupManifest",
+    "BindingMigrationJournal",
     "KdfMetadata",
     "RekeyJournal",
     "RestoreJournal",

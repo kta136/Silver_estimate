@@ -467,7 +467,11 @@ def test_incremental_failure_does_not_use_removed_full_recalculation(qt_app, fak
 def test_widget_save_and_reload(qt_app, tmp_path, settings_stub, monkeypatch):
     db_path = tmp_path / "ui" / "estimate.db"
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    manager = DatabaseManager(str(db_path), "test-pass")
+    manager = DatabaseManager(
+        str(db_path),
+        "test-pass",
+        device_secret=b"W" * 32,
+    )
 
     manager.items_repo.add_item("REG001", "Regular", 92.5, "WT", 10)
     manager.items_repo.add_item("RET001", "Return", 80.0, "WT", 0)

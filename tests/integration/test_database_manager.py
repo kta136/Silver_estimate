@@ -10,12 +10,16 @@ from silverestimate.services.item_catalog_transfer import (
 )
 from tests.factories import estimate_totals, regular_item, return_item, silver_bar_item
 
+DEVICE_SECRET = b"D" * 32
+
 
 def test_database_manager_roundtrip(tmp_path, settings_stub):
     db_path = tmp_path / "storage" / "estimation.db"
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    manager = DatabaseManager(str(db_path), "test-password")
+    manager = DatabaseManager(
+        str(db_path), "test-password", device_secret=DEVICE_SECRET
+    )
     try:
         added = manager.items_repo.add_item("ITM001", "Sample Item", 92.5, "WT", 10.0)
         assert added
@@ -24,7 +28,9 @@ def test_database_manager_roundtrip(tmp_path, settings_stub):
 
     assert db_path.exists()
 
-    reopened = DatabaseManager(str(db_path), "test-password")
+    reopened = DatabaseManager(
+        str(db_path), "test-password", device_secret=DEVICE_SECRET
+    )
     try:
         row = reopened.items_repo.get_item_by_code("ITM001")
         assert row is not None
@@ -40,7 +46,9 @@ def test_database_manager_persists_estimates(tmp_path, settings_stub):
     db_path = tmp_path / "storage" / "persist_estimates.db"
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    manager = DatabaseManager(str(db_path), "test-password")
+    manager = DatabaseManager(
+        str(db_path), "test-password", device_secret=DEVICE_SECRET
+    )
     voucher = "910"
     manager.items_repo.add_item("REG001", "Regular", 92.0, "WT", 12.0)
     manager.items_repo.add_item("RET001", "Return", 80.0, "WT", 0.0)
@@ -99,7 +107,9 @@ def test_database_manager_persists_estimates(tmp_path, settings_stub):
     assert saved
     manager.close()
 
-    reopened = DatabaseManager(str(db_path), "test-password")
+    reopened = DatabaseManager(
+        str(db_path), "test-password", device_secret=DEVICE_SECRET
+    )
     try:
         loaded = reopened.estimates_repo.get_estimate_by_voucher(voucher)
         assert loaded is not None
@@ -127,7 +137,9 @@ def test_database_manager_does_not_retain_plaintext_password(tmp_path, settings_
     db_path = tmp_path / "storage" / "secure_session.db"
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    manager = DatabaseManager(str(db_path), "initial-password")
+    manager = DatabaseManager(
+        str(db_path), "initial-password", device_secret=DEVICE_SECRET
+    )
     try:
         assert not hasattr(manager, "password")
         old_key = manager.key
@@ -138,7 +150,9 @@ def test_database_manager_does_not_retain_plaintext_password(tmp_path, settings_
     finally:
         manager.close()
 
-    reopened = DatabaseManager(str(db_path), "rotated-password")
+    reopened = DatabaseManager(
+        str(db_path), "rotated-password", device_secret=DEVICE_SECRET
+    )
     try:
         assert reopened is not None
     finally:
@@ -150,7 +164,9 @@ def test_database_manager_item_catalog_backup_roundtrip(tmp_path, settings_stub)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     backup_path = tmp_path / "catalog.seitems.json"
 
-    source = DatabaseManager(str(db_path), "test-password")
+    source = DatabaseManager(
+        str(db_path), "test-password", device_secret=DEVICE_SECRET
+    )
     try:
         assert source.items_repo.add_item(
             "ITM001", "Original", 92.5, "WT", 10.0, tunch="91.25 + loss"
@@ -162,7 +178,9 @@ def test_database_manager_item_catalog_backup_roundtrip(tmp_path, settings_stub)
         source.close()
 
     target_path = tmp_path / "storage" / "catalog-target.db"
-    target = DatabaseManager(str(target_path), "test-password")
+    target = DatabaseManager(
+        str(target_path), "test-password", device_secret=DEVICE_SECRET
+    )
     try:
         assert target.items_repo.add_item("ITM001", "Old Name", 70.0, "WT", 1.0)
         assert target.items_repo.add_item("KEEP01", "Keep", 75.0, "WT", 3.0)
@@ -205,7 +223,9 @@ def test_database_manager_item_catalog_restore_can_replace_existing_catalog(
     db_path.parent.mkdir(parents=True, exist_ok=True)
     backup_path = tmp_path / "catalog-replace.seitems.json"
 
-    source = DatabaseManager(str(db_path), "test-password")
+    source = DatabaseManager(
+        str(db_path), "test-password", device_secret=DEVICE_SECRET
+    )
     try:
         assert source.items_repo.add_item(
             "ITM001", "Original", 92.5, "WT", 10.0, tunch="91.25 + loss"
@@ -216,7 +236,9 @@ def test_database_manager_item_catalog_restore_can_replace_existing_catalog(
         source.close()
 
     target_path = tmp_path / "storage" / "catalog-replace-target.db"
-    target = DatabaseManager(str(target_path), "test-password")
+    target = DatabaseManager(
+        str(target_path), "test-password", device_secret=DEVICE_SECRET
+    )
     try:
         assert target.items_repo.add_item("ITM001", "Old Name", 70.0, "WT", 1.0)
         assert target.items_repo.add_item("DROP01", "Drop Me", 75.0, "WT", 3.0)

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Security
+
+- Bound the SQLCipher key to a random 256-bit secret forced into local-machine
+  Windows Credential Manager storage, so the database and new encrypted backups
+  cannot be opened on another PC with the password alone.
+- Reused SQLCipher's in-file salt to make `estimation.db` the only permanent live
+  database file and added atomic migration from the authenticated local two-file
+  format.
+- Made startup fail closed when an existing database lacks local credentials or
+  its device-binding secret, and removed retained rollback files after successful
+  password rotation or format migration.
+
 ## [3.10] - 2026-07-23
 
 ### Changed

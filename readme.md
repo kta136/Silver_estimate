@@ -97,8 +97,8 @@ See also: `DOCS/project-architecture.md`.
 - Return processing and last balance handling
 
 ### Security
-- Encrypted database: SQLCipher 4.17.x with a raw Argon2id-derived 256-bit key and exact versioned KDF metadata
-- Encrypted `.sedbbackup` full-database backup and restart-activated restore; `.seitems.json` catalog exports remain plaintext by request
+- Encrypted database: machine-bound SQLCipher 4.17.x with a raw key derived from the password, the in-file salt, and a 256-bit device secret held in local-machine Windows Credential Manager
+- Machine-bound `.sedbbackup` full-database backup and restart-activated restore; `.seitems.json` catalog exports remain plaintext by request
 - Password hashing: Argon2 with hashes stored in the OS keyring (Python `keyring`)
 - Secure settings store: non-sensitive preferences via QSettings
 
@@ -156,20 +156,23 @@ python main.py
 First run notes:
 - You will be prompted to create a password.
 - The password encrypts the local database file at `<EXE folder>/database/estimation.db` (or the repository root during source runs).
-- Keep this password safe - encrypted data cannot be recovered without it.
-- Hashed credentials are stored in the system keyring; ensure your OS user account can access the default credential vault.
+- Keep this password and Windows installation safe: encrypted data cannot be recovered without both the password and this PC's device-binding secret.
+- Hashed credentials are stored in the system keyring. The random device-binding secret is forced into local-machine Windows Credential Manager storage so it cannot roam to another PC.
 
 ## Security
 
-- Encryption: bundled and hash-verified SQLCipher 4.17.x for CPython 3.14 x64, Argon2id raw keys, and encrypted database/WAL/journal pages
+- Encryption: bundled and hash-verified SQLCipher 4.17.x for CPython 3.14 x64, machine-bound Argon2id raw keys, and encrypted database/WAL/journal pages
 - Passwords: direct Argon2id hashing with `argon2-cffi`; current PHC hashes are persisted in the OS keyring (Python `keyring`)
-- Files: Encrypted DB at `<EXE folder>/database/estimation.db` (ignored in Git)
+- Files: one permanent encrypted DB at `<EXE folder>/database/estimation.db` (ignored in Git); WAL/SHM and recovery journals can exist temporarily
+- Device binding: copying the DB or a new `.sedbbackup` to another PC does not make it openable, even with the correct password
 - Logs: Written to `logs/` (ignored); avoid logging sensitive data
 
 The retired `SILVDB01` importer is no longer included. This release accepts only
-the current schema-v8 SQLCipher database plus `estimation.kdf.json`; plaintext,
-unversioned, and historical schema databases fail closed. Any separately retained
-`estimation.silvdb01.backup` is not opened, rewritten, or deleted automatically.
+the current machine-bound schema-v8 SQLCipher database. An authenticated local
+two-file database is migrated once to the single-file format; a database copied
+without this PC's device secret fails closed. Plaintext, unversioned, and historical
+schema databases are rejected. Any separately retained `estimation.silvdb01.backup`
+is not opened, rewritten, or deleted automatically.
 
 ## Configuration
 

@@ -7,6 +7,7 @@ import os
 import time
 from dataclasses import dataclass
 from enum import Enum, auto
+from pathlib import Path
 from typing import Any, Optional
 
 from PySide6.QtWidgets import QMessageBox, QWidget
@@ -71,7 +72,11 @@ class StartupController:
             time.time(),
         )
         try:
-            auth_result = run_authentication(self._logger, parent=self._parent)
+            auth_result = run_authentication(
+                self._logger,
+                parent=self._parent,
+                db_path=DB_PATH,
+            )
         except Exception as exc:  # pragma: no cover - defensive UX handling
             self._logger.critical(
                 "Authentication failed with error: %s", exc, exc_info=True
@@ -123,7 +128,28 @@ class StartupController:
             time.time(),
         )
 
-        db_manager = self._initialize_database(auth_result.password or "")
+        if not self._protect_pending_credentials(auth_result):
+            return StartupResult(status=StartupStatus.FAILED)
+
+        try:
+            device_secret = self._prepare_device_binding()
+        except CredentialStoreError as exc:
+            self._logger.critical(
+                "Machine-bound database secret is unavailable: %s",
+                exc,
+                exc_info=True,
+            )
+            QMessageBox.critical(
+                self._parent,
+                "Device Binding Error",
+                f"The database cannot be opened on this PC: {exc}",
+            )
+            return StartupResult(status=StartupStatus.FAILED)
+
+        db_manager = self._initialize_database(
+            auth_result.password or "",
+            device_secret,
+        )
         if db_manager is None:
             return StartupResult(status=StartupStatus.FAILED)
         if auth_result.pending_main_hash and auth_result.pending_backup_hash:
@@ -173,7 +199,54 @@ class StartupController:
                     )
         return StartupResult(status=StartupStatus.OK, db=db_manager)
 
-    def _initialize_database(self, password: str) -> Optional[Any]:
+    def _protect_pending_credentials(
+        self,
+        auth_result: AuthenticationResult,
+    ) -> bool:
+        """Persist recoverable hashes before a first database is created."""
+        if not (
+            auth_result.pending_main_hash and auth_result.pending_backup_hash
+        ):
+            return True
+        try:
+            credential_store.set_password_hash(
+                "pending_main",
+                auth_result.pending_main_hash,
+                logger=self._logger,
+            )
+            credential_store.set_password_hash(
+                "pending_backup",
+                auth_result.pending_backup_hash,
+                logger=self._logger,
+            )
+        except CredentialStoreError as exc:
+            QMessageBox.critical(
+                self._parent,
+                "Setup Error",
+                f"Pending credentials could not be protected: {exc}",
+            )
+            return False
+        return True
+
+    def _prepare_device_binding(self) -> bytes:
+        """Load the local secret, creating it only for new or legacy-local data."""
+        secret = credential_store.get_device_binding_secret()
+        if secret is not None:
+            return credential_store.create_device_binding_secret(logger=self._logger)
+        database = Path(DB_PATH).resolve()
+        legacy_metadata = database.with_name(f"{database.stem}.kdf.json")
+        if database.is_file() and not legacy_metadata.is_file():
+            raise CredentialStoreError(
+                "the required device-binding secret is missing; copied databases "
+                "cannot be registered to a different PC"
+            )
+        return credential_store.create_device_binding_secret(logger=self._logger)
+
+    def _initialize_database(
+        self,
+        password: str,
+        device_secret: bytes,
+    ) -> Optional[Any]:
         """Create the encrypted database connection, handling recovery prompts."""
         db_t0 = time.perf_counter()
         db_cls = _resolve_database_manager()
@@ -191,7 +264,11 @@ class StartupController:
             return None
 
         try:
-            db_manager = db_cls(DB_PATH, password=password)
+            db_manager = db_cls(
+                DB_PATH,
+                password=password,
+                device_secret=device_secret,
+            )
             self._start_background_preload(db_manager)
             self._logger.info("Database connection established")
             self._logger.debug(

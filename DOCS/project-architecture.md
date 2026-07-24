@@ -58,8 +58,9 @@ Silver-bar persistence is separated into `SilverBarQueryRepository`, `SilverBarC
 
 ## Encrypted database lifecycle
 
-The active format is SQLCipher. `DatabaseManager` derives a raw 32-byte key from
-the exact version-1 Argon2id metadata in `estimation.kdf.json` and passes it to
+The active format is machine-bound SQLCipher. `DatabaseManager` reads SQLCipher's
+16-byte in-file salt, derives an Argon2id password key, combines it with a random
+256-bit device secret from local-machine Windows Credential Manager, and passes the final raw 32-byte key to
 `SqlCipherConnectionBroker`. Every connection is keyed before reading
 `sqlite_master`, verifies the controlled driver, authenticates the database,
 and then applies foreign keys, WAL, `synchronous=NORMAL`, memory-only temporary
@@ -77,13 +78,15 @@ Argon2id policy.
 credential mismatch and malformed credential data. `CredentialStore` remains
 the only keyring boundary.
 
-The `SILVDB01` importer and its AES-GCM dependency have been retired. Existing
-files must be current schema-v8 SQLCipher databases with exact KDF metadata.
-Plaintext, unversioned, and historical-schema files fail closed.
+The `SILVDB01` importer and its AES-GCM dependency have been retired. An
+authenticated local two-file SQLCipher database is migrated once to the
+machine-bound single-file format. Existing files without the local device secret,
+plaintext files, unversioned files, and historical schemas fail closed.
 
-Encrypted `.sedbbackup` archives contain a SQLCipher database, its KDF metadata,
-and a digested non-secret manifest. Restore and password change use staged
-copy-and-switch activation with journals and retained encrypted rollback files.
+Encrypted `.sedbbackup` archives contain a machine-bound SQLCipher database and a
+digested non-secret manifest. Restore and password change use staged
+copy-and-switch activation with journals; encrypted rollback files are removed
+after successful validation.
 
 ## DDA live-rate path
 

@@ -19,6 +19,7 @@ from typing import Any
 from silverestimate.infrastructure.db_session import ConnectionThreadGuard
 from silverestimate.infrastructure.item_cache import ItemCacheController
 from silverestimate.persistence.database_driver import (
+    SQLCIPHER_SALT_BYTES,
     Connection,
     DatabaseError,
     DriverIdentity,
@@ -32,6 +33,7 @@ from silverestimate.persistence.database_repository_facade import (
 )
 from silverestimate.persistence.storage_metadata import (
     BackupManifest,
+    BindingMigrationJournal,
     KdfMetadata,
     RekeyJournal,
     RestoreJournal,
@@ -43,8 +45,9 @@ from silverestimate.persistence.storage_metadata import (
 from silverestimate.security import encryption as crypto_utils
 
 SQLITE_HEADER = b"SQLite format 3\x00"
-BACKUP_FORMAT_VERSION = 1
-JOURNAL_VERSION = 1
+BACKUP_FORMAT_VERSION = 2
+JOURNAL_VERSION = 2
+BINDING_MIGRATION_VERSION = 1
 
 
 class StorageFormat(Enum):
@@ -57,6 +60,7 @@ class DatabaseOpenStatus(Enum):
     CREATED = auto()
     OPENED = auto()
     RESTORE_ACTIVATED = auto()
+    MIGRATED_TO_DEVICE_BOUND = auto()
 
 
 class MaintenanceStatus(Enum):
@@ -76,9 +80,12 @@ class MaintenanceOutcome:
 class DatabaseManager(DatabaseRepositoryFacadeMixin):
     """Manage a live SQLCipher database without plaintext working snapshots."""
 
-    def __init__(self, db_path: str, password: str):
+    def __init__(self, db_path: str, password: str, *, device_secret: bytes):
         self.logger = logging.getLogger(__name__)
         self.database_path = str(Path(db_path).resolve())
+        if len(device_secret) != crypto_utils.DEVICE_BINDING_BYTES:
+            raise ValueError("A valid 32-byte device-binding secret is required")
+        self._device_secret = bytes(device_secret)
         self.last_error: str | None = None
         self.conn: Connection | None = None
         self.cursor: Any | None = None
@@ -87,12 +94,15 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         self._items_repo: Any | None = None
         self._estimates_repo: Any | None = None
         self._silver_bars_repo: Any | None = None
+        self.database_salt: bytes | None = None
         self._path = Path(self.database_path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._metadata_path = self._path.with_name(f"{self._path.stem}.kdf.json")
         self._rekey_journal = self._path.with_suffix(".rekey.json")
         self._restore_journal = self._path.with_suffix(".restore.json")
+        self._binding_journal = self._path.with_suffix(".binding.json")
         self._recover_missing_live_from_journal()
+        binding_switch_pending = self._inspect_binding_migration()
 
         storage_format = self.detect_storage(self._path)
         if storage_format is StorageFormat.PLAINTEXT_SQLITE:
@@ -100,45 +110,57 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
                 "Plaintext SQLite application databases are unsupported"
             )
         if storage_format is StorageFormat.MISSING:
-            self._metadata = KdfMetadata.create()
-            self.key = self._derive_key(password, self._metadata)
+            self.database_salt = os.urandom(SQLCIPHER_SALT_BYTES)
+            self.key = self._derive_bound_key(password, self.database_salt)
             self._broker = SqlCipherConnectionBroker(
-                self._path, self.key, logger=self.logger
+                self._path,
+                self.key,
+                database_salt=self.database_salt,
+                logger=self.logger,
             )
             self.conn, self.driver_identity = self._broker.open_writer(create=True)
             try:
                 self._bind_connection()
                 self.setup_database()
                 self.validate_database(self.conn)
-                self._metadata.write(self._metadata_path)
             except BaseException:
                 self._close_connection()
                 self._remove_database_family(self._path)
-                self._metadata_path.unlink(missing_ok=True)
                 raise
             self.open_status = DatabaseOpenStatus.CREATED
             return
 
         self.open_status = DatabaseOpenStatus.OPENED
 
-        self._metadata = KdfMetadata.read(self._metadata_path)
-        self.key = self._derive_key(password, self._metadata)
+        if self._metadata_path.is_file() and not binding_switch_pending:
+            self._open_legacy_and_migrate(password)
+            return
+
+        self.database_salt = self._read_database_salt(self._path)
+        self.key = self._derive_bound_key(password, self.database_salt)
         self._activate_pending_restore()
         self._resolve_interrupted_rekey(password)
         self._broker = SqlCipherConnectionBroker(
-            self._path, self.key, logger=self.logger
+            self._path,
+            self.key,
+            database_salt=self.database_salt,
+            logger=self.logger,
         )
         self.conn, self.driver_identity = self._broker.open_writer()
         self._bind_connection()
         self.setup_database()
         self.validate_database(self.conn)
+        if binding_switch_pending:
+            self._finalize_binding_migration()
+            self.open_status = DatabaseOpenStatus.MIGRATED_TO_DEVICE_BOUND
 
     @staticmethod
     def detect_storage(path: str | Path) -> StorageFormat:
         candidate = Path(path)
         if not candidate.exists() or candidate.stat().st_size == 0:
             return StorageFormat.MISSING
-        header = candidate.read_bytes()[: len(SQLITE_HEADER)]
+        with candidate.open("rb") as stream:
+            header = stream.read(len(SQLITE_HEADER))
         if header == SQLITE_HEADER:
             return StorageFormat.PLAINTEXT_SQLITE
         return StorageFormat.SQLCIPHER
@@ -175,7 +197,7 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
     def item_cache_controller(self):
         return self._item_cache_controller
 
-    def _derive_key(self, password: str, metadata: KdfMetadata) -> bytes:
+    def _derive_legacy_key(self, password: str, metadata: KdfMetadata) -> bytes:
         return crypto_utils.derive_key(
             password,
             metadata.salt,
@@ -184,6 +206,215 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
             parallelism=metadata.parallelism,
             logger=self.logger,
         )
+
+    def _derive_bound_key(self, password: str, salt: bytes) -> bytes:
+        return crypto_utils.derive_device_bound_key(
+            password,
+            salt,
+            self._device_secret,
+            time_cost=KdfMetadata.TIME_COST,
+            memory_cost_kib=KdfMetadata.MEMORY_COST_KIB,
+            parallelism=KdfMetadata.PARALLELISM,
+            logger=self.logger,
+        )
+
+    @staticmethod
+    def _read_database_salt(path: str | Path) -> bytes:
+        candidate = Path(path)
+        try:
+            with candidate.open("rb") as stream:
+                salt = stream.read(SQLCIPHER_SALT_BYTES)
+        except OSError as exc:
+            raise StorageMetadataError(
+                f"Unable to read encrypted database header: {candidate}"
+            ) from exc
+        if len(salt) != SQLCIPHER_SALT_BYTES or salt == SQLITE_HEADER:
+            raise StorageMetadataError("Encrypted database salt is missing or invalid")
+        return salt
+
+    def _open_legacy_and_migrate(self, password: str) -> None:
+        """Open the former two-file format and atomically bind it to this device."""
+        self._metadata = KdfMetadata.read(self._metadata_path)
+        self.database_salt = None
+        self.key = self._derive_legacy_key(password, self._metadata)
+        self._activate_pending_restore()
+        self._resolve_interrupted_rekey(password)
+        self._broker = SqlCipherConnectionBroker(
+            self._path, self.key, logger=self.logger
+        )
+        self.conn, self.driver_identity = self._broker.open_writer()
+        self._bind_connection()
+        self.setup_database()
+        self.validate_database(self.conn)
+        self._migrate_legacy_database(password)
+
+    def _migrate_legacy_database(self, password: str) -> None:
+        """Copy-switch a validated legacy database into the device-bound format."""
+        target = self._path.with_suffix(".binding.target")
+        retained = self._path.with_suffix(".pre-binding.sqlcipher")
+        retained_metadata = self._metadata_path.with_suffix(".pre-binding.json")
+        new_salt = os.urandom(SQLCIPHER_SALT_BYTES)
+        new_key = self._derive_bound_key(password, new_salt)
+
+        assert self.conn is not None
+        self.conn.commit()
+        self._remove_database_family(target)
+        export_database(
+            self.conn,
+            target,
+            new_key,
+            target_salt=new_salt,
+        )
+        self._validate_external(target, new_key, new_salt)
+        self._close_connection()
+
+        self._remove_database_family(retained)
+        retained_metadata.unlink(missing_ok=True)
+        shutil.copy2(self._metadata_path, retained_metadata)
+        journal = BindingMigrationJournal(
+            version=BINDING_MIGRATION_VERSION,
+            phase="ready",
+            old_database_sha256=sha256_file(self._path),
+            target_sha256=sha256_file(target),
+            target_path=str(target),
+            retained_path=str(retained),
+            retained_metadata_path=str(retained_metadata),
+        )
+        write_journal(self._binding_journal, journal)
+
+        try:
+            os.replace(self._path, retained)
+            os.replace(target, self._path)
+            self.database_salt = new_salt
+            self.key = new_key
+            self._broker = SqlCipherConnectionBroker(
+                self._path,
+                self.key,
+                database_salt=self.database_salt,
+                logger=self.logger,
+            )
+            self.conn, self.driver_identity = self._broker.open_writer()
+            self._bind_connection()
+            self.setup_database()
+            self.validate_database(self.conn)
+            self._finalize_binding_migration()
+            self.open_status = DatabaseOpenStatus.MIGRATED_TO_DEVICE_BOUND
+        except BaseException as exc:
+            self.logger.exception(
+                "Device-binding migration failed; restoring the legacy database"
+            )
+            self._close_connection()
+            if retained.exists():
+                self._remove_database_family(self._path)
+                os.replace(retained, self._path)
+            if retained_metadata.exists() and not self._metadata_path.exists():
+                os.replace(retained_metadata, self._metadata_path)
+            retained_metadata.unlink(missing_ok=True)
+            self._remove_database_family(target)
+            self._binding_journal.unlink(missing_ok=True)
+            raise StorageMetadataError(
+                "Device-binding migration failed and was rolled back"
+            ) from exc
+
+    def _inspect_binding_migration(self) -> bool:
+        """Recover or resume an interrupted legacy-to-device-bound switch."""
+        if not self._binding_journal.exists():
+            return False
+        journal = read_json(self._binding_journal)
+        if (
+            journal.get("version") != BINDING_MIGRATION_VERSION
+            or journal.get("phase") != "ready"
+        ):
+            raise StorageMetadataError("Unsupported device-binding migration journal")
+        target = self._validated_journal_path(
+            journal,
+            "target_path",
+            self._path.with_suffix(".binding.target"),
+        )
+        retained = self._validated_journal_path(
+            journal,
+            "retained_path",
+            self._path.with_suffix(".pre-binding.sqlcipher"),
+        )
+        retained_metadata = self._validated_journal_path(
+            journal,
+            "retained_metadata_path",
+            self._metadata_path.with_suffix(".pre-binding.json"),
+        )
+        if not self._path.is_file():
+            if not retained.is_file():
+                raise StorageMetadataError(
+                    "Interrupted device-binding migration has no recoverable database"
+                )
+            os.replace(retained, self._path)
+            if retained_metadata.is_file() and not self._metadata_path.exists():
+                os.replace(retained_metadata, self._metadata_path)
+            retained_metadata.unlink(missing_ok=True)
+            self._remove_database_family(target)
+            self._binding_journal.unlink(missing_ok=True)
+            return False
+
+        live_sha256 = sha256_file(self._path)
+        if live_sha256 == journal.get("old_database_sha256"):
+            self._remove_database_family(target)
+            self._remove_database_family(retained)
+            retained_metadata.unlink(missing_ok=True)
+            self._binding_journal.unlink(missing_ok=True)
+            return False
+        if live_sha256 == journal.get("target_sha256"):
+            return True
+        if (
+            retained.is_file()
+            and sha256_file(retained) == journal.get("old_database_sha256")
+        ):
+            self._remove_database_family(self._path)
+            os.replace(retained, self._path)
+            if retained_metadata.is_file() and not self._metadata_path.exists():
+                os.replace(retained_metadata, self._metadata_path)
+            retained_metadata.unlink(missing_ok=True)
+            self._remove_database_family(target)
+            self._binding_journal.unlink(missing_ok=True)
+            return False
+        raise StorageMetadataError(
+            "Interrupted device-binding migration cannot be recovered safely"
+        )
+
+    def _finalize_binding_migration(self) -> None:
+        if not self._binding_journal.exists():
+            self._metadata_path.unlink(missing_ok=True)
+            return
+        journal = read_json(self._binding_journal)
+        target = self._validated_journal_path(
+            journal,
+            "target_path",
+            self._path.with_suffix(".binding.target"),
+        )
+        retained = self._validated_journal_path(
+            journal,
+            "retained_path",
+            self._path.with_suffix(".pre-binding.sqlcipher"),
+        )
+        retained_metadata = self._validated_journal_path(
+            journal,
+            "retained_metadata_path",
+            self._metadata_path.with_suffix(".pre-binding.json"),
+        )
+        self._metadata_path.unlink(missing_ok=True)
+        retained_metadata.unlink(missing_ok=True)
+        self._remove_database_family(retained)
+        self._remove_database_family(target)
+        self._binding_journal.unlink(missing_ok=True)
+
+    @staticmethod
+    def _validated_journal_path(
+        journal: dict[str, Any],
+        field: str,
+        expected: Path,
+    ) -> Path:
+        candidate = Path(str(journal.get(field, ""))).resolve()
+        if candidate != expected.resolve():
+            raise StorageMetadataError(f"Unsafe path in operation journal: {field}")
+        return candidate
 
     def _bind_connection(self) -> None:
         assert self.conn is not None
@@ -358,18 +589,28 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
             )
             try:
                 database_copy = stage_dir / "database.sqlcipher"
-                metadata_copy = stage_dir / "estimation.kdf.json"
-                export_database(self.conn, database_copy, self.key)
-                self._metadata.write(metadata_copy)
-                self._validate_external(database_copy, self.key)
+                assert self.database_salt is not None
+                export_database(
+                    self.conn,
+                    database_copy,
+                    self.key,
+                    target_salt=self.database_salt,
+                )
+                self._validate_external(
+                    database_copy,
+                    self.key,
+                    self.database_salt,
+                )
                 schema_version = self._check_schema_version()
                 manifest = BackupManifest(
                     version=BACKUP_FORMAT_VERSION,
                     created_utc=datetime.now(UTC).isoformat(),
                     database_sha256=sha256_file(database_copy),
-                    kdf_sha256=sha256_file(metadata_copy),
                     schema_version=schema_version,
                     sqlcipher_version=self.driver_identity.sqlcipher_version,
+                    device_binding_fingerprint=(
+                        crypto_utils.device_binding_fingerprint(self._device_secret)
+                    ),
                 )
                 manifest_bytes = (
                     json.dumps(
@@ -385,7 +626,6 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
                     archive_stage, "w", compression=zipfile.ZIP_STORED
                 ) as archive:
                     archive.write(database_copy, "database.sqlcipher")
-                    archive.write(metadata_copy, "estimation.kdf.json")
                     archive.writestr("manifest.json", manifest_bytes)
                     archive.writestr("manifest.sha256", manifest_digest + b"\n")
                 os.replace(archive_stage, destination_path)
@@ -411,7 +651,6 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
                 with zipfile.ZipFile(archive_path, "r") as archive:
                     expected_names = {
                         "database.sqlcipher",
-                        "estimation.kdf.json",
                         "manifest.json",
                         "manifest.sha256",
                     }
@@ -423,23 +662,42 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
                 if not hashlib.sha256(manifest_bytes).hexdigest() == recorded:
                     raise StorageMetadataError("Backup manifest digest mismatch")
                 manifest = read_json(stage_dir / "manifest.json")
+                if manifest.get("version") != BACKUP_FORMAT_VERSION:
+                    raise StorageMetadataError(
+                        "Portable or unsupported database backups cannot be restored "
+                        "into a machine-bound installation"
+                    )
+                expected_binding = crypto_utils.device_binding_fingerprint(
+                    self._device_secret
+                )
+                if manifest.get("device_binding_fingerprint") != expected_binding:
+                    raise StorageMetadataError(
+                        "This database backup belongs to a different PC"
+                    )
                 archived_db = stage_dir / "database.sqlcipher"
-                archived_kdf = stage_dir / "estimation.kdf.json"
                 if sha256_file(archived_db) != manifest.get("database_sha256"):
                     raise StorageMetadataError("Backup database digest mismatch")
-                if sha256_file(archived_kdf) != manifest.get("kdf_sha256"):
-                    raise StorageMetadataError("Backup KDF digest mismatch")
-                backup_metadata = KdfMetadata.read(archived_kdf)
-                backup_key = self._derive_key(archive_password, backup_metadata)
-                source_broker = SqlCipherConnectionBroker(archived_db, backup_key)
+                backup_salt = self._read_database_salt(archived_db)
+                backup_key = self._derive_bound_key(archive_password, backup_salt)
+                source_broker = SqlCipherConnectionBroker(
+                    archived_db,
+                    backup_key,
+                    database_salt=backup_salt,
+                )
                 source, _ = source_broker.open_writer()
                 staged = self._path.with_suffix(".restore.staged")
                 self._remove_database_family(staged)
                 try:
-                    export_database(source, staged, self.key)
+                    assert self.database_salt is not None
+                    export_database(
+                        source,
+                        staged,
+                        self.key,
+                        target_salt=self.database_salt,
+                    )
                 finally:
                     source.close()
-                self._validate_external(staged, self.key)
+                self._validate_external(staged, self.key, self.database_salt)
                 journal = RestoreJournal(
                     version=JOURNAL_VERSION,
                     phase="ready",
@@ -461,59 +719,66 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
 
     def _copy_switch_rekey(self, new_password: str) -> MaintenanceOutcome:
         old_key = self.key
-        new_metadata = KdfMetadata.create()
-        new_key = self._derive_key(new_password, new_metadata)
+        old_salt = self.database_salt
+        assert old_salt is not None
+        new_salt = os.urandom(SQLCIPHER_SALT_BYTES)
+        new_key = self._derive_bound_key(new_password, new_salt)
         target = self._path.with_suffix(".rekey.target")
         retained = self._path.with_suffix(".pre-rekey.sqlcipher")
-        retained_metadata = self._metadata_path.with_suffix(".pre-rekey.json")
-        metadata_target = self._metadata_path.with_suffix(".json.rekey")
         with self._broker.maintenance():
             assert self.conn is not None
             self.conn.commit()
             self._remove_database_family(target)
-            export_database(self.conn, target, new_key)
-            self._validate_external(target, new_key)
-            new_metadata.write(metadata_target)
+            export_database(
+                self.conn,
+                target,
+                new_key,
+                target_salt=new_salt,
+            )
+            self._validate_external(target, new_key, new_salt)
+            self._close_connection()
             journal = RekeyJournal(
                 version=JOURNAL_VERSION,
                 phase="ready",
                 old_database_sha256=sha256_file(self._path),
-                old_metadata_sha256=sha256_file(self._metadata_path),
                 target_path=str(target),
                 retained_path=str(retained),
-                retained_metadata_path=str(retained_metadata),
             )
             write_journal(self._rekey_journal, journal)
-            self._close_connection()
             try:
                 self._remove_database_family(retained)
-                retained_metadata.unlink(missing_ok=True)
-                shutil.copy2(self._metadata_path, retained_metadata)
                 os.replace(self._path, retained)
                 os.replace(target, self._path)
-                os.replace(metadata_target, self._metadata_path)
-                self._metadata = new_metadata
+                self.database_salt = new_salt
                 self.key = new_key
                 self._broker = SqlCipherConnectionBroker(
-                    self._path, self.key, logger=self.logger
+                    self._path,
+                    self.key,
+                    database_salt=self.database_salt,
+                    logger=self.logger,
                 )
                 self.conn, self.driver_identity = self._broker.open_writer()
                 self._bind_connection()
                 self.validate_database(self.conn)
                 self._rekey_journal.unlink(missing_ok=True)
+                self._remove_database_family(retained)
             except BaseException as exc:
                 self.logger.exception("Rekey activation failed; rolling back")
                 self._close_connection()
                 if retained.exists():
                     self._remove_database_family(self._path)
                     os.replace(retained, self._path)
-                if retained_metadata.exists():
-                    os.replace(retained_metadata, self._metadata_path)
-                self._metadata = KdfMetadata.read(self._metadata_path)
+                self.database_salt = old_salt
                 self.key = old_key
-                self._broker = SqlCipherConnectionBroker(self._path, self.key)
+                self._broker = SqlCipherConnectionBroker(
+                    self._path,
+                    self.key,
+                    database_salt=self.database_salt,
+                )
                 self.conn, self.driver_identity = self._broker.open_writer()
                 self._bind_connection()
+                self._rekey_journal.unlink(missing_ok=True)
+                self._remove_database_family(target)
                 return MaintenanceOutcome(
                     MaintenanceStatus.ROLLED_BACK,
                     f"Password change failed and the original database was restored: {exc}",
@@ -521,11 +786,21 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         return MaintenanceOutcome(
             MaintenanceStatus.SUCCESS,
             "Database was copied, validated, and switched to the new password",
-            str(retained),
+            None,
         )
 
-    def _validate_external(self, path: Path, key: bytes) -> DriverIdentity:
-        broker = SqlCipherConnectionBroker(path, key, logger=self.logger)
+    def _validate_external(
+        self,
+        path: Path,
+        key: bytes,
+        database_salt: bytes | None = None,
+    ) -> DriverIdentity:
+        broker = SqlCipherConnectionBroker(
+            path,
+            key,
+            database_salt=database_salt,
+            logger=self.logger,
+        )
         connection, identity = broker.open_writer()
         try:
             self.validate_database(connection)
@@ -537,17 +812,39 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         if not self._restore_journal.exists():
             return
         journal = read_json(self._restore_journal)
-        if journal.get("version") != JOURNAL_VERSION or journal.get("phase") != "ready":
+        if journal.get("version") not in {1, JOURNAL_VERSION} or journal.get(
+            "phase"
+        ) != "ready":
             raise StorageMetadataError("Unsupported interrupted restore journal")
-        staged = Path(str(journal.get("staged_path", "")))
-        retained = Path(str(journal.get("retained_path", "")))
+        staged = self._validated_journal_path(
+            journal,
+            "staged_path",
+            self._path.with_suffix(".restore.staged"),
+        )
+        retained = self._validated_journal_path(
+            journal,
+            "retained_path",
+            self._path.with_suffix(".pre-restore.sqlcipher"),
+        )
         if not staged.is_file() or sha256_file(staged) != journal.get("staged_sha256"):
             raise StorageMetadataError("Pending restore target is missing or corrupt")
+        if (
+            self.database_salt is not None
+            and self._read_database_salt(staged) != self.database_salt
+        ):
+            failed = self._path.with_suffix(".restore.failed")
+            self._remove_database_family(failed)
+            os.replace(staged, failed)
+            self._restore_journal.unlink(missing_ok=True)
+            self.logger.error(
+                "Pending restore was quarantined because its database salt is invalid"
+            )
+            return
         self._remove_database_family(retained)
         os.replace(self._path, retained)
         os.replace(staged, self._path)
         try:
-            self._validate_external(self._path, self.key)
+            self._validate_external(self._path, self.key, self.database_salt)
         except BaseException as exc:
             failed = self._path.with_suffix(".restore.failed")
             self._remove_database_family(failed)
@@ -565,47 +862,147 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
     def _resolve_interrupted_rekey(self, password: str) -> None:
         if not self._rekey_journal.exists():
             return
-        # An unfinished switch is never selected by filename. If the live DB still
-        # authenticates under current metadata, retain it and discard only the target.
         journal = read_json(self._rekey_journal)
-        target = Path(str(journal.get("target_path", "")))
-        retained = Path(str(journal.get("retained_path", "")))
-        retained_metadata = Path(str(journal.get("retained_metadata_path", "")))
+        if journal.get("version") == 1 or self.database_salt is None:
+            self._resolve_legacy_interrupted_rekey(password, journal)
+            return
+        if (
+            journal.get("version") != JOURNAL_VERSION
+            or journal.get("phase") != "ready"
+        ):
+            raise StorageMetadataError("Unsupported interrupted rekey journal")
+        target = self._validated_journal_path(
+            journal,
+            "target_path",
+            self._path.with_suffix(".rekey.target"),
+        )
+        retained = self._validated_journal_path(
+            journal,
+            "retained_path",
+            self._path.with_suffix(".pre-rekey.sqlcipher"),
+        )
         try:
-            self._validate_external(self._path, self.key)
+            self._validate_external(self._path, self.key, self.database_salt)
         except BaseException as exc:
             if not retained.is_file():
                 raise StorageMetadataError(
                     "Interrupted password change requires recovery"
                 ) from exc
+            retained_salt = self._read_database_salt(retained)
+            retained_key = self._derive_bound_key(password, retained_salt)
+            self._validate_external(retained, retained_key, retained_salt)
+            self._remove_database_family(self._path)
+            os.replace(retained, self._path)
+            self.database_salt = retained_salt
+            self.key = retained_key
+            self._validate_external(
+                self._path,
+                self.key,
+                self.database_salt,
+            )
+        self._remove_database_family(target)
+        self._remove_database_family(retained)
+        self._rekey_journal.unlink(missing_ok=True)
+
+    def _resolve_legacy_interrupted_rekey(
+        self,
+        password: str,
+        journal: dict[str, Any],
+    ) -> None:
+        if journal.get("phase") != "ready":
+            raise StorageMetadataError("Unsupported interrupted legacy rekey journal")
+        target = self._validated_journal_path(
+            journal,
+            "target_path",
+            self._path.with_suffix(".rekey.target"),
+        )
+        retained = self._validated_journal_path(
+            journal,
+            "retained_path",
+            self._path.with_suffix(".pre-rekey.sqlcipher"),
+        )
+        retained_metadata = self._validated_journal_path(
+            journal,
+            "retained_metadata_path",
+            self._metadata_path.with_suffix(".pre-rekey.json"),
+        )
+        try:
+            self._validate_external(self._path, self.key)
+        except BaseException as exc:
+            if not retained.is_file():
+                raise StorageMetadataError(
+                    "Interrupted legacy password change requires recovery"
+                ) from exc
             self._remove_database_family(self._path)
             os.replace(retained, self._path)
             if retained_metadata.is_file():
                 os.replace(retained_metadata, self._metadata_path)
-                self._metadata = KdfMetadata.read(self._metadata_path)
-                self.key = self._derive_key(password, self._metadata)
+            self._metadata = KdfMetadata.read(self._metadata_path)
+            self.key = self._derive_legacy_key(password, self._metadata)
             self._validate_external(self._path, self.key)
         self._remove_database_family(target)
+        self._remove_database_family(retained)
+        retained_metadata.unlink(missing_ok=True)
         self._rekey_journal.unlink(missing_ok=True)
 
     def _recover_missing_live_from_journal(self) -> None:
         if self._path.exists():
             return
+        if self._binding_journal.exists():
+            journal = read_json(self._binding_journal)
+            retained = self._validated_journal_path(
+                journal,
+                "retained_path",
+                self._path.with_suffix(".pre-binding.sqlcipher"),
+            )
+            retained_metadata = self._validated_journal_path(
+                journal,
+                "retained_metadata_path",
+                self._metadata_path.with_suffix(".pre-binding.json"),
+            )
+            target = self._validated_journal_path(
+                journal,
+                "target_path",
+                self._path.with_suffix(".binding.target"),
+            )
+            if not retained.is_file():
+                raise StorageMetadataError(
+                    "Interrupted device-binding migration has no recoverable database"
+                )
+            os.replace(retained, self._path)
+            if retained_metadata.is_file() and not self._metadata_path.exists():
+                os.replace(retained_metadata, self._metadata_path)
+            self._remove_database_family(target)
+            self._binding_journal.unlink(missing_ok=True)
+            return
         if self._rekey_journal.exists():
             journal = read_json(self._rekey_journal)
-            retained = Path(str(journal.get("retained_path", "")))
-            retained_metadata = Path(str(journal.get("retained_metadata_path", "")))
+            retained = self._validated_journal_path(
+                journal,
+                "retained_path",
+                self._path.with_suffix(".pre-rekey.sqlcipher"),
+            )
             if not retained.is_file():
                 raise StorageMetadataError(
                     "Interrupted rekey has no recoverable database"
                 )
             os.replace(retained, self._path)
-            if retained_metadata.is_file():
-                os.replace(retained_metadata, self._metadata_path)
+            if journal.get("version") == 1:
+                retained_metadata = self._validated_journal_path(
+                    journal,
+                    "retained_metadata_path",
+                    self._metadata_path.with_suffix(".pre-rekey.json"),
+                )
+                if retained_metadata.is_file():
+                    os.replace(retained_metadata, self._metadata_path)
             return
         if self._restore_journal.exists():
             journal = read_json(self._restore_journal)
-            retained = Path(str(journal.get("retained_path", "")))
+            retained = self._validated_journal_path(
+                journal,
+                "retained_path",
+                self._path.with_suffix(".pre-restore.sqlcipher"),
+            )
             if not retained.is_file():
                 raise StorageMetadataError(
                     "Interrupted restore has no recoverable database"

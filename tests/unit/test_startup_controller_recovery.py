@@ -1,10 +1,13 @@
 import logging
 
+import pytest
+
 from silverestimate.controllers import startup_controller as startup_module
 from silverestimate.controllers.startup_controller import (
     StartupController,
     StartupStatus,
 )
+from silverestimate.security.credential_store import CredentialStoreError
 from silverestimate.services.auth_service import AuthenticationResult
 
 
@@ -50,3 +53,34 @@ def test_authenticate_wipe_skips_database_initialization(monkeypatch):
     assert result.status == StartupStatus.WIPED
     assert calls["wipe"] == 1
     assert calls["db_init"] == 0
+
+
+def test_device_binding_refuses_existing_bound_database_without_local_secret(
+    tmp_path, monkeypatch, settings_stub
+):
+    path = tmp_path / "estimation.db"
+    path.write_bytes(b"bound-database")
+    monkeypatch.setattr(startup_module, "DB_PATH", str(path))
+
+    controller = StartupController(logger=logging.getLogger("test-device-binding"))
+
+    with pytest.raises(CredentialStoreError, match="copied databases"):
+        controller._prepare_device_binding()
+
+
+def test_device_binding_is_created_for_authenticated_legacy_database(
+    tmp_path, monkeypatch, settings_stub
+):
+    path = tmp_path / "estimation.db"
+    path.write_bytes(b"legacy-database")
+    path.with_name("estimation.kdf.json").write_text("{}")
+    monkeypatch.setattr(startup_module, "DB_PATH", str(path))
+
+    controller = StartupController(
+        logger=logging.getLogger("test-legacy-device-binding")
+    )
+    first = controller._prepare_device_binding()
+    second = controller._prepare_device_binding()
+
+    assert first == second
+    assert len(first) == 32

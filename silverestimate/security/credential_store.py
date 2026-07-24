@@ -1,8 +1,10 @@
-"""Secure storage utilities for hashed credentials."""
+"""Secure OS-backed storage for password hashes and device-binding material."""
 
 from __future__ import annotations
 
+import base64
 import logging
+import secrets
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -36,6 +38,9 @@ else:
 
 
 SERVICE_NAME = "SilverEstimateApp"
+DEVICE_BINDING_BYTES = 32
+DEVICE_BINDING_VERSION = "v1"
+_WINDOWS_KEYRING_PREFIX = "keyring.backends.windows."
 _backend_status_cache: Optional["CredentialBackendStatus"] = None
 _backend_status_cache_keyring_id: Optional[int] = None
 
@@ -60,6 +65,7 @@ SUPPORTED_CREDENTIAL_KINDS = (
     "pending_backup",
     "recovery_main",
     "recovery_backup",
+    "device_binding",
 )
 
 _ENTRIES = {
@@ -69,6 +75,7 @@ _ENTRIES = {
     "pending_backup": "pending_backup_password_hash",
     "recovery_main": "recovery_main_password_hash",
     "recovery_backup": "recovery_backup_password_hash",
+    "device_binding": "database_device_binding_v1",
 }
 
 
@@ -142,10 +149,30 @@ def _ensure_keyring() -> Any:
     return keyring
 
 
+def _require_windows_device_backend(kr: Any) -> Any:
+    """Return the Windows vault backend required for non-roaming device secrets."""
+    try:
+        backend = kr.get_keyring()
+    except Exception as exc:
+        raise CredentialStoreError(
+            f"Could not initialize Windows Credential Manager: {exc}"
+        ) from exc
+    backend_type = type(backend)
+    backend_name = f"{backend_type.__module__}.{backend_type.__name__}"
+    if not backend_name.lower().startswith(_WINDOWS_KEYRING_PREFIX):
+        raise CredentialStoreError(
+            "Device binding requires the Windows Credential Manager backend; "
+            f"active backend is {backend_name}."
+        )
+    return backend
+
+
 def get_password_hash(kind: str) -> Optional[str]:
-    """Retrieve the hashed password for ``kind`` from the secure store."""
+    """Retrieve a credential value for ``kind`` from the secure store."""
     secure_id = _get_secure_id(kind)
     kr = _ensure_keyring()
+    if kind == "device_binding":
+        _require_windows_device_backend(kr)
     try:
         value = kr.get_password(SERVICE_NAME, secure_id)
     except KeyringError as exc:
@@ -165,12 +192,21 @@ def set_password_hash(
     """Persist ``value`` for ``kind`` in the secure store."""
     secure_id = _get_secure_id(kind)
     kr = _ensure_keyring()
+    backend = None
+    original_persist: Any = None
     try:
+        if kind == "device_binding":
+            backend = _require_windows_device_backend(kr)
+            original_persist = getattr(backend, "persist", None)
+            backend.persist = "local machine"
         kr.set_password(SERVICE_NAME, secure_id, value)
-    except KeyringError as exc:
+    except (KeyringError, AttributeError, TypeError, ValueError) as exc:
         raise CredentialStoreError(
             f"Failed to store credential '{kind}': {exc}"
         ) from exc
+    finally:
+        if backend is not None:
+            backend.persist = original_persist
 
     if logger:
         logger.debug("Stored credential '%s' in secure store", kind)
@@ -187,6 +223,10 @@ def delete_password_hash(
         if logger:
             logger.debug("Keyring unavailable while deleting credential '%s'", kind)
         return
+
+    if kind == "device_binding":
+        kr = _ensure_keyring()
+        _require_windows_device_backend(kr)
 
     try:
         keyring.delete_password(SERVICE_NAME, secure_id)
@@ -206,3 +246,50 @@ def delete_password_hash(
         raise CredentialStoreError(
             f"Failed to delete credential '{kind}': {exc}"
         ) from exc
+
+
+def get_device_binding_secret() -> bytes | None:
+    """Return the installation's device-bound database secret, if registered."""
+    encoded = get_password_hash("device_binding")
+    if encoded is None:
+        return None
+    prefix = f"{DEVICE_BINDING_VERSION}:"
+    if not encoded.startswith(prefix):
+        raise CredentialStoreError("Device-binding credential has an unknown version")
+    try:
+        secret = base64.b64decode(encoded[len(prefix) :], validate=True)
+    except (ValueError, TypeError) as exc:
+        raise CredentialStoreError("Device-binding credential is malformed") from exc
+    if len(secret) != DEVICE_BINDING_BYTES:
+        raise CredentialStoreError("Device-binding credential has an invalid length")
+    return secret
+
+
+def create_device_binding_secret(
+    *,
+    logger: Optional[logging.Logger] = None,
+) -> bytes:
+    """Create or reassert the device secret using local-machine persistence."""
+    existing = get_device_binding_secret()
+    if existing is not None:
+        encoded = (
+            f"{DEVICE_BINDING_VERSION}:"
+            f"{base64.b64encode(existing).decode('ascii')}"
+        )
+        set_password_hash("device_binding", encoded, logger=logger)
+        return existing
+    secret = secrets.token_bytes(DEVICE_BINDING_BYTES)
+    encoded = (
+        f"{DEVICE_BINDING_VERSION}:"
+        f"{base64.b64encode(secret).decode('ascii')}"
+    )
+    set_password_hash("device_binding", encoded, logger=logger)
+    return secret
+
+
+def delete_device_binding_secret(
+    *,
+    logger: Optional[logging.Logger] = None,
+) -> None:
+    """Remove the device-bound database secret from the OS credential store."""
+    delete_password_hash("device_binding", logger=logger)

@@ -62,6 +62,7 @@ This guide documents the primary controller, service, and persistence APIs expos
 ### Credential Store (silverestimate/security/credential_store.py)
 - **get_backend_status() -> CredentialBackendStatus** - reports whether the active operating-system keyring backend is trusted and usable.
 - **get_password_hash(kind: str) -> Optional[str] / set_password_hash(kind, value, *, logger=None) / delete_password_hash(kind, *, logger=None)** - read, write, or remove the `main` and `backup` Argon2 hashes in the OS keyring. Credential hashes are not read from or written to QSettings.
+- **get_device_binding_secret() / create_device_binding_secret() / delete_device_binding_secret()** - manage the random 256-bit secret in local-machine Windows Credential Manager storage that prevents a copied database from opening on another PC.
 
 ### SettingsService (silverestimate/services/settings_service.py)
     SettingsService()
@@ -106,7 +107,7 @@ This guide documents the primary controller, service, and persistence APIs expos
 ## Persistence Layer
 
 ### DatabaseManager (silverestimate/persistence/database_manager.py)
-    DatabaseManager(db_path: str, password: str)
+    DatabaseManager(db_path: str, password: str, *, device_secret: bytes)
 
 Responsibilities:
 - Open the live SQLCipher database directly through the keyed broker and expose repository compatibility cursors.
@@ -122,7 +123,7 @@ Key Public Methods:
 - **open_read_connection(cancel_event=None)** – return a keyed read-only worker connection owned by the caller.
 - **create_encrypted_backup(destination=None) -> MaintenanceOutcome** – export and validate a `.sedbbackup` archive.
 - **stage_encrypted_restore(path, archive_password) -> MaintenanceOutcome** – validate and stage restore activation for the next open.
-- **change_passwords(new_password) -> MaintenanceOutcome** – copy, validate, switch, and retain rollback material.
+- **change_passwords(new_password) -> MaintenanceOutcome** – copy, validate, switch, and remove rollback material after successful activation.
 - **close()** – commit, checkpoint when possible, and close the live encrypted connection.
 
 New integrations should favour the role-specific repositories below instead of adding more forwarding methods to `DatabaseManager`.
@@ -155,9 +156,9 @@ New integrations should favour the role-specific repositories below instead of a
 
 - **ItemCacheController (silverestimate/infrastructure/item_cache.py)** - shared cache utilised by ItemsRepository for hot lookups.
 - **SqlCipherConnectionBroker (silverestimate/persistence/database_driver.py)** - owns the raw database key, verifies the controlled SQLCipher runtime, configures direct live and worker connections, and serializes maintenance operations.
-- **KdfMetadata and maintenance journals (silverestimate/persistence/storage_metadata.py)** - strict versioned KDF plus backup, rekey, and restore records with canonical JSON and atomic publication.
+- **KdfMetadata and maintenance journals (silverestimate/persistence/storage_metadata.py)** - legacy two-file migration metadata plus binding, backup, rekey, and restore records with canonical JSON and atomic publication.
 - **InlineStatusController (silverestimate/ui/inline_status.py)** - helper used across UI widgets to surface status messages without tight UI coupling.
-- **CredentialStore (silverestimate/security/credential_store.py)** - OS keyring abstraction for hashed credentials.
+- **CredentialStore (silverestimate/security/credential_store.py)** - OS keyring abstraction for hashed credentials and machine-binding material.
 - **Display formatting (silverestimate/ui/display_formatting.py)** - `format_display_date()` and `format_rupees()` provide consistent user-facing dates and Indian-number currency grouping.
 
 ## UI Facades

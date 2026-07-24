@@ -75,6 +75,7 @@ def test_backend_status_cache_invalidates_when_keyring_object_changes(monkeypatc
         "pending_backup",
         "recovery_main",
         "recovery_backup",
+        "device_binding",
     ),
 )
 def test_all_database_credential_kinds_use_the_os_keyring(monkeypatch, kind):
@@ -111,3 +112,64 @@ def test_all_database_credential_kinds_use_the_os_keyring(monkeypatch, kind):
 def test_unknown_credential_kind_is_rejected_before_keyring_access():
     with pytest.raises(ValueError, match="Unknown credential kind"):
         credential_store.get_password_hash("unknown")
+
+
+def test_device_binding_secret_is_stable_and_deletable(monkeypatch):
+    stored = {}
+    writes = 0
+
+    class WindowsBackend:
+        __module__ = "keyring.backends.Windows"
+        persist = "enterprise"
+
+    backend = WindowsBackend()
+
+    class FakeKeyring:
+        @staticmethod
+        def get_keyring():
+            return backend
+
+        @staticmethod
+        def get_password(service, secure_id):
+            return stored.get((service, secure_id))
+
+        @staticmethod
+        def set_password(service, secure_id, value):
+            nonlocal writes
+            assert backend.persist == "local machine"
+            writes += 1
+            stored[(service, secure_id)] = value
+
+        @staticmethod
+        def delete_password(service, secure_id):
+            stored.pop((service, secure_id), None)
+
+    monkeypatch.setattr(credential_store, "keyring", FakeKeyring)
+
+    first = credential_store.create_device_binding_secret()
+    second = credential_store.create_device_binding_secret()
+
+    assert first == second
+    assert len(first) == 32
+    assert writes == 2
+    assert backend.persist == "enterprise"
+    credential_store.delete_device_binding_secret()
+    assert credential_store.get_device_binding_secret() is None
+
+
+def test_device_binding_rejects_non_windows_keyring(monkeypatch):
+    class SecretServiceBackend:
+        __module__ = "keyring.backends.SecretService"
+
+    class FakeKeyring:
+        @staticmethod
+        def get_keyring():
+            return SecretServiceBackend()
+
+    monkeypatch.setattr(credential_store, "keyring", FakeKeyring)
+
+    with pytest.raises(
+        CredentialStoreError,
+        match="requires the Windows Credential Manager backend",
+    ):
+        credential_store.create_device_binding_secret()

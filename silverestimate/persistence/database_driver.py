@@ -27,6 +27,7 @@ EXPECTED_SQLCIPHER_SERIES = "4.17."
 EXPECTED_TEMP_STORE = "TEMP_STORE=2"
 EXPECTED_THREADSAFE = "THREADSAFE=1"
 DEFAULT_CACHE_KIB = 20_000
+SQLCIPHER_SALT_BYTES = 16
 
 
 class DriverUnavailableError(RuntimeError):
@@ -78,10 +79,13 @@ def require_driver() -> Any:
     return dbapi
 
 
-def _quote_raw_key(key: bytes) -> str:
+def _quote_raw_key(key: bytes, database_salt: bytes | None = None) -> str:
     if len(key) != 32:
         raise ValueError("SQLCipher raw keys must contain exactly 32 bytes")
-    return f"\"x'{key.hex()}'\""
+    if database_salt is not None and len(database_salt) != SQLCIPHER_SALT_BYTES:
+        raise ValueError("SQLCipher database salts must contain exactly 16 bytes")
+    payload = key if database_salt is None else key + database_salt
+    return f"\"x'{payload.hex()}'\""
 
 
 def _pragma_scalar(connection: Connection, pragma: str) -> str:
@@ -124,11 +128,14 @@ def configure_connection(
     connection: Connection,
     *,
     raw_key: bytes,
+    database_salt: bytes | None = None,
     writer: bool,
     authenticate: bool = True,
 ) -> DriverIdentity:
     """Key, authenticate, and harden one connection in the required order."""
-    connection.execute(f"PRAGMA key = {_quote_raw_key(raw_key)}")
+    connection.execute(
+        f"PRAGMA key = {_quote_raw_key(raw_key, database_salt)}"
+    )
     try:
         identity = verify_driver(connection)
         if authenticate:
@@ -188,10 +195,16 @@ class SqlCipherConnectionBroker:
         database_path: str | Path,
         raw_key: bytes,
         *,
+        database_salt: bytes | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
         self.database_path = str(database_path)
         self._raw_key = bytes(raw_key)
+        if database_salt is not None and len(database_salt) != SQLCIPHER_SALT_BYTES:
+            raise ValueError("SQLCipher database salts must contain exactly 16 bytes")
+        self._database_salt = (
+            bytes(database_salt) if database_salt is not None else None
+        )
         self._logger = logger or logging.getLogger(__name__)
         self._condition = threading.Condition()
         self._maintenance = False
@@ -202,10 +215,21 @@ class SqlCipherConnectionBroker:
     def raw_key(self) -> bytes:
         return self._raw_key
 
-    def replace_key(self, raw_key: bytes) -> None:
+    @property
+    def database_salt(self) -> bytes | None:
+        return self._database_salt
+
+    def replace_key(
+        self, raw_key: bytes, *, database_salt: bytes | None = None
+    ) -> None:
         if len(raw_key) != 32:
             raise ValueError("SQLCipher key must be 32 bytes")
+        if database_salt is not None and len(database_salt) != SQLCIPHER_SALT_BYTES:
+            raise ValueError("SQLCipher database salts must contain exactly 16 bytes")
         self._raw_key = bytes(raw_key)
+        self._database_salt = (
+            bytes(database_salt) if database_salt is not None else None
+        )
 
     def open_writer(self, *, create: bool = False) -> tuple[Connection, DriverIdentity]:
         driver = require_driver()
@@ -217,6 +241,7 @@ class SqlCipherConnectionBroker:
             identity = configure_connection(
                 connection,
                 raw_key=self._raw_key,
+                database_salt=self._database_salt,
                 writer=True,
                 authenticate=not create,
             )
@@ -237,7 +262,11 @@ class SqlCipherConnectionBroker:
             connection = driver.connect(self.database_path, timeout=15.0)
             try:
                 configure_connection(
-                    connection, raw_key=self._raw_key, writer=False, authenticate=True
+                    connection,
+                    raw_key=self._raw_key,
+                    database_salt=self._database_salt,
+                    writer=False,
+                    authenticate=True,
                 )
             except BaseException:
                 connection.close()
@@ -292,12 +321,14 @@ def export_database(
     target_path: str | Path,
     target_key: bytes,
     *,
+    target_salt: bytes | None = None,
     schema: str = "silver_export",
 ) -> None:
     """Copy the open source into a different-key SQLCipher database."""
     target = str(Path(target_path).resolve()).replace("'", "''")
     source.execute(
-        f"ATTACH DATABASE '{target}' AS {schema} KEY {_quote_raw_key(target_key)}"
+        f"ATTACH DATABASE '{target}' AS {schema} "
+        f"KEY {_quote_raw_key(target_key, target_salt)}"
     )
     try:
         source.execute(f"SELECT sqlcipher_export('{schema}')").fetchone()
@@ -318,6 +349,7 @@ __all__ = [
     "OperationalError",
     "ReadConnection",
     "Row",
+    "SQLCIPHER_SALT_BYTES",
     "SqlCipherConnectionBroker",
     "configure_connection",
     "export_database",

@@ -153,6 +153,7 @@ def run_authentication(
     logger: Optional[logging.Logger] = None,
     *,
     parent: Optional[QWidget] = None,
+    db_path: str = DB_PATH,
 ) -> Optional[AuthenticationResult]:
     """Handle authentication flow using the LoginDialog."""
     logger = logger or logging.getLogger(__name__)
@@ -194,7 +195,27 @@ def run_authentication(
         )
         return None
 
-    if password_hash and backup_hash:
+    has_current_credentials = bool(password_hash and backup_hash)
+    has_pending_credentials = bool(pending_main_hash and pending_backup_hash)
+    if (
+        not has_current_credentials
+        and not has_pending_credentials
+        and Path(db_path).is_file()
+    ):
+        logger.critical(
+            "Existing machine-bound database has no local credential registration"
+        )
+        QMessageBox.critical(
+            parent,
+            "Device Binding Error",
+            "An existing encrypted database was found, but this Windows PC does not "
+            "have its required local credentials.\n\n"
+            "For security, a copied database cannot be adopted or opened on another "
+            "PC, even with the correct password.",
+        )
+        return None
+
+    if has_current_credentials or has_pending_credentials:
         logger.debug("Found existing password hashes, showing login dialog")
         attempt = 0
         while True:
@@ -220,24 +241,28 @@ def run_authentication(
                 return AuthenticationResult(wipe_requested=True, silent=False)
 
             entered_password = login_dialog.get_password()
-            main_verification = _verify_credential_password(
-                password_hash,
-                entered_password,
-                logger=logger,
-            )
-            if main_verification.verified:
-                if logger:
-                    logger.info("Authentication successful on attempt %s", attempt)
-                    logger.debug(
-                        "[perf] startup.auth_dialog_accepted_ms=%.2f t_unix=%.6f attempt=%s",
-                        (time.perf_counter() - flow_started_at) * 1000.0,
-                        time.time(),
-                        attempt,
-                    )
-                return AuthenticationResult(
-                    password=entered_password,
-                    rollback_pending_credentials=bool(pending_main_hash),
+            if password_hash:
+                main_verification = _verify_credential_password(
+                    password_hash,
+                    entered_password,
+                    logger=logger,
                 )
+                if main_verification.verified:
+                    if logger:
+                        logger.info(
+                            "Authentication successful on attempt %s", attempt
+                        )
+                        logger.debug(
+                            "[perf] startup.auth_dialog_accepted_ms=%.2f "
+                            "t_unix=%.6f attempt=%s",
+                            (time.perf_counter() - flow_started_at) * 1000.0,
+                            time.time(),
+                            attempt,
+                        )
+                    return AuthenticationResult(
+                        password=entered_password,
+                        rollback_pending_credentials=bool(pending_main_hash),
+                    )
             if pending_main_hash:
                 pending_main_verification = _verify_credential_password(
                     pending_main_hash,
@@ -250,19 +275,21 @@ def run_authentication(
                         pending_main_hash=pending_main_hash,
                         pending_backup_hash=pending_backup_hash,
                     )
-            backup_verification = _verify_credential_password(
-                backup_hash,
-                entered_password,
-                logger=logger,
-            )
-            if backup_verification.verified:
-                logger.debug(
-                    "[perf] startup.auth_dialog_accepted_ms=%.2f t_unix=%.6f attempt=%s mode=backup",
-                    (time.perf_counter() - flow_started_at) * 1000.0,
-                    time.time(),
-                    attempt,
+            if backup_hash:
+                backup_verification = _verify_credential_password(
+                    backup_hash,
+                    entered_password,
+                    logger=logger,
                 )
-                return AuthenticationResult(wipe_requested=True, silent=True)
+                if backup_verification.verified:
+                    logger.debug(
+                        "[perf] startup.auth_dialog_accepted_ms=%.2f "
+                        "t_unix=%.6f attempt=%s mode=backup",
+                        (time.perf_counter() - flow_started_at) * 1000.0,
+                        time.time(),
+                        attempt,
+                    )
+                    return AuthenticationResult(wipe_requested=True, silent=True)
             if pending_backup_hash:
                 pending_backup_verification = _verify_credential_password(
                     pending_backup_hash,
@@ -347,10 +374,13 @@ def perform_data_wipe(
             database.with_name(f"{database.stem}.kdf.json"),
             database.with_suffix(".rekey.json"),
             database.with_suffix(".restore.json"),
+            database.with_suffix(".binding.json"),
             database.with_suffix(".rekey.target"),
             database.with_suffix(".restore.staged"),
+            database.with_suffix(".binding.target"),
             database.with_suffix(".pre-rekey.sqlcipher"),
             database.with_suffix(".pre-restore.sqlcipher"),
+            database.with_suffix(".pre-binding.sqlcipher"),
         }
         explicit.update(parent_dir.glob("*.sedbbackup"))
         explicit.update(parent_dir.glob(f"{database.name}*"))
@@ -374,6 +404,7 @@ def perform_data_wipe(
             "pending_backup",
             "recovery_main",
             "recovery_backup",
+            "device_binding",
         ):
             try:
                 cred_logger = None if silent else logger

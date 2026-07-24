@@ -64,10 +64,11 @@ error dialog, so they remain visible even when Qt itself cannot load. The
 one-file executable attaches to an existing console without creating one for
 normal Explorer launches; run it from Command Prompt to capture loader output.
 
-The application and its encrypted database are portable and live together, so
-place the executable in a user-writable directory. Do not run it directly from
-inside the zip or from a protected directory such as `Program Files` unless its
-data directory has explicitly been made writable.
+The application executable can be moved, but an initialized encrypted database
+is bound to the Windows PC that created or migrated it. Place the executable in
+a user-writable directory. Do not run it directly from inside the zip or from a
+protected directory such as `Program Files` unless its data directory has
+explicitly been made writable.
 
 The canonical configuration is `pysidedeploy.spec`. It selects the Windows
 platform, icon/SVG/image, widget, and print-support components; embeds required
@@ -137,7 +138,7 @@ release requirements. It is not compared with the retired M0 PyQt6 executable.
 
 ## Manual release smoke
 
-Before promoting a stable release, verify the committed SQLCipher 4.17.x wheel against its recorded SHA-256 and native inventory, probe the installed and frozen runtimes, reject plaintext and unsupported schema/KDF metadata, exercise encrypted backup/restore and copy-switch password rotation with injected interruption, and verify estimate/paging/rate/print workflows. Rebuilding the native wheel is required only when deliberately replacing the bundled dependency.
+Before promoting a stable release, verify the committed SQLCipher 4.17.x wheel against its recorded SHA-256 and native inventory, probe the installed and frozen runtimes, reject plaintext and unsupported schemas, exercise local two-file-to-machine-bound migration, prove that a copied DB and backup fail under a foreign device secret, exercise encrypted backup/restore and copy-switch password rotation with injected interruption, and verify estimate/paging/rate/print workflows. Rebuilding the native wheel is required only when deliberately replacing the bundled dependency.
 
 Normal runtime database files, WAL, and journals are SQLCipher encrypted. Production devices should still use Windows device encryption/BitLocker and a trusted account because SQLCipher does not protect live process memory, hibernation, or a compromised user.
 

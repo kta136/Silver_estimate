@@ -126,8 +126,7 @@ def _verify_credential_password(
         logger=logger,
     )
     logger.info(
-        '[telemetry] {"metric":"startup.password_hash_verify_ms",'
-        '"duration_ms":%.3f}',
+        '[telemetry] {"metric":"startup.password_hash_verify_ms","duration_ms":%.3f}',
         (time.perf_counter() - started_at) * 1000.0,
     )
     return verification
@@ -249,9 +248,7 @@ def run_authentication(
                 )
                 if main_verification.verified:
                     if logger:
-                        logger.info(
-                            "Authentication successful on attempt %s", attempt
-                        )
+                        logger.info("Authentication successful on attempt %s", attempt)
                         logger.debug(
                             "[perf] startup.auth_dialog_accepted_ms=%.2f "
                             "t_unix=%.6f attempt=%s",

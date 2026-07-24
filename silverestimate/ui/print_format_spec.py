@@ -41,9 +41,7 @@ def normalize_estimate_format(value: object) -> str:
     """Return a supported estimate format, defaulting invalid values to Modern."""
     normalized = str(value or "").strip().lower()
     return (
-        normalized
-        if normalized in ESTIMATE_FORMAT_SPECS
-        else DEFAULT_ESTIMATE_FORMAT
+        normalized if normalized in ESTIMATE_FORMAT_SPECS else DEFAULT_ESTIMATE_FORMAT
     )
 
 

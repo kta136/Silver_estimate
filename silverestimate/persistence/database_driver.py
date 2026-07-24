@@ -133,9 +133,7 @@ def configure_connection(
     authenticate: bool = True,
 ) -> DriverIdentity:
     """Key, authenticate, and harden one connection in the required order."""
-    connection.execute(
-        f"PRAGMA key = {_quote_raw_key(raw_key, database_salt)}"
-    )
+    connection.execute(f"PRAGMA key = {_quote_raw_key(raw_key, database_salt)}")
     try:
         identity = verify_driver(connection)
         if authenticate:

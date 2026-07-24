@@ -204,9 +204,7 @@ class StartupController:
         auth_result: AuthenticationResult,
     ) -> bool:
         """Persist recoverable hashes before a first database is created."""
-        if not (
-            auth_result.pending_main_hash and auth_result.pending_backup_hash
-        ):
+        if not (auth_result.pending_main_hash and auth_result.pending_backup_hash):
             return True
         try:
             credential_store.set_password_hash(

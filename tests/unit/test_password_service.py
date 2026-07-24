@@ -15,6 +15,7 @@ CURRENT_POLICY_HASH = (
     "FX332B9UqVYkQQBqgo/RIhU0EiPnwKVjvSXVXSgSYc8"
 )
 
+
 def test_hash_password_uses_explicit_argon2id_policy() -> None:
     password_service = PasswordHashService()
 

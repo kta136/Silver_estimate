@@ -164,9 +164,7 @@ def test_database_manager_item_catalog_backup_roundtrip(tmp_path, settings_stub)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     backup_path = tmp_path / "catalog.seitems.json"
 
-    source = DatabaseManager(
-        str(db_path), "test-password", device_secret=DEVICE_SECRET
-    )
+    source = DatabaseManager(str(db_path), "test-password", device_secret=DEVICE_SECRET)
     try:
         assert source.items_repo.add_item(
             "ITM001", "Original", 92.5, "WT", 10.0, tunch="91.25 + loss"
@@ -223,9 +221,7 @@ def test_database_manager_item_catalog_restore_can_replace_existing_catalog(
     db_path.parent.mkdir(parents=True, exist_ok=True)
     backup_path = tmp_path / "catalog-replace.seitems.json"
 
-    source = DatabaseManager(
-        str(db_path), "test-password", device_secret=DEVICE_SECRET
-    )
+    source = DatabaseManager(str(db_path), "test-password", device_secret=DEVICE_SECRET)
     try:
         assert source.items_repo.add_item(
             "ITM001", "Original", 92.5, "WT", 10.0, tunch="91.25 + loss"

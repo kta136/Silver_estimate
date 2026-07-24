@@ -39,9 +39,7 @@ def test_device_bound_key_requires_the_original_device_secret():
     original = encryption.derive_device_bound_key(
         "password", salt, b"A" * 32, **options
     )
-    foreign = encryption.derive_device_bound_key(
-        "password", salt, b"B" * 32, **options
-    )
+    foreign = encryption.derive_device_bound_key("password", salt, b"B" * 32, **options)
 
     assert original != foreign
     assert len(original) == 32

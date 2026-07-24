@@ -33,9 +33,7 @@ FOREIGN_DEVICE_SECRET = b"F" * 32
 
 def test_live_database_wal_and_rollback_journal_hide_plaintext_canary(tmp_path):
     path = tmp_path / "estimation.db"
-    manager = DatabaseManager(
-        str(path), "password", device_secret=DEVICE_SECRET
-    )
+    manager = DatabaseManager(str(path), "password", device_secret=DEVICE_SECRET)
     canary = "SILVERESTIMATE_ACTIVE_SESSION_PLAINTEXT_CANARY"
     try:
         manager.conn.execute(
@@ -63,9 +61,7 @@ def test_live_database_wal_and_rollback_journal_hide_plaintext_canary(tmp_path):
 
 def test_wrong_password_foreign_device_and_plaintext_database_fail_closed(tmp_path):
     path = tmp_path / "estimation.db"
-    manager = DatabaseManager(
-        str(path), "correct", device_secret=DEVICE_SECRET
-    )
+    manager = DatabaseManager(str(path), "correct", device_secret=DEVICE_SECRET)
     manager.close()
     with pytest.raises(DatabaseAuthenticationError):
         DatabaseManager(str(path), "wrong", device_secret=DEVICE_SECRET)
@@ -120,14 +116,11 @@ def test_legacy_two_file_database_migrates_to_one_machine_bound_file(tmp_path):
         device_secret=DEVICE_SECRET,
     )
     try:
+        assert migrated.open_status is DatabaseOpenStatus.MIGRATED_TO_DEVICE_BOUND
         assert (
-            migrated.open_status
-            is DatabaseOpenStatus.MIGRATED_TO_DEVICE_BOUND
-        )
-        assert (
-            migrated.conn.execute(
-                "SELECT name FROM items WHERE code='M1'"
-            ).fetchone()[0]
+            migrated.conn.execute("SELECT name FROM items WHERE code='M1'").fetchone()[
+                0
+            ]
             == "Migrated"
         )
     finally:
@@ -175,9 +168,7 @@ def test_interrupted_binding_switch_finalizes_only_after_bound_db_validates(tmp_
         password,
         device_secret=DEVICE_SECRET,
     )
-    bound_target.conn.execute(
-        "INSERT INTO items(code,name) VALUES('RECOVER','Bound')"
-    )
+    bound_target.conn.execute("INSERT INTO items(code,name) VALUES('RECOVER','Bound')")
     bound_target.conn.commit()
     bound_target.close()
     target.replace(live)
@@ -201,10 +192,7 @@ def test_interrupted_binding_switch_finalizes_only_after_bound_db_validates(tmp_
         device_secret=DEVICE_SECRET,
     )
     try:
-        assert (
-            recovered.open_status
-            is DatabaseOpenStatus.MIGRATED_TO_DEVICE_BOUND
-        )
+        assert recovered.open_status is DatabaseOpenStatus.MIGRATED_TO_DEVICE_BOUND
         assert (
             recovered.conn.execute(
                 "SELECT name FROM items WHERE code='RECOVER'"
@@ -222,9 +210,7 @@ def test_interrupted_binding_switch_finalizes_only_after_bound_db_validates(tmp_
 
 def test_encrypted_backup_historical_password_restore_and_rekey(tmp_path):
     path = tmp_path / "estimation.db"
-    manager = DatabaseManager(
-        str(path), "old-password", device_secret=DEVICE_SECRET
-    )
+    manager = DatabaseManager(str(path), "old-password", device_secret=DEVICE_SECRET)
     manager.conn.execute("INSERT INTO items(code,name) VALUES('B1','Before')")
     manager.conn.commit()
     backup = manager.create_encrypted_backup(tmp_path / "history.sedbbackup")
@@ -239,9 +225,7 @@ def test_encrypted_backup_historical_password_restore_and_rekey(tmp_path):
     assert restore.status is MaintenanceStatus.STAGED_RESTART_REQUIRED
     manager.close()
 
-    reopened = DatabaseManager(
-        str(path), "new-password", device_secret=DEVICE_SECRET
-    )
+    reopened = DatabaseManager(str(path), "new-password", device_secret=DEVICE_SECRET)
     try:
         assert reopened.open_status is DatabaseOpenStatus.RESTORE_ACTIVATED
         assert (
@@ -312,9 +296,7 @@ def test_kdf_metadata_requires_exact_version_one_policy():
 
 def test_invalid_pending_restore_rolls_back_to_original_database(tmp_path):
     path = tmp_path / "estimation.db"
-    manager = DatabaseManager(
-        str(path), "password", device_secret=DEVICE_SECRET
-    )
+    manager = DatabaseManager(str(path), "password", device_secret=DEVICE_SECRET)
     manager.conn.execute("INSERT INTO items(code,name) VALUES('SAFE','Original')")
     manager.conn.commit()
     manager.close()
@@ -332,9 +314,7 @@ def test_invalid_pending_restore_rolls_back_to_original_database(tmp_path):
         ),
     )
 
-    reopened = DatabaseManager(
-        str(path), "password", device_secret=DEVICE_SECRET
-    )
+    reopened = DatabaseManager(str(path), "password", device_secret=DEVICE_SECRET)
     try:
         assert (
             reopened.conn.execute(
@@ -350,9 +330,7 @@ def test_invalid_pending_restore_rolls_back_to_original_database(tmp_path):
 
 def test_interrupted_rekey_target_is_never_selected_by_filename(tmp_path):
     path = tmp_path / "estimation.db"
-    manager = DatabaseManager(
-        str(path), "password", device_secret=DEVICE_SECRET
-    )
+    manager = DatabaseManager(str(path), "password", device_secret=DEVICE_SECRET)
     manager.close()
     target = path.with_suffix(".rekey.target")
     target.write_bytes(b"incomplete target")
@@ -367,9 +345,7 @@ def test_interrupted_rekey_target_is_never_selected_by_filename(tmp_path):
         ),
     )
 
-    reopened = DatabaseManager(
-        str(path), "password", device_secret=DEVICE_SECRET
-    )
+    reopened = DatabaseManager(str(path), "password", device_secret=DEVICE_SECRET)
     reopened.close()
     assert not target.exists()
     assert not path.with_suffix(".rekey.json").exists()

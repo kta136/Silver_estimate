@@ -273,16 +273,12 @@ def create_device_binding_secret(
     existing = get_device_binding_secret()
     if existing is not None:
         encoded = (
-            f"{DEVICE_BINDING_VERSION}:"
-            f"{base64.b64encode(existing).decode('ascii')}"
+            f"{DEVICE_BINDING_VERSION}:{base64.b64encode(existing).decode('ascii')}"
         )
         set_password_hash("device_binding", encoded, logger=logger)
         return existing
     secret = secrets.token_bytes(DEVICE_BINDING_BYTES)
-    encoded = (
-        f"{DEVICE_BINDING_VERSION}:"
-        f"{base64.b64encode(secret).decode('ascii')}"
-    )
+    encoded = f"{DEVICE_BINDING_VERSION}:{base64.b64encode(secret).decode('ascii')}"
     set_password_hash("device_binding", encoded, logger=logger)
     return secret
 

@@ -106,9 +106,9 @@ def test_existing_database_without_local_credentials_fails_closed(
 
     assert result is None
     assert _MessageBoxStub.critical_calls
-    assert "copied database cannot be adopted" in _MessageBoxStub.critical_calls[0][
-        0
-    ][2]
+    assert (
+        "copied database cannot be adopted" in _MessageBoxStub.critical_calls[0][0][2]
+    )
 
 
 def test_run_authentication_existing_password(monkeypatch, settings_stub):

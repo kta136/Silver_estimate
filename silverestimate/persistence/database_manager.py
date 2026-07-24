@@ -363,9 +363,8 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
             return False
         if live_sha256 == journal.get("target_sha256"):
             return True
-        if (
-            retained.is_file()
-            and sha256_file(retained) == journal.get("old_database_sha256")
+        if retained.is_file() and sha256_file(retained) == journal.get(
+            "old_database_sha256"
         ):
             self._remove_database_family(self._path)
             os.replace(retained, self._path)
@@ -812,9 +811,10 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         if not self._restore_journal.exists():
             return
         journal = read_json(self._restore_journal)
-        if journal.get("version") not in {1, JOURNAL_VERSION} or journal.get(
-            "phase"
-        ) != "ready":
+        if (
+            journal.get("version") not in {1, JOURNAL_VERSION}
+            or journal.get("phase") != "ready"
+        ):
             raise StorageMetadataError("Unsupported interrupted restore journal")
         staged = self._validated_journal_path(
             journal,
@@ -866,10 +866,7 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         if journal.get("version") == 1 or self.database_salt is None:
             self._resolve_legacy_interrupted_rekey(password, journal)
             return
-        if (
-            journal.get("version") != JOURNAL_VERSION
-            or journal.get("phase") != "ready"
-        ):
+        if journal.get("version") != JOURNAL_VERSION or journal.get("phase") != "ready":
             raise StorageMetadataError("Unsupported interrupted rekey journal")
         target = self._validated_journal_path(
             journal,

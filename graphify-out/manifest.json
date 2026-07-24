@@ -35,8 +35,8 @@
     "semantic_hash": ""
   },
   "silverestimate/controllers/startup_controller.py": {
-    "mtime": 1784881885.680436,
-    "ast_hash": "3bb1021b72deae8571d1eecb276d9437",
+    "mtime": 1784882778.785965,
+    "ast_hash": "fbda2357b8ebdd9553fff1faaeffcd61",
     "semantic_hash": ""
   },
   "silverestimate/controllers/__init__.py": {
@@ -115,8 +115,8 @@
     "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "silverestimate/persistence/database_manager.py": {
-    "mtime": 1784881194.4143095,
-    "ast_hash": "8ea088c874c76aa4f5bdbf2f9c60f611",
+    "mtime": 1784882778.785965,
+    "ast_hash": "37792b1597ec117e930fadedb86f8a09",
     "semantic_hash": ""
   },
   "silverestimate/persistence/database_repository_facade.py": {
@@ -130,8 +130,8 @@
     "semantic_hash": "bc035dc27ff67adc35935140d7bf53ce"
   },
   "silverestimate/persistence/items_repository.py": {
-    "mtime": 1784819179.3770764,
-    "ast_hash": "15236e435f36bba41ffbab85d1bfad08",
+    "mtime": 1784882778.785965,
+    "ast_hash": "0e867bd22cb37461f002671ee86671e0",
     "semantic_hash": ""
   },
   "silverestimate/persistence/silver_bars_queries.py": {
@@ -175,8 +175,8 @@
     "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "silverestimate/services/auth_service.py": {
-    "mtime": 1784881122.406544,
-    "ast_hash": "ccb04a41b54b8041d7d5779fd972acef",
+    "mtime": 1784882778.785965,
+    "ast_hash": "4d4be26a13b2527d9d1d40e54a079e29",
     "semantic_hash": ""
   },
   "silverestimate/services/dda_rate_fetcher.py": {
@@ -520,8 +520,8 @@
     "semantic_hash": ""
   },
   "tests/test_security.py": {
-    "mtime": 1784880633.325996,
-    "ast_hash": "aec2c43dbd467fe9f71985ca9defe478",
+    "mtime": 1784882778.785965,
+    "ast_hash": "af2c46cef4de1d166a04b7cf0c82497c",
     "semantic_hash": ""
   },
   "tests/controllers/test_live_rate_controller.py": {
@@ -540,8 +540,8 @@
     "semantic_hash": "522e87f4d1406016554c59e3fc9c78fc"
   },
   "tests/integration/test_database_manager.py": {
-    "mtime": 1784880541.1103103,
-    "ast_hash": "c3e4572150628b25d70ba25ccfa38c10",
+    "mtime": 1784882778.7827277,
+    "ast_hash": "8121a5603ff6c83dc7dd152f4235b495",
     "semantic_hash": ""
   },
   "tests/integration/test_repositories.py": {
@@ -550,8 +550,8 @@
     "semantic_hash": ""
   },
   "tests/services/test_auth_service.py": {
-    "mtime": 1784881138.213405,
-    "ast_hash": "f5e27a104933082b0d6309b42d6704c6",
+    "mtime": 1784882778.785965,
+    "ast_hash": "e63d5d82f3f226568144e296d8107903",
     "semantic_hash": ""
   },
   "tests/services/test_dda_rate_fetcher.py": {
@@ -1035,8 +1035,8 @@
     "semantic_hash": "d6e27105583e3cc428fbeebe8c9044bf"
   },
   "silverestimate/security/credential_store.py": {
-    "mtime": 1784881885.679436,
-    "ast_hash": "4026248b9c9b14667dee0f72db6a92dc",
+    "mtime": 1784882778.785965,
+    "ast_hash": "91506156170f8949ea19fee692adb95d",
     "semantic_hash": ""
   },
   "silverestimate/services/dda_rate_stream.py": {
@@ -1050,8 +1050,8 @@
     "semantic_hash": "f77857eefcfb336e8c84f72c9b38a717"
   },
   "silverestimate/ui/print_format_spec.py": {
-    "mtime": 1784818748.1490848,
-    "ast_hash": "22a92bbca702f40144ee0b93621a4053",
+    "mtime": 1784882778.785965,
+    "ast_hash": "cba32aa17890fc6aa51fa926217d91c8",
     "semantic_hash": ""
   },
   "silverestimate/ui/settings_live_rates_page.py": {
@@ -1410,8 +1410,8 @@
     "semantic_hash": "5034731eae9daa51198e35e75b5d1895"
   },
   "silverestimate/persistence/database_driver.py": {
-    "mtime": 1784880122.3554385,
-    "ast_hash": "950dcebc8b581cd2e95201d42cf1d29e",
+    "mtime": 1784882778.785965,
+    "ast_hash": "0eea8d33fa417a87daf93bf15671c3dc",
     "semantic_hash": ""
   },
   "silverestimate/persistence/storage_metadata.py": {
@@ -1420,8 +1420,8 @@
     "semantic_hash": ""
   },
   "tests/integration/test_sqlcipher_storage.py": {
-    "mtime": 1784881299.9077208,
-    "ast_hash": "bdc62e19ef10ad1e1906578c6e9ce707",
+    "mtime": 1784882778.785965,
+    "ast_hash": "4dbc7ce21148cbb43998ece2a51a38d5",
     "semantic_hash": ""
   },
   "vendor/sqlcipher/PROVENANCE.json": {
@@ -1860,8 +1860,8 @@
     "semantic_hash": ""
   },
   "tests/unit/test_password_service.py": {
-    "mtime": 1784819354.593333,
-    "ast_hash": "3e83ea74be23e7bea9f4875086c9aaea",
+    "mtime": 1784882778.785965,
+    "ast_hash": "6150e62fdf4fd10e60911b404cd60150",
     "semantic_hash": ""
   },
   "tests/unit/test_validate_frozen_artifact.py": {

@@ -15,8 +15,6 @@ REQUIRED_FILES = (
     "_hashlib.pyd",
     "_socket.pyd",
     "_ssl.pyd",
-    "libcrypto-3.dll",
-    "libssl-3.dll",
     "msvcp140.dll",
     "msvcp140_1.dll",
     "msvcp140_2.dll",

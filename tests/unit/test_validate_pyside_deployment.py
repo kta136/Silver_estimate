@@ -32,6 +32,11 @@ def test_validate_deployment_accepts_required_inventory(tmp_path):
     assert result["total_bytes"] > 0
 
 
+def test_static_sqlcipher_does_not_require_shared_openssl_dlls():
+    assert "libcrypto-3.dll" not in deployment_validator.REQUIRED_FILES
+    assert "libssl-3.dll" not in deployment_validator.REQUIRED_FILES
+
+
 def test_validate_deployment_rejects_forbidden_plugin(tmp_path):
     root = tmp_path / "SilverEstimate.dist"
     report = tmp_path / "nuitka-report.xml"

@@ -1835,13 +1835,13 @@
     "semantic_hash": ""
   },
   "scripts/validate_pyside_deployment.py": {
-    "mtime": 1784820999.0096903,
-    "ast_hash": "a595d9704ec3debb54ec6ba3cafbeaab",
+    "mtime": 1784885295.984022,
+    "ast_hash": "97a1350fa341cce70a8b19b0c7f30cdb",
     "semantic_hash": ""
   },
   "tests/unit/test_validate_pyside_deployment.py": {
-    "mtime": 1784806643.7080662,
-    "ast_hash": "f1dc72a1876936fd474a3eda313224fa",
+    "mtime": 1784885295.9882822,
+    "ast_hash": "648d59c2b767577d004ca4622dc6c248",
     "semantic_hash": ""
   },
   "scripts/augment_release_sbom.py": {

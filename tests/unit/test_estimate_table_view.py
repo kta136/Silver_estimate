@@ -1,7 +1,9 @@
 """Tests for EstimateTableView component."""
 
 import pytest
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QPalette
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QMenu
 
 from silverestimate.ui.estimate_entry_components import (
@@ -244,6 +246,35 @@ def test_column_layout_reset_signal(table_view):
 def test_history_requested_signal(table_view):
     """Test that history signal exists."""
     assert hasattr(table_view, "history_requested")
+
+
+def test_page_keys_navigate_visible_rows_even_from_cell_editor(qtbot, table_view):
+    for row in range(30):
+        table_view.add_row(
+            EstimateEntryRowState(code=f"ROW{row:02d}", name=f"Item {row}")
+        )
+    table_view.resize(640, 180)
+    qtbot.addWidget(table_view)
+    table_view.show()
+    table_view.setCurrentIndex(table_view.model().index(0, 0))
+    table_view.edit(table_view.currentIndex())
+    qtbot.waitUntil(lambda: table_view.focusWidget() is not None)
+
+    QTest.keyClick(
+        table_view.focusWidget(),
+        Qt.Key.Key_PageDown,
+        Qt.KeyboardModifier.NoModifier,
+    )
+
+    assert table_view.currentIndex().row() >= 3
+
+    QTest.keyClick(
+        table_view.focusWidget(),
+        Qt.Key.Key_PageUp,
+        Qt.KeyboardModifier.NoModifier,
+    )
+
+    assert table_view.currentIndex().row() == 0
 
 
 def test_context_menu_actions_have_icons(table_view, monkeypatch):

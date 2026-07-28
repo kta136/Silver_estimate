@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import logging
 
-from PySide6.QtGui import QFont, QTextDocument
+from PySide6.QtGui import QFont
 from PySide6.QtPrintSupport import QPrinter
 from PySide6.QtWidgets import QMessageBox
 
@@ -17,12 +17,15 @@ from .print_page_settings import (
     load_print_page_settings,
 )
 from .print_payload_builder import (
-    HtmlPrintDocument,
     PrintDocument,
     PrintPayloadBuilder,
     PrintPreviewPayload,
 )
 from .print_preview_controller import PrintPreviewController
+from .silver_bar_print_document import (
+    SilverBarInventoryPrintDocument,
+    SilverBarListPrintDocument,
+)
 from .silver_bar_print_renderer import SilverBarPrintRenderer
 
 LOGGER = logging.getLogger(__name__)
@@ -182,7 +185,6 @@ class PrintManager:
             fetch_bars=lambda selected_status: self.db_manager.get_silver_bars(
                 selected_status
             ),
-            render_inventory=self._generate_silver_bars_html_table,
         )
 
     def print_silver_bar_list_details(
@@ -219,11 +221,10 @@ class PrintManager:
         return self._payload_builder.build_silver_bar_list_preview_payload(
             list_info,
             bars_in_list,
-            render_list_details=self._generate_list_details_html,
         )
 
     def _render_document(self, printer: QPrinter, document: PrintDocument) -> None:
-        """Render a typed estimate or an HTML silver-bar report."""
+        """Render a typed estimate or silver-bar report."""
         if isinstance(document, EstimatePrintDocument):
             self._estimate_renderer.paint(
                 printer,
@@ -231,45 +232,14 @@ class PrintManager:
                 print_font=self.print_font,
             )
             return
-        if isinstance(document, HtmlPrintDocument):
-            self._print_html(
+        if isinstance(
+            document,
+            SilverBarInventoryPrintDocument | SilverBarListPrintDocument,
+        ):
+            self._silver_bar_renderer.paint(
                 printer,
-                document.html_content,
-                table_mode=document.table_mode,
+                document,
+                print_font=self.print_font,
             )
             return
         raise TypeError(f"Unsupported print document: {type(document).__name__}")
-
-    def _print_html(self, printer, html_content, table_mode=False):
-        """Render silver-bar HTML reports to the printer."""
-        document = QTextDocument()
-        if table_mode:
-            table_font = QFont("Arial", 8)
-            document.setDefaultFont(table_font)
-        else:
-            # Estimate slip: Use the stored print_font settings
-            font_size = self.print_font.pointSizeF()
-            font_size_int = int(round(font_size if font_size > 0 else 7.0))
-            # Force Courier New for alignment, but use stored size/bold
-            font_to_use = QFont("Courier New", font_size_int)
-            is_bold = getattr(
-                self.print_font, "bold", lambda: False
-            )()  # Safely check bold
-            font_to_use.setBold(is_bold)
-            document.setDefaultFont(font_to_use)
-
-        document.setHtml(html_content)
-        document.setPageSize(printer.pageRect(QPrinter.Unit.Point).size())
-        document.print_(printer)
-
-    def _generate_silver_bars_html_table(self, bars, status_filter=None):
-        return self._silver_bar_renderer.generate_inventory_html_table(
-            bars,
-            status_filter=status_filter,
-        )
-
-    def _generate_list_details_html(self, list_info, bars_in_list):
-        return self._silver_bar_renderer.generate_list_details_html(
-            list_info,
-            bars_in_list,
-        )

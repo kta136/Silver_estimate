@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+## [3.11] - 2026-07-26
+
+### Changed
+
+- Replaced Qt's stock print-preview dialog with an application-owned, themed
+  `QDialog` containing one responsive toolbar, persistent page navigation, and
+  an embedded `QPrintPreviewWidget`, while preserving the existing direct
+  painters, report controls, PDF export, page settings, zoom, navigation, and
+  quick print. Command controls use accessible icon-only actions in a
+  consistent output-to-settings-to-view-to-page order at both wide and compact
+  window sizes.
+- Replaced silver-bar inventory and individual-list HTML printing with typed
+  direct `QPainter` reports that share the Modern estimate's visual primitives,
+  repeat metadata and headings across pages, keep totals with final rows, and
+  honor the saved print font in preview, export, and physical printing.
+
+### Removed
+
+- Removed the remaining production `QTextDocument`/HTML print payload, renderer,
+  templates, callbacks, and escaping path.
+
+### Fixed
+
+- Bypassed Nuitka's unsafe frozen PySide6 application-icon wrapper while
+  retaining the embedded executable icon and the application's explicit window
+  icon, preventing null Windows icon handles from aborting packaged startup.
+
 ### Security
 
 - Bound the SQLCipher key to a random 256-bit secret forced into local-machine

@@ -8,7 +8,7 @@ from typing import Callable
 import pytest
 from PySide6.QtCore import QDate, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPixmap
-from PySide6.QtPrintSupport import QPrinter, QPrintPreviewDialog
+from PySide6.QtPrintSupport import QPrinter
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
 from silverestimate.controllers import startup_controller as startup_module
@@ -32,6 +32,7 @@ from silverestimate.ui.estimate_entry_logic.constants import (
 )
 from silverestimate.ui.login_dialog import LoginDialog
 from silverestimate.ui.main_window import MainWindow
+from silverestimate.ui.print_preview_dialog import PrintPreviewDialog
 from tests.factories import estimate_totals, regular_item, return_item, silver_bar_item
 
 pytestmark = pytest.mark.smoke
@@ -530,16 +531,16 @@ def _capture_print_preview_screen(
     parent_widget,
     capture: _SmokeCapture,
 ) -> None:
-    from silverestimate.ui.print_payload_builder import (
-        HtmlPrintDocument,
-        PrintPreviewPayload,
+    from silverestimate.ui.estimate_print_document import EstimatePrintDocument
+    from silverestimate.ui.print_payload_builder import PrintPreviewPayload
+    from silverestimate.ui.print_preview_controller import (
+        PrintPreviewController,
     )
-    from silverestimate.ui.print_preview_controller import PrintPreviewController
 
     captured = {"done": False}
 
     def render_document(printer, document) -> None:
-        assert isinstance(document, HtmlPrintDocument)
+        assert isinstance(document, EstimatePrintDocument)
         painter = QPainter(printer)
         painter.drawText(20, 40, "Smoke Estimate 100")
         painter.end()
@@ -549,7 +550,7 @@ def _capture_print_preview_screen(
             (
                 widget
                 for widget in QApplication.topLevelWidgets()
-                if isinstance(widget, QPrintPreviewDialog) and widget.isVisible()
+                if isinstance(widget, PrintPreviewDialog) and widget.isVisible()
             ),
             None,
         )
@@ -563,11 +564,20 @@ def _capture_print_preview_screen(
 
     def force_close_preview() -> None:
         for widget in QApplication.topLevelWidgets():
-            if isinstance(widget, QPrintPreviewDialog):
+            if isinstance(widget, PrintPreviewDialog):
                 widget.reject()
 
     payload = PrintPreviewPayload(
-        document=HtmlPrintDocument("Smoke Estimate 100", table_mode=False),
+        document=EstimatePrintDocument.from_mapping(
+            {
+                "header": {
+                    "voucher_no": "100",
+                    "date": "2026-07-26",
+                    "silver_rate": 100,
+                },
+                "items": [],
+            }
+        ),
         title="Print Preview - Smoke Estimate 100",
         document_kind="estimate",
         identifier="100",

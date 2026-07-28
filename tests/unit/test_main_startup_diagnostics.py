@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import main as main_module
 
 
@@ -62,3 +64,29 @@ def test_entrypoint_records_and_reports_early_exception(monkeypatch, tmp_path):
     assert len(shown) == 1
     assert isinstance(shown[0][0], RuntimeError)
     assert shown[0][1] == log_path
+
+
+def test_frozen_startup_restores_qapplication_under_nuitka_wrapper(monkeypatch):
+    original_application = type("QApplication", (), {})
+    original_application.__module__ = "PySide6.QtWidgets"
+    wrapped_application = type("QApplication", (original_application,), {})
+    wrapped_application.__module__ = "PySide6.QtWidgets"
+    qt_widgets = SimpleNamespace(QApplication=wrapped_application)
+    monkeypatch.setattr(main_module, "_is_frozen_runtime", lambda: True)
+
+    application_type = main_module._restore_frozen_qapplication(qt_widgets)
+
+    assert application_type is original_application
+    assert qt_widgets.QApplication is original_application
+
+
+def test_source_startup_keeps_standard_qapplication(monkeypatch):
+    application_type = type("QApplication", (), {})
+    application_type.__module__ = "PySide6.QtWidgets"
+    qt_widgets = SimpleNamespace(QApplication=application_type)
+    monkeypatch.setattr(main_module, "_is_frozen_runtime", lambda: False)
+
+    selected_type = main_module._restore_frozen_qapplication(qt_widgets)
+
+    assert selected_type is application_type
+    assert qt_widgets.QApplication is application_type

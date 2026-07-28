@@ -95,14 +95,14 @@ class NavigationController:
         save_action = QAction("&Save", self._main_window)
         save_action.setIcon(get_icon("save", widget=self._main_window))
         save_action.setShortcut(QKeySequence.StandardKey.Save)
-        save_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+        save_action.setShortcutContext(Qt.ShortcutContext.WindowShortcut)
         save_action.triggered.connect(self._main_window.commands.save_estimate)
         file_menu.addAction(save_action)
 
         print_action = QAction("&Print", self._main_window)
         print_action.setIcon(get_icon("print", widget=self._main_window))
         print_action.setShortcut(QKeySequence.StandardKey.Print)
-        print_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+        print_action.setShortcutContext(Qt.ShortcutContext.WindowShortcut)
         print_action.triggered.connect(self._main_window.commands.print_estimate)
         file_menu.addAction(print_action)
 

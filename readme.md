@@ -1,4 +1,4 @@
-# Silver Estimation App - v3.10
+# Silver Estimation App - v3.11
 
 A Windows desktop application built with PySide6 and a local SQLCipher database
 for managing silver sales estimates, item-wise entries, silver-bar inventory,
@@ -7,7 +7,7 @@ returns, and print-ready outputs.
 [![Python](https://img.shields.io/badge/Python-3.14+-blue.svg)](https://www.python.org/)
 [![PySide6](https://img.shields.io/badge/PySide6-6.11-green.svg)](https://doc.qt.io/qtforpython-6/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE)
-[![Source Version](https://img.shields.io/badge/source-v3.10-orange.svg)](CHANGELOG.md#310---2026-07-23)
+[![Source Version](https://img.shields.io/badge/source-v3.11-orange.svg)](CHANGELOG.md#311---2026-07-26)
 [![Latest Release](https://img.shields.io/github/v/release/kta136/Silver_estimate?label=stable%20release)](https://github.com/kta136/Silver_estimate/releases/latest)
 [![PR Validation](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml)
 [![Main Validation](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml)
@@ -24,7 +24,7 @@ returns, and print-ready outputs.
 - [Download latest stable release](https://github.com/kta136/Silver_estimate/releases/latest)
 - [Documentation index](DOCS/README.md)
 - [Changelog](CHANGELOG.md)
-- [v3.10 changelog](CHANGELOG.md#310---2026-07-23)
+- [v3.11 changelog](CHANGELOG.md#311---2026-07-26)
 - [Deployment guide](DOCS/deployment-guide.md)
 
 > The source tree can be ahead of the latest packaged release. Use the release
@@ -55,7 +55,8 @@ The app helps silver shops to:
 - Generate itemized estimates with accurate calculations
 - Track gross, net, and fine weights; wages (PC/WT)
 - Manage silver bar inventory and returns
-- Print formatted estimate slips with Indian rupee formatting
+- Print formatted estimate slips and Modern silver-bar inventory/list reports
+  through typed direct painters with Indian rupee formatting
 - Follow live Agra Mohar rates through anonymous HTTPS/SSE updates with an offline snapshot
 - Keep the desktop UI in a strict light theme across Windows dark mode, dialogs, popups, and print preview controls
 - Store the live database, WAL, and journals locally with SQLCipher encryption
@@ -104,7 +105,11 @@ See also: `DOCS/project-architecture.md`.
 
 ### Printing & Reporting
 - Print-ready estimate layouts with INR formatting
-- Compact print preview with layout/orientation controls and a More menu for printer, page-view, and navigation actions
+- Modern silver-bar inventory and list layouts with repeated multipage headers,
+  kept totals, and the same saved print-font control used by estimates
+- Custom PySide6 print-preview window with one responsive toolbar, an embedded
+  page canvas, persistent page navigation, and a More menu for printer and view
+  actions
 - Shared Qt6 page setup helpers for page size, orientation, margins, printer validation, and safer PDF export
 
 ### Desktop Experience
@@ -195,6 +200,9 @@ Key areas of the codebase:
 - `silverestimate/ui/estimate_entry_logic/column_specs.py` – shared estimate-table column registry for headers, editability, precision, widths, and navigation order.
 - `silverestimate/ui/application_theme.py`, `theme_tokens.py`, `shared_screen_theme.py`, and `themed_controls.py` – strict light theme and reusable desktop controls.
 - `silverestimate/ui/print_page_settings.py` – Qt6 print/page helper functions used by settings, preview, quick print, and PDF export paths.
+- `silverestimate/ui/print_preview_dialog.py` – explicit custom preview window containing the application-owned toolbar and embeddable Qt preview canvas.
+- `silverestimate/ui/modern_print_primitives.py` – shared Modern typography, colors, table geometry, and printable-margin handling for estimate and silver-bar direct painters.
+- `silverestimate/ui/silver_bar_print_document.py`, `silver_bar_print_layout.py`, and `silver_bar_print_renderer.py` – typed silver-bar report data, semantic layouts, pagination, and direct `QPainter` output.
 - `silverestimate/services/` – auth, settings, live-rate, main commands, and repository adapters.
 - `silverestimate/persistence/` – `DatabaseManager`, current schema definition, SQLCipher broker, and repositories.
 - `silverestimate/security/` – Argon2id password policy and keyring-backed credential storage.
@@ -241,7 +249,7 @@ uv run pre-commit run --all-files
 - Inspectable standalone build: `uv run nox -s build_standalone standalone_artifact_smoke`
 - Clean one-file rebuild: `uv run nox -s build_clean artifact_smoke`
 - Validated local Windows build: `scripts\build_windows_local.cmd` (safe when the workspace path contains spaces)
-- Output: `dist/SilverEstimate.exe`, `dist/SilverEstimate-v3.10.exe`, and `dist/SilverEstimate-v3.10-win64.zip` on Windows
+- Output: `dist/SilverEstimate.exe`, `dist/SilverEstimate-v3.11.exe`, and `dist/SilverEstimate-v3.11-win64.zip` on Windows
 - Release/CI builds use Qt's `pyside6-deploy`, the committed `pysidedeploy.spec`, and locked Nuitka 4.1.3
 - Packaged releases are Windows-only; macOS/Linux are untested development environments.
 
@@ -295,6 +303,11 @@ Copyright (C) 2023-2026 Silver Estimation App
 ---
 
 ## Version History (highlights)
+
+### v3.11 (2026-07-26)
+- Replaces legacy silver-bar HTML reports with typed Modern direct-painter layouts
+- Introduces the application-owned single-row print-preview workspace
+- Strengthens machine-bound SQLCipher storage, backup, and recovery handling
 
 ### v3.10 (2026-07-23)
 - Introduces a simplified silver-and-rupee application icon designed for clear Windows shell rendering

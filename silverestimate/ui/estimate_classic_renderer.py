@@ -191,7 +191,7 @@ def paint_classic_estimate(
     *,
     print_font: QFont | None = None,
 ) -> ClassicEstimateLayout:
-    """Paint Classic directly without an HTML or QTextDocument intermediary."""
+    """Paint Classic directly without an intermediate document renderer."""
     layout = build_classic_estimate_layout(document)
     font = _resolve_font(print_font)
     painter = QPainter()

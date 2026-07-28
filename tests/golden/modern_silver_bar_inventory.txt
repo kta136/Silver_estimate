@@ -1,0 +1,7 @@
+SILVER BAR INVENTORY
+Status: <Available & Ready> | Print Date: 26/07/2026
+[SILVER BARS]
+Bar ID | Estimate Vch | Weight (g) | Purity (%) | Fine Wt (g) | Date Added | Status
+<B-1> | V<script> | 12.500 | 99.20 | 12.400 | 20/07/2026 | In <Stock>
+N/A | N/A | 7.250 | 98.00 | 7.200 |  |
+ | TOTAL (2) | 19.750 |  | 19.600 |  |

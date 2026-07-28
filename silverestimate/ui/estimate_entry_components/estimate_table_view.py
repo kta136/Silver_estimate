@@ -6,7 +6,7 @@ from dataclasses import replace
 from typing import Any, Optional
 
 from PySide6.QtCore import QItemSelection, QModelIndex, Qt, Signal
-from PySide6.QtGui import QAction, QColor, QPalette
+from PySide6.QtGui import QAction, QColor, QKeySequence, QPalette, QShortcut
 from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QMenu, QTableView
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
@@ -48,6 +48,7 @@ class EstimateTableView(QTableView):
         self._table_model = EstimateTableModel(self)
         self._setup_ui()
         self._connect_signals()
+        self._setup_page_navigation_shortcuts()
 
     def _setup_ui(self) -> None:
         self.setObjectName("EstimateTableView")
@@ -98,6 +99,44 @@ class EstimateTableView(QTableView):
         if selection_model:
             selection_model.selectionChanged.connect(self._on_selection_changed)
             selection_model.currentChanged.connect(self._on_current_changed)
+
+    def _setup_page_navigation_shortcuts(self) -> None:
+        """Keep page-wise row navigation available while a cell editor has focus."""
+        self._page_shortcuts: list[QShortcut] = []
+        for sequence, direction in (("PgUp", -1), ("PgDown", 1)):
+            shortcut = QShortcut(QKeySequence(sequence), self)
+            shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
+            shortcut.activated.connect(
+                lambda direction=direction: self.navigate_page(direction)
+            )
+            self._page_shortcuts.append(shortcut)
+
+    def navigate_page(self, direction: int) -> None:
+        """Move the current cell by approximately one visible table page."""
+        row_count = self._table_model.rowCount()
+        if row_count <= 0:
+            return
+
+        current = self.currentIndex()
+        current_row = current.row() if current.isValid() else 0
+        current_column = current.column() if current.isValid() else 0
+        row_height = max(1, self.verticalHeader().defaultSectionSize())
+        visible_rows = max(1, self.viewport().height() // row_height)
+        page_step = max(1, visible_rows - 1)
+        target_row = max(
+            0,
+            min(
+                row_count - 1,
+                current_row + (-page_step if direction < 0 else page_step),
+            ),
+        )
+        target = self._table_model.index(target_row, current_column)
+        if not target.isValid():
+            return
+
+        self.setCurrentIndex(target)
+        self.scrollTo(target, QAbstractItemView.ScrollHint.PositionAtCenter)
+        self.setFocus(Qt.FocusReason.ShortcutFocusReason)
 
     def _on_data_changed_detailed(
         self, row: int, col: int, old_value: object, new_value: object

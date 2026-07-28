@@ -468,7 +468,10 @@ class SettingsDialog(QDialog):
             QSizePolicy.Policy.Fixed,
         )
         self.print_font_button.setToolTip(
-            "Set font family, size, and style for printed estimates\nAffects only printed output, not screen display\nRecommended: clean print fonts such as Arial or Segoe UI\nClick to open font selection dialog"
+            "Set font family, size, and style for printed reports\n"
+            "Affects estimates and silver-bar reports, not screen display\n"
+            "Recommended: clean print fonts such as Arial or Segoe UI\n"
+            "Click to open font selection dialog"
         )
         self.print_font_label = QLabel(
             self._get_font_display_text(self._current_print_font)
@@ -490,7 +493,9 @@ class SettingsDialog(QDialog):
         # Live font sample
         self.print_font_sample = QLabel("RING001  Gold Ring    9.500 g    ₹ 2,375")
         self.print_font_sample.setToolTip(
-            "Live preview of selected print font\nShows estimate-like text as it will appear in printouts\nUpdates automatically when font changes"
+            "Live preview of the selected report font\n"
+            "Shows print-like text as it will appear in reports\n"
+            "Updates automatically when the font changes"
         )
         self._update_font_sample_label()
         form_layout.addRow("Sample:", self.print_font_sample)

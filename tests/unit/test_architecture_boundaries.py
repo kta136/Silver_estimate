@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 from pathlib import Path
+from typing import get_args
 
 from silverestimate.persistence.repository_results import (
     RepositoryFailureKind,
@@ -20,14 +21,20 @@ from silverestimate.persistence.silver_bar_synchronization_repository import (
 )
 from silverestimate.ui.estimate_entry import EstimateEntryWidget
 from silverestimate.ui.estimate_entry_facade import EstimateEntryFacade
+from silverestimate.ui.estimate_print_document import EstimatePrintDocument
 from silverestimate.ui.print_format_spec import (
     CLASSIC_ESTIMATE_FORMAT_SPEC,
     ESTIMATE_FORMAT_SPECS,
     MODERN_ESTIMATE_FORMAT_SPEC,
 )
+from silverestimate.ui.print_payload_builder import PrintDocument
 from silverestimate.ui.settings_live_rates_page import LiveRatesSettingsPage
 from silverestimate.ui.silver_bar_management import SilverBarDialog
 from silverestimate.ui.silver_bar_management_facade import SilverBarManagementFacade
+from silverestimate.ui.silver_bar_print_document import (
+    SilverBarInventoryPrintDocument,
+    SilverBarListPrintDocument,
+)
 
 
 def test_composed_widgets_use_explicit_facades() -> None:
@@ -73,6 +80,34 @@ def test_classic_and_modern_are_the_only_estimate_formats() -> None:
     assert ESTIMATE_FORMAT_SPECS["modern"] is MODERN_ESTIMATE_FORMAT_SPEC
     assert CLASSIC_ESTIMATE_FORMAT_SPEC.key == "classic"
     assert MODERN_ESTIMATE_FORMAT_SPEC.key == "modern"
+
+
+def test_print_pipeline_uses_typed_direct_documents_and_custom_preview() -> None:
+    root = Path(__file__).resolve().parents[2]
+    production_sources = (
+        root / "main.py",
+        *sorted((root / "silverestimate").rglob("*.py")),
+    )
+    forbidden = (
+        "HtmlPrintDocument",
+        "QPrintPreviewDialog",
+        "QTextDocument",
+        "setHtml(",
+        "_print_html",
+        "<!DOCTYPE",
+    )
+
+    assert set(get_args(PrintDocument)) == {
+        EstimatePrintDocument,
+        SilverBarInventoryPrintDocument,
+        SilverBarListPrintDocument,
+    }
+    assert not {
+        f"{path.relative_to(root)}: {token}"
+        for path in production_sources
+        for token in forbidden
+        if token in path.read_text(encoding="utf-8")
+    }
 
 
 def test_explicit_facade_methods_delegate_without_dynamic_widget_composition() -> None:

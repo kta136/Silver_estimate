@@ -1,0 +1,8 @@
+SILVER BAR LIST DETAILS
+List ID: LIST-<script>
+Note: <b>fragile</b>
+[SILVER BARS]
+SNo | Weight (g) | Purity (%) | Fine Wt (g)
+1 | 12.500 | 99.20 | 12.400
+2 | 7.250 | 98.00 | 7.200
+TOTAL (2) | 19.750 |  | 19.600

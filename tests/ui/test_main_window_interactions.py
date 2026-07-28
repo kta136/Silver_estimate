@@ -3,6 +3,8 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 import pytest
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction
 
 from silverestimate.infrastructure.app_constants import APP_TITLE
 from silverestimate.ui.estimate_entry_logic.constants import (
@@ -212,6 +214,9 @@ def test_main_window_startup_sets_up_estimate_view(main_window_fixture, qt_app, 
     assert not window._menu_item_master_action.icon().isNull()
     assert not window._menu_silver_action.icon().isNull()
     assert not window.refresh_rate_action.icon().isNull()
+    file_actions = {action.text(): action for action in window.findChildren(QAction)}
+    assert file_actions["&Save"].shortcutContext() == Qt.ShortcutContext.WindowShortcut
+    assert file_actions["&Print"].shortcutContext() == Qt.ShortcutContext.WindowShortcut
 
     widget = window.estimate_widget
     assert not widget.save_button.icon().isNull()

@@ -12,6 +12,10 @@ from .print_format_spec import (
     ESTIMATE_FORMAT_SPECS,
     normalize_estimate_format,
 )
+from .silver_bar_print_document import (
+    SilverBarInventoryPrintDocument,
+    SilverBarListPrintDocument,
+)
 
 
 def _sanitize_filename_stem(value: str) -> str:
@@ -20,15 +24,9 @@ def _sanitize_filename_stem(value: str) -> str:
     return normalized or "document"
 
 
-@dataclass(frozen=True)
-class HtmlPrintDocument:
-    """HTML document used by current silver-bar reports."""
-
-    html_content: str
-    table_mode: bool = True
-
-
-PrintDocument = EstimatePrintDocument | HtmlPrintDocument
+PrintDocument = (
+    EstimatePrintDocument | SilverBarInventoryPrintDocument | SilverBarListPrintDocument
+)
 
 
 @dataclass(frozen=True)
@@ -104,16 +102,15 @@ class PrintPayloadBuilder:
         *,
         status_filter=None,
         fetch_bars: Callable[[object], object],
-        render_inventory: Callable[[object, object], str],
     ) -> PrintPreviewPayload | None:
         bars = fetch_bars(status_filter)
         if not bars:
             return None
 
         return PrintPreviewPayload(
-            document=HtmlPrintDocument(
-                render_inventory(bars, status_filter),
-                table_mode=True,
+            document=SilverBarInventoryPrintDocument.from_rows(
+                bars,
+                status_filter=status_filter,
             ),
             title="Print Preview - Silver Bar Inventory",
             document_kind="silver_bar_inventory",
@@ -125,23 +122,14 @@ class PrintPayloadBuilder:
         self,
         list_info,
         bars_in_list,
-        *,
-        render_list_details: Callable[[object, object], str],
     ) -> PrintPreviewPayload | None:
         if not list_info:
             return None
 
-        identifier = (
-            list_info["list_identifier"]
-            if "list_identifier" in list_info
-            and list_info["list_identifier"] is not None
-            else "N/A"
-        )
+        document = SilverBarListPrintDocument.from_rows(list_info, bars_in_list)
+        identifier = document.list_identifier
         return PrintPreviewPayload(
-            document=HtmlPrintDocument(
-                render_list_details(list_info, bars_in_list),
-                table_mode=True,
-            ),
+            document=document,
             title=f"Print Preview - List {identifier}",
             document_kind="silver_bar_list",
             identifier=str(identifier),
@@ -152,7 +140,6 @@ class PrintPayloadBuilder:
 
 
 __all__ = [
-    "HtmlPrintDocument",
     "PrintDocument",
     "PrintPayloadBuilder",
     "PrintPreviewPayload",

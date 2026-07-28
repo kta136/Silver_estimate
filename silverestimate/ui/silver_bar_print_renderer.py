@@ -1,128 +1,345 @@
-"""Silver bar print rendering helpers extracted from PrintManager."""
+"""Direct QPainter rendering for Modern silver-bar reports."""
 
 from __future__ import annotations
 
-import html as html_lib
+from dataclasses import dataclass
 
-from PySide6.QtCore import QDate
+from PySide6.QtCore import QRectF
+from PySide6.QtGui import QFont, QPainter
+from PySide6.QtPrintSupport import QPrinter
+
+from .modern_print_primitives import (
+    ALTERNATE_ROW_BG,
+    COLUMN_HEADER_BG,
+    MUTED_TEXT,
+    SECTION_BG,
+    TEXT,
+    TOTAL_BG,
+    WHITE,
+    ModernPrintStyle,
+    build_modern_print_style,
+    draw_table_row,
+    draw_text,
+    minimize_bottom_page_margin,
+)
+from .print_format_spec import MODERN_ESTIMATE_FORMAT_SPEC
+from .silver_bar_print_document import SilverBarPrintDocument
+from .silver_bar_print_layout import (
+    SilverBarPrintLayout,
+    SilverBarPrintTableRow,
+    build_silver_bar_print_layout,
+)
 
 
-def _row_value(row, key, default):
-    """Read a mapping-style row without relying on membership semantics."""
-    try:
-        value = row[key]
-    except KeyError, IndexError, TypeError:
-        return default
-    return default if value is None else value
+@dataclass(frozen=True)
+class _PrintPage:
+    rows: tuple[SilverBarPrintTableRow, ...]
+    include_total: bool
+    continued: bool
+    empty: bool = False
 
 
 class SilverBarPrintRenderer:
-    """Render silver bar reports into HTML tables for preview and export."""
+    """Build and directly paint silver-bar inventory and list reports."""
+
+    def build_layout(
+        self,
+        document: SilverBarPrintDocument,
+    ) -> SilverBarPrintLayout:
+        return build_silver_bar_print_layout(document)
+
+    def paint(
+        self,
+        printer: QPrinter,
+        document: SilverBarPrintDocument,
+        *,
+        print_font: QFont | None = None,
+    ) -> SilverBarPrintLayout:
+        layout = self.build_layout(document)
+        base_font = self._resolve_font(print_font)
+        minimize_bottom_page_margin(printer)
+        painter = QPainter()
+        if not painter.begin(printer):
+            raise RuntimeError("Could not initialize the silver-bar print painter.")
+
+        try:
+            painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+            page_rect = printer.pageRect(QPrinter.Unit.DevicePixel)
+            page_width = max(1.0, float(page_rect.width()))
+            page_height = max(1.0, float(page_rect.height()))
+            style = build_modern_print_style(base_font, printer)
+            pages = _paginate(layout, style, page_height)
+
+            for page_index, page in enumerate(pages, start=1):
+                if page_index > 1 and not printer.newPage():
+                    raise RuntimeError("Could not create another print page.")
+                _paint_page(
+                    painter,
+                    layout,
+                    page,
+                    style,
+                    page_width=page_width,
+                )
+        finally:
+            painter.end()
+
+        return layout
 
     @staticmethod
-    def generate_inventory_html_table(bars, status_filter=None):
-        """Generate HTML table for the general inventory report."""
-        status_text = (
-            f" - {html_lib.escape(str(status_filter))}" if status_filter else " - All"
+    def _resolve_font(print_font: QFont | None) -> QFont:
+        spec = MODERN_ESTIMATE_FORMAT_SPEC
+        font = QFont(print_font) if print_font is not None else QFont(spec.font_family)
+        point_size = (
+            print_font.pointSizeF() if print_font is not None else spec.font_size
         )
-        current_date = html_lib.escape(QDate.currentDate().toString("yyyy-MM-dd"))
-        html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Silver Bar Inventory</title><style>
-                   body{{font-family:Arial,sans-serif;font-size:8pt;margin:0;}}
-                   table{{border-collapse:collapse;width:100%;margin-bottom:10px;page-break-inside:auto}}
-                   th,td{{border:1px solid #ccc;padding:4px 6px;text-align:left;word-wrap:break-word}}
-                   tr{{page-break-inside:avoid;page-break-after:auto}} thead{{display:table-header-group}}
-                   th{{border-bottom:1px solid #000;background-color:#f0f0f0;font-weight:bold}}
-                   .header-title{{text-align:center;font-size:10pt;font-weight:bold;margin-bottom:5px}}
-                   .sub-header{{display:flex;justify-content:space-between;margin-bottom:10px;font-weight:bold}}
-                   .totals{{margin-top:10px;font-weight:bold;border-top:1px double #000;padding-top:5px;text-align:right}}
-                   .right{{text-align:right}}</style></head><body>
-                   <div class="header-title">SILVER BARS INVENTORY{status_text}</div>
-                   <div class="sub-header"><span></span><span>Print Date: {current_date}</span></div>
-                   <table><thead><tr><th>Bar ID</th><th>Estimate Vch</th><th class="right">Weight(g)</th><th class="right">Purity(%)</th>
-                   <th class="right">Fine Wt(g)</th><th>Date Added</th><th>Status</th></tr></thead><tbody>"""
-        total_weight = 0.0
-        total_fine = 0.0
-        bar_count = 0
-        if bars:
-            for bar in bars:
-                bw = _row_value(bar, "weight", 0.0)
-                bfw = _row_value(bar, "fine_weight", 0.0)
-                bp = _row_value(bar, "purity", 0.0)
-                bid = _row_value(bar, "bar_id", "N/A")
-                evch = _row_value(bar, "estimate_voucher_no", "N/A")
-                da = _row_value(bar, "date_added", "")
-                st = _row_value(bar, "status", "")
+        if point_size <= 0:
+            point_size = spec.font_size
+        font.setPointSizeF(max(1.0, point_size))
+        return font
 
-                bar_count += 1
-                total_weight += bw
-                total_fine += bfw
 
-                html += f"""<tr>
-                    <td>{html_lib.escape(str(bid))}</td>
-                    <td>{html_lib.escape(str(evch))}</td>
-                    <td class="right">{bw:.3f}</td>
-                    <td class="right">{bp:.2f}</td>
-                    <td class="right">{bfw:.3f}</td>
-                    <td>{html_lib.escape(str(da))}</td>
-                    <td>{html_lib.escape(str(st))}</td>
-                </tr>"""
+def _paginate(
+    layout: SilverBarPrintLayout,
+    style: ModernPrintStyle,
+    page_height: float,
+) -> tuple[_PrintPage, ...]:
+    capacity = page_height - _header_height(layout, style)
+    capacity -= style.section_header_height + style.column_header_height
+    if capacity <= 0:
+        raise ValueError("The printable page height is too small for this report.")
+
+    if not layout.rows:
+        required = style.row_height + style.total_height
+        if required > capacity:
+            raise ValueError("The printable page is too small for this report.")
+        return (_PrintPage((), include_total=True, continued=False, empty=True),)
+
+    pages: list[_PrintPage] = []
+    row_index = 0
+    while row_index < len(layout.rows):
+        remaining = len(layout.rows) - row_index
+        finish_height = remaining * style.row_height + style.total_height
+        if finish_height <= capacity:
+            take = remaining
+            include_total = True
         else:
-            html += '<tr><td colspan="7" style="text-align:center;padding:5px 0;">-- No Bars Found --</td></tr>'
-        html += f"""</tbody></table><div class="totals">TOTAL Bars: {bar_count} | TOTAL Weight: {total_weight:,.3f} g | TOTAL Fine Wt: {total_fine:,.3f} g</div></body></html>"""
-        return html
+            take = int(capacity // style.row_height)
+            if take >= remaining:
+                take = remaining - 1
+            include_total = False
 
-    @staticmethod
-    def generate_list_details_html(list_info, bars_in_list):
-        """Generate HTML content for printing a single list's details."""
-        li = _row_value(list_info, "list_identifier", "N/A")
-        ln = _row_value(list_info, "list_note", "")
-        li_display = html_lib.escape(str(li))
-        ln_display = html_lib.escape(str(ln)) if ln else "N/A"
+        if take <= 0:
+            raise ValueError("The printable page is too small for report rows.")
 
-        html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Silver Bar List - {li_display}</title><style>
-                   body{{font-family:Arial,sans-serif;font-size:8pt;margin:0}}table{{border-collapse:collapse;width:100%;margin-top:15px;page-break-inside:auto}}
-                   th,td{{border:1px solid #ccc;padding:4px 6px;text-align:left;word-wrap:break-word}}tr{{page-break-inside:avoid;page-break-after:auto}}
-                   thead{{display:table-header-group}}th{{border-bottom:1px solid #000;background-color:#f0f0f0;font-weight:bold}}
-                   .header-title{{text-align:center;font-size:12pt;font-weight:bold;margin-bottom:10px}}.list-info{{margin-bottom:15px}}
-                   .list-info span{{display:inline-block;margin-right:20px}}.list-note{{margin-top:5px;border:1px solid #eee;padding:5px;background-color:#f9f9f9}}
-                   .totals{{margin-top:15px;font-weight:bold;border-top:1px double #000;padding-top:5px;text-align:right}}.right{{text-align:right}}</style></head><body>
-                   <div class="header-title">Silver Bar List Details</div>
-                   <div class="list-info">
-                       <span><b>List ID:</b> {li_display}</span>
-                    </div>
-                   <div class="list-note"><b>Note:</b> {ln_display}</div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th class="right">Weight (g)</th>
-                                <th class="right">Purity (%)</th>
-                                <th class="right">Fine Wt (g)</th>
-                            </tr>
-                        </thead>
-                       <tbody>"""
-        total_weight = 0.0
-        total_fine = 0.0
-        bar_count = 0
-        if bars_in_list:
-            for idx, bar in enumerate(bars_in_list):
-                bw = _row_value(bar, "weight", 0.0)
-                bfw = _row_value(bar, "fine_weight", 0.0)
-                bp = _row_value(bar, "purity", 0.0)
+        pages.append(
+            _PrintPage(
+                rows=layout.rows[row_index : row_index + take],
+                include_total=include_total,
+                continued=bool(pages),
+            )
+        )
+        row_index += take
 
-                bar_count += 1
-                total_weight += bw
-                total_fine += bfw
-                html += f"""<tr>
-                               <td>{idx + 1}</td>
-                               <td class="right">{bw:.3f}</td>
-                               <td class="right">{bp:.2f}</td>
-                               <td class="right">{bfw:.3f}</td>
-                           </tr>"""
-        else:
-            html += '<tr><td colspan="4" style="text-align:center;padding:10px 0;">-- No bars assigned --</td></tr>'
+    return tuple(pages)
 
-        html += f"""</tbody></table>
-                   <div class="totals">TOTAL Bars: {bar_count} | TOTAL Weight: {total_weight:,.3f} g | TOTAL Fine Wt: {total_fine:,.3f} g</div>
-                   </body></html>"""
-        return html
+
+def _header_height(
+    layout: SilverBarPrintLayout,
+    style: ModernPrintStyle,
+) -> float:
+    note_height = style.note_height if layout.note else 0.0
+    return style.title_height + style.metadata_height + note_height + style.header_gap
+
+
+def _paint_page(
+    painter: QPainter,
+    layout: SilverBarPrintLayout,
+    page: _PrintPage,
+    style: ModernPrintStyle,
+    *,
+    page_width: float,
+) -> None:
+    y = _draw_header(painter, layout, style, page_width)
+    y = _draw_table_header(
+        painter,
+        layout,
+        page,
+        style,
+        page_width=page_width,
+        y=y,
+    )
+
+    if page.empty:
+        y = _draw_empty_row(
+            painter,
+            layout.empty_message,
+            style,
+            page_width=page_width,
+            y=y,
+        )
+    else:
+        for row_index, row in enumerate(page.rows):
+            draw_table_row(
+                painter,
+                layout.columns,
+                row.values,
+                style,
+                page_width=page_width,
+                y=y,
+                height=style.row_height,
+                font=style.base_font,
+                metrics=style.base_metrics,
+                background=ALTERNATE_ROW_BG if row_index % 2 else WHITE,
+            )
+            y += style.row_height
+
+    if page.include_total:
+        draw_table_row(
+            painter,
+            layout.columns,
+            layout.total_row.values,
+            style,
+            page_width=page_width,
+            y=y,
+            height=style.total_height,
+            font=style.bold_font,
+            metrics=style.bold_metrics,
+            background=TOTAL_BG,
+            strong_border=True,
+            fit_to_width=True,
+        )
+
+
+def _draw_header(
+    painter: QPainter,
+    layout: SilverBarPrintLayout,
+    style: ModernPrintStyle,
+    page_width: float,
+) -> float:
+    y = 0.0
+    title_rect = QRectF(0.0, y, page_width, style.title_height)
+    draw_text(
+        painter,
+        title_rect,
+        layout.title,
+        font=style.title_font,
+        metrics=style.title_metrics,
+        alignment="center",
+        padding=style.padding,
+    )
+    y += style.title_height
+
+    metadata_width = page_width / 2.0
+    draw_text(
+        painter,
+        QRectF(0.0, y, metadata_width, style.metadata_height),
+        layout.left_metadata,
+        font=style.bold_font,
+        metrics=style.bold_metrics,
+        alignment="left",
+        padding=style.padding,
+    )
+    draw_text(
+        painter,
+        QRectF(metadata_width, y, page_width - metadata_width, style.metadata_height),
+        layout.right_metadata,
+        font=style.bold_font,
+        metrics=style.bold_metrics,
+        alignment="right",
+        padding=style.padding,
+    )
+    y += style.metadata_height
+
+    if layout.note:
+        draw_text(
+            painter,
+            QRectF(0.0, y, page_width, style.note_height),
+            f"Note: {layout.note}",
+            font=style.base_font,
+            metrics=style.base_metrics,
+            alignment="left",
+            padding=style.padding,
+            color=MUTED_TEXT,
+        )
+        y += style.note_height
+
+    painter.setPen(style.strong_pen)
+    painter.drawLine(0, int(y), int(page_width), int(y))
+    return y + style.header_gap
+
+
+def _draw_table_header(  # noqa: PLR0913 - explicit page painting inputs
+    painter: QPainter,
+    layout: SilverBarPrintLayout,
+    page: _PrintPage,
+    style: ModernPrintStyle,
+    *,
+    page_width: float,
+    y: float,
+) -> float:
+    section_title = (
+        f"{layout.section_title} (continued)"
+        if page.continued
+        else layout.section_title
+    )
+    section_rect = QRectF(0.0, y, page_width, style.section_header_height)
+    painter.fillRect(section_rect, SECTION_BG)
+    painter.setPen(style.border_pen)
+    painter.drawRect(section_rect)
+    draw_text(
+        painter,
+        section_rect,
+        section_title,
+        font=style.section_font,
+        metrics=style.section_metrics,
+        alignment="center",
+        padding=style.padding,
+    )
+    y += style.section_header_height
+
+    draw_table_row(
+        painter,
+        layout.columns,
+        tuple(f" {column.title} " for column in layout.columns),
+        style,
+        page_width=page_width,
+        y=y,
+        height=style.column_header_height,
+        font=style.bold_font,
+        metrics=style.bold_metrics,
+        background=COLUMN_HEADER_BG,
+        strong_border=True,
+        fit_to_width=True,
+    )
+    return y + style.column_header_height
+
+
+def _draw_empty_row(
+    painter: QPainter,
+    message: str,
+    style: ModernPrintStyle,
+    *,
+    page_width: float,
+    y: float,
+) -> float:
+    rect = QRectF(0.0, y, page_width, style.row_height)
+    painter.fillRect(rect, WHITE)
+    painter.setPen(style.thin_pen)
+    painter.drawRect(rect)
+    draw_text(
+        painter,
+        rect,
+        message,
+        font=style.base_font,
+        metrics=style.base_metrics,
+        alignment="center",
+        padding=style.padding,
+        color=TEXT,
+    )
+    return y + style.row_height
+
+
+__all__ = [
+    "SilverBarPrintLayout",
+    "SilverBarPrintRenderer",
+]

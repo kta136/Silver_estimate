@@ -66,6 +66,7 @@ _ICON_SPECS: Final[dict[str, IconSpec]] = {
     "view_single_page": IconSpec("page"),
     "view_facing_pages": IconSpec("facing_pages"),
     "view_overview": IconSpec("grid"),
+    "more": IconSpec("more_horizontal"),
     "page_first": IconSpec("page_first"),
     "page_previous": IconSpec("page_previous"),
     "page_next": IconSpec("page_next"),
@@ -75,6 +76,7 @@ _ICON_SPECS: Final[dict[str, IconSpec]] = {
     "silver_bars": IconSpec("ingot"),
     "silver_history": IconSpec("history"),
     "settings": IconSpec("settings"),
+    "print_font": IconSpec("font"),
     "about": IconSpec("about"),
     "balance": IconSpec("balance"),
     "history": IconSpec("history"),
@@ -162,6 +164,15 @@ def _paint_pixmap(symbol: str, size: int, color: str) -> QPixmap:
 def _draw_symbol(  # noqa: C901, PLR0911, PLR0912, PLR0915
     painter: QPainter, symbol: str
 ) -> None:
+    if symbol == "more_horizontal":
+        for x in (6, 12, 18):
+            painter.drawEllipse(QPointF(x, 12), 1.2, 1.2)
+        return
+    if symbol == "font":
+        painter.drawLine(QPointF(5, 20), QPointF(12, 4))
+        painter.drawLine(QPointF(12, 4), QPointF(19, 20))
+        painter.drawLine(QPointF(8, 14), QPointF(16, 14))
+        return
     if symbol == "calculator":
         painter.drawRoundedRect(QRectF(4, 2, 16, 20), 2, 2)
         painter.drawRect(QRectF(7, 5, 10, 4))

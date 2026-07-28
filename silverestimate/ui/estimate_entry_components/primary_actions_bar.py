@@ -87,7 +87,7 @@ class PrimaryActionsBar(QWidget):
 
         NOTE: Ctrl+S and Ctrl+P shortcuts are NOT registered here to avoid
         conflicts with the application-wide menu shortcuts in NavigationController.
-        Those are registered as QActions with ApplicationShortcut context.
+        Those are registered as QActions with WindowShortcut context.
 
         Ctrl+N is registered here as it's specific to the estimate entry widget.
         """
@@ -98,7 +98,7 @@ class PrimaryActionsBar(QWidget):
         )
         self._shortcuts: list[QShortcut] = []
 
-        # Ctrl+S and Ctrl+P are handled by menu bar (ApplicationShortcut)
+        # Ctrl+S and Ctrl+P are handled by the main-window menu bar.
         # Only register Ctrl+N here for new estimate
         new_shortcut = QShortcut(QKeySequence("Ctrl+N"), target)
         new_shortcut.setContext(Qt.ShortcutContext.WindowShortcut)

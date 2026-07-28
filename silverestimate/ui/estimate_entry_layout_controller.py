@@ -136,6 +136,7 @@ class EstimateEntryLayoutController(HostProxy):
                 "Ctrl+D Delete Row",
                 "Ctrl+R Return",
                 "Ctrl+B Silver Bar",
+                "PgUp/PgDn Rows",
             ]
         )
         layout.addWidget(self.bottom_status_strip, 0)
@@ -188,7 +189,6 @@ class EstimateEntryLayoutController(HostProxy):
         self.command_history_action = QAction(
             get_icon("history", widget=self.host), "Estimate History", menu
         )
-        self.command_history_action.setShortcut("Ctrl+H")
         menu.addAction(self.command_history_action)
 
         self.command_settings_action = QAction(

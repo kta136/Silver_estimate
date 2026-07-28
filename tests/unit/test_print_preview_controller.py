@@ -1,8 +1,9 @@
 from pathlib import Path
 
-from PySide6.QtCore import QSizeF
-from PySide6.QtGui import QFont, QPageLayout, QPageSize
-from PySide6.QtPrintSupport import QPrinter, QPrintPreviewDialog, QPrintPreviewWidget
+from PySide6.QtCore import QSizeF, Qt
+from PySide6.QtGui import QAction, QFont, QKeySequence, QPageLayout, QPageSize
+from PySide6.QtPrintSupport import QPrinter, QPrintPreviewWidget
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -16,11 +17,13 @@ from PySide6.QtWidgets import (
 )
 
 from silverestimate.infrastructure.settings import get_app_settings
-from silverestimate.ui.print_payload_builder import (
-    HtmlPrintDocument,
-    PrintPreviewPayload,
-)
+from silverestimate.ui.estimate_print_document import EstimatePrintDocument
+from silverestimate.ui.print_payload_builder import PrintPreviewPayload
 from silverestimate.ui.print_preview_controller import PrintPreviewController
+from silverestimate.ui.print_preview_dialog import PrintPreviewDialog
+from silverestimate.ui.silver_bar_print_document import (
+    SilverBarListPrintDocument,
+)
 
 
 class _PreviewWidgetStub:
@@ -35,15 +38,41 @@ class _PreviewWidgetStub:
         self.zoom_factor = zoom_factor
 
 
+def _estimate_document(
+    format_key: str = "modern",
+    *,
+    show_tunch: bool = False,
+) -> EstimatePrintDocument:
+    return EstimatePrintDocument.from_mapping(
+        {
+            "header": {
+                "voucher_no": "V-001",
+                "date": "2026-07-26",
+                "silver_rate": 100,
+            },
+            "items": [],
+        },
+        format_key=format_key,
+        show_tunch=show_tunch,
+    )
+
+
+def _report_document() -> SilverBarListPrintDocument:
+    return SilverBarListPrintDocument.from_rows(
+        {"list_identifier": "LIST-001", "list_note": "Preview"},
+        [],
+    )
+
+
 def _estimate_payload(format_key: str = "modern") -> PrintPreviewPayload:
     def build(
         selected_format: str,
         show_tunch: bool = False,
     ) -> PrintPreviewPayload:
         return PrintPreviewPayload(
-            document=HtmlPrintDocument(
-                f"<html><body><p>{selected_format}</p></body></html>",
-                table_mode=False,
+            document=_estimate_document(
+                selected_format,
+                show_tunch=show_tunch,
             ),
             title="Print Preview",
             document_kind="estimate",
@@ -59,6 +88,19 @@ def _estimate_payload(format_key: str = "modern") -> PrintPreviewPayload:
     return build(format_key)
 
 
+def test_custom_preview_dialog_owns_single_toolbar_and_preview_canvas(qtbot):
+    preview = PrintPreviewDialog(QPrinter())
+    qtbot.addWidget(preview)
+
+    assert preview.objectName() == "PrintPreviewDialog"
+    assert preview.isModal()
+    assert preview.findChild(QToolBar) is preview.toolbar
+    assert len(preview.findChildren(QToolBar)) == 1
+    assert preview.findChild(QPrintPreviewWidget) is preview.preview_widget
+    assert preview.preview_widget.objectName() == "PrintPreviewCanvas"
+    assert preview.layout().count() == 2
+
+
 def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
     controller = PrintPreviewController(
         printer=QPrinter(),
@@ -67,7 +109,7 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
         persist_print_font=lambda _font: None,
     )
     payload = _estimate_payload()
-    preview = QPrintPreviewDialog(controller._printer)
+    preview = PrintPreviewDialog(controller._printer)
     qtbot.addWidget(preview)
     preview_widget = preview.findChild(QPrintPreviewWidget)
 
@@ -95,6 +137,15 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
     tunch_checkbox = preview.findChild(QCheckBox, "PreviewTunchCheckbox")
     assert tunch_checkbox is not None
     assert tunch_checkbox.isChecked() is False
+
+    print_action = next(
+        action for action in toolbar.actions() if action.text() == "Print"
+    )
+    assert (
+        print_action.shortcut().matches(QKeySequence("Ctrl+P"))
+        == QKeySequence.SequenceMatch.ExactMatch
+    )
+    assert print_action.shortcutContext() == Qt.ShortcutContext.WindowShortcut
 
     action_texts = [action.text() for action in toolbar.actions() if action.text()]
 
@@ -125,8 +176,82 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
     ]
     assert action_texts == expected_toolbar_actions
 
+    for action_text in expected_toolbar_actions:
+        action = next(
+            action for action in toolbar.actions() if action.text() == action_text
+        )
+        button = toolbar.widgetForAction(action)
+        assert isinstance(button, QToolButton)
+        assert button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonIconOnly
+        assert button.accessibleName() == action_text
+
     more_button = toolbar.findChild(QToolButton, "PreviewMoreButton")
     assert more_button is not None
+    assert more_button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonIconOnly
+    assert more_button.accessibleName() == "More preview actions"
+    more_action = next(
+        action
+        for action in toolbar.actions()
+        if toolbar.widgetForAction(action) is more_button
+    )
+    page_navigator = preview.findChild(QWidget, "PreviewPageNavigator")
+    page_action = next(
+        action
+        for action in toolbar.actions()
+        if toolbar.widgetForAction(action) is page_navigator
+    )
+    fit_width_action = next(
+        action for action in toolbar.actions() if action.text() == "Fit Width"
+    )
+    fit_page_action = next(
+        action for action in toolbar.actions() if action.text() == "Fit Page"
+    )
+    print_action = next(
+        action for action in toolbar.actions() if action.text() == "Print"
+    )
+    export_action = next(
+        action for action in toolbar.actions() if action.text() == "Export PDF"
+    )
+    font_action = next(
+        action for action in toolbar.actions() if action.text() == "Print Font"
+    )
+    orientation_combo = preview.findChild(QComboBox, "PreviewOrientationCombo")
+    orientation_action = next(
+        action
+        for action in toolbar.actions()
+        if toolbar.widgetForAction(action) is orientation_combo
+    )
+    format_action = next(
+        action
+        for action in toolbar.actions()
+        if toolbar.widgetForAction(action) is format_combo
+    )
+    tunch_action = next(
+        action
+        for action in toolbar.actions()
+        if toolbar.widgetForAction(action) is tunch_checkbox
+    )
+    ordered_actions = toolbar.actions()
+    assert ordered_actions.index(print_action) < ordered_actions.index(export_action)
+    assert ordered_actions.index(export_action) < ordered_actions.index(
+        orientation_action
+    )
+    assert ordered_actions.index(orientation_action) < ordered_actions.index(
+        format_action
+    )
+    assert ordered_actions.index(format_action) < ordered_actions.index(tunch_action)
+    assert ordered_actions.index(tunch_action) < ordered_actions.index(font_action)
+    assert ordered_actions.index(font_action) < ordered_actions.index(fit_width_action)
+    assert toolbar.actions().index(more_action) > toolbar.actions().index(
+        fit_width_action
+    )
+    assert toolbar.actions().index(fit_page_action) < toolbar.actions().index(
+        page_action
+    )
+    assert toolbar.actions().index(page_action) < toolbar.actions().index(more_action)
+    assert toolbar.actions()[-1] is more_action
+    assert fit_width_action.priority() == QAction.Priority.NormalPriority
+    assert fit_page_action.priority() == QAction.Priority.NormalPriority
     more_menu = more_button.menu()
     assert isinstance(more_menu, QMenu)
     menu_action_texts = [
@@ -151,6 +276,125 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
             assert not action.icon().isNull()
 
 
+def test_silver_bar_preview_exposes_print_font_without_format_controls(qtbot):
+    controller = PrintPreviewController(
+        printer=QPrinter(),
+        render_document=lambda *args: None,
+        get_print_font=lambda: QFont("Arial", 8),
+        persist_print_font=lambda _font: None,
+    )
+    payload = PrintPreviewPayload(
+        document=_report_document(),
+        title="Print Preview - List LIST-001",
+        document_kind="silver_bar_list",
+        identifier="LIST-001",
+        suggested_filename="Silver-Bar-List-LIST-001.pdf",
+    )
+    preview = PrintPreviewDialog(controller._printer)
+    qtbot.addWidget(preview)
+
+    controller._augment_preview_toolbar(
+        preview,
+        preview.findChild(QPrintPreviewWidget),
+        {"payload": payload},
+        None,
+    )
+
+    toolbar = preview.findChild(QToolBar)
+    assert toolbar is not None
+    action_texts = [action.text() for action in toolbar.actions() if action.text()]
+    assert "Print Font" in action_texts
+    assert preview.findChild(QComboBox, "PreviewFormatCombo") is None
+    assert preview.findChild(QCheckBox, "PreviewTunchCheckbox") is None
+
+
+def test_ctrl_p_prints_active_preview_instead_of_main_window(qtbot):
+    parent = QWidget()
+    qtbot.addWidget(parent)
+    main_print_calls = []
+    main_print_action = QAction("Main Print", parent)
+    main_print_action.setShortcut("Ctrl+P")
+    main_print_action.setShortcutContext(Qt.ShortcutContext.WindowShortcut)
+    main_print_action.triggered.connect(lambda: main_print_calls.append(True))
+    parent.addAction(main_print_action)
+
+    preview_print_calls = []
+    controller = PrintPreviewController(
+        printer=QPrinter(),
+        render_document=lambda *args: None,
+    )
+    controller._quick_print_current = lambda *args: preview_print_calls.append(args)
+    preview = PrintPreviewDialog(controller._printer, parent)
+    qtbot.addWidget(preview)
+    preview_widget = preview.findChild(QPrintPreviewWidget)
+    controller._augment_preview_toolbar(
+        preview,
+        preview_widget,
+        {"payload": _estimate_payload()},
+        parent,
+    )
+
+    parent.show()
+    preview.show()
+    preview.raise_()
+    preview.activateWindow()
+    preview_widget.setFocus()
+    qtbot.waitUntil(preview.isActiveWindow)
+    QTest.keyClick(
+        preview_widget,
+        Qt.Key.Key_P,
+        Qt.KeyboardModifier.ControlModifier,
+    )
+    qtbot.waitUntil(lambda: len(preview_print_calls) == 1)
+
+    assert len(preview_print_calls) == 1
+    assert main_print_calls == []
+
+
+def test_page_keys_trigger_preview_navigation_with_document_focus(qtbot):
+    parent = QWidget()
+    qtbot.addWidget(parent)
+    controller = PrintPreviewController(
+        printer=QPrinter(),
+        render_document=lambda *args: None,
+    )
+    preview = PrintPreviewDialog(controller._printer, parent)
+    qtbot.addWidget(preview)
+    preview_widget = preview.findChild(QPrintPreviewWidget)
+    controller._augment_preview_toolbar(
+        preview,
+        preview_widget,
+        {"payload": _estimate_payload()},
+        parent,
+    )
+    page_actions = {
+        action.shortcut().toString(): action
+        for action in preview.actions()
+        if not action.shortcut().isEmpty()
+    }
+    assert {"PgUp", "PgDown"} <= page_actions.keys()
+    assert all(
+        page_actions[key].shortcutContext() == Qt.ShortcutContext.WindowShortcut
+        for key in ("PgUp", "PgDown")
+    )
+    triggered = []
+    page_actions["PgUp"].triggered.connect(lambda: triggered.append("up"))
+    page_actions["PgDown"].triggered.connect(lambda: triggered.append("down"))
+
+    parent.show()
+    preview.show()
+    preview.raise_()
+    preview.activateWindow()
+    preview_widget.setFocus()
+    qtbot.waitUntil(preview.isActiveWindow)
+
+    QTest.keyClick(preview_widget, Qt.Key.Key_PageDown)
+    QTest.keyClick(preview_widget, Qt.Key.Key_PageUp)
+    qtbot.waitUntil(lambda: len(triggered) == 2)
+
+    assert triggered == ["down", "up"]
+
+
 def test_preview_print_font_dialog_persists_selection_and_refreshes(
     monkeypatch,
 ) -> None:
@@ -169,11 +413,8 @@ def test_preview_print_font_dialog_persists_selection_and_refreshes(
 
     class _Preview:
         def __init__(self) -> None:
-            self.widget = _PreviewWidget()
+            self.preview_widget = _PreviewWidget()
             self.repaint_calls = 0
-
-        def findChild(self, _widget_type):
-            return self.widget
 
         def repaint(self) -> None:
             self.repaint_calls += 1
@@ -204,7 +445,7 @@ def test_preview_print_font_dialog_persists_selection_and_refreshes(
     controller._choose_print_font(preview)
 
     assert persisted_fonts == [selected_font]
-    assert preview.widget.update_calls == 1
+    assert preview.preview_widget.update_calls == 1
     assert preview.repaint_calls == 0
 
 
@@ -235,6 +476,36 @@ def test_preview_uses_saved_custom_zoom_when_available(qt_app, settings_stub):
 
     assert preview_widget.zoom_modes == [QPrintPreviewWidget.ZoomMode.CustomZoom]
     assert preview_widget.zoom_factor == 1.75
+
+
+def test_focus_preview_activates_dialog_and_document_view():
+    class _FocusStub:
+        def __init__(self):
+            self.focus_reasons = []
+
+        def setFocus(self, reason):
+            self.focus_reasons.append(reason)
+
+    class _PreviewStub(_FocusStub):
+        def __init__(self):
+            super().__init__()
+            self.raise_calls = 0
+            self.activate_calls = 0
+
+        def raise_(self):
+            self.raise_calls += 1
+
+        def activateWindow(self):
+            self.activate_calls += 1
+
+    preview = _PreviewStub()
+    preview_widget = _FocusStub()
+
+    PrintPreviewController._focus_preview(preview, preview_widget)
+
+    assert preview.raise_calls == 1
+    assert preview.activate_calls == 1
+    assert preview_widget.focus_reasons == [Qt.FocusReason.ActiveWindowFocusReason]
 
 
 def test_preview_defaults_persist_updated_print_preferences(
@@ -288,14 +559,14 @@ def test_preview_format_switch_rebuilds_current_estimate_payload(qtbot) -> None:
         printer=QPrinter(),
         render_document=lambda *args: None,
     )
-    preview = QPrintPreviewDialog(controller._printer)
+    preview = PrintPreviewDialog(controller._printer)
     qtbot.addWidget(preview)
     state = {"payload": _estimate_payload("modern")}
 
     controller._switch_format(preview, "classic", state)
 
     assert state["payload"].format_key == "classic"
-    assert state["payload"].document.html_content.endswith("classic</p></body></html>")
+    assert state["payload"].document.format_key == "classic"
 
 
 def test_preview_tunch_toggle_refreshes_and_survives_format_switch(qtbot) -> None:
@@ -303,7 +574,7 @@ def test_preview_tunch_toggle_refreshes_and_survives_format_switch(qtbot) -> Non
         printer=QPrinter(),
         render_document=lambda *args: None,
     )
-    preview = QPrintPreviewDialog(controller._printer)
+    preview = PrintPreviewDialog(controller._printer)
     qtbot.addWidget(preview)
     state = {"payload": _estimate_payload("modern")}
 
@@ -326,10 +597,7 @@ def test_preview_defaults_store_custom_page_size_dimensions(qt_app, settings_stu
     )
     controller._printer.setPageSize(custom_page)
     payload = PrintPreviewPayload(
-        document=HtmlPrintDocument(
-            "<html><body><p>Preview</p></body></html>",
-            table_mode=False,
-        ),
+        document=_report_document(),
         title="Print Preview",
         document_kind="silver_bar_list",
         identifier="LIST-001",
@@ -352,10 +620,7 @@ def test_quick_print_closes_preview_without_success_popup(monkeypatch):
         render_document=lambda *args: render_calls.append(args),
     )
     payload = PrintPreviewPayload(
-        document=HtmlPrintDocument(
-            "<html><body><p>Preview</p></body></html>",
-            table_mode=False,
-        ),
+        document=_estimate_document(),
         title="Print Preview",
         document_kind="estimate",
         identifier="V-003",
@@ -392,10 +657,7 @@ def test_quick_print_failure_keeps_preview_open_and_shows_error(monkeypatch):
         render_document=lambda *args: (_ for _ in ()).throw(RuntimeError("offline")),
     )
     payload = PrintPreviewPayload(
-        document=HtmlPrintDocument(
-            "<html><body><p>Preview</p></body></html>",
-            table_mode=False,
-        ),
+        document=_estimate_document(),
         title="Print Preview",
         document_kind="estimate",
         identifier="V-004",
@@ -434,10 +696,7 @@ def test_quick_print_blocks_missing_printer_before_render(monkeypatch):
         render_document=lambda *args: render_calls.append(args),
     )
     payload = PrintPreviewPayload(
-        document=HtmlPrintDocument(
-            "<html><body><p>Preview</p></body></html>",
-            table_mode=False,
-        ),
+        document=_estimate_document(),
         title="Print Preview",
         document_kind="estimate",
         identifier="V-005",
@@ -490,10 +749,7 @@ def test_export_pdf_writes_temp_then_replaces_target(
         render_document=_render_pdf,
     )
     payload = PrintPreviewPayload(
-        document=HtmlPrintDocument(
-            "<html><body><p>Preview</p></body></html>",
-            table_mode=False,
-        ),
+        document=_estimate_document(),
         title="Print Preview",
         document_kind="estimate",
         identifier="V-006",
@@ -536,10 +792,7 @@ def test_export_pdf_empty_temp_keeps_existing_file(
         render_document=_render_empty_pdf,
     )
     payload = PrintPreviewPayload(
-        document=HtmlPrintDocument(
-            "<html><body><p>Preview</p></body></html>",
-            table_mode=False,
-        ),
+        document=_estimate_document(),
         title="Print Preview",
         document_kind="estimate",
         identifier="V-007",

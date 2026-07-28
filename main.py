@@ -6,7 +6,7 @@ import sys
 import time
 import traceback
 from pathlib import Path
-from typing import TextIO
+from typing import Any, TextIO
 
 PROCESS_START_PERF = time.perf_counter()
 PROCESS_START_UNIX = time.time()
@@ -131,14 +131,54 @@ if sys.stdout is None:
     sys.stdout = open(os.devnull, "w")  # noqa: SIM115 - process-lifetime stream
 
 
+def _restore_frozen_qapplication(qt_widgets: Any | None = None) -> type:
+    """Bypass Nuitka's unsafe Windows icon wrapper around QApplication."""
+    if qt_widgets is None:
+        from PySide6 import QtWidgets
+
+        qt_widgets = QtWidgets
+
+    application_type = qt_widgets.QApplication
+    original_type = getattr(application_type, "__base__", None)
+    if (
+        _is_frozen_runtime()
+        and original_type is not None
+        and getattr(application_type, "__name__", "") == "QApplication"
+        and getattr(original_type, "__name__", "") == "QApplication"
+        and getattr(application_type, "__module__", "")
+        == getattr(original_type, "__module__", "")
+    ):
+        qt_widgets.QApplication = original_type
+        return original_type
+    return application_type
+
+
+def _paint_artifact_smoke_pdf(pdf_path: Path) -> int:
+    """Exercise the frozen Qt print stack through a direct painter."""
+
+    from PySide6.QtGui import QFont, QPainter
+    from PySide6.QtPrintSupport import QPrinter
+
+    printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+    printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+    printer.setOutputFileName(str(pdf_path))
+    painter = QPainter()
+    if not painter.begin(printer):
+        raise RuntimeError("Frozen artifact could not start direct PDF painting")
+    try:
+        painter.setFont(QFont("Arial", 24, QFont.Weight.Bold))
+        painter.drawText(120, 180, "SilverEstimate artifact smoke")
+    finally:
+        painter.end()
+    return pdf_path.stat().st_size
+
+
 def _run_artifact_smoke() -> int:
     import json
     import tempfile
     from pathlib import Path
 
-    from PySide6.QtGui import QIcon, QImageReader, QTextDocument
-    from PySide6.QtPrintSupport import QPrinter
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtGui import QIcon, QImageReader
 
     from silverestimate.infrastructure.app_constants import APP_VERSION
     from silverestimate.infrastructure.paths import (
@@ -154,7 +194,8 @@ def _run_artifact_smoke() -> int:
     os.environ.setdefault(
         "QT_QPA_PLATFORM", "windows" if os.name == "nt" else "offscreen"
     )
-    app = QApplication.instance() or QApplication([])
+    application_type = _restore_frozen_qapplication()
+    app = application_type.instance() or application_type([])
     icon_path = get_asset_path("assets", "icons", "silverestimate.ico")
     icon_available = icon_path.is_file() and not QIcon(str(icon_path)).isNull()
     image_formats = {
@@ -186,14 +227,7 @@ def _run_artifact_smoke() -> int:
         if plaintext_header:
             raise RuntimeError("Frozen artifact created a plaintext SQLite database")
 
-        pdf_path = temp_root / "artifact-smoke.pdf"
-        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
-        printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
-        printer.setOutputFileName(str(pdf_path))
-        document = QTextDocument()
-        document.setHtml("<h1>SilverEstimate artifact smoke</h1>")
-        document.print_(printer)
-        pdf_bytes = pdf_path.stat().st_size
+        pdf_bytes = _paint_artifact_smoke_pdf(temp_root / "artifact-smoke.pdf")
         if pdf_bytes < 1_000:
             raise RuntimeError("Frozen artifact failed to render a PDF")
 
@@ -243,6 +277,9 @@ def main() -> int:
         )
 
         hide_console_window()
+
+    if _is_frozen_runtime():
+        _restore_frozen_qapplication()
 
     from silverestimate.infrastructure.application import ApplicationBuilder
     from silverestimate.infrastructure.main_window_runtime import (

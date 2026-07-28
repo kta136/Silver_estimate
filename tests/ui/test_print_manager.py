@@ -12,7 +12,10 @@ from PySide6.QtPrintSupport import QPrinter
 from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.ui.estimate_print_document import EstimatePrintDocument
 from silverestimate.ui.print_manager import PrintManager
-from silverestimate.ui.print_payload_builder import HtmlPrintDocument
+from silverestimate.ui.silver_bar_print_document import (
+    SilverBarInventoryPrintDocument,
+    SilverBarListPrintDocument,
+)
 from tests.factories import multi_section_print_estimate
 
 
@@ -43,6 +46,21 @@ def _render_estimate_pdf(
     printer.setOutputFileName(str(output_path))
     printer.setPageLayout(page_layout or manager.printer.pageLayout())
     manager._render_document(printer, payload.document)
+
+
+def _render_document_pdf(
+    manager: PrintManager,
+    document,
+    output_path,
+    *,
+    page_layout: QPageLayout | None = None,
+) -> None:
+    _ensure_print_test_font()
+    printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+    printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+    printer.setOutputFileName(str(output_path))
+    printer.setPageLayout(page_layout or manager.printer.pageLayout())
+    manager._render_document(printer, document)
 
 
 def _ensure_print_test_font() -> None:
@@ -82,7 +100,7 @@ def _long_estimate_data(item_count: int = 60):
     return estimate_data
 
 
-def test_generate_silver_bars_html_escapes_dynamic_text(qt_app, settings_stub):
+def test_silver_bar_inventory_layout_keeps_dynamic_text_plain(qt_app, settings_stub):
     manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
     bars = [
         {
@@ -96,13 +114,18 @@ def test_generate_silver_bars_html_escapes_dynamic_text(qt_app, settings_stub):
         }
     ]
 
-    rendered = manager._generate_silver_bars_html_table(bars, status_filter="<all>")
+    document = SilverBarInventoryPrintDocument.from_rows(
+        bars,
+        status_filter="<all>",
+        print_date="2026-02-13",
+    )
+    rendered = manager._silver_bar_renderer.build_layout(document).normalized_text()
 
-    assert "<script>alert(1)</script>" not in rendered
-    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in rendered
-    assert "In &lt;Stock&gt;" in rendered
-    assert "2026-02-13 &lt;today&gt;" in rendered
-    assert "SILVER BARS INVENTORY - &lt;all&gt;" in rendered
+    assert "V1<script>alert(1)</script>" in rendered
+    assert "In <Stock>" in rendered
+    assert "13/02/2026" in rendered
+    assert "Status: <all>" in rendered
+    assert "&lt;" not in rendered
 
 
 def test_estimate_modern_layout_uses_requested_column_precision(qt_app, settings_stub):
@@ -317,73 +340,73 @@ def test_show_preview_delegates_to_preview_dialog(qt_app, settings_stub):
     assert calls == [(payload, "parent")]
 
 
-def test_build_silver_bar_list_preview_payload_marks_table_mode(qt_app, settings_stub):
+def test_build_silver_bar_list_preview_payload_uses_typed_document(
+    qt_app, settings_stub
+):
     manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
-    manager._generate_list_details_html = lambda info, bars: "LIST-HTML"
 
     payload = manager.build_silver_bar_list_preview_payload(
-        {"list_identifier": "LIST-010"},
-        [{"bar_id": 1}],
+        {"list_identifier": "LIST-010", "list_note": "Typed report"},
+        [{"bar_id": 1, "weight": 10, "purity": 99, "fine_weight": 9.9}],
     )
 
     assert payload is not None
-    assert isinstance(payload.document, HtmlPrintDocument)
-    assert payload.document.html_content == "LIST-HTML"
+    assert isinstance(payload.document, SilverBarListPrintDocument)
+    assert payload.document.list_identifier == "LIST-010"
+    assert payload.document.list_note == "Typed report"
+    assert payload.document.bars[0].fine_weight == pytest.approx(9.9)
     assert payload.title == "Print Preview - List LIST-010"
-    assert payload.document.table_mode is True
+    assert payload.document_kind == "silver_bar_list"
     assert payload.suggested_filename == "Silver-Bar-List-LIST-010.pdf"
 
 
-def test_build_silver_bar_inventory_preview_payload_marks_table_mode(
+def test_build_silver_bar_inventory_preview_payload_uses_typed_document(
     qt_app, settings_stub
 ):
     class _InventoryDbStub:
         @staticmethod
         def get_silver_bars(status_filter):
             assert status_filter == "AVAILABLE"
-            return [{"bar_id": 1}]
+            return [
+                {
+                    "bar_id": 1,
+                    "weight": 10,
+                    "purity": 99,
+                    "fine_weight": 9.9,
+                }
+            ]
 
     manager = PrintManager(_InventoryDbStub(), print_font=QFont("Courier New", 8))
-    manager._generate_silver_bars_html_table = lambda bars, status_filter: (
-        f"INVENTORY-{status_filter}-{len(bars)}"
-    )
 
     payload = manager.build_silver_bar_inventory_preview_payload("AVAILABLE")
 
     assert payload is not None
-    assert isinstance(payload.document, HtmlPrintDocument)
-    assert payload.document.html_content == "INVENTORY-AVAILABLE-1"
+    assert isinstance(payload.document, SilverBarInventoryPrintDocument)
+    assert payload.document.status_filter == "AVAILABLE"
+    assert payload.document.bars[0].bar_id == "1"
     assert payload.title == "Print Preview - Silver Bar Inventory"
-    assert payload.document.table_mode is True
+    assert payload.document_kind == "silver_bar_inventory"
     assert payload.suggested_filename == "Silver-Bar-Inventory.pdf"
 
 
-def test_generate_list_details_html_escapes_list_note(qt_app, settings_stub):
+def test_silver_bar_list_layout_keeps_note_as_plain_text(qt_app, settings_stub):
     manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
 
-    rendered = manager._generate_list_details_html(
+    document = SilverBarListPrintDocument.from_rows(
         {
             "list_identifier": 'LIST-011<script>alert("x")</script>',
             "list_note": "<b>fragile</b>",
         },
-        [
-            {
-                "weight": 10.5,
-                "purity": 99.9,
-                "fine_weight": 10.49,
-            }
-        ],
+        [{"weight": 10.5, "purity": 99.9, "fine_weight": 10.49}],
     )
+    rendered = manager._silver_bar_renderer.build_layout(document).normalized_text()
 
-    assert '<script>alert("x")</script>' not in rendered
-    assert "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;" in rendered
-    assert "<b>fragile</b>" not in rendered
-    assert "&lt;b&gt;fragile&lt;/b&gt;" in rendered
+    assert 'LIST-011<script>alert("x")</script>' in rendered
+    assert "<b>fragile</b>" in rendered
+    assert "&lt;" not in rendered
 
 
-def test_generate_list_details_html_reads_values_from_sqlite_rows(
-    qt_app, settings_stub
-):
+def test_silver_bar_list_document_reads_values_from_sqlite_rows(qt_app, settings_stub):
     manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
     connection = sqlite3.connect(":memory:")
     connection.row_factory = sqlite3.Row
@@ -392,18 +415,111 @@ def test_generate_list_details_html_reads_values_from_sqlite_rows(
             "SELECT 12.5 AS weight, 99.2 AS purity, 12.4 AS fine_weight"
         ).fetchone()
 
-        rendered = manager._generate_list_details_html(
+        document = SilverBarListPrintDocument.from_rows(
             {"list_identifier": "LIST-012", "list_note": "SQLite row"},
             [bar],
         )
     finally:
         connection.close()
 
-    assert "12.500" in rendered
-    assert "99.20" in rendered
-    assert "12.400" in rendered
-    assert "TOTAL Weight: 12.500 g" in rendered
-    assert "TOTAL Fine Wt: 12.400 g" in rendered
+    rendered = manager._silver_bar_renderer.build_layout(document).normalized_text()
+
+    assert "1 | 12.500 | 99.20 | 12.400" in rendered
+    assert "TOTAL (1) | 12.500 |  | 12.400" in rendered
+
+
+def test_direct_inventory_painter_repeats_headers_and_keeps_total_with_rows(
+    qt_app,
+    settings_stub,
+    tmp_path,
+):
+    del qt_app, settings_stub
+    manager = PrintManager(_DbStub(), print_font=QFont("Arial", 10))
+    bars = [
+        {
+            "bar_id": index,
+            "estimate_voucher_no": f"V-{index:03d}",
+            "weight": 10 + index / 10,
+            "purity": 99.5,
+            "fine_weight": 9.95 + index / 10,
+            "date_added": "2026-07-26",
+            "status": "In Stock",
+        }
+        for index in range(1, 76)
+    ]
+    document = SilverBarInventoryPrintDocument.from_rows(
+        bars,
+        status_filter="AVAILABLE",
+        print_date="2026-07-26",
+    )
+    output_path = tmp_path / "modern-silver-bar-inventory.pdf"
+    page_layout = QPageLayout(
+        QPageSize(QPageSize.PageSizeId.A4),
+        QPageLayout.Orientation.Portrait,
+        QMarginsF(10, 10, 10, 10),
+        QPageLayout.Unit.Millimeter,
+    )
+
+    _render_document_pdf(
+        manager,
+        document,
+        output_path,
+        page_layout=page_layout,
+    )
+    pages, pdf = _pdf_pages(output_path)
+
+    assert pdf.pageCount() >= 2
+    assert all("SILVER BAR INVENTORY" in page for page in pages)
+    assert all("Status: AVAILABLE" in page for page in pages)
+    assert all("Estimate Vch" in page for page in pages)
+    assert any("SILVER BARS (continued)" in page for page in pages[1:])
+    assert all("TOTAL (75)" not in page for page in pages[:-1])
+    assert "V-075" in pages[-1]
+    assert "TOTAL (75)" in pages[-1]
+
+
+def test_direct_empty_list_painter_handles_custom_page_and_large_font(
+    qt_app,
+    settings_stub,
+    tmp_path,
+):
+    del qt_app, settings_stub
+    manager = PrintManager(_DbStub(), print_font=QFont("Arial", 11))
+    document = SilverBarListPrintDocument.from_rows(
+        {"list_identifier": "LIST-EMPTY", "list_note": ""},
+        [],
+    )
+    output_path = tmp_path / "modern-empty-silver-bar-list.pdf"
+    page_layout = QPageLayout(
+        QPageSize(
+            QSizeF(120.0, 190.0),
+            QPageSize.Unit.Millimeter,
+            "Counter Slip",
+        ),
+        QPageLayout.Orientation.Portrait,
+        QMarginsF(6, 6, 6, 6),
+        QPageLayout.Unit.Millimeter,
+    )
+
+    _render_document_pdf(
+        manager,
+        document,
+        output_path,
+        page_layout=page_layout,
+    )
+    pages, pdf = _pdf_pages(output_path)
+    rendered = "\n".join(pages)
+
+    assert pdf.pageCount() == 1
+    assert "SILVER BAR LIST DETAILS" in rendered
+    assert "List ID: LIST-EMPTY" in rendered
+    assert "Note: N/A" in rendered
+    assert "-- No bars assigned --" in rendered
+    assert "TOTAL (0)" in rendered
+    assert "Created:" not in rendered
+    assert "Printed:" not in rendered
+    assert "Bar Number" not in rendered
+    assert "Status" not in rendered
 
 
 def test_print_manager_preserves_portrait_orientation(qt_app, settings_stub):

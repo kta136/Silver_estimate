@@ -2,6 +2,7 @@ import types
 
 import pytest
 from PySide6.QtCore import QDate, QEventLoop, QSize, Qt, QTimer
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
     QDialog,
     QHeaderView,
@@ -195,6 +196,27 @@ def test_load_estimate_signal_connection_is_idempotent(qt_app, fake_db):
         widget.voucher_edit.returnPressed.emit()
 
         assert load_calls == ["TEST123"]
+    finally:
+        widget.deleteLater()
+
+
+def test_ctrl_h_opens_estimate_history_once(qt_app, fake_db):
+    widget = _make_widget(fake_db)
+    history_calls = []
+    widget.presenter.open_history = lambda: history_calls.append(True)
+    try:
+        widget.show()
+        widget.voucher_edit.setFocus()
+        qt_app.processEvents()
+
+        QTest.keyClick(
+            widget.voucher_edit,
+            Qt.Key.Key_H,
+            Qt.KeyboardModifier.ControlModifier,
+        )
+        qt_app.processEvents()
+
+        assert history_calls == [True]
     finally:
         widget.deleteLater()
 
@@ -903,6 +925,7 @@ def test_compact_header_preserves_table_viewport_height(qt_app, fake_db):
             "Ctrl+D Delete Row",
             "Ctrl+R Return",
             "Ctrl+B Silver Bar",
+            "PgUp/PgDn Rows",
         ):
             assert label in shortcuts
         for stale_label in ("F2:", "Ins:", "Del:", "F9:"):

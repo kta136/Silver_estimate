@@ -171,7 +171,8 @@ def main_window_fixture(qt_app, settings_stub, monkeypatch):
         lambda self: True,
     )
     monkeypatch.setattr(
-        "silverestimate.ui.estimate_entry.EstimateEntryWidget._safe_edit_item",
+        "silverestimate.ui.estimate_entry_table_controller."
+        "EstimateEntryTableController._safe_edit_item",
         lambda self, *_: None,
     )
 
@@ -341,8 +342,8 @@ def test_user_entry_updates_totals_and_view_model(main_window_fixture, qtbot):
     table.set_cell_text(0, COL_WAGE_RATE, "12")
 
     # Trigger chained calculations (net, fine, wage, totals).
-    widget.calculate_net_weight()
-    widget.calculate_totals()
+    widget.totals_controller.calculate_net_weight()
+    widget.totals_controller.calculate_totals()
     qtbot.waitUntil(
         lambda: table.get_cell_text(0, COL_WAGE_AMT).strip() not in {"", "0", "0.0"},
         timeout=1500,
@@ -361,7 +362,7 @@ def test_user_entry_updates_totals_and_view_model(main_window_fixture, qtbot):
     assert float(widget.net_fine_label.text()) == pytest.approx(8.79, rel=1e-3)
 
     # View-model captures the active row for downstream workflows.
-    widget._update_view_model_snapshot()
+    widget.workflow_controller._update_view_model_snapshot()
     active_rows = widget.view_model.active_rows()
     assert len(active_rows) == 1
     row_state = active_rows[0]

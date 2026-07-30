@@ -43,11 +43,8 @@ def test_qt_object_availability_distinguishes_none_live_and_deleted_wrappers(
 def test_totals_recalculation_falls_back_when_timer_wrapper_is_deleted(qt_app):
     timer = QTimer()
     calls = []
-    controller = EstimateEntryTotalsController(
-        SimpleNamespace(
-            _totals_timer=timer, calculate_totals=lambda: calls.append(True)
-        )
-    )
+    controller = EstimateEntryTotalsController(SimpleNamespace(_totals_timer=timer))
+    controller.calculate_totals = lambda: calls.append(True)
     delete(timer)
 
     controller._schedule_totals_recalc()

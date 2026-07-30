@@ -5,37 +5,12 @@ from __future__ import annotations
 from collections.abc import Mapping as MappingABC
 from typing import Any, Iterable, Mapping, Optional, Protocol
 
+from silverestimate.persistence.database_protocols import EstimateDataSource
+
 EstimateRow = Mapping[str, Any]
 
 
-class EstimateRepositoryDatabase(Protocol):
-    """Minimal database-manager contract used by the estimate presenter."""
-
-    last_error: str | None
-
-    def get_item_by_code(self, code: str) -> EstimateRow | None: ...
-
-    def get_items_by_codes(self, codes: Iterable[str]) -> Mapping[str, EstimateRow]: ...
-
-    def generate_voucher_no(self) -> str: ...
-
-    def get_estimate_by_voucher(self, voucher_no: str) -> EstimateRow | None: ...
-
-    def save_estimate_with_returns(
-        self,
-        voucher_no: str,
-        date: str,
-        silver_rate: float,
-        regular_items: list[EstimateRow],
-        return_items: list[EstimateRow],
-        totals: dict[str, Any],
-    ) -> bool: ...
-
-    def sync_silver_bars_for_estimate(
-        self, voucher_no: str, bars: list[EstimateRow]
-    ) -> tuple[int, int]: ...
-
-    def delete_single_estimate(self, voucher_no: str) -> bool: ...
+EstimateRepositoryDatabase = EstimateDataSource
 
 
 class EstimateRepository(Protocol):

@@ -208,7 +208,7 @@ def smoke_environment(monkeypatch, settings_stub, tmp_path):
         "silverestimate.ui.estimate_history.QMessageBox", _MessageBoxStub
     )
     for message_box_target in (
-        "silverestimate.ui.print_preview_controller.QMessageBox",
+        "silverestimate.ui.print_preview_output.QMessageBox",
         "silverestimate.ui.settings_dialog.QMessageBox",
         "silverestimate.ui.silver_bar_history.QMessageBox",
         "silverestimate.ui.silver_bar_list_lifecycle_controller.QMessageBox",
@@ -395,9 +395,11 @@ def _seed_smoke_database(db_manager) -> None:
         ),
     )
 
-    available_bar_id = db_manager.silver_bars_repo.add_silver_bar("2", 40.0, 99.9)
-    active_bar_id = db_manager.silver_bars_repo.add_silver_bar("2", 35.0, 99.5)
-    issued_bar_id = db_manager.silver_bars_repo.add_silver_bar("2", 25.0, 99.0)
+    available_bar_id = db_manager.silver_bar_command_repo.add_silver_bar(
+        "2", 40.0, 99.9
+    )
+    active_bar_id = db_manager.silver_bar_command_repo.add_silver_bar("2", 35.0, 99.5)
+    issued_bar_id = db_manager.silver_bar_command_repo.add_silver_bar("2", 25.0, 99.0)
     active_list_id = db_manager.create_silver_bar_list("Smoke active list")
     issued_list_id = db_manager.create_silver_bar_list("Smoke issued list")
     assert available_bar_id is not None
@@ -638,7 +640,7 @@ def test_full_startup_smoke_with_seeded_database_and_screenshots(
         smoke_capture(window, "03-main-window.png")
 
         widget = window.estimate_widget
-        widget.print_estimate = lambda: None
+        widget.workflow_controller.print_estimate = lambda: None
         table = widget.item_table
         _wait_for(lambda: table.rowCount() > 0, qtbot)
         assert widget.voucher_edit.text() == "3"
@@ -658,8 +660,8 @@ def test_full_startup_smoke_with_seeded_database_and_screenshots(
         table.set_cell_text(0, COL_POLY, "0.500")
         table.set_cell_text(0, COL_PURITY, "91.6")
         table.set_cell_text(0, COL_WAGE_RATE, "250")
-        widget.calculate_net_weight()
-        widget.calculate_totals()
+        widget.totals_controller.calculate_net_weight()
+        widget.totals_controller.calculate_totals()
         _wait_for(
             lambda: table.get_cell_text(0, COL_WAGE_AMT).strip() not in {"", "0"},
             qtbot,

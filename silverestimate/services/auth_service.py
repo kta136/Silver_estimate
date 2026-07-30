@@ -13,7 +13,6 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QDialog, QMessageBox, QWidget
 
 from silverestimate.infrastructure.app_constants import DB_PATH, LOG_DIR
-from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.security import credential_store
 from silverestimate.security.credential_store import CredentialStoreError
 
@@ -393,7 +392,6 @@ def perform_data_wipe(
                 resolved.unlink()
                 _log("info", "Removed encrypted database artifact: %s", resolved)
 
-        settings = get_app_settings()
         for kind in (
             "main",
             "backup",
@@ -412,7 +410,6 @@ def perform_data_wipe(
             except CredentialStoreError:
                 # Delete best-effort; continue wiping remaining artifacts.
                 pass
-        settings.sync()
         if silent:
             _clear_log_artifacts()
         _log(

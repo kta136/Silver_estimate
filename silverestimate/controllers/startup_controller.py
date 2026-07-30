@@ -8,11 +8,12 @@ import time
 from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Optional, cast
 
 from PySide6.QtWidgets import QMessageBox, QWidget
 
 from silverestimate.infrastructure.app_constants import DB_PATH
+from silverestimate.persistence.database_protocols import StartupDatabase
 from silverestimate.security import credential_store
 from silverestimate.security.credential_store import CredentialStoreError
 from silverestimate.services.auth_service import (
@@ -20,6 +21,9 @@ from silverestimate.services.auth_service import (
     perform_data_wipe,
     run_authentication,
 )
+
+if TYPE_CHECKING:
+    from silverestimate.persistence.database_manager import DatabaseManager as DbManager
 
 # Lazy-loaded and monkeypatch-friendly alias used by tests.
 DatabaseManager = None
@@ -48,7 +52,7 @@ class StartupResult:
     """Structured result returned by :class:`StartupController`."""
 
     status: StartupStatus
-    db: Optional[Any] = None
+    db: DbManager | None = None
     silent_wipe: bool = False
 
 
@@ -244,7 +248,7 @@ class StartupController:
         self,
         password: str,
         device_secret: bytes,
-    ) -> Optional[Any]:
+    ) -> DbManager | None:
         """Create the encrypted database connection, handling recovery prompts."""
         db_t0 = time.perf_counter()
         db_cls = _resolve_database_manager()
@@ -279,7 +283,7 @@ class StartupController:
                 '"duration_ms":%.3f}',
                 (time.perf_counter() - db_t0) * 1000.0,
             )
-            return db_manager
+            return cast("DbManager", db_manager)
         except Exception as exc:
             self._logger.critical(
                 "Failed to connect to encrypted database: %s", exc, exc_info=True
@@ -295,7 +299,7 @@ class StartupController:
             QMessageBox.critical(self._parent, "Database Error", error_details)
             return None
 
-    def _start_background_preload(self, db_manager: Any) -> None:
+    def _start_background_preload(self, db_manager: StartupDatabase) -> None:
         """Warm caches during startup so MainWindow stays UI-focused."""
         try:
             db_manager.start_preload_item_cache()

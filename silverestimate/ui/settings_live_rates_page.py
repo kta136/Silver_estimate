@@ -14,7 +14,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from silverestimate.infrastructure.settings import SettingsStore
+from silverestimate.infrastructure.settings import (
+    SettingsKey,
+    SettingsStore,
+    as_settings_store,
+)
 
 
 @dataclass(frozen=True)
@@ -30,7 +34,7 @@ class LiveRatesSettingsPage(QWidget):
 
     def __init__(self, settings: SettingsStore, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._settings = settings
+        self._settings = as_settings_store(settings)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
@@ -67,9 +71,10 @@ class LiveRatesSettingsPage(QWidget):
 
     def load_state(self) -> LiveRateSettingsState:
         return LiveRateSettingsState(
-            visible=bool(self._settings.value("rates/live_enabled", True, type=bool)),
-            automatic=bool(
-                self._settings.value("rates/auto_refresh_enabled", True, type=bool)
+            visible=self._settings.get_bool(SettingsKey.RATES_LIVE_ENABLED, True),
+            automatic=self._settings.get_bool(
+                SettingsKey.RATES_AUTO_REFRESH_ENABLED,
+                True,
             ),
         )
 
@@ -81,9 +86,8 @@ class LiveRatesSettingsPage(QWidget):
 
     def save(self) -> LiveRateSettingsState:
         state = self.state()
-        self._settings.setValue("rates/live_enabled", state.visible)
-        self._settings.setValue("rates/auto_refresh_enabled", state.automatic)
-        self._settings.remove("rates/refresh_interval_sec")
+        self._settings.set(SettingsKey.RATES_LIVE_ENABLED, state.visible)
+        self._settings.set(SettingsKey.RATES_AUTO_REFRESH_ENABLED, state.automatic)
         return state
 
     def _sync_enabled(self, visible: bool) -> None:

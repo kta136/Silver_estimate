@@ -357,7 +357,7 @@ def test_signal_validation_and_display_without_label():
     assert controller._manual_refresh is False
 
 
-def test_display_https_without_meta_and_settings_coercion():
+def test_display_https_without_meta_and_typed_settings_fallback():
     widget = types.SimpleNamespace(live_rate_value_label=_LabelStub())
     controller, _, _ = _build_controller(
         settings={"rates/live_enabled": True}, widget=widget
@@ -380,17 +380,18 @@ def test_display_https_without_meta_and_settings_coercion():
     assert "Market: closed" in widget.live_rate_value_label.tooltip
     assert "Last transport error: offline" in widget.live_rate_value_label.tooltip
 
+    controller._settings_provider = lambda: _SettingsStub(
+        {
+            "rates/live_enabled": "off",
+            "rates/auto_refresh_enabled": "enabled",
+        }
+    )
+    assert controller._read_settings() == (False, True, 10)
+
     controller._settings_provider = lambda: (_ for _ in ()).throw(
         RuntimeError("settings")
     )
     assert controller._read_settings() == (True, True, 10)
-    assert controller._coerce_bool(True, False) is True
-    assert controller._coerce_bool(None, False) is False
-    assert controller._coerce_bool("", True) is True
-    assert controller._coerce_bool("off", True) is False
-    assert controller._coerce_bool("enabled", False) is True
-    assert controller._coerce_bool(0, True) is False
-    assert controller._coerce_bool(object(), True) is True
 
 
 def test_valid_worker_signal_and_currency_fallback(monkeypatch):

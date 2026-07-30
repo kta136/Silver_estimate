@@ -8,9 +8,9 @@ lint/type development environments.
 
 ```text
 Qt views and dialogs
-  -> explicit widget facades / controllers / presenter
+  -> narrow widget command/view APIs / explicit controllers / presenter
   -> domain and application services
-  -> repository facades
+  -> role-specific repositories
        -> query repositories
        -> command repositories
        -> synchronization repositories
@@ -22,14 +22,16 @@ Qt views and dialogs
 
 ## UI and controller boundaries
 
-- `EstimateEntryWidget` inherits `EstimateEntryFacade`. Every routed workflow, layout, table, and totals method is declared explicitly; controller methods are no longer installed with runtime `setattr`.
+- `EstimateEntryWidget` is a `QWidget` that explicitly owns workflow, layout, table, and totals controllers. Its public surface is limited to application commands and the `EstimateEntryView` presenter protocol; cross-controller calls name the target controller.
 - `SilverBarDialog` follows the same pattern through `SilverBarManagementFacade`.
 - `LatestRequestRunner[RequestT, ResultT]` owns one persistent worker, a monotonically increasing generation, cooperative cancellation, and at most one pending replacement request. Only the latest generation may deliver a result.
+- `PagedLoadState[RowT, CursorT]` owns only mutable page accumulation: replace/append, loaded and total counts, cursor advancement, reset, and has-more state. Item Master, Estimate History, Silver-Bar History, and Silver-Bar Management retain their own queries, cursor types, row conversion, selection, feedback, and telemetry.
 - SQLite background work uses a connection owned by its worker thread and a progress handler bound to the cancellation event.
 - Estimate printing offers two named formats over the same typed `EstimatePrintDocument`: Classic preserves the former Modern/New fixed-width column layout, while Modern uses the current full-width semantic table with shared column anchors, repeated headers, and kept totals. Both preview, export, and physical print paths use direct `QPainter` rendering and intentionally omit a footer. The selected default is persisted and can be switched inside preview.
 - Silver-bar inventory and list printing use typed `SilverBarInventoryPrintDocument` and `SilverBarListPrintDocument` values with the same neutral Modern typography, color, table, elision, and printable-margin primitives as the estimate renderer. Their direct painter repeats report metadata, section titles, and column headings across pages, labels continued sections, avoids split rows, and keeps the total with the final rows. Estimate and silver-bar previews expose the same persistent print-font family, size, and weight control with immediate refresh. Silver-bar reports intentionally have one Modern format and no footer or page numbers.
-- `PrintPreviewDialog` is an application-owned `QDialog` containing one explicit toolbar and an embedded `QPrintPreviewWidget`. The toolbar groups icon-only print/export actions, readable orientation/format/Tunch settings, icon-only font and fit/zoom actions, page state, and icon-only overflow in that order. Tooltips, accessible names, and shortcuts preserve non-visual access while every control remains visible at compact widths. `PrintPreviewController` owns these actions and persisted state without discovering or rewriting the private toolbar of Qt's stock `QPrintPreviewDialog`; preview refreshes still invoke the same typed direct painters used for PDF export and physical printing.
-- Settings contains independently owned pages/controllers, including the DDA live-rate page and print-settings controller. Pages expose state/signals instead of reaching into transport code.
+- `PrintPreviewDialog` is an application-owned `QDialog` containing one explicit toolbar and an embedded `QPrintPreviewWidget`. `PrintPreviewController` is only the composition root: `PrintPreviewSession` owns the current immutable payload, the toolbar/navigation and page-setup collaborators own UI mechanics, `PrintPreviewPreferences` owns persisted state, and `PrintOutputService` returns typed outcomes for atomic PDF export and physical printing. `PrintPreviewOutputController` translates those outcomes into user feedback once. Preview refreshes, export, and physical printing invoke the same typed direct painters.
+- `SettingsDialog` is a navigation, dirty-state, validation, apply/defaults, and accept/reject coordinator over independent appearance, live-rate, printing, data-management, logging/diagnostics, and security pages. Pages do not depend on `MainWindow`: typed controllers use narrow callbacks and database protocols, `PasswordChangeService` owns credential staging and SQLCipher rekey orchestration, and maintenance/diagnostics commands return explicit success/cancel/failure outcomes.
+- `ApplicationSettings` is the sole production `QSettings` interpreter. `SettingsKey` centralizes the schema, typed readers normalize values and enforce ranges, and ordered forward migrations advance `meta/settings_schema_version`. Production controllers never receive raw keys or Qt-shaped return values.
 - Shared display helpers keep user-facing dates in `DD/MM/YYYY` form and currency in Indian-grouped rupees across models and history dialogs.
 - History and management tables use shared dense-table styling and explicit empty states; settings surfaces saved/unsaved feedback without controller compatibility aliases.
 
@@ -56,7 +58,15 @@ Keyset pages keep result size bounded:
 
 History reads stored header totals. Estimate line items are loaded only when a record is opened or printed. Catalog imports use bulk upserts and replace the immutable item-cache mapping once after the transaction.
 
-Silver-bar persistence is separated into `SilverBarQueryRepository`, `SilverBarCommandRepository`, and `SilverBarSynchronizationRepository` behind the public `SilverBarsRepository` facade. New synchronization calls return `SilverBarSyncResult`, preserving success/failure information.
+Silver-bar persistence is owned directly by `SilverBarQueryRepository`, `SilverBarCommandRepository`, and `SilverBarSynchronizationRepository`. `DatabaseManager` lazily exposes each role and adapts synchronization results only at its established application API; the former private backend and broad `SilverBarsRepository` facade are removed. Synchronization returns `SilverBarSyncResult`, preserving success/failure information.
+
+Database consumers declare structural contracts from `database_protocols.py`.
+Concrete repositories receive `RepositoryDatabase`; item-catalog transfer,
+main-window commands, estimate adapters, and startup lifecycle code each receive
+their narrower protocol. The composition root alone uses the combined
+`ApplicationDatabase` contract. Repositories use their transaction connection
+directly and do not depend on private prepared cursors owned by
+`DatabaseManager`.
 
 ## Encrypted database lifecycle
 
@@ -111,7 +121,7 @@ SSE is primary. A disconnected stream polls current-rates every 10 seconds, sequ
 - Add a typed domain type before adding another dictionary-shaped cross-layer contract.
 - Add repository reads, writes, and reconciliation to the corresponding role rather than the public facade.
 - Use keyset cursors for user-visible collections.
-- Use `LatestRequestRunner` for replaceable UI work and cooperative stop events for long-running I/O.
+- Use `PagedLoadState` for UI page accumulation and `LatestRequestRunner` for replaceable UI work. Every runner must have one owner that calls cooperative `shutdown()`; never submit new work after shutdown.
 - Keep every report preview, PDF export, and physical print path on typed documents and direct painters. Preserve the former Modern/New fixed-width estimate layout as Classic; add new structured estimate changes to Modern's semantic column/section model, and reuse the neutral Modern primitives for the Modern-only silver-bar reports.
 - Keep preview chrome in the application-owned `PrintPreviewDialog`; do not depend on the stock dialog's internal widget hierarchy or action set.
 - Keep DDA selection pinned to the stable item ID and `finalRate`.

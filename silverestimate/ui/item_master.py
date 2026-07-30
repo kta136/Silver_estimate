@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 from silverestimate.domain.item_validation import ItemValidationError, validate_item
 from silverestimate.domain.pagination import ItemCursor, Page
 from silverestimate.infrastructure.latest_request_runner import LatestRequestRunner
+from silverestimate.infrastructure.paged_load_state import PagedLoadState
 from silverestimate.infrastructure.sqlite_worker import cancellable_sqlite_connection
 from silverestimate.persistence.items_repository import fetch_item_catalog_page
 from silverestimate.ui.models import ItemMasterTableModel
@@ -74,9 +75,7 @@ class ItemMasterWidget(QWidget):
         self._search_timer.setSingleShot(True)
         self._search_timer.setInterval(180)
         self._search_timer.timeout.connect(self.search_items)
-        self._loaded_items: list[dict[str, Any]] = []
-        self._item_cursor: ItemCursor | None = None
-        self._item_total = 0
+        self._item_page_state = PagedLoadState[dict[str, Any], ItemCursor]()
         self._load_runner = LatestRequestRunner(
             _load_item_page,
             self,
@@ -381,13 +380,11 @@ class ItemMasterWidget(QWidget):
         """Load items from the database into the table."""
         normalized_term = (search_term or "").strip()
         if not append:
-            self._loaded_items = []
-            self._item_cursor = None
-            self._item_total = 0
+            self._item_page_state.reset()
             self.items_model.set_rows([])
             self._item_count_label.setText("0 of 0 items")
             self.load_more_button.setVisible(False)
-        elif self._item_cursor is None:
+        elif not self._item_page_state.has_more:
             return
 
         started_at = time.perf_counter()
@@ -396,7 +393,7 @@ class ItemMasterWidget(QWidget):
             request = _ItemLoadRequest(
                 connection_factory,
                 normalized_term,
-                self._item_cursor,
+                self._item_page_state.cursor,
                 append,
                 started_at,
             )
@@ -438,7 +435,11 @@ class ItemMasterWidget(QWidget):
         if callable(getter):
             return cast(
                 Page[dict[str, Any], ItemCursor],
-                getter(search_term, cursor=self._item_cursor, limit=1000),
+                getter(
+                    search_term,
+                    cursor=self._item_page_state.cursor,
+                    limit=1000,
+                ),
             )
         rows = (
             self.db_manager.search_items(search_term)
@@ -475,12 +476,7 @@ class ItemMasterWidget(QWidget):
         started_at: float,
         append: bool,
     ) -> None:
-        page_items = list(page.items)
-        self._loaded_items = (
-            [*self._loaded_items, *page_items] if append else page_items
-        )
-        self._item_cursor = page.next_cursor
-        self._item_total = page.total
+        loaded_items = self._item_page_state.apply(page, append=append)
         table = self.items_table
         model = self.items_model
         sorting_enabled = table.isSortingEnabled()
@@ -489,7 +485,7 @@ class ItemMasterWidget(QWidget):
         try:
             if sorting_enabled:
                 table.setSortingEnabled(False)
-            model.set_rows(cast(list[object], self._loaded_items))
+            model.set_rows(cast(list[object], loaded_items))
         finally:
             if sorting_enabled:
                 table.setSortingEnabled(True)
@@ -497,18 +493,23 @@ class ItemMasterWidget(QWidget):
             table.setUpdatesEnabled(True)
             table.viewport().update()
 
-        count = len(self._loaded_items)
-        self._item_count_label.setText(f"{count} of {self._item_total} items")
-        self.load_more_button.setVisible(self._item_cursor is not None)
+        count = self._item_page_state.loaded
+        self._item_count_label.setText(
+            f"{count} of {self._item_page_state.total} items"
+        )
+        self.load_more_button.setVisible(self._item_page_state.has_more)
         self.load_more_button.setEnabled(True)
         self._update_bottom_status(count)
-        self.show_status(f"Loaded {count} of {self._item_total} items.", 2000)
+        self.show_status(
+            f"Loaded {count} of {self._item_page_state.total} items.",
+            2000,
+        )
         elapsed_ms = (time.perf_counter() - started_at) * 1000.0
         self.logger.debug(
             "[perf] item_master.load_items=%.2fms search_term=%r rows=%s",
             elapsed_ms,
             search_term,
-            len(self._loaded_items),
+            self._item_page_state.loaded,
         )
 
     def _update_bottom_status(self, count: int | None = None) -> None:
@@ -523,7 +524,6 @@ class ItemMasterWidget(QWidget):
         strip.set_right_items([f"Rows: {rows}", "Last Saved: -", f"User: {user}"])
 
     def _cancel_active_loads(self) -> None:
-        self._load_runner.cancel()
         self._load_runner.shutdown()
 
     def on_item_selected(self):

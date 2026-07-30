@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, cast
+from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, cast
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QApplication, QWidget
@@ -15,9 +15,9 @@ from silverestimate.presenter import (
     EstimateEntryPresenter,
     EstimateEntryView,
     EstimateEntryViewState,
+    LoadedEstimate,
 )
 
-from .estimate_entry_facade import EstimateEntryFacade
 from .estimate_entry_layout_controller import EstimateEntryLayoutController
 from .estimate_entry_logic.constants import (
     COL_CODE,
@@ -53,7 +53,7 @@ class _RunningCategoryTotals:
     wage: float = 0.0
 
 
-class EstimateEntryWidget(EstimateEntryFacade, QWidget):
+class EstimateEntryWidget(QWidget):
     """Widget for silver estimate entry and management."""
 
     if TYPE_CHECKING:
@@ -80,6 +80,60 @@ class EstimateEntryWidget(EstimateEntryFacade, QWidget):
     def _normalize_wage_type(value: object) -> str:
         return "PC" if str(value or "").strip().upper() == "PC" else "WT"
 
+    @property
+    def workflow_controller(self) -> EstimateEntryWorkflowController:
+        return self._workflow_controller
+
+    @property
+    def layout_controller(self) -> EstimateEntryLayoutController:
+        return self._layout_controller
+
+    @property
+    def table_controller(self) -> EstimateEntryTableController:
+        return self._table_controller
+
+    @property
+    def totals_controller(self) -> EstimateEntryTotalsController:
+        return self._totals_controller
+
+    # Stable application commands.
+    def safe_load_estimate(self) -> None:
+        self.workflow_controller.safe_load_estimate()
+
+    def save_estimate(self) -> None:
+        self.workflow_controller.save_estimate()
+
+    def print_estimate(self) -> None:
+        self.workflow_controller.print_estimate()
+
+    def clear_form(self, confirm: bool = True) -> None:
+        self.workflow_controller.clear_form(confirm=confirm)
+
+    def confirm_exit(self) -> bool:
+        return self.workflow_controller.confirm_exit()
+
+    def show_silver_bars(self) -> None:
+        self.workflow_controller.show_silver_bars()
+
+    def refresh_silver_rate(self) -> None:
+        self.workflow_controller.refresh_silver_rate()
+
+    # EstimateEntryView boundary used by the presenter.
+    def prompt_item_selection(self, code: str) -> Optional[Mapping[str, object]]:
+        return self.workflow_controller.prompt_item_selection(code)
+
+    def focus_after_item_lookup(self, row_index: int) -> None:
+        self.workflow_controller.focus_after_item_lookup(row_index)
+
+    def open_history_dialog(self) -> Optional[str]:
+        return self.workflow_controller.open_history_dialog()
+
+    def show_silver_bar_management(self) -> None:
+        self.workflow_controller.show_silver_bar_management()
+
+    def apply_loaded_estimate(self, loaded: LoadedEstimate) -> bool:
+        return self.workflow_controller.apply_loaded_estimate(loaded)
+
     def __init__(self, db_manager, main_window, repository):
         super().__init__()
 
@@ -94,7 +148,9 @@ class EstimateEntryWidget(EstimateEntryFacade, QWidget):
         self.presenter = EstimateEntryPresenter(
             cast(EstimateEntryView, self), repository
         )
-        self.live_rate_fetched.connect(self._apply_refreshed_live_rate)
+        self.live_rate_fetched.connect(
+            self.workflow_controller._apply_refreshed_live_rate
+        )
 
         self.initializing = True
         self._loading_estimate = False
@@ -131,24 +187,30 @@ class EstimateEntryWidget(EstimateEntryFacade, QWidget):
         self._agg_overall_poly = 0.0
 
         self._programmatic_resizing = False
-        self._column_autofit_mode = self._read_column_autofit_mode_setting()
+        self._column_autofit_mode = (
+            self.layout_controller._read_column_autofit_mode_setting()
+        )
         self._auto_fit_columns_by_content = self._column_autofit_mode == "continuous"
         self._pending_autofit_columns: set[int] = set()
         self._column_autofit_timer = QTimer(self)
         self._column_autofit_timer.setSingleShot(True)
         self._column_autofit_timer.setInterval(70)
-        self._column_autofit_timer.timeout.connect(self._apply_pending_column_autofit)
+        self._column_autofit_timer.timeout.connect(
+            self.layout_controller._apply_pending_column_autofit
+        )
 
-        self._setup_ui()
-        self._load_totals_section_order_setting()
-        self._load_totals_position_setting()
-        self._setup_table_delegates()
+        self.layout_controller._setup_ui()
+        self.layout_controller._load_totals_section_order_setting()
+        self.layout_controller._load_totals_position_setting()
+        self.layout_controller._setup_table_delegates()
 
         self._column_save_timer = QTimer(self)
         self._column_save_timer.setSingleShot(True)
         self._column_save_timer.setInterval(350)
-        self._column_save_timer.timeout.connect(self._save_column_widths_setting)
-        self._load_column_widths_setting()
+        self._column_save_timer.timeout.connect(
+            self.layout_controller._save_column_widths_setting
+        )
+        self.layout_controller._load_column_widths_setting()
 
         self._status_helper = InlineStatusController(
             parent=self,
@@ -156,8 +218,8 @@ class EstimateEntryWidget(EstimateEntryFacade, QWidget):
             logger=self.logger,
         )
 
-        self.clear_all_rows()
-        self.add_empty_row()
+        self.table_controller.clear_all_rows()
+        self.table_controller.add_empty_row()
 
         if self.presenter:
             try:
@@ -170,20 +232,20 @@ class EstimateEntryWidget(EstimateEntryFacade, QWidget):
                     "Error generating voucher number silently: %s", exc, exc_info=True
                 )
 
-        self.connect_signals(skip_load_estimate=True)
-        self._wire_component_signals()
+        self.layout_controller.connect_signals(skip_load_estimate=True)
+        self.layout_controller._wire_component_signals()
 
         self._totals_timer = QTimer(self)
         self._totals_timer.setSingleShot(True)
         self._totals_timer.setInterval(100)
-        self._totals_timer.timeout.connect(self.calculate_totals)
+        self._totals_timer.timeout.connect(self.totals_controller.calculate_totals)
 
         self._on_unsaved_state_changed(False)
         self._update_mode_tooltip()
 
-        self._load_table_font_size_setting()
-        self._load_breakdown_font_size_setting()
-        self._load_final_calc_font_size_setting()
+        self.layout_controller._load_table_font_size_setting()
+        self.layout_controller._load_breakdown_font_size_setting()
+        self.layout_controller._load_final_calc_font_size_setting()
 
         self.initializing = False
         self.reconnect_load_estimate()
@@ -256,10 +318,12 @@ class EstimateEntryWidget(EstimateEntryFacade, QWidget):
             self.logger.debug("Could not update mode tooltip: %s", exc)
 
     def focus_on_empty_row(self, update_visuals=False):
-        self._get_table_adapter().focus_on_empty_row(update_visuals=update_visuals)
+        self.table_controller._get_table_adapter().focus_on_empty_row(
+            update_visuals=update_visuals
+        )
 
     def capture_state(self) -> EstimateEntryViewState:
-        self._update_view_model_snapshot()
+        self.workflow_controller._update_view_model_snapshot()
         return self.view_model.as_view_state()
 
     def apply_totals(self, totals: TotalsResult) -> None:
@@ -271,11 +335,11 @@ class EstimateEntryWidget(EstimateEntryFacade, QWidget):
         self.voucher_edit.blockSignals(False)
 
     def populate_row(self, row_index: int, item_data: Dict) -> None:
-        self._get_table_adapter().populate_row(row_index, item_data)
-        self._schedule_columns_autofit()
+        self.table_controller._get_table_adapter().populate_row(row_index, item_data)
+        self.layout_controller._schedule_columns_autofit()
 
     def resizeEvent(self, event):
-        self._auto_stretch_item_name()
+        self.layout_controller._auto_stretch_item_name()
         super().resizeEvent(event)
 
     def closeEvent(self, event):
@@ -285,7 +349,7 @@ class EstimateEntryWidget(EstimateEntryFacade, QWidget):
         live_rate_runner = getattr(self, "_live_rate_runner", None)
         if live_rate_runner is not None:
             live_rate_runner.shutdown()
-        self._save_column_widths_setting()
+        self.layout_controller._save_column_widths_setting()
         super().closeEvent(event)
 
     def keyPressEvent(self, event):
@@ -294,11 +358,11 @@ class EstimateEntryWidget(EstimateEntryFacade, QWidget):
 
         if modifiers & Qt.KeyboardModifier.ControlModifier:
             if key == Qt.Key.Key_R:
-                self.toggle_return_mode()
+                self.workflow_controller.toggle_return_mode()
                 event.accept()
                 return
             if key == Qt.Key.Key_B:
-                self.toggle_silver_bar_mode()
+                self.workflow_controller.toggle_silver_bar_mode()
                 event.accept()
                 return
 
@@ -312,13 +376,13 @@ class EstimateEntryWidget(EstimateEntryFacade, QWidget):
             Qt.Key.Key_Enter,
             Qt.Key.Key_Tab,
         ]:
-            self.move_to_next_cell()
+            self.table_controller.move_to_next_cell()
             event.accept()
         elif table_has_focus and key == Qt.Key.Key_Backtab:
-            self.move_to_previous_cell()
+            self.table_controller.move_to_previous_cell()
             event.accept()
         elif table_has_focus and key in [Qt.Key.Key_Up, Qt.Key.Key_Down]:
-            self._mark_manual_row_navigation()
+            self.table_controller._mark_manual_row_navigation()
             super().keyPressEvent(event)
         elif table_has_focus and key == Qt.Key.Key_Escape:
             self.confirm_exit()
@@ -327,7 +391,10 @@ class EstimateEntryWidget(EstimateEntryFacade, QWidget):
             super().keyPressEvent(event)
 
     def force_focus_to_first_cell(self):
-        if self.item_table.rowCount() <= 0 or not self._should_force_code_focus():
+        if (
+            self.item_table.rowCount() <= 0
+            or not self.table_controller._should_force_code_focus()
+        ):
             return
         current_index = self.item_table.currentIndex()
         if current_index.isValid() and (
@@ -336,7 +403,7 @@ class EstimateEntryWidget(EstimateEntryFacade, QWidget):
             return
         self.item_table.setFocus(Qt.FocusReason.OtherFocusReason)
         self.item_table.setCurrentCell(0, COL_CODE)
-        QTimer.singleShot(0, lambda: self._safe_edit_item(0, COL_CODE))
+        QTimer.singleShot(0, lambda: self.table_controller._safe_edit_item(0, COL_CODE))
 
     def reconnect_load_estimate(self):
         if self._load_estimate_connected:

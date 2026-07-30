@@ -1,47 +1,56 @@
 #!/usr/bin/env python
 import logging  # Ensure logging is available for getLogger calls
 
-from PySide6.QtCore import QSize, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QFont
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QAbstractItemView,
-    QCheckBox,
     QDialog,
     QDialogButtonBox,
-    QFileDialog,
-    QFormLayout,
     QFrame,
-    QGridLayout,
-    QGroupBox,
     QHBoxLayout,
-    QHeaderView,
-    QInputDialog,
     QLabel,
-    QLineEdit,
     QListView,
     QListWidget,
     QListWidgetItem,
     QMessageBox,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QStackedWidget,
-    QTableWidget,
-    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
-from silverestimate.infrastructure.settings import get_app_settings
-from silverestimate.security import credential_store
-from silverestimate.security.credential_store import CredentialStoreError
-from silverestimate.services.auth_service import hash_password, verify_password
+from silverestimate.infrastructure.settings import SettingsKey, get_app_settings
+from silverestimate.services.password_change_service import (
+    PasswordChangeService,
+    default_password_change_actions,
+)
+from silverestimate.services.settings_service import FontSettings
 
-# Import dependent dialogs and modules
-from .custom_font_dialog import CustomFontDialog
 from .icons import get_icon
+from .settings_appearance_page import (
+    AppearanceSettingsActions,
+    AppearanceSettingsPage,
+    SettingsAppearanceController,
+    TotalsPosition,
+)
+from .settings_data_page import (
+    DataManagementActions,
+    DataManagementPage,
+    SettingsDataController,
+)
 from .settings_live_rates_page import LiveRatesSettingsPage
-from .settings_print_controller import PrintSettingsWidgets, SettingsPrintController
+from .settings_logging_page import (
+    LoggingSettingsPage,
+    SettingsLoggingController,
+    default_logging_settings_actions,
+)
+from .settings_print_controller import SettingsPrintController
+from .settings_print_page import PrintSettingsPage
+from .settings_security_page import (
+    SecuritySettingsPage,
+    SettingsSecurityController,
+)
 from .shared_screen_theme import build_management_screen_stylesheet
 from .theme_tokens import (
     CARD_BORDER,
@@ -57,21 +66,6 @@ from .theme_tokens import (
     TEXT_MUTED,
     TEXT_STRONG,
 )
-from .themed_controls import ThemedComboBox, ThemedDoubleSpinBox, ThemedSpinBox
-
-
-def _coerce_bool_setting(value: object, default: bool) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        normalized = value.strip().lower()
-        if normalized in {"1", "true", "yes", "on", "enabled"}:
-            return True
-        if normalized in {"0", "false", "no", "off", "disabled"}:
-            return False
-    if isinstance(value, (int, float)):
-        return value != 0
-    return default
 
 
 def _coerce_int_setting(value: object, default: int) -> int:
@@ -79,15 +73,6 @@ def _coerce_int_setting(value: object, default: int) -> int:
         try:
             return int(value)
         except TypeError, ValueError:
-            pass
-    return default
-
-
-def _coerce_float_setting(value: object, default: float) -> float:
-    if isinstance(value, (int, float, str)):
-        try:
-            return float(value)
-        except ValueError:
             pass
     return default
 
@@ -254,14 +239,30 @@ class SettingsDialog(QDialog):
         # Load current settings
         self.settings = get_app_settings()
         self._print_settings_controller = SettingsPrintController(self.settings)
-
-        # Store temporary font objects for editing
-        self._current_print_font = self._load_print_font_setting()
-        self._current_table_font_size = self._load_table_font_size_setting()
-        self._current_breakdown_font_size = self._load_breakdown_font_size_setting()
-        self._current_final_calc_font_size = self._load_final_calc_font_size_setting()
-        self._current_totals_position = self._load_totals_position_setting()
-        # Add more settings variables as needed
+        self._appearance_settings_controller = SettingsAppearanceController(
+            self.settings,
+            self._appearance_settings_actions(),
+        )
+        self._logging_settings_controller = SettingsLoggingController(
+            self.settings,
+            default_logging_settings_actions(),
+        )
+        self._data_settings_controller = SettingsDataController(
+            database_provider=lambda: getattr(self.main_window, "db", None),
+            actions=DataManagementActions(
+                delete_all_estimates=self.main_window.delete_all_estimates,
+                delete_all_data=self.main_window.delete_all_data,
+                restore_item_catalog=self.main_window.show_catalog_restore_dialog,
+                create_item_catalog_backup=self.main_window.show_catalog_backup_dialog,
+            ),
+        )
+        self._security_settings_controller = SettingsSecurityController(
+            PasswordChangeService(
+                default_password_change_actions(
+                    lambda: getattr(self.main_window, "db", None)
+                )
+            )
+        )
 
         # Sidebar + pages (cleaner than rotated west tabs)
         self.sidebar = QListWidget()
@@ -317,7 +318,7 @@ class SettingsDialog(QDialog):
         # Remember last page
         try:
             last_idx = _coerce_int_setting(
-                self.settings.value("ui/settings_last_tab", 0, type=int),
+                self.settings.get_int(SettingsKey.UI_SETTINGS_LAST_TAB, 0),
                 0,
             )
         except Exception:
@@ -425,7 +426,7 @@ class SettingsDialog(QDialog):
     def _set_current_settings_page(self, index: int) -> None:
         if 0 <= index < self.pages.count():
             self.pages.setCurrentIndex(index)
-            self.settings.setValue("ui/settings_last_tab", index)
+            self.settings.set(SettingsKey.UI_SETTINGS_LAST_TAB, index)
         QTimer.singleShot(0, self._sync_page_scrollbar)
 
     def _sync_page_scrollbar(self) -> None:
@@ -452,172 +453,13 @@ class SettingsDialog(QDialog):
         QTimer.singleShot(0, self._sync_page_scrollbar)
 
     def _create_ui_tab(self):
-        """Create the User Interface settings tab."""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
-        form_layout = QFormLayout()
-        self._configure_settings_form(form_layout)
-
-        # Print Font
-        self.print_font_button = QPushButton("Configure Print Font...")
-        self.print_font_button.setMinimumWidth(190)
-        self.print_font_button.setSizePolicy(
-            QSizePolicy.Policy.Fixed,
-            QSizePolicy.Policy.Fixed,
+        """Create the independently owned appearance settings page."""
+        self.appearance_page = AppearanceSettingsPage(
+            self._appearance_settings_controller,
+            self,
         )
-        self.print_font_button.setToolTip(
-            "Set font family, size, and style for printed reports\n"
-            "Affects estimates and silver-bar reports, not screen display\n"
-            "Recommended: clean print fonts such as Arial or Segoe UI\n"
-            "Click to open font selection dialog"
-        )
-        self.print_font_label = QLabel(
-            self._get_font_display_text(self._current_print_font)
-        )  # Show current setting
-        self.print_font_label.setObjectName("SettingsValueLabel")
-        self.print_font_label.setWordWrap(True)
-        self.print_font_label.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
-        self.print_font_label.setMinimumWidth(150)
-        self.print_font_button.clicked.connect(self._show_print_font_dialog)
-        self.print_font_button.clicked.connect(self._mark_dirty)
-        font_layout = QHBoxLayout()
-        font_layout.setSpacing(10)
-        font_layout.addWidget(self.print_font_label, 1)
-        font_layout.addWidget(self.print_font_button)
-        form_layout.addRow("Print Font:", font_layout)
-
-        # Live font sample
-        self.print_font_sample = QLabel("RING001  Gold Ring    9.500 g    ₹ 2,375")
-        self.print_font_sample.setToolTip(
-            "Live preview of the selected report font\n"
-            "Shows print-like text as it will appear in reports\n"
-            "Updates automatically when the font changes"
-        )
-        self._update_font_sample_label()
-        form_layout.addRow("Sample:", self.print_font_sample)
-
-        # Table Font Size
-        self.table_font_size_spin = ThemedSpinBox()
-        self.table_font_size_spin.setRange(7, 16)  # Keep range consistent
-        self.table_font_size_spin.setValue(self._current_table_font_size)
-        self.table_font_size_spin.setToolTip(
-            "Set font size for the main estimate entry table\nRange: 7–16 points\nAffects table readability and screen space usage\nRecommended: 9-11 for most users"
-        )
-        self.table_font_size_spin.setSuffix(" pt")
-        self._polish_field_control(self.table_font_size_spin, width=160)
-        self.table_font_size_spin.valueChanged.connect(self._mark_dirty)
-        form_layout.addRow("Estimate Table Font Size:", self.table_font_size_spin)
-
-        # Breakdown Totals Font Size (Regular/Return/Silver Bar)
-        self.breakdown_font_size_spin = ThemedSpinBox()
-        self.breakdown_font_size_spin.setRange(7, 16)
-        self.breakdown_font_size_spin.setValue(self._current_breakdown_font_size)
-        self.breakdown_font_size_spin.setToolTip(
-            "Text size for Regular/Return/Silver Bar totals\nRange: 7–16 points\nControls left-side totals display\nShould match or be smaller than table font"
-        )
-        self.breakdown_font_size_spin.setSuffix(" pt")
-        self._polish_field_control(self.breakdown_font_size_spin, width=160)
-        self.breakdown_font_size_spin.valueChanged.connect(self._mark_dirty)
-        form_layout.addRow("Totals (Left) Font Size:", self.breakdown_font_size_spin)
-
-        # Final Calculation Font Size
-        self.final_calc_font_size_spin = ThemedSpinBox()
-        self.final_calc_font_size_spin.setRange(8, 20)
-        self.final_calc_font_size_spin.setValue(self._current_final_calc_font_size)
-        self.final_calc_font_size_spin.setToolTip(
-            "Text size for Final Calculation panel\nRange: 8–20 points\nControls right-side grand totals display\nCan be larger for emphasis"
-        )
-        self.final_calc_font_size_spin.setSuffix(" pt")
-        self._polish_field_control(self.final_calc_font_size_spin, width=160)
-        self.final_calc_font_size_spin.valueChanged.connect(self._mark_dirty)
-        form_layout.addRow(
-            "Final Calculation Font Size:", self.final_calc_font_size_spin
-        )
-
-        # Totals/final panel position
-        self.totals_position_combo = ThemedComboBox()
-        self.totals_position_combo.addItem("Right Side", "right")
-        self.totals_position_combo.addItem("Left Side", "left")
-        self.totals_position_combo.addItem("Bottom", "bottom")
-        idx_totals = self.totals_position_combo.findData(self._current_totals_position)
-        if idx_totals >= 0:
-            self.totals_position_combo.setCurrentIndex(idx_totals)
-        self.totals_position_combo.setToolTip(
-            "Choose where totals/final calculation appears.\n"
-            "Right/Left preserves maximum table height.\n"
-            "Bottom uses footer area and can reduce visible rows."
-        )
-        self._polish_field_control(self.totals_position_combo, width=260)
-        self.totals_position_combo.currentIndexChanged.connect(self._mark_dirty)
-        form_layout.addRow("Totals Panel Position:", self.totals_position_combo)
-
-        # Add more UI settings here...
-
-        layout.addLayout(form_layout)
-        layout.addWidget(self._create_ui_preview_panel())
-        layout.addStretch()  # Push settings to the top
-        widget.setLayout(layout)
-        return widget
-
-    def _create_ui_preview_panel(self):
-        preview = QFrame()
-        preview.setObjectName("SettingsPreviewCard")
-        preview_layout = QVBoxLayout(preview)
-        preview_layout.setContentsMargins(12, 10, 12, 12)
-        preview_layout.setSpacing(8)
-
-        title = QLabel("Preview")
-        title.setObjectName("SettingsPreviewTitle")
-        preview_layout.addWidget(title)
-
-        table = QTableWidget(5, 6, preview)
-        table.setObjectName("SettingsPreviewTable")
-        table.setHorizontalHeaderLabels(
-            ["Code", "Item Name", "Gross", "Poly", "Net Wt", "Wage Amt"]
-        )
-        sample_rows = [
-            ("RING001", "Gold Ring", "10.000", "0.500", "9.500", "250.00"),
-            ("NECK001", "Gold Necklace", "15.000", "0.750", "14.250", "325.00"),
-            ("BRAC001", "Gold Bracelet", "20.000", "1.000", "19.000", "275.00"),
-            ("BAR001", "Silver Bar", "40.000", "0.040", "39.960", "0.00"),
-            ("ANKL001", "Silver Anklet", "25.000", "0.300", "24.700", "85.00"),
-        ]
-        for row, values in enumerate(sample_rows):
-            for col, value in enumerate(values):
-                item = QTableWidgetItem(value)
-                if col >= 2:
-                    item.setTextAlignment(
-                        Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-                    )
-                table.setItem(row, col, item)
-        table.verticalHeader().setVisible(False)
-        table.verticalHeader().setDefaultSectionSize(24)
-        table.horizontalHeader().setFixedHeight(28)
-        table.horizontalHeader().setMinimumSectionSize(68)
-        table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.ResizeToContents
-        )
-        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
-        table.setFixedHeight(154)
-        preview_layout.addWidget(table)
-
-        grand_total = QLabel(
-            "Grand Total  ₹ 14,40,170.88    ·    Net Fine Wt  19.058    ·    "
-            "Net Wage  ₹ 6,094.00\n"
-            "Totals: Gross Wt  335.000    ·    Poly Wt  16.760"
-        )
-        grand_total.setObjectName("SettingsGrandTotalPreview")
-        grand_total.setWordWrap(True)
-        grand_total.setAlignment(Qt.AlignmentFlag.AlignTop)
-        grand_total.setMinimumHeight(58)
-        preview_layout.addWidget(grand_total)
-        return preview
+        self.appearance_page.changed.connect(self._mark_dirty)
+        return self.appearance_page
 
     def _create_live_rates_tab(self):
         """Create the independently owned DDA live-rate page."""
@@ -627,431 +469,87 @@ class SettingsDialog(QDialog):
         return page
 
     def _create_print_tab(self):
-        """Create the Printing settings tab."""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
-        form_layout = QFormLayout()
-        self._configure_settings_form(form_layout)
-
-        # --- Margins ---
-        margins_label = QLabel("Page Margins (mm):")
-        margins_layout = QGridLayout()
-        self.margin_left_spin = ThemedSpinBox()
-        self.margin_top_spin = ThemedSpinBox()
-        self.margin_right_spin = ThemedSpinBox()
-        self.margin_bottom_spin = ThemedSpinBox()
-        for spin in [
-            self.margin_left_spin,
-            self.margin_top_spin,
-            self.margin_right_spin,
-            self.margin_bottom_spin,
-        ]:
-            spin.setRange(0, 50)  # Allow 0-50mm margins
-            spin.setSuffix(" mm")
-            self._polish_field_control(spin, width=135)
-            spin.valueChanged.connect(self._mark_dirty)
-
-        margins_layout.setHorizontalSpacing(10)
-        margins_layout.setVerticalSpacing(8)
-        margins_layout.addWidget(QLabel("Left:"), 0, 0)
-        margins_layout.addWidget(self.margin_left_spin, 0, 1)
-        margins_layout.addWidget(QLabel("Top:"), 0, 2)
-        margins_layout.addWidget(self.margin_top_spin, 0, 3)
-        margins_layout.addWidget(QLabel("Right:"), 1, 0)
-        margins_layout.addWidget(self.margin_right_spin, 1, 1)
-        margins_layout.addWidget(QLabel("Bottom:"), 1, 2)
-        margins_layout.addWidget(self.margin_bottom_spin, 1, 3)
-        form_layout.addRow(margins_label, margins_layout)
-
-        # --- Print Preview Zoom ---
-        self.preview_zoom_spin = ThemedDoubleSpinBox()
-        self.preview_zoom_spin.setRange(0.1, 5.0)  # 10% to 500%
-        self.preview_zoom_spin.setSingleStep(0.1)
-        self.preview_zoom_spin.setDecimals(2)
-        self.preview_zoom_spin.setSuffix(" x")  # Display as multiplier
-        self.preview_zoom_spin.setToolTip(
-            "Default zoom factor for print preview (e.g., 1.0 = 100%, 1.25 = 125%)"
+        """Create the independently owned printing page."""
+        self.print_page = PrintSettingsPage(
+            self._print_settings_controller,
+            self,
         )
-        self._polish_field_control(self.preview_zoom_spin, width=160)
-        self.preview_zoom_spin.valueChanged.connect(self._mark_dirty)
-        form_layout.addRow("Preview Default Zoom:", self.preview_zoom_spin)
-
-        # --- Default Printer ---
-        self.printer_combo = ThemedComboBox()
-        self.printer_combo.setToolTip("Default printer for printing and quick print")
-        self._polish_field_control(self.printer_combo, width=320)
-        self._print_settings_controller.refresh_printer_list(self.printer_combo)
-        self.printer_combo.currentIndexChanged.connect(self._mark_dirty)
-        form_layout.addRow("Default Printer:", self.printer_combo)
-
-        # --- Page Size ---
-        self.page_size_combo = ThemedComboBox()
-        self.page_size_combo.addItems(["A4", "A5", "Letter", "Legal", "Thermal 80mm"])
-        self.page_size_combo.setToolTip("Default page size for printing")
-        self._polish_field_control(self.page_size_combo, width=240)
-        self.page_size_combo.currentIndexChanged.connect(self._mark_dirty)
-        form_layout.addRow("Page Size:", self.page_size_combo)
-
-        # --- Orientation ---
-        self.orientation_combo = ThemedComboBox()
-        self.orientation_combo.addItems(["Portrait", "Landscape"])
-        self.orientation_combo.setToolTip("Default page orientation for printing")
-        self._polish_field_control(self.orientation_combo, width=240)
-        self.orientation_combo.currentIndexChanged.connect(self._mark_dirty)
-        form_layout.addRow("Orientation:", self.orientation_combo)
-
-        self.estimate_format_combo = ThemedComboBox()
-        self.estimate_format_combo.addItem("Classic", "classic")
-        self.estimate_format_combo.addItem("Modern", "modern")
-        self.estimate_format_combo.setToolTip(
-            "Choose the default estimate format; it can also be changed in preview"
-        )
-        self._polish_field_control(self.estimate_format_combo, width=240)
-        self.estimate_format_combo.currentIndexChanged.connect(self._mark_dirty)
-        form_layout.addRow("Estimate Format:", self.estimate_format_combo)
-
-        # Load current values into controls
-        self._load_print_settings_to_ui()
-
-        layout.addLayout(form_layout)
-        layout.addStretch()
-        widget.setLayout(layout)
-        return widget
+        self.print_page.changed.connect(self._mark_dirty)
+        return self.print_page
 
     def _create_data_tab(self):
-        """Create the Data Management settings tab."""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
-
-        description = QLabel(
-            "<b>WARNING:</b> These actions permanently delete data and cannot be undone. "
-            "Ensure you have backups if necessary."
+        """Create the independently owned data-management page."""
+        self.data_page = DataManagementPage(
+            self._data_settings_controller,
+            self,
         )
-        description.setWordWrap(True)
-        description.setObjectName("SettingsWarningLabel")
-        layout.addWidget(description)
-
-        button_layout = QHBoxLayout()
-        button_layout.setSpacing(10)
-
-        self.delete_estimates_button = QPushButton("Delete All Estimates...")
-        self.delete_estimates_button.setObjectName("SettingsDangerButton")
-        self.delete_estimates_button.setToolTip(
-            "Remove all estimate records\nKeeps item master and silver bar data intact\nRequires confirmation"
-        )
-        self.delete_estimates_button.clicked.connect(
-            self.main_window.delete_all_estimates
-        )
-        button_layout.addWidget(self.delete_estimates_button)
-
-        self.delete_all_data_button = QPushButton("DELETE ALL DATA")
-        self.delete_all_data_button.setObjectName("SettingsDangerButton")
-        self.delete_all_data_button.setToolTip(
-            "Reset all application data\nIncludes: estimates, items, silver bars, lists\nRequires typing DELETE to confirm"
-        )
-        self.delete_all_data_button.clicked.connect(self.main_window.delete_all_data)
-        button_layout.addWidget(self.delete_all_data_button)
-
-        layout.addLayout(button_layout)
-
-        # --- Item Backup section ---
-        from PySide6.QtWidgets import QGroupBox
-
-        backup_group = QGroupBox("Item Master Backup")
-        backup_layout = QVBoxLayout(backup_group)
-        backup_layout.setSpacing(10)
-
-        restore_button = QPushButton("Restore Item Backup...")
-        restore_button.setToolTip(
-            "Restore a native Silver Estimate item catalog backup\n"
-            "Format: .seitems.json\n"
-            "Updates existing item codes and adds missing ones\n"
-            "Does not remove items that are not in the file"
-        )
-        restore_button.clicked.connect(self.main_window.show_catalog_restore_dialog)
-        backup_layout.addWidget(restore_button)
-
-        export_button = QPushButton("Create Item Backup...")
-        export_button.setToolTip(
-            "Create a native Silver Estimate item catalog backup file\n"
-            "Format: .seitems.json\n"
-            "Round-trip safe for future imports"
-        )
-        export_button.clicked.connect(self.main_window.show_catalog_backup_dialog)
-        backup_layout.addWidget(export_button)
-
-        layout.addWidget(backup_group)
-
-        database_backup_group = QGroupBox("Encrypted Database Backup")
-        database_backup_layout = QVBoxLayout(database_backup_group)
-        create_database_backup = QPushButton("Create Encrypted Database Backup...")
-        create_database_backup.setToolTip(
-            "Create a validated .sedbbackup containing only SQLCipher-encrypted data"
-        )
-        create_database_backup.clicked.connect(self._create_database_backup)
-        database_backup_layout.addWidget(create_database_backup)
-        restore_database_backup = QPushButton("Stage Encrypted Database Restore...")
-        restore_database_backup.setToolTip(
-            "Validate and stage an encrypted restore; activation requires restart"
-        )
-        restore_database_backup.clicked.connect(self._stage_database_restore)
-        database_backup_layout.addWidget(restore_database_backup)
-        layout.addWidget(database_backup_group)
-
-        layout.addStretch()  # Push content up
-        widget.setLayout(layout)
-        return widget
+        return self.data_page
 
     def _create_logging_tab(self):
-        """Create the Logging settings tab."""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
-
-        # Description label
-        description = QLabel(
-            "Configure how the application logs events and manages log files. "
-            "Changes to these settings take effect immediately."
+        """Create the independently owned logging and diagnostics page."""
+        self.logging_page = LoggingSettingsPage(
+            self._logging_settings_controller,
+            self,
         )
-        description.setWordWrap(True)
-        description.setObjectName("SettingsMutedDescription")
-        layout.addWidget(description)
-
-        # Debug mode section
-        debug_group = QGroupBox("Debug Settings")
-        debug_layout = QVBoxLayout(debug_group)
-        debug_layout.setSpacing(8)
-
-        # Debug mode checkbox
-        self.debug_mode_checkbox = QCheckBox("Enable Debug Mode")
-        self.debug_mode_checkbox.setToolTip(
-            "Enable detailed debug logging (may affect performance)"
-        )
-        debug_mode = _coerce_bool_setting(
-            self.settings.value("logging/debug_mode", False, type=bool),
-            False,
-        )
-        self.debug_mode_checkbox.setChecked(debug_mode)
-        self.debug_mode_checkbox.toggled.connect(self._mark_dirty)
-        debug_layout.addWidget(self.debug_mode_checkbox)
-
-        # Debug mode description
-        debug_desc = QLabel(
-            "Debug mode captures detailed information about application operations. "
-            "This is useful for troubleshooting but may affect performance."
-        )
-        debug_desc.setWordWrap(True)
-        debug_desc.setObjectName("SettingsMutedDescription")
-        debug_layout.addWidget(debug_desc)
-
-        # Log level toggles group
-        log_levels_group = QGroupBox("Log Levels")
-        log_levels_layout = QVBoxLayout(log_levels_group)
-        log_levels_layout.setSpacing(8)
-
-        # Normal logs (INFO)
-        self.enable_info_checkbox = QCheckBox("Enable Normal Logs (INFO)")
-        self.enable_info_checkbox.setToolTip(
-            "Log normal application events (INFO level)"
-        )
-        enable_info = _coerce_bool_setting(
-            self.settings.value("logging/enable_info", True, type=bool),
-            True,
-        )
-        self.enable_info_checkbox.setChecked(enable_info)
-        self.enable_info_checkbox.toggled.connect(self._mark_dirty)
-        log_levels_layout.addWidget(self.enable_info_checkbox)
-
-        # Critical logs (ERROR and CRITICAL)
-        self.enable_critical_checkbox = QCheckBox(
-            "Enable Critical Logs (ERROR and CRITICAL)"
-        )
-        self.enable_critical_checkbox.setToolTip("Log errors and critical issues")
-        enable_critical = _coerce_bool_setting(
-            self.settings.value("logging/enable_critical", True, type=bool),
-            True,
-        )
-        self.enable_critical_checkbox.setChecked(enable_critical)
-        self.enable_critical_checkbox.toggled.connect(self._mark_dirty)
-        log_levels_layout.addWidget(self.enable_critical_checkbox)
-
-        # Debug logs
-        self.enable_debug_checkbox = QCheckBox(
-            "Enable Debug Logs (when Debug Mode is on)"
-        )
-        self.enable_debug_checkbox.setToolTip(
-            "Log detailed debug information (only when Debug Mode is enabled)"
-        )
-        enable_debug = _coerce_bool_setting(
-            self.settings.value("logging/enable_debug", True, type=bool),
-            True,
-        )
-        self.enable_debug_checkbox.setChecked(enable_debug)
-        self.enable_debug_checkbox.toggled.connect(self._mark_dirty)
-        log_levels_layout.addWidget(self.enable_debug_checkbox)
-
-        # Log levels description
-        levels_desc = QLabel(
-            "You can enable or disable specific log levels. Critical logs are recommended "
-            "to keep enabled for troubleshooting purposes."
-        )
-        levels_desc.setWordWrap(True)
-        levels_desc.setObjectName("SettingsMutedDescription")
-        log_levels_layout.addWidget(levels_desc)
-
-        # Auto cleanup group
-        cleanup_group = QGroupBox("Automatic Log Cleanup")
-        cleanup_layout = QVBoxLayout(cleanup_group)
-        cleanup_layout.setSpacing(8)
-
-        # Auto cleanup checkbox
-        self.auto_cleanup_checkbox = QCheckBox("Automatically Delete Old Logs")
-        self.auto_cleanup_checkbox.setToolTip(
-            "Automatically delete log files older than the specified number of days"
-        )
-        auto_cleanup = _coerce_bool_setting(
-            self.settings.value("logging/auto_cleanup", False, type=bool),
-            False,
-        )
-        self.auto_cleanup_checkbox.setChecked(auto_cleanup)
-        cleanup_layout.addWidget(self.auto_cleanup_checkbox)
-
-        # Cleanup days spinbox
-        cleanup_days_layout = QHBoxLayout()
-        cleanup_days_layout.addWidget(QLabel("Keep logs for:"))
-        self.cleanup_days_spin = ThemedSpinBox()
-        self.cleanup_days_spin.setRange(1, 365)
-        self.cleanup_days_spin.setSuffix(" days")
-        cleanup_days = _coerce_int_setting(
-            self.settings.value("logging/cleanup_days", 1, type=int),
-            1,
-        )
-        self.cleanup_days_spin.setValue(cleanup_days)
-        self.cleanup_days_spin.setEnabled(auto_cleanup)
-        self._polish_field_control(self.cleanup_days_spin, width=150)
-        cleanup_days_layout.addWidget(self.cleanup_days_spin)
-        self.cleanup_days_spin.valueChanged.connect(self._mark_dirty)
-        cleanup_days_layout.addStretch()
-        cleanup_layout.addLayout(cleanup_days_layout)
-
-        # Cleanup description
-        cleanup_desc = QLabel(
-            "Automatic cleanup helps manage disk space by removing old log files. "
-            "Cleanup occurs at midnight each day."
-        )
-        cleanup_desc.setWordWrap(True)
-        cleanup_desc.setObjectName("SettingsMutedDescription")
-        cleanup_layout.addWidget(cleanup_desc)
-
-        # Connect auto cleanup checkbox to enable/disable days spinbox
-        self.auto_cleanup_checkbox.toggled.connect(self.cleanup_days_spin.setEnabled)
-
-        # Utilities
-        utils_group = QGroupBox("Utilities")
-        utils_layout = QHBoxLayout(utils_group)
-        utils_layout.setSpacing(10)
-        self.manual_cleanup_button = QPushButton("Clean Up Logs Now…")
-        self.manual_cleanup_button.setToolTip("Manually delete old log files")
-        self.manual_cleanup_button.clicked.connect(self._handle_manual_log_cleanup)
-        utils_layout.addWidget(self.manual_cleanup_button)
-
-        open_logs_btn = QPushButton("Open Logs Folder…")
-        open_logs_btn.setToolTip("Open the folder containing application log files")
-        open_logs_btn.clicked.connect(self._open_logs_folder)
-        utils_layout.addWidget(open_logs_btn)
-        utils_layout.addStretch()
-
-        # Add all widgets to layout
-        layout.addWidget(debug_group)
-        layout.addWidget(log_levels_group)
-        layout.addWidget(cleanup_group)
-        layout.addWidget(utils_group)
-        layout.addStretch()
-
-        return widget
+        self.logging_page.changed.connect(self._mark_dirty)
+        return self.logging_page
 
     def _create_security_tab(self):
-        """Create the Security settings tab (Password Management)."""
-        widget = QWidget()
-        main_layout = QVBoxLayout(widget)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(12)
-
-        # --- Change Password Group ---
-        password_group = QGroupBox("Change Passwords")
-        group_layout = QFormLayout(password_group)
-        self._configure_settings_form(group_layout)
-
-        self.current_password_input = QLineEdit()
-        self.current_password_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.current_password_input.setPlaceholderText(
-            "Enter your current main password"
+        """Create the independently owned security page."""
+        self.security_page = SecuritySettingsPage(
+            self._security_settings_controller,
+            self,
         )
-        group_layout.addRow("Current Password:", self.current_password_input)
-
-        self.new_password_input = QLineEdit()
-        self.new_password_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.new_password_input.setPlaceholderText("Enter new main password")
-        group_layout.addRow("New Main Password:", self.new_password_input)
-
-        self.confirm_new_password_input = QLineEdit()
-        self.confirm_new_password_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.confirm_new_password_input.setPlaceholderText("Confirm new main password")
-        group_layout.addRow("Confirm New Main:", self.confirm_new_password_input)
-
-        group_layout.addRow(QLabel("-" * 40))  # Separator
-
-        self.new_secondary_password_input = QLineEdit()
-        self.new_secondary_password_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.new_secondary_password_input.setPlaceholderText(
-            "Enter new recovery password"
-        )
-        group_layout.addRow("New Recovery Password:", self.new_secondary_password_input)
-
-        self.confirm_new_secondary_password_input = QLineEdit()
-        self.confirm_new_secondary_password_input.setEchoMode(
-            QLineEdit.EchoMode.Password
-        )
-        self.confirm_new_secondary_password_input.setPlaceholderText(
-            "Confirm new recovery password"
-        )
-        group_layout.addRow(
-            "Confirm New Recovery:", self.confirm_new_secondary_password_input
-        )
-
-        self.change_password_button = QPushButton("Change Passwords")
-        self.change_password_button.clicked.connect(self._handle_password_change)
-        group_layout.addRow("", self.change_password_button)  # Add button without label
-
-        # Show/hide passwords toggle
-        self.show_passwords_checkbox = QCheckBox("Show passwords")
-        self.show_passwords_checkbox.toggled.connect(self._toggle_password_visibility)
-        group_layout.addRow("", self.show_passwords_checkbox)
-
-        main_layout.addWidget(password_group)
-        main_layout.addStretch()
-
-        return widget
+        return self.security_page
 
     # --- Helper Methods ---
 
-    def _print_settings_widgets(self):
-        return PrintSettingsWidgets(
-            margin_left_spin=self.margin_left_spin,
-            margin_top_spin=self.margin_top_spin,
-            margin_right_spin=self.margin_right_spin,
-            margin_bottom_spin=self.margin_bottom_spin,
-            preview_zoom_spin=self.preview_zoom_spin,
-            printer_combo=self.printer_combo,
-            page_size_combo=self.page_size_combo,
-            orientation_combo=self.orientation_combo,
-            estimate_format_combo=self.estimate_format_combo,
+    def _appearance_settings_actions(self) -> AppearanceSettingsActions:
+        return AppearanceSettingsActions(
+            apply_print_font=self._apply_print_font,
+            apply_table_font_size=lambda value: self._apply_estimate_widget_value(
+                "apply_table_font_size",
+                value,
+                "table font size",
+            ),
+            apply_breakdown_font_size=lambda value: self._apply_estimate_widget_value(
+                "apply_breakdown_font_size",
+                value,
+                "breakdown font size",
+            ),
+            apply_final_calc_font_size=lambda value: self._apply_estimate_widget_value(
+                "apply_final_calc_font_size",
+                value,
+                "final calculation font size",
+            ),
+            apply_totals_position=lambda value: self._apply_estimate_widget_value(
+                "apply_totals_position",
+                value,
+                "totals panel position",
+            ),
         )
+
+    def _apply_print_font(self, font: FontSettings) -> None:
+        self.main_window.print_font = font.to_qfont()
+
+    def _apply_estimate_widget_value(
+        self,
+        method_name: str,
+        value: int | TotalsPosition,
+        label: str,
+    ) -> object:
+        widget = getattr(self.main_window, "estimate_widget", None)
+        if widget is None:
+            return None
+        method = getattr(widget, method_name, None)
+        if not callable(method):
+            raise RuntimeError(
+                f"Estimate view does not support '{method_name}' for {label}."
+            )
+        result = method(value)
+        if result is False:
+            raise RuntimeError(f"Estimate view rejected {label} value {value}.")
+        return result
 
     def _resize_to_available_screen(self) -> None:
         """Keep the settings dialog usable at larger Windows scale factors."""
@@ -1061,137 +559,6 @@ class SettingsDialog(QDialog):
         target_height = min(760, max(self.minimumHeight(), available.height() - 80))
         self.resize(target_width, target_height)
 
-    @staticmethod
-    def _configure_settings_form(form_layout: QFormLayout) -> None:
-        form_layout.setContentsMargins(0, 0, 0, 0)
-        form_layout.setHorizontalSpacing(12)
-        form_layout.setVerticalSpacing(12)
-        form_layout.setLabelAlignment(
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-        )
-        form_layout.setFormAlignment(
-            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
-        )
-        form_layout.setFieldGrowthPolicy(
-            QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
-        )
-
-    @staticmethod
-    def _polish_field_control(widget: QWidget, *, width: int) -> None:
-        widget.setMinimumWidth(min(width, 180))
-        widget.setMaximumWidth(width)
-        widget.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Fixed,
-        )
-
-    def _get_font_display_text(self, font):
-        """Generate display text for a QFont object."""
-        if not font:
-            return "Default"
-        size = font.pointSizeF()
-        style = " Bold" if font.bold() else ""
-        return f"{font.family()}, {size:.1f}pt{style}"
-
-    def _load_print_font_setting(self):
-        """Loads the print font from QSettings."""
-        # Reusing logic similar to MainWindow.load_settings
-        default_font = QFont("Arial", 8)
-        default_font_size = 8.0
-
-        font_family = str(
-            self.settings.value("font/family", default_font.family(), type=str)
-            or default_font.family()
-        )
-        font_size_float = _coerce_float_setting(
-            self.settings.value("font/size_float", default_font_size, type=float),
-            default_font_size,
-        )
-        font_bold = _coerce_bool_setting(
-            self.settings.value("font/bold", default_font.bold(), type=bool),
-            default_font.bold(),
-        )
-
-        # Ensure minimum size
-        font_size_float = max(5.0, font_size_float)
-
-        loaded_font = QFont(font_family)
-        loaded_font.setPointSizeF(font_size_float)
-        loaded_font.setBold(font_bold)
-        return loaded_font
-
-    def _load_table_font_size_setting(self):
-        """Loads the table font size from QSettings."""
-        return self._load_clamped_int_setting(
-            "ui/table_font_size",
-            default_size=9,
-            min_size=7,
-            max_size=16,
-        )
-
-    def _load_breakdown_font_size_setting(self):
-        return self._load_clamped_int_setting(
-            "ui/breakdown_font_size",
-            default_size=9,
-            min_size=7,
-            max_size=16,
-        )
-
-    def _load_final_calc_font_size_setting(self):
-        return self._load_clamped_int_setting(
-            "ui/final_calc_font_size",
-            default_size=10,
-            min_size=8,
-            max_size=20,
-        )
-
-    def _load_totals_position_setting(self):
-        value = self.settings.value(
-            "ui/estimate_totals_position", defaultValue="right", type=str
-        )
-        if value in {"left", "right", "bottom"}:
-            return value
-        return "right"
-
-    def _load_clamped_int_setting(
-        self,
-        key: str,
-        *,
-        default_size: int,
-        min_size: int,
-        max_size: int,
-    ) -> int:
-        value = self.settings.value(key, defaultValue=default_size, type=int)
-        numeric_value = _coerce_int_setting(value, default_size)
-        if numeric_value == default_size and value not in (
-            default_size,
-            str(default_size),
-        ):
-            logging.getLogger(__name__).warning(
-                "Invalid integer setting for %s: %r; using %s",
-                key,
-                value,
-                default_size,
-            )
-        return max(min_size, min(numeric_value, max_size))
-
-    def _load_print_settings_to_ui(self):
-        """Load current printing settings into the UI controls."""
-        self._print_settings_controller.load_to_ui(self._print_settings_widgets())
-
-    def _show_print_font_dialog(self):
-        """Show the custom print font dialog."""
-        # Use the temporary font object for editing
-        dialog = CustomFontDialog(self._current_print_font, self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            self._current_print_font = dialog.get_selected_font()
-            self.print_font_label.setText(
-                self._get_font_display_text(self._current_print_font)
-            )
-            self._mark_dirty()
-            # Update live sample
-            self._update_font_sample_label()
-
     # --- Apply/Save/Accept/Reject ---
 
     def apply_settings(self):
@@ -1199,67 +566,15 @@ class SettingsDialog(QDialog):
         logger = logging.getLogger(__name__)
         logger.debug("Applying settings...")
 
-        def _apply_estimate_widget_value(method_name, value, label):
-            widget = getattr(self.main_window, "estimate_widget", None)
-            if widget is None:
-                return
-            method = getattr(widget, method_name, None)
-            if not callable(method):
-                raise RuntimeError(
-                    f"Estimate view does not support '{method_name}' for {label}."
-                )
-            result = method(value)
-            if result is False:
-                raise RuntimeError(f"Estimate view rejected {label} value {value}.")
-
         try:
-            # Save Print Font
-            font_to_save = self._current_print_font
-            float_size = font_to_save.pointSizeF()
-            self.settings.setValue("font/family", font_to_save.family())
-            self.settings.setValue("font/size_float", float(float_size))
-            self.settings.setValue("font/bold", bool(font_to_save.bold()))
-            self.main_window.print_font = font_to_save
-            logger.debug(
-                "Applied print font: %s",
-                self._get_font_display_text(font_to_save),
-            )
+            self.appearance_page.validate()
+            self.print_page.validate()
+            self.logging_page.validate()
 
-            new_table_size = self.table_font_size_spin.value()
-            self.settings.setValue("ui/table_font_size", new_table_size)
-            _apply_estimate_widget_value(
-                "apply_table_font_size",
-                new_table_size,
-                "table font size",
-            )
+            appearance_state = self.appearance_page.apply()
+            logger.debug("Applied appearance settings: %s", appearance_state)
 
-            new_breakdown_size = self.breakdown_font_size_spin.value()
-            self.settings.setValue("ui/breakdown_font_size", new_breakdown_size)
-            _apply_estimate_widget_value(
-                "apply_breakdown_font_size",
-                new_breakdown_size,
-                "breakdown font size",
-            )
-
-            new_final_calc_size = self.final_calc_font_size_spin.value()
-            self.settings.setValue("ui/final_calc_font_size", new_final_calc_size)
-            _apply_estimate_widget_value(
-                "apply_final_calc_font_size",
-                new_final_calc_size,
-                "final calculation font size",
-            )
-
-            new_totals_position = self.totals_position_combo.currentData() or "right"
-            self.settings.setValue("ui/estimate_totals_position", new_totals_position)
-            _apply_estimate_widget_value(
-                "apply_totals_position",
-                new_totals_position,
-                "totals panel position",
-            )
-
-            print_state = self._print_settings_controller.save_from_ui(
-                self._print_settings_widgets()
-            )
+            print_state = self.print_page.apply()
             logger.debug(
                 "Saved print settings: margins=%s zoom=%s printer=%s page_size=%s orientation=%s",
                 self._print_settings_controller.serialize_margins(print_state.margins),
@@ -1276,29 +591,8 @@ class SettingsDialog(QDialog):
             if hasattr(self.main_window, "reconfigure_rate_timer_from_settings"):
                 self.main_window.reconfigure_rate_timer_from_settings()
 
-            self.settings.setValue(
-                "logging/debug_mode", self.debug_mode_checkbox.isChecked()
-            )
-            self.settings.setValue(
-                "logging/enable_info", self.enable_info_checkbox.isChecked()
-            )
-            self.settings.setValue(
-                "logging/enable_critical", self.enable_critical_checkbox.isChecked()
-            )
-            self.settings.setValue(
-                "logging/enable_debug", self.enable_debug_checkbox.isChecked()
-            )
-            self.settings.setValue(
-                "logging/auto_cleanup", self.auto_cleanup_checkbox.isChecked()
-            )
-            self.settings.setValue(
-                "logging/cleanup_days", self.cleanup_days_spin.value()
-            )
-
-            from silverestimate.infrastructure.logger import reconfigure_logging
-
-            reconfigure_logging()
-            logger.info("Logging settings applied.")
+            logging_state = self.logging_page.apply()
+            logger.info("Applied logging settings: %s", logging_state)
             self.settings.sync()
             self.settings_applied.emit()
             logger.info("Settings applied and saved.")
@@ -1326,264 +620,6 @@ class SettingsDialog(QDialog):
             self.settings_feedback_label.setProperty("state", "dirty")
             self.settings_feedback_label.setVisible(True)
             return False
-
-    def _handle_password_change(self):
-        """Handle the logic for changing both passwords."""
-        current_password = self.current_password_input.text()
-        new_main_pw = self.new_password_input.text()
-        confirm_main_pw = self.confirm_new_password_input.text()
-        new_secondary_pw = self.new_secondary_password_input.text()
-        confirm_secondary_pw = self.confirm_new_secondary_password_input.text()
-
-        logger = logging.getLogger(__name__)
-        try:
-            stored_main_hash = credential_store.get_password_hash("main")
-        except CredentialStoreError as exc:
-            logger.error(
-                "Secure credential store unavailable during password change: %s",
-                exc,
-                exc_info=True,
-            )
-            QMessageBox.critical(
-                self,
-                "Password Change Error",
-                "Secure credential storage is not available. Install and configure the system keyring, then try again.",
-            )
-            return
-
-        # 1. Validate Current Password
-        if not stored_main_hash or not verify_password(
-            stored_main_hash,
-            current_password,
-            logger=logger,
-        ):
-            QMessageBox.warning(
-                self, "Password Change Failed", "Incorrect current password."
-            )
-            self.current_password_input.clear()  # Clear field on error
-            self.current_password_input.setFocus()
-            return
-
-        # 2. Validate New Main Password
-        if not new_main_pw:
-            QMessageBox.warning(
-                self, "Password Change Failed", "New main password cannot be empty."
-            )
-            self.new_password_input.setFocus()
-            return
-        if new_main_pw != confirm_main_pw:
-            QMessageBox.warning(
-                self, "Password Change Failed", "New main passwords do not match."
-            )
-            self.confirm_new_password_input.clear()
-            self.confirm_new_password_input.setFocus()
-            return
-
-        # 3. Validate New Recovery Password
-        if not new_secondary_pw:
-            QMessageBox.warning(
-                self,
-                "Password Change Failed",
-                "New recovery password cannot be empty.",
-            )
-            self.new_secondary_password_input.setFocus()
-            return
-        if new_secondary_pw != confirm_secondary_pw:
-            QMessageBox.warning(
-                self, "Password Change Failed", "New recovery passwords do not match."
-            )
-            self.confirm_new_secondary_password_input.clear()
-            self.confirm_new_secondary_password_input.setFocus()
-            return
-
-        # 4. Validate Main vs Recovery
-        if new_main_pw == new_secondary_pw:
-            QMessageBox.warning(
-                self,
-                "Password Change Failed",
-                "New main and recovery passwords must be different.",
-            )
-            self.new_secondary_password_input.setFocus()
-            return
-
-        # 5. Hash New Passwords
-        new_main_hash = hash_password(new_main_pw, logger=logger)
-        new_secondary_hash = hash_password(new_secondary_pw, logger=logger)
-
-        if not new_main_hash or not new_secondary_hash:
-            QMessageBox.critical(
-                self,
-                "Password Change Error",
-                "Failed to hash new passwords. Cannot save.",
-            )
-            return
-
-        # 6. Persist recoverable pending hashes, switch the database, then promote.
-        try:
-            stored_backup_hash = credential_store.get_password_hash("backup")
-            credential_store.set_password_hash(
-                "pending_main", new_main_hash, logger=logger
-            )
-            credential_store.set_password_hash(
-                "pending_backup", new_secondary_hash, logger=logger
-            )
-            credential_store.set_password_hash(
-                "recovery_main", stored_main_hash, logger=logger
-            )
-            if stored_backup_hash:
-                credential_store.set_password_hash(
-                    "recovery_backup", stored_backup_hash, logger=logger
-                )
-            dbm = getattr(self.main_window, "db", None)
-            if dbm is None:
-                raise RuntimeError("Encrypted database connection is unavailable")
-            outcome = dbm.change_passwords(new_main_pw)
-            if getattr(outcome.status, "name", "") != "SUCCESS":
-                for kind in (
-                    "pending_main",
-                    "pending_backup",
-                    "recovery_main",
-                    "recovery_backup",
-                ):
-                    credential_store.delete_password_hash(kind, logger=logger)
-                QMessageBox.warning(
-                    self, "Password Change Rolled Back", outcome.message
-                )
-                return
-            credential_store.set_password_hash("main", new_main_hash, logger=logger)
-            credential_store.set_password_hash(
-                "backup", new_secondary_hash, logger=logger
-            )
-            for kind in (
-                "pending_main",
-                "pending_backup",
-                "recovery_main",
-                "recovery_backup",
-            ):
-                credential_store.delete_password_hash(kind, logger=logger)
-            QMessageBox.information(self, "Password Updated", outcome.message)
-            for field in (
-                self.current_password_input,
-                self.new_password_input,
-                self.confirm_new_password_input,
-                self.new_secondary_password_input,
-                self.confirm_new_secondary_password_input,
-            ):
-                field.clear()
-
-        except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Password Change Error",
-                f"Failed to save new password settings: {e}",
-            )
-            logging.getLogger(__name__).error(
-                "Error saving new password hashes:", exc_info=True
-            )
-
-    def _create_database_backup(self) -> None:
-        dbm = getattr(self.main_window, "db", None)
-        if dbm is None:
-            QMessageBox.critical(self, "Backup Error", "Database is unavailable.")
-            return
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Create Encrypted Database Backup",
-            "silverestimate.sedbbackup",
-            "Silver Estimate Encrypted Backup (*.sedbbackup)",
-        )
-        if not path:
-            return
-        if not path.lower().endswith(".sedbbackup"):
-            path += ".sedbbackup"
-        try:
-            outcome = dbm.create_encrypted_backup(path)
-            QMessageBox.information(self, "Encrypted Backup Created", outcome.message)
-        except Exception as exc:
-            QMessageBox.critical(self, "Backup Error", str(exc))
-
-    def _stage_database_restore(self) -> None:
-        dbm = getattr(self.main_window, "db", None)
-        if dbm is None:
-            QMessageBox.critical(self, "Restore Error", "Database is unavailable.")
-            return
-        path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Restore Encrypted Database Backup",
-            "",
-            "Silver Estimate Encrypted Backup (*.sedbbackup)",
-        )
-        if not path:
-            return
-        password, accepted = QInputDialog.getText(
-            self,
-            "Backup Password",
-            "Enter the main password that protected this backup:",
-            QLineEdit.EchoMode.Password,
-        )
-        if not accepted:
-            return
-        try:
-            outcome = dbm.stage_encrypted_restore(path, password)
-            QMessageBox.information(self, "Restore Staged", outcome.message)
-        except Exception as exc:
-            QMessageBox.critical(self, "Restore Error", str(exc))
-
-    def _handle_manual_log_cleanup(self):
-        """Handle manual log cleanup button click."""
-        from silverestimate.infrastructure.logger import cleanup_old_logs
-
-        # Get logger for this operation
-        logger = logging.getLogger(__name__)
-
-        # Ask for confirmation
-        days = self.cleanup_days_spin.value()
-        reply = QMessageBox.question(
-            self,
-            "Confirm Log Cleanup",
-            f"This will permanently delete log files older than {days} day(s).\n\nContinue?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-
-        if reply == QMessageBox.StandardButton.Yes:
-            try:
-                logger.info(
-                    f"Manual log cleanup initiated for files older than {days} days"
-                )
-
-                # Show busy cursor during cleanup
-                from PySide6.QtCore import Qt
-                from PySide6.QtGui import QCursor
-
-                self.setCursor(QCursor(Qt.CursorShape.WaitCursor))
-
-                # Run the cleanup
-                removed_count = cleanup_old_logs(max_age_days=days)
-
-                # Restore cursor
-                self.unsetCursor()
-
-                # Show results
-                logger.info(
-                    f"Manual log cleanup completed: removed {removed_count} files"
-                )
-                QMessageBox.information(
-                    self,
-                    "Log Cleanup Complete",
-                    f"Successfully removed {removed_count} old log file(s).",
-                )
-            except Exception as e:
-                # Restore cursor in case of error
-                self.unsetCursor()
-
-                # Log and show error
-                logger.error(f"Manual log cleanup failed: {str(e)}", exc_info=True)
-                QMessageBox.critical(
-                    self,
-                    "Log Cleanup Failed",
-                    f"An error occurred during log cleanup: {str(e)}",
-                )
 
     def accept(self):
         """Apply settings and close the dialog."""
@@ -1620,75 +656,14 @@ class SettingsDialog(QDialog):
 
     def _restore_defaults(self):
         """Restore sensible default settings for this dialog and update the UI."""
-        # Fonts
-        default_font = QFont("Arial", 8)
-        self._current_print_font = default_font
-        self.print_font_label.setText(self._get_font_display_text(default_font))
+        self.appearance_page.restore_defaults()
 
-        # Table/UI sizes
-        self.table_font_size_spin.setValue(9)
-        self.breakdown_font_size_spin.setValue(9)
-        self.final_calc_font_size_spin.setValue(10)
-        idx_totals = self.totals_position_combo.findData("right")
-        if idx_totals >= 0:
-            self.totals_position_combo.setCurrentIndex(idx_totals)
+        self.print_page.restore_defaults()
 
-        # Printing
-        self._print_settings_controller.apply_defaults_to_ui(
-            self._print_settings_widgets()
-        )
-
-        # Logging
-        self.debug_mode_checkbox.setChecked(False)
-        self.enable_info_checkbox.setChecked(True)
-        self.enable_critical_checkbox.setChecked(True)
-        self.enable_debug_checkbox.setChecked(True)
-        self.auto_cleanup_checkbox.setChecked(False)
-        self.cleanup_days_spin.setValue(1)
+        self.logging_page.restore_defaults()
 
         # Mark dirty so user can Apply
         self._mark_dirty()
-
-    def _open_logs_folder(self):
-        """Open the logs directory in the system file manager."""
-        try:
-            from silverestimate.infrastructure.app_constants import LOG_DIR
-
-            QDesktopServices.openUrl(QUrl.fromLocalFile(LOG_DIR))
-        except Exception:
-            # Fallback: try current working directory 'logs'
-            QDesktopServices.openUrl(QUrl.fromLocalFile("logs"))
-
-    def _toggle_password_visibility(self, checked):
-        """Toggle password echo mode for all password fields."""
-        mode = QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password
-        for fld in [
-            getattr(self, "current_password_input", None),
-            getattr(self, "new_password_input", None),
-            getattr(self, "confirm_new_password_input", None),
-            getattr(self, "new_secondary_password_input", None),
-            getattr(self, "confirm_new_secondary_password_input", None),
-        ]:
-            if fld is not None:
-                fld.setEchoMode(mode)
-        # no Apply state change needed here
-
-    def _update_font_sample_label(self):
-        """Update the live sample label to reflect current print font."""
-        try:
-            if (
-                hasattr(self, "print_font_sample")
-                and self.print_font_sample is not None
-            ) and self._current_print_font:
-                sample_font = QFont(self._current_print_font)
-                size_f = self._current_print_font.pointSizeF()
-                if size_f:
-                    sample_font.setPointSizeF(max(5.0, float(size_f)))
-                self.print_font_sample.setFont(sample_font)
-        except Exception as exc:
-            logging.getLogger(__name__).debug(
-                "Failed to update print-font sample label: %s", exc
-            )
 
 
 # Example usage for testing

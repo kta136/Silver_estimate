@@ -38,7 +38,7 @@ class EstimateTableAdapter:
         try:
             if not isValid(owner):
                 return
-            owner.focus_on_code_column(row)
+            owner.table_controller.focus_on_code_column(row)
         except RuntimeError:
             return
 
@@ -127,7 +127,7 @@ class EstimateTableAdapter:
             self._apply_mode_category(row_index)
 
             owner.current_row = row_index
-            owner.calculate_net_weight()
+            owner.totals_controller.calculate_net_weight()
         except Exception as exc:  # pragma: no cover - UI failure reporting
             owner.logger.error(
                 "Error populating row %s: %s", row_index + 1, exc, exc_info=True
@@ -216,7 +216,7 @@ class EstimateTableAdapter:
         if empty_row_index != -1:
             if update_visuals:
                 self.refresh_empty_row_type()
-                owner.calculate_totals()
-            owner.focus_on_code_column(empty_row_index)
+                owner.totals_controller.calculate_totals()
+            owner.table_controller.focus_on_code_column(empty_row_index)
         else:
             self.add_empty_row()

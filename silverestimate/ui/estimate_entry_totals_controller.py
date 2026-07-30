@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from PySide6.QtWidgets import QDoubleSpinBox
 from shiboken6 import isValid
@@ -21,7 +21,6 @@ from silverestimate.services.estimate_calculator import (
 )
 from silverestimate.ui.view_models import EstimateEntryRowState
 
-from ._host_proxy import HostProxy
 from .estimate_entry_logic.constants import (
     COL_FINE_WT,
     COL_GROSS,
@@ -38,8 +37,11 @@ if TYPE_CHECKING:
     from .estimate_entry_components import EstimateTableView
 
 
-class EstimateEntryTotalsController(HostProxy):
+class EstimateEntryTotalsController:
     """Own totals recompute and incremental aggregation behavior."""
+
+    def __init__(self, host: Any) -> None:
+        self.host = host
 
     if TYPE_CHECKING:
         item_table: EstimateTableView
@@ -53,16 +55,16 @@ class EstimateEntryTotalsController(HostProxy):
         _row_contrib_cache: dict[int, _RowContribution]
 
     def calculate_net_weight(self):
-        self._recompute_row_derived_values(self.current_row)
+        self._recompute_row_derived_values(self.host.current_row)
 
     def calculate_fine(self):
-        self._recompute_row_derived_values(self.current_row)
+        self._recompute_row_derived_values(self.host.current_row)
 
     def calculate_wage(self):
-        self._recompute_row_derived_values(self.current_row)
+        self._recompute_row_derived_values(self.host.current_row)
 
     def _row_wage_type(self, row: int) -> str:
-        table = getattr(self, "item_table", None)
+        table = getattr(self.host, "item_table", None)
         if table is None:
             return "WT"
         model = table.get_model() if hasattr(table, "get_model") else table.model()
@@ -85,16 +87,16 @@ class EstimateEntryTotalsController(HostProxy):
         started_at = time.perf_counter()
         if row is None or row < 0:
             return
-        if row >= self.item_table.rowCount():
+        if row >= self.host.item_table.rowCount():
             return
         try:
-            gross = self._get_cell_float(row, COL_GROSS)
-            poly = self._get_cell_float(row, COL_POLY)
+            gross = self.host.table_controller._get_cell_float(row, COL_GROSS)
+            poly = self.host.table_controller._get_cell_float(row, COL_POLY)
             net = compute_net_weight(gross, poly)
-            purity = self._get_cell_float(row, COL_PURITY)
+            purity = self.host.table_controller._get_cell_float(row, COL_PURITY)
             fine = compute_fine_weight(net, purity)
-            wage_rate = self._get_cell_float(row, COL_WAGE_RATE)
-            pieces = self._get_cell_int(row, COL_PIECES)
+            wage_rate = self.host.table_controller._get_cell_float(row, COL_WAGE_RATE)
+            pieces = self.host.table_controller._get_cell_int(row, COL_PIECES)
             wage_basis = self._row_wage_type(row)
             wage = compute_wage_amount(
                 wage_basis,
@@ -103,20 +105,20 @@ class EstimateEntryTotalsController(HostProxy):
                 pieces=pieces,
             )
 
-            self.item_table.set_cell_text(row, COL_NET_WT, f"{net:.2f}")
-            self.item_table.set_cell_text(row, COL_FINE_WT, f"{fine:.2f}")
-            self.item_table.set_cell_text(row, COL_WAGE_AMT, f"{wage:.0f}")
+            self.host.item_table.set_cell_text(row, COL_NET_WT, f"{net:.2f}")
+            self.host.item_table.set_cell_text(row, COL_FINE_WT, f"{fine:.2f}")
+            self.host.item_table.set_cell_text(row, COL_WAGE_AMT, f"{wage:.0f}")
             self._update_incremental_for_row(row)
 
             if schedule_totals:
                 self._refresh_totals_after_row_edit(start=started_at)
         except (AttributeError, TypeError, ValueError) as exc:
-            self.logger.warning(
+            self.host.logger.warning(
                 "Failed to recompute row %s derived values: %s", row, exc, exc_info=True
             )
 
     def _schedule_totals_recalc(self, delay_ms: int | None = None) -> None:
-        timer = getattr(self, "_totals_timer", None)
+        timer = getattr(self.host, "_totals_timer", None)
         if timer is None or not isValid(timer):
             self.calculate_totals()
             return
@@ -126,20 +128,20 @@ class EstimateEntryTotalsController(HostProxy):
             timer.setInterval(max(0, int(delay_ms)))
             timer.start()
         except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
-            self.logger.debug("Failed to schedule totals recalculation: %s", exc)
+            self.host.logger.debug("Failed to schedule totals recalculation: %s", exc)
             self.calculate_totals()
 
     def _apply_incremental_totals_now(self, *, start: float | None = None) -> bool:
         if not self._totals_incremental_is_active():
             return False
-        if not self._is_table_valid():
+        if not self.host.table_controller._is_table_valid():
             return False
-        if len(self._row_contrib_cache) != self.item_table.rowCount():
+        if len(self.host._row_contrib_cache) != self.host.item_table.rowCount():
             return False
 
         started_at = time.perf_counter() if start is None else start
         totals = self._build_totals_result_from_aggregates()
-        self.apply_totals(totals)
+        self.host.apply_totals(totals)
         self._log_perf_metric(
             "estimate_entry.totals_incremental_apply",
             started_at,
@@ -165,9 +167,9 @@ class EstimateEntryTotalsController(HostProxy):
             return
         details = " ".join(f"{key}={value}" for key, value in metadata.items())
         if details:
-            self.logger.debug("[perf] %s=%.2fms %s", name, elapsed_ms, details)
+            self.host.logger.debug("[perf] %s=%.2fms %s", name, elapsed_ms, details)
         else:
-            self.logger.debug("[perf] %s=%.2fms", name, elapsed_ms)
+            self.host.logger.debug("[perf] %s=%.2fms", name, elapsed_ms)
 
     @staticmethod
     def _inactive_row_contribution() -> "_RowContribution":
@@ -176,7 +178,7 @@ class EstimateEntryTotalsController(HostProxy):
         return _RowContribution()
 
     def _totals_incremental_is_active(self) -> bool:
-        return not self._incremental_totals_failed
+        return not self.host._incremental_totals_failed
 
     @staticmethod
     def _category_bucket_for(
@@ -229,64 +231,64 @@ class EstimateEntryTotalsController(HostProxy):
         if old_contrib.is_active:
             old_bucket = self._category_bucket_for(
                 old_contrib.category,
-                regular=self._agg_regular,
-                returns=self._agg_returns,
-                silver_bars=self._agg_silver_bars,
+                regular=self.host._agg_regular,
+                returns=self.host._agg_returns,
+                silver_bars=self.host._agg_silver_bars,
             )
             self._apply_signed_contribution(old_bucket, old_contrib, sign=-1)
-            self._agg_overall_gross -= old_contrib.gross
-            self._agg_overall_poly -= old_contrib.poly
+            self.host._agg_overall_gross -= old_contrib.gross
+            self.host._agg_overall_poly -= old_contrib.poly
 
         if new_contrib.is_active:
             new_bucket = self._category_bucket_for(
                 new_contrib.category,
-                regular=self._agg_regular,
-                returns=self._agg_returns,
-                silver_bars=self._agg_silver_bars,
+                regular=self.host._agg_regular,
+                returns=self.host._agg_returns,
+                silver_bars=self.host._agg_silver_bars,
             )
             self._apply_signed_contribution(new_bucket, new_contrib, sign=1)
-            self._agg_overall_gross += new_contrib.gross
-            self._agg_overall_poly += new_contrib.poly
+            self.host._agg_overall_gross += new_contrib.gross
+            self.host._agg_overall_poly += new_contrib.poly
 
     def _reset_incremental_aggregates(self) -> None:
         from .estimate_entry import _RunningCategoryTotals
 
-        self._row_contrib_cache.clear()
-        self._agg_regular = _RunningCategoryTotals()
-        self._agg_returns = _RunningCategoryTotals()
-        self._agg_silver_bars = _RunningCategoryTotals()
-        self._agg_overall_gross = 0.0
-        self._agg_overall_poly = 0.0
+        self.host._row_contrib_cache.clear()
+        self.host._agg_regular = _RunningCategoryTotals()
+        self.host._agg_returns = _RunningCategoryTotals()
+        self.host._agg_silver_bars = _RunningCategoryTotals()
+        self.host._agg_overall_gross = 0.0
+        self.host._agg_overall_poly = 0.0
 
     def _rebuild_incremental_totals_from_table(self) -> None:
         self._reset_incremental_aggregates()
-        if not self._is_table_valid():
+        if not self.host.table_controller._is_table_valid():
             return
 
-        rows = list(self.item_table.get_all_rows())
+        rows = list(self.host.item_table.get_all_rows())
         for row_idx, row_state in enumerate(rows):
             contrib = self._row_contribution_from_row_state(row_state)
             self._apply_contribution_delta(self._inactive_row_contribution(), contrib)
-            self._row_contrib_cache[row_idx] = contrib
+            self.host._row_contrib_cache[row_idx] = contrib
 
     def _update_incremental_for_row(self, row: int) -> None:
         if not self._totals_incremental_is_active():
             return
         if row is None or row < 0:
             return
-        if not self._is_table_valid():
+        if not self.host.table_controller._is_table_valid():
             return
-        if row >= self.item_table.rowCount():
+        if row >= self.host.item_table.rowCount():
             return
 
         try:
-            row_state = self.item_table.get_row_state(row)
-            old_contrib = self._row_contrib_cache.get(
+            row_state = self.host.item_table.get_row_state(row)
+            old_contrib = self.host._row_contrib_cache.get(
                 row, self._inactive_row_contribution()
             )
             new_contrib = self._row_contribution_from_row_state(row_state)
             self._apply_contribution_delta(old_contrib, new_contrib)
-            self._row_contrib_cache[row] = new_contrib
+            self.host._row_contrib_cache[row] = new_contrib
         except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
             self._disable_incremental_totals_and_fallback(exc)
 
@@ -296,18 +298,18 @@ class EstimateEntryTotalsController(HostProxy):
         if row is None or row < 0:
             return
 
-        old_contrib = self._row_contrib_cache.pop(
+        old_contrib = self.host._row_contrib_cache.pop(
             row, self._inactive_row_contribution()
         )
         self._apply_contribution_delta(old_contrib, self._inactive_row_contribution())
-        if not self._row_contrib_cache:
+        if not self.host._row_contrib_cache:
             return
 
         shifted: dict[int, _RowContribution] = {}
-        for index in sorted(self._row_contrib_cache):
-            contrib = self._row_contrib_cache[index]
+        for index in sorted(self.host._row_contrib_cache):
+            contrib = self.host._row_contrib_cache[index]
             shifted[index - 1 if index > row else index] = contrib
-        self._row_contrib_cache = shifted
+        self.host._row_contrib_cache = shifted
 
     @staticmethod
     def _frozen_category_totals(bucket) -> CategoryTotals:
@@ -319,40 +321,40 @@ class EstimateEntryTotalsController(HostProxy):
         )
 
     def _build_totals_result_from_aggregates(self) -> TotalsResult:
-        regular_totals = self._frozen_category_totals(self._agg_regular)
-        return_totals = self._frozen_category_totals(self._agg_returns)
-        bar_totals = self._frozen_category_totals(self._agg_silver_bars)
+        regular_totals = self._frozen_category_totals(self.host._agg_regular)
+        return_totals = self._frozen_category_totals(self.host._agg_returns)
+        bar_totals = self._frozen_category_totals(self.host._agg_silver_bars)
 
         return build_totals_result(
-            overall_gross=float(self._agg_overall_gross),
-            overall_poly=float(self._agg_overall_poly),
+            overall_gross=float(self.host._agg_overall_gross),
+            overall_poly=float(self.host._agg_overall_poly),
             regular=regular_totals,
             returns=return_totals,
             silver_bars=bar_totals,
-            silver_rate=float(self.silver_rate_spin.value()),
-            last_balance_silver=float(self.last_balance_silver),
-            last_balance_amount=float(self.last_balance_amount),
+            silver_rate=float(self.host.silver_rate_spin.value()),
+            last_balance_silver=float(self.host.last_balance_silver),
+            last_balance_amount=float(self.host.last_balance_amount),
         )
 
     def _disable_incremental_totals_and_fallback(self, exc: Exception) -> None:
-        if not self._incremental_totals_failed:
-            self.logger.warning(
+        if not self.host._incremental_totals_failed:
+            self.host.logger.warning(
                 "Incremental totals failed; full recalculation fallback is disabled: %s",
                 exc,
                 exc_info=True,
             )
-        self._incremental_totals_failed = True
+        self.host._incremental_totals_failed = True
 
     def calculate_totals(self):
         start = time.perf_counter()
-        if self._incremental_totals_failed:
+        if self.host._incremental_totals_failed:
             return
 
         try:
-            if len(self._row_contrib_cache) != self.item_table.rowCount():
+            if len(self.host._row_contrib_cache) != self.host.item_table.rowCount():
                 self._rebuild_incremental_totals_from_table()
             totals = self._build_totals_result_from_aggregates()
-            self.apply_totals(totals)
+            self.host.apply_totals(totals)
             self._log_perf_metric(
                 "estimate_entry.totals_incremental_apply",
                 start,

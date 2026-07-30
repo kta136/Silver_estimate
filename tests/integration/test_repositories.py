@@ -9,7 +9,16 @@ from silverestimate.infrastructure.item_cache import ItemCacheController
 from silverestimate.persistence import schema
 from silverestimate.persistence.estimates_repository import EstimatesRepository
 from silverestimate.persistence.items_repository import ItemsRepository
-from silverestimate.persistence.silver_bars_repository import SilverBarsRepository
+from silverestimate.persistence.silver_bar_command_repository import (
+    SilverBarCommandRepository,
+)
+from silverestimate.persistence.silver_bar_query_repository import (
+    SilverBarQueryRepository,
+)
+from silverestimate.persistence.silver_bar_synchronization_repository import (
+    SilverBarSynchronizationRepository,
+    SilverBarSyncResult,
+)
 from tests.factories import estimate_totals, regular_item, return_item, silver_bar_item
 
 
@@ -564,7 +573,9 @@ def test_save_estimate_reports_missing_item_code(fake_db):
 
 def test_estimate_delete_cleans_silver_bars(fake_db):
     est_repo = EstimatesRepository(fake_db)
-    silver_repo = SilverBarsRepository(fake_db)
+    silver_commands = SilverBarCommandRepository(fake_db)
+    silver_queries = SilverBarQueryRepository(fake_db)
+    SilverBarSynchronizationRepository(fake_db)
     est_repo.save_estimate_with_returns(
         voucher_no="200",
         date="2025-01-02",
@@ -575,117 +586,129 @@ def test_estimate_delete_cleans_silver_bars(fake_db):
             total_gross=0.0, total_net=0.0, net_fine=0.0, net_wage=0.0
         ),
     )
-    bar_id = silver_repo.add_silver_bar("200", 5.0, 99.9)
+    bar_id = silver_commands.add_silver_bar("200", 5.0, 99.9)
     assert bar_id is not None
-    list_id = silver_repo.create_list("Auto List")
+    list_id = silver_commands.create_list("Auto List")
     assert list_id is not None
-    assert silver_repo.assign_bar_to_list(bar_id, list_id, perform_commit=True)
+    assert silver_commands.assign_bar_to_list(bar_id, list_id, perform_commit=True)
     deleted = est_repo.delete_single_estimate("200")
     assert deleted
-    remaining_bars = silver_repo.get_silver_bars(estimate_voucher_no="200")
+    remaining_bars = silver_queries.get_silver_bars(estimate_voucher_no="200")
     assert remaining_bars == []
 
 
 def test_silver_bar_assignment_cycle(fake_db):
-    repo = SilverBarsRepository(fake_db)
-    list_id = repo.create_list("Test List")
+    commands = SilverBarCommandRepository(fake_db)
+    queries = SilverBarQueryRepository(fake_db)
+    SilverBarSynchronizationRepository(fake_db)
+    list_id = commands.create_list("Test List")
     assert list_id is not None
-    bar_id = repo.add_silver_bar("300", 7.5, 99.0)
+    bar_id = commands.add_silver_bar("300", 7.5, 99.0)
     assert bar_id is not None
-    assert repo.assign_bar_to_list(bar_id, list_id)
-    bars_in_list = repo.get_bars_in_list(list_id)
+    assert commands.assign_bar_to_list(bar_id, list_id)
+    bars_in_list = queries.get_bars_in_list(list_id)
     assert len(bars_in_list) == 1
-    assert repo.remove_bar_from_list(bar_id)
-    bars_in_list = repo.get_bars_in_list(list_id)
+    assert commands.remove_bar_from_list(bar_id)
+    bars_in_list = queries.get_bars_in_list(list_id)
     assert bars_in_list == []
 
 
 def test_silver_bar_bulk_assignment_and_removal(fake_db):
-    repo = SilverBarsRepository(fake_db)
-    list_id = repo.create_list("Bulk List")
+    commands = SilverBarCommandRepository(fake_db)
+    queries = SilverBarQueryRepository(fake_db)
+    SilverBarSynchronizationRepository(fake_db)
+    list_id = commands.create_list("Bulk List")
     assert list_id is not None
 
     bar_ids = []
     for idx in range(3):
-        bar_id = repo.add_silver_bar(f"BULK{idx}", float(idx + 1), 99.0)
+        bar_id = commands.add_silver_bar(f"BULK{idx}", float(idx + 1), 99.0)
         assert bar_id is not None
         bar_ids.append(bar_id)
 
-    assigned, failed_assign = repo.assign_bars_to_list_bulk(bar_ids, list_id)
+    assigned, failed_assign = commands.assign_bars_to_list_bulk(bar_ids, list_id)
     assert assigned == 3
     assert failed_assign == []
 
-    bars_in_list = repo.get_bars_in_list(list_id)
+    bars_in_list = queries.get_bars_in_list(list_id)
     assert {row["bar_id"] for row in bars_in_list} == set(bar_ids)
 
-    removed, failed_remove = repo.remove_bars_from_list_bulk(bar_ids)
+    removed, failed_remove = commands.remove_bars_from_list_bulk(bar_ids)
     assert removed == 3
     assert failed_remove == []
 
-    bars_in_list_after = repo.get_bars_in_list(list_id)
+    bars_in_list_after = queries.get_bars_in_list(list_id)
     assert bars_in_list_after == []
 
 
 def test_silver_bar_bulk_assignment_reports_failures(fake_db):
-    repo = SilverBarsRepository(fake_db)
-    list_id = repo.create_list("Bulk Fail List")
+    commands = SilverBarCommandRepository(fake_db)
+    SilverBarQueryRepository(fake_db)
+    SilverBarSynchronizationRepository(fake_db)
+    list_id = commands.create_list("Bulk Fail List")
     assert list_id is not None
 
-    bar_id = repo.add_silver_bar("BULKFAIL", 5.0, 99.0)
+    bar_id = commands.add_silver_bar("BULKFAIL", 5.0, 99.0)
     assert bar_id is not None
-    assert repo.assign_bar_to_list(bar_id, list_id)
+    assert commands.assign_bar_to_list(bar_id, list_id)
 
-    assigned, failed = repo.assign_bars_to_list_bulk([bar_id, 999999], list_id)
+    assigned, failed = commands.assign_bars_to_list_bulk([bar_id, 999999], list_id)
     assert assigned == 0
     assert set(failed) == {bar_id, 999999}
 
 
 def test_silver_bar_query_limit_and_offset(fake_db):
-    repo = SilverBarsRepository(fake_db)
+    commands = SilverBarCommandRepository(fake_db)
+    queries = SilverBarQueryRepository(fake_db)
+    SilverBarSynchronizationRepository(fake_db)
     bar_ids = []
     for i in range(1, 5):
-        bar_id = repo.add_silver_bar(f"V{i}", float(i), 99.0)
+        bar_id = commands.add_silver_bar(f"V{i}", float(i), 99.0)
         assert bar_id is not None
         bar_ids.append(bar_id)
 
-    limited = repo.get_silver_bars(limit=2)
+    limited = queries.get_silver_bars(limit=2)
     assert len(limited) == 2
     # get_silver_bars orders by date_added DESC, bar_id DESC
     assert [row["bar_id"] for row in limited] == sorted(
         [row["bar_id"] for row in limited], reverse=True
     )
 
-    offset_rows = repo.get_silver_bars(limit=1, offset=1)
+    offset_rows = queries.get_silver_bars(limit=1, offset=1)
     assert len(offset_rows) == 1
     assert offset_rows[0]["bar_id"] == limited[1]["bar_id"]
 
 
 def test_silver_bar_query_unassigned_only_filter(fake_db):
-    repo = SilverBarsRepository(fake_db)
-    list_id = repo.create_list("Filter List")
+    commands = SilverBarCommandRepository(fake_db)
+    queries = SilverBarQueryRepository(fake_db)
+    SilverBarSynchronizationRepository(fake_db)
+    list_id = commands.create_list("Filter List")
     assert list_id is not None
 
-    free_bar = repo.add_silver_bar("U1", 11.0, 99.0)
-    assigned_bar = repo.add_silver_bar("U2", 12.0, 99.0)
+    free_bar = commands.add_silver_bar("U1", 11.0, 99.0)
+    assigned_bar = commands.add_silver_bar("U2", 12.0, 99.0)
     assert free_bar is not None
     assert assigned_bar is not None
-    assert repo.assign_bar_to_list(assigned_bar, list_id)
+    assert commands.assign_bar_to_list(assigned_bar, list_id)
 
-    all_rows = repo.get_silver_bars()
+    all_rows = queries.get_silver_bars()
     assert {row["bar_id"] for row in all_rows} == {free_bar, assigned_bar}
 
-    unassigned_rows = repo.get_silver_bars(unassigned_only=True)
+    unassigned_rows = queries.get_silver_bars(unassigned_only=True)
     assert {row["bar_id"] for row in unassigned_rows} == {free_bar}
 
 
 def test_silver_bar_sync_for_estimate_updates_and_inserts_in_one_call(fake_db):
-    repo = SilverBarsRepository(fake_db)
-    first = repo.add_silver_bar("SYNC1", 5.0, 99.0)
-    second = repo.add_silver_bar("SYNC1", 6.0, 99.0)
+    commands = SilverBarCommandRepository(fake_db)
+    queries = SilverBarQueryRepository(fake_db)
+    synchronization = SilverBarSynchronizationRepository(fake_db)
+    first = commands.add_silver_bar("SYNC1", 5.0, 99.0)
+    second = commands.add_silver_bar("SYNC1", 6.0, 99.0)
     assert first is not None
     assert second is not None
 
-    added, failed = repo.sync_silver_bars_for_estimate(
+    sync_result = synchronization.synchronize(
         "SYNC1",
         [
             {"weight": 5.5, "purity": 99.5},
@@ -694,9 +717,9 @@ def test_silver_bar_sync_for_estimate_updates_and_inserts_in_one_call(fake_db):
         ],
     )
 
-    assert added == 1
-    assert failed == 0
-    rows = repo.get_silver_bars_for_estimate("SYNC1")
+    assert sync_result.added == 1
+    assert sync_result.failed == 0
+    rows = queries.get_silver_bars_for_estimate("SYNC1")
     assert len(rows) == 3
     assert float(rows[0]["weight"]) == pytest.approx(5.5)
     assert float(rows[0]["purity"]) == pytest.approx(99.5)
@@ -705,19 +728,21 @@ def test_silver_bar_sync_for_estimate_updates_and_inserts_in_one_call(fake_db):
 
 
 def test_silver_bar_sync_for_estimate_uses_line_key_instead_of_row_order(fake_db):
-    repo = SilverBarsRepository(fake_db)
+    SilverBarCommandRepository(fake_db)
+    queries = SilverBarQueryRepository(fake_db)
+    synchronization = SilverBarSynchronizationRepository(fake_db)
 
-    added, failed = repo.sync_silver_bars_for_estimate(
+    sync_result = synchronization.synchronize(
         "SYNCKEY",
         [
             {"line_key": "line-one", "weight": 5.0, "purity": 99.0},
             {"line_key": "line-two", "weight": 6.0, "purity": 98.0},
         ],
     )
-    assert added == 2
-    assert failed == 0
+    assert sync_result.added == 2
+    assert sync_result.failed == 0
 
-    added, failed = repo.sync_silver_bars_for_estimate(
+    sync_result = synchronization.synchronize(
         "SYNCKEY",
         [
             {"line_key": "line-two", "weight": 6.5, "purity": 98.5},
@@ -725,11 +750,11 @@ def test_silver_bar_sync_for_estimate_uses_line_key_instead_of_row_order(fake_db
         ],
     )
 
-    assert added == 0
-    assert failed == 0
+    assert sync_result.added == 0
+    assert sync_result.failed == 0
     rows = {
         row["source_line_key"]: row
-        for row in repo.get_silver_bars_for_estimate("SYNCKEY")
+        for row in queries.get_silver_bars_for_estimate("SYNCKEY")
     }
     assert float(rows["line-one"]["weight"]) == pytest.approx(5.0)
     assert float(rows["line-one"]["purity"]) == pytest.approx(99.0)
@@ -738,67 +763,73 @@ def test_silver_bar_sync_for_estimate_uses_line_key_instead_of_row_order(fake_db
 
 
 def test_silver_bar_sync_for_estimate_does_not_mutate_assigned_bar_values(fake_db):
-    repo = SilverBarsRepository(fake_db)
-    added, failed = repo.sync_silver_bars_for_estimate(
+    commands = SilverBarCommandRepository(fake_db)
+    queries = SilverBarQueryRepository(fake_db)
+    synchronization = SilverBarSynchronizationRepository(fake_db)
+    sync_result = synchronization.synchronize(
         "SYNCASSIGN",
         [{"line_key": "line-a", "weight": 7.0, "purity": 99.0}],
     )
-    assert added == 1
-    assert failed == 0
+    assert sync_result.added == 1
+    assert sync_result.failed == 0
 
-    rows = repo.get_silver_bars_for_estimate("SYNCASSIGN")
+    rows = queries.get_silver_bars_for_estimate("SYNCASSIGN")
     assert len(rows) == 1
     bar_id = int(rows[0]["bar_id"])
-    list_id = repo.create_list("Assigned list")
+    list_id = commands.create_list("Assigned list")
     assert list_id is not None
-    assert repo.assign_bar_to_list(bar_id, list_id)
+    assert commands.assign_bar_to_list(bar_id, list_id)
 
-    added, failed = repo.sync_silver_bars_for_estimate(
+    sync_result = synchronization.synchronize(
         "SYNCASSIGN",
         [{"line_key": "line-a", "weight": 7.5, "purity": 98.0}],
     )
 
-    assert added == 0
-    assert failed == 1
-    row = repo.get_silver_bars_for_estimate("SYNCASSIGN")[0]
+    assert sync_result.added == 0
+    assert sync_result.failed == 1
+    row = queries.get_silver_bars_for_estimate("SYNCASSIGN")[0]
     assert float(row["weight"]) == pytest.approx(7.0)
     assert float(row["purity"]) == pytest.approx(99.0)
 
 
 def test_silver_bar_list_query_limit_and_offset(fake_db):
-    repo = SilverBarsRepository(fake_db)
-    list_id = repo.create_list("Limited List")
+    commands = SilverBarCommandRepository(fake_db)
+    queries = SilverBarQueryRepository(fake_db)
+    SilverBarSynchronizationRepository(fake_db)
+    list_id = commands.create_list("Limited List")
     assert list_id is not None
 
     created = []
     for i in range(1, 5):
-        bar_id = repo.add_silver_bar(f"L{i}", float(i), 98.5)
+        bar_id = commands.add_silver_bar(f"L{i}", float(i), 98.5)
         assert bar_id is not None
-        assert repo.assign_bar_to_list(bar_id, list_id)
+        assert commands.assign_bar_to_list(bar_id, list_id)
         created.append(bar_id)
 
-    limited = repo.get_bars_in_list(list_id, limit=2)
+    limited = queries.get_bars_in_list(list_id, limit=2)
     assert len(limited) == 2
     # get_bars_in_list orders by bar_id ASC
     assert [row["bar_id"] for row in limited] == sorted(
         [row["bar_id"] for row in limited]
     )
 
-    offset_rows = repo.get_bars_in_list(list_id, limit=1, offset=1)
+    offset_rows = queries.get_bars_in_list(list_id, limit=1, offset=1)
     assert len(offset_rows) == 1
     assert offset_rows[0]["bar_id"] == limited[1]["bar_id"]
 
 
 def test_silver_bar_keyset_pages_preserve_stable_order(fake_db):
-    repo = SilverBarsRepository(fake_db)
+    commands = SilverBarCommandRepository(fake_db)
+    queries = SilverBarQueryRepository(fake_db)
+    SilverBarSynchronizationRepository(fake_db)
     created = [
-        repo.add_silver_bar(f"PAGE-{index}", float(index), 99.0)
+        commands.add_silver_bar(f"PAGE-{index}", float(index), 99.0)
         for index in range(1, 5)
     ]
     assert all(bar_id is not None for bar_id in created)
 
-    first = repo.get_available_bars_keyset_page(limit=2)
-    second = repo.get_available_bars_keyset_page(
+    first = queries.get_available_bars_keyset_page(limit=2)
+    second = queries.get_available_bars_keyset_page(
         cursor=first.next_cursor,
         limit=2,
     )
@@ -810,21 +841,23 @@ def test_silver_bar_keyset_pages_preserve_stable_order(fake_db):
 
 
 def test_silver_bar_repository_available_page_and_history_search(fake_db):
-    repo = SilverBarsRepository(fake_db)
-    list_id = repo.create_list("Page List")
+    commands = SilverBarCommandRepository(fake_db)
+    queries = SilverBarQueryRepository(fake_db)
+    SilverBarSynchronizationRepository(fake_db)
+    list_id = commands.create_list("Page List")
     assert list_id is not None
 
-    free_bar = repo.add_silver_bar("PAGE1", 10.0, 99.0)
-    assigned_bar = repo.add_silver_bar("PAGE2", 11.0, 98.0)
+    free_bar = commands.add_silver_bar("PAGE1", 10.0, 99.0)
+    assigned_bar = commands.add_silver_bar("PAGE2", 11.0, 98.0)
     assert free_bar is not None
     assert assigned_bar is not None
-    assert repo.assign_bar_to_list(assigned_bar, list_id)
+    assert commands.assign_bar_to_list(assigned_bar, list_id)
 
-    available_rows, total_count = repo.get_available_bars_page(limit=10)
+    available_rows, total_count = queries.get_available_bars_page(limit=10)
     assert total_count == 1
     assert [row["bar_id"] for row in available_rows] == [free_bar]
 
-    history_rows = repo.search_history_bars(
+    history_rows = queries.search_history_bars(
         voucher_term="PAGE2",
         weight_text="11.0",
         status_text="Assigned",
@@ -834,29 +867,31 @@ def test_silver_bar_repository_available_page_and_history_search(fake_db):
 
 
 def test_silver_bar_repository_counts_rows_by_list_and_cycles_issue_state(fake_db):
-    repo = SilverBarsRepository(fake_db)
-    list_id = repo.create_list("Issued List")
+    commands = SilverBarCommandRepository(fake_db)
+    queries = SilverBarQueryRepository(fake_db)
+    SilverBarSynchronizationRepository(fake_db)
+    list_id = commands.create_list("Issued List")
     assert list_id is not None
 
-    first_bar = repo.add_silver_bar("ISSUE1", 7.5, 99.0)
-    second_bar = repo.add_silver_bar("ISSUE2", 8.5, 98.0)
+    first_bar = commands.add_silver_bar("ISSUE1", 7.5, 99.0)
+    second_bar = commands.add_silver_bar("ISSUE2", 8.5, 98.0)
     assert first_bar is not None
     assert second_bar is not None
-    assert repo.assign_bar_to_list(first_bar, list_id)
-    assert repo.assign_bar_to_list(second_bar, list_id)
+    assert commands.assign_bar_to_list(first_bar, list_id)
+    assert commands.assign_bar_to_list(second_bar, list_id)
 
-    assert repo.count_bars_by_list_ids([list_id, 999999]) == {list_id: 2}
+    assert queries.count_bars_by_list_ids([list_id, 999999]) == {list_id: 2}
 
     issued_at = "2026-02-27 09:30:00"
-    assert repo.mark_list_as_issued(list_id, issued_at)
-    details = repo.get_list_details(list_id)
+    assert commands.mark_list_as_issued(list_id, issued_at)
+    details = queries.get_list_details(list_id)
     assert details["issued_date"] == issued_at
-    assert {row["status"] for row in repo.get_bars_in_list(list_id)} == {"Issued"}
+    assert {row["status"] for row in queries.get_bars_in_list(list_id)} == {"Issued"}
 
-    assert repo.reactivate_list(list_id)
-    details = repo.get_list_details(list_id)
+    assert commands.reactivate_list(list_id)
+    details = queries.get_list_details(list_id)
     assert details["issued_date"] is None
-    assert {row["status"] for row in repo.get_bars_in_list(list_id)} == {"Assigned"}
+    assert {row["status"] for row in queries.get_bars_in_list(list_id)} == {"Assigned"}
 
 
 def test_estimate_repository_load_preserves_item_types(fake_db):
@@ -980,37 +1015,41 @@ def test_silver_bar_repository_handles_missing_database_runtime() -> None:
         cursor=None,
         logger=logging.getLogger("test.silver-bars.missing-db"),
     )
-    repo = SilverBarsRepository(db)
+    commands = SilverBarCommandRepository(db)
+    queries = SilverBarQueryRepository(db)
+    synchronization = SilverBarSynchronizationRepository(db)
 
-    assert repo.generate_list_identifier().startswith("ERR-L-")
-    assert repo.create_list("offline") is None
-    assert repo.get_lists() == []
-    assert repo.get_list_details(1) is None
-    assert repo.get_list_details_result(1).succeeded is False
-    assert repo.update_list_note(1, "note") is False
-    assert repo.mark_list_as_issued(1) is False
-    assert repo.reactivate_list(1) is False
-    assert repo.delete_list(1) == (False, "No database connection")
-    assert repo.delete_list_result(1).succeeded is False
-    assert repo.assign_bar_to_list(1, 1) is False
-    assert repo.assign_bars_to_list_bulk([1], 1) == (0, [])
-    assert repo.remove_bar_from_list(1) is False
-    assert repo.remove_bars_from_list_bulk([1]) == (0, [])
-    assert repo.get_available_bars_page() == ([], 0)
-    assert repo.get_available_bars_keyset_page().items == ()
-    assert repo.get_bars_in_list_page(1) == ([], 0)
-    assert repo.get_bars_in_list_keyset_page(1).items == ()
-    assert repo.get_bars_in_list(1) == []
-    assert repo.get_available_bars() == []
-    assert repo.search_history_bars() == []
-    assert repo.search_history_bars_page().items == ()
-    assert repo.count_bars_by_list_ids([1]) == {}
-    assert repo.get_silver_bars_for_estimate("1") == []
-    assert repo.sync_silver_bars_for_estimate("1", []) == (0, 0)
-    assert repo.add_silver_bar("1", 1.0, 99.9) is None
-    assert repo.get_silver_bars() == []
-    assert repo.delete_bars_for_estimate("1") == (0, set())
-    assert repo.cleanup_empty_lists([1]) is None
+    assert commands.generate_list_identifier().startswith("ERR-L-")
+    assert commands.create_list("offline") is None
+    assert queries.get_lists() == []
+    assert queries.get_list_details(1) is None
+    assert queries.get_list_details_result(1).succeeded is False
+    assert commands.update_list_note(1, "note") is False
+    assert commands.mark_list_as_issued(1) is False
+    assert commands.reactivate_list(1) is False
+    assert commands.delete_list(1) == (False, "No database connection")
+    assert commands.delete_list_result(1).succeeded is False
+    assert commands.assign_bar_to_list(1, 1) is False
+    assert commands.assign_bars_to_list_bulk([1], 1) == (0, [])
+    assert commands.remove_bar_from_list(1) is False
+    assert commands.remove_bars_from_list_bulk([1]) == (0, [])
+    assert queries.get_available_bars_page() == ([], 0)
+    assert queries.get_available_bars_keyset_page().items == ()
+    assert queries.get_bars_in_list_page(1) == ([], 0)
+    assert queries.get_bars_in_list_keyset_page(1).items == ()
+    assert queries.get_bars_in_list(1) == []
+    assert queries.get_available_bars() == []
+    assert queries.search_history_bars() == []
+    assert queries.search_history_bars_page().items == ()
+    assert queries.count_bars_by_list_ids([1]) == {}
+    assert queries.get_silver_bars_for_estimate("1") == []
+    assert synchronization.synchronize("1", []) == SilverBarSyncResult(
+        added=0, failed=0
+    )
+    assert commands.add_silver_bar("1", 1.0, 99.9) is None
+    assert queries.get_silver_bars() == []
+    assert commands.delete_bars_for_estimate("1") == (0, set())
+    assert commands.cleanup_empty_lists([1]) is None
 
 
 def test_silver_bar_repository_storage_errors_are_contained(fake_db) -> None:
@@ -1025,80 +1064,83 @@ def test_silver_bar_repository_storage_errors_are_contained(fake_db) -> None:
             raise sqlite3.OperationalError("injected storage fault")
 
     fake_db.cursor = ErrorCursor()
-    repo = SilverBarsRepository(fake_db)
+    commands = SilverBarCommandRepository(fake_db)
+    queries = SilverBarQueryRepository(fake_db)
+    synchronization = SilverBarSynchronizationRepository(fake_db)
 
-    assert repo.generate_list_identifier().startswith("L-")
-    assert repo.create_list("fault") is None
-    assert repo.get_lists() == []
-    assert repo.get_list_details(1) is None
-    assert repo.update_list_note(1, "fault") is False
-    assert repo.mark_list_as_issued(1) is False
-    assert repo.reactivate_list(1) is False
-    deleted, message = repo.delete_list(1)
+    assert commands.generate_list_identifier().startswith("L-")
+    assert commands.create_list("fault") is None
+    assert queries.get_lists() == []
+    assert queries.get_list_details(1) is None
+    assert commands.update_list_note(1, "fault") is False
+    assert commands.mark_list_as_issued(1) is False
+    assert commands.reactivate_list(1) is False
+    deleted, message = commands.delete_list(1)
     assert deleted is False
     assert "injected storage fault" in message
-    assert repo.assign_bar_to_list(1, 1) is False
-    assert repo.assign_bars_to_list_bulk([1], 1) == (0, [1])
-    assert repo.remove_bar_from_list(1) is False
-    assert repo.remove_bars_from_list_bulk([1]) == (0, [1])
-    assert repo.get_available_bars_page() == ([], 0)
+    assert commands.assign_bar_to_list(1, 1) is False
+    assert commands.assign_bars_to_list_bulk([1], 1) == (0, [1])
+    assert commands.remove_bar_from_list(1) is False
+    assert commands.remove_bars_from_list_bulk([1]) == (0, [1])
+    assert queries.get_available_bars_page() == ([], 0)
     with pytest.raises(sqlite3.OperationalError, match="injected storage fault"):
-        repo.get_available_bars_keyset_page()
-    assert repo.get_bars_in_list_page(1) == ([], 0)
+        queries.get_available_bars_keyset_page()
+    assert queries.get_bars_in_list_page(1) == ([], 0)
     with pytest.raises(sqlite3.OperationalError, match="injected storage fault"):
-        repo.get_bars_in_list_keyset_page(1)
-    assert repo.get_available_bars() == []
-    assert repo.search_history_bars() == []
+        queries.get_bars_in_list_keyset_page(1)
+    assert queries.get_available_bars() == []
+    assert queries.search_history_bars() == []
     with pytest.raises(sqlite3.OperationalError, match="injected storage fault"):
-        repo.search_history_bars_page()
-    assert repo.count_bars_by_list_ids([1]) == {}
-    assert repo.get_silver_bars_for_estimate("1") == []
-    assert repo.sync_silver_bars_for_estimate("1", [{"weight": 1, "purity": 99}]) == (
-        0,
-        1,
-    )
-    assert repo.add_silver_bar("1", 1.0, 99.9) is None
-    assert repo.get_silver_bars() == []
+        queries.search_history_bars_page()
+    assert queries.count_bars_by_list_ids([1]) == {}
+    assert queries.get_silver_bars_for_estimate("1") == []
+    assert synchronization.synchronize(
+        "1", [{"weight": 1, "purity": 99}]
+    ) == SilverBarSyncResult(added=0, failed=1)
+    assert commands.add_silver_bar("1", 1.0, 99.9) is None
+    assert queries.get_silver_bars() == []
     with pytest.raises(sqlite3.OperationalError, match="injected storage fault"):
-        repo.delete_bars_for_estimate("1")
-    assert repo.cleanup_empty_lists([1]) is None
+        commands.delete_bars_for_estimate("1")
+    assert commands.cleanup_empty_lists([1]) is None
 
 
 def test_silver_bar_repository_exercises_edge_outcomes(fake_db) -> None:
-    repo = SilverBarsRepository(fake_db)
-    list_id = repo.create_list("edge cases")
+    commands = SilverBarCommandRepository(fake_db)
+    queries = SilverBarQueryRepository(fake_db)
+    synchronization = SilverBarSynchronizationRepository(fake_db)
+    list_id = commands.create_list("edge cases")
     assert list_id is not None
 
     fake_db.cursor.execute(
         "UPDATE silver_bar_lists SET list_identifier = 'malformed' WHERE list_id = ?",
         (list_id,),
     )
-    assert repo.generate_list_identifier().endswith("-001")
-    assert repo.update_list_note(-1, "missing") is False
-    assert repo.mark_list_as_issued(-1) is False
-    assert repo.reactivate_list(-1) is False
-    assert repo.assign_bar_to_list(-1, list_id) is False
+    assert commands.generate_list_identifier().endswith("-001")
+    assert commands.update_list_note(-1, "missing") is False
+    assert commands.mark_list_as_issued(-1) is False
+    assert commands.reactivate_list(-1) is False
+    assert commands.assign_bar_to_list(-1, list_id) is False
 
-    bar_id = repo.add_silver_bar("edge", 2.5, 95.0)
+    bar_id = commands.add_silver_bar("edge", 2.5, 95.0)
     assert bar_id is not None
-    assert repo.assign_bar_to_list(bar_id, -1) is False
-    assert repo.assign_bars_to_list_bulk([], list_id) == (0, [])
-    assert repo.assign_bars_to_list_bulk([bar_id], -1) == (0, [bar_id])
-    assert repo.assign_bars_to_list_bulk([-1, "bad", bar_id, bar_id], list_id) == (
+    assert commands.assign_bar_to_list(bar_id, -1) is False
+    assert commands.assign_bars_to_list_bulk([], list_id) == (0, [])
+    assert commands.assign_bars_to_list_bulk([bar_id], -1) == (0, [bar_id])
+    assert commands.assign_bars_to_list_bulk([-1, "bad", bar_id, bar_id], list_id) == (
         1,
         [],
     )
-    assert repo.remove_bars_from_list_bulk([]) == (0, [])
-    assert repo.remove_bars_from_list_bulk([-1, "bad"]) == (0, [])
-    assert repo.remove_bars_from_list_bulk([bar_id, 999999]) == (1, [999999])
-    assert repo.remove_bar_from_list(bar_id) is False
+    assert commands.remove_bars_from_list_bulk([]) == (0, [])
+    assert commands.remove_bars_from_list_bulk([-1, "bad"]) == (0, [])
+    assert commands.remove_bars_from_list_bulk([bar_id, 999999]) == (1, [999999])
+    assert commands.remove_bar_from_list(bar_id) is False
 
-    result = repo.delete_list(999999)
+    result = commands.delete_list(999999)
     assert result == (False, "List not found")
-    typed = repo.delete_list_result(999999)
+    typed = commands.delete_list_result(999999)
     assert typed.succeeded is False
 
-    rows = repo.get_silver_bars(
+    rows = queries.get_silver_bars(
         status="In Stock",
         weight_query="invalid",
         estimate_voucher_no="edge",
@@ -1110,10 +1152,10 @@ def test_silver_bar_repository_exercises_edge_outcomes(fake_db) -> None:
         offset=1,
     )
     assert rows == []
-    assert repo.count_bars_by_list_ids([]) == {}
-    assert repo.get_silver_bars_for_estimate("") == []
+    assert queries.count_bars_by_list_ids([]) == {}
+    assert queries.get_silver_bars_for_estimate("") == []
 
-    added, failed = repo.sync_silver_bars_for_estimate(
+    sync_result = synchronization.synchronize(
         "edge-sync",
         [
             {"weight": object(), "purity": 99},
@@ -1121,4 +1163,4 @@ def test_silver_bar_repository_exercises_edge_outcomes(fake_db) -> None:
             {"weight": 2, "purity": 98, "line_key": "same"},
         ],
     )
-    assert (added, failed) == (1, 2)
+    assert (sync_result.added, sync_result.failed) == (1, 2)

@@ -9,39 +9,15 @@ import PySide6.QtCore as QtCore
 from PySide6.QtCore import QtMsgType
 
 from silverestimate.infrastructure.paths import get_runtime_root
-from silverestimate.infrastructure.settings import get_app_settings
+from silverestimate.infrastructure.settings import SettingsKey, get_app_settings
 
 # Global variable to store the cleanup scheduler instance
 _cleanup_scheduler: "LogCleanupScheduler | None" = None
 
 
-def _coerce_bool_setting(value: object, default: bool) -> bool:
-    if isinstance(value, bool):
-        return value
-    if value is None:
-        return default
-    if isinstance(value, str):
-        normalized = value.strip().lower()
-        if not normalized:
-            return default
-        return normalized in {"1", "true", "yes", "on", "enabled"}
-    if isinstance(value, (int, float)):
-        return value != 0
-    return default
-
-
-def _coerce_int_setting(value: object, default: int) -> int:
-    if isinstance(value, (int, float, str, bytes, bytearray)):
-        try:
-            return int(value)
-        except TypeError, ValueError:
-            pass
-    return default
-
-
 def _read_error_logging_enabled(settings):
-    return _coerce_bool_setting(
-        settings.value("logging/enable_critical", True),
+    return settings.get_bool(
+        SettingsKey.LOGGING_ENABLE_CRITICAL,
         True,
     )
 
@@ -351,38 +327,34 @@ def get_log_config():
     # Environment variables take precedence
     debug_mode = os.environ.get("SILVER_APP_DEBUG", "").lower() in ("true", "1", "yes")
     if "SILVER_APP_DEBUG" not in os.environ:
-        debug_mode = _coerce_bool_setting(
-            settings.value("logging/debug_mode", False, type=bool),
+        debug_mode = settings.get_bool(
+            SettingsKey.LOGGING_DEBUG_MODE,
             False,
         )
 
     log_dir = os.environ.get("SILVER_APP_LOG_DIR") or str(get_runtime_root() / "logs")
 
-    enable_info = _coerce_bool_setting(
-        settings.value("logging/enable_info", True, type=bool),
+    enable_info = settings.get_bool(
+        SettingsKey.LOGGING_ENABLE_INFO,
         True,
     )
     enable_error = _read_error_logging_enabled(settings)
-    enable_debug = _coerce_bool_setting(
-        settings.value("logging/enable_debug", True, type=bool),
+    enable_debug = settings.get_bool(
+        SettingsKey.LOGGING_ENABLE_DEBUG,
         True,
     )
 
     # Get auto-cleanup settings
-    auto_cleanup = _coerce_bool_setting(
-        settings.value("logging/auto_cleanup", False, type=bool),
+    auto_cleanup = settings.get_bool(
+        SettingsKey.LOGGING_AUTO_CLEANUP,
         False,
     )
-    cleanup_days = _coerce_int_setting(
-        settings.value("logging/cleanup_days", 1, type=int),
+    cleanup_days = settings.get_int(
+        SettingsKey.LOGGING_CLEANUP_DAYS,
         1,
+        minimum=1,
+        maximum=365,
     )
-
-    # Ensure cleanup_days is within reasonable range
-    if cleanup_days < 1:
-        cleanup_days = 1
-    elif cleanup_days > 365:
-        cleanup_days = 365
 
     return {
         "debug_mode": debug_mode,

@@ -1,0 +1,77 @@
+{
+  "advisory_ignores": [],
+  "allowed_licenses": [
+    "Apache-2.0",
+    "Apache-2.0 OR BSD-3-Clause",
+    "BSD-3-Clause",
+    "GPL-3.0-only",
+    "LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only",
+    "MIT",
+    "MIT-0",
+    "PSF-2.0"
+  ],
+  "audit_skip_allowlist": [
+    {
+      "control": "The committed wheel is hash- and native-inventory-verified by scripts/verify_sqlcipher_runtime.py and its embedded libraries are recorded in vendor/sqlcipher/PROVENANCE.json.",
+      "expires": "2027-07-30",
+      "owner": "release maintainer",
+      "package": "sqlcipher3",
+      "rationale": "The controlled Silver Estimate build is a local wheel that is intentionally absent from PyPI, so pip-audit cannot resolve an advisory record for it."
+    }
+  ],
+  "lock_review": {
+    "rationale": "Phase 13 replaces Safety with pip-audit 2.10.x and removes Safety's transitive dependency graph.",
+    "reviewed_by": "project maintainer",
+    "reviewed_on": "2026-07-30",
+    "sha256": "1401d16f14e4fc4fddfed3c80956fa3b87833fad5bc4c161c29192d0f6949740"
+  },
+  "native_provenance": {
+    "path": "vendor/sqlcipher/PROVENANCE.json",
+    "required_sources": [
+      "openssl",
+      "sqlcipher",
+      "sqlcipher3"
+    ]
+  },
+  "required_attributions": [
+    {
+      "component": "SQLCipher",
+      "path": "THIRD_PARTY_NOTICES.md",
+      "required_text": "SQLCipher Community Edition 4.17.0"
+    },
+    {
+      "component": "sqlcipher3",
+      "path": "THIRD_PARTY_NOTICES.md",
+      "required_text": "sqlcipher3 0.6.2"
+    },
+    {
+      "component": "OpenSSL",
+      "path": "THIRD_PARTY_NOTICES.md",
+      "required_text": "OpenSSL 3.6.0"
+    },
+    {
+      "component": "Qt for Python",
+      "path": "THIRD_PARTY_NOTICES.md",
+      "required_text": "PySide6 6.11.1, Shiboken6 6.11.1, and Qt 6.11.1"
+    }
+  ],
+  "required_native_components": [
+    {
+      "license": "PSF-2.0",
+      "name": "CPython"
+    },
+    {
+      "license": "LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only",
+      "name": "Qt"
+    },
+    {
+      "license": "BSD-3-Clause",
+      "name": "SQLCipher"
+    },
+    {
+      "license": "Apache-2.0",
+      "name": "OpenSSL"
+    }
+  ],
+  "schema_version": 1
+}

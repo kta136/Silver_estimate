@@ -21,6 +21,8 @@ from silverestimate.ui.estimate_print_document import EstimatePrintDocument
 from silverestimate.ui.print_payload_builder import PrintPreviewPayload
 from silverestimate.ui.print_preview_controller import PrintPreviewController
 from silverestimate.ui.print_preview_dialog import PrintPreviewDialog
+from silverestimate.ui.print_preview_output import PrintOutputStatus
+from silverestimate.ui.print_preview_session import PrintPreviewSession
 from silverestimate.ui.silver_bar_print_document import (
     SilverBarListPrintDocument,
 )
@@ -88,6 +90,17 @@ def _estimate_payload(format_key: str = "modern") -> PrintPreviewPayload:
     return build(format_key)
 
 
+def _preview_session(
+    preview: PrintPreviewDialog,
+    payload: PrintPreviewPayload,
+) -> PrintPreviewSession:
+    return PrintPreviewSession(
+        preview=preview,
+        payload=payload,
+        render_document=lambda *_args: None,
+    )
+
+
 def test_custom_preview_dialog_owns_single_toolbar_and_preview_canvas(qtbot):
     preview = PrintPreviewDialog(QPrinter())
     qtbot.addWidget(preview)
@@ -111,14 +124,8 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
     payload = _estimate_payload()
     preview = PrintPreviewDialog(controller._printer)
     qtbot.addWidget(preview)
-    preview_widget = preview.findChild(QPrintPreviewWidget)
 
-    controller._augment_preview_toolbar(
-        preview,
-        preview_widget,
-        {"payload": payload},
-        None,
-    )
+    controller._toolbar_builder.build(_preview_session(preview, payload), None)
 
     toolbar = preview.findChild(QToolBar)
     assert toolbar is not None
@@ -293,12 +300,7 @@ def test_silver_bar_preview_exposes_print_font_without_format_controls(qtbot):
     preview = PrintPreviewDialog(controller._printer)
     qtbot.addWidget(preview)
 
-    controller._augment_preview_toolbar(
-        preview,
-        preview.findChild(QPrintPreviewWidget),
-        {"payload": payload},
-        None,
-    )
+    controller._toolbar_builder.build(_preview_session(preview, payload), None)
 
     toolbar = preview.findChild(QToolBar)
     assert toolbar is not None
@@ -323,14 +325,14 @@ def test_ctrl_p_prints_active_preview_instead_of_main_window(qtbot):
         printer=QPrinter(),
         render_document=lambda *args: None,
     )
-    controller._quick_print_current = lambda *args: preview_print_calls.append(args)
+    controller._output_controller.quick_print_current = lambda *args: (
+        preview_print_calls.append(args)
+    )
     preview = PrintPreviewDialog(controller._printer, parent)
     qtbot.addWidget(preview)
     preview_widget = preview.findChild(QPrintPreviewWidget)
-    controller._augment_preview_toolbar(
-        preview,
-        preview_widget,
-        {"payload": _estimate_payload()},
+    controller._toolbar_builder.build(
+        _preview_session(preview, _estimate_payload()),
         parent,
     )
 
@@ -361,10 +363,8 @@ def test_page_keys_trigger_preview_navigation_with_document_focus(qtbot):
     preview = PrintPreviewDialog(controller._printer, parent)
     qtbot.addWidget(preview)
     preview_widget = preview.findChild(QPrintPreviewWidget)
-    controller._augment_preview_toolbar(
-        preview,
-        preview_widget,
-        {"payload": _estimate_payload()},
+    controller._toolbar_builder.build(
+        _preview_session(preview, _estimate_payload()),
         parent,
     )
     page_actions = {
@@ -438,11 +438,11 @@ def test_preview_print_font_dialog_persists_selection_and_refreshes(
     )
     preview = _Preview()
     monkeypatch.setattr(
-        "silverestimate.ui.print_preview_controller.CustomFontDialog",
+        "silverestimate.ui.print_preview_toolbar.CustomFontDialog",
         _FontDialog,
     )
 
-    controller._choose_print_font(preview)
+    controller._toolbar_builder.choose_print_font(preview)
 
     assert persisted_fonts == [selected_font]
     assert preview.preview_widget.update_calls == 1
@@ -457,7 +457,7 @@ def test_preview_uses_fit_width_when_zoom_is_not_saved(qt_app, settings_stub):
     )
     preview_widget = _PreviewWidgetStub()
 
-    controller._apply_initial_zoom(preview_widget)
+    controller._preferences.apply_initial_zoom(preview_widget)
 
     assert preview_widget.zoom_modes == [QPrintPreviewWidget.ZoomMode.FitToWidth]
     assert preview_widget.zoom_factor is None
@@ -472,7 +472,7 @@ def test_preview_uses_saved_custom_zoom_when_available(qt_app, settings_stub):
     )
     preview_widget = _PreviewWidgetStub()
 
-    controller._apply_initial_zoom(preview_widget)
+    controller._preferences.apply_initial_zoom(preview_widget)
 
     assert preview_widget.zoom_modes == [QPrintPreviewWidget.ZoomMode.CustomZoom]
     assert preview_widget.zoom_factor == 1.75
@@ -501,7 +501,7 @@ def test_focus_preview_activates_dialog_and_document_view():
     preview = _PreviewStub()
     preview_widget = _FocusStub()
 
-    PrintPreviewController._focus_preview(preview, preview_widget)
+    PrintPreviewSession.focus(preview, preview_widget)
 
     assert preview.raise_calls == 1
     assert preview.activate_calls == 1
@@ -538,7 +538,7 @@ def test_preview_defaults_persist_updated_print_preferences(
     )
     payload = _estimate_payload("classic")
 
-    controller._save_preview_defaults(payload)
+    controller._preferences.save_preview_defaults(controller._printer, payload)
 
     settings = get_app_settings()
     assert settings.value("print/default_printer") == "Warehouse Printer"
@@ -561,12 +561,12 @@ def test_preview_format_switch_rebuilds_current_estimate_payload(qtbot) -> None:
     )
     preview = PrintPreviewDialog(controller._printer)
     qtbot.addWidget(preview)
-    state = {"payload": _estimate_payload("modern")}
+    session = _preview_session(preview, _estimate_payload("modern"))
 
-    controller._switch_format(preview, "classic", state)
+    session.switch_format("classic")
 
-    assert state["payload"].format_key == "classic"
-    assert state["payload"].document.format_key == "classic"
+    assert session.payload.format_key == "classic"
+    assert session.payload.document.format_key == "classic"
 
 
 def test_preview_tunch_toggle_refreshes_and_survives_format_switch(qtbot) -> None:
@@ -576,14 +576,14 @@ def test_preview_tunch_toggle_refreshes_and_survives_format_switch(qtbot) -> Non
     )
     preview = PrintPreviewDialog(controller._printer)
     qtbot.addWidget(preview)
-    state = {"payload": _estimate_payload("modern")}
+    session = _preview_session(preview, _estimate_payload("modern"))
 
-    controller._switch_tunch_visibility(preview, True, state)
+    session.switch_tunch_visibility(True)
 
-    assert state["payload"].show_tunch is True
-    controller._switch_format(preview, "classic", state)
-    assert state["payload"].format_key == "classic"
-    assert state["payload"].show_tunch is True
+    assert session.payload.show_tunch is True
+    session.switch_format("classic")
+    assert session.payload.format_key == "classic"
+    assert session.payload.show_tunch is True
 
 
 def test_preview_defaults_store_custom_page_size_dimensions(qt_app, settings_stub):
@@ -604,7 +604,7 @@ def test_preview_defaults_store_custom_page_size_dimensions(qt_app, settings_stu
         suggested_filename="List.pdf",
     )
 
-    controller._save_preview_defaults(payload)
+    controller._preferences.save_preview_defaults(controller._printer, payload)
 
     settings = get_app_settings()
     assert settings.value("print/page_size") == "Counter Slip"
@@ -641,12 +641,17 @@ def test_quick_print_closes_preview_without_success_popup(monkeypatch):
 
     monkeypatch.setattr(QMessageBox, "information", _unexpected_information)
     monkeypatch.setattr(
-        "silverestimate.ui.print_preview_controller.validate_quick_print_printer",
+        "silverestimate.ui.print_preview_output.validate_quick_print_printer",
         lambda printer: (True, ""),
     )
 
-    controller._quick_print_current(preview, payload, parent_widget=None)
+    outcome = controller._output_controller.quick_print_current(
+        preview,
+        payload,
+        parent_widget=None,
+    )
 
+    assert outcome.status is PrintOutputStatus.SUCCESS
     assert len(render_calls) == 1
     assert preview.accept_calls == 1
 
@@ -679,12 +684,17 @@ def test_quick_print_failure_keeps_preview_open_and_shows_error(monkeypatch):
         lambda *args: critical_calls.append(args),
     )
     monkeypatch.setattr(
-        "silverestimate.ui.print_preview_controller.validate_quick_print_printer",
+        "silverestimate.ui.print_preview_output.validate_quick_print_printer",
         lambda printer: (True, ""),
     )
 
-    controller._quick_print_current(preview, payload, parent_widget=None)
+    outcome = controller._output_controller.quick_print_current(
+        preview,
+        payload,
+        parent_widget=None,
+    )
 
+    assert outcome.status is PrintOutputStatus.FAILED
     assert preview.accept_calls == 0
     assert len(critical_calls) == 1
 
@@ -713,7 +723,7 @@ def test_quick_print_blocks_missing_printer_before_render(monkeypatch):
     preview = _PreviewStub()
     critical_calls = []
     monkeypatch.setattr(
-        "silverestimate.ui.print_preview_controller.validate_quick_print_printer",
+        "silverestimate.ui.print_preview_output.validate_quick_print_printer",
         lambda printer: (False, "The selected printer is no longer available."),
     )
     monkeypatch.setattr(
@@ -722,8 +732,13 @@ def test_quick_print_blocks_missing_printer_before_render(monkeypatch):
         lambda *args: critical_calls.append(args),
     )
 
-    controller._quick_print_current(preview, payload, parent_widget=None)
+    outcome = controller._output_controller.quick_print_current(
+        preview,
+        payload,
+        parent_widget=None,
+    )
 
+    assert outcome.status is PrintOutputStatus.VALIDATION_FAILED
     assert render_calls == []
     assert preview.accept_calls == 0
     assert len(critical_calls) == 1
@@ -767,8 +782,12 @@ def test_export_pdf_writes_temp_then_replaces_target(
         lambda *args: info_calls.append(args),
     )
 
-    controller._export_pdf_via_dialog(payload, parent_widget=None)
+    outcome = controller._output_controller.export_pdf_via_dialog(
+        payload,
+        parent_widget=None,
+    )
 
+    assert outcome.status is PrintOutputStatus.SUCCESS
     assert target.read_bytes() == b"%PDF-1.4\nok\n"
     assert render_targets
     assert render_targets[0] != target
@@ -810,8 +829,12 @@ def test_export_pdf_empty_temp_keeps_existing_file(
         lambda *args: critical_calls.append(args),
     )
 
-    controller._export_pdf_via_dialog(payload, parent_widget=None)
+    outcome = controller._output_controller.export_pdf_via_dialog(
+        payload,
+        parent_widget=None,
+    )
 
+    assert outcome.status is PrintOutputStatus.FAILED
     assert target.read_bytes() == b"old-pdf"
     assert not list(tmp_path.glob(".silverestimate-*.pdf"))
     assert len(critical_calls) == 1

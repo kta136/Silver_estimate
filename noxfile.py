@@ -13,7 +13,7 @@ from silverestimate.infrastructure.app_constants import APP_VERSION
 nox.options.sessions = ["pr"]
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-RUFF_TARGETS = ("silverestimate", "tests", "main.py", "noxfile.py")
+RUFF_TARGETS = ("silverestimate", "tests", "scripts", "main.py", "noxfile.py")
 PYSIDE_DEPLOY_CONFIG = PROJECT_ROOT / "pysidedeploy.spec"
 NUITKA_VERSION = "4.1.3"
 LEGAL_ARTIFACTS = (
@@ -261,8 +261,50 @@ def bandit(session: nox.Session) -> None:
 
 
 @nox.session(python=False)
-def safety(session: nox.Session) -> None:
-    session.run("python", "-m", "safety", "check", "--json")
+def dependency_policy(session: nox.Session) -> None:
+    artifact_dir = PROJECT_ROOT / "artifacts" / "dependency-policy"
+    requirements = artifact_dir / "runtime-requirements.txt"
+    audit_report = artifact_dir / "pip-audit.json"
+    clean_artifact(artifact_dir)
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+
+    session.run(
+        "uv",
+        "export",
+        "--frozen",
+        "--no-dev",
+        "--no-emit-project",
+        "--no-hashes",
+        "--format",
+        "requirements-txt",
+        "--output-file",
+        str(requirements),
+        external=True,
+    )
+    session.run(
+        "python",
+        "-m",
+        "pip_audit",
+        "--requirement",
+        str(requirements),
+        "--no-deps",
+        "--disable-pip",
+        "--progress-spinner",
+        "off",
+        "--cache-dir",
+        str(artifact_dir / "pip-audit-cache"),
+        "--format",
+        "json",
+        "--output",
+        str(audit_report),
+        success_codes=[0, 1],
+    )
+    session.run(
+        "python",
+        "scripts/check_dependency_policy.py",
+        "--audit-report",
+        str(audit_report),
+    )
 
 
 @nox.session(python=False)
@@ -326,17 +368,23 @@ def standalone_artifact_smoke(session: nox.Session) -> None:
 
 @nox.session(python=False, name="pr")
 def pr(session: nox.Session) -> None:
-    for session_name in ("ruff", "mypy", "tests_fast"):
+    for session_name in ("ruff", "mypy", "dependency_policy", "tests_fast"):
         session.notify(session_name)
 
 
 @nox.session(python=False, name="ci")
 def ci(session: nox.Session) -> None:
-    for session_name in ("ruff", "mypy", "tests_full", "build_clean"):
+    for session_name in (
+        "ruff",
+        "mypy",
+        "dependency_policy",
+        "tests_full",
+        "build_clean",
+    ):
         session.notify(session_name)
 
 
 @nox.session(python=False, name="advisory")
 def advisory(session: nox.Session) -> None:
-    for session_name in ("bandit", "safety"):
+    for session_name in ("bandit", "dependency_policy"):
         session.notify(session_name)

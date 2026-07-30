@@ -14,13 +14,14 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from silverestimate.infrastructure.db_session import ConnectionThreadGuard
 from silverestimate.infrastructure.item_cache import ItemCacheController
 from silverestimate.persistence.database_driver import (
     SQLCIPHER_SALT_BYTES,
     Connection,
+    Cursor,
     DatabaseError,
     DriverIdentity,
     Error,
@@ -43,6 +44,19 @@ from silverestimate.persistence.storage_metadata import (
     write_journal,
 )
 from silverestimate.security import encryption as crypto_utils
+
+if TYPE_CHECKING:
+    from silverestimate.persistence.estimates_repository import EstimatesRepository
+    from silverestimate.persistence.items_repository import ItemsRepository
+    from silverestimate.persistence.silver_bar_command_repository import (
+        SilverBarCommandRepository,
+    )
+    from silverestimate.persistence.silver_bar_query_repository import (
+        SilverBarQueryRepository,
+    )
+    from silverestimate.persistence.silver_bar_synchronization_repository import (
+        SilverBarSynchronizationRepository,
+    )
 
 SQLITE_HEADER = b"SQLite format 3\x00"
 BACKUP_FORMAT_VERSION = 2
@@ -88,12 +102,16 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         self._device_secret = bytes(device_secret)
         self.last_error: str | None = None
         self.conn: Connection | None = None
-        self.cursor: Any | None = None
+        self.cursor: Cursor | None = None
         self._session = ConnectionThreadGuard(logger=self.logger)
         self._item_cache_controller = ItemCacheController(logger=self.logger)
-        self._items_repo: Any | None = None
-        self._estimates_repo: Any | None = None
-        self._silver_bars_repo: Any | None = None
+        self._items_repo: ItemsRepository | None = None
+        self._estimates_repo: EstimatesRepository | None = None
+        self._silver_bar_query_repo: SilverBarQueryRepository | None = None
+        self._silver_bar_command_repo: SilverBarCommandRepository | None = None
+        self._silver_bar_synchronization_repo: (
+            SilverBarSynchronizationRepository | None
+        ) = None
         self.database_salt: bytes | None = None
         self._path = Path(self.database_path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -184,14 +202,36 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         return self._estimates_repo
 
     @property
-    def silver_bars_repo(self):
-        if self._silver_bars_repo is None:
-            from silverestimate.persistence.silver_bars_repository import (
-                SilverBarsRepository,
+    def silver_bar_query_repo(self):
+        if self._silver_bar_query_repo is None:
+            from silverestimate.persistence.silver_bar_query_repository import (
+                SilverBarQueryRepository,
             )
 
-            self._silver_bars_repo = SilverBarsRepository(self)
-        return self._silver_bars_repo
+            self._silver_bar_query_repo = SilverBarQueryRepository(self)
+        return self._silver_bar_query_repo
+
+    @property
+    def silver_bar_command_repo(self):
+        if self._silver_bar_command_repo is None:
+            from silverestimate.persistence.silver_bar_command_repository import (
+                SilverBarCommandRepository,
+            )
+
+            self._silver_bar_command_repo = SilverBarCommandRepository(self)
+        return self._silver_bar_command_repo
+
+    @property
+    def silver_bar_synchronization_repo(self):
+        if self._silver_bar_synchronization_repo is None:
+            from silverestimate.persistence.silver_bar_synchronization_repository import (
+                SilverBarSynchronizationRepository,
+            )
+
+            self._silver_bar_synchronization_repo = SilverBarSynchronizationRepository(
+                self
+            )
+        return self._silver_bar_synchronization_repo
 
     @property
     def item_cache_controller(self):
@@ -419,15 +459,6 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         assert self.conn is not None
         self._session.attach_to_current_thread()
         self.cursor = self.conn.cursor()
-        self._c_get_item_by_code = self.conn.cursor()
-        self._sql_get_item_by_code = "SELECT * FROM items WHERE code = ? COLLATE NOCASE"
-        self._c_insert_estimate_item = self.conn.cursor()
-        self._sql_insert_estimate_item = (
-            "INSERT INTO estimate_items "
-            "(voucher_no, item_code, item_name, gross, poly, net_wt, purity, "
-            "wage_rate, pieces, wage_type, wage, fine, is_return, is_silver_bar, "
-            "line_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        )
 
     def open_read_connection(self, cancel_event: Any | None = None) -> ReadConnection:
         return self._broker.open_read_connection(cancel_event)

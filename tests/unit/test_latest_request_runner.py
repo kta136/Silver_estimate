@@ -3,6 +3,7 @@ import threading
 import time
 from contextlib import closing
 
+import pytest
 from PySide6.QtCore import QThread
 from PySide6.QtWidgets import QApplication
 
@@ -64,6 +65,9 @@ def test_shutdown_cooperatively_cancels_active_request():
     runner.submit("slow")
     assert started.wait(1.0)
     assert runner.shutdown(timeout=1.0) is True
+    assert runner.shutdown(timeout=1.0) is True
+    with pytest.raises(RuntimeError, match="shut down"):
+        runner.submit("late")
 
 
 def test_sqlite_worker_progress_handler_interrupts_query(tmp_path):

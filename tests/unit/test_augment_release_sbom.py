@@ -69,12 +69,30 @@ def _environment_sbom() -> dict[str, Any]:
     }
 
 
+def _provenance() -> dict[str, Any]:
+    return {
+        "sources": {
+            "openssl": {
+                "license": "Apache-2.0",
+                "revision": "openssl-revision",
+                "version": "3.6.0",
+            },
+            "sqlcipher": {
+                "license": "BSD-3-Clause",
+                "revision": "sqlcipher-revision",
+                "version": "4.17.0",
+            },
+        }
+    }
+
+
 def test_augment_release_sbom_adds_application_python_and_native_qt() -> None:
     document = augment_release_sbom(
         _environment_sbom(),
         app_version="3.07",
         python_version="3.14.4",
         qt_version="6.11.1",
+        provenance=_provenance(),
     )
 
     application = document["metadata"]["component"]
@@ -90,6 +108,8 @@ def test_augment_release_sbom_adds_application_python_and_native_qt() -> None:
     }
     assert versions["CPython"] == "3.14.4"
     assert versions["Qt"] == "6.11.1"
+    assert versions["SQLCipher"] == "4.17.0"
+    assert versions["OpenSSL"] == "3.6.0"
     sqlcipher = next(
         component
         for component in document["components"]
@@ -103,6 +123,22 @@ def test_augment_release_sbom_adds_application_python_and_native_qt() -> None:
     )
     assert "pkg:generic/cpython@3.14.4" in root_dependency["dependsOn"]
     assert "pkg:generic/qt@6.11.1" in root_dependency["dependsOn"]
+    sqlcipher_dependency = next(
+        dependency
+        for dependency in document["dependencies"]
+        if dependency["ref"] == "sqlcipher3==0.6.2"
+    )
+    assert sqlcipher_dependency["dependsOn"] == [
+        "pkg:generic/openssl@3.6.0",
+        "pkg:generic/sqlcipher@4.17.0",
+    ]
+
+    qt = next(
+        component for component in document["components"] if component["name"] == "Qt"
+    )
+    assert qt["licenses"] == [
+        {"expression": "LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only"}
+    ]
 
 
 def test_augment_release_sbom_rejects_mismatched_qt_wheel() -> None:
@@ -120,4 +156,5 @@ def test_augment_release_sbom_rejects_mismatched_qt_wheel() -> None:
             app_version="3.07",
             python_version="3.14.4",
             qt_version="6.11.1",
+            provenance=_provenance(),
         )

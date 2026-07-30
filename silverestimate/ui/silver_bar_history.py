@@ -26,7 +26,8 @@ from PySide6.QtWidgets import (
 
 from silverestimate.domain.pagination import Page, SilverBarHistoryCursor
 from silverestimate.infrastructure.latest_request_runner import LatestRequestRunner
-from silverestimate.infrastructure.settings import get_app_settings
+from silverestimate.infrastructure.paged_load_state import PagedLoadState
+from silverestimate.infrastructure.settings import SettingsKey, get_app_settings
 from silverestimate.persistence.silver_bars_snapshot_repository import (
     SilverBarsSnapshotRepository,
 )
@@ -140,9 +141,10 @@ class SilverBarHistoryDialog(QDialog):
         self._search_timer.setSingleShot(True)
         self._search_timer.setInterval(180)
         self._search_timer.timeout.connect(self.search_bars)
-        self._history_rows: list[dict[str, Any]] = []
-        self._bars_cursor: SilverBarHistoryCursor | None = None
-        self._bars_total = 0
+        self._bars_page_state = PagedLoadState[
+            dict[str, Any],
+            SilverBarHistoryCursor,
+        ]()
         self._bars_load_runner = LatestRequestRunner(
             _load_bars_history_page,
             self,
@@ -251,8 +253,11 @@ class SilverBarHistoryDialog(QDialog):
         self.max_rows_spin.setMaximumWidth(132)
         default_limit = 500
         try:
-            stored_limit = get_app_settings().value(
-                "silver_bar/history_max_rows", defaultValue=500, type=int
+            stored_limit = get_app_settings().get_int(
+                SettingsKey.SILVER_BAR_HISTORY_MAX_ROWS,
+                500,
+                minimum=100,
+                maximum=1000,
             )
             if isinstance(stored_limit, (int, float, str, bytes, bytearray)):
                 default_limit = int(stored_limit)
@@ -484,12 +489,10 @@ class SilverBarHistoryDialog(QDialog):
 
     def _start_bars_load(self, payload: dict, *, append: bool = False) -> None:
         if not append:
-            self._history_rows = []
-            self._bars_cursor = None
-            self._bars_total = 0
+            self._bars_page_state.reset()
             self.bars_model.set_rows([])
             self.load_more_button.setVisible(False)
-        elif self._bars_cursor is None:
+        elif not self._bars_page_state.has_more:
             return
         self.load_more_button.setEnabled(False)
         connection_factory = getattr(self.db_manager, "open_read_connection", None)
@@ -503,7 +506,7 @@ class SilverBarHistoryDialog(QDialog):
                 str(payload.get("voucher_term") or "").strip(),
                 str(payload.get("weight_text") or "").strip(),
                 str(payload.get("status_text") or "All Statuses").strip(),
-                self._bars_cursor,
+                self._bars_page_state.cursor,
                 append,
             )
         )
@@ -548,7 +551,7 @@ class SilverBarHistoryDialog(QDialog):
                     voucher_term=str(payload.get("voucher_term") or "").strip(),
                     weight_text=str(payload.get("weight_text") or "").strip(),
                     status_text=str(payload.get("status_text") or "").strip(),
-                    cursor=self._bars_cursor,
+                    cursor=self._bars_page_state.cursor,
                     limit=1000,
                 )
             else:
@@ -565,7 +568,7 @@ class SilverBarHistoryDialog(QDialog):
                 str(payload.get("voucher_term") or "").strip(),
                 str(payload.get("weight_text") or "").strip(),
                 str(payload.get("status_text") or "All Statuses").strip(),
-                self._bars_cursor,
+                self._bars_page_state.cursor,
                 append,
             )
             self._on_bars_load_ready(0, (request, page))
@@ -582,13 +585,16 @@ class SilverBarHistoryDialog(QDialog):
             ],
             value,
         )
-        self._bars_cursor = page.next_cursor
-        self._bars_total = page.total
-        page_rows = [dict(row) for row in page.items]
-        self._history_rows = (
-            [*self._history_rows, *page_rows] if request.append else page_rows
+        normalized_page = Page(
+            tuple(dict(row) for row in page.items),
+            page.total,
+            page.next_cursor,
         )
-        self.populate_bars_table(self._history_rows)
+        history_rows = self._bars_page_state.apply(
+            normalized_page,
+            append=request.append,
+        )
+        self.populate_bars_table(history_rows)
 
     def _on_bars_load_error(self, _generation: int, error: object) -> None:
         QMessageBox.critical(
@@ -623,7 +629,10 @@ class SilverBarHistoryDialog(QDialog):
 
     def _save_row_limit_setting(self, value: int) -> None:
         try:
-            get_app_settings().setValue("silver_bar/history_max_rows", int(value))
+            get_app_settings().set(
+                SettingsKey.SILVER_BAR_HISTORY_MAX_ROWS,
+                int(value),
+            )
         except Exception as exc:
             self.logger.debug("Could not persist history max rows setting: %s", exc)
 
@@ -638,7 +647,7 @@ class SilverBarHistoryDialog(QDialog):
             for bar in list(bars_data or [])
         ]
         self.bars_model.set_rows(normalized_rows)
-        self.load_more_button.setVisible(self._bars_cursor is not None)
+        self.load_more_button.setVisible(self._bars_page_state.has_more)
         self._last_refreshed_text = datetime.now().strftime("%d/%m/%Y %I:%M %p")
         if normalized_rows:
             self.bars_table.clearSelection()
@@ -812,7 +821,7 @@ class SilverBarHistoryDialog(QDialog):
         selection_model = self.bars_table.selectionModel()
         selected = len(selection_model.selectedRows()) if selection_model else 0
         refreshed = getattr(self, "_last_refreshed_text", "-")
-        strip.set_left_items([f"Loaded: {total} of {self._bars_total} bars"])
+        strip.set_left_items([f"Loaded: {total} of {self._bars_page_state.total} bars"])
         strip.set_right_items([f"Selected: {selected}", f"Refreshed: {refreshed}"])
 
     def show_bars_context_menu(self, pos):
@@ -884,7 +893,6 @@ class SilverBarHistoryDialog(QDialog):
             self.logger.warning("Failed to copy selected rows: %s", exc, exc_info=True)
 
     def _cancel_active_loads(self) -> None:
-        self._bars_load_runner.cancel()
         self._bars_load_runner.shutdown()
 
     def keyPressEvent(self, event):

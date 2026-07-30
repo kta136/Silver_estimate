@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+## [3.12] - 2026-07-30
+
+### Added
+
+- Added a repository-owned dependency policy that validates the locked
+  `pip-audit` report, reviewed exceptions, licenses, notices, and native
+  component provenance for release artifacts.
+- Added reusable typed paging state and explicit database, settings, password,
+  print-preview, and worker-lifecycle contracts.
+
+### Changed
+
+- Split silver-bar persistence into role-specific query, command, and
+  synchronization repositories.
+- Reworked estimate entry, settings, and print preview as composed,
+  independently tested controllers and collaborators with narrow typed
+  boundaries.
+- Closed the modernization program at its accepted scope. Phase 12 remains
+  deferred pending transport-maintenance evidence, and Phase 16 is out of scope
+  because the portable EXE/ZIP/checksum/SBOM release path meets the current
+  single-system deployment requirements.
+
+### Removed
+
+- Removed the broad `SilverBarsRepository`, forwarding
+  `EstimateEntryFacade`, Safety dependency graph, and superseded controller
+  ownership paths.
+
+### Security
+
+- Extended the release SBOM and policy gates to cover CPython, Qt, SQLCipher,
+  OpenSSL, runtime licenses, native provenance, and rejection of unintended
+  SQLite or Qt components.
+
 ## [3.11] - 2026-07-26
 
 ### Changed

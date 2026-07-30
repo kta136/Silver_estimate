@@ -1,4 +1,4 @@
-# Silver Estimation App - v3.11
+# Silver Estimation App - v3.12
 
 A Windows desktop application built with PySide6 and a local SQLCipher database
 for managing silver sales estimates, item-wise entries, silver-bar inventory,
@@ -7,7 +7,7 @@ returns, and print-ready outputs.
 [![Python](https://img.shields.io/badge/Python-3.14+-blue.svg)](https://www.python.org/)
 [![PySide6](https://img.shields.io/badge/PySide6-6.11-green.svg)](https://doc.qt.io/qtforpython-6/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE)
-[![Source Version](https://img.shields.io/badge/source-v3.11-orange.svg)](CHANGELOG.md#311---2026-07-26)
+[![Source Version](https://img.shields.io/badge/source-v3.12-orange.svg)](CHANGELOG.md#312---2026-07-30)
 [![Latest Release](https://img.shields.io/github/v/release/kta136/Silver_estimate?label=stable%20release)](https://github.com/kta136/Silver_estimate/releases/latest)
 [![PR Validation](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml)
 [![Main Validation](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml)
@@ -24,7 +24,7 @@ returns, and print-ready outputs.
 - [Download latest stable release](https://github.com/kta136/Silver_estimate/releases/latest)
 - [Documentation index](DOCS/README.md)
 - [Changelog](CHANGELOG.md)
-- [v3.11 changelog](CHANGELOG.md#311---2026-07-26)
+- [v3.12 changelog](CHANGELOG.md#312---2026-07-30)
 - [Deployment guide](DOCS/deployment-guide.md)
 
 > The source tree can be ahead of the latest packaged release. Use the release
@@ -233,7 +233,7 @@ uv run pre-commit run --all-files
 - Shared validation entrypoints:
   - `uv run nox -s pr` for the required PR gate set
   - `uv run nox -s ci` for the required main-branch gate set
-  - `uv run nox -s advisory` for advisory `bandit` and `safety`
+  - `uv run nox -s advisory` for blocking Bandit and locked `pip-audit` policy
 - CI requires 75% global coverage and 90% changed-line coverage on pull requests.
 - CI builds the deterministic scale dataset and requires all seven p95 performance metrics with 20 hot-path or five encrypted-flush samples.
 - To iterate quickly on the application builder branch, run `pytest tests/unit/test_application_builder.py`.
@@ -249,7 +249,7 @@ uv run pre-commit run --all-files
 - Inspectable standalone build: `uv run nox -s build_standalone standalone_artifact_smoke`
 - Clean one-file rebuild: `uv run nox -s build_clean artifact_smoke`
 - Validated local Windows build: `scripts\build_windows_local.cmd` (safe when the workspace path contains spaces)
-- Output: `dist/SilverEstimate.exe`, `dist/SilverEstimate-v3.11.exe`, and `dist/SilverEstimate-v3.11-win64.zip` on Windows
+- Output: `dist/SilverEstimate.exe`, `dist/SilverEstimate-v3.12.exe`, and `dist/SilverEstimate-v3.12-win64.zip` on Windows
 - Release/CI builds use Qt's `pyside6-deploy`, the committed `pysidedeploy.spec`, and locked Nuitka 4.1.3
 - Packaged releases are Windows-only; macOS/Linux are untested development environments.
 
@@ -303,6 +303,11 @@ Copyright (C) 2023-2026 Silver Estimation App
 ---
 
 ## Version History (highlights)
+
+### v3.12 (2026-07-30)
+- Completes the repository, estimate-entry, settings, print-preview, typed-contract, paging, and worker-lifecycle modernization
+- Adds blocking locked-dependency, license, notice, SBOM, and native-provenance policy gates
+- Closes the modernization program at the accepted portable Windows release scope
 
 ### v3.11 (2026-07-26)
 - Replaces legacy silver-bar HTML reports with typed Modern direct-painter layouts

@@ -29,6 +29,7 @@ from silverestimate.infrastructure.latest_request_runner import (
     LatestRequestRunner,
     RequestCancelledError,
 )
+from silverestimate.infrastructure.paged_load_state import PagedLoadState
 from silverestimate.infrastructure.sqlite_worker import cancellable_sqlite_connection
 from silverestimate.persistence.estimates_repository import fetch_estimate_history_page
 from silverestimate.ui.display_formatting import format_display_date, format_rupees
@@ -105,9 +106,10 @@ class EstimateHistoryDialog(QDialog):
         self.logger = logging.getLogger(__name__)
         self.main_window = main_window_ref  # Store the explicit reference to MainWindow
         self.selected_voucher = None
-        self._history_rows: list[dict[str, Any]] = []
-        self._history_cursor: EstimateHistoryCursor | None = None
-        self._history_total = 0
+        self._history_page_state = PagedLoadState[
+            dict[str, Any],
+            EstimateHistoryCursor,
+        ]()
         self._load_runner = LatestRequestRunner(
             _load_history_page,
             self,
@@ -395,12 +397,10 @@ class EstimateHistoryDialog(QDialog):
     def load_estimates(self, *, append: bool = False):
         """Load estimates based on search criteria (runs queries in a background thread)."""
         if not append:
-            self._history_rows = []
-            self._history_cursor = None
-            self._history_total = 0
+            self._history_page_state.reset()
             self.estimates_model.set_rows([])
             self.load_more_button.setVisible(False)
-        elif self._history_cursor is None:
+        elif not self._history_page_state.has_more:
             return
         self.results_summary_label.setText("Loading estimates...")
         started_at = time.perf_counter()
@@ -434,7 +434,7 @@ class EstimateHistoryDialog(QDialog):
             self.date_from.date().toString("yyyy-MM-dd"),
             self.date_to.date().toString("yyyy-MM-dd"),
             self.voucher_search.text().strip(),
-            self._history_cursor,
+            self._history_page_state.cursor,
             append,
             started_at,
         )
@@ -451,7 +451,7 @@ class EstimateHistoryDialog(QDialog):
                     date_from=self.date_from.date().toString("yyyy-MM-dd"),
                     date_to=self.date_to.date().toString("yyyy-MM-dd"),
                     voucher_search=self.voucher_search.text().strip(),
-                    cursor=self._history_cursor,
+                    cursor=self._history_page_state.cursor,
                     limit=500,
                 ),
             )
@@ -477,17 +477,14 @@ class EstimateHistoryDialog(QDialog):
         started_at: float | None = None,
         append: bool = False,
     ) -> None:
-        page_rows = list(page.items)
-        self._history_rows = [*self._history_rows, *page_rows] if append else page_rows
-        self._history_cursor = page.next_cursor
-        self._history_total = page.total
+        history_rows = self._history_page_state.apply(page, append=append)
         table = self.estimates_table
         sorting_enabled = table.isSortingEnabled()
         table.setUpdatesEnabled(False)
         table.blockSignals(True)
         try:
             rows = []
-            for history_row in self._history_rows:
+            for history_row in history_rows:
                 vno = str(history_row.get("voucher_no", "") or "")
                 total_gross = float(history_row.get("total_gross", 0.0) or 0.0)
                 total_net = float(history_row.get("total_net", 0.0) or 0.0)
@@ -516,7 +513,7 @@ class EstimateHistoryDialog(QDialog):
                 table.setSortingEnabled(False)
             self.estimates_model.set_rows(rows)
             self._update_results_summary(len(rows))
-            self.load_more_button.setVisible(self._history_cursor is not None)
+            self.load_more_button.setVisible(self._history_page_state.has_more)
             if rows:
                 table.selectRow(0)
             else:
@@ -554,7 +551,7 @@ class EstimateHistoryDialog(QDialog):
         loaded = (
             self.estimates_model.rowCount() if row_count is None else int(row_count)
         )
-        total = self._history_total
+        total = self._history_page_state.total
         if loaded <= 0:
             text = "No estimates found"
         elif total == 1 and loaded == 1:
@@ -618,7 +615,6 @@ class EstimateHistoryDialog(QDialog):
         )
 
     def _cancel_active_loads(self) -> None:
-        self._load_runner.cancel()
         self._load_runner.shutdown()
 
     def keyPressEvent(self, event):
@@ -746,7 +742,6 @@ class EstimateHistoryDialog(QDialog):
             progress.deleteLater()
 
     def _cancel_active_print_previews(self) -> None:
-        self._print_preview_runner.cancel()
         self._print_preview_runner.shutdown()
         self._dispose_print_preview_progress()
 

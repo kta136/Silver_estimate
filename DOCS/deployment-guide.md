@@ -26,6 +26,7 @@ graph.
 uv run nox -s ruff
 uv run nox -s mypy
 uv run nox -s bandit
+uv run nox -s dependency_policy
 uv run nox -s tests_full
 $env:QT_QPA_PLATFORM = "offscreen"
 uv run nox -s smoke_ui
@@ -33,7 +34,7 @@ uv run nox -s build_standalone
 uv run nox -s standalone_artifact_smoke
 uv run nox -s build_clean
 uv run nox -s artifact_smoke
-uv run python scripts/check_startup_budgets.py --artifact dist\SilverEstimate-v3.11.exe --samples 5 --p95-budget-ms 3000
+uv run python scripts/check_startup_budgets.py --artifact dist\SilverEstimate-v3.12.exe --samples 5 --p95-budget-ms 3000
 ```
 
 The standalone build is a diagnostic artifact at
@@ -92,6 +93,7 @@ PR validation runs:
 
 - Ruff formatting/lint and mypy;
 - blocking Bandit medium/high findings;
+- blocking locked-runtime `pip-audit`, lock-review, notice, and native-provenance policy;
 - the complete non-smoke test suite on Windows;
 - 75% global coverage and 90% changed-line coverage;
 - deterministic performance gates;
@@ -108,19 +110,24 @@ Main repeats frozen quality/security gates and complete Windows validation. Cove
 `.github/workflows/release-windows.yml` runs for `v*` tags. Before any publish step it:
 
 1. verifies the tag equals `v<APP_VERSION>`;
-2. runs Ruff, mypy, blocking Bandit, complete tests, coverage, performance, and offscreen smoke;
-3. builds with the canonical `pysidedeploy.spec` through `nox -s build_clean`;
-4. optionally signs the executable when certificate secrets exist;
-5. starts the frozen executable in artifact-smoke mode;
-6. creates the Windows zip, CycloneDX JSON SBOM, and SHA-256 checksums;
-7. publishes only after every required gate succeeds.
+2. runs Ruff, mypy, blocking Bandit, locked dependency policy, complete tests, coverage, performance, and offscreen smoke;
+3. builds and inspects the standalone artifact before creating the one-file executable;
+4. builds with the canonical `pysidedeploy.spec` through `nox -s build_clean`;
+5. optionally signs the executable when certificate secrets exist;
+6. starts the frozen executable in artifact-smoke mode;
+7. creates and policy-validates the Windows zip, CycloneDX JSON SBOM, and SHA-256 checksums;
+8. publishes only after every required gate succeeds.
 
 The release SBOM starts from the frozen build environment and is then augmented
 and validated by `scripts/augment_release_sbom.py`. Its root component preserves
 the application version, and explicit CPython and native Qt components record
-the interpreter and framework embedded in the Windows executable. PySide6,
-PySide6 Addons/Essentials, and Shiboken6 wheel versions must match that native
-Qt version or the release stops.
+the interpreter and framework embedded in the Windows executable. Controlled
+SQLCipher and OpenSSL source identities are added from committed provenance.
+PySide6, PySide6 Addons/Essentials, and Shiboken6 wheel versions must match that
+native Qt version. Every audited runtime and required native component must
+have an allowed license, required notices must remain present, and the lockfile
+must match its recorded dependency review or the release stops. See
+[`dependency-security-policy.md`](dependency-security-policy.md).
 
 The `main` source version may be newer than the latest published package. The
 [GitHub Releases page](https://github.com/kta136/Silver_estimate/releases/latest)

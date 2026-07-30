@@ -8,6 +8,7 @@ from typing import Any, Iterable, List, Optional
 
 from silverestimate.domain.pagination import EstimateHistoryCursor, Page
 from silverestimate.persistence.database_driver import dbapi as sqlite3
+from silverestimate.persistence.database_protocols import RepositoryDatabase
 
 
 def fetch_estimate_history_rows(
@@ -170,7 +171,7 @@ def fetch_estimate_history_page(
 class EstimatesRepository:
     """Encapsulate estimate header/item persistence logic."""
 
-    def __init__(self, db_manager: Any) -> None:
+    def __init__(self, db_manager: RepositoryDatabase) -> None:
         self._db = db_manager
         self._logger = getattr(db_manager, "logger", logging.getLogger(__name__))
 
@@ -567,21 +568,10 @@ class EstimatesRepository:
                 for item in return_items_list
             )
             if params:
-                try:
-                    prepared = getattr(self._db, "_c_insert_estimate_item", None)
-                    stmt = getattr(self._db, "_sql_insert_estimate_item", None)
-                    if prepared and stmt:
-                        prepared.executemany(stmt, params)
-                    else:
-                        cursor.executemany(
-                            "INSERT INTO estimate_items (voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage_type, wage, fine, is_return, is_silver_bar, line_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                            params,
-                        )
-                except sqlite3.Error:
-                    cursor.executemany(
-                        "INSERT INTO estimate_items (voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage_type, wage, fine, is_return, is_silver_bar, line_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        params,
-                    )
+                cursor.executemany(
+                    "INSERT INTO estimate_items (voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage_type, wage, fine, is_return, is_silver_bar, line_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    params,
+                )
 
             conn.commit()
             self._set_last_error(None)
@@ -641,8 +631,8 @@ class EstimatesRepository:
         try:
             conn.execute("BEGIN TRANSACTION")
             deleted_bars_count = 0
-            affected_lists = set()
-            silver_repo = getattr(self._db, "silver_bars_repo", None)
+            affected_lists: set[int] = set()
+            silver_repo = getattr(self._db, "silver_bar_command_repo", None)
             if silver_repo is not None:
                 deleted_bars_count, affected_lists = (
                     silver_repo.delete_bars_for_estimate(voucher_no)

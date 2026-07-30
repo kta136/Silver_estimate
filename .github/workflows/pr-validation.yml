@@ -35,6 +35,8 @@ jobs:
         run: uv run nox -s mypy
       - name: Blocking Bandit medium/high gate
         run: uv run nox -s bandit
+      - name: Blocking dependency advisory and lock policy
+        run: uv run nox -s dependency_policy
 
   windows-validation:
     name: Windows tests, smoke, performance, and package

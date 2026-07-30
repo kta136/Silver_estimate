@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from importlib import import_module
 from typing import Any, Optional
 
+from silverestimate.persistence.database_protocols import ApplicationDatabase
+
 POST_AUTH_RUNTIME_MODULES = (
     "silverestimate.persistence.database_manager",
     "silverestimate.controllers.live_rate_controller",
@@ -41,7 +43,7 @@ def preload_post_auth_runtime() -> None:
 def build_main_window_runtime(
     *,
     main_window: Any,
-    db_manager: Any,
+    db_manager: ApplicationDatabase,
     logger: Optional[logging.Logger] = None,
     settings_service: Any = None,
 ) -> MainWindowRuntime:
@@ -86,7 +88,11 @@ def build_main_window_runtime(
     )
 
 
-def create_main_window(*, db_manager: Any, logger: Optional[logging.Logger] = None):
+def create_main_window(
+    *,
+    db_manager: ApplicationDatabase,
+    logger: Optional[logging.Logger] = None,
+):
     """Create a fully wired main window for application startup."""
     from silverestimate.ui.main_window import MainWindow
 

@@ -206,10 +206,10 @@ def test_adapter_add_empty_row_via_button(qt_app, fake_db):
         initial_count = widget.item_table.rowCount()
 
         # Clear existing rows to test from clean slate
-        widget.clear_all_rows()
+        widget.table_controller.clear_all_rows()
 
         # Simulate user clicking "Add Row" button (triggers adapter)
-        widget.table_adapter.add_empty_row()
+        widget.table_controller._get_table_adapter().add_empty_row()
 
         assert widget.item_table.rowCount() == 1, "Should add one row"
 
@@ -226,14 +226,14 @@ def test_adapter_prevents_multiple_empty_rows(qt_app, fake_db):
     """
     widget = _make_widget(fake_db)
     try:
-        widget.clear_all_rows()
+        widget.table_controller.clear_all_rows()
 
         # Add first empty row
-        widget.table_adapter.add_empty_row()
+        widget.table_controller._get_table_adapter().add_empty_row()
         assert widget.item_table.rowCount() == 1
 
         # Try to add another empty row
-        widget.table_adapter.add_empty_row()
+        widget.table_controller._get_table_adapter().add_empty_row()
 
         # Should still have only one row (focuses existing empty row)
         assert widget.item_table.rowCount() == 1
@@ -245,15 +245,15 @@ def test_adapter_adds_row_when_last_has_code(qt_app, fake_db):
     """Test that adapter creates new row when last row has code."""
     widget = _make_widget(fake_db)
     try:
-        widget.clear_all_rows()
+        widget.table_controller.clear_all_rows()
 
         # Add row and populate it
-        widget.table_adapter.add_empty_row()
+        widget.table_controller._get_table_adapter().add_empty_row()
         table = widget.item_table
         table.set_cell_text(0, COL_CODE, "ABC123")
 
         # Now try to add another row
-        widget.table_adapter.add_empty_row()
+        widget.table_controller._get_table_adapter().add_empty_row()
 
         # Should create a new row since last one has code
         assert table.rowCount() == 2, "Should create second row when first has code"
@@ -270,11 +270,11 @@ def test_adapter_populate_row_uses_model_first_updates(qt_app, fake_db):
     """Test that adapter.populate_row writes through model-first helpers."""
     widget = _make_widget(fake_db)
     try:
-        widget.clear_all_rows()
-        widget.table_adapter.add_empty_row()
+        widget.table_controller.clear_all_rows()
+        widget.table_controller._get_table_adapter().add_empty_row()
 
         # Populate row via adapter.
-        widget.table_adapter.populate_row(
+        widget.table_controller._get_table_adapter().populate_row(
             0,
             {
                 "code": "test001",
@@ -297,9 +297,9 @@ def test_adapter_populate_row_uses_model_first_updates(qt_app, fake_db):
 def test_adapter_populate_row_wt_forces_zero_and_disables_pieces(qt_app, fake_db):
     widget = _make_widget(fake_db)
     try:
-        widget.clear_all_rows()
-        widget.table_adapter.add_empty_row()
-        widget.table_adapter.populate_row(
+        widget.table_controller.clear_all_rows()
+        widget.table_controller._get_table_adapter().add_empty_row()
+        widget.table_controller._get_table_adapter().populate_row(
             0,
             {
                 "code": "wt001",
@@ -320,9 +320,9 @@ def test_adapter_populate_row_wt_forces_zero_and_disables_pieces(qt_app, fake_db
 def test_adapter_populate_row_pc_restores_one_after_wt_zero(qt_app, fake_db):
     widget = _make_widget(fake_db)
     try:
-        widget.clear_all_rows()
-        widget.table_adapter.add_empty_row()
-        widget.table_adapter.populate_row(
+        widget.table_controller.clear_all_rows()
+        widget.table_controller._get_table_adapter().add_empty_row()
+        widget.table_controller._get_table_adapter().populate_row(
             0,
             {
                 "code": "wt001",
@@ -332,7 +332,7 @@ def test_adapter_populate_row_pc_restores_one_after_wt_zero(qt_app, fake_db):
                 "wage_type": "WT",
             },
         )
-        widget.table_adapter.populate_row(
+        widget.table_controller._get_table_adapter().populate_row(
             0,
             {
                 "code": "pc001",
@@ -358,11 +358,11 @@ def test_adapter_populate_triggers_calculations(qt_app, fake_db):
     """
     widget = _make_widget(fake_db)
     try:
-        widget.clear_all_rows()
-        widget.table_adapter.add_empty_row()
+        widget.table_controller.clear_all_rows()
+        widget.table_controller._get_table_adapter().add_empty_row()
 
         # Populate with data that should trigger calculations
-        widget.table_adapter.populate_row(
+        widget.table_controller._get_table_adapter().populate_row(
             0,
             {
                 "code": "calc001",
@@ -379,7 +379,7 @@ def test_adapter_populate_triggers_calculations(qt_app, fake_db):
 
         # Trigger calculation manually (in real app, this happens via signals)
         widget.current_row = 0
-        widget.calculate_net_weight()
+        widget.totals_controller.calculate_net_weight()
 
         # Verify calculations
         assert float(table.get_cell_text(0, COL_NET_WT)) == pytest.approx(9.0)
@@ -402,8 +402,8 @@ def test_set_cell_text_syncs_with_model(qt_app, fake_db):
     """Setting cell text should propagate to the underlying model."""
     widget = _make_widget(fake_db)
     try:
-        widget.clear_all_rows()
-        widget.table_adapter.add_empty_row()
+        widget.table_controller.clear_all_rows()
+        widget.table_controller._get_table_adapter().add_empty_row()
 
         table = widget.item_table
         table.set_cell_text(0, COL_CODE, "SYNC123")
@@ -422,8 +422,8 @@ def test_model_updates_reflect_in_get_cell_text(qt_app, fake_db):
     """Model updates should be readable via table view helper."""
     widget = _make_widget(fake_db)
     try:
-        widget.clear_all_rows()
-        widget.table_adapter.add_empty_row()
+        widget.table_controller.clear_all_rows()
+        widget.table_controller._get_table_adapter().add_empty_row()
 
         table = widget.item_table
         model = table.get_model()
@@ -441,15 +441,15 @@ def test_row_changes_keep_existing_cell_values(qt_app, fake_db):
     """Adding rows should not disturb existing row values."""
     widget = _make_widget(fake_db)
     try:
-        widget.clear_all_rows()
-        widget.table_adapter.add_empty_row()
+        widget.table_controller.clear_all_rows()
+        widget.table_controller._get_table_adapter().add_empty_row()
 
         table = widget.item_table
 
         table.set_cell_text(0, COL_CODE, "CACHE1")
 
         # Add another row (should clear cache)
-        widget.table_adapter.add_empty_row()
+        widget.table_controller._get_table_adapter().add_empty_row()
 
         assert table.get_cell_text(0, COL_CODE) == "CACHE1"
     finally:
@@ -472,19 +472,19 @@ def test_mode_toggle_updates_empty_row_type_via_adapter(qt_app, fake_db):
         assert table.get_cell_text(last_row, COL_TYPE) == "Regular"
 
         # Toggle return mode
-        widget.toggle_return_mode()
+        widget.workflow_controller.toggle_return_mode()
 
         # Adapter should refresh empty row type
         last_row = table.rowCount() - 1
         assert table.get_cell_text(last_row, COL_TYPE) == "Return"
 
         # Toggle silver bar mode
-        widget.toggle_silver_bar_mode()
+        widget.workflow_controller.toggle_silver_bar_mode()
         last_row = table.rowCount() - 1
         assert table.get_cell_text(last_row, COL_TYPE) == "Silver Bar"
 
         # Toggle off
-        widget.toggle_silver_bar_mode()
+        widget.workflow_controller.toggle_silver_bar_mode()
         last_row = table.rowCount() - 1
         assert table.get_cell_text(last_row, COL_TYPE) == "Regular"
     finally:
@@ -511,10 +511,10 @@ def test_adapter_focus_on_empty_row(qt_app, fake_db):
     """Test adapter.focus_on_empty_row() finds or creates empty row."""
     widget = _make_widget(fake_db)
     try:
-        widget.clear_all_rows()
+        widget.table_controller.clear_all_rows()
 
         # No rows - should create one
-        widget.table_adapter.focus_on_empty_row()
+        widget.table_controller._get_table_adapter().focus_on_empty_row()
         assert widget.item_table.rowCount() == 1
 
         # Add code to first row
@@ -522,7 +522,7 @@ def test_adapter_focus_on_empty_row(qt_app, fake_db):
         table.set_cell_text(0, COL_CODE, "FILLED")
 
         # Should create new empty row
-        widget.table_adapter.focus_on_empty_row()
+        widget.table_controller._get_table_adapter().focus_on_empty_row()
         assert table.rowCount() == 2
     finally:
         widget.deleteLater()
@@ -532,19 +532,19 @@ def test_adapter_refresh_empty_row_type(qt_app, fake_db):
     """Test that adapter.refresh_empty_row_type() updates all empty rows."""
     widget = _make_widget(fake_db)
     try:
-        widget.clear_all_rows()
+        widget.table_controller.clear_all_rows()
 
         # Create multiple empty rows
-        widget.table_adapter.add_empty_row()
-        widget.table_adapter.add_empty_row()
+        widget.table_controller._get_table_adapter().add_empty_row()
+        widget.table_controller._get_table_adapter().add_empty_row()
 
         table = widget.item_table
 
         # Toggle mode
-        widget.toggle_return_mode()
+        widget.workflow_controller.toggle_return_mode()
 
         # Refresh should update all empty rows
-        widget.table_adapter.refresh_empty_row_type()
+        widget.table_controller._get_table_adapter().refresh_empty_row_type()
 
         # Check all empty rows have correct type
         for row in range(table.rowCount()):
@@ -590,10 +590,10 @@ def test_navigation_target_mapping_is_consistent(qt_app, fake_db):
     """Test cursor navigation mapping helpers for deterministic movement."""
     widget = _make_widget(fake_db)
     try:
-        widget.clear_all_rows()
-        widget.table_adapter.add_empty_row()
+        widget.table_controller.clear_all_rows()
+        widget.table_controller._get_table_adapter().add_empty_row()
         widget.item_table.set_cell_text(0, COL_CODE, "WT001")
-        widget.table_adapter.add_empty_row()
+        widget.table_controller._get_table_adapter().add_empty_row()
         widget.item_table.set_cell_text(1, COL_CODE, "PC001")
         model = widget.item_table.get_model()
         assert model.set_row_wage_type(0, "WT")
@@ -602,27 +602,69 @@ def test_navigation_target_mapping_is_consistent(qt_app, fake_db):
         wt_row = 0
         pc_row = 1
 
-        assert widget._next_edit_target(wt_row, COL_WAGE_RATE) == (wt_row + 1, COL_CODE)
-        assert widget._previous_edit_target(wt_row + 1, COL_CODE) == (
+        assert widget.table_controller._next_edit_target(wt_row, COL_WAGE_RATE) == (
+            wt_row + 1,
+            COL_CODE,
+        )
+        assert widget.table_controller._previous_edit_target(wt_row + 1, COL_CODE) == (
             wt_row,
             COL_WAGE_RATE,
         )
 
         row = pc_row
-        assert widget._next_edit_target(row, COL_CODE) == (row, COL_GROSS)
-        assert widget._next_edit_target(row, COL_GROSS) == (row, COL_POLY)
-        assert widget._next_edit_target(row, COL_POLY) == (row, COL_PURITY)
-        assert widget._next_edit_target(row, COL_PURITY) == (row, COL_WAGE_RATE)
-        assert widget._next_edit_target(row, COL_WAGE_RATE) == (row, COL_PIECES)
-        assert widget._next_edit_target(row, COL_PIECES) == (row + 1, COL_CODE)
+        assert widget.table_controller._next_edit_target(row, COL_CODE) == (
+            row,
+            COL_GROSS,
+        )
+        assert widget.table_controller._next_edit_target(row, COL_GROSS) == (
+            row,
+            COL_POLY,
+        )
+        assert widget.table_controller._next_edit_target(row, COL_POLY) == (
+            row,
+            COL_PURITY,
+        )
+        assert widget.table_controller._next_edit_target(row, COL_PURITY) == (
+            row,
+            COL_WAGE_RATE,
+        )
+        assert widget.table_controller._next_edit_target(row, COL_WAGE_RATE) == (
+            row,
+            COL_PIECES,
+        )
+        assert widget.table_controller._next_edit_target(row, COL_PIECES) == (
+            row + 1,
+            COL_CODE,
+        )
 
-        assert widget._previous_edit_target(row, COL_PIECES) == (row, COL_WAGE_RATE)
-        assert widget._previous_edit_target(row, COL_WAGE_RATE) == (row, COL_PURITY)
-        assert widget._previous_edit_target(row, COL_PURITY) == (row, COL_POLY)
-        assert widget._previous_edit_target(row, COL_POLY) == (row, COL_GROSS)
-        assert widget._previous_edit_target(row, COL_GROSS) == (row, COL_CODE)
-        assert widget._previous_edit_target(row, COL_CODE) == (row - 1, COL_WAGE_RATE)
-        assert widget._previous_edit_target(0, COL_CODE) == (0, COL_CODE)
+        assert widget.table_controller._previous_edit_target(row, COL_PIECES) == (
+            row,
+            COL_WAGE_RATE,
+        )
+        assert widget.table_controller._previous_edit_target(row, COL_WAGE_RATE) == (
+            row,
+            COL_PURITY,
+        )
+        assert widget.table_controller._previous_edit_target(row, COL_PURITY) == (
+            row,
+            COL_POLY,
+        )
+        assert widget.table_controller._previous_edit_target(row, COL_POLY) == (
+            row,
+            COL_GROSS,
+        )
+        assert widget.table_controller._previous_edit_target(row, COL_GROSS) == (
+            row,
+            COL_CODE,
+        )
+        assert widget.table_controller._previous_edit_target(row, COL_CODE) == (
+            row - 1,
+            COL_WAGE_RATE,
+        )
+        assert widget.table_controller._previous_edit_target(0, COL_CODE) == (
+            0,
+            COL_CODE,
+        )
     finally:
         widget.deleteLater()
 
@@ -669,8 +711,8 @@ def test_table_delegates_signal_navigation_requests(qtbot, fake_db):
 def test_add_empty_row_deferred_focus_is_safe_after_delete(qt_app, fake_db, capsys):
     """Test deferred focus timer does not crash when widget is deleted quickly."""
     widget = _make_widget(fake_db)
-    widget.clear_all_rows()
-    widget.table_adapter.add_empty_row()
+    widget.table_controller.clear_all_rows()
+    widget.table_controller._get_table_adapter().add_empty_row()
     widget.close()
     widget.deleteLater()
     qt_app.sendPostedEvents()
@@ -687,19 +729,19 @@ def test_manual_row_selection_not_overridden_by_queued_auto_advance(qtbot, fake_
     """Manual row selection should win over delayed auto-advance from prior edit."""
     widget = _make_widget(fake_db)
     try:
-        widget.clear_all_rows()
-        widget.table_adapter.add_empty_row()
+        widget.table_controller.clear_all_rows()
+        widget.table_controller._get_table_adapter().add_empty_row()
         table = widget.item_table
 
         # Prepare two rows with codes so navigation logic treats them as valid rows.
         table.set_cell_text(0, COL_CODE, "ROW0")
-        widget.table_adapter.add_empty_row()
+        widget.table_controller._get_table_adapter().add_empty_row()
         table.set_cell_text(1, COL_CODE, "ROW1")
 
         # Simulate an edit in row 1 that queues move_to_next_cell().
         widget.current_row = 1
         widget.current_column = COL_GROSS
-        widget.handle_cell_changed(1, COL_GROSS)
+        widget.table_controller.handle_cell_changed(1, COL_GROSS)
 
         # User manually moves to previous row before queued auto-advance fires.
         table.setCurrentCell(0, COL_CODE)
@@ -722,20 +764,20 @@ def test_manual_arrow_navigation_intent_blocks_queued_auto_advance(qtbot, fake_d
     """Queued auto-advance must not override a user arrow-row navigation."""
     widget = _make_widget(fake_db)
     try:
-        widget.clear_all_rows()
-        widget.table_adapter.add_empty_row()
+        widget.table_controller.clear_all_rows()
+        widget.table_controller._get_table_adapter().add_empty_row()
         table = widget.item_table
         table.set_cell_text(0, COL_CODE, "ROW0")
-        widget.table_adapter.add_empty_row()
+        widget.table_controller._get_table_adapter().add_empty_row()
         table.set_cell_text(1, COL_CODE, "ROW1")
 
         table.setCurrentCell(1, COL_GROSS)
         widget.current_row = 1
         widget.current_column = COL_GROSS
-        widget._schedule_auto_advance_from(1, COL_GROSS)
+        widget.table_controller._schedule_auto_advance_from(1, COL_GROSS)
 
         # Mimic arrow-up intent arriving before deferred auto-advance executes.
-        widget._mark_manual_row_navigation()
+        widget.table_controller._mark_manual_row_navigation()
         table.setCurrentCell(0, COL_GROSS)
         widget.current_row = 0
         widget.current_column = COL_GROSS
@@ -757,21 +799,24 @@ def test_row_change_marks_manual_nav_and_blocks_old_auto_advance(qtbot, fake_db)
     """Row switch via current-cell change should suppress queued auto-advance."""
     widget = _make_widget(fake_db)
     try:
-        widget.clear_all_rows()
-        widget.table_adapter.add_empty_row()
+        widget.table_controller.clear_all_rows()
+        widget.table_controller._get_table_adapter().add_empty_row()
         table = widget.item_table
         table.set_cell_text(0, COL_CODE, "ROW0")
-        widget.table_adapter.add_empty_row()
+        widget.table_controller._get_table_adapter().add_empty_row()
         table.set_cell_text(1, COL_CODE, "ROW1")
 
         widget.current_row = 1
         widget.current_column = COL_GROSS
-        widget._schedule_auto_advance_from(1, COL_GROSS)
+        widget.table_controller._schedule_auto_advance_from(1, COL_GROSS)
 
         # Simulate keyboard row navigation event path.
-        widget.current_cell_changed(0, COL_GROSS, 1, COL_GROSS)
+        widget.table_controller.current_cell_changed(0, COL_GROSS, 1, COL_GROSS)
         qtbot.waitUntil(
-            lambda: widget.current_row == 0 and widget._manual_row_nav_recent(),
+            lambda: (
+                widget.current_row == 0
+                and widget.table_controller._manual_row_nav_recent()
+            ),
             timeout=1000,
         )
 
@@ -779,7 +824,7 @@ def test_row_change_marks_manual_nav_and_blocks_old_auto_advance(qtbot, fake_db)
         # current index can be invalid in headless mode; if valid it must remain on the upper row.
         assert (not current.isValid()) or (current.row() == 0)
         assert widget.current_row == 0
-        assert widget._manual_row_nav_recent()
+        assert widget.table_controller._manual_row_nav_recent()
     finally:
         widget.deleteLater()
 
@@ -788,21 +833,21 @@ def test_click_row_above_during_queued_advance_remains_stable(qtbot, fake_db):
     """Clicking an upper row should not trigger edit-loop churn."""
     widget = _make_widget(fake_db)
     try:
-        widget.clear_all_rows()
-        widget.table_adapter.add_empty_row()
+        widget.table_controller.clear_all_rows()
+        widget.table_controller._get_table_adapter().add_empty_row()
         table = widget.item_table
         table.set_cell_text(0, COL_CODE, "ROW0")
-        widget.table_adapter.add_empty_row()
+        widget.table_controller._get_table_adapter().add_empty_row()
         table.set_cell_text(1, COL_CODE, "ROW1")
 
         # Trigger an edit change path that queues auto-advance.
         table.setCurrentCell(1, COL_GROSS)
         widget.current_row = 1
         widget.current_column = COL_GROSS
-        widget.handle_cell_changed(1, COL_GROSS)
+        widget.table_controller.handle_cell_changed(1, COL_GROSS)
 
         # User clicks row above immediately.
-        widget.cell_clicked(0, COL_CODE)
+        widget.table_controller.cell_clicked(0, COL_CODE)
         table.setCurrentCell(0, COL_CODE)
         widget.current_row = 0
         widget.current_column = COL_CODE
@@ -819,8 +864,8 @@ def test_revisiting_row_with_same_code_preserves_manual_overrides(qtbot, fake_db
     """Unchanged code commit must not reapply item-master defaults."""
     widget = _make_widget(fake_db)
     try:
-        widget.clear_all_rows()
-        widget.table_adapter.add_empty_row()
+        widget.table_controller.clear_all_rows()
+        widget.table_controller._get_table_adapter().add_empty_row()
         table = widget.item_table
 
         lookup_calls = []
@@ -871,8 +916,8 @@ def test_unchanged_purity_commit_still_advances_cursor(qtbot, fake_db):
     """Committing unchanged purity should still advance to wage-rate column."""
     widget = _make_widget(fake_db)
     try:
-        widget.clear_all_rows()
-        widget.table_adapter.add_empty_row()
+        widget.table_controller.clear_all_rows()
+        widget.table_controller._get_table_adapter().add_empty_row()
         table = widget.item_table
 
         table.set_cell_text(0, COL_CODE, "ROW1")
@@ -970,8 +1015,8 @@ def test_empty_gross_enter_commits_zero_and_advances_to_poly(qtbot, fake_db):
     widget = _make_widget(fake_db)
     widget.show()
     try:
-        widget.clear_all_rows()
-        widget.table_adapter.add_empty_row()
+        widget.table_controller.clear_all_rows()
+        widget.table_controller._get_table_adapter().add_empty_row()
         table = widget.item_table
         table.set_cell_text(0, COL_CODE, "ROW1")
 
@@ -997,8 +1042,8 @@ def test_empty_gross_backspace_moves_to_code_column(qtbot, fake_db):
     widget = _make_widget(fake_db)
     widget.show()
     try:
-        widget.clear_all_rows()
-        widget.table_adapter.add_empty_row()
+        widget.table_controller.clear_all_rows()
+        widget.table_controller._get_table_adapter().add_empty_row()
         table = widget.item_table
         table.set_cell_text(0, COL_CODE, "ROW1")
 
@@ -1026,7 +1071,7 @@ def test_begin_cell_edit_model_first_helper(qtbot, fake_db):
 
         # Ensure we have a row
         if table.rowCount() == 0:
-            widget.table_adapter.add_empty_row()
+            widget.table_controller._get_table_adapter().add_empty_row()
 
         assert table.begin_cell_edit(0, COL_CODE)
 

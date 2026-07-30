@@ -11,14 +11,18 @@ from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from typing import Any, Literal, Protocol, cast
 
-from silverestimate.infrastructure.settings import SettingsStore, get_app_settings
+from silverestimate.infrastructure.settings import (
+    SettingsKey,
+    SettingsStore,
+    as_settings_store,
+    get_app_settings,
+)
 
 DDA_CURRENT_RATES_URL = "https://ddajewels.com/api/v1/rates/current"
 DDA_AGRA_MOHAR_ITEM_ID = "cmomws5tw000004i5k5t6yrnw"
 DDA_RATE_UNIT = "PER_KG"
 DDA_SCHEMA_VERSION = 1
 MAX_CURRENT_RATES_BYTES = 2 * 1024 * 1024
-SNAPSHOT_SETTINGS_KEY = "rates/dda_last_verified_snapshot"
 
 RateTransport = Literal["https", "sse", "cache"]
 
@@ -231,9 +235,9 @@ class DdaSnapshotStore:
             dict(snapshot.market_state) if snapshot.market_state is not None else None
         )
         try:
-            settings = self._settings_provider()
-            settings.setValue(
-                SNAPSHOT_SETTINGS_KEY,
+            settings = as_settings_store(self._settings_provider())
+            settings.set(
+                SettingsKey.RATES_VERIFIED_SNAPSHOT,
                 json.dumps(payload, sort_keys=True, separators=(",", ":")),
             )
             settings.sync()
@@ -242,7 +246,9 @@ class DdaSnapshotStore:
 
     def load(self) -> DdaRateSnapshot | None:
         try:
-            raw = self._settings_provider().value(SNAPSHOT_SETTINGS_KEY, "")
+            raw = as_settings_store(self._settings_provider()).get_text(
+                SettingsKey.RATES_VERIFIED_SNAPSHOT,
+            )
             decoded = json.loads(str(raw)) if raw else None
             if not isinstance(decoded, Mapping):
                 return None

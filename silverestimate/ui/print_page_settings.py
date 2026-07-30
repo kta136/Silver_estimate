@@ -9,6 +9,11 @@ from PySide6.QtCore import QMarginsF, QSizeF
 from PySide6.QtGui import QPageLayout, QPageSize
 from PySide6.QtPrintSupport import QPrinter, QPrinterInfo
 
+from silverestimate.infrastructure.settings import (
+    SettingsKey,
+    as_settings_store,
+)
+
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_PRINT_MARGINS = (10, 2, 10, 2)
@@ -68,31 +73,31 @@ class PrintPageSettings:
 
 def load_print_page_settings(settings) -> PrintPageSettings:
     """Load and normalize persisted printer page preferences."""
-    page_size, page_size_name, width_mm, height_mm = _load_page_size(settings)
+    store = as_settings_store(settings)
+    page_size, page_size_name, width_mm, height_mm = _load_page_size(store)
     return PrintPageSettings(
-        margins=load_margins(settings),
-        default_printer=_clean_text(
-            settings.value("print/default_printer", "", type=str)
-        ),
+        margins=load_margins(store),
+        default_printer=store.get_text(SettingsKey.PRINT_DEFAULT_PRINTER),
         page_size=page_size,
         page_size_name=page_size_name,
         page_width_mm=width_mm,
         page_height_mm=height_mm,
-        orientation=load_orientation(settings),
+        orientation=load_orientation(store),
     )
 
 
 def save_print_page_settings(settings, state: PrintPageSettings) -> None:
     """Persist normalized page preferences, including clearing blank printers."""
-    settings.setValue("print/margins", serialize_margins(state.margins))
+    store = as_settings_store(settings)
+    store.set(SettingsKey.PRINT_MARGINS, serialize_margins(state.margins))
     if state.default_printer:
-        settings.setValue("print/default_printer", state.default_printer)
+        store.set(SettingsKey.PRINT_DEFAULT_PRINTER, state.default_printer)
     else:
-        _remove_setting(settings, "print/default_printer")
+        store.remove(SettingsKey.PRINT_DEFAULT_PRINTER)
 
     page_size = _clean_text(state.page_size) or DEFAULT_PAGE_SIZE
-    settings.setValue("print/page_size", page_size)
-    settings.setValue("print/page_size_name", state.page_size_name or page_size)
+    store.set(SettingsKey.PRINT_PAGE_SIZE, page_size)
+    store.set(SettingsKey.PRINT_PAGE_SIZE_NAME, state.page_size_name or page_size)
 
     width_mm = float(state.page_width_mm or 0.0)
     height_mm = float(state.page_height_mm or 0.0)
@@ -101,18 +106,18 @@ def save_print_page_settings(settings, state: PrintPageSettings) -> None:
         height_mm = THERMAL_PAGE_HEIGHT_MM
 
     if width_mm > 0 and height_mm > 0:
-        settings.setValue("print/page_width_mm", width_mm)
-        settings.setValue("print/page_height_mm", height_mm)
+        store.set(SettingsKey.PRINT_PAGE_WIDTH_MM, width_mm)
+        store.set(SettingsKey.PRINT_PAGE_HEIGHT_MM, height_mm)
     else:
-        _remove_setting(settings, "print/page_width_mm")
-        _remove_setting(settings, "print/page_height_mm")
+        store.remove(SettingsKey.PRINT_PAGE_WIDTH_MM)
+        store.remove(SettingsKey.PRINT_PAGE_HEIGHT_MM)
 
     orientation = (
         state.orientation
         if state.orientation in SUPPORTED_ORIENTATIONS
         else DEFAULT_ORIENTATION
     )
-    settings.setValue("print/orientation", orientation)
+    store.set(SettingsKey.PRINT_ORIENTATION, orientation)
 
 
 def apply_print_page_settings_to_printer(
@@ -139,26 +144,27 @@ def save_printer_page_settings(
     clear_empty_default: bool = False,
 ) -> None:
     """Persist the page setup currently held by a QPrinter."""
+    store = as_settings_store(settings)
     printer_name = _clean_text(printer.printerName())
     if printer_name:
-        settings.setValue("print/default_printer", printer_name)
+        store.set(SettingsKey.PRINT_DEFAULT_PRINTER, printer_name)
     elif clear_empty_default:
-        _remove_setting(settings, "print/default_printer")
+        store.remove(SettingsKey.PRINT_DEFAULT_PRINTER)
 
     orientation = orientation_name(printer.pageLayout().orientation())
-    settings.setValue("print/orientation", orientation)
+    store.set(SettingsKey.PRINT_ORIENTATION, orientation)
 
     page_size = printer.pageLayout().pageSize()
     label = page_size_label(page_size)
     size_mm = page_size.size(QPageSize.Unit.Millimeter)
-    settings.setValue("print/page_size", label)
-    settings.setValue("print/page_size_name", page_size.name() or label)
-    settings.setValue("print/page_width_mm", _round_mm(size_mm.width()))
-    settings.setValue("print/page_height_mm", _round_mm(size_mm.height()))
+    store.set(SettingsKey.PRINT_PAGE_SIZE, label)
+    store.set(SettingsKey.PRINT_PAGE_SIZE_NAME, page_size.name() or label)
+    store.set(SettingsKey.PRINT_PAGE_WIDTH_MM, _round_mm(size_mm.width()))
+    store.set(SettingsKey.PRINT_PAGE_HEIGHT_MM, _round_mm(size_mm.height()))
 
     margins = printer.pageLayout().margins(QPageLayout.Unit.Millimeter)
-    settings.setValue(
-        "print/margins",
+    store.set(
+        SettingsKey.PRINT_MARGINS,
         serialize_margins(
             (
                 max(0, int(round(margins.left()))),
@@ -182,10 +188,10 @@ def copy_printer_page_layout(source: QPrinter, target: QPrinter) -> None:
 
 
 def load_margins(settings) -> tuple[int, int, int, int]:
-    raw_value = settings.value(
-        "print/margins",
+    store = as_settings_store(settings)
+    raw_value = store.read(
+        SettingsKey.PRINT_MARGINS,
         serialize_margins(DEFAULT_PRINT_MARGINS),
-        type=str,
     )
     try:
         if isinstance(raw_value, (list, tuple)):
@@ -210,12 +216,13 @@ def serialize_margins(margins: tuple[int, int, int, int]) -> str:
 
 
 def load_orientation(settings) -> str:
-    raw_value = settings.value("print/orientation", None, type=str)
+    raw_value = as_settings_store(settings).read(SettingsKey.PRINT_ORIENTATION)
     if raw_value in SUPPORTED_ORIENTATIONS:
         return str(raw_value)
     if raw_value is not None:
         LOGGER.warning(
-            "Invalid print/orientation setting value %r; using %s",
+            "Invalid %s setting value %r; using %s",
+            SettingsKey.PRINT_ORIENTATION,
             raw_value,
             DEFAULT_ORIENTATION,
         )
@@ -297,18 +304,23 @@ def validate_quick_print_printer(printer: QPrinter) -> tuple[bool, str]:
 
 
 def _load_page_size(settings) -> tuple[str, str, float, float]:
+    store = as_settings_store(settings)
     raw_page_size = _clean_text(
-        settings.value("print/page_size", DEFAULT_PAGE_SIZE, type=str)
+        store.get_text(SettingsKey.PRINT_PAGE_SIZE, DEFAULT_PAGE_SIZE)
     )
     raw_page_size = "Letter" if raw_page_size == "Letter / ANSI A" else raw_page_size
     custom_name = _clean_text(
-        settings.value("print/page_size_name", raw_page_size, type=str)
+        store.get_text(SettingsKey.PRINT_PAGE_SIZE_NAME, raw_page_size)
     )
-    width_mm = _coerce_positive_float(
-        settings.value("print/page_width_mm", 0.0, type=float)
+    width_mm = store.get_float(
+        SettingsKey.PRINT_PAGE_WIDTH_MM,
+        0.0,
+        minimum=0.0,
     )
-    height_mm = _coerce_positive_float(
-        settings.value("print/page_height_mm", 0.0, type=float)
+    height_mm = store.get_float(
+        SettingsKey.PRINT_PAGE_HEIGHT_MM,
+        0.0,
+        minimum=0.0,
     )
 
     if raw_page_size in _PAGE_SIZE_IDS:
@@ -325,19 +337,12 @@ def _load_page_size(settings) -> tuple[str, str, float, float]:
         return label, label, width_mm, height_mm
 
     LOGGER.warning(
-        "Invalid print/page_size setting value %r; using %s",
+        "Invalid %s setting value %r; using %s",
+        SettingsKey.PRINT_PAGE_SIZE,
         raw_page_size,
         DEFAULT_PAGE_SIZE,
     )
     return DEFAULT_PAGE_SIZE, DEFAULT_PAGE_SIZE, 0.0, 0.0
-
-
-def _coerce_positive_float(value) -> float:
-    try:
-        numeric = float(value)
-    except TypeError, ValueError:
-        return 0.0
-    return numeric if numeric > 0 else 0.0
 
 
 def _clean_text(value) -> str:
@@ -346,9 +351,3 @@ def _clean_text(value) -> str:
 
 def _round_mm(value: float) -> float:
     return float(round(float(value), 3))
-
-
-def _remove_setting(settings, key: str) -> None:
-    remove = getattr(settings, "remove", None)
-    if callable(remove):
-        remove(key)

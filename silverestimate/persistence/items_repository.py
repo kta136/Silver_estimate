@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, Optional, cast
 
 from silverestimate.domain.item_validation import ItemValidationError, validate_item
 from silverestimate.domain.pagination import ItemCursor, Page
 from silverestimate.persistence.database_driver import dbapi as sqlite3
+from silverestimate.persistence.database_protocols import (
+    ItemCacheBoundary,
+    RepositoryDatabase,
+)
 
 ITEM_CATALOG_COLUMNS = "code, name, tunch, purity, wage_type, wage_rate"
 
@@ -132,7 +136,7 @@ def fetch_item_catalog_page(
 class ItemsRepository:
     """Encapsulate item-related database operations."""
 
-    def __init__(self, db_manager: Any) -> None:
+    def __init__(self, db_manager: RepositoryDatabase) -> None:
         self._db = db_manager
         self._logger = getattr(db_manager, "logger", logging.getLogger(__name__))
         self._fallback_cache: dict[str, dict[str, Any]] = {}
@@ -142,8 +146,11 @@ class ItemsRepository:
         return getattr(self._db, "conn", None)
 
     @property
-    def _cache_controller(self) -> Optional[Any]:
-        return getattr(self._db, "item_cache_controller", None)
+    def _cache_controller(self) -> ItemCacheBoundary | None:
+        return cast(
+            ItemCacheBoundary | None,
+            getattr(self._db, "item_cache_controller", None),
+        )
 
     @property
     def _cursor(self) -> Optional[sqlite3.Cursor]:
@@ -165,21 +172,8 @@ class ItemsRepository:
                 if cached is not None:
                     return self._normalize_row(cached)
 
-            row = None
-            try:
-                stmt = getattr(self._db, "_sql_get_item_by_code", None)
-                prepared = getattr(self._db, "_c_get_item_by_code", None)
-                if prepared and stmt:
-                    prepared.execute(stmt, (code,))
-                    row = prepared.fetchone()
-            except Exception:
-                row = None
-
-            if row is None:
-                cursor.execute(
-                    "SELECT * FROM items WHERE code = ? COLLATE NOCASE", (code,)
-                )
-                row = cursor.fetchone()
+            cursor.execute("SELECT * FROM items WHERE code = ? COLLATE NOCASE", (code,))
+            row = cursor.fetchone()
             if row is None:
                 return None
 

@@ -25,7 +25,7 @@ This guide documents the primary controller, service, and persistence APIs expos
 
 - **initialize(initial_refresh_delay_ms: int = 500)** - apply settings, set up timers, trigger the first refresh.
 - **shutdown()** - stop the service timer during application exit.
-- **apply_visibility_settings() -> bool** - toggle rate UI visibility based on QSettings.
+- **apply_visibility_settings() -> bool** - toggle rate UI visibility from the typed settings reader.
 - **apply_timer_settings(force_show_ui: Optional[bool] = None)** - restart auto-refresh cadence.
 - **refresh_now()** - fire an immediate fetch, falling back to widget-side refresh on failure.
 
@@ -67,17 +67,60 @@ This guide documents the primary controller, service, and persistence APIs expos
 ### SettingsService (silverestimate/services/settings_service.py)
     SettingsService()
 
+- **FontSettings** - immutable print-font family, point size, and bold state with explicit `QFont` conversion.
 - **load_print_font(default_font: QFont) -> QFont / save_print_font(font: QFont)** – round-trip print font selections.
 - **load_table_font_size(default_size: int = 9) -> int / save_table_font_size(size: int)** – persist grid font sizing.
 - **restore_geometry(window) -> bool / save_geometry(window)** – handle main window geometry and state.
-- **get(key, default=None, type=None)** and **set(key, value)** – thin wrappers around QSettings.
-- **raw() -> QSettings** – direct access for advanced scenarios.
+
+### ApplicationSettings (silverestimate/infrastructure/settings.py)
+- **SettingsKey** - canonical enum for every production preference key.
+- **get_bool / get_int / get_float / get_text / get_list** - normalize backend values and apply typed defaults or numeric bounds.
+- **read / contains / set / remove / sync** - typed storage operations accepting `SettingsKey`, never raw production strings.
+- **migrate_settings(backend) -> int** - apply ordered forward migrations through `SETTINGS_SCHEMA_VERSION`; unknown future versions are preserved unchanged.
+- **SettingsReader / SettingsStore** - injectable protocols used by controllers and in-memory tests.
+
+### Appearance Settings (silverestimate/ui/settings_appearance_page.py)
+- **AppearanceSettingsState** - immutable print-font, table-font, totals-font, and totals-position preferences.
+- **AppearanceSettingsActions** - narrow callbacks for applying appearance values to the active estimate runtime.
+- **SettingsAppearanceController.load_state() / apply_state(state)** - normalize raw stored values, validate typed state, apply runtime changes, and persist the complete appearance group.
+- **AppearanceSettingsPage.state() / apply() / restore_defaults()** - own the appearance controls and expose typed page operations without depending on `MainWindow`.
+
+### Logging Settings (silverestimate/ui/settings_logging_page.py)
+- **LoggingSettingsState** - immutable debug, level, automatic-cleanup, and retention preferences.
+- **SettingsLoggingController.load_state() / apply_state(state)** - normalize, validate, persist, and reconfigure logging as one settings group, restoring the previous state if runtime reconfiguration fails.
+- **cleanup_logs(days) -> LogCleanupResult / open_logs_folder() -> DiagnosticsActionResult** - return explicit outcomes for diagnostics utilities.
+- **LoggingSettingsPage.state() / apply() / restore_defaults()** - own logging controls, confirmation dialogs, and diagnostics feedback without depending on `SettingsDialog` or `MainWindow`.
+
+### Data Management Settings (silverestimate/ui/settings_data_page.py)
+- **MainCommandOutcome** - typed success, started, cancelled, or failed result returned by destructive and catalog commands.
+- **DataManagementActions** - narrow application callbacks for estimate/data deletion and item-catalog backup/restore commands.
+- **SettingsDataController** - invokes application commands and encrypted database backup/restore through an injected `DatabaseMaintenanceGateway`.
+- **DataActionResult** - immutable success, message, and path outcome for every page action.
+- **DataManagementPage** - owns file/password prompts and result feedback without directly accessing `MainWindow` or `DatabaseManager`.
+
+### Security Settings (silverestimate/services/password_change_service.py, silverestimate/ui/settings_security_page.py)
+- **PasswordChangeRequest / PasswordChangeResult** - immutable input and explicit validation, credential-store, hashing, rollback, failure, or success outcome.
+- **PasswordChangeService.change_passwords(request)** - verify the current credential, stage recoverable hashes, rekey SQLCipher storage, promote new hashes, and clean transition credentials.
+- **SecuritySettingsPage** - owns password controls, focus/clear behavior, visibility toggling, and outcome feedback without accessing the database or credential store.
+
+### Printing Settings Page (silverestimate/ui/settings_print_page.py)
+- **PrintSettingsPage.state() / validate() / apply() / restore_defaults()** - own all printing controls over the existing typed `SettingsPrintController`.
 
 ### Print Page Settings (silverestimate/ui/print_page_settings.py)
 - **PrintPageSettings** - normalized margins, printer, page-size dimensions, and orientation used by settings, preview, quick print, and PDF export.
 - **load_print_page_settings(settings) / save_print_page_settings(settings, state)** - round-trip the current print preferences without one-time orientation migration markers.
 - **apply_print_page_settings_to_printer(...) / save_printer_page_settings(...)** - apply or capture a Qt6 `QPrinter` page layout.
 - **validate_quick_print_printer(printer) -> tuple[bool, str]** - reject missing, stale, or unconfigured printer targets with user-facing guidance.
+
+### Print Preview Composition (silverestimate/ui/print_preview_*.py)
+- **PrintPreviewController.open_preview(payload, parent_widget=None)** - compose and run one preview session while preserving the stable `PrintManager` entry point.
+- **PrintPreviewSession** - own the current immutable `PrintPreviewPayload`, renderer binding, format/Tunch replacement, refresh, and focus lifecycle.
+- **PrintPreviewToolbarBuilder / PrintPreviewNavigationController** - build accessible toolbar actions and own zoom, view mode, keyboard shortcuts, and page navigation.
+- **PrintPreviewPageSetupController** - own printer selection, page setup, and orientation refresh.
+- **PreviewZoomPreference / PrintPreviewPreferences** - normalize zoom and persist preview, printer, page-layout, format, Tunch, and export-directory defaults.
+- **PrintOutputStatus / PrintOutputOutcome** - immutable success, cancellation, validation-failure, or execution-failure result.
+- **PrintOutputService.export_pdf(...) / quick_print(...)** - atomically export or physically print the same typed payload used by preview without owning dialogs.
+- **PrintPreviewOutputController** - own save prompts, preview close-on-success, and the single user-facing output-error boundary.
 
 ### NavigationService (silverestimate/services/navigation_service.py)
     NavigationService(main_window, stack_widget, logger: Optional[logging.Logger] = None)
@@ -95,6 +138,11 @@ This guide documents the primary controller, service, and persistence APIs expos
 - **create_item_catalog_backup()** – create a native `.seitems.json` item catalog backup via an asynchronous worker.
 - **restore_item_catalog()** – restore a native `.seitems.json` item catalog backup and refresh visible item tables after completion.
 
+### Shared paging and background work
+- **Page[ItemT, CursorT] (`domain/pagination.py`)** - immutable keyset page containing typed rows, total matches, and the next domain-specific cursor.
+- **PagedLoadState[RowT, CursorT] (`infrastructure/paged_load_state.py`)** - mutable UI-side replace/append state with loaded/total counts, reset, cursor advancement, and `has_more`; it intentionally contains no query or widget policy.
+- **LatestRequestRunner[RequestT, ResultT] (`infrastructure/latest_request_runner.py`)** - persistent latest-generation worker that cancels superseded work, suppresses stale delivery, reports result/failure/settled signals on the owner thread, and cooperatively shuts down.
+
 ### LiveRateService (silverestimate/services/live_rate_service.py)
     LiveRateService(parent: Optional[QObject] = None, logger: Optional[logging.Logger] = None)
 
@@ -111,7 +159,9 @@ This guide documents the primary controller, service, and persistence APIs expos
 
 Responsibilities:
 - Open the live SQLCipher database directly through the keyed broker and expose repository compatibility cursors.
-- Expose repository accessors: items_repo, estimates_repo, silver_bars_repo.
+- Expose repository accessors: `items_repo`, `estimates_repo`,
+  `silver_bar_query_repo`, `silver_bar_command_repo`, and
+  `silver_bar_synchronization_repo`.
 - Detect/create current storage, validate the controlled driver and schema, and serialize maintenance operations.
 
 Key Public Methods:
@@ -128,6 +178,12 @@ Key Public Methods:
 
 New integrations should favour the role-specific repositories below instead of adding more forwarding methods to `DatabaseManager`.
 
+### Database protocols (silverestimate/persistence/database_protocols.py)
+- **RepositoryDatabase** - writer connection, cursor, logger, cache, and silver-bar deletion surface used by concrete repositories.
+- **ItemCatalogDatabase / MainCommandsDatabase** - catalog and maintenance contracts used by application services.
+- **EstimateDataSource** - estimate persistence surface consumed by `DatabaseEstimateRepository`.
+- **StartupDatabase / ApplicationDatabase** - lifecycle-only and composition-root contracts; feature code should select the narrower protocol above.
+
 ### ItemsRepository (silverestimate/persistence/items_repository.py)
 - **get_item_by_code(code: str)** – fetch item rows with cache support.
 - **get_items_page(...) -> Page[dict, ItemCursor]** – keyset page of up to 1,000 filtered items.
@@ -141,16 +197,17 @@ New integrations should favour the role-specific repositories below instead of a
 - **save_estimate_with_returns(voucher_no, date, silver_rate, regular_items, return_items, totals) -> bool** – transactional save/update, including validation for missing item codes.
 - **delete_single_estimate(voucher_no: str) -> bool** – cleanup helper used by DatabaseManager.
 
-### SilverBarsRepository (silverestimate/persistence/silver_bars_repository.py)
-- Public facade over `SilverBarQueryRepository`, `SilverBarCommandRepository`, and `SilverBarSynchronizationRepository`.
-- **create_list(note: Optional[str] = None) -> Optional[int] / get_lists(include_issued: bool = True)** – manage bar list metadata.
-- **assign_bar_to_list(bar_id: int, list_id: int, note: str = ...) -> bool** – move bars into lists with transfer logging.
-- **remove_bar_from_list(bar_id: int, note: str = ...) -> bool** – reverse assignments, recording transfer history.
-- **get_available_bars_keyset_page(...) / get_bars_in_list_keyset_page(...)** – up to 1,500 rows with typed cursors.
-- **search_history_bars_page(...)** – up to 1,000 rows by `(date_added, bar_id)`.
-- **get_silver_bars(..., unassigned_only: bool = False)** – query inventory with optional `list_id IS NULL` filtering for available-only screens.
-- **delete_list(list_id: int) -> Tuple[bool, str]** – drop lists and safely unassign bars.
-- **add_silver_bar(...) / update_silver_bar_values(...)** – maintain silver bar records linked to estimates.
+### Silver-bar role repositories
+
+- **SilverBarQueryRepository (`silver_bar_query_repository.py`)** – owns list,
+  inventory, history, count, and keyset-page reads. Available/list pages are
+  capped at 1,500 rows and history pages at 1,000.
+- **SilverBarCommandRepository (`silver_bar_command_repository.py`)** – owns
+  list lifecycle, assignment/removal transfer logging, estimate-bar deletion,
+  and explicit commit/rollback behavior.
+- **SilverBarSynchronizationRepository
+  (`silver_bar_synchronization_repository.py`)** – reconciles estimate rows
+  with mutable inventory rows and returns `SilverBarSyncResult`.
 
 ## Supporting Types
 
@@ -166,6 +223,8 @@ New integrations should favour the role-specific repositories below instead of a
 While the focus of this reference is the controller/service stack, the following UI entry points expose the application logic:
 - **EstimateEntryWidget (silverestimate/ui/estimate_entry.py)** - integrates `EstimateEntryPresenter` with a model-first `EstimateTableView` data path; exposes `save_estimate()`, `print_estimate()`, `safe_load_estimate()`.
 - **ItemMasterWidget (silverestimate/ui/item_master.py)** - allows CRUD via load_items(), add_item(), update_item(), delete_item() (internally using ItemsRepository).
-- **SilverBarDialog (silverestimate/ui/silver_bar_management.py)** - provides load_available_bars(), load_bars_in_selected_list(), and list assignment interactions on top of SilverBarsRepository.
+- **SilverBarDialog (silverestimate/ui/silver_bar_management.py)** - provides
+  `load_available_bars()`, `load_bars_in_selected_list()`, and list assignment
+  interactions through the role-specific database-manager APIs.
 
 Use controllers and services as the primary integration surface; direct UI manipulation should be reserved for Qt widget customisations.

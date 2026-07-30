@@ -73,11 +73,11 @@ def test_settings_dialog_uses_visible_arrow_controls(qt_app, settings_stub):
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
     try:
-        assert isinstance(dialog.table_font_size_spin, ThemedSpinBox)
-        assert isinstance(dialog.preview_zoom_spin, ThemedDoubleSpinBox)
-        assert isinstance(dialog.totals_position_combo, ThemedComboBox)
-        assert isinstance(dialog.printer_combo, ThemedComboBox)
-        assert isinstance(dialog.estimate_format_combo, ThemedComboBox)
+        assert isinstance(dialog.appearance_page.table_font_size_spin, ThemedSpinBox)
+        assert isinstance(dialog.print_page.preview_zoom_spin, ThemedDoubleSpinBox)
+        assert isinstance(dialog.appearance_page.totals_position_combo, ThemedComboBox)
+        assert isinstance(dialog.print_page.printer_combo, ThemedComboBox)
+        assert isinstance(dialog.print_page.estimate_format_combo, ThemedComboBox)
         assert (
             dialog.sidebar.horizontalScrollBarPolicy()
             == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
@@ -89,8 +89,8 @@ def test_settings_dialog_uses_visible_arrow_controls(qt_app, settings_stub):
             dialog.page_scroll.horizontalScrollBarPolicy()
             == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
-        assert dialog.print_font_button.minimumWidth() >= 180
-        assert dialog.table_font_size_spin.maximumWidth() <= 180
+        assert dialog.appearance_page.print_font_button.minimumWidth() >= 180
+        assert dialog.appearance_page.table_font_size_spin.maximumWidth() <= 180
         preview_table = dialog.findChild(QTableWidget, "SettingsPreviewTable")
         assert preview_table is not None
         assert preview_table.item(0, 2).textAlignment() == (
@@ -137,16 +137,16 @@ def test_settings_apply_persists_print_preferences(qt_app, monkeypatch, settings
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
     try:
-        dialog.margin_left_spin.setValue(12)
-        dialog.margin_top_spin.setValue(3)
-        dialog.margin_right_spin.setValue(14)
-        dialog.margin_bottom_spin.setValue(4)
-        dialog.preview_zoom_spin.setValue(1.75)
-        dialog.printer_combo.setCurrentText("Warehouse Printer")
-        dialog.page_size_combo.setCurrentText("Legal")
-        dialog.orientation_combo.setCurrentText("Landscape")
-        dialog.estimate_format_combo.setCurrentIndex(
-            dialog.estimate_format_combo.findData("classic")
+        dialog.print_page.margin_left_spin.setValue(12)
+        dialog.print_page.margin_top_spin.setValue(3)
+        dialog.print_page.margin_right_spin.setValue(14)
+        dialog.print_page.margin_bottom_spin.setValue(4)
+        dialog.print_page.preview_zoom_spin.setValue(1.75)
+        dialog.print_page.printer_combo.setCurrentText("Warehouse Printer")
+        dialog.print_page.page_size_combo.setCurrentText("Legal")
+        dialog.print_page.orientation_combo.setCurrentText("Landscape")
+        dialog.print_page.estimate_format_combo.setCurrentIndex(
+            dialog.print_page.estimate_format_combo.findData("classic")
         )
 
         assert dialog.apply_settings() is True
@@ -185,16 +185,16 @@ def test_settings_dialog_uses_defaults_for_invalid_print_settings(
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
     try:
-        assert dialog.margin_left_spin.value() == 10
-        assert dialog.margin_top_spin.value() == 2
-        assert dialog.margin_right_spin.value() == 10
-        assert dialog.margin_bottom_spin.value() == 2
-        assert dialog.preview_zoom_spin.value() == 1.25
-        assert dialog.page_size_combo.currentText() == "A4"
-        assert dialog.orientation_combo.currentText() == "Landscape"
+        assert dialog.print_page.margin_left_spin.value() == 10
+        assert dialog.print_page.margin_top_spin.value() == 2
+        assert dialog.print_page.margin_right_spin.value() == 10
+        assert dialog.print_page.margin_bottom_spin.value() == 2
+        assert dialog.print_page.preview_zoom_spin.value() == 1.25
+        assert dialog.print_page.page_size_combo.currentText() == "A4"
+        assert dialog.print_page.orientation_combo.currentText() == "Landscape"
         assert settings.value("print/estimate_layout") == "modern"
-        assert dialog.estimate_format_combo.currentData() == "modern"
-        assert dialog.printer_combo.currentData() == ""
+        assert dialog.print_page.estimate_format_combo.currentData() == "modern"
+        assert dialog.print_page.printer_combo.currentData() == ""
     finally:
         dialog.deleteLater()
 
@@ -219,7 +219,7 @@ def test_settings_dialog_preserves_portrait_orientation(
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
     try:
-        assert dialog.orientation_combo.currentText() == "Portrait"
+        assert dialog.print_page.orientation_combo.currentText() == "Portrait"
     finally:
         dialog.deleteLater()
 
@@ -250,11 +250,11 @@ def test_settings_apply_persists_ui_preferences(qt_app, monkeypatch, settings_st
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
     try:
-        dialog.table_font_size_spin.setValue(12)
-        dialog.breakdown_font_size_spin.setValue(11)
-        dialog.final_calc_font_size_spin.setValue(18)
-        dialog.totals_position_combo.setCurrentIndex(
-            dialog.totals_position_combo.findData("bottom")
+        dialog.appearance_page.table_font_size_spin.setValue(12)
+        dialog.appearance_page.breakdown_font_size_spin.setValue(11)
+        dialog.appearance_page.final_calc_font_size_spin.setValue(18)
+        dialog.appearance_page.totals_position_combo.setCurrentIndex(
+            dialog.appearance_page.totals_position_combo.findData("bottom")
         )
 
         assert dialog.apply_settings() is True
@@ -268,6 +268,50 @@ def test_settings_apply_persists_ui_preferences(qt_app, monkeypatch, settings_st
             "final": 18,
             "position": "bottom",
         }
+    finally:
+        dialog.deleteLater()
+
+
+def test_settings_apply_persists_logging_preferences(
+    qt_app,
+    monkeypatch,
+    settings_stub,
+):
+    del qt_app, settings_stub
+    settings = get_app_settings()
+    reconfigure_calls = []
+    monkeypatch.setattr(
+        "silverestimate.ui.settings_print_controller.QPrinterInfo.availablePrinters",
+        lambda: [],
+    )
+    monkeypatch.setattr(
+        "silverestimate.infrastructure.logger.reconfigure_logging",
+        lambda: reconfigure_calls.append(True),
+    )
+    estimate_widget = types.SimpleNamespace(
+        apply_table_font_size=lambda size: True,
+        apply_breakdown_font_size=lambda size: True,
+        apply_final_calc_font_size=lambda size: True,
+        apply_totals_position=lambda value: True,
+    )
+    dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
+    try:
+        page = dialog.logging_page
+        page.debug_mode_checkbox.setChecked(True)
+        page.enable_info_checkbox.setChecked(False)
+        page.enable_critical_checkbox.setChecked(True)
+        page.enable_debug_checkbox.setChecked(True)
+        page.auto_cleanup_checkbox.setChecked(True)
+        page.cleanup_days_spin.setValue(30)
+
+        assert dialog.apply_settings() is True
+        assert settings.value("logging/debug_mode") is True
+        assert settings.value("logging/enable_info") is False
+        assert settings.value("logging/enable_critical") is True
+        assert settings.value("logging/enable_debug") is True
+        assert settings.value("logging/auto_cleanup") is True
+        assert settings.value("logging/cleanup_days") == 30
+        assert reconfigure_calls == [True]
     finally:
         dialog.deleteLater()
 
@@ -292,7 +336,9 @@ def test_settings_apply_can_clear_default_printer(qt_app, monkeypatch, settings_
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
     try:
-        dialog.printer_combo.setCurrentIndex(dialog.printer_combo.findData(""))
+        dialog.print_page.printer_combo.setCurrentIndex(
+            dialog.print_page.printer_combo.findData("")
+        )
 
         assert dialog.apply_settings() is True
         assert settings.value("print/default_printer") is None
@@ -323,10 +369,10 @@ def test_settings_dialog_uses_defaults_for_invalid_ui_preferences(
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
     try:
-        assert dialog.table_font_size_spin.value() == 9
-        assert dialog.breakdown_font_size_spin.value() == 9
-        assert dialog.final_calc_font_size_spin.value() == 10
-        assert dialog.totals_position_combo.currentData() == "right"
+        assert dialog.appearance_page.table_font_size_spin.value() == 9
+        assert dialog.appearance_page.breakdown_font_size_spin.value() == 9
+        assert dialog.appearance_page.final_calc_font_size_spin.value() == 10
+        assert dialog.appearance_page.totals_position_combo.currentData() == "right"
     finally:
         dialog.deleteLater()
 
@@ -396,28 +442,30 @@ def test_password_change_uses_auth_service_and_preserves_keyring_names(
         main_window_ref=_make_main_window(estimate_widget, db=_DatabaseStub())
     )
     monkeypatch.setattr(
-        "silverestimate.ui.settings_dialog.QMessageBox",
+        "silverestimate.ui.settings_security_page.QMessageBox",
         _MessageBoxStub,
     )
     monkeypatch.setattr(
-        "silverestimate.ui.settings_dialog.verify_password",
+        "silverestimate.services.auth_service.verify_password",
         lambda stored, provided, logger=None: (
             stored == "old-main-hash" and provided == "current-password"
         ),
     )
     monkeypatch.setattr(
-        "silverestimate.ui.settings_dialog.hash_password",
+        "silverestimate.services.auth_service.hash_password",
         lambda password, logger=None: f"argon2-{password}",
     )
     try:
-        dialog.current_password_input.setText("current-password")
-        dialog.new_password_input.setText("new-main-password")
-        dialog.confirm_new_password_input.setText("new-main-password")
-        dialog.new_secondary_password_input.setText("new-recovery-password")
-        dialog.confirm_new_secondary_password_input.setText("new-recovery-password")
+        page = dialog.security_page
+        page.current_password_input.setText("current-password")
+        page.new_password_input.setText("new-main-password")
+        page.confirm_new_password_input.setText("new-main-password")
+        page.new_secondary_password_input.setText("new-recovery-password")
+        page.confirm_new_secondary_password_input.setText("new-recovery-password")
 
-        dialog._handle_password_change()
+        result = page.change_passwords()
 
+        assert result.succeeded
         assert changed_passwords == ["new-main-password"]
         assert credential_store.get_password_hash("main") == (
             "argon2-new-main-password"

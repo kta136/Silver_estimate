@@ -62,6 +62,11 @@ FORBIDDEN_PATH_FRAGMENTS = (
     "/qwebp.dll",
 )
 
+FORBIDDEN_EXACT_PATHS = (
+    "_sqlite3.pyd",
+    "sqlite3.dll",
+)
+
 REQUIRED_REPORT_MODULES = (
     "argon2._password_hasher",
     "keyring.backends.Windows",
@@ -72,8 +77,10 @@ REQUIRED_REPORT_MODULES = (
 )
 
 FORBIDDEN_REPORT_MODULE_PREFIXES = (
+    "_sqlite3",
     "PyQt6",
     "passlib",
+    "sqlite3",
 )
 
 
@@ -101,7 +108,8 @@ def validate_deployment(root: Path, report: Path) -> dict[str, int]:
     forbidden = sorted(
         relative_path
         for relative_path in inventory
-        if any(fragment in f"/{relative_path}" for fragment in FORBIDDEN_PATH_FRAGMENTS)
+        if relative_path in FORBIDDEN_EXACT_PATHS
+        or any(fragment in f"/{relative_path}" for fragment in FORBIDDEN_PATH_FRAGMENTS)
     )
     if forbidden:
         raise ValueError(f"Forbidden deployment files are present: {forbidden}")

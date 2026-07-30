@@ -8,7 +8,12 @@ from dataclasses import replace
 
 from PySide6.QtCore import QDateTime, QLocale, QObject, QTimer
 
-from silverestimate.infrastructure.settings import SettingsReader, get_app_settings
+from silverestimate.infrastructure.settings import (
+    SettingsKey,
+    SettingsReader,
+    as_settings_reader,
+    get_app_settings,
+)
 from silverestimate.services.dda_rate_fetcher import DdaRateSnapshot
 from silverestimate.services.live_rate_service import LiveRateService
 
@@ -274,41 +279,16 @@ class LiveRateController(QObject):
 
     def _read_settings(self) -> tuple[bool, bool, int]:
         try:
-            settings = self._settings_provider()
-            show_ui = self._coerce_bool(
-                settings.value("rates/live_enabled", True), True
-            )
-            automatic = self._coerce_bool(
-                settings.value("rates/auto_refresh_enabled", True), True
+            settings = as_settings_reader(self._settings_provider())
+            show_ui = settings.get_bool(SettingsKey.RATES_LIVE_ENABLED, True)
+            automatic = settings.get_bool(
+                SettingsKey.RATES_AUTO_REFRESH_ENABLED,
+                True,
             )
             return show_ui, automatic, 10
         except Exception as exc:
             self._logger.debug("Using default DDA live-rate settings: %s", exc)
             return True, True, 10
-
-    @staticmethod
-    def _coerce_bool(value: object, default: bool) -> bool:
-        if isinstance(value, bool):
-            return value
-        if value is None:
-            return default
-        if isinstance(value, str):
-            normalized = value.strip().lower()
-            return (
-                default
-                if not normalized
-                else normalized
-                in {
-                    "1",
-                    "true",
-                    "yes",
-                    "on",
-                    "enabled",
-                }
-            )
-        if isinstance(value, int | float):
-            return value != 0
-        return default
 
 
 __all__ = ["LiveRateController"]

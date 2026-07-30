@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Optional
+from typing import Any, Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
@@ -18,9 +18,12 @@ from PySide6.QtWidgets import (
 )
 from shiboken6 import isValid
 
-from silverestimate.infrastructure.settings import get_app_settings
+from silverestimate.infrastructure.settings import (
+    ApplicationSettings,
+    SettingsKey,
+    get_app_settings,
+)
 
-from ._host_proxy import HostProxy
 from .estimate_entry_components import (
     EstimateTableView,
     PrimaryActionsBar,
@@ -45,8 +48,11 @@ from .icons import get_icon
 from .modern_components import BottomStatusStrip, polish_dense_table
 
 
-class EstimateEntryLayoutController(HostProxy):
+class EstimateEntryLayoutController:
     """Own layout wiring, totals placement, and persisted UI preferences."""
+
+    def __init__(self, host: Any) -> None:
+        self.host = host
 
     _totals_panel_sidebar: TotalsPanel | None
     _totals_panel_bottom: TotalsPanel | None
@@ -68,66 +74,70 @@ class EstimateEntryLayoutController(HostProxy):
         header_layout.setContentsMargins(8, 4, 8, 4)
         header_layout.setSpacing(6)
 
-        self.toolbar = VoucherToolbar()
-        self.toolbar.setSizePolicy(
+        self.host.toolbar = VoucherToolbar()
+        self.host.toolbar.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
-        header_layout.addWidget(self.toolbar, 5)
+        header_layout.addWidget(self.host.toolbar, 5)
 
-        self.primary_actions = PrimaryActionsBar(shortcut_parent=self.host)
-        self.primary_actions.setSizePolicy(
+        self.host.primary_actions = PrimaryActionsBar(shortcut_parent=self.host)
+        self.host.primary_actions.setSizePolicy(
             QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed
         )
-        header_layout.addWidget(self.primary_actions)
+        header_layout.addWidget(self.host.primary_actions)
 
-        self.secondary_actions = SecondaryActionsBar(shortcut_parent=self.host)
-        self.secondary_actions.setVisible(False)
-        self.secondary_actions.setSizePolicy(
+        self.host.secondary_actions = SecondaryActionsBar(shortcut_parent=self.host)
+        self.host.secondary_actions.setVisible(False)
+        self.host.secondary_actions.setSizePolicy(
             QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
         )
-        header_layout.addWidget(self.secondary_actions)
+        header_layout.addWidget(self.host.secondary_actions)
 
-        self.estimate_tools_button = QToolButton()
-        self.estimate_tools_button.setObjectName("EstimateToolsButton")
-        self.estimate_tools_button.setText("Tools")
-        self.estimate_tools_button.setIcon(get_icon("tools", widget=self.host))
-        self.estimate_tools_button.setPopupMode(
+        self.host.estimate_tools_button = QToolButton()
+        self.host.estimate_tools_button.setObjectName("EstimateToolsButton")
+        self.host.estimate_tools_button.setText("Tools")
+        self.host.estimate_tools_button.setIcon(get_icon("tools", widget=self.host))
+        self.host.estimate_tools_button.setPopupMode(
             QToolButton.ToolButtonPopupMode.InstantPopup
         )
-        self.estimate_tools_button.setToolButtonStyle(
+        self.host.estimate_tools_button.setToolButtonStyle(
             Qt.ToolButtonStyle.ToolButtonTextBesideIcon
         )
-        self.estimate_tools_button.setToolTip("Estimate row and silver-bar tools")
-        self.estimate_tools_button.setMenu(self._build_estimate_tools_menu())
-        header_layout.addWidget(self.estimate_tools_button)
+        self.host.estimate_tools_button.setToolTip("Estimate row and silver-bar tools")
+        self.host.estimate_tools_button.setMenu(self._build_estimate_tools_menu())
+        header_layout.addWidget(self.host.estimate_tools_button)
         layout.addWidget(header_container, 0)
 
-        self._content_splitter = QSplitter(Qt.Orientation.Horizontal)
-        self._content_splitter.setChildrenCollapsible(False)
-        self._content_splitter.setOpaqueResize(True)
+        self.host._content_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.host._content_splitter.setChildrenCollapsible(False)
+        self.host._content_splitter.setOpaqueResize(True)
 
-        self.item_table = EstimateTableView()
-        self.item_table.host_widget = self.host
+        self.host.item_table = EstimateTableView()
+        self.host.item_table.host_widget = self.host
         polish_dense_table(
-            self.item_table,
+            self.host.item_table,
             row_height=26,
             header_height=28,
             show_grid=True,
             hide_vertical_header=False,
         )
-        self.item_table.setSizePolicy(
+        self.host.item_table.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
-        self._content_splitter.addWidget(self.item_table)
+        self.host._content_splitter.addWidget(self.host.item_table)
 
-        self._totals_position = self._read_totals_position_setting()
-        layout_mode = "horizontal" if self._totals_position == "bottom" else "sidebar"
-        self.totals_panel = self._create_totals_panel(layout_mode)
-        self._place_totals_panel(self._content_splitter, self._totals_position)
+        self.host._totals_position = self._read_totals_position_setting()
+        layout_mode = (
+            "horizontal" if self.host._totals_position == "bottom" else "sidebar"
+        )
+        self.host.totals_panel = self._create_totals_panel(layout_mode)
+        self._place_totals_panel(
+            self.host._content_splitter, self.host._totals_position
+        )
 
-        layout.addWidget(self._content_splitter, 1)
-        self.bottom_status_strip = BottomStatusStrip(self.host)
-        self.bottom_status_strip.set_left_items(
+        layout.addWidget(self.host._content_splitter, 1)
+        self.host.bottom_status_strip = BottomStatusStrip(self.host)
+        self.host.bottom_status_strip.set_left_items(
             [
                 "Ctrl+S Save",
                 "Ctrl+P Print",
@@ -139,62 +149,72 @@ class EstimateEntryLayoutController(HostProxy):
                 "PgUp/PgDn Rows",
             ]
         )
-        layout.addWidget(self.bottom_status_strip, 0)
+        layout.addWidget(self.host.bottom_status_strip, 0)
         layout.setStretch(0, 0)
         layout.setStretch(1, 1)
         layout.setStretch(2, 0)
 
-        self.voucher_edit = self.toolbar.voucher_edit
-        self.date_edit = self.toolbar.date_edit
-        self.note_edit = self.toolbar.note_edit
-        self.silver_rate_spin = self.toolbar.silver_rate_spin
-        self.load_button = self.toolbar.load_button
+        self.host.voucher_edit = self.host.toolbar.voucher_edit
+        self.host.date_edit = self.host.toolbar.date_edit
+        self.host.note_edit = self.host.toolbar.note_edit
+        self.host.silver_rate_spin = self.host.toolbar.silver_rate_spin
+        self.host.load_button = self.host.toolbar.load_button
 
-        self.save_button = self.primary_actions.save_button
-        self.print_button = self.primary_actions.print_button
-        self.clear_button = self.primary_actions.new_button
-        self.delete_estimate_button = self.secondary_actions.delete_estimate_button
-        self.history_button = self.secondary_actions.history_button
+        self.host.save_button = self.host.primary_actions.save_button
+        self.host.print_button = self.host.primary_actions.print_button
+        self.host.clear_button = self.host.primary_actions.new_button
+        self.host.delete_estimate_button = (
+            self.host.secondary_actions.delete_estimate_button
+        )
+        self.host.history_button = self.host.secondary_actions.history_button
 
-        self.delete_row_button = self.secondary_actions.delete_row_button
-        self.return_toggle_button = self.secondary_actions.return_toggle_button
-        self.silver_bar_toggle_button = self.secondary_actions.silver_bar_toggle_button
-        self.last_balance_button = self.secondary_actions.last_balance_button
-        self.silver_bars_button = self.secondary_actions.silver_bars_button
-        self.live_rate_value_label = self.secondary_actions.live_rate_value_label
-        self.live_rate_meta_label = self.secondary_actions.live_rate_meta_label
-        self.refresh_rate_button = self.secondary_actions.refresh_rate_button
+        self.host.delete_row_button = self.host.secondary_actions.delete_row_button
+        self.host.return_toggle_button = (
+            self.host.secondary_actions.return_toggle_button
+        )
+        self.host.silver_bar_toggle_button = (
+            self.host.secondary_actions.silver_bar_toggle_button
+        )
+        self.host.last_balance_button = self.host.secondary_actions.last_balance_button
+        self.host.silver_bars_button = self.host.secondary_actions.silver_bars_button
+        self.host.live_rate_value_label = (
+            self.host.secondary_actions.live_rate_value_label
+        )
+        self.host.live_rate_meta_label = (
+            self.host.secondary_actions.live_rate_meta_label
+        )
+        self.host.refresh_rate_button = self.host.secondary_actions.refresh_rate_button
 
-        self._sync_live_rate_card_placement(self._totals_position)
+        self._sync_live_rate_card_placement(self.host._totals_position)
 
         self._bind_totals_panel_labels()
 
-        self.unsaved_badge = self.toolbar.unsaved_badge
-        self.status_message_label = self.toolbar.status_message_label
+        self.host.unsaved_badge = self.host.toolbar.unsaved_badge
+        self.host.status_message_label = self.host.toolbar.status_message_label
         self._update_bottom_status_strip()
 
         try:
-            model = self.item_table.model()
+            model = self.host.item_table.model()
             model.rowsInserted.connect(lambda *_: self._update_bottom_status_strip())
             model.rowsRemoved.connect(lambda *_: self._update_bottom_status_strip())
             model.modelReset.connect(lambda *_: self._update_bottom_status_strip())
         except (AttributeError, RuntimeError, TypeError) as exc:
-            self.logger.debug(
+            self.host.logger.debug(
                 "Failed to bind bottom status strip table updates: %s", exc
             )
 
     def _build_estimate_tools_menu(self) -> QMenu:
         menu = QMenu(self.host)
 
-        self.command_history_action = QAction(
+        self.host.command_history_action = QAction(
             get_icon("history", widget=self.host), "Estimate History", menu
         )
-        menu.addAction(self.command_history_action)
+        menu.addAction(self.host.command_history_action)
 
-        self.command_settings_action = QAction(
+        self.host.command_settings_action = QAction(
             get_icon("settings", widget=self.host), "Application Settings", menu
         )
-        menu.addAction(self.command_settings_action)
+        menu.addAction(self.host.command_settings_action)
         menu.addSeparator()
 
         delete_row = QAction(
@@ -202,7 +222,9 @@ class EstimateEntryLayoutController(HostProxy):
             "Delete Current Row",
             menu,
         )
-        delete_row.triggered.connect(self.secondary_actions.delete_row_clicked.emit)
+        delete_row.triggered.connect(
+            self.host.secondary_actions.delete_row_clicked.emit
+        )
         menu.addAction(delete_row)
         menu.addSeparator()
 
@@ -213,7 +235,7 @@ class EstimateEntryLayoutController(HostProxy):
         )
         return_mode.setCheckable(True)
         return_mode.triggered.connect(
-            lambda _checked=False: self.return_toggle_button.click()
+            lambda _checked=False: self.host.return_toggle_button.click()
         )
         menu.addAction(return_mode)
 
@@ -224,7 +246,7 @@ class EstimateEntryLayoutController(HostProxy):
         )
         silver_bar_mode.setCheckable(True)
         silver_bar_mode.triggered.connect(
-            lambda _checked=False: self.silver_bar_toggle_button.click()
+            lambda _checked=False: self.host.silver_bar_toggle_button.click()
         )
         menu.addAction(silver_bar_mode)
         menu.addSeparator()
@@ -232,13 +254,13 @@ class EstimateEntryLayoutController(HostProxy):
         balance = QAction(
             get_icon("balance", widget=self.host), "Add Last Balance", menu
         )
-        balance.triggered.connect(self.secondary_actions.last_balance_clicked.emit)
+        balance.triggered.connect(self.host.secondary_actions.last_balance_clicked.emit)
         menu.addAction(balance)
 
         bars = QAction(
             get_icon("silver_bars", widget=self.host), "Silver Bar Manager", menu
         )
-        bars.triggered.connect(self.secondary_actions.silver_bars_clicked.emit)
+        bars.triggered.connect(self.host.secondary_actions.silver_bars_clicked.emit)
         menu.addAction(bars)
 
         refresh = QAction(
@@ -246,7 +268,7 @@ class EstimateEntryLayoutController(HostProxy):
             "Refresh Live Rate",
             menu,
         )
-        refresh.triggered.connect(self.secondary_actions.refresh_rate_clicked.emit)
+        refresh.triggered.connect(self.host.secondary_actions.refresh_rate_clicked.emit)
         menu.addAction(refresh)
         menu.addSeparator()
 
@@ -256,24 +278,28 @@ class EstimateEntryLayoutController(HostProxy):
             menu,
         )
         delete_estimate.triggered.connect(
-            self.secondary_actions.delete_estimate_clicked.emit
+            self.host.secondary_actions.delete_estimate_clicked.emit
         )
         menu.addAction(delete_estimate)
 
         def sync_menu_state() -> None:
-            return_mode.setChecked(bool(self.return_toggle_button.isChecked()))
-            silver_bar_mode.setChecked(bool(self.silver_bar_toggle_button.isChecked()))
-            delete_estimate.setEnabled(bool(self.delete_estimate_button.isEnabled()))
+            return_mode.setChecked(bool(self.host.return_toggle_button.isChecked()))
+            silver_bar_mode.setChecked(
+                bool(self.host.silver_bar_toggle_button.isChecked())
+            )
+            delete_estimate.setEnabled(
+                bool(self.host.delete_estimate_button.isEnabled())
+            )
 
         menu.aboutToShow.connect(sync_menu_state)
         return menu
 
     def _update_bottom_status_strip(self) -> None:
-        strip = getattr(self, "bottom_status_strip", None)
+        strip = getattr(self.host, "bottom_status_strip", None)
         if strip is None:
             return
         try:
-            rows = self.item_table.rowCount()
+            rows = self.host.item_table.rowCount()
         except Exception:
             rows = 0
         try:
@@ -295,8 +321,10 @@ class EstimateEntryLayoutController(HostProxy):
             opener()
 
     def _move_live_rate_card_to_summary_top(self) -> None:
-        sidebar_panel = getattr(self, "totals_panel", None)
-        live_rate_card = getattr(self.secondary_actions, "live_rate_container", None)
+        sidebar_panel = getattr(self.host, "totals_panel", None)
+        live_rate_card = getattr(
+            self.host.secondary_actions, "live_rate_container", None
+        )
         if (
             sidebar_panel is None
             or sidebar_panel.layout_mode != "sidebar"
@@ -309,90 +337,120 @@ class EstimateEntryLayoutController(HostProxy):
         try:
             sidebar_panel.set_sidebar_top_widget(live_rate_card)
         except (AttributeError, RuntimeError, TypeError) as exc:
-            self.logger.debug("Failed to move live-rate card to sidebar: %s", exc)
+            self.host.logger.debug("Failed to move live-rate card to sidebar: %s", exc)
             return
 
-        live_rate_divider = getattr(self.secondary_actions, "live_rate_divider", None)
+        live_rate_divider = getattr(
+            self.host.secondary_actions, "live_rate_divider", None
+        )
         if live_rate_divider is not None:
             live_rate_divider.setVisible(False)
 
     def _sync_live_rate_card_placement(self, totals_position: str) -> None:
         normalized = self._normalize_totals_position(totals_position)
         if normalized == "bottom":
-            if hasattr(self.secondary_actions, "show_live_rate_in_header"):
-                self.secondary_actions.show_live_rate_in_header(show_divider=True)
+            if hasattr(self.host.secondary_actions, "show_live_rate_in_header"):
+                self.host.secondary_actions.show_live_rate_in_header(show_divider=True)
             return
 
         self._move_live_rate_card_to_summary_top()
 
     def _setup_table_delegates(self):
-        code_delegate = CodeDelegate(parent=self.item_table)
-        numeric_delegate = NumericDelegate(parent=self.item_table)
-        code_delegate.advance_requested.connect(self.move_to_next_cell)
-        numeric_delegate.reverse_requested.connect(self.move_to_previous_cell)
+        code_delegate = CodeDelegate(parent=self.host.item_table)
+        numeric_delegate = NumericDelegate(parent=self.host.item_table)
+        code_delegate.advance_requested.connect(
+            self.host.table_controller.move_to_next_cell
+        )
+        numeric_delegate.reverse_requested.connect(
+            self.host.table_controller.move_to_previous_cell
+        )
         numeric_delegate.manual_row_navigation_requested.connect(
-            self._mark_manual_row_navigation
+            self.host.table_controller._mark_manual_row_navigation
         )
 
         for column in columns_for_editor_type(EDITOR_CODE, editable_only=True):
-            self.item_table.setItemDelegateForColumn(column, code_delegate)
+            self.host.item_table.setItemDelegateForColumn(column, code_delegate)
         for column in columns_for_editor_type(EDITOR_NUMERIC, editable_only=True):
-            self.item_table.setItemDelegateForColumn(column, numeric_delegate)
+            self.host.item_table.setItemDelegateForColumn(column, numeric_delegate)
 
         for column, width in self._default_column_widths().items():
-            self.item_table.setColumnWidth(
+            self.host.item_table.setColumnWidth(
                 column, self._bounded_column_width(column, width)
             )
 
-        header = self.item_table.horizontalHeader()
+        header = self.host.item_table.horizontalHeader()
         header.sectionResized.connect(self._on_item_table_section_resized)
 
     def _wire_component_signals(self):
-        self.toolbar.load_clicked.connect(self.safe_load_estimate)
-
-        self.primary_actions.save_clicked.connect(self.save_estimate)
-        self.primary_actions.print_clicked.connect(self.print_estimate)
-        self.primary_actions.new_clicked.connect(self.clear_form)
-
-        self.secondary_actions.delete_row_clicked.connect(self.delete_current_row)
-        self.secondary_actions.last_balance_clicked.connect(
-            self.show_last_balance_dialog
+        self.host.toolbar.load_clicked.connect(
+            self.host.workflow_controller.safe_load_estimate
         )
-        self.secondary_actions.history_clicked.connect(self.show_history)
-        self.secondary_actions.silver_bars_clicked.connect(self.show_silver_bars)
-        self.secondary_actions.refresh_rate_clicked.connect(self.refresh_silver_rate)
-        self.secondary_actions.delete_estimate_clicked.connect(
-            self.delete_current_estimate
+
+        self.host.primary_actions.save_clicked.connect(
+            self.host.workflow_controller.save_estimate
         )
-        self.command_history_action.triggered.connect(self.show_history)
-        self.command_settings_action.triggered.connect(
+        self.host.primary_actions.print_clicked.connect(
+            self.host.workflow_controller.print_estimate
+        )
+        self.host.primary_actions.new_clicked.connect(
+            self.host.workflow_controller.clear_form
+        )
+
+        self.host.secondary_actions.delete_row_clicked.connect(
+            self.host.workflow_controller.delete_current_row
+        )
+        self.host.secondary_actions.last_balance_clicked.connect(
+            self.host.workflow_controller.show_last_balance_dialog
+        )
+        self.host.secondary_actions.history_clicked.connect(
+            self.host.workflow_controller.show_history
+        )
+        self.host.secondary_actions.silver_bars_clicked.connect(
+            self.host.workflow_controller.show_silver_bars
+        )
+        self.host.secondary_actions.refresh_rate_clicked.connect(
+            self.host.workflow_controller.refresh_silver_rate
+        )
+        self.host.secondary_actions.delete_estimate_clicked.connect(
+            self.host.workflow_controller.delete_current_estimate
+        )
+        self.host.command_history_action.triggered.connect(
+            self.host.workflow_controller.show_history
+        )
+        self.host.command_settings_action.triggered.connect(
             self._show_settings_from_command_bar
         )
 
-        self.item_table.cell_edited.connect(self._on_table_cell_edited)
-        self.item_table.column_layout_reset_requested.connect(
+        self.host.item_table.cell_edited.connect(
+            self.host.table_controller._on_table_cell_edited
+        )
+        self.host.item_table.column_layout_reset_requested.connect(
             self._reset_columns_layout
         )
-        self.item_table.row_deleted.connect(self._on_table_row_delete_requested)
-        self.item_table.history_requested.connect(self.show_history)
+        self.host.item_table.row_deleted.connect(
+            self.host.table_controller._on_table_row_delete_requested
+        )
+        self.host.item_table.history_requested.connect(
+            self.host.workflow_controller.show_history
+        )
 
     def _bind_totals_panel_labels(self) -> None:
-        self.mode_indicator_label = self.toolbar.mode_indicator_label
+        self.host.mode_indicator_label = self.host.toolbar.mode_indicator_label
 
-        self.overall_gross_label = self.totals_panel.overall_gross_label
-        self.overall_poly_label = self.totals_panel.overall_poly_label
-        self.total_gross_label = self.totals_panel.total_gross_label
-        self.total_net_label = self.totals_panel.total_net_label
-        self.total_fine_label = self.totals_panel.total_fine_label
-        self.return_gross_label = self.totals_panel.return_gross_label
-        self.return_net_label = self.totals_panel.return_net_label
-        self.return_fine_label = self.totals_panel.return_fine_label
-        self.bar_gross_label = self.totals_panel.bar_gross_label
-        self.bar_net_label = self.totals_panel.bar_net_label
-        self.bar_fine_label = self.totals_panel.bar_fine_label
-        self.net_fine_label = self.totals_panel.net_fine_label
-        self.net_wage_label = self.totals_panel.net_wage_label
-        self.grand_total_label = self.totals_panel.grand_total_label
+        self.host.overall_gross_label = self.host.totals_panel.overall_gross_label
+        self.host.overall_poly_label = self.host.totals_panel.overall_poly_label
+        self.host.total_gross_label = self.host.totals_panel.total_gross_label
+        self.host.total_net_label = self.host.totals_panel.total_net_label
+        self.host.total_fine_label = self.host.totals_panel.total_fine_label
+        self.host.return_gross_label = self.host.totals_panel.return_gross_label
+        self.host.return_net_label = self.host.totals_panel.return_net_label
+        self.host.return_fine_label = self.host.totals_panel.return_fine_label
+        self.host.bar_gross_label = self.host.totals_panel.bar_gross_label
+        self.host.bar_net_label = self.host.totals_panel.bar_net_label
+        self.host.bar_fine_label = self.host.totals_panel.bar_fine_label
+        self.host.net_fine_label = self.host.totals_panel.net_fine_label
+        self.host.net_wage_label = self.host.totals_panel.net_wage_label
+        self.host.grand_total_label = self.host.totals_panel.grand_total_label
 
     def _normalize_totals_position(self, position: str) -> str:
         value = (position or "").strip().lower()
@@ -407,33 +465,33 @@ class EstimateEntryLayoutController(HostProxy):
         self, order, *, persist: bool = True, source_panel: TotalsPanel | None = None
     ) -> None:
         normalized = self._normalize_totals_section_order(order)
-        panel = getattr(self, "totals_panel", None)
+        panel = getattr(self.host, "totals_panel", None)
         if (
             panel is not None
             and isValid(panel)
             and (panel is not source_panel or panel.section_order() != normalized)
         ):
             panel.set_section_order(normalized)
-        self._totals_section_order = list(normalized)
+        self.host._totals_section_order = list(normalized)
         self._bind_totals_panel_labels()
 
         if persist:
             try:
-                self._settings().setValue(
-                    "ui/estimate_totals_section_order", ",".join(normalized)
+                self._settings().set(
+                    SettingsKey.UI_ESTIMATE_TOTALS_SECTION_ORDER,
+                    ",".join(normalized),
                 )
             except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
-                self.logger.debug(
+                self.host.logger.debug(
                     "Failed to save totals section order setting: %s", exc
                 )
 
     def _load_totals_section_order_setting(self) -> None:
         default_order = ",".join(TotalsPanel.default_section_order())
         try:
-            saved = self._settings().value(
-                "ui/estimate_totals_section_order",
-                defaultValue=default_order,
-                type=str,
+            saved = self._settings().get_text(
+                SettingsKey.UI_ESTIMATE_TOTALS_SECTION_ORDER,
+                default_order,
             )
         except AttributeError, RuntimeError, TypeError, ValueError:
             saved = default_order
@@ -446,44 +504,48 @@ class EstimateEntryLayoutController(HostProxy):
 
     def _apply_totals_position(self, position: str, *, persist: bool = True) -> None:
         normalized = self._normalize_totals_position(position)
-        splitter_obj = getattr(self, "_content_splitter", None)
+        splitter_obj = getattr(self.host, "_content_splitter", None)
         if splitter_obj is None or not isValid(splitter_obj):
             return
         splitter = splitter_obj
 
         desired_mode = "horizontal" if normalized == "bottom" else "sidebar"
-        current_panel = self.totals_panel
+        current_panel = self.host.totals_panel
         if current_panel.layout_mode != desired_mode:
             section_order = current_panel.section_order()
             if current_panel.layout_mode == "sidebar":
                 current_panel.set_sidebar_top_widget(None)
             current_panel.setParent(None)
             current_panel.deleteLater()
-            self.totals_panel = self._create_totals_panel(desired_mode)
-            self.totals_panel.set_section_order(section_order)
+            self.host.totals_panel = self._create_totals_panel(desired_mode)
+            self.host.totals_panel.set_section_order(section_order)
 
         self._place_totals_panel(splitter, normalized)
 
         self._sync_live_rate_card_placement(normalized)
         self._bind_totals_panel_labels()
-        self.calculate_totals()
-        self._totals_position = normalized
+        self.host.totals_controller.calculate_totals()
+        self.host._totals_position = normalized
 
         if persist:
             try:
-                self._settings().setValue("ui/estimate_totals_position", normalized)
+                self._settings().set(
+                    SettingsKey.UI_ESTIMATE_TOTALS_POSITION,
+                    normalized,
+                )
             except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
-                self.logger.debug("Failed to save totals position setting: %s", exc)
+                self.host.logger.debug(
+                    "Failed to save totals position setting: %s", exc
+                )
 
     def _load_totals_position_setting(self) -> None:
         self._apply_totals_position(self._read_totals_position_setting(), persist=False)
 
     def _read_totals_position_setting(self) -> str:
         try:
-            saved = self._settings().value(
-                "ui/estimate_totals_position",
-                defaultValue="right",
-                type=str,
+            saved = self._settings().get_text(
+                SettingsKey.UI_ESTIMATE_TOTALS_POSITION,
+                "right",
             )
         except AttributeError, RuntimeError, TypeError, ValueError:
             saved = "right"
@@ -497,8 +559,8 @@ class EstimateEntryLayoutController(HostProxy):
             )
             panel.setMinimumWidth(275)
             panel.setMaximumWidth(420)
-            self._totals_panel_sidebar = panel
-            self._totals_panel_bottom = None
+            self.host._totals_panel_sidebar = panel
+            self.host._totals_panel_bottom = None
         else:
             panel.setSizePolicy(
                 QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum
@@ -506,16 +568,16 @@ class EstimateEntryLayoutController(HostProxy):
             panel.setMinimumWidth(0)
             panel.setMaximumWidth(16777215)
             panel.setMaximumHeight(280)
-            self._totals_panel_sidebar = None
-            self._totals_panel_bottom = panel
+            self.host._totals_panel_sidebar = None
+            self.host._totals_panel_bottom = panel
 
-        section_order = getattr(self, "_totals_section_order", None)
+        section_order = getattr(self.host, "_totals_section_order", None)
         if section_order:
             panel.set_section_order(section_order)
-        breakdown_size = getattr(self, "_breakdown_font_size", None)
+        breakdown_size = getattr(self.host, "_breakdown_font_size", None)
         if breakdown_size is not None:
             panel.set_breakdown_font_size(breakdown_size)
-        final_size = getattr(self, "_final_calc_font_size", None)
+        final_size = getattr(self.host, "_final_calc_font_size", None)
         if final_size is not None:
             panel.set_final_calc_font_size(final_size)
         panel.section_order_changed.connect(self._on_totals_section_order_changed)
@@ -524,10 +586,10 @@ class EstimateEntryLayoutController(HostProxy):
     def _place_totals_panel(
         self, splitter: QSplitter, normalized_position: str
     ) -> None:
-        panel = self.totals_panel
+        panel = self.host.totals_panel
         if normalized_position == "bottom":
             splitter.setOrientation(Qt.Orientation.Vertical)
-            splitter.insertWidget(0, self.item_table)
+            splitter.insertWidget(0, self.host.item_table)
             splitter.insertWidget(1, panel)
             splitter.setStretchFactor(0, 1)
             splitter.setStretchFactor(1, 0)
@@ -537,12 +599,12 @@ class EstimateEntryLayoutController(HostProxy):
         splitter.setOrientation(Qt.Orientation.Horizontal)
         if normalized_position == "left":
             splitter.insertWidget(0, panel)
-            splitter.insertWidget(1, self.item_table)
+            splitter.insertWidget(1, self.host.item_table)
             splitter.setStretchFactor(0, 0)
             splitter.setStretchFactor(1, 1)
             splitter.setSizes([320, 1060])
         else:
-            splitter.insertWidget(0, self.item_table)
+            splitter.insertWidget(0, self.host.item_table)
             splitter.insertWidget(1, panel)
             splitter.setStretchFactor(0, 1)
             splitter.setStretchFactor(1, 0)
@@ -556,36 +618,49 @@ class EstimateEntryLayoutController(HostProxy):
             self._apply_totals_position(position, persist=True)
             return True
         except Exception as exc:
-            self.logger.warning("Failed to apply totals position: %s", exc)
+            self.host.logger.warning("Failed to apply totals position: %s", exc)
             return False
 
     def connect_signals(self, skip_load_estimate: bool = False):
         if not skip_load_estimate:
-            self.voucher_edit.returnPressed.connect(self.safe_load_estimate)
+            self.host.voucher_edit.returnPressed.connect(
+                self.host.workflow_controller.safe_load_estimate
+            )
 
-        self.silver_rate_spin.valueChanged.connect(self._handle_silver_rate_changed)
+        self.host.silver_rate_spin.valueChanged.connect(
+            self.host.workflow_controller._handle_silver_rate_changed
+        )
 
-        if hasattr(self, "note_edit"):
-            self.note_edit.textEdited.connect(self._mark_unsaved)
-        if hasattr(self, "date_edit"):
-            self.date_edit.dateChanged.connect(self._mark_unsaved)
+        if hasattr(self.host, "note_edit"):
+            self.host.note_edit.textEdited.connect(self.host._mark_unsaved)
+        if hasattr(self.host, "date_edit"):
+            self.host.date_edit.dateChanged.connect(self.host._mark_unsaved)
 
-        self.item_table.cellClicked.connect(self.cell_clicked)
-        self.item_table.itemSelectionChanged.connect(self.selection_changed)
-        self.item_table.currentCellChanged.connect(self.current_cell_changed)
+        self.host.item_table.cellClicked.connect(
+            self.host.table_controller.cell_clicked
+        )
+        self.host.item_table.itemSelectionChanged.connect(
+            self.host.table_controller.selection_changed
+        )
+        self.host.item_table.currentCellChanged.connect(
+            self.host.table_controller.current_cell_changed
+        )
 
-        self.return_toggle_button.clicked.connect(self.toggle_return_mode)
-        self.silver_bar_toggle_button.clicked.connect(self.toggle_silver_bar_mode)
+        self.host.return_toggle_button.clicked.connect(
+            self.host.workflow_controller.toggle_return_mode
+        )
+        self.host.silver_bar_toggle_button.clicked.connect(
+            self.host.workflow_controller.toggle_silver_bar_mode
+        )
 
-    def _settings(self):
+    def _settings(self) -> ApplicationSettings:
         return get_app_settings()
 
     def _read_column_autofit_mode_setting(self) -> str:
         try:
-            raw = self._settings().value(
-                "ui/estimate_table_autofit_mode",
-                defaultValue="explicit",
-                type=str,
+            raw = self._settings().get_text(
+                SettingsKey.UI_ESTIMATE_TABLE_AUTOFIT_MODE,
+                "explicit",
             )
         except AttributeError, RuntimeError, TypeError, ValueError:
             raw = "explicit"
@@ -596,8 +671,8 @@ class EstimateEntryLayoutController(HostProxy):
 
     def _is_continuous_column_autofit_enabled(self) -> bool:
         return bool(
-            self._auto_fit_columns_by_content
-            and self._column_autofit_mode == "continuous"
+            self.host._auto_fit_columns_by_content
+            and self.host._column_autofit_mode == "continuous"
         )
 
     def _column_width_limits(self) -> dict[int, tuple[int, int]]:
@@ -613,7 +688,7 @@ class EstimateEntryLayoutController(HostProxy):
     def _apply_non_autofit_column_layout(
         self, saved_widths: dict[int, int] | None = None
     ) -> None:
-        table = getattr(self, "item_table", None)
+        table = getattr(self.host, "item_table", None)
         if table is None or not isValid(table):
             return
 
@@ -625,7 +700,7 @@ class EstimateEntryLayoutController(HostProxy):
                 if isinstance(col, int) and isinstance(width, int):
                     widths[col] = self._bounded_column_width(col, width)
 
-        self._programmatic_resizing = True
+        self.host._programmatic_resizing = True
         try:
             for col in range(table.columnCount()):
                 stretch = is_stretch_column(col)
@@ -635,9 +710,9 @@ class EstimateEntryLayoutController(HostProxy):
                         col, self._bounded_column_width(col, widths[col])
                     )
         except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
-            self.logger.debug("Failed to apply non-autofit column layout: %s", exc)
+            self.host.logger.debug("Failed to apply non-autofit column layout: %s", exc)
         finally:
-            self._programmatic_resizing = False
+            self.host._programmatic_resizing = False
 
     def _ensure_column_can_fit_content(self, column: int) -> None:
         if self._is_continuous_column_autofit_enabled():
@@ -645,7 +720,7 @@ class EstimateEntryLayoutController(HostProxy):
         if is_stretch_column(column):
             return
 
-        table = getattr(self, "item_table", None)
+        table = getattr(self.host, "item_table", None)
         if table is None or not isValid(table):
             return
         if column < 0 or column >= table.columnCount():
@@ -671,13 +746,15 @@ class EstimateEntryLayoutController(HostProxy):
         if target_width <= current_width:
             return
 
-        self._programmatic_resizing = True
+        self.host._programmatic_resizing = True
         try:
             table.setColumnWidth(column, int(target_width))
         except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
-            self.logger.debug("Failed to expand column %s for content: %s", column, exc)
+            self.host.logger.debug(
+                "Failed to expand column %s for content: %s", column, exc
+            )
         finally:
-            self._programmatic_resizing = False
+            self.host._programmatic_resizing = False
 
     def _schedule_columns_autofit(
         self,
@@ -688,33 +765,33 @@ class EstimateEntryLayoutController(HostProxy):
     ) -> None:
         if not force and not self._is_continuous_column_autofit_enabled():
             return
-        table = getattr(self, "item_table", None)
+        table = getattr(self.host, "item_table", None)
         if table is None or not isValid(table):
             return
 
         if columns is None:
-            self._pending_autofit_columns.update(range(table.columnCount()))
+            self.host._pending_autofit_columns.update(range(table.columnCount()))
         else:
             for col in columns:
                 if isinstance(col, int) and 0 <= col < table.columnCount():
-                    self._pending_autofit_columns.add(col)
+                    self.host._pending_autofit_columns.add(col)
 
-        if not self._pending_autofit_columns:
+        if not self.host._pending_autofit_columns:
             return
 
         try:
-            self._column_autofit_timer.setInterval(max(0, int(delay_ms)))
-            self._column_autofit_timer.start()
+            self.host._column_autofit_timer.setInterval(max(0, int(delay_ms)))
+            self.host._column_autofit_timer.start()
         except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
-            self.logger.debug("Failed to schedule column auto-fit: %s", exc)
+            self.host.logger.debug("Failed to schedule column auto-fit: %s", exc)
 
     def _apply_pending_column_autofit(self) -> None:
-        if not self._is_table_valid():
+        if not self.host.table_controller._is_table_valid():
             return
 
-        table = self.item_table
-        columns = sorted(self._pending_autofit_columns)
-        self._pending_autofit_columns.clear()
+        table = self.host.item_table
+        columns = sorted(self.host._pending_autofit_columns)
+        self.host._pending_autofit_columns.clear()
         if not columns:
             if not self._is_continuous_column_autofit_enabled():
                 return
@@ -727,7 +804,7 @@ class EstimateEntryLayoutController(HostProxy):
         metrics = table.fontMetrics()
         limits = self._column_width_limits()
 
-        self._programmatic_resizing = True
+        self.host._programmatic_resizing = True
         try:
             for col in columns:
                 if col < 0 or col >= table.columnCount():
@@ -750,37 +827,42 @@ class EstimateEntryLayoutController(HostProxy):
                 if abs(current_width - target_width) >= 2:
                     table.setColumnWidth(col, target_width)
         except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
-            self.logger.debug("Failed to auto-fit columns by content: %s", exc)
+            self.host.logger.debug("Failed to auto-fit columns by content: %s", exc)
         finally:
-            self._programmatic_resizing = False
+            self.host._programmatic_resizing = False
 
     def _save_column_widths_setting(self):
-        if self._auto_fit_columns_by_content:
+        if self.host._auto_fit_columns_by_content:
             return
         try:
             widths = [
-                str(self.item_table.columnWidth(i) if not is_stretch_column(i) else -1)
-                for i in range(self.item_table.columnCount())
+                str(
+                    self.host.item_table.columnWidth(i)
+                    if not is_stretch_column(i)
+                    else -1
+                )
+                for i in range(self.host.item_table.columnCount())
             ]
-            self._settings().setValue(
-                "ui/estimate_table_column_widths", ",".join(widths)
+            self._settings().set(
+                SettingsKey.UI_ESTIMATE_TABLE_COLUMN_WIDTHS,
+                ",".join(widths),
             )
         except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
-            self.logger.debug("Failed to save column widths setting: %s", exc)
+            self.host.logger.debug("Failed to save column widths setting: %s", exc)
 
     def _load_column_widths_setting(self):
         if self._is_continuous_column_autofit_enabled():
-            self._programmatic_resizing = True
+            self.host._programmatic_resizing = True
             try:
-                for col in range(self.item_table.columnCount()):
-                    self.item_table.set_column_stretch(col, stretch=False)
+                for col in range(self.host.item_table.columnCount()):
+                    self.host.item_table.set_column_stretch(col, stretch=False)
             finally:
-                self._programmatic_resizing = False
+                self.host._programmatic_resizing = False
             self._schedule_columns_autofit(delay_ms=0, force=True)
             return
 
         saved_widths: dict[int, int] = {}
-        val = self._settings().value("ui/estimate_table_column_widths", type=str)
+        val = self._settings().get_text(SettingsKey.UI_ESTIMATE_TABLE_COLUMN_WIDTHS)
         if val:
             try:
                 widths = [int(w) for w in val.split(",")]
@@ -788,35 +870,37 @@ class EstimateEntryLayoutController(HostProxy):
                     i: w
                     for i, w in enumerate(widths)
                     if (
-                        i < self.item_table.columnCount()
+                        i < self.host.item_table.columnCount()
                         and not is_stretch_column(i)
                         and w > 0
                     )
                 }
             except (TypeError, ValueError) as exc:
-                self.logger.debug("Failed to restore column widths setting: %s", exc)
+                self.host.logger.debug(
+                    "Failed to restore column widths setting: %s", exc
+                )
         self._apply_non_autofit_column_layout(saved_widths)
 
     def _on_item_table_section_resized(self, idx, old, new):
         del old
-        if self._programmatic_resizing or is_stretch_column(idx):
+        if self.host._programmatic_resizing or is_stretch_column(idx):
             return
 
         bounded_width = self._bounded_column_width(idx, new)
         if bounded_width != new:
-            self._programmatic_resizing = True
+            self.host._programmatic_resizing = True
             try:
-                self.item_table.setColumnWidth(idx, bounded_width)
+                self.host.item_table.setColumnWidth(idx, bounded_width)
             finally:
-                self._programmatic_resizing = False
+                self.host._programmatic_resizing = False
             return
 
-        self._column_save_timer.start()
+        self.host._column_save_timer.start()
 
     def _auto_stretch_item_name(self):
-        if self._auto_fit_columns_by_content:
+        if self.host._auto_fit_columns_by_content:
             return
-        table = getattr(self, "item_table", None)
+        table = getattr(self.host, "item_table", None)
         if table is None or not isValid(table):
             return
         current_widths = {
@@ -830,22 +914,33 @@ class EstimateEntryLayoutController(HostProxy):
         if self._is_continuous_column_autofit_enabled():
             self._schedule_columns_autofit(delay_ms=0, force=True)
             return
-        self._settings().remove("ui/estimate_table_column_widths")
+        self._settings().remove(SettingsKey.UI_ESTIMATE_TABLE_COLUMN_WIDTHS)
         self._apply_non_autofit_column_layout()
 
     def _load_table_font_size_setting(self):
-        size = self._settings().value("ui/table_font_size", defaultValue=9, type=int)
+        size = self._settings().get_int(
+            SettingsKey.UI_TABLE_FONT_SIZE,
+            9,
+            minimum=5,
+            maximum=24,
+        )
         self.apply_table_font_size(size)
 
     def _load_breakdown_font_size_setting(self):
-        size = self._settings().value(
-            "ui/breakdown_font_size", defaultValue=9, type=int
+        size = self._settings().get_int(
+            SettingsKey.UI_BREAKDOWN_FONT_SIZE,
+            9,
+            minimum=5,
+            maximum=24,
         )
         self.apply_breakdown_font_size(size)
 
     def _load_final_calc_font_size_setting(self):
-        size = self._settings().value(
-            "ui/final_calc_font_size", defaultValue=10, type=int
+        size = self._settings().get_int(
+            SettingsKey.UI_FINAL_CALC_FONT_SIZE,
+            10,
+            minimum=5,
+            maximum=24,
         )
         self.apply_final_calc_font_size(size)
 
@@ -853,58 +948,62 @@ class EstimateEntryLayoutController(HostProxy):
         try:
             size_i = int(size)
         except TypeError, ValueError:
-            self.logger.warning("Invalid table font size value: %r", size)
+            self.host.logger.warning("Invalid table font size value: %r", size)
             return False
         size_i = max(7, min(16, size_i))
         try:
-            font = self.item_table.font()
+            font = self.host.item_table.font()
             font.setPointSize(size_i)
-            self.item_table.setFont(font)
-            model = self.item_table.model()
+            self.host.item_table.setFont(font)
+            model = self.host.item_table.model()
             invalidate_style_cache = getattr(model, "invalidate_style_cache", None)
             if callable(invalidate_style_cache):
                 invalidate_style_cache()
             row_height = max(24, min(32, size_i + 17))
-            self.item_table.verticalHeader().setDefaultSectionSize(row_height)
-            self.item_table.verticalHeader().setMinimumSectionSize(
+            self.host.item_table.verticalHeader().setDefaultSectionSize(row_height)
+            self.host.item_table.verticalHeader().setMinimumSectionSize(
                 max(22, row_height - 2)
             )
-            self.item_table.horizontalHeader().setFixedHeight(
+            self.host.item_table.horizontalHeader().setFixedHeight(
                 max(26, min(34, row_height + 2))
             )
             self._schedule_columns_autofit(delay_ms=0, force=True)
-            self.item_table.viewport().update()
+            self.host.item_table.viewport().update()
             return True
         except Exception as exc:
-            self.logger.warning("Failed to apply table font size: %s", exc)
+            self.host.logger.warning("Failed to apply table font size: %s", exc)
             return False
 
     def apply_breakdown_font_size(self, size: int) -> bool:
         try:
             size_i = int(size)
         except TypeError, ValueError:
-            self.logger.warning("Invalid breakdown font size value: %r", size)
+            self.host.logger.warning("Invalid breakdown font size value: %r", size)
             return False
         size_i = max(7, min(16, size_i))
         try:
-            self._breakdown_font_size = size_i
-            self.totals_panel.set_breakdown_font_size(size_i)
+            self.host._breakdown_font_size = size_i
+            self.host.totals_panel.set_breakdown_font_size(size_i)
             return True
         except Exception as exc:
-            self.logger.warning("Failed to apply breakdown font size: %s", exc)
+            self.host.logger.warning("Failed to apply breakdown font size: %s", exc)
             return False
 
     def apply_final_calc_font_size(self, size: int) -> bool:
         try:
             size_i = int(size)
         except TypeError, ValueError:
-            self.logger.warning("Invalid final calculation font size value: %r", size)
+            self.host.logger.warning(
+                "Invalid final calculation font size value: %r", size
+            )
             return False
         size_i = max(8, min(20, size_i))
         try:
-            self._final_calc_font_size = size_i
-            self.totals_panel.set_final_calc_font_size(size_i)
+            self.host._final_calc_font_size = size_i
+            self.host.totals_panel.set_final_calc_font_size(size_i)
             return True
         except Exception as exc:
-            self.logger.warning("Failed to apply final calculation font size: %s", exc)
+            self.host.logger.warning(
+                "Failed to apply final calculation font size: %s", exc
+            )
             return False

@@ -62,7 +62,7 @@ def fake_db(tmp_path):
 def _set_row(widget, row, item):
     table = widget.item_table
     while table.rowCount() <= row:
-        widget.add_empty_row()
+        widget.table_controller.add_empty_row()
     table.set_cell_text(row, COL_CODE, str(item["code"]))
     if item.get("name"):
         table.set_cell_text(row, COL_ITEM_NAME, str(item["name"]))
@@ -88,7 +88,7 @@ def _set_row(widget, row, item):
     else:
         table.set_row_category(row, EstimateLineCategory.REGULAR)
 
-    widget.calculate_totals()
+    widget.totals_controller.calculate_totals()
 
     return table
 
@@ -249,16 +249,16 @@ def test_widget_multi_row_totals(qt_app, fake_db):
 
     _set_row(widget, 0, regular_item(gross=10, poly=1, purity=92.5, wage_rate=10))
 
-    widget.toggle_return_mode()
+    widget.workflow_controller.toggle_return_mode()
     _set_row(widget, 1, return_item(gross=2.5, poly=0.5, purity=80, wage_rate=0))
-    widget.toggle_return_mode()
+    widget.workflow_controller.toggle_return_mode()
 
-    widget.toggle_silver_bar_mode()
+    widget.workflow_controller.toggle_silver_bar_mode()
     _set_row(widget, 2, silver_bar_item(gross=3.0, poly=0.0, purity=99.9, wage_rate=0))
-    widget.toggle_silver_bar_mode()
+    widget.workflow_controller.toggle_silver_bar_mode()
 
     table = widget.item_table
-    widget.calculate_totals()
+    widget.totals_controller.calculate_totals()
 
     assert table.get_cell_text(0, COL_TYPE) == "Regular"
     assert table.get_cell_text(1, COL_TYPE) == "Return"
@@ -279,10 +279,10 @@ def test_incremental_totals_match_full_single_row_edit(qt_app, fake_db):
             0,
             regular_item(gross=10, poly=1, purity=92.5, wage_rate=10),
         )
-        assert widget._totals_incremental_is_active()
+        assert widget.totals_controller._totals_incremental_is_active()
 
         table.set_cell_text(0, COL_GROSS, "12.0")
-        widget.handle_cell_changed(0, COL_GROSS)
+        widget.table_controller.handle_cell_changed(0, COL_GROSS)
         _pump_events(150)
 
         assert float(widget.total_gross_label.text()) == pytest.approx(12.0)
@@ -301,7 +301,7 @@ def test_incremental_row_edit_applies_totals_without_recalc_schedule(qt_app, fak
             0,
             regular_item(gross=10, poly=1, purity=92.5, wage_rate=10),
         )
-        assert widget._totals_incremental_is_active()
+        assert widget.totals_controller._totals_incremental_is_active()
 
         scheduled = {"count": 0}
 
@@ -309,10 +309,10 @@ def test_incremental_row_edit_applies_totals_without_recalc_schedule(qt_app, fak
             scheduled["count"] += 1
             raise AssertionError("incremental row edit should not schedule totals")
 
-        widget._schedule_totals_recalc = _unexpected_schedule
+        widget.totals_controller._schedule_totals_recalc = _unexpected_schedule
 
         table.set_cell_text(0, COL_GROSS, "12.0")
-        widget.handle_cell_changed(0, COL_GROSS)
+        widget.table_controller.handle_cell_changed(0, COL_GROSS)
 
         assert scheduled["count"] == 0
         assert float(widget.total_gross_label.text()) == pytest.approx(12.0)
@@ -330,28 +330,28 @@ def test_incremental_totals_match_full_multi_row_mixed_categories(
     try:
         _set_row(widget, 0, regular_item(gross=10, poly=1, purity=90.0, wage_rate=10.0))
 
-        widget.toggle_return_mode()
+        widget.workflow_controller.toggle_return_mode()
         _set_row(
             widget, 1, return_item(gross=2.0, poly=0.5, purity=80.0, wage_rate=5.0)
         )
-        widget.toggle_return_mode()
+        widget.workflow_controller.toggle_return_mode()
 
-        widget.toggle_silver_bar_mode()
+        widget.workflow_controller.toggle_silver_bar_mode()
         _set_row(
             widget,
             2,
             silver_bar_item(gross=3.0, poly=0.0, purity=99.9, wage_rate=2.0),
         )
-        widget.toggle_silver_bar_mode()
+        widget.workflow_controller.toggle_silver_bar_mode()
 
-        assert widget._totals_incremental_is_active()
+        assert widget.totals_controller._totals_incremental_is_active()
 
         widget.item_table.set_cell_text(0, COL_GROSS, "11.0")
-        widget.handle_cell_changed(0, COL_GROSS)
+        widget.table_controller.handle_cell_changed(0, COL_GROSS)
         widget.item_table.set_cell_text(1, COL_GROSS, "2.5")
-        widget.handle_cell_changed(1, COL_GROSS)
+        widget.table_controller.handle_cell_changed(1, COL_GROSS)
         widget.item_table.set_cell_text(2, COL_PURITY, "95.0")
-        widget.handle_cell_changed(2, COL_PURITY)
+        widget.table_controller.handle_cell_changed(2, COL_PURITY)
         qtbot.waitUntil(
             lambda: float(widget.total_gross_label.text()) == pytest.approx(11.0),
             timeout=500,
@@ -385,7 +385,7 @@ def test_incremental_rebuild_after_row_delete(qt_app, fake_db, monkeypatch):
             raising=False,
         )
         widget.item_table.setCurrentCell(1, COL_CODE)
-        widget.delete_current_row()
+        widget.workflow_controller.delete_current_row()
 
         assert widget.item_table.rowCount() >= 2
         assert float(widget.total_gross_label.text()) == pytest.approx(8.0)
@@ -447,7 +447,7 @@ def test_incremental_rebuild_after_apply_loaded_estimate(qt_app, fake_db):
         assert len(widget._row_contrib_cache) == widget.item_table.rowCount()
 
         widget.item_table.set_cell_text(0, COL_GROSS, "12.0")
-        widget.handle_cell_changed(0, COL_GROSS)
+        widget.table_controller.handle_cell_changed(0, COL_GROSS)
         _pump_events(160)
 
         assert float(widget.total_gross_label.text()) == pytest.approx(12.0)
@@ -464,21 +464,21 @@ def test_incremental_failure_does_not_use_removed_full_recalculation(qt_app, fak
             0,
             regular_item(gross=10, poly=1, purity=92.5, wage_rate=10.0),
         )
-        assert widget._totals_incremental_is_active()
+        assert widget.totals_controller._totals_incremental_is_active()
 
         def _boom(_row_state):
             raise RuntimeError("forced incremental failure")
 
-        widget._row_contribution_from_row_state = _boom
+        widget.totals_controller._row_contribution_from_row_state = _boom
         table.set_cell_text(0, COL_GROSS, "11.0")
-        widget.handle_cell_changed(0, COL_GROSS)
+        widget.table_controller.handle_cell_changed(0, COL_GROSS)
         _pump_events(160)
 
         assert widget._incremental_totals_failed is True
         assert float(widget.total_gross_label.text()) == pytest.approx(10.0)
 
         widget.item_table.set_cell_text(0, COL_GROSS, "12.0")
-        widget.handle_cell_changed(0, COL_GROSS)
+        widget.table_controller.handle_cell_changed(0, COL_GROSS)
         _pump_events(160)
         assert float(widget.total_gross_label.text()) == pytest.approx(10.0)
         assert float(widget.net_wage_label.text()) == pytest.approx(90.0)
@@ -504,13 +504,13 @@ def test_widget_save_and_reload(qt_app, tmp_path, settings_stub, monkeypatch):
 
     _set_row(widget, 0, regular_item(gross=10, poly=1, purity=92.5, wage_rate=10))
 
-    widget.toggle_return_mode()
+    widget.workflow_controller.toggle_return_mode()
     _set_row(widget, 1, return_item(gross=1.5, poly=0.3, purity=75.0, wage_rate=0))
-    widget.toggle_return_mode()
+    widget.workflow_controller.toggle_return_mode()
 
-    widget.toggle_silver_bar_mode()
+    widget.workflow_controller.toggle_silver_bar_mode()
     _set_row(widget, 2, silver_bar_item(gross=2.0, poly=0.0, purity=99.9, wage_rate=0))
-    widget.toggle_silver_bar_mode()
+    widget.workflow_controller.toggle_silver_bar_mode()
 
     from PySide6.QtWidgets import QMessageBox as _QtMessageBox
 
@@ -542,7 +542,7 @@ def test_widget_save_and_reload(qt_app, tmp_path, settings_stub, monkeypatch):
         raising=False,
     )
 
-    widget.print_estimate = lambda: None
+    widget.workflow_controller.print_estimate = lambda: None
     widget.save_estimate()
 
     widget_loaded = _make_widget(manager)
@@ -590,7 +590,7 @@ def test_print_estimate_uses_current_unsaved_state(qt_app, fake_db, monkeypatch)
         captured["voucher_no"] = voucher_no
         captured["estimate_data"] = estimate_data
 
-    widget._start_estimate_print_preview_build = _capture_start
+    widget.workflow_controller._start_estimate_print_preview_build = _capture_start
     widget.voucher_edit.setText("LIVE001")
     widget.date_edit.setDate(QDate(2026, 2, 14))
     widget.note_edit.setText("Unsaved note")
@@ -622,13 +622,13 @@ def test_toggle_modes_updates_empty_row(qt_app, fake_db):
     widget = _make_widget(fake_db)
     last_row = widget.item_table.rowCount() - 1
     assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "Regular"
-    widget.toggle_return_mode()
+    widget.workflow_controller.toggle_return_mode()
     last_row = widget.item_table.rowCount() - 1
     assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "Return"
-    widget.toggle_silver_bar_mode()
+    widget.workflow_controller.toggle_silver_bar_mode()
     last_row = widget.item_table.rowCount() - 1
     assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "Silver Bar"
-    widget.toggle_silver_bar_mode()
+    widget.workflow_controller.toggle_silver_bar_mode()
     last_row = widget.item_table.rowCount() - 1
     assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "Regular"
 
@@ -638,7 +638,7 @@ def test_populate_row_updates_code_cell(qt_app, fake_db):
     try:
         table = widget.item_table
         if table.rowCount() == 0:
-            widget.add_empty_row()
+            widget.table_controller.add_empty_row()
 
         table.set_cell_text(0, COL_CODE, "old-code")
         widget.populate_row(
@@ -781,32 +781,40 @@ def test_totals_position_switching_and_persistence(qt_app, fake_db, settings_stu
         assert widget._totals_panel_sidebar is original_sidebar
         assert widget._totals_panel_bottom is None
 
-        widget._apply_totals_position("left")
+        widget.layout_controller._apply_totals_position("left")
         assert splitter.orientation() == Qt.Orientation.Horizontal
         assert splitter.widget(0) is widget.totals_panel
         assert widget.totals_panel is original_sidebar
         assert (
-            widget._settings().value("ui/estimate_totals_position", type=str) == "left"
+            widget.layout_controller._settings().value(
+                "ui/estimate_totals_position", type=str
+            )
+            == "left"
         )
 
-        widget._on_totals_position_requested("bottom")
+        widget.layout_controller._on_totals_position_requested("bottom")
         assert splitter.orientation() == Qt.Orientation.Vertical
         assert splitter.widget(1) is widget.totals_panel
         assert widget.totals_panel is not original_sidebar
         assert widget._totals_panel_sidebar is None
         assert widget._totals_panel_bottom is widget.totals_panel
         assert (
-            widget._settings().value("ui/estimate_totals_position", type=str)
+            widget.layout_controller._settings().value(
+                "ui/estimate_totals_position", type=str
+            )
             == "bottom"
         )
 
-        widget._on_totals_position_requested("right")
+        widget.layout_controller._on_totals_position_requested("right")
         assert splitter.orientation() == Qt.Orientation.Horizontal
         assert splitter.widget(1) is widget.totals_panel
         assert widget._totals_panel_sidebar is widget.totals_panel
         assert widget._totals_panel_bottom is None
         assert (
-            widget._settings().value("ui/estimate_totals_position", type=str) == "right"
+            widget.layout_controller._settings().value(
+                "ui/estimate_totals_position", type=str
+            )
+            == "right"
         )
     finally:
         widget.deleteLater()
@@ -861,7 +869,7 @@ def test_live_rate_card_moves_between_sidebar_and_header(qt_app, fake_db):
             >= widget.refresh_rate_button.geometry().bottom()
         )
 
-        widget._apply_totals_position("bottom")
+        widget.layout_controller._apply_totals_position("bottom")
         qt_app.processEvents()
 
         assert live_rate_card.parent() is widget.secondary_actions
@@ -870,7 +878,7 @@ def test_live_rate_card_moves_between_sidebar_and_header(qt_app, fake_db):
             live_rate_card.sizePolicy().horizontalPolicy() == QSizePolicy.Policy.Fixed
         )
 
-        widget._apply_totals_position("right")
+        widget.layout_controller._apply_totals_position("right")
         qt_app.processEvents()
 
         sidebar_top_host = widget.totals_panel._sidebar_top_host
@@ -940,14 +948,14 @@ def test_totals_section_order_sync_and_persistence(qt_app, fake_db, settings_stu
     try:
         new_order = ["silver_bar", "return", "regular", "totals"]
         expected_order = TotalsPanel.normalize_section_order(new_order)
-        widget._apply_totals_section_order(new_order, persist=True)
+        widget.layout_controller._apply_totals_section_order(new_order, persist=True)
 
         assert widget.totals_panel.section_order() == expected_order
-        assert widget._settings().value(
+        assert widget.layout_controller._settings().value(
             "ui/estimate_totals_section_order", type=str
         ) == ",".join(expected_order)
 
-        widget._apply_totals_position("bottom")
+        widget.layout_controller._apply_totals_position("bottom")
         assert widget.totals_panel.section_order() == expected_order
 
         widget_loaded = _make_widget(fake_db)
@@ -968,20 +976,26 @@ def test_column_width_auto_fits_content_expand_and_shrink(
         col = COL_ITEM_NAME
 
         table.set_cell_text(0, col, "A")
-        widget._schedule_columns_autofit([col], delay_ms=0, force=True)
-        widget._apply_pending_column_autofit()
+        widget.layout_controller._schedule_columns_autofit(
+            [col], delay_ms=0, force=True
+        )
+        widget.layout_controller._apply_pending_column_autofit()
         base_width = table.columnWidth(col)
 
         table.set_cell_text(
             0, col, "Very Long Item Name For Dynamic Width Testing 12345"
         )
-        widget._schedule_columns_autofit([col], delay_ms=0, force=True)
-        widget._apply_pending_column_autofit()
+        widget.layout_controller._schedule_columns_autofit(
+            [col], delay_ms=0, force=True
+        )
+        widget.layout_controller._apply_pending_column_autofit()
         expanded_width = table.columnWidth(col)
 
         table.set_cell_text(0, col, "AB")
-        widget._schedule_columns_autofit([col], delay_ms=0, force=True)
-        widget._apply_pending_column_autofit()
+        widget.layout_controller._schedule_columns_autofit(
+            [col], delay_ms=0, force=True
+        )
+        widget.layout_controller._apply_pending_column_autofit()
         shrink_width = table.columnWidth(col)
 
         assert expanded_width > base_width
@@ -995,7 +1009,7 @@ def test_column_autofit_defaults_to_explicit_mode(qt_app, fake_db, settings_stub
     try:
         col = COL_ITEM_NAME
         widget._pending_autofit_columns.clear()
-        widget._schedule_columns_autofit([col], delay_ms=0)
+        widget.layout_controller._schedule_columns_autofit([col], delay_ms=0)
         assert col not in widget._pending_autofit_columns
     finally:
         widget.deleteLater()
@@ -1028,8 +1042,10 @@ def test_non_autofit_persists_fixed_column_widths_only(qt_app, fake_db, settings
     widget = _make_widget(fake_db)
     try:
         widget.item_table.setColumnWidth(COL_CODE, 137)
-        widget._save_column_widths_setting()
-        saved = widget._settings().value("ui/estimate_table_column_widths", type=str)
+        widget.layout_controller._save_column_widths_setting()
+        saved = widget.layout_controller._settings().value(
+            "ui/estimate_table_column_widths", type=str
+        )
         assert saved is not None
         tokens = [int(token) for token in saved.split(",")]
         assert tokens[COL_CODE] == 137
@@ -1063,7 +1079,7 @@ def test_non_autofit_clamps_restored_widths_to_column_limits(
     widget = _make_widget(fake_db)
     try:
         table = widget.item_table
-        limits = widget._column_width_limits()
+        limits = widget.layout_controller._column_width_limits()
         assert table.columnWidth(COL_WAGE_RATE) == limits[COL_WAGE_RATE][1]
         assert table.columnWidth(COL_PIECES) == limits[COL_PIECES][1]
         assert table.columnWidth(COL_NET_WT) == limits[COL_NET_WT][0]
@@ -1079,8 +1095,8 @@ def test_non_autofit_expands_fixed_column_when_edit_content_grows(qt_app, fake_d
         base_width = table.columnWidth(COL_CODE)
 
         table.set_cell_text(0, COL_CODE, "LONG-CODE-123456789")
-        widget.handle_cell_changed(0, COL_CODE)
-        widget._ensure_column_can_fit_content(COL_CODE)
+        widget.table_controller.handle_cell_changed(0, COL_CODE)
+        widget.layout_controller._ensure_column_can_fit_content(COL_CODE)
 
         assert table.columnWidth(COL_CODE) > base_width
     finally:
@@ -1120,8 +1136,10 @@ def test_numeric_helpers_read_raw_values_when_display_is_grouped(qt_app, fake_db
 
         assert table.get_cell_text(0, COL_GROSS) == "12,34,567.500"
         assert table.get_cell_text(0, COL_PIECES) == "1,23,456"
-        assert widget._get_cell_float(0, COL_GROSS) == pytest.approx(1234567.5)
-        assert widget._get_cell_int(0, COL_PIECES) == 123456
+        assert widget.table_controller._get_cell_float(0, COL_GROSS) == pytest.approx(
+            1234567.5
+        )
+        assert widget.table_controller._get_cell_int(0, COL_PIECES) == 123456
     finally:
         widget.deleteLater()
 
@@ -1130,7 +1148,9 @@ def test_table_edit_pipeline_invokes_handle_cell_changed_once(qt_app, fake_db):
     widget = _make_widget(fake_db)
     try:
         calls = []
-        widget.handle_cell_changed = lambda row, col: calls.append((row, col))
+        widget.table_controller.handle_cell_changed = lambda row, col: calls.append(
+            (row, col)
+        )
         model = widget.item_table.get_model()
         index = model.index(0, COL_GROSS)
         assert model.setData(index, "12.5", Qt.ItemDataRole.EditRole)
@@ -1144,7 +1164,7 @@ def test_calculate_wage_uses_row_wage_type_without_repository_lookup(qt_app, fak
     try:
         table = widget.item_table
         if table.rowCount() == 0:
-            widget.add_empty_row()
+            widget.table_controller.add_empty_row()
 
         repo_calls = []
         fake_db.get_item_by_code = lambda code: (
@@ -1166,7 +1186,7 @@ def test_calculate_wage_uses_row_wage_type_without_repository_lookup(qt_app, fak
         table.set_cell_text(0, COL_PIECES, "3")
 
         widget.current_row = 0
-        widget.calculate_wage()
+        widget.totals_controller.calculate_wage()
 
         assert float(table.get_cell_text(0, COL_WAGE_AMT)) == pytest.approx(15.0)
         assert repo_calls == []
@@ -1188,9 +1208,9 @@ def test_totals_recalc_is_debounced(qt_app, qtbot, fake_db):
         _pump_events(40)
         calls.clear()
 
-        widget._schedule_totals_recalc(delay_ms=10)
-        widget._schedule_totals_recalc(delay_ms=10)
-        widget._schedule_totals_recalc(delay_ms=10)
+        widget.totals_controller._schedule_totals_recalc(delay_ms=10)
+        widget.totals_controller._schedule_totals_recalc(delay_ms=10)
+        widget.totals_controller._schedule_totals_recalc(delay_ms=10)
         qtbot.waitUntil(lambda: len(calls) == 1, timeout=500)
 
         assert len(calls) == 1

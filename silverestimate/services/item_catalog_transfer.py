@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, cast
 
 from silverestimate.domain.item_validation import validate_item
+from silverestimate.persistence.database_protocols import (
+    ItemCatalogDatabase,
+    ReadConnectionFactory,
+)
 
 ITEM_CATALOG_FORMAT = "silverestimate.item_catalog"
 ITEM_CATALOG_VERSION = 2
@@ -22,7 +27,10 @@ class ItemCatalogTransferError(ValueError):
     """Raised when a catalog backup file cannot be imported or exported safely."""
 
 
-def export_item_catalog(db_manager: Any, file_path: str) -> int:
+def export_item_catalog(
+    db_manager: ItemCatalogDatabase,
+    file_path: str,
+) -> int:
     """Write the current item catalog to a native Silver Estimate backup file."""
     if not db_manager:
         raise ItemCatalogTransferError("Database connection not available.")
@@ -31,7 +39,10 @@ def export_item_catalog(db_manager: Any, file_path: str) -> int:
     return export_item_catalog_rows(raw_items, file_path)
 
 
-def export_item_catalog_rows(raw_items: list[Any], file_path: str) -> int:
+def export_item_catalog_rows(
+    raw_items: Iterable[object],
+    file_path: str,
+) -> int:
     """Write already-loaded item rows to a native Silver Estimate backup file."""
     items = [
         _normalize_item_mapping(item, context=f"catalog row {index + 1}")
@@ -55,7 +66,7 @@ def export_item_catalog_rows(raw_items: list[Any], file_path: str) -> int:
 
 
 def load_item_catalog_rows_from_connection_factory(
-    connection_factory: Any,
+    connection_factory: ReadConnectionFactory,
 ) -> list[dict[str, Any]]:
     """Read item rows through a keyed broker connection."""
     if not callable(connection_factory):
@@ -79,7 +90,7 @@ def load_item_catalog_rows_from_connection_factory(
 
 
 def import_item_catalog(
-    db_manager: Any,
+    db_manager: ItemCatalogDatabase,
     file_path: str,
     *,
     replace_existing: bool = False,
@@ -153,12 +164,12 @@ def ensure_catalog_file_suffix(file_path: str) -> str:
     return f"{text}{ITEM_CATALOG_FILE_SUFFIX}"
 
 
-def _normalize_item_mapping(raw_item: Any, *, context: str) -> dict[str, Any]:
+def _normalize_item_mapping(raw_item: object, *, context: str) -> dict[str, Any]:
     if isinstance(raw_item, Mapping):
         data = raw_item
     else:
         try:
-            data = dict(raw_item)
+            data = dict(cast(Any, raw_item))
         except Exception as exc:
             raise ItemCatalogTransferError(
                 f"{context.capitalize()} is not a valid item record."

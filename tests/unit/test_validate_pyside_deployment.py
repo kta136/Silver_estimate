@@ -50,6 +50,17 @@ def test_validate_deployment_rejects_forbidden_plugin(tmp_path):
         deployment_validator.validate_deployment(root, report)
 
 
+def test_validate_deployment_rejects_unintended_stdlib_sqlite_binary(tmp_path):
+    root = tmp_path / "SilverEstimate.dist"
+    report = tmp_path / "nuitka-report.xml"
+    _write_deployment(root)
+    _write_report(report)
+    (root / "_sqlite3.pyd").write_bytes(b"unintended sqlite")
+
+    with pytest.raises(ValueError, match="_sqlite3.pyd"):
+        deployment_validator.validate_deployment(root, report)
+
+
 def test_validate_deployment_rejects_passlib_in_compilation_report(tmp_path):
     root = tmp_path / "SilverEstimate.dist"
     report = tmp_path / "nuitka-report.xml"
@@ -64,4 +75,21 @@ def test_validate_deployment_rejects_passlib_in_compilation_report(tmp_path):
     )
 
     with pytest.raises(ValueError, match="passlib"):
+        deployment_validator.validate_deployment(root, report)
+
+
+def test_validate_deployment_rejects_stdlib_sqlite_in_compilation_report(tmp_path):
+    root = tmp_path / "SilverEstimate.dist"
+    report = tmp_path / "nuitka-report.xml"
+    _write_deployment(root)
+    _write_report(report)
+    report.write_text(
+        report.read_text(encoding="utf-8").replace(
+            "</report>",
+            '<module name="sqlite3.dbapi2" /></report>',
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="sqlite3"):
         deployment_validator.validate_deployment(root, report)

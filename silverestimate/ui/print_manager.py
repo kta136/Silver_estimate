@@ -5,7 +5,7 @@ from PySide6.QtGui import QFont
 from PySide6.QtPrintSupport import QPrinter
 from PySide6.QtWidgets import QMessageBox
 
-from silverestimate.infrastructure.settings import get_app_settings
+from silverestimate.infrastructure.settings import SettingsKey, get_app_settings
 from silverestimate.services.settings_service import SettingsService
 
 from .estimate_print_document import EstimatePrintDocument
@@ -53,10 +53,9 @@ class PrintManager:
 
         try:
             self.estimate_format = normalize_estimate_format(
-                settings.value(
-                    "print/estimate_layout",
+                settings.get_text(
+                    SettingsKey.PRINT_ESTIMATE_LAYOUT,
                     DEFAULT_ESTIMATE_FORMAT,
-                    type=str,
                 )
             )
         except Exception as exc:
@@ -64,12 +63,9 @@ class PrintManager:
             self.estimate_format = DEFAULT_ESTIMATE_FORMAT
 
         try:
-            self.show_tunch = bool(
-                settings.value(
-                    "print/show_tunch",
-                    defaultValue=False,
-                    type=bool,
-                )
+            self.show_tunch = settings.get_bool(
+                SettingsKey.PRINT_SHOW_TUNCH,
+                False,
             )
         except Exception as exc:
             LOGGER.debug("Failed to load Tunch print preference: %s", exc)

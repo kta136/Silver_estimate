@@ -6,7 +6,11 @@ from dataclasses import dataclass
 from PySide6.QtPrintSupport import QPrinterInfo
 from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QSpinBox
 
-from silverestimate.infrastructure.settings import SettingsStore
+from silverestimate.infrastructure.settings import (
+    SettingsKey,
+    SettingsStore,
+    as_settings_store,
+)
 from silverestimate.ui.print_format_spec import (
     DEFAULT_ESTIMATE_FORMAT,
     normalize_estimate_format,
@@ -59,19 +63,18 @@ class SettingsPrintController:
     """Owns print-settings persistence and widget synchronization."""
 
     def __init__(self, settings: SettingsStore):
-        self._settings = settings
+        self._settings = as_settings_store(settings)
 
     def load_state(self) -> PrintSettingsState:
         page_settings = load_print_page_settings(self._settings)
         preview_zoom = self._load_preview_zoom()
-        raw_estimate_format = self._settings.value(
-            "print/estimate_layout",
+        raw_estimate_format = self._settings.get_text(
+            SettingsKey.PRINT_ESTIMATE_LAYOUT,
             DEFAULT_ESTIMATE_FORMAT,
-            type=str,
         )
         estimate_format = normalize_estimate_format(raw_estimate_format)
         if str(raw_estimate_format or "").strip().lower() != estimate_format:
-            self._settings.setValue("print/estimate_layout", estimate_format)
+            self._settings.set(SettingsKey.PRINT_ESTIMATE_LAYOUT, estimate_format)
         return PrintSettingsState(
             margins=page_settings.margins,
             preview_zoom=preview_zoom,
@@ -123,6 +126,11 @@ class SettingsPrintController:
         return state
 
     def save_from_ui(self, widgets: PrintSettingsWidgets) -> PrintSettingsState:
+        state = self.state_from_ui(widgets)
+        self.save_state(state)
+        return state
+
+    def state_from_ui(self, widgets: PrintSettingsWidgets) -> PrintSettingsState:
         printer_data = widgets.printer_combo.currentData()
         if printer_data is None:
             default_printer = widgets.printer_combo.currentText().strip()
@@ -159,10 +167,11 @@ class SettingsPrintController:
                 widgets.estimate_format_combo.currentData() or DEFAULT_ESTIMATE_FORMAT
             ),
         )
-        self.save_state(state)
+        self.validate_state(state)
         return state
 
     def save_state(self, state: PrintSettingsState) -> None:
+        self.validate_state(state)
         save_print_page_settings(
             self._settings,
             PrintPageSettings(
@@ -175,8 +184,23 @@ class SettingsPrintController:
                 orientation=state.orientation,
             ),
         )
-        self._settings.setValue("print/preview_zoom", float(state.preview_zoom))
-        self._settings.setValue("print/estimate_layout", state.estimate_format)
+        self._settings.set(SettingsKey.PRINT_PREVIEW_ZOOM, float(state.preview_zoom))
+        self._settings.set(SettingsKey.PRINT_ESTIMATE_LAYOUT, state.estimate_format)
+
+    @staticmethod
+    def validate_state(state: PrintSettingsState) -> None:
+        if len(state.margins) != 4 or any(
+            margin < 0 or margin > 50 for margin in state.margins
+        ):
+            raise ValueError("Print margins must be between 0 and 50 mm.")
+        if not 0.1 <= state.preview_zoom <= 5.0:
+            raise ValueError("Print preview zoom must be between 0.1 and 5.0.")
+        if not state.page_size.strip():
+            raise ValueError("Print page size cannot be empty.")
+        if state.orientation not in SUPPORTED_ORIENTATIONS:
+            raise ValueError("Print orientation is invalid.")
+        if normalize_estimate_format(state.estimate_format) != state.estimate_format:
+            raise ValueError("Estimate print format is invalid.")
 
     def apply_defaults_to_ui(self, widgets: PrintSettingsWidgets) -> PrintSettingsState:
         state = PrintSettingsState()
@@ -219,13 +243,9 @@ class SettingsPrintController:
         return serialize_margins(margins)
 
     def _load_preview_zoom(self) -> float:
-        raw_value = self._settings.value(
-            "print/preview_zoom",
+        return self._settings.get_float(
+            SettingsKey.PRINT_PREVIEW_ZOOM,
             DEFAULT_PREVIEW_ZOOM,
-            type=float,
+            minimum=0.1,
+            maximum=5.0,
         )
-        try:
-            return float(raw_value)
-        except TypeError, ValueError:
-            LOGGER.warning("Invalid preview zoom in settings: %r", raw_value)
-            return DEFAULT_PREVIEW_ZOOM

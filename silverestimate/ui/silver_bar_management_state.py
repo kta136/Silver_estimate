@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from datetime import datetime, timedelta
 
 from PySide6.QtCore import Qt
 
-from silverestimate.infrastructure.settings import get_app_settings
+from silverestimate.infrastructure.settings import (
+    ApplicationSettings,
+    SettingsKey,
+    get_app_settings,
+)
 
 from ._host_proxy import HostProxy
 
@@ -14,46 +19,59 @@ from ._host_proxy import HostProxy
 class SilverBarManagementStateStore(HostProxy):
     """Persist and restore dialog state, filters, and navigation context."""
 
-    def _settings(self):
+    def _settings(self) -> ApplicationSettings:
         return get_app_settings()
 
     def _save_table_sort_state(self, which, table):
         try:
             settings = self._settings()
             header = table.horizontalHeader()
-            settings.setValue(
-                f"ui/silver_bars/{which}_sort_col", header.sortIndicatorSection()
-            )
-            settings.setValue(
-                f"ui/silver_bars/{which}_sort_order", int(header.sortIndicatorOrder())
-            )
+            if which == "available":
+                column_key = SettingsKey.UI_SILVER_BARS_AVAILABLE_SORT_COLUMN
+                order_key = SettingsKey.UI_SILVER_BARS_AVAILABLE_SORT_ORDER
+            elif which == "list":
+                column_key = SettingsKey.UI_SILVER_BARS_LIST_SORT_COLUMN
+                order_key = SettingsKey.UI_SILVER_BARS_LIST_SORT_ORDER
+            else:
+                raise ValueError(f"Unknown silver-bar table: {which}")
+            settings.set(column_key, header.sortIndicatorSection())
+            settings.set(order_key, int(header.sortIndicatorOrder()))
         except Exception as exc:
             self.logger.debug("Could not persist %s table sort state: %s", which, exc)
 
     def _save_ui_state(self):
         try:
             settings = self._settings()
-            settings.setValue("ui/silver_bars/geometry", self.host.saveGeometry())
+            settings.set(
+                SettingsKey.UI_SILVER_BARS_GEOMETRY,
+                self.host.saveGeometry(),
+            )
             if hasattr(self, "_splitter"):
-                settings.setValue(
-                    "ui/silver_bars/splitter_h", self._splitter.saveState()
+                settings.set(
+                    SettingsKey.UI_SILVER_BARS_SPLITTER,
+                    self._splitter.saveState(),
                 )
-            settings.setValue(
-                "ui/silver_bars/available_cols",
+            settings.set(
+                SettingsKey.UI_SILVER_BARS_AVAILABLE_COLUMNS,
                 self._get_table_column_widths(self.available_bars_table),
             )
-            settings.setValue(
-                "ui/silver_bars/list_cols",
+            settings.set(
+                SettingsKey.UI_SILVER_BARS_LIST_COLUMNS,
                 self._get_table_column_widths(self.list_bars_table),
             )
             self._save_table_sort_state("available", self.available_bars_table)
             self._save_table_sort_state("list", self.list_bars_table)
-            settings.setValue(
-                "ui/silver_bars/weight_query", self.weight_search_edit.text()
+            settings.set(
+                SettingsKey.UI_SILVER_BARS_WEIGHT_QUERY,
+                self.weight_search_edit.text(),
             )
-            settings.setValue("ui/silver_bars/current_list_id", self.current_list_id)
-            settings.setValue(
-                "ui/silver_bars/date_range", self.date_range_combo.currentText()
+            settings.set(
+                SettingsKey.UI_SILVER_BARS_CURRENT_LIST_ID,
+                self.current_list_id,
+            )
+            settings.set(
+                SettingsKey.UI_SILVER_BARS_DATE_RANGE,
+                self.date_range_combo.currentText(),
             )
             settings.sync()
         except Exception as exc:
@@ -64,38 +82,41 @@ class SilverBarManagementStateStore(HostProxy):
     def _restore_ui_state(self):
         try:
             settings = self._settings()
-            geometry = settings.value("ui/silver_bars/geometry")
+            geometry = settings.read(SettingsKey.UI_SILVER_BARS_GEOMETRY)
             if geometry:
                 self.host.restoreGeometry(geometry)
 
-            state = settings.value("ui/silver_bars/splitter_h")
+            state = settings.read(SettingsKey.UI_SILVER_BARS_SPLITTER)
             if state and hasattr(self, "_splitter"):
                 self._splitter.restoreState(state)
             if hasattr(self, "_splitter"):
                 self._splitter.setOrientation(Qt.Orientation.Horizontal)
 
-            dr = settings.value("ui/silver_bars/date_range")
-            if isinstance(dr, str):
+            if settings.contains(SettingsKey.UI_SILVER_BARS_DATE_RANGE):
+                dr = settings.get_text(SettingsKey.UI_SILVER_BARS_DATE_RANGE)
                 idx = self.date_range_combo.findText(dr)
                 if idx >= 0:
                     self.date_range_combo.setCurrentIndex(idx)
 
-            weight_query = settings.value("ui/silver_bars/weight_query")
-            if isinstance(weight_query, str):
-                self.weight_search_edit.setText(weight_query)
+            weight_query = settings.get_text(SettingsKey.UI_SILVER_BARS_WEIGHT_QUERY)
+            self.weight_search_edit.setText(weight_query)
 
-            av_col = settings.value("ui/silver_bars/available_sort_col", type=int)
-            av_ord = settings.value("ui/silver_bars/available_sort_order", type=int)
-            if av_col is not None and av_ord is not None:
-                self.available_bars_table.sortByColumn(
-                    int(av_col), Qt.SortOrder(int(av_ord))
+            if settings.contains(
+                SettingsKey.UI_SILVER_BARS_AVAILABLE_SORT_COLUMN
+            ) and settings.contains(SettingsKey.UI_SILVER_BARS_AVAILABLE_SORT_ORDER):
+                av_col = settings.get_int(
+                    SettingsKey.UI_SILVER_BARS_AVAILABLE_SORT_COLUMN
                 )
-            ls_col = settings.value("ui/silver_bars/list_sort_col", type=int)
-            ls_ord = settings.value("ui/silver_bars/list_sort_order", type=int)
-            if ls_col is not None and ls_ord is not None:
-                self.list_bars_table.sortByColumn(
-                    int(ls_col), Qt.SortOrder(int(ls_ord))
+                av_ord = settings.get_int(
+                    SettingsKey.UI_SILVER_BARS_AVAILABLE_SORT_ORDER
                 )
+                self.available_bars_table.sortByColumn(av_col, Qt.SortOrder(av_ord))
+            if settings.contains(
+                SettingsKey.UI_SILVER_BARS_LIST_SORT_COLUMN
+            ) and settings.contains(SettingsKey.UI_SILVER_BARS_LIST_SORT_ORDER):
+                ls_col = settings.get_int(SettingsKey.UI_SILVER_BARS_LIST_SORT_COLUMN)
+                ls_ord = settings.get_int(SettingsKey.UI_SILVER_BARS_LIST_SORT_ORDER)
+                self.list_bars_table.sortByColumn(ls_col, Qt.SortOrder(ls_ord))
         except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
             self.logger.debug(
                 "Failed to restore silver bar dialog state: %s", exc, exc_info=True
@@ -104,13 +125,13 @@ class SilverBarManagementStateStore(HostProxy):
     def _restore_selected_list_from_settings(self):
         try:
             settings = self._settings()
-            saved_id = settings.value("ui/silver_bars/current_list_id")
+            saved_id = settings.read(SettingsKey.UI_SILVER_BARS_CURRENT_LIST_ID)
             if saved_id is None:
                 return
-            try:
-                saved_id_int = int(saved_id)
-            except TypeError, ValueError:
-                saved_id_int = saved_id
+            saved_id_int = saved_id
+            if isinstance(saved_id, (str, int, float, bytes, bytearray)):
+                with suppress(ValueError):
+                    saved_id_int = int(saved_id)
             idx = self.list_combo.findData(saved_id_int)
             if idx >= 0:
                 self.list_combo.setCurrentIndex(idx)
@@ -143,8 +164,8 @@ class SilverBarManagementStateStore(HostProxy):
     def _restore_table_column_widths(self):
         try:
             settings = self._settings()
-            available = settings.value("ui/silver_bars/available_cols", type=list)
-            list_cols = settings.value("ui/silver_bars/list_cols", type=list)
+            available = settings.get_list(SettingsKey.UI_SILVER_BARS_AVAILABLE_COLUMNS)
+            list_cols = settings.get_list(SettingsKey.UI_SILVER_BARS_LIST_COLUMNS)
             self._apply_table_column_widths(self.available_bars_table, available)
             self._apply_table_column_widths(self.list_bars_table, list_cols)
         except Exception as exc:

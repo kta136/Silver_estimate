@@ -8,7 +8,12 @@ from collections.abc import Callable
 
 from PySide6.QtCore import QObject, QThread, Signal
 
-from silverestimate.infrastructure.settings import SettingsReader, get_app_settings
+from silverestimate.infrastructure.settings import (
+    SettingsKey,
+    SettingsReader,
+    as_settings_reader,
+    get_app_settings,
+)
 from silverestimate.services.dda_rate_stream import DdaRateStreamWorker
 
 
@@ -37,8 +42,8 @@ class LiveRateService(QObject):
         self._thread: QThread | None = None
 
     def start(self) -> None:
-        settings = self._settings_provider()
-        if not settings.value("rates/live_enabled", True, type=bool):
+        settings = as_settings_reader(self._settings_provider())
+        if not settings.get_bool(SettingsKey.RATES_LIVE_ENABLED, True):
             return
         if self._thread is not None and self._thread.isRunning():
             return
@@ -77,7 +82,8 @@ class LiveRateService(QObject):
         self._thread = None
 
     def refresh_now(self) -> None:
-        if not self._settings_provider().value("rates/live_enabled", True, type=bool):
+        settings = as_settings_reader(self._settings_provider())
+        if not settings.get_bool(SettingsKey.RATES_LIVE_ENABLED, True):
             return
         was_running = self._thread is not None and self._thread.isRunning()
         self.start()

@@ -243,6 +243,9 @@ class _Host(QWidget):
         self.add_row_calls = 0
         self.calculate_totals_calls = 0
         self.log_perf_calls: list[tuple[str, int]] = []
+        self.layout_controller = self
+        self.table_controller = self
+        self.totals_controller = self
 
     def _status(self, message: str, timeout: int = 3000) -> None:
         self.status_calls.append((message, timeout))
@@ -477,7 +480,7 @@ def test_safe_load_estimate_respects_unsaved_cancel(workflow_host, monkeypatch):
     controller.safe_load_estimate()
 
     assert calls == []
-    assert controller._loading_estimate is False
+    assert host._loading_estimate is False
 
 
 def test_safe_load_estimate_ignores_empty_voucher(workflow_host, monkeypatch):
@@ -500,9 +503,13 @@ def test_save_estimate_success_invokes_print_and_clear(workflow_host, monkeypatc
     host.note_edit.setText("note")
     host.print_calls = 0
     host.clear_calls = []
-    host.print_estimate = lambda: setattr(host, "print_calls", host.print_calls + 1)
-    host.clear_form = lambda confirm=False: host.clear_calls.append(confirm)
-    host._update_view_model_snapshot = lambda: host.status_calls.append(("snapshot", 0))
+    controller.print_estimate = lambda: setattr(
+        host, "print_calls", host.print_calls + 1
+    )
+    controller.clear_form = lambda confirm=False: host.clear_calls.append(confirm)
+    controller._update_view_model_snapshot = lambda: host.status_calls.append(
+        ("snapshot", 0)
+    )
     host.presenter = object()
 
     class _ServiceStub:
@@ -546,7 +553,7 @@ def test_save_estimate_returns_when_presenter_missing(workflow_host):
 def test_save_estimate_handles_exception(workflow_host, monkeypatch):
     host, controller = workflow_host
     host.voucher_edit.setText("S004")
-    host._update_view_model_snapshot = lambda: None
+    controller._update_view_model_snapshot = lambda: None
     host.presenter = object()
 
     class _ServiceStub:
@@ -572,7 +579,7 @@ def test_save_estimate_handles_exception(workflow_host, monkeypatch):
 def test_save_estimate_failure_shows_critical(workflow_host, monkeypatch):
     host, controller = workflow_host
     host.voucher_edit.setText("S002")
-    host._update_view_model_snapshot = lambda: None
+    controller._update_view_model_snapshot = lambda: None
     host.presenter = object()
 
     class _ServiceStub:
@@ -598,7 +605,7 @@ def test_delete_current_estimate_success_clears_form(workflow_host):
     host.voucher_edit.setText("DEL1")
     host.presenter = types.SimpleNamespace(delete_estimate=lambda voucher_no: True)
     host.clear_calls = []
-    host.clear_form = lambda confirm=False: host.clear_calls.append(confirm)
+    controller.clear_form = lambda confirm=False: host.clear_calls.append(confirm)
 
     controller.delete_current_estimate()
 
@@ -619,9 +626,9 @@ def test_delete_current_estimate_failure_shows_warning(workflow_host):
 def test_print_estimate_handles_preview_validation_error(workflow_host):
     host, controller = workflow_host
     host.voucher_edit.setText("P001")
-    host._build_current_estimate_preview_data = lambda _voucher: (_ for _ in ()).throw(
-        ValueError("No valid items found to save.")
-    )
+    controller._build_current_estimate_preview_data = lambda _voucher: (
+        _ for _ in ()
+    ).throw(ValueError("No valid items found to save."))
 
     controller.print_estimate()
 
@@ -634,9 +641,9 @@ def test_print_estimate_handles_preview_validation_error(workflow_host):
 def test_print_estimate_handles_preview_build_exception(workflow_host):
     host, controller = workflow_host
     host.voucher_edit.setText("P002")
-    host._build_current_estimate_preview_data = lambda _voucher: (_ for _ in ()).throw(
-        RuntimeError("bad preview")
-    )
+    controller._build_current_estimate_preview_data = lambda _voucher: (
+        _ for _ in ()
+    ).throw(RuntimeError("bad preview"))
 
     controller.print_estimate()
 
@@ -644,7 +651,7 @@ def test_print_estimate_handles_preview_build_exception(workflow_host):
 
 
 def test_print_preview_ready_closes_progress_and_shows_preview(workflow_host):
-    _host, controller = workflow_host
+    host, controller = workflow_host
     progress = _ProgressStub()
     shown = []
     print_manager = types.SimpleNamespace(
@@ -652,7 +659,7 @@ def test_print_preview_ready_closes_progress_and_shows_preview(workflow_host):
             (payload, parent_widget)
         )
     )
-    controller._print_preview_request_id = 5
+    host._print_preview_request_id = 5
 
     controller._on_estimate_print_preview_ready(
         5,
@@ -666,10 +673,10 @@ def test_print_preview_ready_closes_progress_and_shows_preview(workflow_host):
 
 
 def test_print_preview_ready_ignores_stale_request(workflow_host):
-    _host, controller = workflow_host
+    host, controller = workflow_host
     progress = _ProgressStub()
     shown = []
-    controller._print_preview_request_id = 8
+    host._print_preview_request_id = 8
     print_manager = types.SimpleNamespace(
         show_preview=lambda payload, parent_widget=None: shown.append(
             (payload, parent_widget)
@@ -688,10 +695,10 @@ def test_print_preview_ready_ignores_stale_request(workflow_host):
 
 
 def test_print_preview_ready_none_payload_routes_to_error(workflow_host, monkeypatch):
-    _host, controller = workflow_host
+    host, controller = workflow_host
     progress = _ProgressStub()
     calls = []
-    controller._print_preview_request_id = 9
+    host._print_preview_request_id = 9
     monkeypatch.setattr(
         workflow_module.EstimateEntryWorkflowController,
         "_on_estimate_print_preview_error",
@@ -711,9 +718,9 @@ def test_print_preview_ready_none_payload_routes_to_error(workflow_host, monkeyp
 
 
 def test_print_preview_error_shows_message(workflow_host):
-    _host, controller = workflow_host
+    host, controller = workflow_host
     progress = _ProgressStub()
-    controller._print_preview_request_id = 3
+    host._print_preview_request_id = 3
 
     controller._on_estimate_print_preview_error(3, "bad payload", progress=progress)
 
@@ -722,9 +729,9 @@ def test_print_preview_error_shows_message(workflow_host):
 
 
 def test_print_preview_error_ignores_stale_request(workflow_host):
-    _host, controller = workflow_host
+    host, controller = workflow_host
     progress = _ProgressStub()
-    controller._print_preview_request_id = 5
+    host._print_preview_request_id = 5
 
     controller._on_estimate_print_preview_error(4, "stale", progress=progress)
 
@@ -737,7 +744,7 @@ def test_finalize_print_preview_build_disposes_resources(workflow_host):
     progress = _ProgressStub()
     thread = _ThreadStub()
     worker = _WorkerDisposeStub()
-    controller._active_print_preview_workers = {thread: worker}
+    host._active_print_preview_workers = {thread: worker}
 
     controller._finalize_estimate_print_preview_build(
         1,
@@ -752,7 +759,7 @@ def test_finalize_print_preview_build_disposes_resources(workflow_host):
     assert thread.wait_calls == [2000]
     assert worker.deleted == 1
     assert thread.deleted == 1
-    assert controller._active_print_preview_workers == {}
+    assert host._active_print_preview_workers == {}
 
 
 def test_clear_form_resets_modes_and_focuses_first_row(workflow_host, monkeypatch):
@@ -1039,7 +1046,7 @@ def test_build_current_estimate_preview_data_reports_skipped_rows(
         voucher_date="2026-03-20",
         voucher_note="preview note",
     )
-    host._update_view_model_snapshot = lambda: None
+    controller._update_view_model_snapshot = lambda: None
 
     class _Preparation:
         skipped_rows = [2, 4]

@@ -3,10 +3,41 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Optional
+from dataclasses import dataclass
+from enum import Enum, auto
+from typing import Optional, cast
 
 from PySide6.QtCore import QObject, QThread, Signal
 from PySide6.QtWidgets import QCheckBox, QFileDialog, QInputDialog, QMessageBox
+
+from silverestimate.persistence.database_protocols import (
+    MainCommandsDatabase,
+    ReadConnectionFactory,
+)
+
+
+class MainCommandStatus(Enum):
+    SUCCESS = auto()
+    STARTED = auto()
+    CANCELLED = auto()
+    FAILED = auto()
+
+
+@dataclass(frozen=True)
+class MainCommandOutcome:
+    status: MainCommandStatus
+    message: str = ""
+
+    @property
+    def succeeded(self) -> bool:
+        return self.status in {
+            MainCommandStatus.SUCCESS,
+            MainCommandStatus.STARTED,
+        }
+
+    @property
+    def cancelled(self) -> bool:
+        return self.status is MainCommandStatus.CANCELLED
 
 
 class _ItemCatalogExportWorker(QObject):
@@ -14,7 +45,7 @@ class _ItemCatalogExportWorker(QObject):
     error = Signal(str)
 
     def __init__(
-        self, *, connection_factory: Callable[[], Any], file_path: str
+        self, *, connection_factory: ReadConnectionFactory, file_path: str
     ) -> None:
         super().__init__()
         self.connection_factory = connection_factory
@@ -41,7 +72,10 @@ class MainCommands:
     """Encapsulate high-level commands triggered from the main window."""
 
     def __init__(
-        self, main_window, db_manager, logger: Optional[logging.Logger] = None
+        self,
+        main_window,
+        db_manager: MainCommandsDatabase,
+        logger: Optional[logging.Logger] = None,
     ) -> None:
         self.main_window = main_window
         self.db = db_manager
@@ -49,7 +83,7 @@ class MainCommands:
         self._catalog_export_thread: QThread | None = None
         self._catalog_export_worker: _ItemCatalogExportWorker | None = None
 
-    def update_db(self, db_manager) -> None:
+    def update_db(self, db_manager: MainCommandsDatabase) -> None:
         self.db = db_manager
         self._catalog_export_thread = None
         self._catalog_export_worker = None
@@ -82,9 +116,12 @@ class MainCommands:
             QMessageBox.critical(self.main_window, "Print Error", str(exc))
 
     # --- Data management ------------------------------------------------
-    def delete_all_data(self) -> None:
+    def delete_all_data(self) -> MainCommandOutcome:
         if not self._ensure_db():
-            return
+            return MainCommandOutcome(
+                MainCommandStatus.FAILED,
+                "Database connection is not available.",
+            )
 
         reply = QMessageBox.warning(
             self.main_window,
@@ -96,7 +133,7 @@ class MainCommands:
             QMessageBox.StandardButton.Cancel,
         )
         if reply != QMessageBox.StandardButton.Yes:
-            return
+            return MainCommandOutcome(MainCommandStatus.CANCELLED)
 
         text, ok = QInputDialog.getText(
             self.main_window,
@@ -107,7 +144,7 @@ class MainCommands:
             QMessageBox.information(
                 self.main_window, "Cancelled", "Delete all data cancelled."
             )
-            return
+            return MainCommandOutcome(MainCommandStatus.CANCELLED)
 
         try:
             if not self.db.drop_tables():
@@ -116,13 +153,20 @@ class MainCommands:
                     "Error",
                     "Failed to delete all data (dropping tables failed).",
                 )
-                return
+                return MainCommandOutcome(
+                    MainCommandStatus.FAILED,
+                    "Failed to delete all data (dropping tables failed).",
+                )
 
             self.db.setup_database()
             self._refresh_views_after_data_reset()
+            message = "All data has been deleted successfully."
             QMessageBox.information(
-                self.main_window, "Success", "All data has been deleted successfully."
+                self.main_window,
+                "Success",
+                message,
             )
+            return MainCommandOutcome(MainCommandStatus.SUCCESS, message)
         except Exception as exc:
             self.logger.error("Error deleting all data: %s", exc, exc_info=True)
             QMessageBox.critical(
@@ -130,11 +174,18 @@ class MainCommands:
                 "Error",
                 f"Failed to delete all data: {exc}",
             )
+            return MainCommandOutcome(
+                MainCommandStatus.FAILED,
+                f"Failed to delete all data: {exc}",
+            )
 
-    def restore_item_catalog(self) -> None:
+    def restore_item_catalog(self) -> MainCommandOutcome:
         """Restore a native Silver Estimate item catalog backup."""
         if not self._ensure_db():
-            return
+            return MainCommandOutcome(
+                MainCommandStatus.FAILED,
+                "Database connection is not available.",
+            )
 
         from silverestimate.services.item_catalog_transfer import (
             ITEM_CATALOG_FILE_FILTER,
@@ -148,7 +199,7 @@ class MainCommands:
             ITEM_CATALOG_FILE_FILTER,
         )
         if not file_path:
-            return
+            return MainCommandOutcome(MainCommandStatus.CANCELLED)
 
         message_box = QMessageBox(self.main_window)
         message_box.setIcon(QMessageBox.Icon.Question)
@@ -173,7 +224,7 @@ class MainCommands:
         )
         message_box.setDefaultButton(QMessageBox.StandardButton.Cancel)
         if message_box.exec() != QMessageBox.StandardButton.Yes:
-            return
+            return MainCommandOutcome(MainCommandStatus.CANCELLED)
         replace_existing = replace_checkbox.isChecked()
 
         try:
@@ -189,7 +240,7 @@ class MainCommands:
                 "Restore Failed",
                 str(exc),
             )
-            return
+            return MainCommandOutcome(MainCommandStatus.FAILED, str(exc))
 
         item_master = getattr(self.main_window, "item_master_widget", None)
         if item_master is not None and item_master.isVisible():
@@ -200,20 +251,27 @@ class MainCommands:
                     "Could not refresh item master after import: %s", exc
                 )
 
-        QMessageBox.information(
-            self.main_window,
-            "Restore Complete",
+        message = (
             "Item catalog backup restored successfully.\n\n"
             f"Total records: {summary['total']}\n"
             f"Inserted: {summary['inserted']}\n"
             f"Updated: {summary['updated']}\n"
-            f"Deleted: {summary['deleted']}",
+            f"Deleted: {summary['deleted']}"
         )
+        QMessageBox.information(
+            self.main_window,
+            "Restore Complete",
+            message,
+        )
+        return MainCommandOutcome(MainCommandStatus.SUCCESS, message)
 
-    def create_item_catalog_backup(self) -> None:
+    def create_item_catalog_backup(self) -> MainCommandOutcome:
         """Create a native Silver Estimate item catalog backup."""
         if not self._ensure_db():
-            return
+            return MainCommandOutcome(
+                MainCommandStatus.FAILED,
+                "Database connection is not available.",
+            )
 
         from silverestimate.services.item_catalog_transfer import (
             ITEM_CATALOG_FILE_FILTER,
@@ -228,7 +286,7 @@ class MainCommands:
             ITEM_CATALOG_FILE_FILTER,
         )
         if not file_path:
-            return
+            return MainCommandOutcome(MainCommandStatus.CANCELLED)
 
         connection_factory = getattr(self.db, "open_read_connection", None)
         if not callable(connection_factory):
@@ -237,16 +295,22 @@ class MainCommands:
                 "Export Failed",
                 "Encrypted database connection not available.",
             )
-            return
+            return MainCommandOutcome(
+                MainCommandStatus.FAILED,
+                "Encrypted database connection not available.",
+            )
 
-        self._start_item_catalog_export_worker(
-            connection_factory=connection_factory,
+        return self._start_item_catalog_export_worker(
+            connection_factory=cast(ReadConnectionFactory, connection_factory),
             file_path=ensure_catalog_file_suffix(file_path),
         )
 
-    def delete_all_estimates(self) -> None:
+    def delete_all_estimates(self) -> MainCommandOutcome:
         if not self._ensure_db():
-            return
+            return MainCommandOutcome(
+                MainCommandStatus.FAILED,
+                "Database connection is not available.",
+            )
 
         reply = QMessageBox.warning(
             self.main_window,
@@ -257,14 +321,15 @@ class MainCommands:
             QMessageBox.StandardButton.Cancel,
         )
         if reply != QMessageBox.StandardButton.Yes:
-            return
+            return MainCommandOutcome(MainCommandStatus.CANCELLED)
 
         try:
             if self.db.delete_all_estimates():
+                message = "All estimates have been deleted successfully."
                 QMessageBox.information(
                     self.main_window,
                     "Success",
-                    "All estimates have been deleted successfully.",
+                    message,
                 )
                 widget = getattr(self.main_window, "estimate_widget", None)
                 if widget:
@@ -274,12 +339,15 @@ class MainCommands:
                         self.logger.error(
                             "Error clearing estimate form: %s", form_exc, exc_info=True
                         )
+                return MainCommandOutcome(MainCommandStatus.SUCCESS, message)
             else:
+                message = "Failed to delete all estimates (database error)."
                 QMessageBox.critical(
                     self.main_window,
                     "Error",
-                    "Failed to delete all estimates (database error).",
+                    message,
                 )
+                return MainCommandOutcome(MainCommandStatus.FAILED, message)
         except Exception as exc:
             self.logger.error("Error deleting all estimates: %s", exc, exc_info=True)
             QMessageBox.critical(
@@ -287,17 +355,25 @@ class MainCommands:
                 "Error",
                 f"An unexpected error occurred: {exc}",
             )
+            return MainCommandOutcome(
+                MainCommandStatus.FAILED,
+                f"An unexpected error occurred: {exc}",
+            )
 
     def _start_item_catalog_export_worker(
-        self, *, connection_factory: Callable[[], Any], file_path: str
-    ) -> None:
+        self,
+        *,
+        connection_factory: ReadConnectionFactory,
+        file_path: str,
+    ) -> MainCommandOutcome:
         if getattr(self, "_catalog_export_thread", None) is not None:
+            message = "A catalog backup is already in progress."
             QMessageBox.information(
                 self.main_window,
                 "Catalog Backup",
-                "A catalog backup is already in progress.",
+                message,
             )
-            return
+            return MainCommandOutcome(MainCommandStatus.CANCELLED, message)
 
         worker = _ItemCatalogExportWorker(
             connection_factory=connection_factory, file_path=file_path
@@ -315,6 +391,10 @@ class MainCommands:
         self._catalog_export_worker = worker
         self._catalog_export_thread = thread
         thread.start()
+        return MainCommandOutcome(
+            MainCommandStatus.STARTED,
+            "Item catalog backup started.",
+        )
 
     def _on_item_catalog_export_finished(self, exported_count: int) -> None:
         QMessageBox.information(

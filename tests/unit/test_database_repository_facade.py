@@ -39,7 +39,7 @@ class _StubEstimateRepo:
         return "2025-01-01"
 
 
-class _StubSilverBarsRepo:
+class _StubSilverBarCommandRepo:
     def __init__(self):
         self.calls = []
 
@@ -47,9 +47,19 @@ class _StubSilverBarsRepo:
         self.calls.append(("create_list", (note,)))
         return 17
 
+
+class _StubSilverBarQueryRepo:
+    def __init__(self):
+        self.calls = []
+
     def get_silver_bars(self, **kwargs):
         self.calls.append(("get_silver_bars", kwargs))
         return ["bars"]
+
+
+class _StubSilverBarSynchronizationRepo:
+    def synchronize(self, voucher_no, bars):
+        raise AssertionError("Synchronization is not expected in this test.")
 
 
 class _StubItemCacheController:
@@ -64,7 +74,9 @@ class _FacadeHarness(DatabaseRepositoryFacadeMixin):
     def __init__(self):
         self.items_repo = _StubItemRepo()
         self.estimates_repo = _StubEstimateRepo()
-        self.silver_bars_repo = _StubSilverBarsRepo()
+        self.silver_bar_command_repo = _StubSilverBarCommandRepo()
+        self.silver_bar_query_repo = _StubSilverBarQueryRepo()
+        self.silver_bar_synchronization_repo = _StubSilverBarSynchronizationRepo()
         self._item_cache_controller = _StubItemCacheController()
         self.open_read_connection = lambda: object()
         self.last_error = "existing"
@@ -155,8 +167,8 @@ def test_silver_bar_facade_delegates_keyword_arguments():
         limit=5,
         offset=2,
     ) == ["bars"]
-    assert facade.silver_bars_repo.calls == [
-        ("create_list", ("Test List",)),
+    assert facade.silver_bar_command_repo.calls == [("create_list", ("Test List",))]
+    assert facade.silver_bar_query_repo.calls == [
         (
             "get_silver_bars",
             {

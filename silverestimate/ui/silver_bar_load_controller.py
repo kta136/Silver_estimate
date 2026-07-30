@@ -17,6 +17,7 @@ from silverestimate.domain.pagination import (
     Page,
 )
 from silverestimate.infrastructure.latest_request_runner import LatestRequestRunner
+from silverestimate.infrastructure.paged_load_state import PagedLoadState
 from silverestimate.persistence.silver_bars_snapshot_repository import (
     SilverBarsSnapshotRepository,
 )
@@ -84,10 +85,11 @@ class SilverBarLoadController(HostProxy):
     def __init__(self, host) -> None:
         super().__init__(host)
         object.__setattr__(self, "_load_shutdown", False)
-        self._available_cursor: AvailableBarCursor | None = None
-        self._list_cursor: BarListCursor | None = None
-        self._available_rows: list[dict[str, Any]] = []
-        self._list_rows: list[dict[str, Any]] = []
+        self._available_page_state = PagedLoadState[
+            dict[str, Any],
+            AvailableBarCursor,
+        ]()
+        self._list_page_state = PagedLoadState[dict[str, Any], BarListCursor]()
         self._available_runner = LatestRequestRunner(
             _load_bars_page,
             host,
@@ -153,23 +155,21 @@ class SilverBarLoadController(HostProxy):
             return 0
         cursor: AvailableBarCursor | BarListCursor | None
         if target == "available":
-            cursor = self._available_cursor
+            cursor = self._available_page_state.cursor
             runner = self._available_runner
             if not append:
-                self._available_cursor = None
-                self._available_rows = []
+                self._available_page_state.reset()
                 cursor = None
-            elif cursor is None:
+            elif not self._available_page_state.has_more:
                 return runner.generation
             button = getattr(self, "available_load_more_button", None)
         elif target == "list":
-            cursor = self._list_cursor
+            cursor = self._list_page_state.cursor
             runner = self._list_runner
             if not append:
-                self._list_cursor = None
-                self._list_rows = []
+                self._list_page_state.reset()
                 cursor = None
-            elif cursor is None:
+            elif not self._list_page_state.has_more:
                 return runner.generation
             button = getattr(self, "list_load_more_button", None)
         else:
@@ -256,16 +256,16 @@ class SilverBarLoadController(HostProxy):
     def _on_bars_load_ready(self, _generation: int, value: object) -> None:
         request, page = cast(tuple[_BarsLoadRequest, _BarsPage], value)
         target = request.target
-        page_rows = [dict(row) for row in page.items]
         if target == "available":
-            self._available_cursor = cast(
-                AvailableBarCursor | None,
-                page.next_cursor,
+            available_page = Page(
+                tuple(dict(row) for row in page.items),
+                page.total,
+                cast(AvailableBarCursor | None, page.next_cursor),
             )
-            self._available_rows = (
-                [*self._available_rows, *page_rows] if request.append else page_rows
+            rows = self._available_page_state.apply(
+                available_page,
+                append=request.append,
             )
-            rows = self._available_rows
             self._populate_table(
                 self.available_bars_table,
                 rows,
@@ -274,13 +274,17 @@ class SilverBarLoadController(HostProxy):
             self._restore_table_column_widths()
             button = getattr(self, "available_load_more_button", None)
             if button is not None:
-                button.setVisible(self._available_cursor is not None)
+                button.setVisible(self._available_page_state.has_more)
         elif target == "list":
-            self._list_cursor = cast(BarListCursor | None, page.next_cursor)
-            self._list_rows = (
-                [*self._list_rows, *page_rows] if request.append else page_rows
+            list_page = Page(
+                tuple(dict(row) for row in page.items),
+                page.total,
+                cast(BarListCursor | None, page.next_cursor),
             )
-            rows = self._list_rows
+            rows = self._list_page_state.apply(
+                list_page,
+                append=request.append,
+            )
             self._populate_table(
                 self.list_bars_table,
                 rows,
@@ -288,7 +292,7 @@ class SilverBarLoadController(HostProxy):
             )
             button = getattr(self, "list_load_more_button", None)
             if button is not None:
-                button.setVisible(self._list_cursor is not None)
+                button.setVisible(self._list_page_state.has_more)
         else:
             return
         self._update_transfer_buttons_state()
@@ -342,7 +346,6 @@ class SilverBarLoadController(HostProxy):
             return
         object.__setattr__(self, "_load_shutdown", True)
         for runner in (self._available_runner, self._list_runner):
-            runner.cancel()
             with contextlib.suppress(TypeError, RuntimeError):
                 runner.result.disconnect(self._on_bars_load_ready)
             with contextlib.suppress(TypeError, RuntimeError):
@@ -439,8 +442,7 @@ class SilverBarLoadController(HostProxy):
 
     def load_bars_in_selected_list(self, *, append: bool = False):
         if self.current_list_id is None:
-            self._list_rows = []
-            self._list_cursor = None
+            self._list_page_state.reset()
             self._clear_management_table(self.list_bars_table)
             button = getattr(self, "list_load_more_button", None)
             if button is not None:

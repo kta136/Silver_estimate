@@ -245,8 +245,8 @@
     "semantic_hash": ""
   },
   "silverestimate/ui/estimate_entry_theme.py": {
-    "mtime": 1784790124.887133,
-    "ast_hash": "103dc4d26660b340478496a9592dd1fc",
+    "mtime": 1786276664.0790057,
+    "ast_hash": "bea04f386d97cbac320c7c7fff76db86",
     "semantic_hash": ""
   },
   "silverestimate/ui/estimate_entry_totals_controller.py": {
@@ -1416,8 +1416,8 @@
   },
   "vendor/sqlcipher/PROVENANCE.json": {
     "mtime": 1784730232.81739,
-    "ast_hash": "bd38cc0e89d60ee794555f0f1fe9d381",
-    "semantic_hash": "bd38cc0e89d60ee794555f0f1fe9d381"
+    "ast_hash": "",
+    "semantic_hash": ""
   },
   ".github/workflows/build-sqlcipher-wheel.yml": {
     "mtime": 1784730315.8632934,
@@ -2000,8 +2000,8 @@
     "semantic_hash": ""
   },
   "DOCS/modernization-roadmap.md": {
-    "mtime": 1785418056.0042796,
-    "ast_hash": "4d8e8986ce002b1a0285d3c196a45ae0",
+    "mtime": 1785418426.4240928,
+    "ast_hash": "904a5db2d792015a51f1fe85c9c09e04",
     "semantic_hash": ""
   },
   "silverestimate/persistence/silver_bar_repository_base.py": {
@@ -2121,7 +2121,7 @@
   },
   "config/dependency-policy.json": {
     "mtime": 1785415220.1691966,
-    "ast_hash": "9ddf2b7eccd2116bd90630261c9a48c8",
+    "ast_hash": "",
     "semantic_hash": ""
   },
   "scripts/check_dependency_policy.py": {
@@ -2137,6 +2137,11 @@
   "DOCS/dependency-security-policy.md": {
     "mtime": 1785415424.1379929,
     "ast_hash": "49fb4e79a8f13548f0aea4df1522915e",
+    "semantic_hash": ""
+  },
+  "graphify-out/memory/query_20260809_115459_when_enterin_g_values_in_estimate_screen_thw_whole.md": {
+    "mtime": 1786276499.5466256,
+    "ast_hash": "954dd58823eae19ad4d6783f2ce4c5e7",
     "semantic_hash": ""
   }
 }

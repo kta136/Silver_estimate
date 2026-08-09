@@ -317,10 +317,6 @@ QTableView#EstimateTableView QLineEdit {
     selection-color: #ffffff;
 }
 
-QTableView#EstimateTableView:focus {
-    border: 2px solid __FOCUS_RING__;
-}
-
 QHeaderView::section {
     background-color: __HEADER_BG__;
     color: __TEXT_STRONG__;

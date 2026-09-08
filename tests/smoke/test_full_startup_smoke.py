@@ -7,7 +7,7 @@ from typing import Callable
 
 import pytest
 from PySide6.QtCore import QDate, Qt, QTimer
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPixmap
+from PySide6.QtGui import QAction, QColor, QFont, QFontDatabase, QPainter, QPixmap
 from PySide6.QtPrintSupport import QPrinter
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
@@ -53,15 +53,18 @@ _SMOKE_FONT_CANDIDATES = (
 
 
 def _configure_smoke_font(app: QApplication) -> None:
+    if app.platformName() == "windows":
+        # Exercise the installed Windows fonts used by the packaged application.
+        return
     for candidate in _SMOKE_FONT_CANDIDATES:
         if not candidate.exists():
             continue
         font_id = QFontDatabase.addApplicationFont(str(candidate))
         families = QFontDatabase.applicationFontFamilies(font_id)
         if font_id >= 0 and families:
-            app.setFont(QFont(families[0], 9))
+            app.setFont(QFont(families[0], 11))
             return
-    app.setFont(QFont("Sans Serif", 9))
+    app.setFont(QFont("Sans Serif", 11))
 
 
 class _MessageBoxStub:
@@ -85,7 +88,9 @@ class _MessageBoxStub:
         return QMessageBox.StandardButton.Ok
 
     @staticmethod
-    def question(*_args, **_kwargs):
+    def question(*args, **_kwargs):
+        if len(args) > 3 and args[3] & QMessageBox.StandardButton.Discard:
+            return QMessageBox.StandardButton.Discard
         return QMessageBox.StandardButton.Yes
 
     @staticmethod
@@ -186,14 +191,14 @@ def smoke_capture(request) -> _SmokeCapture:
 
 
 @pytest.fixture()
-def smoke_environment(monkeypatch, settings_stub, tmp_path):
+def smoke_environment(monkeypatch, settings_stub, tmp_path, qt_application_state):
     del settings_stub
     db_path = tmp_path / "database" / "estimation.db"
 
-    app = QApplication.instance()
-    if app is not None:
-        apply_light_application_theme(app, logging.getLogger("test.smoke.theme"))
-        _configure_smoke_font(app)
+    apply_light_application_theme(
+        qt_application_state, logging.getLogger("test.smoke.theme")
+    )
+    _configure_smoke_font(qt_application_state)
 
     monkeypatch.setattr(startup_module, "DB_PATH", str(db_path))
     monkeypatch.setattr(startup_module, "DatabaseManager", None, raising=False)
@@ -702,6 +707,7 @@ def test_full_startup_smoke_with_seeded_database_and_screenshots(
         from silverestimate.ui.estimate_history import EstimateHistoryDialog
 
         history_dialog = EstimateHistoryDialog(reopened_db, window, parent=window)
+        qtbot.addWidget(history_dialog)
         open_dialogs.append(history_dialog)
         _show_and_capture_dialog(
             history_dialog,
@@ -733,6 +739,7 @@ def test_full_startup_smoke_with_seeded_database_and_screenshots(
         )
 
         settings_dialog = SettingsDialog(main_window_ref=window, parent=window)
+        qtbot.addWidget(settings_dialog)
         open_dialogs.append(settings_dialog)
         _show_and_capture_dialog(
             settings_dialog,
@@ -745,6 +752,7 @@ def test_full_startup_smoke_with_seeded_database_and_screenshots(
         assert settings_dialog.sidebar.count() >= 6
 
         font_dialog = CustomFontDialog(window.print_font, parent=window)
+        qtbot.addWidget(font_dialog)
         open_dialogs.append(font_dialog)
         _show_and_capture_dialog(
             font_dialog,
@@ -757,6 +765,7 @@ def test_full_startup_smoke_with_seeded_database_and_screenshots(
         assert font_dialog.size_spinbox.value() >= 5
 
         item_selection_dialog = ItemSelectionDialog(reopened_db, "RING", parent=window)
+        qtbot.addWidget(item_selection_dialog)
         open_dialogs.append(item_selection_dialog)
         _show_and_capture_dialog(
             item_selection_dialog,
@@ -770,6 +779,7 @@ def test_full_startup_smoke_with_seeded_database_and_screenshots(
         assert item_selection_dialog.detail_code.text() == "RING001"
 
         silver_bar_dialog = SilverBarDialog(reopened_db, parent=window)
+        qtbot.addWidget(silver_bar_dialog)
         open_dialogs.append(silver_bar_dialog)
         _show_and_capture_dialog(
             silver_bar_dialog,
@@ -785,6 +795,7 @@ def test_full_startup_smoke_with_seeded_database_and_screenshots(
         smoke_capture(silver_bar_dialog, "10-silver-bar-management.png")
 
         optimal_dialog = OptimalListDialog(parent=silver_bar_dialog)
+        qtbot.addWidget(optimal_dialog)
         open_dialogs.append(optimal_dialog)
         _show_and_capture_dialog(
             optimal_dialog,
@@ -797,6 +808,7 @@ def test_full_startup_smoke_with_seeded_database_and_screenshots(
         assert optimal_dialog.min_weight_spin.value() > 0
 
         silver_history_dialog = SilverBarHistoryDialog(reopened_db, parent=window)
+        qtbot.addWidget(silver_history_dialog)
         open_dialogs.append(silver_history_dialog)
         _show_and_capture_dialog(
             silver_history_dialog,
@@ -821,6 +833,20 @@ def test_full_startup_smoke_with_seeded_database_and_screenshots(
         )
 
         if smoke_capture.enabled:
+            from tests.smoke.approved_ui_gallery import capture_approved_gallery
+
+            capture_approved_gallery(
+                capture=smoke_capture,
+                window=window,
+                history=history_dialog,
+                settings=settings_dialog,
+                inventory=silver_bar_dialog,
+                silver_history=silver_history_dialog,
+                font_dialog=font_dialog,
+                item_selection=item_selection_dialog,
+                optimal=optimal_dialog,
+                qtbot=qtbot,
+            )
             expected = {
                 "01-login-setup.png",
                 "02-login-existing-password.png",
@@ -849,3 +875,87 @@ def test_full_startup_smoke_with_seeded_database_and_screenshots(
             qt_app.processEvents()
         elif reopened_db is not None:
             reopened_db.close()
+
+
+@pytest.mark.parametrize("start_view", ["estimate", "item_master"])
+def test_history_menu_opens_real_dialog_and_loads_selected_estimate(
+    qtbot, qt_app, smoke_environment, smoke_capture, start_view
+):
+    from silverestimate.persistence.database_manager import DatabaseManager
+    from silverestimate.ui.estimate_history import EstimateHistoryDialog
+
+    db = DatabaseManager(
+        str(smoke_environment), SMOKE_MAIN_PASSWORD, device_secret=b"H" * 32
+    )
+    window = None
+    dialogs = []
+    timer = QTimer()
+    attempts = 0
+
+    def choose_estimate():
+        nonlocal attempts
+        attempts += 1
+        dialog = next(
+            (
+                candidate
+                for candidate in QApplication.topLevelWidgets()
+                if isinstance(candidate, EstimateHistoryDialog)
+                and candidate.isVisible()
+            ),
+            None,
+        )
+        if dialog is None:
+            return
+        if dialog not in dialogs:
+            dialogs.append(dialog)
+        for row in range(dialog.estimates_model.rowCount()):
+            payload = dialog.estimates_model.row_payload(row)
+            if payload is not None and payload.voucher_no == "1":
+                dialog.estimates_table.selectRow(row)
+                smoke_capture(dialog, f"14-history-menu-{start_view}.png")
+                timer.stop()
+                dialog.accept()
+                return
+        if attempts >= 300:
+            timer.stop()
+            dialog.reject()
+
+    try:
+        _seed_smoke_database(db)
+        window = MainWindow(
+            db_manager=db, logger=logging.getLogger("test.history.menu")
+        )
+        qtbot.addWidget(window)
+        _show_main_window_for_smoke(window, qtbot)
+        if start_view == "item_master":
+            window.show_item_master()
+            assert window.stack.currentWidget() is window.item_master_widget
+
+        history_action = next(
+            action
+            for action in window.findChildren(QAction)
+            if action.text() == "Estimate &History"
+        )
+        timer.timeout.connect(choose_estimate)
+        timer.start(10)
+        history_action.trigger()
+
+        assert dialogs, "The real History menu must open EstimateHistoryDialog"
+        assert dialogs[0].selected_voucher == "1"
+        widget = window.estimate_widget
+        assert window.stack.currentWidget() is widget
+        assert widget.voucher_edit.text() == "1"
+        assert widget.note_edit.text() == "Smoke estimate one"
+        assert widget.item_table.get_cell_text(0, COL_CODE) == "RING001"
+        assert not widget.has_unsaved_changes()
+    finally:
+        timer.stop()
+        for dialog in dialogs:
+            dialog.close()
+            dialog.deleteLater()
+        if window is not None:
+            window.close()
+            window.deleteLater()
+            qt_app.processEvents()
+        else:
+            db.close()

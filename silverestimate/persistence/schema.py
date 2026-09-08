@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from silverestimate.persistence.database_driver import dbapi as sqlite3
 
-CURRENT_SCHEMA_VERSION = 8
+CURRENT_SCHEMA_VERSION = 10
 
 if TYPE_CHECKING:  # pragma: no cover
     from silverestimate.persistence.database_manager import DatabaseManager
@@ -27,10 +27,10 @@ def run_schema_setup(db: "DatabaseManager") -> None:
     try:
         current_version = db._check_schema_version()
         logger.info("Current database schema version: %s", current_version)
-        if current_version not in (0, CURRENT_SCHEMA_VERSION):
+        if current_version not in (0, 8, 9, CURRENT_SCHEMA_VERSION):
             raise RuntimeError(
                 f"Unsupported database schema version {current_version}; "
-                f"this release accepts only version {CURRENT_SCHEMA_VERSION}."
+                f"this release accepts versions 8, 9 or {CURRENT_SCHEMA_VERSION}."
             )
 
         conn.execute("BEGIN IMMEDIATE")
@@ -54,6 +54,12 @@ def run_schema_setup(db: "DatabaseManager") -> None:
                 )
             _create_current_schema(db)
             _stage_schema_version(db, CURRENT_SCHEMA_VERSION)
+        if current_version == 8:
+            _upgrade_v8_snapshots(db)
+        if current_version in (0, 8, 9):
+            _create_draft_schema(db)
+            if current_version:
+                _stage_schema_version(db, CURRENT_SCHEMA_VERSION)
         _ensure_indexes(db)
         _validate_schema(db)
 
@@ -106,6 +112,9 @@ def _create_current_schema(db: "DatabaseManager") -> None:
             voucher_no TEXT,
             item_code TEXT,
             item_name TEXT,
+            item_code_snapshot TEXT,
+            tunch TEXT,
+            snapshot_version INTEGER NOT NULL DEFAULT 1,
             gross REAL DEFAULT 0,
             poly REAL DEFAULT 0,
             net_wt REAL DEFAULT 0,
@@ -159,6 +168,44 @@ def _create_current_schema(db: "DatabaseManager") -> None:
             FOREIGN KEY (silver_bar_id) REFERENCES silver_bars (bar_id) ON DELETE CASCADE,
             FOREIGN KEY (list_id) REFERENCES silver_bar_lists (list_id) ON DELETE SET NULL
         )
+        """)
+
+
+def _create_draft_schema(db: "DatabaseManager") -> None:
+    assert db.cursor is not None
+    db.cursor.execute("""
+        CREATE TABLE estimate_draft (
+            slot INTEGER PRIMARY KEY CHECK (slot = 1),
+            token TEXT NOT NULL,
+            voucher_no TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            updated_utc TEXT NOT NULL
+        )
+    """)
+
+
+def _upgrade_v8_snapshots(db: "DatabaseManager") -> None:
+    """Freeze metadata available at upgrade; original lost metadata is unknowable."""
+    cursor = db.cursor
+    assert cursor is not None
+    cursor.execute("ALTER TABLE estimate_items ADD COLUMN item_code_snapshot TEXT")
+    cursor.execute("ALTER TABLE estimate_items ADD COLUMN tunch TEXT")
+    cursor.execute(
+        "ALTER TABLE estimate_items ADD COLUMN snapshot_version INTEGER NOT NULL DEFAULT 1"
+    )
+    cursor.execute("""
+        UPDATE estimate_items SET
+            item_code_snapshot = item_code,
+            tunch = (SELECT items.tunch FROM items
+                     WHERE items.code = estimate_items.item_code COLLATE NOCASE),
+            wage_type = CASE
+                WHEN UPPER(TRIM(COALESCE(wage_type, ''))) IN ('WT', 'PC') THEN wage_type
+                ELSE COALESCE((SELECT CASE WHEN UPPER(items.wage_type) = 'PC'
+                              THEN 'PC' ELSE 'WT' END FROM items
+                              WHERE items.code = estimate_items.item_code COLLATE NOCASE), 'WT')
+                END,
+            line_key = CASE WHEN TRIM(COALESCE(line_key, '')) = ''
+                       THEN LOWER(HEX(RANDOMBLOB(16))) ELSE line_key END
         """)
 
 
@@ -234,11 +281,23 @@ def _ensure_indexes(db: "DatabaseManager") -> None:
             "CREATE INDEX IF NOT EXISTS idx_sbars_voucher_line_key "
             "ON silver_bars(estimate_voucher_no, source_line_key)"
         ),
+        "idx_bar_transfers_bar": (
+            "CREATE INDEX IF NOT EXISTS idx_bar_transfers_bar "
+            "ON bar_transfers(silver_bar_id)"
+        ),
         "idx_sbar_lists_identifier": (
             "CREATE INDEX IF NOT EXISTS idx_sbar_lists_identifier "
             "ON silver_bar_lists(list_identifier)"
         ),
     }
+    mandatory_indexes.update(
+        {
+            "idx_estimates_history_order": "CREATE INDEX IF NOT EXISTS idx_estimates_history_order ON estimates(COALESCE(voucher_no_int, -1) DESC, voucher_no DESC)",
+            "idx_sbars_history_order": "CREATE INDEX IF NOT EXISTS idx_sbars_history_order ON silver_bars(COALESCE(date_added, '') DESC, bar_id DESC)",
+            "idx_sbars_status_history_order": "CREATE INDEX IF NOT EXISTS idx_sbars_status_history_order ON silver_bars(status, COALESCE(date_added, '') DESC, bar_id DESC)",
+            "idx_sbars_available_order": "CREATE INDEX IF NOT EXISTS idx_sbars_available_order ON silver_bars(status, list_id, COALESCE(date_added, '') DESC, bar_id DESC)",
+        }
+    )
     failures: list[str] = []
     for position, (name, statement) in enumerate(mandatory_indexes.items()):
         savepoint = f"schema_index_{position}"
@@ -274,6 +333,7 @@ def _validate_schema(db: "DatabaseManager") -> None:
     assert cursor is not None
 
     required_columns = {
+        "estimate_draft": {"slot", "token", "voucher_no", "payload", "updated_utc"},
         "items": {"code", "name", "purity", "wage_type", "wage_rate", "tunch"},
         "estimates": {
             "voucher_no",
@@ -282,7 +342,14 @@ def _validate_schema(db: "DatabaseManager") -> None:
             "total_gross",
             "total_net",
         },
-        "estimate_items": {"voucher_no", "wage_type", "line_key"},
+        "estimate_items": {
+            "voucher_no",
+            "wage_type",
+            "line_key",
+            "item_code_snapshot",
+            "tunch",
+            "snapshot_version",
+        },
         "silver_bars": {
             "bar_id",
             "weight",

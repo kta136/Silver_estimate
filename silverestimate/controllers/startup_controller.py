@@ -21,6 +21,7 @@ from silverestimate.services.auth_service import (
     perform_data_wipe,
     run_authentication,
 )
+from silverestimate.ui.maintenance_progress import MaintenanceProgressDialog
 
 if TYPE_CHECKING:
     from silverestimate.persistence.database_manager import DatabaseManager as DbManager
@@ -249,7 +250,7 @@ class StartupController:
         password: str,
         device_secret: bytes,
     ) -> DbManager | None:
-        """Create the encrypted database connection, handling recovery prompts."""
+        """Prepare encrypted storage off-thread, then attach the UI writer."""
         db_t0 = time.perf_counter()
         db_cls = _resolve_database_manager()
         try:
@@ -266,10 +267,26 @@ class StartupController:
             return None
 
         try:
-            db_manager = db_cls(
-                DB_PATH,
-                password=password,
-                device_secret=device_secret,
+            progress = MaintenanceProgressDialog(
+                lambda: db_cls.prepare_startup(
+                    DB_PATH, password=password, device_secret=device_secret
+                ),
+                "Opening Database",
+                self._parent,
+                message=(
+                    "Opening and checking your database.\n"
+                    "Any required upgrades will finish before the application opens."
+                ),
+            )
+            try:
+                db_manager = cast("DbManager", progress.run_operation())
+            finally:
+                progress.deleteLater()
+            attach_t0 = time.perf_counter()
+            db_manager.attach_prepared_connection()
+            self._logger.debug(
+                "[perf] startup.ui_writer_attach_ms=%.2f",
+                (time.perf_counter() - attach_t0) * 1000.0,
             )
             self._start_background_preload(db_manager)
             self._logger.info("Database connection established")
@@ -283,7 +300,7 @@ class StartupController:
                 '"duration_ms":%.3f}',
                 (time.perf_counter() - db_t0) * 1000.0,
             )
-            return cast("DbManager", db_manager)
+            return db_manager
         except Exception as exc:
             self._logger.critical(
                 "Failed to connect to encrypted database: %s", exc, exc_info=True

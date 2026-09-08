@@ -34,6 +34,9 @@ MANIFEST
 *.spec
 !pysidedeploy.spec
 
+# Nuitka build diagnostics
+nuitka-crash-report.xml
+
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
@@ -161,6 +164,9 @@ logs/
 
 # Local test and smoke artifacts
 artifacts/
+/tmp/
+/output/
+# Curated visual references already tracked under output/ remain versioned.
 
 # Project database artifacts
 # Ignore all database files while keeping the folder via .gitkeep

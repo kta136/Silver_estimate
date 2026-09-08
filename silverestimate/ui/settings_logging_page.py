@@ -247,15 +247,17 @@ class LoggingSettingsPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
 
+        title = QLabel("Logging")
+        title.setObjectName("SettingsTitleLabel")
+        layout.addWidget(title)
         description = QLabel(
-            "Configure how the application logs events and manages log files. "
+            "Choose what gets recorded and how long logs are kept. "
             "Changes take effect when settings are applied."
         )
         description.setWordWrap(True)
         description.setObjectName("SettingsMutedDescription")
         layout.addWidget(description)
 
-        layout.addWidget(self._create_debug_group())
         layout.addWidget(self._create_log_levels_group())
         layout.addWidget(self._create_cleanup_group())
         layout.addWidget(self._create_utilities_group())
@@ -272,6 +274,8 @@ class LoggingSettingsPage(QWidget):
             checkbox.toggled.connect(self._emit_changed)
         self.cleanup_days_spin.valueChanged.connect(self._emit_changed)
         self.auto_cleanup_checkbox.toggled.connect(self.cleanup_days_spin.setEnabled)
+        self.debug_mode_checkbox.toggled.connect(self.enable_debug_checkbox.setEnabled)
+        self.enable_debug_checkbox.setEnabled(self.debug_mode_checkbox.isChecked())
 
     def _create_debug_group(self) -> QGroupBox:
         group = QGroupBox("Debug Settings")
@@ -294,25 +298,23 @@ class LoggingSettingsPage(QWidget):
         return group
 
     def _create_log_levels_group(self) -> QGroupBox:
-        group = QGroupBox("Log Levels")
+        group = QGroupBox("Recording")
         layout = QVBoxLayout(group)
         layout.setSpacing(8)
 
-        self.enable_info_checkbox = QCheckBox("Enable Normal Logs (INFO)")
+        self.enable_info_checkbox = QCheckBox("Normal events (INFO)")
         self.enable_info_checkbox.setToolTip(
             "Log normal application events (INFO level)"
         )
         layout.addWidget(self.enable_info_checkbox)
 
-        self.enable_critical_checkbox = QCheckBox(
-            "Enable Critical Logs (ERROR and CRITICAL)"
-        )
+        self.enable_critical_checkbox = QCheckBox("Errors and critical events")
         self.enable_critical_checkbox.setToolTip("Log errors and critical issues")
         layout.addWidget(self.enable_critical_checkbox)
 
-        self.enable_debug_checkbox = QCheckBox(
-            "Enable Debug Logs (when Debug Mode is on)"
-        )
+        self.debug_mode_checkbox = QCheckBox("Debug mode")
+        layout.addWidget(self.debug_mode_checkbox)
+        self.enable_debug_checkbox = QCheckBox("Debug details")
         self.enable_debug_checkbox.setToolTip(
             "Log detailed debug information (only when Debug Mode is enabled)"
         )
@@ -328,7 +330,7 @@ class LoggingSettingsPage(QWidget):
         return group
 
     def _create_cleanup_group(self) -> QGroupBox:
-        group = QGroupBox("Automatic Log Cleanup")
+        group = QGroupBox("Retention")
         layout = QVBoxLayout(group)
         layout.setSpacing(8)
 
@@ -358,7 +360,7 @@ class LoggingSettingsPage(QWidget):
         return group
 
     def _create_utilities_group(self) -> QGroupBox:
-        group = QGroupBox("Utilities")
+        group = QGroupBox("Maintenance")
         layout = QHBoxLayout(group)
         layout.setSpacing(10)
 

@@ -15,7 +15,7 @@ nox.options.sessions = ["pr"]
 PROJECT_ROOT = Path(__file__).resolve().parent
 RUFF_TARGETS = ("silverestimate", "tests", "scripts", "main.py", "noxfile.py")
 PYSIDE_DEPLOY_CONFIG = PROJECT_ROOT / "pysidedeploy.spec"
-NUITKA_VERSION = "4.1.3"
+NUITKA_VERSION = "4.2.1"
 LEGAL_ARTIFACTS = (
     PROJECT_ROOT / "LICENSE",
     PROJECT_ROOT / "THIRD_PARTY_NOTICES.md",
@@ -112,6 +112,13 @@ def run_pyside_deploy_build(
     parser = configparser.ConfigParser(interpolation=None)
     parser.read(PYSIDE_DEPLOY_CONFIG, encoding="utf-8")
     parser.set("nuitka", "mode", mode)
+    if os.name == "nt":
+        extra_args = parser.get("nuitka", "extra_args", fallback="")
+        parser.set(
+            "nuitka",
+            "extra_args",
+            f"--file-version={APP_VERSION} --product-version={APP_VERSION} {extra_args}",
+        )
     with temporary_config.open("w", encoding="utf-8") as stream:
         parser.write(stream)
 
@@ -174,6 +181,7 @@ def tests_full(session: nox.Session) -> None:
     clean_artifact(perf_log)
     clean_artifact(coverage_data)
     clean_artifact(coverage_xml)
+    smoke_artifacts = prepare_smoke_artifacts()
     session.env["QT_QPA_PLATFORM"] = "offscreen"
 
     session.run(
@@ -194,6 +202,9 @@ def tests_full(session: nox.Session) -> None:
         "pytest",
         "tests/smoke",
         "--run-smoke",
+        "--smoke-screenshots",
+        "--smoke-artifact-dir",
+        str(smoke_artifacts),
         "--cov=silverestimate",
         "--cov-append",
         "--cov-report=",
@@ -226,11 +237,21 @@ def tests_full(session: nox.Session) -> None:
 
 
 @nox.session(python=False)
-def smoke_ui(session: nox.Session) -> None:
+def perf_sqlcipher(session: nox.Session) -> None:
+    """Capture an opt-in encrypted baseline without machine-specific CI limits."""
+    session.run("python", "-m", "scripts.benchmark_sqlcipher", *session.posargs)
+
+
+def prepare_smoke_artifacts() -> Path:
     artifact_dir = PROJECT_ROOT / "artifacts" / "smoke-ui"
     clean_artifact(artifact_dir)
     artifact_dir.mkdir(parents=True, exist_ok=True)
+    return artifact_dir
 
+
+@nox.session(python=False)
+def smoke_ui(session: nox.Session) -> None:
+    artifact_dir = prepare_smoke_artifacts()
     session.env["QT_QPA_PLATFORM"] = "offscreen"
     session.run(
         "python",

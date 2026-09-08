@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from silverestimate.ui.models import ItemSelectionRecord, ItemSelectionTableModel
+from silverestimate.ui.modern_components import polish_dense_table
 from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
 from silverestimate.ui.window_sizing import resize_to_available_screen
 
@@ -66,11 +67,11 @@ class ItemSelectionDialog(QDialog):
                 extra_rules="""
                 QLabel#ItemSelectionBodyLabel {
                     color: __FIELD_TEXT__;
-                    font-size: 9pt;
+
                 }
                 QLabel#ItemSelectionMutedLabel {
                     color: __TEXT_MUTED__;
-                    font-size: 9pt;
+
                 }
                 QLabel#ItemSelectionEmptyLabel {
                     color: __TEXT_MUTED__;
@@ -157,7 +158,7 @@ class ItemSelectionDialog(QDialog):
         self.items_table.setSelectionMode(
             QAbstractItemView.SelectionMode.SingleSelection
         )
-        self.items_table.verticalHeader().setDefaultSectionSize(26)
+        polish_dense_table(self.items_table)
         self.items_table.doubleClicked.connect(lambda *_: self.accept())
         selection_model = self.items_table.selectionModel()
         if selection_model is not None:
@@ -219,7 +220,7 @@ class ItemSelectionDialog(QDialog):
         self.detail_wage_type.setObjectName("ItemSelectionValueLabel")
         grid.addWidget(self.detail_wage_type, 3, 1)
 
-        rate_label = QLabel("Wage Rate")
+        rate_label = QLabel("Lbr")
         rate_label.setObjectName("ItemSelectionFieldLabel")
         grid.addWidget(rate_label, 4, 0)
         self.detail_wage_rate = QLabel("-")

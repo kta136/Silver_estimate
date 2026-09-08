@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QFormLayout,
+    QFrame,
     QGridLayout,
+    QHBoxLayout,
     QLabel,
     QSizePolicy,
     QVBoxLayout,
@@ -61,18 +63,47 @@ class PrintSettingsPage(QWidget):
         )
 
     def _build_ui(self) -> None:
-        layout = QVBoxLayout(self)
+        layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
         form = QFormLayout()
         self._configure_form(form)
 
-        self._add_margin_controls(form)
         self._add_print_target_controls(form)
+        self._add_margin_controls(form)
         self._controller.load_to_ui(self.widgets())
 
-        layout.addLayout(form)
-        layout.addStretch()
+        from .settings_print_preview import SettingsPrintPreview
+
+        self.controls = QWidget()
+        self.controls.setMaximumWidth(440)
+        self.controls_layout = QVBoxLayout(self.controls)
+        self.controls_layout.addWidget(QLabel("Printer & paper"))
+        self.controls_layout.addLayout(form)
+        self.controls_layout.addStretch()
+        layout.addWidget(self.controls)
+        self.preview = SettingsPrintPreview(self)
+        layout.addWidget(self.preview, 1)
+        self._preview_timer = QTimer(self)
+        self._preview_timer.setSingleShot(True)
+        self._preview_timer.setInterval(150)
+        self._preview_timer.timeout.connect(self._refresh_preview)
+        self.changed.connect(self._preview_timer.start)
+
+    def attach_font_controls(self, appearance_page) -> None:
+        self._appearance_page = appearance_page
+        self.controls_layout.insertWidget(
+            self.controls_layout.count() - 1, appearance_page.print_font_controls
+        )
+        appearance_page.print_font_controls.show()
+        appearance_page.changed.connect(self._preview_timer.start)
+        self._preview_timer.start()
+
+    def _refresh_preview(self) -> None:
+        if hasattr(self, "_appearance_page"):
+            self.preview.render_preferences(
+                self.state(), self._appearance_page._current_print_font
+            )
 
     def _add_margin_controls(self, form: QFormLayout) -> None:
         margins_layout = QGridLayout()
@@ -88,20 +119,36 @@ class PrintSettingsPage(QWidget):
         ):
             spin.setRange(0, 50)
             spin.setSuffix(" mm")
-            self._polish_field(spin, width=135)
+            self._polish_field(spin, width=115)
             spin.valueChanged.connect(self._emit_changed)
 
-        margins_layout.setHorizontalSpacing(10)
-        margins_layout.setVerticalSpacing(8)
-        margins_layout.addWidget(QLabel("Left:"), 0, 0)
-        margins_layout.addWidget(self.margin_left_spin, 0, 1)
-        margins_layout.addWidget(QLabel("Top:"), 0, 2)
-        margins_layout.addWidget(self.margin_top_spin, 0, 3)
-        margins_layout.addWidget(QLabel("Right:"), 1, 0)
-        margins_layout.addWidget(self.margin_right_spin, 1, 1)
-        margins_layout.addWidget(QLabel("Bottom:"), 1, 2)
-        margins_layout.addWidget(self.margin_bottom_spin, 1, 3)
-        form.addRow(QLabel("Page Margins (mm):"), margins_layout)
+        margins_layout.setHorizontalSpacing(12)
+        margins_layout.setVerticalSpacing(4)
+        margins_layout.addWidget(
+            QLabel("Top"), 0, 1, alignment=Qt.AlignmentFlag.AlignCenter
+        )
+        margins_layout.addWidget(self.margin_top_spin, 1, 1)
+        page = QFrame()
+        page.setFixedSize(100, 92)
+        page.setStyleSheet("QFrame { background: white; border: 1px solid #8b929a; }")
+        inside = QFrame(page)
+        inside.setGeometry(10, 10, 80, 72)
+        inside.setStyleSheet("border: 1px dashed #b9bfc5;")
+        margins_layout.addWidget(page, 3, 1, alignment=Qt.AlignmentFlag.AlignCenter)
+        for column, label, spin in (
+            (0, "Left", self.margin_left_spin),
+            (2, "Right", self.margin_right_spin),
+        ):
+            side = QVBoxLayout()
+            side.addWidget(QLabel(label))
+            side.addWidget(spin)
+            margins_layout.addLayout(side, 3, column)
+        margins_layout.addWidget(
+            QLabel("Bottom"), 4, 1, alignment=Qt.AlignmentFlag.AlignCenter
+        )
+        margins_layout.addWidget(self.margin_bottom_spin, 5, 1)
+        form.addRow(QLabel("Margins (mm)"))
+        form.addRow(margins_layout)
 
     def _add_print_target_controls(self, form: QFormLayout) -> None:
         self.preview_zoom_spin = ThemedDoubleSpinBox()
@@ -114,7 +161,7 @@ class PrintSettingsPage(QWidget):
         )
         self._polish_field(self.preview_zoom_spin, width=160)
         self.preview_zoom_spin.valueChanged.connect(self._emit_changed)
-        form.addRow("Preview Default Zoom:", self.preview_zoom_spin)
+        form.addRow("Default zoom:", self.preview_zoom_spin)
 
         self.printer_combo = ThemedComboBox()
         self.printer_combo.setToolTip("Default printer for printing and quick print")

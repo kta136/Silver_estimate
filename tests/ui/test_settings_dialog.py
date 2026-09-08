@@ -1,8 +1,9 @@
 import types
 
+import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QTableWidget
+from PySide6.QtWidgets import QDialog, QDialogButtonBox, QTableWidget
 
 from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.security import credential_store
@@ -41,10 +42,10 @@ class _MessageBoxStub:
         return None
 
 
-def _make_main_window(estimate_widget, *, db=None):
+def _make_main_window(estimate_layout, *, db=None):
     return types.SimpleNamespace(
         print_font=QFont("Arial", 10),
-        estimate_widget=estimate_widget,
+        estimate_widget=types.SimpleNamespace(layout_controller=estimate_layout),
         show_catalog_restore_dialog=lambda: None,
         show_catalog_backup_dialog=lambda: None,
         delete_all_estimates=lambda: None,
@@ -63,7 +64,7 @@ class _PrinterStub:
         return self._name
 
 
-def test_settings_dialog_uses_visible_arrow_controls(qt_app, settings_stub):
+def test_settings_dialog_uses_visible_arrow_controls(qtbot, qt_app, settings_stub):
     del qt_app, settings_stub
     estimate_widget = types.SimpleNamespace(
         apply_table_font_size=lambda size: True,
@@ -72,6 +73,7 @@ def test_settings_dialog_uses_visible_arrow_controls(qt_app, settings_stub):
         apply_totals_position=lambda value: True,
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
+    qtbot.addWidget(dialog)
     try:
         assert isinstance(dialog.appearance_page.table_font_size_spin, ThemedSpinBox)
         assert isinstance(dialog.print_page.preview_zoom_spin, ThemedDoubleSpinBox)
@@ -87,9 +89,9 @@ def test_settings_dialog_uses_visible_arrow_controls(qt_app, settings_stub):
         assert dialog.page_scroll.widgetResizable() is True
         assert (
             dialog.page_scroll.horizontalScrollBarPolicy()
-            == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            == Qt.ScrollBarPolicy.ScrollBarAsNeeded
         )
-        assert dialog.appearance_page.print_font_button.minimumWidth() >= 180
+        assert dialog.appearance_page.print_font_button.minimumWidth() >= 130
         assert dialog.appearance_page.table_font_size_spin.maximumWidth() <= 180
         preview_table = dialog.findChild(QTableWidget, "SettingsPreviewTable")
         assert preview_table is not None
@@ -101,7 +103,7 @@ def test_settings_dialog_uses_visible_arrow_controls(qt_app, settings_stub):
 
 
 def test_settings_accept_does_not_close_when_apply_fails(
-    qt_app, monkeypatch, settings_stub
+    qtbot, qt_app, monkeypatch, settings_stub
 ):
     estimate_widget = types.SimpleNamespace(
         apply_table_font_size=lambda size: True,
@@ -110,6 +112,7 @@ def test_settings_accept_does_not_close_when_apply_fails(
         apply_totals_position=lambda value: True,
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
+    qtbot.addWidget(dialog)
     try:
         monkeypatch.setattr(dialog, "apply_settings", lambda: False)
         dialog.accept()
@@ -118,7 +121,9 @@ def test_settings_accept_does_not_close_when_apply_fails(
         dialog.deleteLater()
 
 
-def test_settings_apply_persists_print_preferences(qt_app, monkeypatch, settings_stub):
+def test_settings_apply_persists_print_preferences(
+    qtbot, qt_app, monkeypatch, settings_stub
+):
     del qt_app, settings_stub
     settings = get_app_settings()
     monkeypatch.setattr(
@@ -136,6 +141,7 @@ def test_settings_apply_persists_print_preferences(qt_app, monkeypatch, settings
         apply_totals_position=lambda value: True,
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
+    qtbot.addWidget(dialog)
     try:
         dialog.print_page.margin_left_spin.setValue(12)
         dialog.print_page.margin_top_spin.setValue(3)
@@ -161,7 +167,7 @@ def test_settings_apply_persists_print_preferences(qt_app, monkeypatch, settings
 
 
 def test_settings_dialog_uses_defaults_for_invalid_print_settings(
-    qt_app, monkeypatch, settings_stub
+    qtbot, qt_app, monkeypatch, settings_stub
 ):
     del qt_app, settings_stub
     settings = get_app_settings()
@@ -184,6 +190,7 @@ def test_settings_dialog_uses_defaults_for_invalid_print_settings(
         apply_totals_position=lambda value: True,
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
+    qtbot.addWidget(dialog)
     try:
         assert dialog.print_page.margin_left_spin.value() == 10
         assert dialog.print_page.margin_top_spin.value() == 2
@@ -200,7 +207,7 @@ def test_settings_dialog_uses_defaults_for_invalid_print_settings(
 
 
 def test_settings_dialog_preserves_portrait_orientation(
-    qt_app, monkeypatch, settings_stub
+    qtbot, qt_app, monkeypatch, settings_stub
 ):
     del qt_app, settings_stub
     settings = get_app_settings()
@@ -218,13 +225,16 @@ def test_settings_dialog_preserves_portrait_orientation(
         apply_totals_position=lambda value: True,
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
+    qtbot.addWidget(dialog)
     try:
         assert dialog.print_page.orientation_combo.currentText() == "Portrait"
     finally:
         dialog.deleteLater()
 
 
-def test_settings_apply_persists_ui_preferences(qt_app, monkeypatch, settings_stub):
+def test_settings_apply_persists_ui_preferences(
+    qtbot, qt_app, monkeypatch, settings_stub
+):
     del qt_app, settings_stub
     settings = get_app_settings()
     monkeypatch.setattr(
@@ -249,6 +259,7 @@ def test_settings_apply_persists_ui_preferences(qt_app, monkeypatch, settings_st
         ),
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
+    qtbot.addWidget(dialog)
     try:
         dialog.appearance_page.table_font_size_spin.setValue(12)
         dialog.appearance_page.breakdown_font_size_spin.setValue(11)
@@ -272,7 +283,76 @@ def test_settings_apply_persists_ui_preferences(qt_app, monkeypatch, settings_st
         dialog.deleteLater()
 
 
+@pytest.mark.parametrize(
+    "save_button",
+    [QDialogButtonBox.StandardButton.Apply, QDialogButtonBox.StandardButton.Ok],
+    ids=["apply", "save-and-close"],
+)
+def test_settings_save_appearance_on_real_estimate_screen(
+    qtbot,
+    qt_application_state,
+    monkeypatch,
+    make_estimate_widget,
+    fake_db,
+    save_button,
+):
+    _MessageBoxStub.reset()
+    monkeypatch.setattr(
+        "silverestimate.ui.settings_dialog.QMessageBox", _MessageBoxStub
+    )
+    monkeypatch.setattr(
+        "silverestimate.ui.settings_print_controller.QPrinterInfo.availablePrinters",
+        lambda: [],
+    )
+    monkeypatch.setattr(
+        "silverestimate.infrastructure.logger.reconfigure_logging", lambda: None
+    )
+    estimate = make_estimate_widget(fake_db)
+    main_window = _make_main_window(estimate.layout_controller)
+    main_window.estimate_widget = estimate
+    dialog = SettingsDialog(main_window_ref=main_window)
+    qtbot.addWidget(dialog)
+    page = dialog.appearance_page
+    page.table_font_size_spin.setValue(13)
+    page.breakdown_font_size_spin.setValue(12)
+    page.final_calc_font_size_spin.setValue(18)
+    page.totals_position_combo.setCurrentIndex(
+        page.totals_position_combo.findData("bottom")
+    )
+    page.density_combo.setCurrentIndex(page.density_combo.findData("comfortable"))
+    page.alternating_checkbox.setChecked(False)
+
+    dialog.buttonBox.button(save_button).click()
+
+    assert not _MessageBoxStub.critical_calls
+    assert dialog.settings_feedback_label.text() == "Settings applied and saved."
+    if save_button == QDialogButtonBox.StandardButton.Ok:
+        assert dialog.result() == QDialog.DialogCode.Accepted
+    settings = get_app_settings()
+    assert settings.value("ui/table_font_size") == 13
+    assert settings.value("ui/breakdown_font_size") == 12
+    assert settings.value("ui/final_calc_font_size") == 18
+    assert settings.value("ui/estimate_totals_position") == "bottom"
+    assert estimate.item_table.font().pointSize() == 13
+    assert not estimate.item_table.alternatingRowColors()
+    assert estimate._breakdown_font_size == 12
+    assert estimate._final_calc_font_size == 18
+    assert estimate._totals_position == "bottom"
+
+    reopened = SettingsDialog(main_window_ref=main_window)
+    qtbot.addWidget(reopened)
+    assert reopened.appearance_page.table_font_size_spin.value() == 13
+    reopened.appearance_page.table_font_size_spin.setValue(15)
+    reopened.buttonBox.button(QDialogButtonBox.StandardButton.Cancel).click()
+    assert settings.value("ui/table_font_size") == 13
+    assert estimate.item_table.font().pointSize() == 13
+    reloaded_estimate = make_estimate_widget(fake_db)
+    assert reloaded_estimate.item_table.font().pointSize() == 13
+    assert reloaded_estimate._totals_position == "bottom"
+
+
 def test_settings_apply_persists_logging_preferences(
+    qtbot,
     qt_app,
     monkeypatch,
     settings_stub,
@@ -295,6 +375,7 @@ def test_settings_apply_persists_logging_preferences(
         apply_totals_position=lambda value: True,
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
+    qtbot.addWidget(dialog)
     try:
         page = dialog.logging_page
         page.debug_mode_checkbox.setChecked(True)
@@ -316,7 +397,9 @@ def test_settings_apply_persists_logging_preferences(
         dialog.deleteLater()
 
 
-def test_settings_apply_can_clear_default_printer(qt_app, monkeypatch, settings_stub):
+def test_settings_apply_can_clear_default_printer(
+    qtbot, qt_app, monkeypatch, settings_stub
+):
     del qt_app, settings_stub
     settings = get_app_settings()
     settings.setValue("print/default_printer", "Warehouse Printer")
@@ -335,6 +418,7 @@ def test_settings_apply_can_clear_default_printer(qt_app, monkeypatch, settings_
         apply_totals_position=lambda value: True,
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
+    qtbot.addWidget(dialog)
     try:
         dialog.print_page.printer_combo.setCurrentIndex(
             dialog.print_page.printer_combo.findData("")
@@ -347,7 +431,7 @@ def test_settings_apply_can_clear_default_printer(qt_app, monkeypatch, settings_
 
 
 def test_settings_dialog_uses_defaults_for_invalid_ui_preferences(
-    qt_app, monkeypatch, settings_stub
+    qtbot, qt_app, monkeypatch, settings_stub
 ):
     del qt_app, settings_stub
     settings = get_app_settings()
@@ -368,17 +452,18 @@ def test_settings_dialog_uses_defaults_for_invalid_ui_preferences(
         apply_totals_position=lambda value: True,
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
+    qtbot.addWidget(dialog)
     try:
-        assert dialog.appearance_page.table_font_size_spin.value() == 9
-        assert dialog.appearance_page.breakdown_font_size_spin.value() == 9
-        assert dialog.appearance_page.final_calc_font_size_spin.value() == 10
+        assert dialog.appearance_page.table_font_size_spin.value() == 11
+        assert dialog.appearance_page.breakdown_font_size_spin.value() == 11
+        assert dialog.appearance_page.final_calc_font_size_spin.value() == 16
         assert dialog.appearance_page.totals_position_combo.currentData() == "right"
     finally:
         dialog.deleteLater()
 
 
-def test_settings_apply_calls_public_estimate_widget_methods(
-    qt_app, monkeypatch, settings_stub
+def test_settings_apply_calls_estimate_layout_controller(
+    qtbot, qt_app, monkeypatch, settings_stub
 ):
     _MessageBoxStub.reset()
     calls = {"table": 0, "breakdown": 0, "final": 0, "position": 0}
@@ -398,6 +483,7 @@ def test_settings_apply_calls_public_estimate_widget_methods(
         ),
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
+    qtbot.addWidget(dialog)
     try:
         monkeypatch.setattr(
             "silverestimate.ui.settings_dialog.QMessageBox", _MessageBoxStub
@@ -413,6 +499,7 @@ def test_settings_apply_calls_public_estimate_widget_methods(
 
 
 def test_password_change_uses_auth_service_and_preserves_keyring_names(
+    qtbot,
     qt_app,
     monkeypatch,
     settings_stub,
@@ -422,6 +509,10 @@ def test_password_change_uses_auth_service_and_preserves_keyring_names(
     credential_store.set_password_hash("main", "old-main-hash")
     credential_store.set_password_hash("backup", "old-backup-hash")
     changed_passwords = []
+    monkeypatch.setattr(
+        "silverestimate.ui.settings_security_page.run_database_maintenance",
+        lambda database, operation, title, parent: operation(database),
+    )
 
     class _DatabaseStub:
         @staticmethod
@@ -441,6 +532,7 @@ def test_password_change_uses_auth_service_and_preserves_keyring_names(
     dialog = SettingsDialog(
         main_window_ref=_make_main_window(estimate_widget, db=_DatabaseStub())
     )
+    qtbot.addWidget(dialog)
     monkeypatch.setattr(
         "silverestimate.ui.settings_security_page.QMessageBox",
         _MessageBoxStub,

@@ -67,6 +67,7 @@ def create_deterministic_dataset(path: Path) -> None:
                 total_net REAL,
                 total_fine REAL,
                 total_wage REAL,
+                last_balance_silver REAL,
                 last_balance_amount REAL
             );
             CREATE TABLE estimate_items (
@@ -105,8 +106,8 @@ def create_deterministic_dataset(path: Path) -> None:
             INSERT INTO estimates(
                 voucher_no, voucher_no_int, date, note, silver_rate,
                 total_gross, total_net, total_fine, total_wage,
-                last_balance_amount
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                last_balance_silver, last_balance_amount
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 (
@@ -119,6 +120,7 @@ def create_deterministic_dataset(path: Path) -> None:
                     495.0,
                     490.0,
                     1_250.0,
+                    2.0 if index % 2 else -2.0,
                     0.0,
                 )
                 for index in range(ESTIMATE_COUNT)
@@ -284,6 +286,9 @@ def run(output_path: Path) -> None:
                     lambda: fetch_estimate_history_page(connection.cursor(), limit=500)
                 )
                 assert len(page.items) == 500 and page.total == ESTIMATE_COUNT
+                assert page.items[0]["last_balance_silver"] == (
+                    2.0 if (ESTIMATE_COUNT - 1) % 2 else -2.0
+                )
                 _emit("estimate_history.page", duration)
 
                 duration, page = _measure(

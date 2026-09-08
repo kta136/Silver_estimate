@@ -5,6 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from silverestimate.domain.estimate_totals import calculate_grand_total
+from silverestimate.domain.numeric_policy import fixed_decimal, silver_value, sum_values
+from silverestimate.ui.estimate_table_formatting import format_indian_number
+
 from .estimate_print_document import (
     EstimatePrintDocument,
     EstimatePrintHeader,
@@ -64,6 +68,9 @@ class ModernEstimateLayout:
     sections: tuple[EstimatePrintSection, ...]
     last_balance_metrics: tuple[EstimatePrintMetric, ...]
     final_metrics: tuple[EstimatePrintMetric, ...]
+    date: str = ""
+    fine_weight: str = ""
+    has_rate: bool = False
 
     @property
     def lines(self) -> tuple[str, ...]:
@@ -72,8 +79,8 @@ class ModernEstimateLayout:
 
     def normalized_text(self) -> str:
         lines = [
-            "ESTIMATE SLIP ONLY",
-            f"Voucher: {self.voucher_no} | Silver Rate: {self.silver_rate}",
+            "ESTIMATE SLIP",
+            f"Voucher: {self.voucher_no} | Date: {self.date} | Silver Rate: {self.silver_rate}",
         ]
         if self.note:
             lines.append(f"Note: {self.note}")
@@ -92,7 +99,9 @@ class ModernEstimateLayout:
             lines.append("[LAST BALANCE]")
             lines.append(_metrics_text(self.last_balance_metrics))
 
-        lines.append("[FINAL SILVER & AMOUNT]")
+        if self.has_rate:
+            lines.append(f"Total Fine Weight (g): {self.fine_weight}")
+        lines.append("[SUMMARY]")
         lines.append(_metrics_text(self.final_metrics))
         return "\n".join(lines)
 
@@ -104,45 +113,43 @@ class _SectionTotals:
     net: float
     fine: float
     wage: float
+    pieces: float = 0.0
 
 
-REGULAR_COLUMNS = (
-    EstimatePrintColumn("sno", "SNo", 0.00, 0.04, "center"),
-    EstimatePrintColumn("name", "Item Name", 0.04, 0.25, "left"),
-    EstimatePrintColumn("gross", "Gross", 0.29, 0.10, "right"),
-    EstimatePrintColumn("poly", "Poly", 0.39, 0.09, "right"),
-    EstimatePrintColumn("net", "Net", 0.48, 0.10, "right"),
-    EstimatePrintColumn("purity", "%", 0.58, 0.08, "right"),
-    EstimatePrintColumn("wage_rate", "W. Rate", 0.66, 0.09, "right"),
-    EstimatePrintColumn("pieces", "PCS", 0.75, 0.07, "right"),
-    EstimatePrintColumn("fine", "Fine", 0.82, 0.10, "right"),
-    EstimatePrintColumn("wage", "Lbr", 0.92, 0.08, "right"),
-)
+def _columns(show_tunch: bool = False) -> tuple[EstimatePrintColumn, ...]:
+    specs: list[tuple[str, str, int, ColumnAlignment]] = [
+        ("sno", "#", 3, "center"),
+        ("name", "Item Name", 24, "left"),
+    ]
+    if show_tunch:
+        specs.append(("tunch", "Tunch", 6, "left"))
+    specs.extend(
+        [
+            ("gross", "Gross (g)", 8, "right"),
+            ("poly", "Poly (g)", 7, "right"),
+            ("net", "Net Wt (g)", 8, "right"),
+            ("purity", "Purity (%)", 7, "right"),
+            ("wage_rate", "Lbr", 8, "right"),
+            ("pieces", "Pieces", 5, "right"),
+            ("wage", "Lbr Amt (₹)", 10, "right"),
+            ("fine", "Fine Wt (g)", 8, "right"),
+            ("type", "Type", 8, "left"),
+        ]
+    )
+    total = sum(spec[2] for spec in specs)
+    result = []
+    start = 0.0
+    for key, title, width, alignment in specs:
+        ratio = width / total
+        result.append(EstimatePrintColumn(key, title, start, ratio, alignment))
+        start += ratio
+    return tuple(result)
 
-REGULAR_COLUMNS_WITH_TUNCH = (
-    EstimatePrintColumn("sno", "SNo", 0.00, 0.04, "center"),
-    EstimatePrintColumn("name", "Item Name", 0.04, 0.18, "left"),
-    EstimatePrintColumn("tunch", "Tunch", 0.22, 0.07, "right"),
-    *REGULAR_COLUMNS[2:],
-)
 
-SILVER_BAR_COLUMNS = (
-    EstimatePrintColumn("sno", "SNo", 0.00, 0.04, "center"),
-    EstimatePrintColumn("name", "Item Name", 0.04, 0.25, "left"),
-    EstimatePrintColumn("gross", "Gross", 0.29, 0.10, "right"),
-    EstimatePrintColumn("poly", "Poly", 0.39, 0.09, "right"),
-    EstimatePrintColumn("net", "Net", 0.48, 0.10, "right"),
-    EstimatePrintColumn("purity", "%", 0.58, 0.08, "right"),
-    EstimatePrintColumn("fine", "Fine", 0.82, 0.10, "right"),
-    EstimatePrintColumn("wage", "Lbr", 0.92, 0.08, "right"),
-)
-
-SILVER_BAR_COLUMNS_WITH_TUNCH = (
-    EstimatePrintColumn("sno", "SNo", 0.00, 0.04, "center"),
-    EstimatePrintColumn("name", "Item Name", 0.04, 0.18, "left"),
-    EstimatePrintColumn("tunch", "Tunch", 0.22, 0.07, "right"),
-    *SILVER_BAR_COLUMNS[2:],
-)
+REGULAR_COLUMNS = _columns()
+REGULAR_COLUMNS_WITH_TUNCH = _columns(True)
+SILVER_BAR_COLUMNS = REGULAR_COLUMNS
+SILVER_BAR_COLUMNS_WITH_TUNCH = REGULAR_COLUMNS_WITH_TUNCH
 
 
 def build_modern_estimate_layout(
@@ -160,17 +167,17 @@ def build_modern_estimate_layout(
                 show_tunch=document.show_tunch,
             ),
             _build_section(
-                "silver_bars",
-                "SILVER BARS",
-                bars,
-                is_bar=True,
-                show_tunch=document.show_tunch,
-            ),
-            _build_section(
                 "return_goods",
                 "RETURN GOODS",
                 returns,
                 is_return=True,
+                show_tunch=document.show_tunch,
+            ),
+            _build_section(
+                "silver_bars",
+                "SILVER BARS",
+                bars,
+                is_bar=True,
                 show_tunch=document.show_tunch,
             ),
             _build_section(
@@ -239,66 +246,53 @@ def _item_row(
     is_bar: bool,
     show_tunch: bool,
 ) -> EstimatePrintRow:
-    values: tuple[str, ...]
-    leading: tuple[str, ...] = (
-        str(index),
-        item.item_name,
-    )
+    leading: tuple[str, ...] = (str(index), item.item_name)
     if show_tunch:
         leading += (_tunch(item.tunch),)
-    common = leading + (
-        _weight(item.gross),
-        _weight(item.poly),
-        _weight(item.net_wt),
-        _decimal(item.purity, decimals=2),
+    kind = (
+        "Return Silver Bar"
+        if item.is_return and item.is_silver_bar
+        else "Return"
+        if item.is_return
+        else "Silver Bar"
+        if item.is_silver_bar
+        else "Regular"
     )
-    if is_bar:
-        values = common + (
-            _weight(item.fine),
-            _amount(item.wage, decimals=0),
-        )
-    else:
-        values = common + (
+    return EstimatePrintRow(
+        leading
+        + (
+            _weight(item.gross),
+            _weight(item.poly),
+            _weight(item.net_wt),
+            _decimal(item.purity, decimals=2),
             _decimal(item.wage_rate, decimals=2),
             _pieces(item.pieces),
+            _amount(item.wage, decimals=2),
             _weight(item.fine),
-            _amount(item.wage, decimals=0),
+            kind,
         )
-    return EstimatePrintRow(values)
+    )
 
 
 def _total_row(
-    totals: _SectionTotals,
-    *,
-    is_bar: bool,
-    show_tunch: bool,
+    totals: _SectionTotals, *, is_bar: bool, show_tunch: bool
 ) -> EstimatePrintRow:
-    values: tuple[str, ...]
-    leading: tuple[str, ...] = (
-        "",
-        "TOTAL",
-    )
-    if show_tunch:
-        leading += ("",)
-    common = leading + (
-        _weight(totals.gross),
-        _weight(totals.poly),
-        _weight(totals.net),
-        "",
-    )
-    if is_bar:
-        values = common + (
-            _weight(totals.fine),
-            _amount(totals.wage, decimals=0),
-        )
-    else:
-        values = common + (
+    leading = ("", "SUBTOTAL") + (("",) if show_tunch else ())
+    return EstimatePrintRow(
+        leading
+        + (
+            _weight(totals.gross),
+            _weight(totals.poly),
+            _weight(totals.net),
             "",
             "",
+            _pieces(totals.pieces),
+            _amount(totals.wage, decimals=2),
             _weight(totals.fine),
-            _amount(totals.wage, decimals=0),
-        )
-    return EstimatePrintRow(values, is_total=True)
+            "",
+        ),
+        is_total=True,
+    )
 
 
 def _complete_layout(
@@ -311,38 +305,56 @@ def _complete_layout(
     returns = totals_by_key.get("return_goods", _zero_totals())
     returned_bars = totals_by_key.get("return_silver_bars", _zero_totals())
 
-    net_fine = regular.fine - bars.fine - returns.fine - returned_bars.fine
-    net_wage = regular.wage - bars.wage - returns.wage - returned_bars.wage
-    if header.last_balance_silver > 0:
-        net_fine += header.last_balance_silver
-    if header.last_balance_amount > 0:
-        net_wage += header.last_balance_amount
-    silver_cost = net_fine * header.silver_rate
-    total_cost = net_wage + silver_cost
+    net_fine = sum_values(
+        (
+            regular.fine,
+            -bars.fine,
+            -returns.fine,
+            -returned_bars.fine,
+            header.last_balance_silver,
+        )
+    )
+    net_wage = sum_values(
+        (
+            regular.wage,
+            -bars.wage,
+            -returns.wage,
+            -returned_bars.wage,
+            header.last_balance_amount,
+        )
+    )
+    silver_cost = silver_value(net_fine, header.silver_rate)
+    total_cost = calculate_grand_total(
+        net_fine=net_fine, net_wage=net_wage, silver_rate=header.silver_rate
+    )
 
     last_balance = _last_balance_metrics(header)
-    final_metrics = [EstimatePrintMetric("Fine Silver", f"{_weight(net_fine)} g")]
-    if net_wage != 0.0:
-        final_metrics.append(
-            EstimatePrintMetric("Labour", f"Rs. {_amount(net_wage, decimals=0)}")
-        )
+    final_metrics = [
+        EstimatePrintMetric("Total Lbr Amt (₹)", _amount(net_wage, decimals=2))
+    ]
     if header.silver_rate > 0:
         final_metrics.extend(
             (
                 EstimatePrintMetric(
-                    "Silver Cost",
-                    f"Rs. {_amount(silver_cost, decimals=1)}",
+                    "Silver Value (₹)", _amount(silver_cost, decimals=2)
                 ),
                 EstimatePrintMetric(
-                    "Total",
-                    f"Rs. {_amount(total_cost, decimals=1)}",
-                    emphasis=True,
+                    "GRAND TOTAL (₹)", _amount(total_cost, decimals=2), emphasis=True
                 ),
             )
         )
+    else:
+        final_metrics.append(
+            EstimatePrintMetric("Silver (g)", _weight(net_fine), emphasis=True)
+        )
     return ModernEstimateLayout(
         voucher_no=header.voucher_no,
-        silver_rate=_amount(header.silver_rate, decimals=2),
+        date=header.date,
+        fine_weight=_weight(net_fine),
+        has_rate=header.silver_rate > 0,
+        silver_rate=_amount(header.silver_rate, decimals=2)
+        if header.silver_rate > 0
+        else "—",
         note=header.note.strip(),
         sections=sections,
         last_balance_metrics=last_balance,
@@ -353,7 +365,7 @@ def _complete_layout(
 def _last_balance_metrics(
     header: EstimatePrintHeader,
 ) -> tuple[EstimatePrintMetric, ...]:
-    if header.last_balance_silver <= 0 and header.last_balance_amount <= 0:
+    if header.last_balance_silver == 0 and header.last_balance_amount == 0:
         return ()
     return (
         EstimatePrintMetric(
@@ -362,7 +374,7 @@ def _last_balance_metrics(
         ),
         EstimatePrintMetric(
             "Amount",
-            f"Rs. {_amount(header.last_balance_amount, decimals=1)}",
+            f"Rs. {_amount(header.last_balance_amount, decimals=2)}",
         ),
     )
 
@@ -388,11 +400,12 @@ def _split_items(
 
 def _totals(items: tuple[EstimatePrintItem, ...]) -> _SectionTotals:
     return _SectionTotals(
-        gross=sum(item.gross for item in items),
-        poly=sum(item.poly for item in items),
-        net=sum(item.net_wt for item in items),
-        fine=sum(item.fine for item in items),
-        wage=sum(item.wage for item in items),
+        gross=sum_values(item.gross for item in items),
+        poly=sum_values(item.poly for item in items),
+        net=sum_values(item.net_wt for item in items),
+        fine=sum_values(item.fine for item in items),
+        wage=sum_values(item.wage for item in items),
+        pieces=sum_values(item.pieces for item in items),
     )
 
 
@@ -401,7 +414,7 @@ def _zero_totals() -> _SectionTotals:
 
 
 def _weight(value: float) -> str:
-    return _decimal(value, decimals=2, grouped=True)
+    return _decimal(value, decimals=3, grouped=True)
 
 
 def _tunch(value: str | None) -> str:
@@ -424,26 +437,11 @@ def _decimal(
     decimals: int,
     grouped: bool = False,
 ) -> str:
-    numeric = float(value)
-    sign = "-" if numeric < 0 else ""
-    integer, separator, fraction = f"{abs(numeric):.{decimals}f}".partition(".")
-    if grouped:
-        integer = _indian_group(integer)
-    if decimals <= 0:
-        return f"{sign}{integer}"
-    return f"{sign}{integer}{separator}{fraction}"
-
-
-def _indian_group(digits: str) -> str:
-    if len(digits) <= 3:
-        return digits
-    last_three = digits[-3:]
-    prefix = digits[:-3]
-    groups = []
-    while prefix:
-        groups.append(prefix[-2:])
-        prefix = prefix[:-2]
-    return f"{','.join(reversed(groups))},{last_three}"
+    return (
+        format_indian_number(value, decimals)
+        if grouped
+        else fixed_decimal(value, decimals)
+    )
 
 
 def _metrics_text(metrics: tuple[EstimatePrintMetric, ...]) -> str:

@@ -1,4 +1,4 @@
-# Silver Estimation App - v3.12
+# Silver Estimation App - v4.0
 
 A Windows desktop application built with PySide6 and a local SQLCipher database
 for managing silver sales estimates, item-wise entries, silver-bar inventory,
@@ -7,7 +7,7 @@ returns, and print-ready outputs.
 [![Python](https://img.shields.io/badge/Python-3.14+-blue.svg)](https://www.python.org/)
 [![PySide6](https://img.shields.io/badge/PySide6-6.11-green.svg)](https://doc.qt.io/qtforpython-6/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE)
-[![Source Version](https://img.shields.io/badge/source-v3.12-orange.svg)](CHANGELOG.md#312---2026-07-30)
+[![Source Version](https://img.shields.io/badge/source-v4.0-orange.svg)](CHANGELOG.md#40---2026-09-08)
 [![Latest Release](https://img.shields.io/github/v/release/kta136/Silver_estimate?label=stable%20release)](https://github.com/kta136/Silver_estimate/releases/latest)
 [![PR Validation](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml)
 [![Main Validation](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml)
@@ -24,7 +24,7 @@ returns, and print-ready outputs.
 - [Download latest stable release](https://github.com/kta136/Silver_estimate/releases/latest)
 - [Documentation index](DOCS/README.md)
 - [Changelog](CHANGELOG.md)
-- [v3.12 changelog](CHANGELOG.md#312---2026-07-30)
+- [v4.0 changelog](CHANGELOG.md#40---2026-09-08)
 - [Deployment guide](DOCS/deployment-guide.md)
 
 > The source tree can be ahead of the latest packaged release. Use the release
@@ -69,7 +69,7 @@ The app helps silver shops to:
 - **Presenter**: `silverestimate/presenter/estimate_entry_presenter.py` coordinates estimate workflows, keeping UI widgets thin and testable.
 - **Controllers**: Startup, navigation, and live-rate controllers bootstrap the app, wire menus/toolbars, and manage background refresh cadence.
 - **Services**: `MainCommands`, `SettingsService`, `LiveRateService`, and `AuthService` encapsulate reusable logic; authentication relies on the secure credential store.
-- **Persistence**: `DatabaseManager`, `SqlCipherConnectionBroker`, and role-specific repositories manage direct encrypted connections, current schema-v8 creation and validation, keyset pages, encrypted WAL/journals, maintenance draining, and staged recovery.
+- **Persistence**: `DatabaseManager`, `SqlCipherConnectionBroker`, and role-specific repositories manage direct encrypted connections, schema-v10 creation, v8/v9 upgrades and validation, keyset pages, encrypted WAL/journals, maintenance draining, and staged recovery.
 - **Security & infrastructure**: OS keyring-backed credential storage (`silverestimate/security/credential_store.py`), Qt6 startup bootstrap (`silverestimate/infrastructure/qt_bootstrap.py`), structured logging with optional cleanup scheduler, and QSettings helpers maintain app state safely.
 
 ### DDA Agra Mohar Live Rate
@@ -173,7 +173,7 @@ First run notes:
 - Logs: Written to `logs/` (ignored); avoid logging sensitive data
 
 The retired `SILVDB01` importer is no longer included. This release accepts only
-the current machine-bound schema-v8 SQLCipher database. An authenticated local
+the current machine-bound schema-v10 SQLCipher database (with transactional v8/v9 upgrades). An authenticated local
 two-file database is migrated once to the single-file format; a database copied
 without this PC's device secret fails closed. Plaintext, unversioned, and historical
 schema databases are rejected. Any separately retained `estimation.silvdb01.backup`
@@ -249,8 +249,8 @@ uv run pre-commit run --all-files
 - Inspectable standalone build: `uv run nox -s build_standalone standalone_artifact_smoke`
 - Clean one-file rebuild: `uv run nox -s build_clean artifact_smoke`
 - Validated local Windows build: `scripts\build_windows_local.cmd` (safe when the workspace path contains spaces)
-- Output: `dist/SilverEstimate.exe`, `dist/SilverEstimate-v3.12.exe`, and `dist/SilverEstimate-v3.12-win64.zip` on Windows
-- Release/CI builds use Qt's `pyside6-deploy`, the committed `pysidedeploy.spec`, and locked Nuitka 4.1.3
+- Validated local output: `dist/SilverEstimate-v4.0.exe`. Nox builds also produce `dist/SilverEstimate.exe` and `dist/SilverEstimate-v4.0-win64.zip` on Windows.
+- Release/CI builds use Qt's `pyside6-deploy`, the committed `pysidedeploy.spec`, and locked Nuitka 4.2.1
 - Packaged releases are Windows-only; macOS/Linux are untested development environments.
 
 ### GitHub Release (Windows CI)
@@ -303,6 +303,11 @@ Copyright (C) 2023-2026 Silver Estimation App
 ---
 
 ## Version History (highlights)
+
+### v4.0 (2026-09-08)
+- Implements the approved compact UI across the main workspaces, settings, and dialogs
+- Adds live appearance previews and preserves customization after applying the new defaults once
+- Updates Modern print layouts and summaries while retaining Classic printing
 
 ### v3.12 (2026-07-30)
 - Completes the repository, estimate-entry, settings, print-preview, typed-contract, paging, and worker-lifecycle modernization

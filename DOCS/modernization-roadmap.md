@@ -1,10 +1,30 @@
 # Modernization and Dependency Replacement Roadmap
 
 **Status:** Modernization closed at v3.12; Phase 12 deferred and Phase 16 out of scope
-**Last updated:** 2026-07-30
+**Last updated:** 2026-09-06
 **Applies to:** Silver Estimate v3.12 source tree and later
 **Primary platform:** Windows 10/11, Python 3.14
 **Project license:** GPL-3.0-only
+
+## Source review follow-up: 2026-09-06
+
+The platform phases below are a dated modernization record. A subsequent source
+review completed estimate/inventory safeguards, shared precision rules,
+historical snapshots, dirty-entry protection and encrypted draft recovery,
+history/query performance work, durable saves and responsive backup/restore.
+Entry and silver-bar controllers now use explicit host contracts; previews share
+one reusable worker controller per screen. Startup, password changes/rekey and
+catalog import now keep expensive work off the GUI thread with explicit
+connection ownership.
+
+Verified cleanup retired unused eager estimate loaders, unused font/row/print
+wrappers and an unused commit helper. Temporary visual runs were pruned while
+retaining a [documented reference set](visual-references.md). Current storage
+uses schema 10 and WAL/FULL; older descriptions below belong to their dated
+implementation records. Recovery and schema migration code remains supported.
+The original single Save action and accepted recovery-password wipe are retained.
+Final executable build verification remains the next delivery step; the July
+packaging results below do not validate the newer source changes.
 
 ## Implementation record: 2026-07-30
 
@@ -27,8 +47,8 @@ Phase 7 is complete. `EstimateEntryWidget` is a `QWidget` that explicitly owns
 workflow, layout, table, and totals controllers. Cross-controller calls name
 the target controller, the presenter still receives the narrow
 `EstimateEntryView` protocol, and `EstimateEntryFacade` has been deleted.
-`HostProxy` remains only because the independently owned silver-bar dialog
-controllers still use it.
+Follow-up, 6 September 2026: the nine silver-bar controllers now use explicit typed
+host access and direct facade calls. `HostProxy` has been removed.
 
 Phase 8 is complete. `SettingsDialog` is now a navigation and apply/defaults
 coordinator over independent appearance, live-rate, printing, data-management,
@@ -901,9 +921,9 @@ Acceptance criteria:
 - no navigation, recalculation, or save behavior regresses;
 - the project graph no longer identifies the facade as the dominant bridge.
 
-`HostProxy` remains independently justified for the silver-bar management
-controller family; it is no longer part of an estimate-entry facade
-inheritance chain.
+Follow-up, 6 September 2026: silver-bar controllers no longer use `HostProxy`;
+the unused helper is removed. Load/preview state has explicit controller ownership,
+and the dialog facade has direct calls and checked command signatures.
 
 ### 11.3 Split `SettingsDialog`
 

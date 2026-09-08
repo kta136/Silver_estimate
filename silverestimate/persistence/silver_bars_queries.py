@@ -104,10 +104,12 @@ def build_available_bars_queries(
 
     if after_date_added is not None and after_bar_id is not None:
         query += (
-            " AND (COALESCE(sb.date_added, '') < ? OR "
+            " AND COALESCE(sb.date_added, '') <= ? AND (COALESCE(sb.date_added, '') < ? OR "
             "(COALESCE(sb.date_added, '') = ? AND sb.bar_id < ?))"
         )
-        params.extend((after_date_added, after_date_added, int(after_bar_id)))
+        params.extend(
+            (after_date_added, after_date_added, after_date_added, int(after_bar_id))
+        )
 
     query += " ORDER BY COALESCE(sb.date_added, '') DESC, sb.bar_id DESC"
     if isinstance(limit, int) and limit > 0:
@@ -156,24 +158,18 @@ def build_bars_in_list_queries(
     )
 
 
-def build_history_bars_query(
-    *,
-    voucher_term: str = "",
-    weight_text: str = "",
-    status_text: str = "All Statuses",
-    limit: int = 2000,
-    after_date_added: str | None = None,
-    after_bar_id: int | None = None,
-) -> SqlStatement:
-    """Build the history search query used by the history dialog worker."""
-
+def _history_filters(
+    voucher_term: str, weight_text: str, status_text: str
+) -> tuple[list[str], list[Any]]:
     conditions: List[str] = []
     params: List[Any] = []
 
     normalized_voucher = str(voucher_term or "").strip()
     if normalized_voucher:
         pattern = f"%{normalized_voucher}%"
-        conditions.append("(sb.estimate_voucher_no LIKE ? OR e.note LIKE ?)")
+        conditions.append(
+            "(sb.estimate_voucher_no LIKE ? OR sb.estimate_voucher_no IN (SELECT voucher_no FROM estimates WHERE note LIKE ?))"
+        )
         params.extend([pattern, pattern])
 
     normalized_weight = str(weight_text or "").strip()
@@ -190,12 +186,40 @@ def build_history_bars_query(
         conditions.append("sb.status = ?")
         params.append(normalized_status)
 
+    return conditions, params
+
+
+def build_history_bars_count_query(
+    *, voucher_term: str = "", weight_text: str = "", status_text: str = "All Statuses"
+) -> SqlStatement:
+    conditions, params = _history_filters(voucher_term, weight_text, status_text)
+    query = "SELECT COUNT(*) FROM silver_bars sb"
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    return SqlStatement(query, tuple(params))
+
+
+def build_history_bars_query(
+    *,
+    voucher_term: str = "",
+    weight_text: str = "",
+    status_text: str = "All Statuses",
+    limit: int = 2000,
+    after_date_added: str | None = None,
+    after_bar_id: int | None = None,
+) -> SqlStatement:
+    """Build the history search query used by the history dialog worker."""
+
+    conditions, params = _history_filters(voucher_term, weight_text, status_text)
+
     if after_date_added is not None and after_bar_id is not None:
         conditions.append(
-            "(COALESCE(sb.date_added, '') < ? OR "
+            "COALESCE(sb.date_added, '') <= ? AND (COALESCE(sb.date_added, '') < ? OR "
             "(COALESCE(sb.date_added, '') = ? AND sb.bar_id < ?))"
         )
-        params.extend((after_date_added, after_date_added, int(after_bar_id)))
+        params.extend(
+            (after_date_added, after_date_added, after_date_added, int(after_bar_id))
+        )
 
     query = (
         "SELECT "
@@ -207,6 +231,16 @@ def build_history_bars_query(
         "LEFT JOIN silver_bar_lists sbl ON sb.list_id = sbl.list_id "
         "LEFT JOIN estimates e ON sb.estimate_voucher_no = e.voucher_no"
     )
+    # Substring filters scan once and test matching voucher IDs before display joins.
+    # The date-order index otherwise causes costly random lookups for every bar.
+    if (
+        str(voucher_term or "").strip()
+        and "sb.weight = ?" not in conditions
+        and "sb.status = ?" not in conditions
+    ):
+        query = query.replace(
+            "FROM silver_bars sb ", "FROM silver_bars sb NOT INDEXED "
+        )
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
     query += " ORDER BY COALESCE(sb.date_added, '') DESC, sb.bar_id DESC LIMIT ?"

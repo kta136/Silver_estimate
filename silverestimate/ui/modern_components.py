@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QScrollArea,
     QSizePolicy,
     QTableView,
     QVBoxLayout,
@@ -28,6 +29,7 @@ def polish_dense_table(
 ) -> None:
     """Apply shared dense table metrics without replacing the table model."""
 
+    table.setProperty("denseTable", True)
     table.setAlternatingRowColors(True)
     table.setWordWrap(False)
     table.verticalHeader().setDefaultSectionSize(int(row_height))
@@ -42,6 +44,9 @@ def polish_dense_table(
         table.setShowGrid(bool(show_grid))
     if hide_vertical_header is not None:
         table.verticalHeader().setVisible(not bool(hide_vertical_header))
+    from .appearance import apply_table_appearance
+
+    apply_table_appearance(table)
 
 
 class BottomStatusStrip(QFrame):
@@ -52,8 +57,8 @@ class BottomStatusStrip(QFrame):
         self.setObjectName("BottomStatusStrip")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 2, 10, 2)
-        layout.setSpacing(18)
+        layout.setContentsMargins(6, 1, 6, 1)
+        layout.setSpacing(10)
         self._left = QLabel("")
         self._left.setObjectName("StatusStripText")
         self._right = QLabel("")
@@ -63,10 +68,27 @@ class BottomStatusStrip(QFrame):
         )
         layout.addWidget(self._left, 1)
         layout.addWidget(self._right, 0)
-        self.setFixedHeight(24)
+        self._sync_metrics()
+        self._left.setMinimumWidth(0)
+        self._left.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
+
+    def _sync_metrics(self) -> None:
+        font = self.font()
+        font.setPointSizeF(max(8.0, font.pointSizeF() - 1.0))
+        for label in (self._left, self._right):
+            label.setFont(font)
+        self.setFixedHeight(max(22, self._left.fontMetrics().height() + 4))
+
+    def changeEvent(self, event) -> None:
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.FontChange and hasattr(self, "_left"):
+            self._sync_metrics()
 
     def set_left_items(self, items: Iterable[str]) -> None:
         self._left.setText("  |  ".join(str(item) for item in items if str(item)))
+        self._left.setToolTip(self._left.text())
 
     def set_right_items(self, items: Iterable[str]) -> None:
         self._right.setText("  |  ".join(str(item) for item in items if str(item)))
@@ -122,6 +144,77 @@ class DetailsStrip(QFrame):
             group_layout.addWidget(value_widget)
             self._layout.addWidget(group)
         self._layout.addStretch(1)
+
+
+class RecordInspector(QFrame):
+    """Readable selected-record details, independent of the source table model."""
+
+    def __init__(self, title: str, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.setObjectName("RecordInspector")
+        self.setStyleSheet(
+            "QFrame#RecordInspector { background: white; border: 1px solid #d9dde2; border-radius: 6px; }"
+            "QWidget#RecordInspectorBody { background: white; }"
+        )
+        self.setMinimumWidth(260)
+        self.setMaximumWidth(380)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
+        heading = QLabel(title.upper())
+        layout.addWidget(heading)
+        self._fields = QVBoxLayout()
+        self._fields.setSpacing(12)
+        self._fields.setAlignment(Qt.AlignmentFlag.AlignTop)
+        body = QWidget()
+        body.setObjectName("RecordInspectorBody")
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.addLayout(self._fields)
+        body_layout.addStretch()
+        scroll = QScrollArea()
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(body)
+        layout.addWidget(scroll, 1)
+        self.action_layout = QVBoxLayout()
+        self.action_layout.setSpacing(10)
+        layout.addLayout(self.action_layout)
+
+    def set_items(self, items: Iterable[tuple[str, object]]) -> None:
+        while self._fields.count():
+            item = self._fields.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.hide()
+                widget.deleteLater()
+        for title, value in items:
+            row = QWidget()
+            row.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
+            layout = (
+                QVBoxLayout(row)
+                if title in {"Note", "Name", "Voucher No"}
+                else QHBoxLayout(row)
+            )
+            layout.setContentsMargins(0, 0, 0, 0)
+            label, content = QLabel(title), QLabel(str(value))
+            content.setWordWrap(True)
+            content.setTextInteractionFlags(
+                Qt.TextInteractionFlag.TextSelectableByMouse
+            )
+            content.setMinimumWidth(0)
+            layout.addWidget(label)
+            layout.addWidget(content, 1 if isinstance(layout, QHBoxLayout) else 0)
+            if isinstance(layout, QHBoxLayout):
+                content.setAlignment(
+                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+                )
+            if title in {"Grand Total", "Total"}:
+                row.setStyleSheet(
+                    "background: #007f89; border-radius: 5px; padding: 7px;"
+                )
+                label.setStyleSheet("color: white; font-weight: bold;")
+                content.setStyleSheet("color: white; font-weight: bold;")
+            self._fields.addWidget(row)
 
 
 class TableEmptyStateOverlay(QLabel):

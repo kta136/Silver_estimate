@@ -3,23 +3,23 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Optional
 
-from PySide6.QtWidgets import QDoubleSpinBox
 from shiboken6 import isValid
 
+from silverestimate.domain.estimate_entry import EstimateEntryRowState
 from silverestimate.domain.estimate_models import (
     CategoryTotals,
     EstimateLineCategory,
     TotalsResult,
 )
 from silverestimate.domain.estimate_totals import build_totals_result
+from silverestimate.domain.numeric_policy import sum_values
 from silverestimate.services.estimate_calculator import (
     compute_fine_weight,
     compute_net_weight,
     compute_wage_amount,
 )
-from silverestimate.ui.view_models import EstimateEntryRowState
 
 from .estimate_entry_logic.constants import (
     COL_FINE_WT,
@@ -33,26 +33,14 @@ from .estimate_entry_logic.constants import (
 )
 
 if TYPE_CHECKING:
-    from .estimate_entry import _RowContribution, _RunningCategoryTotals
-    from .estimate_entry_components import EstimateTableView
+    from .estimate_entry import EstimateEntryWidget, _RowContribution
 
 
 class EstimateEntryTotalsController:
     """Own totals recompute and incremental aggregation behavior."""
 
-    def __init__(self, host: Any) -> None:
+    def __init__(self, host: EstimateEntryWidget) -> None:
         self.host = host
-
-    if TYPE_CHECKING:
-        item_table: EstimateTableView
-        silver_rate_spin: QDoubleSpinBox
-        _agg_overall_gross: float
-        _agg_overall_poly: float
-        _agg_regular: _RunningCategoryTotals
-        _agg_returns: _RunningCategoryTotals
-        _agg_silver_bars: _RunningCategoryTotals
-        _incremental_totals_failed: bool
-        _row_contrib_cache: dict[int, _RowContribution]
 
     def calculate_net_weight(self):
         self._recompute_row_derived_values(self.host.current_row)
@@ -105,9 +93,9 @@ class EstimateEntryTotalsController:
                 pieces=pieces,
             )
 
-            self.host.item_table.set_cell_text(row, COL_NET_WT, f"{net:.2f}")
-            self.host.item_table.set_cell_text(row, COL_FINE_WT, f"{fine:.2f}")
-            self.host.item_table.set_cell_text(row, COL_WAGE_AMT, f"{wage:.0f}")
+            self.host.item_table.set_cell_value(row, COL_NET_WT, net)
+            self.host.item_table.set_cell_value(row, COL_FINE_WT, fine)
+            self.host.item_table.set_cell_value(row, COL_WAGE_AMT, wage)
             self._update_incremental_for_row(row)
 
             if schedule_totals:
@@ -202,8 +190,7 @@ class EstimateEntryTotalsController:
         if row_state is None:
             return self._inactive_row_contribution()
 
-        code = str(getattr(row_state, "code", "") or "").strip()
-        if not code:
+        if row_state.is_empty():
             return self._inactive_row_contribution()
 
         category = getattr(row_state, "category", EstimateLineCategory.REGULAR)
@@ -222,10 +209,10 @@ class EstimateEntryTotalsController:
 
     @staticmethod
     def _apply_signed_contribution(bucket, contrib, *, sign: int) -> None:
-        bucket.gross += sign * contrib.gross
-        bucket.net += sign * contrib.net
-        bucket.fine += sign * contrib.fine
-        bucket.wage += sign * contrib.wage
+        bucket.gross = sum_values((bucket.gross, sign * contrib.gross))
+        bucket.net = sum_values((bucket.net, sign * contrib.net))
+        bucket.fine = sum_values((bucket.fine, sign * contrib.fine))
+        bucket.wage = sum_values((bucket.wage, sign * contrib.wage))
 
     def _apply_contribution_delta(self, old_contrib, new_contrib) -> None:
         if old_contrib.is_active:
@@ -236,8 +223,12 @@ class EstimateEntryTotalsController:
                 silver_bars=self.host._agg_silver_bars,
             )
             self._apply_signed_contribution(old_bucket, old_contrib, sign=-1)
-            self.host._agg_overall_gross -= old_contrib.gross
-            self.host._agg_overall_poly -= old_contrib.poly
+            self.host._agg_overall_gross = sum_values(
+                (self.host._agg_overall_gross, -old_contrib.gross)
+            )
+            self.host._agg_overall_poly = sum_values(
+                (self.host._agg_overall_poly, -old_contrib.poly)
+            )
 
         if new_contrib.is_active:
             new_bucket = self._category_bucket_for(
@@ -247,8 +238,12 @@ class EstimateEntryTotalsController:
                 silver_bars=self.host._agg_silver_bars,
             )
             self._apply_signed_contribution(new_bucket, new_contrib, sign=1)
-            self.host._agg_overall_gross += new_contrib.gross
-            self.host._agg_overall_poly += new_contrib.poly
+            self.host._agg_overall_gross = sum_values(
+                (self.host._agg_overall_gross, new_contrib.gross)
+            )
+            self.host._agg_overall_poly = sum_values(
+                (self.host._agg_overall_poly, new_contrib.poly)
+            )
 
     def _reset_incremental_aggregates(self) -> None:
         from .estimate_entry import _RunningCategoryTotals

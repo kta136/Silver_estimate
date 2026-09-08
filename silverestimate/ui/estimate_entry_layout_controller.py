@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
+    QFrame,
+    QGridLayout,
     QHBoxLayout,
     QMenu,
     QSizePolicy,
@@ -24,6 +26,7 @@ from silverestimate.infrastructure.settings import (
     get_app_settings,
 )
 
+from .appearance import set_table_font
 from .estimate_entry_components import (
     EstimateTableView,
     PrimaryActionsBar,
@@ -46,16 +49,17 @@ from .estimate_entry_ui import (
 )
 from .icons import get_icon
 from .modern_components import BottomStatusStrip, polish_dense_table
+from .toolbar_overflow import ToolbarOverflow
+
+if TYPE_CHECKING:
+    from .estimate_entry import EstimateEntryWidget
 
 
 class EstimateEntryLayoutController:
     """Own layout wiring, totals placement, and persisted UI preferences."""
 
-    def __init__(self, host: Any) -> None:
+    def __init__(self, host: EstimateEntryWidget) -> None:
         self.host = host
-
-    _totals_panel_sidebar: TotalsPanel | None
-    _totals_panel_bottom: TotalsPanel | None
 
     def _setup_ui(self):
         self.host.setObjectName("EstimateEntryRoot")
@@ -71,7 +75,7 @@ class EstimateEntryLayoutController:
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
         header_layout = QHBoxLayout(header_container)
-        header_layout.setContentsMargins(8, 4, 8, 4)
+        header_layout.setContentsMargins(6, 2, 6, 2)
         header_layout.setSpacing(6)
 
         self.host.toolbar = VoucherToolbar()
@@ -93,20 +97,9 @@ class EstimateEntryLayoutController:
         )
         header_layout.addWidget(self.host.secondary_actions)
 
-        self.host.estimate_tools_button = QToolButton()
-        self.host.estimate_tools_button.setObjectName("EstimateToolsButton")
-        self.host.estimate_tools_button.setText("Tools")
-        self.host.estimate_tools_button.setIcon(get_icon("tools", widget=self.host))
-        self.host.estimate_tools_button.setPopupMode(
-            QToolButton.ToolButtonPopupMode.InstantPopup
-        )
-        self.host.estimate_tools_button.setToolButtonStyle(
-            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
-        )
-        self.host.estimate_tools_button.setToolTip("Estimate row and silver-bar tools")
-        self.host.estimate_tools_button.setMenu(self._build_estimate_tools_menu())
-        header_layout.addWidget(self.host.estimate_tools_button)
-        layout.addWidget(header_container, 0)
+        self.host.estimate_tools_menu = self._build_estimate_tools_menu()
+        self.host.estimate_tools_menu.setTitle("Estimate Actions")
+        layout.addWidget(ToolbarOverflow(header_container), 0)
 
         self.host._content_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.host._content_splitter.setChildrenCollapsible(False)
@@ -141,12 +134,7 @@ class EstimateEntryLayoutController:
             [
                 "Ctrl+S Save",
                 "Ctrl+P Print",
-                "Ctrl+N New",
-                "Ctrl+H History",
-                "Ctrl+D Delete Row",
-                "Ctrl+R Return",
-                "Ctrl+B Silver Bar",
-                "PgUp/PgDn Rows",
+                "F1 Shortcuts",
             ]
         )
         layout.addWidget(self.host.bottom_status_strip, 0)
@@ -186,6 +174,7 @@ class EstimateEntryLayoutController:
         self.host.refresh_rate_button = self.host.secondary_actions.refresh_rate_button
 
         self._sync_live_rate_card_placement(self.host._totals_position)
+        self._place_sidebar_actions()
 
         self._bind_totals_panel_labels()
 
@@ -202,6 +191,43 @@ class EstimateEntryLayoutController:
             self.host.logger.debug(
                 "Failed to bind bottom status strip table updates: %s", exc
             )
+
+    def _place_sidebar_actions(self) -> None:
+        if not hasattr(self.host, "sidebar_actions"):
+            actions = QFrame(self.host)
+            actions.setObjectName("EstimateSidebarActions")
+            grid = QGridLayout(actions)
+            grid.setContentsMargins(6, 6, 6, 6)
+            grid.setSpacing(4)
+            specs = [
+                ("last_balance_button", "Last Balance", 0, 0, 1),
+                ("history_button", "History", 0, 1, 1),
+                ("silver_bars_button", "Manage Silver Bars", 1, 0, 2),
+                ("delete_row_button", "Delete Row", 2, 0, 2),
+                ("delete_estimate_button", "Delete Estimate", 3, 0, 2),
+            ]
+            for attr, text, row, col, span in specs:
+                button = getattr(self.host.secondary_actions, attr)
+                button.setProperty("iconOnly", False)
+                button.setText(text)
+                button.setMinimumSize(0, 26)
+                button.setMaximumSize(16777215, 16777215)
+                button.setSizePolicy(
+                    QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+                )
+                if isinstance(button, QToolButton):
+                    button.setToolButtonStyle(
+                        Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+                    )
+                grid.addWidget(button, row, col, 1, span)
+                button.show()
+            self.host.sidebar_actions = actions
+        panel = self.host.totals_panel
+        if panel.layout_mode == "sidebar":
+            panel.sidebar_actions_layout.addWidget(self.host.sidebar_actions)
+            self.host.sidebar_actions.show()
+        else:
+            self.host.sidebar_actions.hide()
 
     def _build_estimate_tools_menu(self) -> QMenu:
         menu = QMenu(self.host)
@@ -226,10 +252,21 @@ class EstimateEntryLayoutController:
             self.host.secondary_actions.delete_row_clicked.emit
         )
         menu.addAction(delete_row)
+        self.host.command_undo_row_action = QAction("Undo Last Row Deletion", menu)
+        self.host.command_undo_row_action.setEnabled(False)
+        self.host.command_undo_row_action.triggered.connect(
+            self.host.workflow_controller.undo_row_deletion
+        )
+        menu.addAction(self.host.command_undo_row_action)
+        recovery = getattr(self.host, "draft_recovery", None)
+        if recovery is not None:
+            recover_action = QAction("Recover Unfinished Estimate...", menu)
+            recover_action.triggered.connect(recovery.offer_recovery)
+            menu.addAction(recover_action)
         menu.addSeparator()
 
         return_mode = QAction(
-            get_icon("return_mode", widget=self.host, color="#2563eb"),
+            get_icon("return_mode", widget=self.host, color="#007f89"),
             "Return Mode",
             menu,
         )
@@ -240,7 +277,7 @@ class EstimateEntryLayoutController:
         menu.addAction(return_mode)
 
         silver_bar_mode = QAction(
-            get_icon("bar_mode", widget=self.host, color="#0f766e"),
+            get_icon("bar_mode", widget=self.host, color="#007f89"),
             "Silver Bar Mode",
             menu,
         )
@@ -264,7 +301,7 @@ class EstimateEntryLayoutController:
         menu.addAction(bars)
 
         refresh = QAction(
-            get_icon("refresh", widget=self.host, color="#0f766e"),
+            get_icon("refresh", widget=self.host, color="#007f89"),
             "Refresh Live Rate",
             menu,
         )
@@ -307,9 +344,11 @@ class EstimateEntryLayoutController:
         except Exception:
             user = "-"
         last_saved = getattr(self.host, "_last_saved_status", "-")
-        strip.set_right_items(
-            [f"Rows: {rows}", f"Last Saved: {last_saved}", f"User: {user}"]
-        )
+        items = [f"Rows: {rows}", f"Last Saved: {last_saved}", f"User: {user}"]
+        recovery = getattr(self.host, "draft_recovery", None)
+        if recovery is not None:
+            items.append(f"Recovery: {recovery.status}")
+        strip.set_right_items(items)
 
     def refresh_bottom_status(self) -> None:
         self._update_bottom_status_strip()
@@ -381,7 +420,28 @@ class EstimateEntryLayoutController:
         header = self.host.item_table.horizontalHeader()
         header.sectionResized.connect(self._on_item_table_section_resized)
 
+    def _choose_entry_mode(self, index: int) -> None:
+        actions = self.host.secondary_actions
+        if actions.return_toggle_button.isChecked() != (index == 1):
+            actions.return_toggle_button.click()
+        if actions.silver_bar_toggle_button.isChecked() != (index == 2):
+            actions.silver_bar_toggle_button.click()
+
     def _wire_component_signals(self):
+        self.host.toolbar.mode_combo.activated.connect(self._choose_entry_mode)
+        for button in (
+            self.host.return_toggle_button,
+            self.host.silver_bar_toggle_button,
+        ):
+            button.toggled.connect(
+                lambda *_: self.host.toolbar.mode_combo.setCurrentIndex(
+                    1
+                    if self.host.return_toggle_button.isChecked()
+                    else 2
+                    if self.host.silver_bar_toggle_button.isChecked()
+                    else 0
+                )
+            )
         self.host.toolbar.load_clicked.connect(
             self.host.workflow_controller.safe_load_estimate
         )
@@ -466,12 +526,10 @@ class EstimateEntryLayoutController:
     ) -> None:
         normalized = self._normalize_totals_section_order(order)
         panel = getattr(self.host, "totals_panel", None)
-        if (
-            panel is not None
-            and isValid(panel)
-            and (panel is not source_panel or panel.section_order() != normalized)
-        ):
-            panel.set_section_order(normalized)
+        if panel is not None and isValid(panel):
+            current_order = panel.section_order()
+            if panel is not source_panel or current_order != normalized:
+                panel.set_section_order(normalized)
         self.host._totals_section_order = list(normalized)
         self._bind_totals_panel_labels()
 
@@ -515,6 +573,8 @@ class EstimateEntryLayoutController:
             section_order = current_panel.section_order()
             if current_panel.layout_mode == "sidebar":
                 current_panel.set_sidebar_top_widget(None)
+                if hasattr(self.host, "sidebar_actions"):
+                    self.host.sidebar_actions.setParent(self.host)
             current_panel.setParent(None)
             current_panel.deleteLater()
             self.host.totals_panel = self._create_totals_panel(desired_mode)
@@ -523,6 +583,7 @@ class EstimateEntryLayoutController:
         self._place_totals_panel(splitter, normalized)
 
         self._sync_live_rate_card_placement(normalized)
+        self._place_sidebar_actions()
         self._bind_totals_panel_labels()
         self.host.totals_controller.calculate_totals()
         self.host._totals_position = normalized
@@ -557,8 +618,8 @@ class EstimateEntryLayoutController:
             panel.setSizePolicy(
                 QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding
             )
-            panel.setMinimumWidth(275)
-            panel.setMaximumWidth(420)
+            panel.setMinimumWidth(280)
+            panel.setMaximumWidth(440)
             self.host._totals_panel_sidebar = panel
             self.host._totals_panel_bottom = None
         else:
@@ -700,12 +761,23 @@ class EstimateEntryLayoutController:
                 if isinstance(col, int) and isinstance(width, int):
                     widths[col] = self._bounded_column_width(col, width)
 
+        stretch_column = next(
+            col for col in range(table.columnCount()) if is_stretch_column(col)
+        )
+        minimum = self._column_width_limits()[stretch_column][0]
+        remaining = table.viewport().width() - sum(
+            self._bounded_column_width(col, widths[col])
+            for col in range(table.columnCount())
+            if col != stretch_column and col in widths
+        )
         self.host._programmatic_resizing = True
         try:
             for col in range(table.columnCount()):
-                stretch = is_stretch_column(col)
+                stretch = is_stretch_column(col) and remaining >= minimum
                 table.set_column_stretch(col, stretch=stretch)
-                if not stretch and col in widths:
+                if col == stretch_column and not stretch:
+                    table.setColumnWidth(col, minimum)
+                elif not stretch and col in widths:
                     table.setColumnWidth(
                         col, self._bounded_column_width(col, widths[col])
                     )
@@ -739,8 +811,8 @@ class EstimateEntryLayoutController:
             )
             or ""
         )
-        header_width = metrics.horizontalAdvance(str(header_text)) + 28
-        hint_width = table.sizeHintForColumn(column) + 16
+        header_width = metrics.horizontalAdvance(str(header_text)) + 12
+        hint_width = table.sizeHintForColumn(column) + 2
         target_width = max(min_width, min(max_width, max(header_width, hint_width)))
         current_width = table.columnWidth(column)
         if target_width <= current_width:
@@ -816,8 +888,8 @@ class EstimateEntryLayoutController:
                     )
                     or ""
                 )
-                header_width = metrics.horizontalAdvance(str(header_text)) + 28
-                hint_width = table.sizeHintForColumn(col) + 16
+                header_width = metrics.horizontalAdvance(str(header_text)) + 12
+                hint_width = table.sizeHintForColumn(col) + 2
                 target_width = max(header_width, hint_width)
 
                 min_width, max_width = limits.get(col, (60, 700))
@@ -920,7 +992,7 @@ class EstimateEntryLayoutController:
     def _load_table_font_size_setting(self):
         size = self._settings().get_int(
             SettingsKey.UI_TABLE_FONT_SIZE,
-            9,
+            11,
             minimum=5,
             maximum=24,
         )
@@ -929,7 +1001,7 @@ class EstimateEntryLayoutController:
     def _load_breakdown_font_size_setting(self):
         size = self._settings().get_int(
             SettingsKey.UI_BREAKDOWN_FONT_SIZE,
-            9,
+            11,
             minimum=5,
             maximum=24,
         )
@@ -938,7 +1010,7 @@ class EstimateEntryLayoutController:
     def _load_final_calc_font_size_setting(self):
         size = self._settings().get_int(
             SettingsKey.UI_FINAL_CALC_FONT_SIZE,
-            10,
+            16,
             minimum=5,
             maximum=24,
         )
@@ -954,12 +1026,21 @@ class EstimateEntryLayoutController:
         try:
             font = self.host.item_table.font()
             font.setPointSize(size_i)
-            self.host.item_table.setFont(font)
+            set_table_font(self.host.item_table, font)
             model = self.host.item_table.model()
             invalidate_style_cache = getattr(model, "invalidate_style_cache", None)
             if callable(invalidate_style_cache):
                 invalidate_style_cache()
-            row_height = max(24, min(32, size_i + 17))
+            row_height = max(
+                24,
+                self.host.item_table.fontMetrics().height()
+                + (
+                    12
+                    if self._settings().get_text(SettingsKey.UI_ROW_DENSITY, "compact")
+                    == "comfortable"
+                    else 4
+                ),
+            )
             self.host.item_table.verticalHeader().setDefaultSectionSize(row_height)
             self.host.item_table.verticalHeader().setMinimumSectionSize(
                 max(22, row_height - 2)

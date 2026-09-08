@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from PySide6.QtCore import QItemSelectionModel
 from PySide6.QtWidgets import QFrame
 
@@ -12,18 +14,6 @@ class _ButtonStub:
 
     def setEnabled(self, value):
         self.enabled = bool(value)
-
-
-class _ProgressStub:
-    def __init__(self):
-        self.closed = False
-        self.deleted = False
-
-    def close(self):
-        self.closed = True
-
-    def deleteLater(self):
-        self.deleted = True
 
 
 class _HistoryHarness:
@@ -43,6 +33,8 @@ class _DialogDbStub:
 
 def _build_harness():
     harness = _HistoryHarness()
+    harness._closing = False
+    harness._load_runner = SimpleNamespace(generation=2)
     harness.search_button = _ButtonStub(enabled=False)
     harness.open_button = _ButtonStub(enabled=False)
     harness.print_button = _ButtonStub(enabled=False)
@@ -60,21 +52,6 @@ def test_loading_done_re_enables_buttons_in_finally_path():
     assert harness.print_button.enabled is True
     assert harness.delete_button.enabled is True
     assert harness.load_more_button.enabled is True
-
-
-def test_finish_print_preview_build_cleans_up_progress():
-    harness = _HistoryHarness()
-    progress = _ProgressStub()
-    harness._print_preview_progress = progress
-    harness._dispose_print_preview_progress = lambda: (
-        EstimateHistoryDialog._dispose_print_preview_progress(harness)
-    )
-
-    EstimateHistoryDialog._finish_print_preview_build(harness, 2)
-
-    assert progress.closed is True
-    assert progress.deleted is True
-    assert harness._print_preview_progress is None
 
 
 def test_populate_table_uses_model_rows_and_selection_lookup(qtbot, monkeypatch):

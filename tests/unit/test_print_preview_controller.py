@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QMenu,
     QMessageBox,
+    QSpinBox,
     QToolBar,
     QToolButton,
     QWidget,
@@ -132,7 +133,7 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
     assert toolbar.objectName() == "PrintPreviewToolbar"
     assert not toolbar.isMovable()
     assert not toolbar.isFloatable()
-    assert toolbar.iconSize().width() == 22
+    assert toolbar.iconSize().width() == 16
     assert preview.findChild(QWidget, "PreviewPageNavigator") is not None
     format_combo = preview.findChild(QComboBox, "PreviewFormatCombo")
     assert format_combo is not None
@@ -175,11 +176,14 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
     expected_toolbar_actions = [
         "Print",
         "Export PDF",
+        "Printer Setup",
+        "Page Setup",
         "Print Font",
         "Fit Width",
         "Fit Page",
         "Zoom Out",
         "Zoom In",
+        "Close",
     ]
     assert action_texts == expected_toolbar_actions
 
@@ -189,12 +193,18 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
         )
         button = toolbar.widgetForAction(action)
         assert isinstance(button, QToolButton)
-        assert button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonIconOnly
+        assert button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextBesideIcon
         assert button.accessibleName() == action_text
 
     more_button = toolbar.findChild(QToolButton, "PreviewMoreButton")
+    zoom = toolbar.findChild(QSpinBox, "PreviewZoomSpin")
+    assert zoom is not None
+    zoom.setValue(150)
+    assert preview.preview_widget.zoomFactor() == 1.5
+    preview.preview_widget.setZoomFactor(1.25)
+    qtbot.waitUntil(lambda: zoom.value() == 125)
     assert more_button is not None
-    assert more_button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonIconOnly
+    assert more_button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextBesideIcon
     assert more_button.accessibleName() == "More preview actions"
     more_action = next(
         action
@@ -256,7 +266,7 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
         page_action
     )
     assert toolbar.actions().index(page_action) < toolbar.actions().index(more_action)
-    assert toolbar.actions()[-1] is more_action
+    assert toolbar.actions()[-1].text() == "Close"
     assert fit_width_action.priority() == QAction.Priority.NormalPriority
     assert fit_page_action.priority() == QAction.Priority.NormalPriority
     more_menu = more_button.menu()

@@ -51,7 +51,10 @@ silver_bars (1) ----< (M) bar_transfers
 | id          | INTEGER | PRIMARY KEY AUTOINCREMENT             | Unique ID           |
 | voucher_no  | TEXT    | FOREIGN KEY → estimates ON DELETE CASCADE | Parent estimate   |
 | item_code   | TEXT    | FOREIGN KEY → items ON DELETE SET NULL    | Item reference    |
-| item_name   | TEXT    |                                       | Item description    |
+| item_code_snapshot | TEXT | | Saved code independent of the catalog reference |
+| tunch | TEXT | NULL | Saved print Tunch; NULL remains an intentional empty value |
+| snapshot_version | INTEGER | NOT NULL DEFAULT 1 | Catalog-independent snapshot policy version |
+| item_name   | TEXT    |                                       | Saved item description |
 | gross       | REAL    | DEFAULT 0                             | Gross weight        |
 | poly        | REAL    | DEFAULT 0                             | Poly/stone weight   |
 | net_wt      | REAL    | DEFAULT 0                             | Net weight          |
@@ -124,7 +127,7 @@ silver_bars (1) ----< (M) bar_transfers
 ### 2. Items → Estimate Items
 - **Relationship**: One-to-Many
 - **Cascade**: ON DELETE SET NULL
-- **Behavior**: Deleting an item leaves references as NULL
+- **Behavior**: Deleting an item leaves its optional catalog reference NULL; saved code, name, Tunch and numeric line snapshots remain intact
 
 ### 3. Estimates → Silver Bars
 - **Relationship**: One-to-Many
@@ -150,13 +153,13 @@ silver_bars (1) ----< (M) bar_transfers
 5. **Wage Types**: PC (per piece) or WT (per weight)
 6. **Status Values**: `In Stock`, `Assigned`, `Issued`, and `Sold`
 7. **Stable Line Identity**: `estimate_items.line_key` links a source line to `silver_bars.source_line_key`
-8. **Tunch**: Optional free-text item-master value; estimates resolve the current master value when printed
+8. **Tunch**: Optional free-text catalog value; estimates print the line snapshot captured at save or v8 upgrade
 
 ## Historical Schema Versions
 
-The current runtime does not contain upgrade branches for these versions. It
-creates fresh databases directly at version 8 and accepts existing databases
-only when they already report version 8.
+The runtime creates version 10 databases and transactionally upgrades versions 8 and 9.
+Older version transitions below are historical documentation, not supported
+upgrade paths in this release.
 
 ### Version 0 → 1
 - Established the silver-bar/list/transfer schema and normalized missing baseline columns.
@@ -184,7 +187,14 @@ only when they already report version 8.
 ### Version 7 → 8
 - Changed `items.tunch` from a constrained numeric value to free text.
 
-Fresh schema creation, mandatory indexes, validation, and the schema-version
+### Version 8 → 9
+- Adds independent item-code and Tunch snapshots and snapshot policy version 1.
+- Freezes metadata still available at upgrade without recalculating numeric fields.
+- Fills missing wage modes once and assigns missing line keys. Lost codes remain
+  unknown; their lines stay visible, printable and saveable.
+- Catalog removal clears only the optional master reference, preserving snapshots.
+
+Fresh schema creation or the v8 upgrade, mandatory indexes, validation, and the schema-version
 write run in one transaction. Any failure rolls the full setup back.
 
 ## Performance-Critical Indexes
@@ -193,3 +203,13 @@ write run in one transaction. Any failure rolls the full setup back.
 - Estimate lines: `(voucher_no, line_key)`
 - Available bars: `(status, list_id, weight, date_added DESC, bar_id DESC)`
 - Bar synchronization: `(estimate_voucher_no, source_line_key)`
+
+### Version 9 → 10: encrypted draft recovery
+
+Adds `estimate_draft` without rewriting saved business records. Its singleton row
+has `slot` (primary key, constrained to 1), ownership `token`, `voucher_no`, JSON
+`payload` and `updated_utc`, all required. It has no foreign key to estimates: a
+new draft may have no saved voucher. The payload is encrypted by SQLCipher along
+with the rest of the database and contains no separate plaintext sidecar.
+Schema creation, version staging and validation share one transaction. Version 8
+first receives the snapshot migration, then this table, before committing v10.

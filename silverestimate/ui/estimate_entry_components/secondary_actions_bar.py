@@ -105,7 +105,7 @@ class SecondaryActionsBar(QWidget):
         self.return_toggle_button = QPushButton()
         self.return_toggle_button.setObjectName("ReturnModeButton")
         self.return_toggle_button.setIcon(
-            get_icon("return_mode", widget=self, color="#2563eb")
+            get_icon("return_mode", widget=self, color="#007f89")
         )
         self._configure_icon_button(self.return_toggle_button, label="Return")
         self.return_toggle_button.setToolTip(
@@ -121,7 +121,7 @@ class SecondaryActionsBar(QWidget):
         self.silver_bar_toggle_button = QPushButton()
         self.silver_bar_toggle_button.setObjectName("SilverBarModeButton")
         self.silver_bar_toggle_button.setIcon(
-            get_icon("bar_mode", widget=self, color="#0f766e")
+            get_icon("bar_mode", widget=self, color="#007f89")
         )
         self._configure_icon_button(self.silver_bar_toggle_button, label="Bar Mode")
         self.silver_bar_toggle_button.setToolTip(
@@ -185,12 +185,12 @@ class SecondaryActionsBar(QWidget):
         )
 
         rate_layout = QHBoxLayout(self.live_rate_container)
-        rate_layout.setContentsMargins(6, 5, 6, 5)
+        rate_layout.setContentsMargins(6, 3, 6, 3)
         rate_layout.setSpacing(6)
 
-        rate_text_layout = QHBoxLayout()
-        rate_text_layout.setContentsMargins(4, 0, 4, 0)
-        rate_text_layout.setSpacing(8)
+        rate_text_layout = QVBoxLayout()
+        rate_text_layout.setContentsMargins(0, 0, 0, 0)
+        rate_text_layout.setSpacing(0)
 
         self.live_rate_title_label = QLabel("Live silver rate")
         self.live_rate_title_label.setObjectName("LiveRateTitle")
@@ -200,7 +200,7 @@ class SecondaryActionsBar(QWidget):
 
         self.live_rate_value_label = QLabel("Loading…")
         self.live_rate_value_label.setObjectName("LiveRateValue")
-        self.live_rate_value_label.setMinimumWidth(150)
+        self.live_rate_value_label.setMinimumWidth(110)
         self.live_rate_value_label.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
@@ -208,7 +208,6 @@ class SecondaryActionsBar(QWidget):
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
         rate_font = self.live_rate_value_label.font()
-        rate_font.setPointSize(12)
         rate_font.setBold(True)
         self.live_rate_value_label.setFont(rate_font)
         rate_text_layout.addWidget(
@@ -224,13 +223,13 @@ class SecondaryActionsBar(QWidget):
         self.refresh_rate_button.setObjectName("RefreshRateButton")
         self.refresh_rate_button.setToolTip("Refresh live silver rate and set it here")
         self.refresh_rate_button.setIcon(
-            get_icon("refresh", widget=self, color="#0f766e")
+            get_icon("refresh", widget=self, color="#007f89")
         )
         self._configure_icon_button(
             self.refresh_rate_button, label="Refresh Silver Rate"
         )
         self.refresh_rate_button.setIconSize(QSize(14, 14))
-        self.refresh_rate_button.setFixedSize(QSize(34, 32))
+        self.refresh_rate_button.setFixedSize(QSize(28, 24))
         self.refresh_rate_button.setSizePolicy(
             QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
         )
@@ -244,7 +243,9 @@ class SecondaryActionsBar(QWidget):
         self.live_rate_meta_label = QLabel("Not updated")
         self.live_rate_meta_label.setObjectName("LiveRateMeta")
         self.live_rate_meta_label.setAccessibleName("Live Rate Status")
-        self.live_rate_meta_label.setFixedWidth(76)
+        self.live_rate_meta_label.setMinimumWidth(0)
+        self.live_rate_meta_label.setMaximumWidth(125)
+        self.live_rate_meta_label.setWordWrap(False)
         self.live_rate_meta_label.setAlignment(
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
         )

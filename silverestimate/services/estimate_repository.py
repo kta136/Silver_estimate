@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping as MappingABC
 from typing import Any, Iterable, Mapping, Optional, Protocol
 
+from silverestimate.domain.estimate_save import EstimateSaveResult
 from silverestimate.persistence.database_protocols import EstimateDataSource
 
 EstimateRow = Mapping[str, Any]
@@ -34,11 +35,7 @@ class EstimateRepository(Protocol):
         regular_items: Iterable[EstimateRow],
         return_items: Iterable[EstimateRow],
         totals: Mapping[str, Any],
-    ) -> bool: ...
-
-    def sync_silver_bars_for_estimate(
-        self, voucher_no: str, bars: Iterable[EstimateRow]
-    ) -> tuple[int, int]: ...
+    ) -> EstimateSaveResult: ...
 
     def last_error(self) -> Optional[str]: ...
 
@@ -78,30 +75,15 @@ class DatabaseEstimateRepository:
         regular_items: Iterable[EstimateRow],
         return_items: Iterable[EstimateRow],
         totals: Mapping[str, Any],
-    ) -> bool:
-        return bool(
-            self._db.save_estimate_with_returns(
-                voucher_no,
-                date,
-                silver_rate,
-                list(regular_items or []),
-                list(return_items or []),
-                dict(totals or {}),
-            )
+    ) -> EstimateSaveResult:
+        return self._db.save_estimate_atomic(
+            voucher_no,
+            date,
+            silver_rate,
+            list(regular_items or []),
+            list(return_items or []),
+            dict(totals or {}),
         )
-
-    def sync_silver_bars_for_estimate(
-        self, voucher_no: str, bars: Iterable[EstimateRow]
-    ) -> tuple[int, int]:
-        bars_list = list(bars or [])
-        try:
-            added, failed = self._db.sync_silver_bars_for_estimate(
-                voucher_no,
-                bars_list,
-            )
-            return int(added or 0), int(failed or 0)
-        except Exception:
-            return 0, len(bars_list)
 
     def last_error(self) -> Optional[str]:
         return getattr(self._db, "last_error", None)

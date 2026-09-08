@@ -5,19 +5,17 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, cast
+from typing import TYPE_CHECKING, Mapping, Optional
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QApplication, QWidget
 
+from silverestimate.domain.estimate_entry import EstimateEntryViewState, LoadedEstimate
 from silverestimate.domain.estimate_models import EstimateLineCategory, TotalsResult
-from silverestimate.presenter import (
-    EstimateEntryPresenter,
-    EstimateEntryView,
-    EstimateEntryViewState,
-    LoadedEstimate,
-)
+from silverestimate.persistence.draft_repository import DraftRepository
+from silverestimate.presenter import EstimateEntryPresenter
 
+from .estimate_draft_recovery import EstimateDraftRecovery
 from .estimate_entry_layout_controller import EstimateEntryLayoutController
 from .estimate_entry_logic.constants import (
     COL_CODE,
@@ -32,6 +30,31 @@ from .estimate_entry_totals_controller import EstimateEntryTotalsController
 from .estimate_entry_workflow_controller import EstimateEntryWorkflowController
 from .inline_status import InlineStatusController
 from .view_models import EstimateEntryViewModel
+
+if TYPE_CHECKING:
+    from PySide6.QtGui import QAction
+    from PySide6.QtWidgets import (
+        QDateEdit,
+        QDoubleSpinBox,
+        QLabel,
+        QLineEdit,
+        QMenu,
+        QPushButton,
+        QSplitter,
+        QToolButton,
+    )
+
+    from silverestimate.infrastructure.latest_request_runner import LatestRequestRunner
+
+    from .adapters import EstimateTableAdapter
+    from .estimate_entry_components import (
+        EstimateTableView,
+        PrimaryActionsBar,
+        SecondaryActionsBar,
+        TotalsPanel,
+        VoucherToolbar,
+    )
+    from .modern_components import BottomStatusStrip
 
 
 @dataclass(frozen=True)
@@ -56,15 +79,63 @@ class _RunningCategoryTotals:
 class EstimateEntryWidget(QWidget):
     """Widget for silver estimate entry and management."""
 
-    if TYPE_CHECKING:
-        item_table: Any
-        mode_indicator_label: Any
-        secondary_actions: Any
-        toolbar: Any
-        totals_panel: Any
-        voucher_edit: Any
-
-        def __getattr__(self, name: str) -> Any: ...
+    # Controller-managed controls and state; no dynamic attribute fallback.
+    _breakdown_font_size: int
+    _code_focus_timer: QTimer
+    _content_splitter: QSplitter
+    _final_calc_font_size: int
+    _last_saved_status: str
+    _live_rate_runner: LatestRequestRunner
+    _pending_focus_row: int
+    _totals_panel_bottom: TotalsPanel | None
+    _totals_panel_sidebar: TotalsPanel | None
+    _totals_position: str
+    _totals_section_order: list[str]
+    bar_fine_label: QLabel
+    bar_gross_label: QLabel
+    bar_net_label: QLabel
+    bottom_status_strip: BottomStatusStrip
+    clear_button: QPushButton
+    command_history_action: QAction
+    command_settings_action: QAction
+    command_undo_row_action: QAction
+    date_edit: QDateEdit
+    delete_estimate_button: QToolButton
+    delete_row_button: QPushButton
+    estimate_tools_menu: QMenu
+    grand_total_label: QLabel
+    history_button: QToolButton
+    item_table: EstimateTableView
+    last_balance_button: QToolButton
+    live_rate_meta_label: QLabel
+    live_rate_value_label: QLabel
+    load_button: QPushButton
+    mode_indicator_label: QLabel
+    net_fine_label: QLabel
+    net_wage_label: QLabel
+    note_edit: QLineEdit
+    overall_gross_label: QLabel
+    overall_poly_label: QLabel
+    primary_actions: PrimaryActionsBar
+    print_button: QPushButton
+    refresh_rate_button: QToolButton
+    return_fine_label: QLabel
+    return_gross_label: QLabel
+    return_net_label: QLabel
+    return_toggle_button: QPushButton
+    save_button: QPushButton
+    secondary_actions: SecondaryActionsBar
+    silver_bar_toggle_button: QPushButton
+    silver_bars_button: QToolButton
+    silver_rate_spin: QDoubleSpinBox
+    status_message_label: QLabel
+    toolbar: VoucherToolbar
+    total_fine_label: QLabel
+    total_gross_label: QLabel
+    total_net_label: QLabel
+    totals_panel: TotalsPanel
+    unsaved_badge: QLabel
+    voucher_edit: QLineEdit
 
     live_rate_fetched = Signal(object)
     EDITABLE_ENTRY_COLS = (
@@ -100,6 +171,9 @@ class EstimateEntryWidget(QWidget):
     def safe_load_estimate(self) -> None:
         self.workflow_controller.safe_load_estimate()
 
+    def show_history(self) -> None:
+        self.workflow_controller.show_history()
+
     def save_estimate(self) -> None:
         self.workflow_controller.save_estimate()
 
@@ -134,6 +208,8 @@ class EstimateEntryWidget(QWidget):
     def apply_loaded_estimate(self, loaded: LoadedEstimate) -> bool:
         return self.workflow_controller.apply_loaded_estimate(loaded)
 
+    sidebar_actions: QWidget
+
     def __init__(self, db_manager, main_window, repository):
         super().__init__()
 
@@ -145,13 +221,19 @@ class EstimateEntryWidget(QWidget):
 
         self.db_manager = db_manager
         self.main_window = main_window
-        self.presenter = EstimateEntryPresenter(
-            cast(EstimateEntryView, self), repository
+        self.presenter: EstimateEntryPresenter | None = EstimateEntryPresenter(
+            self, repository
         )
         self.live_rate_fetched.connect(
             self.workflow_controller._apply_refreshed_live_rate
         )
 
+        draft_repository = getattr(db_manager, "draft_repository", None)
+        self.draft_recovery = (
+            EstimateDraftRecovery(self, draft_repository)
+            if isinstance(draft_repository, DraftRepository)
+            else None
+        )
         self.initializing = True
         self._loading_estimate = False
         self._load_estimate_connected = False
@@ -165,7 +247,7 @@ class EstimateEntryWidget(QWidget):
         self.last_balance_silver = 0.0
         self.last_balance_amount = 0.0
 
-        self._table_adapter = None
+        self._table_adapter: EstimateTableAdapter | None = None
         self._last_manual_row_nav_ts = 0.0
         self._edit_request_token = 0
         self._manual_row_nav_edit_delay_ms = 35
@@ -248,10 +330,14 @@ class EstimateEntryWidget(QWidget):
         self.layout_controller._load_final_calc_font_size_setting()
 
         self.initializing = False
+        if self.draft_recovery is not None:
+            self.draft_recovery.bind_changes()
         self.reconnect_load_estimate()
 
     def showEvent(self, event):
         super().showEvent(event)
+        if self.draft_recovery is not None:
+            self.draft_recovery.schedule_start()
         if self._initial_focus_scheduled:
             return
         self._initial_focus_scheduled = True
@@ -285,7 +371,15 @@ class EstimateEntryWidget(QWidget):
         if not force and dirty and getattr(self, "_unsaved_block", 0) > 0:
             return
         previous = getattr(self, "_unsaved_changes", False)
+        if dirty and not previous and not getattr(self, "_estimate_loaded", False):
+            self._active_voucher_no = self.voucher_edit.text().strip()
         self._unsaved_changes = dirty
+        recovery = getattr(self, "draft_recovery", None)
+        if recovery is not None:
+            if dirty:
+                recovery.mark_changed()
+            else:
+                recovery.discard_current()
         if previous != dirty or force:
             self._on_unsaved_state_changed(dirty)
 
@@ -330,11 +424,12 @@ class EstimateEntryWidget(QWidget):
         self.totals_panel.set_totals(totals)
 
     def set_voucher_number(self, voucher_no: str) -> None:
+        self._active_voucher_no = voucher_no
         self.voucher_edit.blockSignals(True)
         self.voucher_edit.setText(voucher_no)
         self.voucher_edit.blockSignals(False)
 
-    def populate_row(self, row_index: int, item_data: Dict) -> None:
+    def populate_row(self, row_index: int, item_data: Mapping[str, object]) -> None:
         self.table_controller._get_table_adapter().populate_row(row_index, item_data)
         self.layout_controller._schedule_columns_autofit()
 
@@ -342,15 +437,28 @@ class EstimateEntryWidget(QWidget):
         self.layout_controller._auto_stretch_item_name()
         super().resizeEvent(event)
 
+    def hideEvent(self, event):
+        recovery = getattr(self, "draft_recovery", None)
+        if recovery is not None:
+            recovery.flush()
+        super().hideEvent(event)
+
     def closeEvent(self, event):
         if not self.confirm_exit():
             event.ignore()
             return
+        self.stop_background_work()
+        self.layout_controller._save_column_widths_setting()
+        super().closeEvent(event)
+
+    def stop_background_work(self) -> None:
+        """Stop callbacks before the containing window closes its database."""
+        self.workflow_controller.shutdown_print_previews()
+        if self.draft_recovery is not None:
+            self.draft_recovery.stop()
         live_rate_runner = getattr(self, "_live_rate_runner", None)
         if live_rate_runner is not None:
             live_rate_runner.shutdown()
-        self.layout_controller._save_column_widths_setting()
-        super().closeEvent(event)
 
     def keyPressEvent(self, event):
         key = event.key()

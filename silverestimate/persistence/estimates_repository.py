@@ -6,9 +6,18 @@ import logging
 from datetime import datetime
 from typing import Any, Iterable, List, Optional
 
+from silverestimate.domain.estimate_save import EstimateSaveResult
+from silverestimate.domain.estimate_validation import (
+    SQLITE_MAX_INTEGER,
+    validate_estimate,
+)
 from silverestimate.domain.pagination import EstimateHistoryCursor, Page
 from silverestimate.persistence.database_driver import dbapi as sqlite3
 from silverestimate.persistence.database_protocols import RepositoryDatabase
+from silverestimate.persistence.silver_bar_synchronization_repository import (
+    BarReconciliationPlan,
+    SilverBarSynchronizationRepository,
+)
 
 
 def fetch_estimate_history_rows(
@@ -29,6 +38,7 @@ def fetch_estimate_history_rows(
                 silver_rate,
                 total_fine,
                 total_wage,
+                last_balance_silver,
                 last_balance_amount
             FROM estimates
             WHERE 1=1
@@ -53,6 +63,7 @@ def fetch_estimate_history_rows(
             e.silver_rate,
             e.total_fine,
             e.total_wage,
+            e.last_balance_silver,
             e.last_balance_amount,
             COALESCE(
                 SUM(
@@ -84,6 +95,7 @@ def fetch_estimate_history_rows(
             e.silver_rate,
             e.total_fine,
             e.total_wage,
+            e.last_balance_silver,
             e.last_balance_amount
         ORDER BY e.voucher_no_int DESC, e.voucher_no DESC
     """
@@ -98,6 +110,7 @@ def fetch_estimate_history_page(
     date_to: str | None = None,
     voucher_search: str | None = None,
     page_cursor: EstimateHistoryCursor | None = None,
+    include_total: bool = True,
     limit: int = 500,
 ) -> Page[dict[str, Any], EstimateHistoryCursor]:
     """Return a keyset page using persisted estimate-header summaries."""
@@ -116,9 +129,11 @@ def fetch_estimate_history_page(
         params.append(f"%{normalized_search}%")
 
     where_sql = " AND ".join(conditions)
-    cursor.execute(f"SELECT COUNT(*) FROM estimates WHERE {where_sql}", params)  # nosec B608
-    count_row = cursor.fetchone()
-    total = int(count_row[0]) if count_row else 0
+    total = None
+    if include_total:
+        cursor.execute(f"SELECT COUNT(*) FROM estimates WHERE {where_sql}", params)  # nosec B608
+        count_row = cursor.fetchone()
+        total = int(count_row[0]) if count_row else 0
 
     keyset_sql = ""
     query_params = list(params)
@@ -129,10 +144,12 @@ def fetch_estimate_history_page(
             else -1
         )
         keyset_sql = (
-            " AND (COALESCE(voucher_no_int, -1) < ? OR "
+            " AND COALESCE(voucher_no_int, -1) <= ? AND (COALESCE(voucher_no_int, -1) < ? OR "
             "(COALESCE(voucher_no_int, -1) = ? AND voucher_no < ?))"
         )
-        query_params.extend((numeric_cursor, numeric_cursor, page_cursor.voucher_no))
+        query_params.extend(
+            (numeric_cursor, numeric_cursor, numeric_cursor, page_cursor.voucher_no)
+        )
     query_params.append(page_size + 1)
     cursor.execute(
         f"""
@@ -146,6 +163,7 @@ def fetch_estimate_history_page(
             total_net,
             total_fine,
             total_wage,
+            last_balance_silver,
             last_balance_amount
         FROM estimates
         WHERE {where_sql}{keyset_sql}
@@ -227,16 +245,18 @@ class EstimatesRepository:
                 conn.rollback()
                 return None
             cursor.execute(
-                "SELECT ei.*, i.tunch AS tunch "
+                "SELECT ei.* "
                 "FROM estimate_items ei "
-                "LEFT JOIN items i ON i.code = ei.item_code COLLATE NOCASE "
                 "WHERE ei.voucher_no = ? "
                 "ORDER BY ei.is_return, ei.is_silver_bar, ei.id",
                 (voucher_no,),
             )
             items = cursor.fetchall()
             conn.commit()
-            return {"header": dict(estimate), "items": [dict(item) for item in items]}
+            return {
+                "header": dict(estimate),
+                "items": [self._snapshot_item(item) for item in items],
+            }
         except sqlite3.Error as exc:
             conn.rollback()
             self._logger.error(
@@ -252,53 +272,6 @@ class EstimatesRepository:
                 exc_info=True,
             )
             return None
-
-    def get_estimates(self, date_from=None, date_to=None, voucher_search=None):
-        cursor = self._cursor
-        if not cursor:
-            return []
-        query = "SELECT * FROM estimates WHERE 1=1"
-        params: List[Any] = []
-        if date_from:
-            query += " AND date >= ?"
-            params.append(date_from)
-        if date_to:
-            query += " AND date <= ?"
-            params.append(date_to)
-        if voucher_search:
-            query += " AND voucher_no LIKE ?"
-            params.append(f"%{voucher_search}%")
-        try:
-            cursor.execute(
-                f"{query} ORDER BY voucher_no_int DESC, voucher_no DESC",
-                params,
-            )
-            headers = [dict(row) for row in cursor.fetchall()]
-        except sqlite3.Error as exc:
-            self._logger.error(
-                "DB Error getting estimates: %s",
-                exc,
-                exc_info=True,
-            )
-            return []
-
-        if not headers:
-            return []
-
-        voucher_nos = [
-            str(row.get("voucher_no", ""))
-            for row in headers
-            if row.get("voucher_no") is not None
-        ]
-        items_by_voucher = self._load_estimate_items_by_voucher(voucher_nos)
-
-        return [
-            {
-                "header": header,
-                "items": items_by_voucher.get(str(header.get("voucher_no", "")), []),
-            }
-            for header in headers
-        ]
 
     def get_estimate_history_rows(
         self,
@@ -349,73 +322,6 @@ class EstimatesRepository:
             self._logger.exception("DB Error getting estimate-history page")
             raise
 
-    def _load_estimate_items_by_voucher(
-        self, voucher_nos: Iterable[str]
-    ) -> dict[str, list[dict[str, Any]]]:
-        cursor = self._cursor
-        if not cursor:
-            return {}
-
-        normalized = [str(voucher) for voucher in voucher_nos if str(voucher)]
-        if not normalized:
-            return {}
-
-        items_by_voucher: dict[str, list[dict[str, Any]]] = {
-            voucher_no: [] for voucher_no in normalized
-        }
-        chunk_size = 900  # Keep comfortably below SQLite variable limits.
-
-        for start in range(0, len(normalized), chunk_size):
-            chunk = normalized[start : start + chunk_size]
-            placeholders = ",".join("?" for _ in chunk)
-            try:
-                # Placeholder count is generated locally; values remain parameterized.
-                cursor.execute(
-                    f"SELECT ei.*, i.tunch AS tunch FROM estimate_items ei "
-                    f"LEFT JOIN items i ON i.code = ei.item_code COLLATE NOCASE "
-                    f"WHERE ei.voucher_no IN ({placeholders}) "
-                    f"ORDER BY ei.voucher_no, ei.id",  # nosec B608
-                    chunk,
-                )
-                for row in cursor.fetchall():
-                    item = dict(row)
-                    key = str(item.get("voucher_no", ""))
-                    items_by_voucher.setdefault(key, []).append(item)
-            except sqlite3.Error as exc:
-                self._logger.error(
-                    "DB Error loading estimate items for vouchers: %s",
-                    exc,
-                    exc_info=True,
-                )
-                return {}
-
-        return items_by_voucher
-
-    def get_estimate_headers(self, date_from=None, date_to=None, voucher_search=None):
-        cursor = self._cursor
-        if not cursor:
-            return []
-        query = "SELECT * FROM estimates WHERE 1=1"
-        params: List[Any] = []
-        if date_from:
-            query += " AND date >= ?"
-            params.append(date_from)
-        if date_to:
-            query += " AND date <= ?"
-            params.append(date_to)
-        if voucher_search:
-            query += " AND voucher_no LIKE ?"
-            params.append(f"%{voucher_search}%")
-        query += " ORDER BY voucher_no_int DESC, voucher_no DESC"
-        try:
-            cursor.execute(query, params)
-            return [dict(row) for row in cursor.fetchall()]
-        except sqlite3.Error as exc:
-            self._logger.error(
-                "DB Error getting estimate headers: %s", exc, exc_info=True
-            )
-            return []
-
     def get_first_estimate_date(self):
         """Return the earliest estimate date (yyyy-MM-dd) or None when unavailable."""
         cursor = self._cursor
@@ -443,17 +349,35 @@ class EstimatesRepository:
         return_items: Iterable[dict],
         totals: dict,
     ) -> bool:
+        """Compatibility boolean API; inventory participates in the same save."""
+        return self.save_estimate_atomic(
+            voucher_no, date, silver_rate, regular_items, return_items, totals
+        ).success
+
+    def save_estimate_atomic(
+        self,
+        voucher_no: str,
+        date: str,
+        silver_rate: float,
+        regular_items: Iterable[dict],
+        return_items: Iterable[dict],
+        totals: dict,
+    ) -> EstimateSaveResult:
         conn, cursor = self._conn, self._cursor
         if not conn or not cursor:
             self._set_last_error(
                 "Cannot save estimate: no active database connection is available."
             )
-            return False
+            return EstimateSaveResult(False, error_detail=self._db.last_error)
+        transaction_started = False
+        regular_items_list: list[dict] = []
+        return_items_list: list[dict] = []
         try:
             self._set_last_error(None)
-            conn.execute("BEGIN TRANSACTION")
-            regular_items_list = list(regular_items or [])
-            return_items_list = list(return_items or [])
+            regular_items_list = [dict(item) for item in regular_items or []]
+            return_items_list = [dict(item) for item in return_items or []]
+            conn.execute("BEGIN IMMEDIATE")
+            transaction_started = True
             cursor.execute(
                 "SELECT 1 FROM estimates WHERE voucher_no = ?", (voucher_no,)
             )
@@ -465,17 +389,18 @@ class EstimatesRepository:
             voucher_no_int = self._voucher_to_int(voucher_no)
 
             all_items = regular_items_list + return_items_list
-            missing_codes = self._find_missing_item_codes(all_items)
-            if missing_codes:
-                conn.rollback()
-                message = self._format_missing_code_message(missing_codes, all_items)
-                self._logger.warning(
-                    "Estimate %s save aborted due to missing item codes: %s",
-                    voucher_no,
-                    ", ".join(missing_codes),
-                )
-                self._set_last_error(message)
-                return False
+            missing_code_keys = self._prepare_snapshots(cursor, voucher_no, all_items)
+            validate_estimate(
+                voucher_no,
+                silver_rate,
+                all_items,
+                totals,
+                missing_code_keys=missing_code_keys,
+            )
+
+            inventory_plan = self._prepare_inventory(
+                cursor, voucher_no, regular_items_list, return_items_list
+            )
 
             if estimate_exists:
                 cursor.execute(
@@ -530,7 +455,7 @@ class EstimatesRepository:
             params = [
                 (
                     voucher_no,
-                    item.get("code", ""),
+                    item.get("_catalog_code"),
                     item.get("name", ""),
                     float(item.get("gross", 0.0)),
                     float(item.get("poly", 0.0)),
@@ -544,13 +469,15 @@ class EstimatesRepository:
                     0,
                     0,
                     str(item.get("line_key", "") or ""),
+                    item.get("code") or None,
+                    item.get("tunch"),
                 )
                 for item in regular_items_list
             ]
             params.extend(
                 (
                     voucher_no,
-                    item.get("code", ""),
+                    item.get("_catalog_code"),
                     item.get("name", ""),
                     float(item.get("gross", 0.0)),
                     float(item.get("poly", 0.0)),
@@ -564,20 +491,33 @@ class EstimatesRepository:
                     1 if item.get("is_return", False) else 0,
                     1 if item.get("is_silver_bar", False) else 0,
                     str(item.get("line_key", "") or ""),
+                    item.get("code") or None,
+                    item.get("tunch"),
                 )
                 for item in return_items_list
             )
             if params:
                 cursor.executemany(
-                    "INSERT INTO estimate_items (voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage_type, wage, fine, is_return, is_silver_bar, line_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO estimate_items (voucher_no, item_code, item_name, gross, poly, net_wt, purity, wage_rate, pieces, wage_type, wage, fine, is_return, is_silver_bar, line_key, item_code_snapshot, tunch) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     params,
                 )
 
+            inventory = SilverBarSynchronizationRepository.apply(
+                cursor, voucher_no, inventory_plan
+            )
+            cursor.execute(
+                "DELETE FROM estimate_draft WHERE voucher_no = ?", (voucher_no,)
+            )
             conn.commit()
+            transaction_started = False
             self._set_last_error(None)
-            return True
+            return EstimateSaveResult(
+                True,
+                bars_added=inventory.added,
+                bars_updated=inventory.updated,
+                bars_removed=inventory.removed,
+            )
         except sqlite3.IntegrityError as exc:
-            conn.rollback()
             detail_message = self._diagnose_integrity_error(
                 exc, regular_items_list + return_items_list
             )
@@ -587,13 +527,115 @@ class EstimatesRepository:
                 exc,
                 exc_info=True,
             )
-            if detail_message:
-                self._set_last_error(detail_message)
-            else:
-                self._set_last_error(
-                    f"Database integrity error while saving estimate '{voucher_no}': {exc}"
-                )
-            return False
+            self._set_last_error(
+                detail_message
+                or f"Database integrity error while saving estimate '{voucher_no}': {exc}"
+            )
+            return EstimateSaveResult(False, error_detail=self._db.last_error)
+        except Exception as exc:
+            self._logger.error(
+                "Failed saving estimate %s: %s", voucher_no, exc, exc_info=True
+            )
+            self._set_last_error(f"Could not save estimate '{voucher_no}': {exc}")
+            return EstimateSaveResult(False, error_detail=self._db.last_error)
+        finally:
+            if transaction_started:
+                conn.rollback()
+
+    @staticmethod
+    def _snapshot_item(row) -> dict:
+        item = dict(row)
+        item["item_code"] = (
+            item.get("item_code_snapshot")
+            if item.get("item_code_snapshot") is not None
+            else item.get("item_code")
+        )
+        return item
+
+    def _prepare_snapshots(
+        self, cursor, voucher_no: str, items: list[dict]
+    ) -> set[str]:
+        """Resolve new catalog links while retaining same-line historical metadata."""
+        from uuid import uuid4
+
+        cursor.execute(
+            "SELECT * FROM estimate_items WHERE voucher_no = ?", (voucher_no,)
+        )
+        existing: dict[str, dict] = {}
+        for row in cursor.fetchall():
+            key = str(row["line_key"] or "").strip()
+            if key:
+                if key in existing:
+                    raise ValueError("Saved estimate contains duplicate line keys.")
+                existing[key] = dict(row)
+        codes = sorted(
+            {str(item.get("code") or "").strip().upper() for item in items} - {""}
+        )
+        catalog: dict[str, dict] = {}
+        for start in range(0, len(codes), 900):
+            chunk = codes[start : start + 900]
+            placeholders = ",".join("?" for _ in chunk)
+            cursor.execute(
+                f"SELECT code, tunch FROM items WHERE UPPER(code) IN ({placeholders})",  # nosec B608
+                chunk,
+            )
+            catalog.update(
+                {str(row["code"]).upper(): dict(row) for row in cursor.fetchall()}
+            )
+        missing = []
+        missing_code_keys = set()
+        for item in items:
+            code = str(item.get("code") or "").strip()
+            key = str(item.get("line_key") or "").strip()
+            previous = existing.get(key)
+            same_line = (
+                previous is not None
+                and str(previous["item_code_snapshot"] or "").upper() == code.upper()
+            )
+            master = catalog.get(code.upper())
+            if not master and not same_line:
+                if code:
+                    missing.append(code)
+                else:
+                    raise ValueError("Item code is required for new lines.")
+            item["_catalog_code"] = master["code"] if master else None
+            item["tunch"] = (
+                previous["tunch"]
+                if same_line and previous is not None
+                else (master or {}).get("tunch")
+            )
+            if same_line and not code:
+                missing_code_keys.add(key)
+            # Bar keys are assigned by inventory reconciliation to preserve legacy identity.
+            if not key and not item.get("is_silver_bar"):
+                item["line_key"] = uuid4().hex
+        if missing:
+            raise ValueError(self._format_missing_code_message(missing, items))
+        return missing_code_keys
+
+    def _prepare_inventory(
+        self,
+        cursor: sqlite3.Cursor,
+        voucher_no: str,
+        regular_items: list[dict],
+        return_items: list[dict],
+    ) -> BarReconciliationPlan:
+        bars = [
+            item
+            for item in return_items
+            if item.get("is_silver_bar") and not item.get("is_return")
+        ]
+        plan = SilverBarSynchronizationRepository(self._db).prepare(
+            cursor, voucher_no, bars
+        )
+        line_keys = []
+        for item in regular_items + return_items:
+            item["line_key"] = str(item.get("line_key") or "").strip()
+            if item["line_key"]:
+                line_keys.append(item["line_key"])
+        if len(line_keys) != len(set(line_keys)):
+            raise ValueError("Estimate contains duplicate line keys.")
+        return plan
 
     @staticmethod
     def _voucher_to_int(voucher_no: str) -> Optional[int]:
@@ -601,7 +643,8 @@ class EstimatesRepository:
         if not raw.isdigit():
             return None
         try:
-            return int(raw)
+            value = int(raw)
+            return value if value <= SQLITE_MAX_INTEGER else None
         except TypeError, ValueError:
             return None
 
@@ -611,6 +654,7 @@ class EstimatesRepository:
             return False
         try:
             cursor.execute("DELETE FROM estimate_items")
+            cursor.execute("DELETE FROM estimate_draft")
             cursor.execute("DELETE FROM estimates")
             conn.commit()
             return True
@@ -628,8 +672,30 @@ class EstimatesRepository:
         if not voucher_no:
             self._logger.error("No voucher number provided for deletion.")
             return False
+        transaction_started = False
         try:
-            conn.execute("BEGIN TRANSACTION")
+            self._set_last_error(None)
+            conn.execute("BEGIN IMMEDIATE")
+            transaction_started = True
+            cursor.execute(
+                """
+                SELECT 1 FROM silver_bars AS bars
+                WHERE bars.estimate_voucher_no = ?
+                  AND (COALESCE(bars.status, '') != 'In Stock'
+                       OR bars.list_id IS NOT NULL
+                       OR EXISTS (SELECT 1 FROM bar_transfers AS transfers
+                                  WHERE transfers.silver_bar_id = bars.bar_id))
+                LIMIT 1
+                """,
+                (voucher_no,),
+            )
+            if cursor.fetchone():
+                self._set_last_error(
+                    f"Estimate '{voucher_no}' cannot be deleted because its silver bars "
+                    "are assigned, issued, or have transfer history. "
+                    "Keep this estimate to preserve the inventory records."
+                )
+                return False
             deleted_bars_count = 0
             affected_lists: set[int] = set()
             silver_repo = getattr(self._db, "silver_bar_command_repo", None)
@@ -648,13 +714,20 @@ class EstimatesRepository:
                 "DELETE FROM estimate_items WHERE voucher_no = ?", (voucher_no,)
             )
             deleted_items_count = cursor.rowcount
+            cursor.execute(
+                "DELETE FROM estimate_draft WHERE voucher_no = ?", (voucher_no,)
+            )
             cursor.execute("DELETE FROM estimates WHERE voucher_no = ?", (voucher_no,))
             deleted_estimate_count = cursor.rowcount
 
             if silver_repo is not None and affected_lists:
                 silver_repo.cleanup_empty_lists(affected_lists)
 
+            cursor.execute(
+                "DELETE FROM estimate_draft WHERE voucher_no = ?", (voucher_no,)
+            )
             conn.commit()
+            transaction_started = False
             if deleted_estimate_count > 0:
                 self._logger.info(
                     "Deleted estimate %s with %s items and %s silver bars.",
@@ -664,15 +737,10 @@ class EstimatesRepository:
                 )
                 return True
             self._logger.warning("Estimate %s not found for deletion.", voucher_no)
-            return False
-        except sqlite3.Error as exc:
-            conn.rollback()
-            self._logger.error(
-                "DB Error deleting estimate %s: %s", voucher_no, exc, exc_info=True
-            )
+            self._set_last_error(f"Estimate '{voucher_no}' was not found.")
             return False
         except Exception as exc:
-            conn.rollback()
+            self._set_last_error(f"Could not delete estimate '{voucher_no}': {exc}")
             self._logger.error(
                 "Unexpected error deleting estimate %s: %s",
                 voucher_no,
@@ -680,6 +748,9 @@ class EstimatesRepository:
                 exc_info=True,
             )
             return False
+        finally:
+            if transaction_started:
+                conn.rollback()
 
     def _set_last_error(self, message: str | None) -> None:
         try:

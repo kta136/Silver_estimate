@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import QLocale
+from PySide6.QtCore import QCoreApplication, QEvent, QLocale
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -106,6 +106,36 @@ def qt_app():
     if app is None:
         app = QApplication([])
     return app
+
+
+@pytest.fixture(autouse=True)
+def flush_qt_deferred_deletes():
+    """Finish pytest-qt/widget deletion before the next test changes app state."""
+    yield
+    if QCoreApplication.instance() is not None:
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
+@pytest.fixture()
+def qt_application_state(qt_app):
+    """Restore application-wide appearance after tests that change the theme."""
+    previous_style = qt_app.style().objectName()
+    previous_font = qt_app.font()
+    previous_class_fonts = {
+        name: qt_app.font(name) for name in ("QMenu", "QMenuBar", "QHeaderView")
+    }
+    previous_palette = qt_app.palette()
+    previous_stylesheet = qt_app.styleSheet()
+    try:
+        yield qt_app
+    finally:
+        if qt_app.style().objectName() != previous_style:
+            qt_app.setStyle(previous_style)
+        qt_app.setFont(previous_font)
+        qt_app.setPalette(previous_palette)
+        qt_app.setStyleSheet(previous_stylesheet)
+        for name, font in previous_class_fonts.items():
+            qt_app.setFont(font, name)
 
 
 @pytest.fixture()

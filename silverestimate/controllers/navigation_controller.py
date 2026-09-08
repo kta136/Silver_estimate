@@ -65,6 +65,26 @@ class NavigationController:
         if controller:
             controller.refresh_now()
 
+    def show_keyboard_shortcuts(self):
+        QMessageBox.information(
+            self._main_window,
+            "Keyboard Shortcuts",
+            "Estimate entry\n\n"
+            "Ctrl+S — Save estimate and open print preview\n"
+            "Ctrl+P — Print preview\n"
+            "Ctrl+N — New estimate\n"
+            "Ctrl+H — Estimate history\n"
+            "Ctrl+D — Delete current row\n"
+            "Ctrl+R — Toggle Return mode\n"
+            "Ctrl+B — Toggle Silver Bar mode\n"
+            "Page Up / Page Down — Move through rows\n"
+            "Enter / Tab — Confirm field and move forward\n\n"
+            "Navigation\n\n"
+            "Alt+E — Estimate entry\n"
+            "Alt+I — Item Master\n"
+            "F1 — Keyboard shortcuts",
+        )
+
     def delete_all_data(self):
         return self._commands.delete_all_data()
 
@@ -115,6 +135,11 @@ class NavigationController:
         file_menu.addAction(exit_action)
 
         tools_menu = menu_bar.addMenu("&Tools")
+        estimate = getattr(self._main_window, "estimate_widget", None)
+        estimate_menu = getattr(estimate, "estimate_tools_menu", None)
+        if estimate_menu is not None:
+            tools_menu.addMenu(estimate_menu)
+            tools_menu.addSeparator()
 
         silver_bars_action = QAction(
             "Open &Silver Bar Management Dialog...", self._main_window
@@ -194,6 +219,11 @@ class NavigationController:
         reports_menu.addAction(history_action)
 
         help_menu = menu_bar.addMenu("&Help")
+        shortcuts_action = QAction("&Keyboard Shortcuts", self._main_window)
+        shortcuts_action.setShortcut("F1")
+        shortcuts_action.triggered.connect(self.show_keyboard_shortcuts)
+        help_menu.addAction(shortcuts_action)
+        help_menu.addSeparator()
         about_action = QAction("&About", self._main_window)
         about_action.setIcon(get_icon("about", widget=self._main_window))
         about_action.triggered.connect(self.show_about)

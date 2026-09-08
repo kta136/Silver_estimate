@@ -22,6 +22,7 @@ from silverestimate.persistence.silver_bar_repository_base import (
 from silverestimate.persistence.silver_bars_queries import (
     build_available_bars_queries,
     build_bars_in_list_queries,
+    build_history_bars_count_query,
     build_history_bars_query,
 )
 
@@ -285,16 +286,14 @@ class SilverBarQueryRepository(_SilverBarRepositoryBase):
         if not db_cursor:
             return Page(items=(), total=0, next_cursor=None)
         page_size = max(1, min(int(limit), 5000))
-        count_statement = build_history_bars_query(
+        count_statement = build_history_bars_count_query(
             voucher_term=voucher_term,
             weight_text=weight_text,
             status_text=status_text,
-            limit=1,
         )
-        count_base = count_statement.query.rsplit(" ORDER BY ", 1)[0]
         db_cursor.execute(
-            f"SELECT COUNT(*) FROM ({count_base})",  # nosec B608
-            tuple(count_statement.params[:-1]),
+            count_statement.query,
+            tuple(count_statement.params),
         )
         count_row = db_cursor.fetchone()
         total = int(count_row[0]) if count_row else 0

@@ -15,9 +15,12 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QMenu,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QTableView,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -36,6 +39,7 @@ from silverestimate.ui.modern_components import (
 )
 from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
 from silverestimate.ui.themed_controls import ThemedComboBox
+from silverestimate.ui.toolbar_overflow import ToolbarOverflow
 
 
 @dataclass(frozen=True)
@@ -54,10 +58,12 @@ def _load_item_page(
     with cancellable_sqlite_connection(
         request.connection_factory, cancel_event
     ) as connection:
+        connection.execute("BEGIN")
         page = fetch_item_catalog_page(
             connection.cursor(),
             request.search_term,
             page_cursor=request.cursor,
+            include_total=not request.append,
             limit=1000,
         )
     return request, page
@@ -123,7 +129,7 @@ class ItemMasterWidget(QWidget):
                 }
                 QLabel#ItemMasterCountLabel {
                     color: __TEXT_MUTED__;
-                    font-size: 8.5pt;
+
                 }
                 QFrame#ItemMasterSeparator {
                     background-color: __CARD_BORDER_SOFT__;
@@ -158,9 +164,9 @@ class ItemMasterWidget(QWidget):
         )
         subtitle_label.setObjectName("ItemMasterSubtitleLabel")
         subtitle_label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
-        header_row.addWidget(subtitle_label)
+        subtitle_label.hide()
         header_row.addStretch()
-        outer.addLayout(header_row)
+        outer.addWidget(ToolbarOverflow(header_row))
 
         # ── Horizontal split ────────────────────────────────────
         split = QHBoxLayout()
@@ -233,7 +239,8 @@ class ItemMasterWidget(QWidget):
         wt_lbl = QLabel("Wage Type")
         wt_lbl.setObjectName("ItemMasterFieldLabel")
         self.wage_type_combo = ThemedComboBox()
-        self.wage_type_combo.addItems(["PC", "WT"])
+        self.wage_type_combo.addItem("Per piece", "PC")
+        self.wage_type_combo.addItem("Per gram", "WT")
         self.wage_type_combo.setMinimumWidth(92)
         self.wage_type_combo.setToolTip("PC = Per Piece  |  WT = Per Weight (gram)")
         wt_col.addWidget(wt_lbl)
@@ -242,11 +249,11 @@ class ItemMasterWidget(QWidget):
 
         wr_col = QVBoxLayout()
         wr_col.setSpacing(4)
-        wr_lbl = QLabel("Wage Rate")
+        wr_lbl = QLabel("Lbr")
         wr_lbl.setObjectName("ItemMasterFieldLabel")
         self.wage_rate_edit = QLineEdit()
         self.wage_rate_edit.setPlaceholderText("0.00")
-        self.wage_rate_edit.setToolTip("Wage rate for the selected wage type.")
+        self.wage_rate_edit.setToolTip("Lbr for the selected wage type.")
         rate_validator = QDoubleValidator(0.00, 100000.00, 2, self.wage_rate_edit)
         rate_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
         rate_validator.setLocale(QLocale.system())
@@ -293,8 +300,6 @@ class ItemMasterWidget(QWidget):
 
         form_vbox.addStretch()
 
-        split.addWidget(self._form_panel)
-
         # ── RIGHT: Search + table ───────────────────────────────
         right_col = QVBoxLayout()
         right_col.setSpacing(6)
@@ -302,8 +307,8 @@ class ItemMasterWidget(QWidget):
         search_row = QHBoxLayout()
         search_row.setSpacing(8)
         self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText("Search by code or name...")
-        self.search_edit.setToolTip("Filter items by code or name.")
+        self.search_edit.setPlaceholderText("Search code, name or Tunch...")
+        self.search_edit.setToolTip("Filter items by code, name or Tunch.")
         self.search_edit.setClearButtonEnabled(True)
         self.search_edit.textChanged.connect(self._schedule_search)
         search_row.addWidget(self.search_edit)
@@ -314,7 +319,6 @@ class ItemMasterWidget(QWidget):
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
         search_row.addWidget(self._item_count_label)
-        right_col.addLayout(search_row)
 
         self.items_table = QTableView(self)
         self.items_model = ItemMasterTableModel(self.items_table)
@@ -338,6 +342,9 @@ class ItemMasterWidget(QWidget):
             QAbstractItemView.SelectionMode.SingleSelection
         )
         self.items_table.setSortingEnabled(True)
+        self.items_table.horizontalHeader().setToolTip(
+            "Sort loaded rows only. Filters search all records. Up to 20,000 rows are displayed; narrow filters to see more."
+        )
         self.items_table.setAlternatingRowColors(True)
         self.items_table.setShowGrid(False)
         self.items_table.setColumnWidth(0, 110)
@@ -364,17 +371,131 @@ class ItemMasterWidget(QWidget):
         right_col.addLayout(paging_row)
 
         split.addLayout(right_col, 1)
+        form_scroll = QScrollArea()
+        form_scroll.setWidgetResizable(True)
+        form_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        form_scroll.setMinimumWidth(300)
+        form_scroll.setMaximumWidth(360)
+        form_scroll.setWidget(self._form_panel)
+        split.addWidget(form_scroll)
+        header_row.insertWidget(1, self.search_edit, 1)
+        header_row.addWidget(self._item_count_label)
+        self.new_item_button = QPushButton("+ New item")
+        self.new_item_button.setObjectName("ItemMasterPrimaryButton")
+        self.new_item_button.clicked.connect(self.clear_form)
+        header_row.addWidget(self.new_item_button)
+        backup = QToolButton()
+        backup.setText("Backup")
+        backup.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        menu = QMenu(backup)
+        for label, method in (
+            ("Create catalog backup", "create_item_catalog_backup"),
+            ("Restore catalog", "restore_item_catalog"),
+        ):
+            action = menu.addAction(label)
+            action.triggered.connect(
+                lambda checked=False, name=method: self._catalog_command(name)
+            )
+        backup.setMenu(menu)
+        header_row.addWidget(backup)
+        close = QPushButton("Close")
+        close.clicked.connect(self._close_catalog)
+        header_row.addWidget(close)
+        self.dirty_label = QLabel("")
+        form_vbox.insertWidget(form_vbox.indexOf(self.update_button), self.dirty_label)
+        self.clear_button.setText("Cancel")
+        self._clean_form = self._form_values()
+        self._selection_guard = False
+        for edit in (
+            self.code_edit,
+            self.name_edit,
+            self.tunch_edit,
+            self.purity_edit,
+            self.wage_rate_edit,
+        ):
+            edit.textEdited.connect(self._update_dirty_label)
+        self.wage_type_combo.activated.connect(self._update_dirty_label)
         outer.addLayout(split, 1)
 
         self.bottom_status_strip = BottomStatusStrip(self)
         self.bottom_status_strip.set_left_items(
             [
                 "Select a row to edit",
-                "Search by code or name",
+                "Search code, name or Tunch",
             ]
         )
         outer.addWidget(self.bottom_status_strip)
         self._update_bottom_status(0)
+
+    def _form_values(self) -> tuple:
+        return tuple(
+            edit.text()
+            for edit in (
+                self.code_edit,
+                self.name_edit,
+                self.tunch_edit,
+                self.purity_edit,
+                self.wage_rate_edit,
+            )
+        ) + (self.wage_type_combo.currentData(),)
+
+    def _update_dirty_label(self, *_args) -> None:
+        self.dirty_label.setText(
+            "● Unsaved changes" if self._form_values() != self._clean_form else ""
+        )
+
+    def confirm_discard_edits(self) -> bool:
+        if not hasattr(self, "_clean_form") or self._form_values() == self._clean_form:
+            return True
+        reply = QMessageBox.question(
+            self,
+            "Unsaved item changes",
+            "Save changes to this item before continuing?",
+            QMessageBox.StandardButton.Save
+            | QMessageBox.StandardButton.Discard
+            | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if reply == QMessageBox.StandardButton.Discard:
+            for field, value in zip(
+                (
+                    self.code_edit,
+                    self.name_edit,
+                    self.tunch_edit,
+                    self.purity_edit,
+                    self.wage_rate_edit,
+                ),
+                self._clean_form[:5],
+                strict=True,
+            ):
+                field.setText(value)
+            self.wage_type_combo.setCurrentIndex(
+                self.wage_type_combo.findData(self._clean_form[5])
+            )
+            self._update_dirty_label()
+            return True
+        if reply == QMessageBox.StandardButton.Save:
+            self._selection_guard = True
+            try:
+                self.update_item() if self.code_edit.isReadOnly() else self.add_item()
+            finally:
+                self._selection_guard = False
+            return self._form_values() == self._clean_form
+        return False
+
+    def _catalog_command(self, name: str) -> None:
+        if self.confirm_discard_edits():
+            callback = getattr(getattr(self.main_window, "commands", None), name, None)
+            if callable(callback):
+                callback()
+
+    def _close_catalog(self) -> None:
+        if self.confirm_discard_edits():
+            callback = getattr(self.main_window, "show_estimate", None)
+            if callable(callback):
+                callback()
+            else:
+                self.close()
 
     def load_items(self, search_term=None, *, append: bool = False):
         """Load items from the database into the table."""
@@ -476,32 +597,37 @@ class ItemMasterWidget(QWidget):
         started_at: float,
         append: bool,
     ) -> None:
-        loaded_items = self._item_page_state.apply(page, append=append)
+        self._item_page_state.apply(page, append=append)
+        loaded_items = self._item_page_state.last_page_rows
         table = self.items_table
         model = self.items_model
-        sorting_enabled = table.isSortingEnabled()
         table.setUpdatesEnabled(False)
         table.blockSignals(True)
         try:
-            if sorting_enabled:
-                table.setSortingEnabled(False)
-            model.set_rows(cast(list[object], loaded_items))
+            if append:
+                model.append_rows(cast(list[object], loaded_items))
+            else:
+                model.set_rows(cast(list[object], loaded_items))
         finally:
-            if sorting_enabled:
-                table.setSortingEnabled(True)
             table.blockSignals(False)
             table.setUpdatesEnabled(True)
             table.viewport().update()
 
         count = self._item_page_state.loaded
-        self._item_count_label.setText(
-            f"{count} of {self._item_page_state.total} items"
+        summary = (
+            f"{count} items loaded"
+            if self._item_page_state.total is None
+            else f"{count} of {self._item_page_state.total} items"
         )
+        summary += " · Sort: loaded rows"
+        if self._item_page_state.limit_reached:
+            summary += " · Display limit reached; narrow the search"
+        self._item_count_label.setText(summary)
         self.load_more_button.setVisible(self._item_page_state.has_more)
         self.load_more_button.setEnabled(True)
         self._update_bottom_status(count)
         self.show_status(
-            f"Loaded {count} of {self._item_page_state.total} items.",
+            summary,
             2000,
         )
         elapsed_ms = (time.perf_counter() - started_at) * 1000.0
@@ -528,7 +654,23 @@ class ItemMasterWidget(QWidget):
 
     def on_item_selected(self):
         """Handle item selection in the table."""
+        if self._selection_guard:
+            return
         payload = self._selected_item_payload()
+        target_code = str(payload.get("code") or "") if payload else ""
+        if self.code_edit.text() != target_code and not self.confirm_discard_edits():
+            self._selection_guard = True
+            try:
+                for row in range(self.items_model.rowCount()):
+                    if (
+                        self.items_model.row_payload(row).get("code")
+                        == self.code_edit.text()
+                    ):
+                        self.items_table.selectRow(row)
+                        break
+            finally:
+                self._selection_guard = False
+            return
         if payload is None:
             self._set_form_cleared(clear_selection=False)
             return
@@ -551,7 +693,7 @@ class ItemMasterWidget(QWidget):
         self.purity_edit.setText(purity_str)
         self.wage_rate_edit.setText(wage_rate_str)
 
-        index = self.wage_type_combo.findText(wage_type, Qt.MatchFlag.MatchFixedString)
+        index = self.wage_type_combo.findData(wage_type)
         self.wage_type_combo.setCurrentIndex(index if index >= 0 else 0)
 
         # Switch form panel to edit mode
@@ -561,11 +703,14 @@ class ItemMasterWidget(QWidget):
         self.add_button.setVisible(False)
         self.update_button.setVisible(True)
         self.delete_button.setEnabled(True)
+        self._clean_form = self._form_values()
+        self._update_dirty_label()
         self.show_status(f"Selected item: {code}", 2000)
 
     def clear_form(self):
         """Clear the form fields and reset button states."""
-        self._set_form_cleared(clear_selection=True)
+        if self.confirm_discard_edits():
+            self._set_form_cleared(clear_selection=True)
 
     def _set_form_cleared(self, *, clear_selection: bool) -> None:
         self.code_edit.clear()
@@ -584,9 +729,12 @@ class ItemMasterWidget(QWidget):
         self.update_button.setVisible(False)
         self.delete_button.setEnabled(False)
 
+        self._clean_form = self._form_values()
         if clear_selection:
             self.items_table.clearSelection()
             self.items_table.setCurrentIndex(QModelIndex())
+        self._clean_form = self._form_values()
+        self._update_dirty_label()
         self.show_status("Form cleared.", 1500)
 
     def _set_form_heading_mode(self, mode: str) -> None:
@@ -622,7 +770,7 @@ class ItemMasterWidget(QWidget):
         name = self.name_edit.text().strip()
         tunch = self.tunch_edit.text().strip() or None
         purity = self._parse_float(self.purity_edit.text(), 0.0)
-        wage_type = self.wage_type_combo.currentText()
+        wage_type = self.wage_type_combo.currentData()
         wage_rate = self._parse_float(self.wage_rate_edit.text(), 0.0)
 
         try:
@@ -660,7 +808,8 @@ class ItemMasterWidget(QWidget):
         )
         if success:
             self.show_status(f"Item '{validated.code}' added successfully.", 3000)
-            self.clear_form()
+            self._clean_form = self._form_values()
+            self._set_form_cleared(clear_selection=True)
             self.load_items()
         else:
             QMessageBox.critical(
@@ -676,7 +825,7 @@ class ItemMasterWidget(QWidget):
         name = self.name_edit.text().strip()
         tunch = self.tunch_edit.text().strip() or None
         purity = self._parse_float(self.purity_edit.text(), 0.0)
-        wage_type = self.wage_type_combo.currentText()
+        wage_type = self.wage_type_combo.currentData()
         wage_rate = self._parse_float(self.wage_rate_edit.text(), 0.0)
 
         try:
@@ -703,7 +852,8 @@ class ItemMasterWidget(QWidget):
         )
         if success:
             self.show_status(f"Item '{validated.code}' updated successfully.", 3000)
-            self.clear_form()
+            self._clean_form = self._form_values()
+            self._set_form_cleared(clear_selection=True)
             self.load_items()
         else:
             QMessageBox.critical(
@@ -728,7 +878,7 @@ class ItemMasterWidget(QWidget):
             self,
             "Confirm Deletion",
             f"Are you sure you want to delete item '{code}'?\n"
-            f"WARNING: This may affect past estimates using this item code.\n"
+            f"Saved estimates will keep their original item details.\n"
             f"This action cannot be undone.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel,
@@ -738,13 +888,15 @@ class ItemMasterWidget(QWidget):
             success = self.db_manager.delete_item(code)
             if success:
                 self.show_status(f"Item '{code}' deleted successfully.", 3000)
-                self.clear_form()
+                self._clean_form = self._form_values()
+                self._set_form_cleared(clear_selection=True)
                 self.load_items()
             else:
                 QMessageBox.critical(
                     self,
                     "Database Error",
-                    f"Failed to delete item '{code}'. It might be used in existing estimates. See console/logs.",
+                    getattr(self.db_manager, "last_error", None)
+                    or f"Failed to delete item '{code}'.",
                 )
                 self.show_status(
                     f"Delete Item Error: Database operation failed for '{code}'.", 4000
@@ -761,5 +913,8 @@ class ItemMasterWidget(QWidget):
             super().keyPressEvent(event)
 
     def closeEvent(self, event):
+        if not self.confirm_discard_edits():
+            event.ignore()
+            return
         self._cancel_active_loads()
         super().closeEvent(event)

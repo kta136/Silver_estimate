@@ -2,22 +2,26 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Dict, Mapping, Optional, Protocol, Sequence
 
-from silverestimate.domain.estimate_models import EstimateLine, TotalsResult
+from silverestimate.domain.estimate_entry import (
+    EstimateEntryViewState as EstimateEntryViewState,
+)
+from silverestimate.domain.estimate_entry import (
+    LoadedEstimate as LoadedEstimate,
+)
+from silverestimate.domain.estimate_entry import (
+    SaveItem as SaveItem,
+)
+from silverestimate.domain.estimate_entry import (
+    SaveOutcome as SaveOutcome,
+)
+from silverestimate.domain.estimate_entry import (
+    SavePayload as SavePayload,
+)
+from silverestimate.domain.estimate_models import TotalsResult
 from silverestimate.services.estimate_calculator import compute_totals
 from silverestimate.services.estimate_repository import EstimateRepository
-
-
-@dataclass(frozen=True)
-class EstimateEntryViewState:
-    """Snapshot of the data required to run presenter computations."""
-
-    lines: Sequence[EstimateLine]
-    silver_rate: float
-    last_balance_silver: float = 0.0
-    last_balance_amount: float = 0.0
 
 
 class EstimateEntryView(Protocol):
@@ -54,67 +58,6 @@ class EstimateEntryView(Protocol):
 
     def apply_loaded_estimate(self, loaded: "LoadedEstimate") -> bool:
         """Apply a loaded estimate to the view."""
-
-
-@dataclass(frozen=True)
-class SaveItem:
-    """Representation of a row prepared for persistence."""
-
-    code: str
-    row_number: int
-    name: str
-    gross: float
-    poly: float
-    net_wt: float
-    purity: float
-    wage_rate: float
-    pieces: int
-    wage: float
-    fine: float
-    is_return: bool
-    is_silver_bar: bool
-    wage_type: str = "WT"
-    line_key: str = ""
-
-
-@dataclass(frozen=True)
-class SavePayload:
-    """Aggregate data required to persist an estimate."""
-
-    voucher_no: str
-    date: str
-    silver_rate: float
-    note: str
-    last_balance_silver: float
-    last_balance_amount: float
-    items: Sequence[SaveItem]
-    regular_items: Sequence[SaveItem]
-    return_items: Sequence[SaveItem]
-    totals: Mapping[str, object]
-
-
-@dataclass(frozen=True)
-class SaveOutcome:
-    """Result of attempting to save an estimate."""
-
-    success: bool
-    message: str
-    bars_added: int = 0
-    bars_failed: int = 0
-    error_detail: Optional[str] = None
-
-
-@dataclass(frozen=True)
-class LoadedEstimate:
-    """Representation of a fully loaded estimate."""
-
-    voucher_no: str
-    date: str
-    silver_rate: float
-    note: str
-    last_balance_silver: float
-    last_balance_amount: float
-    items: Sequence[SaveItem]
 
 
 class EstimateEntryPresenter:
@@ -182,6 +125,8 @@ class EstimateEntryPresenter:
                     is_return=bool(raw.get("is_return", 0)),
                     is_silver_bar=bool(raw.get("is_silver_bar", 0)),
                     line_key=str(raw.get("line_key", "") or ""),
+                    tunch=raw.get("tunch"),
+                    snapshot_version=int(raw.get("snapshot_version", 0) or 0),
                 )
             except AttributeError, TypeError, ValueError:
                 item = None
@@ -254,7 +199,7 @@ class EstimateEntryPresenter:
         try:
             regular_dicts = [self._item_to_dict(item) for item in payload.regular_items]
             return_dicts = [self._item_to_dict(item) for item in payload.return_items]
-            success = self._repository.save_estimate(
+            result = self._repository.save_estimate(
                 payload.voucher_no,
                 payload.date,
                 payload.silver_rate,
@@ -262,39 +207,28 @@ class EstimateEntryPresenter:
                 return_dicts,
                 payload.totals,
             )
-            if not success:
-                detail = self._repository.last_error()
+            if not result.success:
                 return SaveOutcome(
                     success=False,
                     message=f"Failed to save estimate '{payload.voucher_no}'.",
-                    error_detail=detail,
+                    error_detail=result.error_detail,
                 )
 
-            bars_added = 0
-            bars_failed = 0
-
-            current_bar_items = [
-                item
-                for item in payload.items
-                if item.is_silver_bar and not item.is_return
-            ]
-            bars_added, bars_failed = self._sync_silver_bars_for_estimate(
-                payload.voucher_no,
-                current_bar_items,
-            )
-
             message_parts = [f"Estimate '{payload.voucher_no}' saved successfully."]
-            if bars_added:
-                message_parts.append(f"{bars_added} silver bar(s) created.")
-            if bars_failed:
-                message_parts.append(f"{bars_failed} bar update(s) failed.")
+            if result.bars_added:
+                message_parts.append(f"{result.bars_added} silver bar(s) created.")
+            if result.bars_updated:
+                message_parts.append(f"{result.bars_updated} silver bar(s) updated.")
+            if result.bars_removed:
+                message_parts.append(
+                    f"{result.bars_removed} unused silver bar(s) removed."
+                )
             message = " ".join(message_parts)
 
             return SaveOutcome(
                 success=True,
                 message=message,
-                bars_added=bars_added,
-                bars_failed=bars_failed,
+                bars_added=result.bars_added,
             )
         except Exception as exc:
             return SaveOutcome(
@@ -302,23 +236,6 @@ class EstimateEntryPresenter:
                 message=f"Unexpected error saving estimate '{payload.voucher_no}'.",
                 error_detail=str(exc),
             )
-
-    def _sync_silver_bars_for_estimate(
-        self, voucher_no: str, items: Sequence[SaveItem]
-    ) -> tuple[int, int]:
-        bars_payload = [
-            {
-                "weight": float(item.net_wt or 0.0),
-                "purity": float(item.purity or 0.0),
-                "line_key": str(item.line_key or ""),
-            }
-            for item in items
-        ]
-        added, failed = self._repository.sync_silver_bars_for_estimate(
-            voucher_no,
-            bars_payload,
-        )
-        return int(added or 0), int(failed or 0)
 
     @staticmethod
     def _item_to_dict(item: SaveItem) -> Dict[str, object]:

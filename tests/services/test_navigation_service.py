@@ -23,6 +23,9 @@ class _StackStub:
     def setCurrentWidget(self, widget):
         self.current = widget
 
+    def currentWidget(self):
+        return self.current
+
     def addWidget(self, widget):
         self.added.append(widget)
 

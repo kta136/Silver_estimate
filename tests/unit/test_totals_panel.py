@@ -8,28 +8,30 @@ from silverestimate.ui.estimate_entry_components.totals_panel import TotalsPanel
 
 
 @pytest.fixture
-def panel(qt_app):
+def panel(qtbot):
     """Create a fresh TotalsPanel for testing."""
-    return TotalsPanel()
+    widget = TotalsPanel()
+    qtbot.addWidget(widget)
+    return widget
 
 
 def test_initial_state(panel):
     """Test that panel initializes with zero values."""
-    assert panel.overall_gross_label.text() == "0.0"
-    assert panel.overall_poly_label.text() == "0.0"
-    assert panel.total_gross_label.text() == "0.0"
-    assert panel.total_net_label.text() == "0.0"
-    assert panel.total_fine_label.text() == "0.0"
-    assert panel.return_gross_label.text() == "0.0"
-    assert panel.return_net_label.text() == "0.0"
-    assert panel.return_fine_label.text() == "0.0"
-    assert panel.bar_gross_label.text() == "0.0"
-    assert panel.bar_net_label.text() == "0.0"
-    assert panel.bar_fine_label.text() == "0.0"
-    assert panel.net_fine_label.text() == "0.0"
-    assert panel.net_wage_label.text() == "0"
+    assert panel.overall_gross_label.text() == "0.000"
+    assert panel.overall_poly_label.text() == "0.000"
+    assert panel.total_gross_label.text() == "0.000"
+    assert panel.total_net_label.text() == "0.000"
+    assert panel.total_fine_label.text() == "0.000"
+    assert panel.return_gross_label.text() == "0.000"
+    assert panel.return_net_label.text() == "0.000"
+    assert panel.return_fine_label.text() == "0.000"
+    assert panel.bar_gross_label.text() == "0.000"
+    assert panel.bar_net_label.text() == "0.000"
+    assert panel.bar_fine_label.text() == "0.000"
+    assert panel.net_fine_label.text() == "0.000"
+    assert panel.net_wage_label.text() == "0.00"
     # Note: grand_total_label shows "0" not "₹ 0" initially
-    assert panel.grand_total_label.text() in ["0", "₹ 0"]
+    assert panel.grand_total_label.text() == "₹ 0.00"
 
 
 def test_set_totals(panel):
@@ -55,20 +57,20 @@ def test_set_totals(panel):
     panel.set_totals(totals)
 
     # Verify all values are updated
-    assert panel.overall_gross_label.text() == "500.00"
-    assert panel.overall_poly_label.text() == "25.00"
-    assert panel.total_gross_label.text() == "300.00"
-    assert panel.total_net_label.text() == "275.00"
-    assert panel.total_fine_label.text() == "252.00"
-    assert panel.return_gross_label.text() == "100.00"
-    assert panel.return_net_label.text() == "95.00"
-    assert panel.return_fine_label.text() == "87.00"
-    assert panel.bar_gross_label.text() == "100.00"
-    assert panel.bar_net_label.text() == "95.00"
-    assert panel.bar_fine_label.text() == "87.00"
-    assert panel.net_fine_label.text() == "252.00"
-    assert panel.net_wage_label.text() == "5,000"
-    assert panel.grand_total_label.text() == "₹ 1,25,000"
+    assert panel.overall_gross_label.text() == "500.000"
+    assert panel.overall_poly_label.text() == "25.000"
+    assert panel.total_gross_label.text() == "300.000"
+    assert panel.total_net_label.text() == "275.000"
+    assert panel.total_fine_label.text() == "252.000"
+    assert panel.return_gross_label.text() == "100.000"
+    assert panel.return_net_label.text() == "95.000"
+    assert panel.return_fine_label.text() == "87.000"
+    assert panel.bar_gross_label.text() == "100.000"
+    assert panel.bar_net_label.text() == "95.000"
+    assert panel.bar_fine_label.text() == "87.000"
+    assert panel.net_fine_label.text() == "252.000"
+    assert panel.net_wage_label.text() == "5,000.00"
+    assert panel.grand_total_label.text() == "₹ 1,25,000.00"
 
 
 def test_clear_totals(panel):
@@ -97,20 +99,20 @@ def test_clear_totals(panel):
     panel.clear_totals()
 
     # Verify all back to zero
-    assert panel.overall_gross_label.text() == "0.0"
-    assert panel.overall_poly_label.text() == "0.0"
-    assert panel.total_gross_label.text() == "0.0"
-    assert panel.total_net_label.text() == "0.0"
-    assert panel.total_fine_label.text() == "0.0"
-    assert panel.return_gross_label.text() == "0.0"
-    assert panel.return_net_label.text() == "0.0"
-    assert panel.return_fine_label.text() == "0.0"
-    assert panel.bar_gross_label.text() == "0.0"
-    assert panel.bar_net_label.text() == "0.0"
-    assert panel.bar_fine_label.text() == "0.0"
-    assert panel.net_fine_label.text() == "0.0"
-    assert panel.net_wage_label.text() == "0"
-    assert panel.grand_total_label.text() == "₹ 0"
+    assert panel.overall_gross_label.text() == "0.000"
+    assert panel.overall_poly_label.text() == "0.000"
+    assert panel.total_gross_label.text() == "0.000"
+    assert panel.total_net_label.text() == "0.000"
+    assert panel.total_fine_label.text() == "0.000"
+    assert panel.return_gross_label.text() == "0.000"
+    assert panel.return_net_label.text() == "0.000"
+    assert panel.return_fine_label.text() == "0.000"
+    assert panel.bar_gross_label.text() == "0.000"
+    assert panel.bar_net_label.text() == "0.000"
+    assert panel.bar_fine_label.text() == "0.000"
+    assert panel.net_fine_label.text() == "0.000"
+    assert panel.net_wage_label.text() == "0.00"
+    assert panel.grand_total_label.text() == "₹ 0.00"
 
 
 def test_set_totals_with_zero_values(panel):
@@ -136,9 +138,9 @@ def test_set_totals_with_zero_values(panel):
     panel.set_totals(totals)
 
     # Should display "0.00" or "0" appropriately
-    assert panel.overall_gross_label.text() == "0.00"
-    assert panel.net_wage_label.text() == "0"
-    assert panel.grand_total_label.text() == "₹ 0"
+    assert panel.overall_gross_label.text() == "0.000"
+    assert panel.net_wage_label.text() == "0.00"
+    assert panel.grand_total_label.text() == "₹ 0.00"
 
 
 def test_optional_return_and_silver_bar_sections_only_show_when_used(panel):
@@ -176,18 +178,18 @@ def test_optional_return_and_silver_bar_sections_only_show_when_used(panel):
 def test_decimal_formatting(panel):
     """Test that decimal values are formatted correctly."""
     totals = TotalsResult(
-        overall_gross=123.456,  # Should round to 2 decimals
+        overall_gross=123.456,  # Retains three weight decimals
         overall_poly=0.0,
         regular=CategoryTotals(
             gross=0.0, net=0.0, fine=999.999, wage=0.0
-        ),  # Should round to 2 decimals
+        ),  # Retains three weight decimals
         returns=CategoryTotals(),
         silver_bars=CategoryTotals(),
         net_fine_core=0.0,
         net_wage_core=0.0,
         net_value_core=0.0,
         net_fine=0.0,
-        net_wage=1234.56,  # Should round to 0 decimals
+        net_wage=1234.56,  # Retains two monetary decimals
         net_value=0.0,
         grand_total=0.0,
         silver_rate=0.0,
@@ -197,22 +199,24 @@ def test_decimal_formatting(panel):
 
     panel.set_totals(totals)
 
-    assert panel.overall_gross_label.text() == "123.46"
-    assert panel.total_fine_label.text() == "1,000.00"
-    assert panel.net_wage_label.text() == "1,235"
+    assert panel.overall_gross_label.text() == "123.456"
+    assert panel.total_fine_label.text() == "999.999"
+    assert panel.net_wage_label.text() == "1,234.56"
 
 
 def test_final_calc_font_size_keeps_grand_total_more_prominent(panel):
-    panel.set_final_calc_font_size(11)
+    panel.set_breakdown_font_size(11)
+    panel.set_final_calc_font_size(16)
 
     assert panel.net_fine_label.font().pointSize() == 11
     assert panel.net_wage_label.font().pointSize() == 11
-    assert panel.grand_total_label.font().pointSize() == 14
+    assert panel.grand_total_label.font().pointSize() == 16
     assert panel.grand_total_label.font().bold()
 
 
-def test_sidebar_section_order_can_be_reordered(qt_app):
+def test_sidebar_section_order_can_be_reordered(qtbot, qt_app):
     panel = TotalsPanel(layout_mode="sidebar")
+    qtbot.addWidget(panel)
     panel.set_section_order(["silver_bar", "return", "totals", "regular"])
 
     assert panel.section_order() == [
@@ -226,27 +230,31 @@ def test_sidebar_section_order_can_be_reordered(qt_app):
         panel._summary_sections_list.item(i).data(Qt.ItemDataRole.UserRole)
         for i in range(panel._summary_sections_list.count())
     ]
-    assert ui_order == ["final_calc", "silver_bar", "return", "totals", "regular"]
+    assert ui_order == ["final_calc", "totals"]
+    assert panel.category_table.cellWidget(0, 0).text() == "Silver Bar"
 
 
-def test_sidebar_rows_moved_emits_section_order_signal(qt_app):
+def test_sidebar_rows_moved_emits_section_order_signal(qtbot, qt_app):
     panel = TotalsPanel(layout_mode="sidebar")
+    qtbot.addWidget(panel)
     emissions = []
     panel.section_order_changed.connect(lambda order: emissions.append(order))
 
-    moving_item = panel._summary_sections_list.takeItem(4)
-    panel._summary_sections_list.insertItem(0, moving_item)
-    panel._on_sidebar_section_rows_moved()
+    panel.move_category("silver_bar", -1)
+    panel.move_category("silver_bar", -1)
 
     assert emissions
     assert emissions[-1][0] == "final_calc"
-    assert emissions[-1][1] == "silver_bar"
+    assert [key for key in emissions[-1] if key not in {"final_calc", "totals"}][
+        0
+    ] == "silver_bar"
     assert panel.section_order()[0] == "final_calc"
-    assert panel.section_order()[1] == "silver_bar"
+    assert panel.category_table.cellWidget(0, 0).text() == "Silver Bar"
 
 
-def test_sidebar_swap_requested_swaps_card_positions(qt_app):
+def test_sidebar_swap_requested_swaps_card_positions(qtbot, qt_app):
     panel = TotalsPanel(layout_mode="sidebar")
+    qtbot.addWidget(panel)
     emissions = []
     panel.section_order_changed.connect(lambda order: emissions.append(order))
 
@@ -263,7 +271,8 @@ def test_sidebar_swap_requested_swaps_card_positions(qt_app):
         panel._summary_sections_list.item(i).data(Qt.ItemDataRole.UserRole)
         for i in range(panel._summary_sections_list.count())
     ]
-    assert ui_order == ["final_calc", "return", "regular", "totals", "silver_bar"]
+    assert ui_order == ["final_calc", "totals"]
+    assert panel.category_table.cellWidget(0, 0).text() == "Return"
     assert emissions[-1] == [
         "final_calc",
         "return",
@@ -273,8 +282,9 @@ def test_sidebar_swap_requested_swaps_card_positions(qt_app):
     ]
 
 
-def test_sidebar_swap_requested_keeps_final_calc_pinned(qt_app):
+def test_sidebar_swap_requested_keeps_final_calc_pinned(qtbot, qt_app):
     panel = TotalsPanel(layout_mode="sidebar")
+    qtbot.addWidget(panel)
     original_order = panel.section_order()
 
     panel._on_sidebar_section_swap_requested(0, 2)
@@ -282,14 +292,13 @@ def test_sidebar_swap_requested_keeps_final_calc_pinned(qt_app):
     assert panel.section_order() == original_order
 
 
-def test_sidebar_rows_moved_keeps_all_cards_visible(qt_app):
+def test_sidebar_rows_moved_keeps_all_cards_visible(qtbot, qt_app):
     panel = TotalsPanel(layout_mode="sidebar")
+    qtbot.addWidget(panel)
     panel.show()
     qt_app.processEvents()
 
-    moving_item = panel._summary_sections_list.takeItem(2)
-    panel._summary_sections_list.insertItem(0, moving_item)
-    panel._on_sidebar_section_rows_moved()
+    panel.move_category("silver_bar", -1)
     qt_app.processEvents()
 
     for idx in range(panel._summary_sections_list.count()):
@@ -298,24 +307,27 @@ def test_sidebar_rows_moved_keeps_all_cards_visible(qt_app):
         assert panel._summary_sections_list.itemWidget(item) is not None
 
 
-def test_sidebar_items_are_not_drop_targets(qt_app):
+def test_sidebar_items_are_not_drop_targets(qtbot, qt_app):
     panel = TotalsPanel(layout_mode="sidebar")
+    qtbot.addWidget(panel)
     for idx in range(panel._summary_sections_list.count()):
         item = panel._summary_sections_list.item(idx)
         assert item is not None
         assert not bool(item.flags() & Qt.ItemFlag.ItemIsDropEnabled)
 
 
-def test_sidebar_final_calc_item_is_not_draggable(qt_app):
+def test_sidebar_final_calc_item_is_not_draggable(qtbot, qt_app):
     panel = TotalsPanel(layout_mode="sidebar")
+    qtbot.addWidget(panel)
     first_item = panel._summary_sections_list.item(0)
     assert first_item is not None
     assert first_item.data(Qt.ItemDataRole.UserRole) == "final_calc"
     assert not bool(first_item.flags() & Qt.ItemFlag.ItemIsDragEnabled)
 
 
-def test_sidebar_cards_resize_with_available_width(qt_app):
+def test_sidebar_cards_resize_with_available_width(qtbot, qt_app):
     panel = TotalsPanel(layout_mode="sidebar")
+    qtbot.addWidget(panel)
     panel.resize(520, 760)
     panel.show()
     qt_app.processEvents()

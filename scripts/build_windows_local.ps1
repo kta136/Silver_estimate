@@ -1,3 +1,8 @@
+param(
+    [ValidatePattern('^[A-Za-z0-9-]*$')]
+    [string]$ArtifactSuffix = ""
+)
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
@@ -6,8 +11,13 @@ $appConstants = Join-Path $repoRoot "silverestimate\infrastructure\app_constants
 $deployConfig = Join-Path $repoRoot "pysidedeploy.spec"
 $artifactValidator = Join-Path $repoRoot "scripts\validate_frozen_artifact.py"
 $distDir = Join-Path $repoRoot "dist"
-$requiredPython = [version]"3.14"
-$nuitkaVersion = "4.1.3"
+$pythonPinPath = Join-Path $repoRoot ".python-version"
+$pythonPin = (Get-Content -LiteralPath $pythonPinPath -Raw).Trim()
+if ($pythonPin -notmatch '^\d+\.\d+\.\d+$') {
+    throw ".python-version must contain an exact major.minor.patch version."
+}
+$requiredPython = [version]$pythonPin
+$nuitkaVersion = "4.2.1"
 
 function Get-AppVersion {
     $match = Select-String -Path $appConstants -Pattern 'APP_VERSION = "([^"]+)"'
@@ -36,102 +46,23 @@ function Test-PythonForBuild([string]$pythonExe) {
         return $false
     }
     $version = Get-PythonVersion -pythonExe $pythonExe
-    return $version -and
-        $version.Major -eq $requiredPython.Major -and
-        $version.Minor -eq $requiredPython.Minor
+    return $version -and $version -eq $requiredPython
 }
 
-function Get-Python314FromLauncher {
-    $launcher = Get-Command py -ErrorAction SilentlyContinue
-    if (-not $launcher) {
-        return $null
-    }
-
-    $pythonExe = & $launcher.Source -3.14 -c "import sys; print(sys.executable)" 2>$null |
-        Select-Object -First 1
-    if (Test-PythonForBuild -pythonExe $pythonExe) {
-        return $pythonExe
-    }
-    return $null
-}
-
-function Get-Python314FromRegistry {
-    $registryPaths = @(
-        'HKCU:\SOFTWARE\Python\PythonCore\3.14\InstallPath',
-        'HKLM:\SOFTWARE\Python\PythonCore\3.14\InstallPath',
-        'HKCU:\SOFTWARE\WOW6432Node\Python\PythonCore\3.14\InstallPath',
-        'HKLM:\SOFTWARE\WOW6432Node\Python\PythonCore\3.14\InstallPath'
-    )
-
-    foreach ($path in $registryPaths) {
-        $properties = Get-ItemProperty $path -ErrorAction SilentlyContinue
-        if (-not $properties) {
-            continue
-        }
-
-        $executableProperty = $properties.PSObject.Properties["ExecutablePath"]
-        $pythonExe = if ($executableProperty) { $executableProperty.Value } else { $null }
-
-        $defaultProperty = $properties.PSObject.Properties["(default)"]
-        if (-not $pythonExe -and $defaultProperty -and $defaultProperty.Value) {
-            $pythonExe = Join-Path $defaultProperty.Value "python.exe"
-        }
-
-        if (Test-PythonForBuild -pythonExe $pythonExe) {
-            return $pythonExe
-        }
-    }
-    return $null
-}
-
-function Find-WindowsPython {
-    $preferred = @(
-        (Get-Python314FromLauncher),
-        (Get-Python314FromRegistry),
-        (Join-Path $repoRoot ".venv\Scripts\python.exe")
-    )
-
-    foreach ($pythonExe in $preferred) {
-        if (Test-PythonForBuild -pythonExe $pythonExe) {
-            return $pythonExe
-        }
-    }
-
-    $candidates = @(
-        "C:\Users\$env:USERNAME\AppData\Local\Programs\Python",
-        "C:\Python*",
-        "C:\Program Files\Python*",
-        "C:\Program Files (x86)\Python*"
-    )
-
-    foreach ($pattern in $candidates) {
-        $directories = Get-ChildItem -Path $pattern -Directory -ErrorAction SilentlyContinue |
-            Sort-Object FullName -Descending
-        foreach ($directory in $directories) {
-            $pythonExe = Join-Path $directory.FullName "python.exe"
-            if (Test-PythonForBuild -pythonExe $pythonExe) {
-                return $pythonExe
-            }
-        }
-    }
-
-    throw "Python 3.14 or newer was not found in common Windows install locations."
-}
-
-function Sync-ProjectDependencies([string]$pythonExe) {
+function Sync-ProjectDependencies {
     $uv = Get-Command uv -ErrorAction SilentlyContinue
     if (-not $uv) {
         throw "uv is required for a locked release build but was not found on PATH."
     }
 
-    & $uv.Source sync --extra dev --python $pythonExe --locked
+    & $uv.Source sync --extra dev --python $pythonPin --locked
     if ($LASTEXITCODE -ne 0) {
         throw "uv dependency sync failed with exit code $LASTEXITCODE."
     }
 
     $venvPython = Join-Path $repoRoot ".venv\Scripts\python.exe"
     if (-not (Test-PythonForBuild -pythonExe $venvPython)) {
-        throw "Locked dependency sync did not produce a Python 3.14 virtual environment."
+        throw "Locked dependency sync did not produce the pinned Python $pythonPin virtual environment."
     }
     return $venvPython
 }
@@ -290,10 +221,9 @@ if ($env:OS -ne "Windows_NT" -or -not [Environment]::Is64BitOperatingSystem) {
     throw "The local release build requires 64-bit Windows."
 }
 
-$pythonExe = Find-WindowsPython
-
 $version = Get-AppVersion
-$versionedExe = Join-Path $distDir "SilverEstimate-v$version.exe"
+$artifactTag = if ($ArtifactSuffix) { "-$ArtifactSuffix" } else { "" }
+$versionedExe = Join-Path $distDir "SilverEstimate-v$version$artifactTag.exe"
 $baseExe = Join-Path $distDir "SilverEstimate.exe"
 $standaloneDir = Join-Path $distDir "SilverEstimate.dist"
 $portableDir = Join-Path $distDir "SilverEstimate-v$version-portable"
@@ -303,7 +233,7 @@ $temporaryOnefileConfig = Join-Path $repoRoot ".pysidedeploy-local-onefile.spec"
 
 Push-Location $repoRoot
 try {
-    $buildPython = Sync-ProjectDependencies -pythonExe $pythonExe
+    $buildPython = Sync-ProjectDependencies
     $deployExe = Get-PySideDeploy -pythonExe $buildPython
     $dumpbinExe = Find-Dumpbin
 
@@ -320,6 +250,9 @@ try {
     }
 
     Copy-Item -LiteralPath $deployConfig -Destination $temporaryOnefileConfig -Force
+    $configContent = Get-Content -LiteralPath $temporaryOnefileConfig -Raw
+    $configContent = $configContent -replace '(?m)^extra_args = ', "extra_args = --file-version=$version --product-version=$version "
+    [IO.File]::WriteAllText($temporaryOnefileConfig, $configContent, [Text.UTF8Encoding]::new($false))
     Invoke-PySideDeployBuild `
         -deployExe $deployExe `
         -configFile $temporaryOnefileConfig `

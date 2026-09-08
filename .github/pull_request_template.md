@@ -23,8 +23,8 @@ Please describe the tests that you ran to verify your changes. Provide instructi
 
 **Test Configuration**:
 - OS: [e.g., Windows 11]
-- Python version: [e.g., 3.14.4]
-- PySide6/Qt version: [e.g., 6.11.1]
+- Python version: [e.g., 3.14.7]
+- PySide6/Qt version: [e.g., 6.11.2]
 
 ## Checklist
 - [ ] My code follows the style guidelines of this project

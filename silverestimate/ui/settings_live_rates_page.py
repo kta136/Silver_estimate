@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QLabel,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -39,18 +40,26 @@ class LiveRatesSettingsPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
 
-        group = QGroupBox("DDA Agra Mohar Live Rate")
+        title = QLabel("Live Rates")
+        title.setObjectName("SettingsTitleLabel")
+        layout.addWidget(title)
+        group = QGroupBox("Current Live Rates")
         form = QFormLayout(group)
         form.setContentsMargins(16, 16, 16, 16)
         form.setHorizontalSpacing(18)
         form.setVerticalSpacing(12)
 
+        self.rate_value = QLabel("Not updated")
+        self.rate_status = QLabel("Waiting for connection")
+        form.addRow("Provider", QLabel("DDA Agra Mohar"))
+        form.addRow("Live silver rate", self.rate_value)
+        form.addRow("Status", self.rate_status)
         state = self.load_state()
-        self.live_enabled_checkbox = QCheckBox("Enable live rate (show in UI)")
+        self.live_enabled_checkbox = QCheckBox("Show live rate in estimate entry")
         self.live_enabled_checkbox.setChecked(state.visible)
         form.addRow("Live Rate:", self.live_enabled_checkbox)
 
-        self.automatic_checkbox = QCheckBox("Enable automatic SSE updates")
+        self.automatic_checkbox = QCheckBox("Update automatically")
         self.automatic_checkbox.setChecked(state.automatic)
         form.addRow("Automatic:", self.automatic_checkbox)
 
@@ -61,6 +70,11 @@ class LiveRatesSettingsPage(QWidget):
         )
         hint.setWordWrap(True)
         layout.addWidget(group)
+        technical = QPushButton("Technical details")
+        technical.setCheckable(True)
+        technical.toggled.connect(hint.setVisible)
+        hint.hide()
+        layout.addWidget(technical)
         layout.addWidget(hint)
         layout.addStretch()
 
@@ -68,6 +82,10 @@ class LiveRatesSettingsPage(QWidget):
         self.live_enabled_checkbox.toggled.connect(self.changed.emit)
         self.automatic_checkbox.toggled.connect(self.changed.emit)
         self._sync_enabled(state.visible)
+
+    def set_rate_status(self, value: str, status: str) -> None:
+        self.rate_value.setText(value)
+        self.rate_status.setText(status)
 
     def load_state(self) -> LiveRateSettingsState:
         return LiveRateSettingsState(
@@ -83,6 +101,10 @@ class LiveRatesSettingsPage(QWidget):
             visible=self.live_enabled_checkbox.isChecked(),
             automatic=self.automatic_checkbox.isChecked(),
         )
+
+    def restore_defaults(self) -> None:
+        self.live_enabled_checkbox.setChecked(True)
+        self.automatic_checkbox.setChecked(True)
 
     def save(self) -> LiveRateSettingsState:
         state = self.state()

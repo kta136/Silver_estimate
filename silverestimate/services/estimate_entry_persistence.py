@@ -1,12 +1,21 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, Iterable, List
+from dataclasses import asdict, dataclass
+from typing import Dict, Iterable, List, Protocol
 
-from silverestimate.domain.estimate_models import EstimateLineCategory
-from silverestimate.presenter import SaveItem, SaveOutcome, SavePayload
+from silverestimate.domain.estimate_entry import (
+    EstimateEntryRowState,
+    EstimateEntrySnapshot,
+    SaveItem,
+    SaveOutcome,
+    SavePayload,
+)
+from silverestimate.domain.estimate_models import EstimateLine, EstimateLineCategory
+from silverestimate.domain.estimate_validation import (
+    validate_estimate_item,
+    validate_estimate_totals,
+)
 from silverestimate.services.estimate_calculator import compute_totals
-from silverestimate.ui.view_models import EstimateEntryRowState, EstimateEntryViewModel
 
 
 @dataclass(frozen=True)
@@ -18,11 +27,26 @@ class SavePreparation:
     row_errors: Dict[int, str]
 
 
-class EstimateEntryPersistenceService:
-    """Translate between the view-model state and presenter persistence calls."""
+class SaveValidationError(ValueError):
+    """Validation failure retaining row locations for the entry screen."""
 
-    def __init__(self, view_model: EstimateEntryViewModel) -> None:
-        self._view_model = view_model
+    def __init__(self, row_errors: Dict[int, str]) -> None:
+        self.row_errors = row_errors
+        detail = "\n".join(f"Row {row}: {error}" for row, error in row_errors.items())
+        super().__init__(f"Correct the invalid rows before saving.\n{detail}")
+
+
+class EstimateSaveExecutor(Protocol):
+    """Only the save command is required by the application save workflow."""
+
+    def save_estimate(self, payload: SavePayload) -> SaveOutcome: ...
+
+
+class EstimateEntryPersistenceService:
+    """Validate a detached entry snapshot and execute one save command."""
+
+    def __init__(self, snapshot: EstimateEntrySnapshot) -> None:
+        self._snapshot = snapshot
 
     # ------------------------------------------------------------------ #
     # Save helpers
@@ -34,15 +58,15 @@ class EstimateEntryPersistenceService:
         date: str,
         note: str,
     ) -> SavePreparation:
-        """Create a SavePayload from the current view-model rows."""
-        self._view_model.ensure_line_keys()
-        rows = self._view_model.rows()
+        """Create a SavePayload from the detached input rows."""
+        rows = self._snapshot.rows
         save_items: List[SaveItem] = []
+        accepted_rows: List[EstimateEntryRowState] = []
         skipped_rows: List[int] = []
         row_errors: Dict[int, str] = {}
 
         for idx, row in enumerate(rows):
-            if row.is_empty():
+            if row.is_empty() and not self._has_row_data(row):
                 continue
             row_number = row.row_index if row.row_index > 0 else idx + 1
             try:
@@ -52,15 +76,27 @@ class EstimateEntryPersistenceService:
                 row_errors[row_number] = str(exc)
                 continue
             save_items.append(save_item)
+            accepted_rows.append(row)
 
         if not save_items:
+            if row_errors:
+                raise SaveValidationError(row_errors)
             raise ValueError("No valid items found to save.")
 
+        if not voucher_no.strip():
+            raise ValueError("Voucher number is required.")
+        validate_estimate_totals(
+            self._snapshot.silver_rate,
+            {
+                "last_balance_silver": self._snapshot.last_balance_silver,
+                "last_balance_amount": self._snapshot.last_balance_amount,
+            },
+        )
         totals = compute_totals(
-            [self._row_to_estimate_line(row) for row in rows if not row.is_empty()],
-            silver_rate=self._view_model.silver_rate,
-            last_balance_silver=self._view_model.last_balance_silver,
-            last_balance_amount=self._view_model.last_balance_amount,
+            [self._row_to_estimate_line(row) for row in accepted_rows],
+            silver_rate=self._snapshot.silver_rate,
+            last_balance_silver=self._snapshot.last_balance_silver,
+            last_balance_amount=self._snapshot.last_balance_amount,
         )
 
         regular_items = tuple(
@@ -73,10 +109,10 @@ class EstimateEntryPersistenceService:
         payload = SavePayload(
             voucher_no=voucher_no,
             date=date,
-            silver_rate=self._view_model.silver_rate,
+            silver_rate=self._snapshot.silver_rate,
             note=note,
-            last_balance_silver=self._view_model.last_balance_silver,
-            last_balance_amount=self._view_model.last_balance_amount,
+            last_balance_silver=self._snapshot.last_balance_silver,
+            last_balance_amount=self._snapshot.last_balance_amount,
             items=tuple(save_items),
             regular_items=regular_items,
             return_items=return_items,
@@ -86,10 +122,11 @@ class EstimateEntryPersistenceService:
                 "net_fine": totals.net_fine_core,
                 "net_wage": totals.net_wage_core,
                 "note": note,
-                "last_balance_silver": self._view_model.last_balance_silver,
-                "last_balance_amount": self._view_model.last_balance_amount,
+                "last_balance_silver": self._snapshot.last_balance_silver,
+                "last_balance_amount": self._snapshot.last_balance_amount,
             },
         )
+        validate_estimate_totals(payload.silver_rate, payload.totals)
 
         return SavePreparation(
             payload=payload,
@@ -103,7 +140,7 @@ class EstimateEntryPersistenceService:
         voucher_no: str,
         date: str,
         note: str,
-        presenter,
+        presenter: EstimateSaveExecutor,
     ) -> tuple[SaveOutcome, SavePreparation]:
         """Run save using the presenter and return the outcome plus preparation info."""
         preparation = self.prepare_save_payload(
@@ -111,6 +148,15 @@ class EstimateEntryPersistenceService:
             date=date,
             note=note,
         )
+        if preparation.row_errors:
+            return SaveOutcome(
+                success=False,
+                message="Estimate was not saved. Correct the invalid rows and try again.",
+                error_detail="\n".join(
+                    f"Row {row}: {error}"
+                    for row, error in preparation.row_errors.items()
+                ),
+            ), preparation
         outcome = presenter.save_estimate(preparation.payload)
         return outcome, preparation
 
@@ -124,8 +170,6 @@ class EstimateEntryPersistenceService:
         """Convert persisted SaveItem entries into view-model row states."""
         rows: List[EstimateEntryRowState] = []
         for idx, item in enumerate(items):
-            if not item.code:
-                continue
             category = (
                 EstimateLineCategory.RETURN
                 if item.is_return
@@ -151,6 +195,8 @@ class EstimateEntryPersistenceService:
                     category=category,
                     row_index=item.row_number if item.row_number else idx + 1,
                     line_key=str(item.line_key or ""),
+                    tunch=item.tunch,
+                    snapshot_version=item.snapshot_version,
                 )
             )
         return rows
@@ -159,18 +205,33 @@ class EstimateEntryPersistenceService:
     # Internal helpers
     # ------------------------------------------------------------------ #
     @staticmethod
-    def _row_to_estimate_line(row: EstimateEntryRowState):
+    def _has_row_data(row: EstimateEntryRowState) -> bool:
+        return bool(
+            row.name.strip()
+            or row.pieces not in (0, 1)
+            or any(
+                (
+                    row.gross,
+                    row.poly,
+                    row.net_weight,
+                    row.purity,
+                    row.wage_rate,
+                    row.wage_amount,
+                    row.fine_weight,
+                )
+            )
+        )
+
+    @staticmethod
+    def _row_to_estimate_line(row: EstimateEntryRowState) -> EstimateLine:
         return row.to_estimate_line()
 
     @staticmethod
     def _row_to_save_item(row: EstimateEntryRowState, row_number: int) -> SaveItem:
-        if row.net_weight < 0 or row.fine_weight < 0 or row.wage_amount < 0:
-            raise ValueError("Calculated values cannot be negative.")
-
         is_return = row.category.is_return()
         is_silver_bar = row.category.is_silver_bar()
 
-        return SaveItem(
+        item = SaveItem(
             code=row.code,
             row_number=row_number,
             name=row.name,
@@ -186,4 +247,10 @@ class EstimateEntryPersistenceService:
             is_return=is_return,
             is_silver_bar=is_silver_bar,
             line_key=str(row.line_key or ""),
+            tunch=row.tunch,
+            snapshot_version=row.snapshot_version,
         )
+        validate_estimate_item(
+            asdict(item), allow_missing_code=bool(row.snapshot_version and row.line_key)
+        )
+        return item

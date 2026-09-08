@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Callable, Protocol
 
 from PySide6.QtWidgets import (
@@ -18,6 +19,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from silverestimate.infrastructure.settings import SettingsKey, get_app_settings
+from silverestimate.ui.maintenance_progress import MaintenanceProgressDialog
 
 LOGGER = logging.getLogger(__name__)
 DATABASE_BACKUP_FILTER = "Silver Estimate Encrypted Backup (*.sedbbackup)"
@@ -65,6 +69,11 @@ class SettingsDataController:
     ) -> None:
         self._database_provider = database_provider
         self._actions = actions
+
+    def for_worker(self) -> SettingsDataController:
+        """Resolve the UI-owned database provider before dispatching work."""
+        database = self._database_provider()
+        return SettingsDataController(lambda: database, self._actions)
 
     def delete_all_estimates(self) -> DataActionResult:
         return self._run_command(
@@ -125,8 +134,13 @@ class SettingsDataController:
     def _maintenance_result(outcome: object, fallback_path: str) -> DataActionResult:
         message = str(getattr(outcome, "message", "") or "")
         path = getattr(outcome, "path", None)
+        status = getattr(outcome, "status", None)
+        succeeded = status is None or getattr(status, "name", "") in {
+            "SUCCESS",
+            "STAGED_RESTART_REQUIRED",
+        }
         return DataActionResult(
-            succeeded=True,
+            succeeded=succeeded,
             message=message,
             path=str(path or fallback_path),
         )
@@ -164,6 +178,7 @@ class DataManagementPage(QWidget):
     ) -> None:
         super().__init__(parent)
         self._controller = controller
+        self._maintenance_active = False
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -177,10 +192,17 @@ class DataManagementPage(QWidget):
         )
         description.setWordWrap(True)
         description.setObjectName("SettingsWarningLabel")
-        layout.addWidget(description)
-        layout.addLayout(self._create_delete_actions())
+        title = QLabel("Backups")
+        title.setObjectName("SettingsTitleLabel")
+        layout.addWidget(title)
         layout.addWidget(self._create_item_backup_group())
         layout.addWidget(self._create_database_backup_group())
+        danger = QGroupBox("DANGER ZONE")
+        danger.setStyleSheet("QGroupBox { border: 1px solid #ff9ca4; color: #cf2434; }")
+        danger_layout = QVBoxLayout(danger)
+        danger_layout.addWidget(description)
+        danger_layout.addLayout(self._create_delete_actions())
+        layout.addWidget(danger)
         layout.addStretch()
 
     def _create_delete_actions(self) -> QHBoxLayout:
@@ -219,11 +241,11 @@ class DataManagementPage(QWidget):
         return layout
 
     def _create_item_backup_group(self) -> QGroupBox:
-        group = QGroupBox("Item Master Backup")
+        group = QGroupBox("Item catalog")
         layout = QVBoxLayout(group)
         layout.setSpacing(10)
 
-        self.restore_item_backup_button = QPushButton("Restore Item Backup...")
+        self.restore_item_backup_button = QPushButton("Restore catalog")
         self.restore_item_backup_button.setToolTip(
             "Restore a native Silver Estimate item catalog backup\n"
             "Format: .seitems.json\n"
@@ -238,7 +260,7 @@ class DataManagementPage(QWidget):
         )
         layout.addWidget(self.restore_item_backup_button)
 
-        self.create_item_backup_button = QPushButton("Create Item Backup...")
+        self.create_item_backup_button = QPushButton("Create catalog backup")
         self.create_item_backup_button.setToolTip(
             "Create a native Silver Estimate item catalog backup file\n"
             "Format: .seitems.json\n"
@@ -256,6 +278,21 @@ class DataManagementPage(QWidget):
     def _create_database_backup_group(self) -> QGroupBox:
         group = QGroupBox("Encrypted Database Backup")
         layout = QVBoxLayout(group)
+        recovery = QLabel(
+            "Backups require this installation's original device secret and the "
+            "main password used when the backup was created. They cannot be "
+            "restored on another PC. Losing or resetting Windows credentials "
+            "or the device secret can make backups unusable. Keep a separate "
+            "copy of the archive; it cannot recover data if the device secret "
+            "is lost. Backups include saved data and any preserved draft recovery copy.",
+            group,
+        )
+        recovery.setWordWrap(True)
+        layout.addWidget(recovery)
+        self.backup_status_label = QLabel(group)
+        self.backup_status_label.setWordWrap(True)
+        self._refresh_backup_status()
+        layout.addWidget(self.backup_status_label)
 
         self.create_database_backup_button = QPushButton(
             "Create Encrypted Database Backup..."
@@ -278,6 +315,37 @@ class DataManagementPage(QWidget):
         layout.addWidget(self.restore_database_backup_button)
         return group
 
+    def _refresh_backup_status(self) -> None:
+        stamp = get_app_settings().get_text(SettingsKey.BACKUP_LAST_VALIDATED_UTC)
+        self.backup_status_label.setText(
+            f"Last successful backup and validation (UTC): {stamp}"
+            if stamp
+            else "No successful database backup recorded on this installation."
+        )
+
+    def _run_maintenance(
+        self,
+        operation: Callable[[], DataActionResult],
+        title: str,
+    ) -> DataActionResult:
+        if self._maintenance_active:
+            return DataActionResult(False, "Database maintenance is already active.")
+        self._maintenance_active = True
+        dialog = MaintenanceProgressDialog(operation, title, self)
+        try:
+            result = dialog.run_operation()
+            if not isinstance(result, DataActionResult):
+                return DataActionResult(
+                    False, "Maintenance returned an invalid result."
+                )
+            return result
+        except Exception as exc:
+            LOGGER.exception("Database maintenance failed")
+            return DataActionResult(False, str(exc))
+        finally:
+            dialog.deleteLater()
+            self._maintenance_active = False
+
     def _create_database_backup(self) -> None:
         path, _selected_filter = QFileDialog.getSaveFileName(
             self,
@@ -287,8 +355,19 @@ class DataManagementPage(QWidget):
         )
         if not path:
             return
-        result = self._controller.create_database_backup(path)
+        controller = self._controller.for_worker()
+        result = self._run_maintenance(
+            lambda: controller.create_database_backup(path),
+            "Creating Encrypted Backup",
+        )
         if result.succeeded:
+            settings = get_app_settings()
+            settings.set(
+                SettingsKey.BACKUP_LAST_VALIDATED_UTC,
+                datetime.now(UTC).isoformat(timespec="seconds"),
+            )
+            settings.sync()
+            self._refresh_backup_status()
             QMessageBox.information(
                 self,
                 "Encrypted Backup Created",
@@ -314,7 +393,11 @@ class DataManagementPage(QWidget):
         )
         if not accepted:
             return
-        result = self._controller.stage_database_restore(path, password)
+        controller = self._controller.for_worker()
+        result = self._run_maintenance(
+            lambda: controller.stage_database_restore(path, password),
+            "Validating and Staging Restore",
+        )
         if result.succeeded:
             QMessageBox.information(self, "Restore Staged", result.message)
         else:

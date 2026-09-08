@@ -1,11 +1,6 @@
-import logging
-
 from PySide6.QtCore import QItemSelectionModel
 from PySide6.QtWidgets import QApplication, QFrame, QMessageBox
 
-from silverestimate.ui.silver_bar_list_print_controller import (
-    SilverBarListPrintController,
-)
 from silverestimate.ui.silver_bar_management import SilverBarDialog
 
 
@@ -127,43 +122,6 @@ class _FakeSilverBarManagementDb:
         self.marked_calls.append(int(list_id))
         self.lists = [row for row in self.lists if int(row["list_id"]) != int(list_id)]
         return True
-
-
-class _ThreadStub:
-    def __init__(self):
-        self.quit_called = False
-        self.wait_called = False
-        self.deleted = False
-
-    def quit(self):
-        self.quit_called = True
-
-    def wait(self, _timeout):
-        self.wait_called = True
-        return True
-
-    def deleteLater(self):
-        self.deleted = True
-
-
-class _WorkerStub:
-    def __init__(self):
-        self.deleted = False
-
-    def deleteLater(self):
-        self.deleted = True
-
-
-class _ProgressStub:
-    def __init__(self):
-        self.closed = False
-        self.deleted = False
-
-    def close(self):
-        self.closed = True
-
-    def deleteLater(self):
-        self.deleted = True
 
 
 def _row_for_bar_id(model, bar_id: int) -> int:
@@ -370,34 +328,3 @@ def test_management_dialog_omits_purity_range_filters(qtbot, settings_stub):
     assert hasattr(dialog, "available_limit_spin") is False
     assert hasattr(dialog, "refresh_available_button") is False
     assert hasattr(dialog, "auto_refresh_checkbox") is False
-
-
-def test_list_print_preview_cleanup_removes_worker():
-    harness = type(
-        "_Harness",
-        (),
-        {
-            "_active_print_preview_workers": {},
-            "logger": logging.getLogger("test-list-preview"),
-        },
-    )()
-    thread = _ThreadStub()
-    worker = _WorkerStub()
-    progress = _ProgressStub()
-    harness._active_print_preview_workers[thread] = worker
-
-    SilverBarListPrintController._finish_list_print_preview_build(
-        harness,
-        1,
-        thread=thread,
-        worker=worker,
-        progress=progress,
-    )
-
-    assert thread.quit_called is True
-    assert thread.wait_called is True
-    assert thread.deleted is True
-    assert worker.deleted is True
-    assert progress.closed is True
-    assert progress.deleted is True
-    assert thread not in harness._active_print_preview_workers

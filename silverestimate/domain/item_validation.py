@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 MIN_PURITY = 0.0
@@ -50,17 +51,17 @@ def validate_item(  # noqa: PLR0913 - stable public field-by-field validation AP
             f"{', '.join(sorted(VALID_WAGE_TYPES))}."
         )
 
-    purity_value = float(purity)
+    purity_value = _finite_number(purity, "Purity")
     if not (MIN_PURITY <= purity_value <= MAX_PURITY):
         raise ItemValidationError(
             f"Purity must be between {MIN_PURITY:.0f} and {MAX_PURITY:.0f}."
         )
 
-    wage_rate_value = float(wage_rate)
+    wage_rate_value = _finite_number(wage_rate, "Lbr")
     if wage_rate_value < MIN_WAGE_RATE:
-        raise ItemValidationError("Wage rate cannot be negative.")
+        raise ItemValidationError("Lbr cannot be negative.")
     if wage_rate_value > MAX_WAGE_RATE:
-        raise ItemValidationError(f"Wage rate must be <= {MAX_WAGE_RATE:,.0f}.")
+        raise ItemValidationError(f"Lbr must be <= {MAX_WAGE_RATE:,.0f}.")
 
     tunch_value = str(tunch).strip() if tunch is not None else ""
 
@@ -72,3 +73,13 @@ def validate_item(  # noqa: PLR0913 - stable public field-by-field validation AP
         wage_rate=wage_rate_value,
         tunch=tunch_value or None,
     )
+
+
+def _finite_number(value: float, label: str) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ItemValidationError(f"{label} must be a finite number.") from exc
+    if not math.isfinite(number):
+        raise ItemValidationError(f"{label} must be a finite number.")
+    return number

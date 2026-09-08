@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
@@ -58,10 +60,25 @@ def export_item_catalog_rows(
     }
 
     path = Path(file_path)
-    path.write_text(
-        f"{json.dumps(payload, indent=2, sort_keys=True)}\n",
-        encoding="utf-8",
-    )
+    serialized = f"{json.dumps(payload, indent=2, sort_keys=True, allow_nan=False)}\n"
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            temporary.write(serialized)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        os.replace(temporary_path, path)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
     return len(items)
 
 
@@ -102,7 +119,10 @@ def import_item_catalog(
     items = load_item_catalog_file(file_path)
     summary = db_manager.upsert_item_catalog(items, replace_existing=replace_existing)
     if not isinstance(summary, dict):
-        raise ItemCatalogTransferError("Item catalog import could not be applied.")
+        raise ItemCatalogTransferError(
+            getattr(db_manager, "last_error", None)
+            or "Item catalog import could not be applied."
+        )
     return {
         "inserted": int(summary.get("inserted", 0)),
         "updated": int(summary.get("updated", 0)),
@@ -115,7 +135,9 @@ def load_item_catalog_file(file_path: str) -> list[dict[str, Any]]:
     """Parse and validate a native catalog backup file."""
     path = Path(file_path)
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(
+            path.read_text(encoding="utf-8"), parse_constant=_reject_json_constant
+        )
     except FileNotFoundError as exc:
         raise ItemCatalogTransferError(f"Catalog file not found: {path}") from exc
     except json.JSONDecodeError as exc:
@@ -153,6 +175,12 @@ def load_item_catalog_file(file_path: str) -> list[dict[str, Any]]:
     return normalized_items
 
 
+def _reject_json_constant(value: str) -> None:
+    raise ItemCatalogTransferError(
+        f"Catalog file is not valid JSON: non-finite number {value}."
+    )
+
+
 def ensure_catalog_file_suffix(file_path: str) -> str:
     """Append the native file suffix unless it is already present."""
     text = str(file_path or "").strip()
@@ -179,9 +207,9 @@ def _normalize_item_mapping(raw_item: object, *, context: str) -> dict[str, Any]
         validated = validate_item(
             code=str(data.get("code", "") or ""),
             name=str(data.get("name", "") or ""),
-            purity=float(data.get("purity", 0.0)),
+            purity=data.get("purity", 0.0),
             wage_type=str(data.get("wage_type", "") or ""),
-            wage_rate=float(data.get("wage_rate", 0.0)),
+            wage_rate=data.get("wage_rate", 0.0),
             tunch=data.get("tunch"),
         )
     except (TypeError, ValueError) as exc:

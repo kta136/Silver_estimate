@@ -17,33 +17,34 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
-    QProgressDialog,
     QPushButton,
     QSizePolicy,
     QTableView,
     QVBoxLayout,
 )
 
+from silverestimate.domain.estimate_totals import calculate_grand_total
 from silverestimate.domain.pagination import EstimateHistoryCursor, Page
 from silverestimate.infrastructure.latest_request_runner import (
     LatestRequestRunner,
-    RequestCancelledError,
 )
 from silverestimate.infrastructure.paged_load_state import PagedLoadState
 from silverestimate.infrastructure.sqlite_worker import cancellable_sqlite_connection
 from silverestimate.persistence.estimates_repository import fetch_estimate_history_page
 from silverestimate.ui.display_formatting import format_display_date, format_rupees
+from silverestimate.ui.estimate_deletion_dialog import confirm_estimate_deletion
 from silverestimate.ui.models import EstimateHistoryRow, EstimateHistoryTableModel
 from silverestimate.ui.modern_components import (
     BottomStatusStrip,
-    DetailsStrip,
+    RecordInspector,
     install_table_empty_state,
     polish_dense_table,
 )
+from silverestimate.ui.toolbar_overflow import ToolbarOverflow
 
 from .icons import get_icon
+from .preview_build_worker import PreviewBuildController
 from .print_manager import PrintManager
-from .print_payload_builder import PrintPreviewPayload
 from .shared_screen_theme import build_management_screen_stylesheet
 from .themed_controls import ThemedDateEdit
 from .window_sizing import resize_to_available_screen
@@ -67,33 +68,17 @@ def _load_history_page(
     with cancellable_sqlite_connection(
         request.connection_factory, cancel_event
     ) as connection:
+        connection.execute("BEGIN")
         page = fetch_estimate_history_page(
             connection.cursor(),
             date_from=request.date_from,
             date_to=request.date_to,
             voucher_search=request.voucher_search,
             page_cursor=request.cursor,
+            include_total=not request.append,
             limit=500,
         )
     return request, page
-
-
-@dataclass(frozen=True)
-class _PreviewRequest:
-    print_manager: PrintManager
-    build_preview: Callable[[], object]
-
-
-def _build_preview(
-    request: _PreviewRequest,
-    cancel_event: threading.Event,
-) -> tuple[_PreviewRequest, object]:
-    if cancel_event.is_set():
-        raise RequestCancelledError
-    payload = request.build_preview()
-    if cancel_event.is_set():
-        raise RequestCancelledError
-    return request, payload
 
 
 class EstimateHistoryDialog(QDialog):
@@ -106,6 +91,7 @@ class EstimateHistoryDialog(QDialog):
         self.logger = logging.getLogger(__name__)
         self.main_window = main_window_ref  # Store the explicit reference to MainWindow
         self.selected_voucher = None
+        self._closing = False
         self._history_page_state = PagedLoadState[
             dict[str, Any],
             EstimateHistoryCursor,
@@ -118,22 +104,14 @@ class EstimateHistoryDialog(QDialog):
         self._load_runner.result.connect(self._handle_load_result)
         self._load_runner.failed.connect(self._handle_load_error)
         self._load_runner.settled.connect(self._loading_done)
-        self._print_preview_progress: QProgressDialog | None = None
-        self._print_preview_runner = LatestRequestRunner(
-            _build_preview,
-            self,
-            name="estimate-preview-builder",
-        )
-        self._print_preview_runner.result.connect(self._on_print_preview_ready)
-        self._print_preview_runner.failed.connect(self._on_print_preview_error)
-        self._print_preview_runner.settled.connect(self._finish_print_preview_build)
+        self._preview_builder = PreviewBuildController(self)
         self.init_ui()
         self.load_estimates()
 
     def init_ui(self):
         """Set up the user interface."""
         self.setWindowTitle("Estimate History")
-        self.setMinimumSize(820, 500)
+        self.setMinimumSize(760, 420)
         resize_to_available_screen(
             self,
             preferred_width=1120,
@@ -159,7 +137,7 @@ class EstimateHistoryDialog(QDialog):
                 include_table=True,
                 extra_rules="""
                 QLabel#HistorySubtitleLabel {
-                    font-size: 8.7pt;
+
                 }
                 QLabel#HistorySummaryLabel {
                     background-color: __HEADER_BG__;
@@ -175,7 +153,7 @@ class EstimateHistoryDialog(QDialog):
                 }
                 QTableView {
                     color: __TEXT_STRONG__;
-                    font-size: 9.5pt;
+
                     alternate-background-color: __SURFACE_BG__;
                 }
                 QTableView::item {
@@ -213,13 +191,14 @@ class EstimateHistoryDialog(QDialog):
         subtitle_label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         header_layout.addWidget(subtitle_label, 0, Qt.AlignmentFlag.AlignVCenter)
         header_layout.addStretch(1)
-        layout.addWidget(header_card)
+        header_card.hide()
 
         filter_card = QFrame(self)
         filter_card.setObjectName("HistoryFilterCard")
         filter_layout = QHBoxLayout(filter_card)
         filter_layout.setContentsMargins(12, 7, 12, 7)
         filter_layout.setSpacing(6)
+        filter_layout.addWidget(header_label)
 
         from_label = QLabel("From")
         from_label.setObjectName("HistoryFieldLabel")
@@ -268,9 +247,11 @@ class EstimateHistoryDialog(QDialog):
         self.results_summary_label.setObjectName("HistorySummaryLabel")
         self.results_summary_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.results_summary_label.setMinimumWidth(150)
-        filter_layout.addWidget(self.results_summary_label)
+        self.clear_filters_button = QPushButton("Clear")
+        self.clear_filters_button.clicked.connect(self._clear_filters)
+        filter_layout.addWidget(self.clear_filters_button)
 
-        layout.addWidget(filter_card)
+        layout.addWidget(ToolbarOverflow(filter_card))
 
         # Estimates table
         self.estimates_table = QTableView(self)
@@ -301,6 +282,9 @@ class EstimateHistoryDialog(QDialog):
             QAbstractItemView.SelectionMode.SingleSelection
         )
         self.estimates_table.setSortingEnabled(True)
+        self.estimates_table.horizontalHeader().setToolTip(
+            "Sort loaded rows only. Filters search all records. Up to 20,000 rows are displayed; narrow filters to see more."
+        )
         self.estimates_table.setAlternatingRowColors(True)
         self.estimates_table.setShowGrid(False)
         self.estimates_table.setWordWrap(False)
@@ -319,15 +303,17 @@ class EstimateHistoryDialog(QDialog):
                 lambda *_: self._update_selected_details()
             )
 
-        layout.addWidget(self.estimates_table, 1)
+        workspace = QHBoxLayout()
+        workspace.addWidget(self.estimates_table, 1)
+        layout.addLayout(workspace, 1)
         self._empty_state_overlay = install_table_empty_state(
             self.estimates_table,
             "No estimates match this date range or voucher filter.",
         )
 
-        self.selected_details_strip = DetailsStrip("Selected Estimate", self)
+        self.selected_details_strip = RecordInspector("Selected Estimate", self)
         self.selected_details_strip.setObjectName("HistoryDetailsStrip")
-        layout.addWidget(self.selected_details_strip)
+        workspace.addWidget(self.selected_details_strip)
 
         self.bottom_status_strip = BottomStatusStrip(self)
         self.bottom_status_strip.set_left_items(["Rows: 0"])
@@ -367,6 +353,8 @@ class EstimateHistoryDialog(QDialog):
         self.load_more_button.setVisible(False)
         self.load_more_button.clicked.connect(lambda: self.load_estimates(append=True))
         button_layout.addWidget(self.load_more_button)
+        self.paging_scope_label = QLabel("Sort: loaded rows")
+        button_layout.addWidget(self.paging_scope_label)
 
         self.close_button = QPushButton("Close")
         self.close_button.setObjectName("HistorySecondaryButton")
@@ -374,10 +362,24 @@ class EstimateHistoryDialog(QDialog):
         self.close_button.clicked.connect(self.reject)
         button_layout.addWidget(self.close_button)
 
+        button_layout.insertWidget(0, self.results_summary_label)
+        for button, label in (
+            (self.open_button, "Open estimate"),
+            (self.print_button, "Print estimate"),
+            (self.delete_button, "Delete estimate"),
+        ):
+            button.setText(label)
+            self.selected_details_strip.action_layout.addWidget(button)
         layout.addWidget(actions_card)
 
         self._update_results_summary()
         self._update_selected_details()
+
+    def _clear_filters(self) -> None:
+        self.voucher_search.clear()
+        self.date_from.setDate(self._resolve_first_estimate_date())
+        self.date_to.setDate(QDate.currentDate())
+        self.load_estimates()
 
     def _resolve_first_estimate_date(self):
         """Resolve the earliest estimate date, falling back to today."""
@@ -396,6 +398,8 @@ class EstimateHistoryDialog(QDialog):
 
     def load_estimates(self, *, append: bool = False):
         """Load estimates based on search criteria (runs queries in a background thread)."""
+        if self._closing:
+            return
         if not append:
             self._history_page_state.reset()
             self.estimates_model.set_rows([])
@@ -458,6 +462,8 @@ class EstimateHistoryDialog(QDialog):
         raise RuntimeError("Estimate history rows are unavailable.")
 
     def _handle_load_result(self, _generation: int, value: object) -> None:
+        if self._closing or _generation != self._load_runner.generation:
+            return
         request, page = cast(
             tuple[
                 _HistoryLoadRequest,
@@ -468,6 +474,8 @@ class EstimateHistoryDialog(QDialog):
         self._populate_table(page, started_at=request.started_at, append=request.append)
 
     def _handle_load_error(self, _generation: int, error: object) -> None:
+        if self._closing or _generation != self._load_runner.generation:
+            return
         QMessageBox.warning(self, "Load Error", str(error))
 
     def _populate_table(
@@ -477,9 +485,10 @@ class EstimateHistoryDialog(QDialog):
         started_at: float | None = None,
         append: bool = False,
     ) -> None:
-        history_rows = self._history_page_state.apply(page, append=append)
+        selected_voucher = self.get_selected_voucher()
+        self._history_page_state.apply(page, append=append)
+        history_rows = self._history_page_state.last_page_rows
         table = self.estimates_table
-        sorting_enabled = table.isSortingEnabled()
         table.setUpdatesEnabled(False)
         table.blockSignals(True)
         try:
@@ -494,6 +503,9 @@ class EstimateHistoryDialog(QDialog):
                 last_balance_amount = float(
                     history_row.get("last_balance_amount", 0.0) or 0.0
                 )
+                last_balance_silver = float(
+                    history_row.get("last_balance_silver", 0.0) or 0.0
+                )
                 rows.append(
                     EstimateHistoryRow(
                         voucher_no=vno,
@@ -504,24 +516,36 @@ class EstimateHistoryDialog(QDialog):
                         total_net=total_net,
                         net_fine=net_fine,
                         net_wage=net_wage,
-                        grand_total=(net_fine * silver_rate)
-                        + net_wage
-                        + last_balance_amount,
+                        grand_total=calculate_grand_total(
+                            net_fine=net_fine,
+                            net_wage=net_wage,
+                            silver_rate=silver_rate,
+                            last_balance_silver=last_balance_silver,
+                            last_balance_amount=last_balance_amount,
+                        ),
                     )
                 )
-            if sorting_enabled:
-                table.setSortingEnabled(False)
-            self.estimates_model.set_rows(rows)
-            self._update_results_summary(len(rows))
-            self.load_more_button.setVisible(self._history_page_state.has_more)
-            if rows:
-                table.selectRow(0)
+            if append:
+                self.estimates_model.append_rows(rows)
             else:
+                self.estimates_model.set_rows(rows)
+            self._update_results_summary()
+            self.load_more_button.setVisible(self._history_page_state.has_more)
+            if not append and rows:
+                selected_row = next(
+                    (
+                        row
+                        for row in range(self.estimates_model.rowCount())
+                        if self.estimates_model.row_payload(row).voucher_no
+                        == selected_voucher
+                    ),
+                    0,
+                )
+                table.selectRow(selected_row)
+            elif not append:
                 table.clearSelection()
             self._update_selected_details()
         finally:
-            if sorting_enabled:
-                table.setSortingEnabled(True)
             table.blockSignals(False)
             table.setUpdatesEnabled(True)
             table.viewport().update()
@@ -535,6 +559,8 @@ class EstimateHistoryDialog(QDialog):
                 )
 
     def _loading_done(self, _generation: int) -> None:
+        if self._closing or _generation != self._load_runner.generation:
+            return
         try:
             self.search_button.setEnabled(True)
             if hasattr(self, "open_button"):
@@ -554,6 +580,8 @@ class EstimateHistoryDialog(QDialog):
         total = self._history_page_state.total
         if loaded <= 0:
             text = "No estimates found"
+        elif total is None:
+            text = f"{loaded} estimates loaded"
         elif total == 1 and loaded == 1:
             text = "1 of 1 estimate"
         else:
@@ -566,6 +594,14 @@ class EstimateHistoryDialog(QDialog):
         self.results_summary_label.setText(text)
         text_width = self.results_summary_label.fontMetrics().horizontalAdvance(text)
         self.results_summary_label.setMinimumWidth(max(150, text_width + 24))
+        self.paging_scope_label.setText(
+            "Sort: loaded rows"
+            + (
+                " · Display limit reached; narrow filters"
+                if self._history_page_state.limit_reached
+                else ""
+            )
+        )
         self._update_bottom_status(loaded)
 
     def _update_selected_details(self) -> None:
@@ -575,13 +611,13 @@ class EstimateHistoryDialog(QDialog):
         selection_model = self.estimates_table.selectionModel()
         selected_rows = selection_model.selectedRows() if selection_model else []
         if not selected_rows:
-            strip.setVisible(False)
+            strip.setVisible(True)
             strip.set_items([("Voucher No", "-"), ("Date", "-"), ("Grand Total", "-")])
             self._update_bottom_status()
             return
         payload = self.estimates_model.row_payload(selected_rows[0].row())
         if payload is None:
-            strip.setVisible(False)
+            strip.setVisible(True)
             strip.set_items([("Voucher No", "-"), ("Date", "-"), ("Grand Total", "-")])
             self._update_bottom_status()
             return
@@ -591,7 +627,10 @@ class EstimateHistoryDialog(QDialog):
                 ("Voucher No", payload.voucher_no),
                 ("Date", format_display_date(payload.date)),
                 ("Note", payload.note or "-"),
-                ("Net Fine", f"{payload.net_fine:.3f}"),
+                ("Silver rate", format_rupees(payload.silver_rate)),
+                ("Gross", f"{payload.total_gross:.3f}g"),
+                ("Net Wt", f"{payload.total_net:.3f}g"),
+                ("Net Fine", f"{payload.net_fine:.3f}g"),
                 ("Net Wage", format_rupees(payload.net_wage)),
                 ("Grand Total", format_rupees(payload.grand_total)),
             ]
@@ -617,20 +656,26 @@ class EstimateHistoryDialog(QDialog):
     def _cancel_active_loads(self) -> None:
         self._load_runner.shutdown()
 
+    def shutdown_workers(self) -> None:
+        """Release background work once, regardless of how this dialog finishes."""
+        if self._closing:
+            return
+        self._closing = True
+        self._cancel_active_loads()
+        self._preview_builder.shutdown()
+
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Escape:
             self.reject()
         else:
             super().keyPressEvent(event)
 
-    def reject(self):
-        self._cancel_active_loads()
-        self._cancel_active_print_previews()
-        super().reject()
+    def done(self, result: int) -> None:
+        self.shutdown_workers()
+        super().done(result)
 
     def closeEvent(self, event):
-        self._cancel_active_loads()
-        self._cancel_active_print_previews()
+        self.shutdown_workers()
         super().closeEvent(event)
 
     def get_selected_voucher(self):
@@ -686,64 +731,16 @@ class EstimateHistoryDialog(QDialog):
         )
 
     def _start_print_preview_build(self, *, print_manager, build_preview) -> None:
-        self._dispose_print_preview_progress()
-        progress = QProgressDialog("Preparing print preview...", "", 0, 0, self)
-        progress.setCancelButton(None)
-        progress.setWindowTitle("Print Preview")
-        progress.setMinimumDuration(0)
-        progress.setAutoClose(False)
-        progress.setAutoReset(False)
-        progress.show()
-        self._print_preview_progress = progress
-        self._print_preview_runner.submit(_PreviewRequest(print_manager, build_preview))
-
-    def _on_print_preview_ready(
-        self,
-        _generation: int,
-        value: object,
-    ) -> None:
-        request, payload = cast(
-            tuple[_PreviewRequest, PrintPreviewPayload | None], value
-        )
-        self._close_print_preview_progress()
-        if payload is None:
-            QMessageBox.warning(
-                self,
-                "Print Error",
-                "Failed to prepare the selected estimate for preview.",
-            )
+        if self._closing:
             return
-        request.print_manager.show_preview(payload, parent_widget=self)
-
-    def _on_print_preview_error(
-        self,
-        _generation: int,
-        error: object,
-    ) -> None:
-        self._close_print_preview_progress()
-        QMessageBox.warning(self, "Print Error", str(error))
-
-    def _finish_print_preview_build(
-        self,
-        _generation: int,
-    ) -> None:
-        self._dispose_print_preview_progress()
-
-    def _close_print_preview_progress(self) -> None:
-        progress = self._print_preview_progress
-        if progress is not None:
-            progress.close()
-
-    def _dispose_print_preview_progress(self) -> None:
-        progress = self._print_preview_progress
-        self._print_preview_progress = None
-        if progress is not None:
-            progress.close()
-            progress.deleteLater()
-
-    def _cancel_active_print_previews(self) -> None:
-        self._print_preview_runner.shutdown()
-        self._dispose_print_preview_progress()
+        self._preview_builder.start(
+            build_preview,
+            on_ready=lambda payload: print_manager.show_preview(
+                payload, parent_widget=self
+            ),
+            on_error=lambda message: QMessageBox.warning(self, "Print Error", message),
+            empty_message="Failed to prepare the selected estimate for preview.",
+        )
 
     def delete_selected_estimate(self):
         """Handle deletion of the selected estimate."""
@@ -754,16 +751,7 @@ class EstimateHistoryDialog(QDialog):
             )
             return
 
-        reply = QMessageBox.warning(
-            self,
-            "Confirm Delete Estimate",
-            f"Are you sure you want to permanently delete estimate '{voucher_no}'?\n"
-            "This action cannot be undone.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Cancel,
-        )
-
-        if reply == QMessageBox.StandardButton.Yes:
+        if confirm_estimate_deletion(self, voucher_no):
             try:
                 success = self.db_manager.delete_single_estimate(voucher_no)
                 if success:
@@ -777,7 +765,8 @@ class EstimateHistoryDialog(QDialog):
                     QMessageBox.warning(
                         self,
                         "Delete Error",
-                        f"Estimate '{voucher_no}' could not be deleted (might already be deleted).",
+                        getattr(self.db_manager, "last_error", None)
+                        or f"Estimate '{voucher_no}' could not be deleted (might already be deleted).",
                     )
             except Exception as e:
                 QMessageBox.critical(

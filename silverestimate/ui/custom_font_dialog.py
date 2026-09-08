@@ -26,7 +26,7 @@ class CustomFontDialog(QDialog):
 
     def __init__(self, initial_font=None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Font Settings")
+        self.setWindowTitle("Print Font")
         self.setMinimumSize(420, 360)
         self.setObjectName("CustomFontDialog")
         self.setStyleSheet(
@@ -46,7 +46,7 @@ class CustomFontDialog(QDialog):
                 extra_rules="""
                 QLabel#CustomFontPreviewLabel {
                     color: __TEXT_STRONG__;
-                    font-size: 10pt;
+
                     font-weight: 600;
                 }
                 QFrame#CustomFontSampleFrame {
@@ -96,7 +96,7 @@ class CustomFontDialog(QDialog):
 
         self.preview_label = QLabel(
             "Estimate 100\n"
-            "RING001  Gold Ring      9.500    8.702\n"
+            "RING001  Silver Ring      9.500    8.702\n"
             "Grand Total                         ₹ 2,375",
             self,
         )
@@ -113,6 +113,7 @@ class CustomFontDialog(QDialog):
         self.button_box.button(QDialogButtonBox.StandardButton.Ok).setObjectName(
             "CustomFontPrimaryButton"
         )
+        self.button_box.button(QDialogButtonBox.StandardButton.Ok).setText("Apply Font")
         self.button_box.button(QDialogButtonBox.StandardButton.Cancel).setObjectName(
             "CustomFontSecondaryButton"
         )
@@ -128,7 +129,7 @@ class CustomFontDialog(QDialog):
         header_layout.setContentsMargins(12, 12, 12, 12)
         header_layout.setSpacing(2)
 
-        title = QLabel("Font Settings")
+        title = QLabel("Print Font")
         title.setObjectName("CustomFontTitleLabel")
         header_layout.addWidget(title)
 

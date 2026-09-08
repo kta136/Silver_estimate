@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import configparser
 import os
+import re
 import shutil
 import subprocess
+import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -16,7 +20,7 @@ def test_local_build_requires_locked_uv_environment():
     source = SCRIPT.read_text(encoding="utf-8")
 
     assert "uv is required for a locked release build" in source
-    assert "uv.Source sync --extra dev --python $pythonExe --locked" in source
+    assert "uv.Source sync --extra dev --python $pythonPin --locked" in source
     assert "pip install" not in source
 
 
@@ -91,3 +95,60 @@ def test_deploy_spec_uses_msvc_for_a_self_contained_loader():
 
     assert "--msvc=latest" in source
     assert "--zig" not in source
+
+
+def test_compiler_pin_matches_manifest_deploy_and_build_entrypoints():
+    root = SCRIPT.parents[1]
+    manifest = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    pin = next(
+        dependency.split("==", 1)[1]
+        for dependency in manifest["project"]["optional-dependencies"]["dev"]
+        if dependency.startswith("Nuitka==")
+    )
+    deploy = configparser.ConfigParser()
+    deploy.read(DEPLOY_SPEC, encoding="utf-8")
+    assert f"Nuitka=={pin}" in deploy["python"]["packages"].split(",")
+    assert f'$nuitkaVersion = "{pin}"' in SCRIPT.read_text(encoding="utf-8")
+    assert f'NUITKA_VERSION = "{pin}"' in (root / "noxfile.py").read_text(
+        encoding="utf-8"
+    )
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows build interpreter guard")
+def test_local_build_rejects_a_different_python_patch(tmp_path):
+    # Run the real interpreter guard without invoking the build or syncing packages.
+    source = SCRIPT.read_text(encoding="utf-8")
+    functions = source[
+        source.index("function Get-PythonVersion") : source.index(
+            "function Sync-ProjectDependencies"
+        )
+    ]
+    script = tmp_path / "check exact interpreter.ps1"
+    actual_version = ".".join(map(str, sys.version_info[:3]))
+    different_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro + 1}"
+    quoted_python = sys.executable.replace("'", "''")
+    script.write_text(
+        "$ErrorActionPreference = 'Stop'\n"
+        + functions
+        + f"\n$requiredPython = [version]'{actual_version}'\n"
+        + f"if (-not (Test-PythonForBuild '{quoted_python}')) {{ throw 'Matching interpreter rejected' }}\n"
+        + f"$requiredPython = [version]'{different_version}'\n"
+        + f"if (Test-PythonForBuild '{quoted_python}') {{ throw 'Wrong patch accepted' }}\n",
+        encoding="utf-8",
+    )
+    subprocess.run(
+        ["powershell.exe", "-NoProfile", "-NonInteractive", "-File", str(script)],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+
+def test_local_build_uses_project_pin_instead_of_launcher_or_registry():
+    source = SCRIPT.read_text(encoding="utf-8")
+    pin = (SCRIPT.parents[1] / ".python-version").read_text().strip()
+    assert re.fullmatch(r"\d+\.\d+\.\d+", pin)
+    assert "Get-Content -LiteralPath $pythonPinPath -Raw" in source
+    assert "Find-WindowsPython" not in source
+    assert "Get-Python314FromRegistry" not in source

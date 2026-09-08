@@ -28,32 +28,32 @@ jobs:
       - run: uv python install 3.14
       - name: Sync frozen development environment
         run: uv sync --frozen --extra dev
-      - name: Verify committed SQLCipher runtime
+      - name: Verify committed SQLCipher wheel
         shell: pwsh
-        run: |
-          uv run python scripts/verify_sqlcipher_runtime.py --wheel vendor/sqlcipher/sqlcipher3-0.6.2+silverestimate.4.17.0.1-cp314-cp314-win_amd64.whl --provenance vendor/sqlcipher/PROVENANCE.json
-          uv run python scripts/verify_sqlcipher_runtime.py --provenance vendor/sqlcipher/PROVENANCE.json
+        run: uv run python scripts/verify_sqlcipher_runtime.py --wheel vendor/sqlcipher/sqlcipher3-0.6.2+silverestimate.4.17.0.1-cp314-cp314-win_amd64.whl --provenance vendor/sqlcipher/PROVENANCE.json
+      - name: Verify installed SQLCipher runtime
+        run: uv run python scripts/verify_sqlcipher_runtime.py --provenance vendor/sqlcipher/PROVENANCE.json
 
       - name: Verify tag equals APP_VERSION
         shell: pwsh
         run: |
           $version = uv run python -c "from silverestimate.infrastructure.app_constants import APP_VERSION; print(APP_VERSION)"
+          if ($LASTEXITCODE -ne 0) { throw "Failed to read APP_VERSION" }
           $expected = "v$($version.Trim())"
           if ($expected -ne "${{ github.ref_name }}") {
             throw "Release tag ${{ github.ref_name }} does not match APP_VERSION $expected"
           }
 
-      - name: Quality, typing, and blocking security gates
-        shell: pwsh
-        run: |
-          uv run nox -s ruff
-          uv run nox -s mypy
-          uv run nox -s bandit
-          uv run nox -s dependency_policy
+      - name: Ruff
+        run: uv run nox -s ruff
+      - name: Mypy
+        run: uv run nox -s mypy
+      - name: Blocking Bandit medium/high gate
+        run: uv run nox -s bandit
+      - name: Blocking dependency advisory and lock policy
+        run: uv run nox -s dependency_policy
       - name: Complete tests and performance gates
         run: uv run nox -s tests_full
-      - name: Offscreen Qt startup smoke
-        run: uv run nox -s smoke_ui
 
       - name: Build and inspect standalone artifact
         run: uv run nox -s build_standalone standalone_artifact_smoke
@@ -61,16 +61,20 @@ jobs:
       - name: Build executable with pyside6-deploy
         run: uv run nox -s build_clean
 
-      - name: Optional Windows code-signing hook
+      - name: Sign Windows executable when configured
         if: ${{ env.SIGNING_CERTIFICATE_BASE64 != '' }}
-        continue-on-error: true
         shell: pwsh
         run: |
           $certificate = Join-Path $env:RUNNER_TEMP "silverestimate-signing.pfx"
-          [IO.File]::WriteAllBytes($certificate, [Convert]::FromBase64String($env:SIGNING_CERTIFICATE_BASE64))
-          & signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $certificate /p $env:SIGNING_CERTIFICATE_PASSWORD dist\SilverEstimate.exe
-          if ($LASTEXITCODE -ne 0) { throw "signtool failed with exit code $LASTEXITCODE" }
-          Remove-Item -LiteralPath $certificate -Force
+          try {
+            [IO.File]::WriteAllBytes($certificate, [Convert]::FromBase64String($env:SIGNING_CERTIFICATE_BASE64))
+            & signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $certificate /p $env:SIGNING_CERTIFICATE_PASSWORD dist\SilverEstimate.exe
+            if ($LASTEXITCODE -ne 0) { throw "signtool failed with exit code $LASTEXITCODE" }
+          } finally {
+            if (Test-Path -LiteralPath $certificate) {
+              Remove-Item -LiteralPath $certificate -Force
+            }
+          }
 
       - name: Verify frozen artifact startup budget
         run: >-
@@ -89,8 +93,11 @@ jobs:
           Copy-Item -LiteralPath dist\SilverEstimate.exe -Destination $exe
           Compress-Archive -LiteralPath $exe,LICENSE,THIRD_PARTY_NOTICES.md,vendor\sqlcipher\PROVENANCE.json -DestinationPath $zip -Force
           uv run cyclonedx-py environment --output-reproducible --output-format JSON --output-file $sbom
+          if ($LASTEXITCODE -ne 0) { throw "SBOM generation failed" }
           uv run python scripts/augment_release_sbom.py --sbom $sbom
+          if ($LASTEXITCODE -ne 0) { throw "SBOM augmentation failed" }
           uv run python scripts/check_dependency_policy.py --audit-report artifacts/dependency-policy/pip-audit.json --sbom $sbom
+          if ($LASTEXITCODE -ne 0) { throw "Release dependency policy failed" }
           foreach ($artifact in @($exe, $zip, $sbom)) {
             $hash = (Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash.ToLower()
             "$hash  $artifact" | Set-Content -LiteralPath "$artifact.sha256" -NoNewline

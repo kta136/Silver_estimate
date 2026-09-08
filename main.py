@@ -196,6 +196,10 @@ def _run_artifact_smoke() -> int:
     )
     application_type = _restore_frozen_qapplication()
     app = application_type.instance() or application_type([])
+    # Import widget consumers only after replacing Nuitka's QApplication wrapper.
+    from silverestimate.infrastructure.artifact_ui_smoke import verify_artifact_ui_fonts
+
+    ui_fonts = verify_artifact_ui_fonts(app)
     icon_path = get_asset_path("assets", "icons", "silverestimate.ico")
     icon_available = icon_path.is_file() and not QIcon(str(icon_path)).isNull()
     image_formats = {
@@ -249,6 +253,7 @@ def _run_artifact_smoke() -> int:
                 "runtime_root": str(get_runtime_root()),
                 "sqlite_version": identity.sqlite_version,
                 "svg_image_format": "svg" in image_formats,
+                "ui_fonts": ui_fonts,
             },
             sort_keys=True,
         )

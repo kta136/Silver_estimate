@@ -91,7 +91,7 @@ def test_item_master_selection_populates_form_and_clear_resets(qtbot):
         assert widget.tunch_edit.text() == "87 + loss"
         assert widget.tunch_edit.validator() is None
         assert widget.purity_edit.text() == "80.0"
-        assert widget.wage_type_combo.currentText() == "PC"
+        assert widget.wage_type_combo.currentData() == "PC"
         assert widget.wage_rate_edit.text() == "5.0"
         assert widget.update_button.isHidden() is False
         assert widget.add_button.isHidden() is True

@@ -16,8 +16,11 @@ class PagedLoadState(Generic[RowT, CursorT]):
     """Accumulate pages while leaving query and presentation policy to callers."""
 
     rows: list[RowT] = field(default_factory=list)
+    last_page_rows: list[RowT] = field(default_factory=list)
+    max_rows: int = 20_000
+    limit_reached: bool = False
     cursor: CursorT | None = None
-    total: int = 0
+    total: int | None = 0
 
     @property
     def loaded(self) -> int:
@@ -29,6 +32,8 @@ class PagedLoadState(Generic[RowT, CursorT]):
 
     def reset(self) -> None:
         self.rows.clear()
+        self.last_page_rows.clear()
+        self.limit_reached = False
         self.cursor = None
         self.total = 0
 
@@ -38,13 +43,18 @@ class PagedLoadState(Generic[RowT, CursorT]):
         *,
         append: bool = False,
     ) -> list[RowT]:
-        page_rows = list(page.items)
+        remaining = max(0, self.max_rows - (len(self.rows) if append else 0))
+        page_rows = list(page.items[:remaining])
+        self.last_page_rows = page_rows
+        self.limit_reached = len(page.items) > remaining or (
+            len(page_rows) == remaining and page.has_more
+        )
         if append:
             self.rows.extend(page_rows)
         else:
             self.rows = page_rows
-        self.cursor = page.next_cursor
-        self.total = max(0, int(page.total))
+        self.cursor = None if self.limit_reached else page.next_cursor
+        self.total = max(0, int(page.total)) if page.total is not None else None
         return self.rows
 
 

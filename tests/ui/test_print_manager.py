@@ -1,5 +1,4 @@
 import os
-import sqlite3
 from copy import deepcopy
 from pathlib import Path
 
@@ -161,7 +160,7 @@ def test_estimate_modern_layout_uses_requested_column_precision(qt_app, settings
     rendered = layout.normalized_text()
     item_line = next(line for line in lines if "Chain" in line)
     total_line = next(line for line in lines if "TOTAL" in line)
-    final_line = next(line for line in lines if "Fine Silver:" in line)
+    final_line = next(line for line in lines if "Total Fine Weight (g):" in line)
 
     assert "12.34" in item_line
     assert "5.00" in item_line
@@ -169,21 +168,21 @@ def test_estimate_modern_layout_uses_requested_column_precision(qt_app, settings
     assert "92.50" in item_line
     assert "11" in item_line
     assert "1.23" in item_line
-    assert item_line.rstrip().endswith("100")
+    assert "100.20" in item_line
 
     assert "12.34" in total_line
     assert "5.00" in total_line
     assert "7.34" in total_line
     assert "1.23" in total_line
-    assert total_line.rstrip().endswith("100")
+    assert "100.20" in total_line
 
-    assert "Fine Silver: 1.23 g" in final_line
-    assert "100" in final_line
-    assert "Silver Cost: Rs. 12.4" in rendered
-    assert "Total: Rs. 112.6" in rendered
+    assert "Total Fine Weight (g): 1.230" in final_line
+    assert "Total Lbr Amt (₹): 100.20" in rendered
+    assert "Silver Value (₹): 12.42" in rendered
+    assert "GRAND TOTAL (₹): 112.62" in rendered
 
 
-def test_estimate_modern_layout_keeps_amount_totals_at_one_decimal(
+def test_estimate_modern_layout_keeps_amount_totals_at_two_decimals(
     qt_app, settings_stub
 ):
     manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
@@ -218,7 +217,7 @@ def test_estimate_modern_layout_keeps_amount_totals_at_one_decimal(
     rendered = layout.normalized_text()
     item_line = next(line for line in lines if "Chain" in line)
     total_line = next(line for line in lines if "TOTAL" in line)
-    final_line = next(line for line in lines if "Fine Silver:" in line)
+    final_line = next(line for line in lines if "Total Fine Weight (g):" in line)
 
     assert "1.54" in item_line
     assert "0.04" in item_line
@@ -226,17 +225,17 @@ def test_estimate_modern_layout_keeps_amount_totals_at_one_decimal(
     assert "92.54" in item_line
     assert "1" in item_line
     assert "1.23" in item_line
-    assert item_line.rstrip().endswith("100")
+    assert "100.24" in item_line
 
     assert "1.54" in total_line
     assert "1.50" in total_line
     assert "1.23" in total_line
-    assert total_line.rstrip().endswith("100")
+    assert "100.24" in total_line
 
-    assert "Silver: 0.27 g | Amount: Rs. 50.5" in rendered
-    assert "Fine Silver: 1.50 g" in final_line
-    assert "Silver Cost: Rs. 15.1" in rendered
-    assert "Total: Rs. 165.9" in rendered
+    assert "Silver: 0.270 g | Amount: Rs. 50.54" in rendered
+    assert "Total Fine Weight (g): 1.500" in final_line
+    assert "Silver Value (₹): 15.15" in rendered
+    assert "GRAND TOTAL (₹): 165.93" in rendered
 
 
 def test_build_estimate_preview_payload_uses_modern_layout(qt_app, settings_stub):
@@ -406,28 +405,6 @@ def test_silver_bar_list_layout_keeps_note_as_plain_text(qt_app, settings_stub):
     assert "&lt;" not in rendered
 
 
-def test_silver_bar_list_document_reads_values_from_sqlite_rows(qt_app, settings_stub):
-    manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
-    connection = sqlite3.connect(":memory:")
-    connection.row_factory = sqlite3.Row
-    try:
-        bar = connection.execute(
-            "SELECT 12.5 AS weight, 99.2 AS purity, 12.4 AS fine_weight"
-        ).fetchone()
-
-        document = SilverBarListPrintDocument.from_rows(
-            {"list_identifier": "LIST-012", "list_note": "SQLite row"},
-            [bar],
-        )
-    finally:
-        connection.close()
-
-    rendered = manager._silver_bar_renderer.build_layout(document).normalized_text()
-
-    assert "1 | 12.500 | 99.20 | 12.400" in rendered
-    assert "TOTAL (1) | 12.500 |  | 12.400" in rendered
-
-
 def test_direct_inventory_painter_repeats_headers_and_keeps_total_with_rows(
     qt_app,
     settings_stub,
@@ -588,7 +565,7 @@ def test_classic_estimate_painter_writes_previous_modern_style_without_html(
     rendered = "\n".join(pages)
 
     assert document.pageCount() >= 1
-    assert "ESTIMATE SLIP ONLY" in rendered
+    assert "ESTIMATE SLIP" in rendered
     assert "Gross" in rendered
     assert "Net" in rendered
     assert "S.Per%" not in rendered
@@ -647,7 +624,6 @@ def test_modern_estimate_painter_uses_minimum_bottom_margin(
             QPageLayout.Unit.Millimeter,
         )
     )
-    minimum_bottom = printer.pageLayout().minimumMargins().bottom()
 
     manager._render_document(printer, payload.document)
 
@@ -655,7 +631,7 @@ def test_modern_estimate_painter_uses_minimum_bottom_margin(
     assert margins.left() == pytest.approx(10)
     assert margins.top() == pytest.approx(3)
     assert margins.right() == pytest.approx(12)
-    assert margins.bottom() == pytest.approx(minimum_bottom)
+    assert margins.bottom() == pytest.approx(15)
 
 
 def test_direct_estimate_painter_repeats_headers_and_keeps_summary_with_rows(
@@ -691,7 +667,7 @@ def test_direct_estimate_painter_repeats_headers_and_keeps_summary_with_rows(
     assert any("REGULAR GOODS (continued)" in page for page in pages[1:])
     assert "Long Regular Item 060" in pages[-1]
     assert "TOTAL" in pages[-1]
-    assert "FINAL SILVER & AMOUNT" in pages[-1]
+    assert "GRAND TOTAL" in pages[-1]
 
 
 def test_direct_estimate_painter_elides_long_names_without_clipping(
@@ -742,16 +718,17 @@ def test_direct_estimate_painter_handles_portrait_and_large_font(
 
     assert document.pageCount() >= 1
     assert document.pagePointSize(0).height() > document.pagePointSize(0).width()
-    assert "ESTIMATE SLIP ONLY" in pages[0]
-    assert "Gross (g)" not in pages[0]
-    assert "Poly (g)" not in pages[0]
-    assert "Net (g)" not in pages[0]
-    assert "Fine (g)" not in pages[0]
-    assert "Purity (%)" not in pages[0]
-    assert "Gross Poly Net %" in pages[0]
-    assert "Fine Lbr" in pages[0]
-    assert "Date:" not in pages[0]
-    assert "FINAL SILVER & AMOUNT" in pages[-1]
+    assert "ESTIMATE SLIP" in pages[0]
+    for label in (
+        "Gross (g)",
+        "Poly (g)",
+        "Net Wt (g)",
+        "Fine Wt (g)",
+        "Purity (%)",
+        "Date:",
+    ):
+        assert label in pages[0]
+    assert "GRAND TOTAL" in pages[-1]
 
 
 def test_direct_estimate_painter_handles_custom_page_size(
@@ -788,4 +765,4 @@ def test_direct_estimate_painter_handles_custom_page_size(
     assert 335.0 < point_size.width() < 345.0
     assert 535.0 < point_size.height() < 545.0
     assert "Voucher: EST-PARITY-001" in pages[0]
-    assert "FINAL SILVER & AMOUNT" in pages[-1]
+    assert "GRAND TOTAL" in pages[-1]

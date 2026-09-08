@@ -4,6 +4,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+from scripts import check_perf_budgets
+
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "check_perf_budgets.py"
 
 METRICS = {
@@ -26,6 +30,18 @@ def _run_script(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+@pytest.fixture
+def run_budget_check(monkeypatch, capsys):
+    def run(*args):
+        command = [str(SCRIPT_PATH), *args]
+        monkeypatch.setattr(sys, "argv", command)
+        returncode = check_perf_budgets.main()
+        output = capsys.readouterr()
+        return subprocess.CompletedProcess(command, returncode, output.out, output.err)
+
+    return run
+
+
 def _valid_telemetry() -> str:
     return "\n".join(
         f"[perf] {metric}={duration:.2f}ms"
@@ -41,45 +57,51 @@ def test_perf_gate_fails_when_log_file_is_missing(tmp_path: Path) -> None:
     assert "log file not found" in result.stdout
 
 
-def test_perf_gate_requires_every_configured_metric(tmp_path: Path) -> None:
+def test_perf_gate_requires_every_configured_metric(
+    run_budget_check, tmp_path: Path
+) -> None:
     log_path = tmp_path / "perf.log"
     log_path.write_text("[perf] estimate_history.page=10.0ms\n", encoding="utf-8")
 
-    result = _run_script("--log-file", str(log_path))
+    result = run_budget_check("--log-file", str(log_path))
 
     assert result.returncode == 1
     assert "configured metrics were not observed" in result.stdout
     assert "dda_sse.parse_apply" in result.stdout
 
 
-def test_perf_gate_rejects_malformed_telemetry(tmp_path: Path) -> None:
+def test_perf_gate_rejects_malformed_telemetry(
+    run_budget_check, tmp_path: Path
+) -> None:
     log_path = tmp_path / "perf.log"
     log_path.write_text(
         f"{_valid_telemetry()}\n[perf] encrypted_backup_export=not-a-number\n",
         encoding="utf-8",
     )
 
-    result = _run_script("--log-file", str(log_path))
+    result = run_budget_check("--log-file", str(log_path))
 
     assert result.returncode == 1
     assert "malformed telemetry" in result.stdout
 
 
-def test_perf_gate_rejects_insufficient_samples(tmp_path: Path) -> None:
+def test_perf_gate_rejects_insufficient_samples(
+    run_budget_check, tmp_path: Path
+) -> None:
     log_path = tmp_path / "perf.log"
     telemetry = _valid_telemetry().replace(
         "[perf] encrypted_backup_export=50.00ms\n", "", 1
     )
     log_path.write_text(telemetry, encoding="utf-8")
 
-    result = _run_script("--log-file", str(log_path))
+    result = run_budget_check("--log-file", str(log_path))
 
     assert result.returncode == 1
     assert "insufficient samples" in result.stdout
     assert "encrypted_backup_export" in result.stdout
 
 
-def test_perf_gate_rejects_exceeded_p95(tmp_path: Path) -> None:
+def test_perf_gate_rejects_exceeded_p95(run_budget_check, tmp_path: Path) -> None:
     log_path = tmp_path / "perf.log"
     telemetry = _valid_telemetry().replace(
         "[perf] encrypted_backup_export=50.00ms",
@@ -87,7 +109,7 @@ def test_perf_gate_rejects_exceeded_p95(tmp_path: Path) -> None:
     )
     log_path.write_text(telemetry, encoding="utf-8")
 
-    result = _run_script("--log-file", str(log_path))
+    result = run_budget_check("--log-file", str(log_path))
 
     assert result.returncode == 1
     assert "Perf budget violations" in result.stdout
@@ -105,6 +127,7 @@ def test_perf_gate_accepts_complete_telemetry(tmp_path: Path) -> None:
 
 
 def test_github_windows_profile_does_not_weaken_local_export_budget(
+    run_budget_check,
     tmp_path: Path,
 ) -> None:
     log_path = tmp_path / "perf.log"
@@ -114,8 +137,8 @@ def test_github_windows_profile_does_not_weaken_local_export_budget(
     )
     log_path.write_text(telemetry, encoding="utf-8")
 
-    local_result = _run_script("--log-file", str(log_path))
-    hosted_result = _run_script(
+    local_result = run_budget_check("--log-file", str(log_path))
+    hosted_result = run_budget_check(
         "--log-file",
         str(log_path),
         "--profile",

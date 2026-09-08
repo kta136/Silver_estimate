@@ -13,6 +13,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QBrush, QColor
 
 from silverestimate.ui.display_formatting import format_display_date
+from silverestimate.ui.models.table_sorting import insert_model_rows, sort_model_rows
 
 
 class _BaseSilverBarTableModel(QAbstractTableModel):
@@ -22,6 +23,7 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
         super().__init__(parent)
         self._rows: list[dict[str, Any]] = []
         self._total_count = 0
+        self._numeric_totals = {"weight": 0.0, "fine_weight": 0.0}
         self._sort_column: Optional[int] = None
         self._sort_order = Qt.SortOrder.AscendingOrder
 
@@ -81,14 +83,15 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
     ) -> None:
         if not (0 <= column < self.columnCount()):
             return
-        self.layoutAboutToBeChanged.emit()
         self._sort_column = int(column)
         self._sort_order = order
         reverse = order == Qt.SortOrder.DescendingOrder
-        self._rows.sort(
-            key=lambda row: self.sort_key_for_row(row, column), reverse=reverse
+        sort_model_rows(
+            self,
+            self._rows,
+            key=lambda row: self.sort_key_for_row(row, column),
+            reverse=reverse,
         )
-        self.layoutChanged.emit()
 
     def set_rows(
         self, rows: list[dict[str, Any]], total_count: int | None = None
@@ -106,6 +109,10 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
                 key=lambda row: self.sort_key_for_row(row, self._sort_column or 0),
                 reverse=reverse,
             )
+        self._numeric_totals = {
+            field: self._sum_rows(self._rows, field)
+            for field in ("weight", "fine_weight")
+        }
         self.endResetModel()
 
     def total_count(self) -> int:
@@ -116,6 +123,23 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
 
     def clear_rows(self) -> None:
         self.set_rows([], total_count=0)
+
+    def append_rows(
+        self, rows: list[dict[str, Any]], total_count: int | None = None
+    ) -> None:
+        for field in self._numeric_totals:
+            self._numeric_totals[field] += self._sum_rows(rows, field)
+        column = self._sort_column
+        insert_model_rows(
+            self,
+            self._rows,
+            [dict(row) for row in rows],
+            key=(lambda row: self.sort_key_for_row(row, column))
+            if column is not None
+            else None,
+            reverse=self._sort_order == Qt.SortOrder.DescendingOrder,
+        )
+        self._total_count = total_count if total_count is not None else len(self._rows)
 
     def row_payload(self, row: int) -> Optional[dict[str, Any]]:
         if 0 <= row < len(self._rows):
@@ -223,8 +247,12 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
         return None
 
     def _sum_numeric_field(self, key: str) -> float:
+        return self._numeric_totals[key]
+
+    @staticmethod
+    def _sum_rows(rows: list[dict[str, Any]], key: str) -> float:
         total = 0.0
-        for row in self._rows:
+        for row in rows:
             try:
                 total += float(row.get(key) or 0.0)
             except TypeError, ValueError:
@@ -282,7 +310,7 @@ class _ManagementSilverBarsTableModel(_BaseSilverBarTableModel):
             except TypeError, ValueError:
                 return 0.0
         if column == 4:
-            return self._format_date(row.get("date_added"))
+            return str(row.get("date_added") or "")
         if column == 5:
             return str(row.get("status") or "").casefold()
         return super().sort_key_value(row, column)
@@ -370,11 +398,11 @@ class HistorySilverBarsTableModel(_BaseSilverBarTableModel):
             note = payload.get("estimate_note") or ""
             return f"{voucher_no} ({note})" if note else str(voucher_no)
         if column == 2:
-            return self._format_float(payload.get("weight"), 1)
+            return self._format_float(payload.get("weight"), 3)
         if column == 3:
             return self._format_float(payload.get("purity"), 1)
         if column == 4:
-            return self._format_float(payload.get("fine_weight"), 1)
+            return self._format_float(payload.get("fine_weight"), 3)
         if column == 5:
             return str(payload.get("status") or "Unknown")
         if column == 6:
@@ -433,11 +461,11 @@ class HistorySilverBarsTableModel(_BaseSilverBarTableModel):
             note = row.get("estimate_note") or ""
             return f"{voucher_no} ({note})" if note else str(voucher_no)
         if column == 2:
-            return self._format_float(row.get("weight"), 1)
+            return self._format_float(row.get("weight"), 3)
         if column == 3:
             return self._format_float(row.get("purity"), 1)
         if column == 4:
-            return self._format_float(row.get("fine_weight"), 1)
+            return self._format_float(row.get("fine_weight"), 3)
         if column == 5:
             return str(row.get("status") or "Unknown")
         if column == 6:
@@ -445,7 +473,7 @@ class HistorySilverBarsTableModel(_BaseSilverBarTableModel):
                 return str(row.get("list_identifier") or f"List {row['list_id']}")
             return "—"
         if column == 7:
-            return self._format_date(row.get("date_added"))
+            return str(row.get("date_added") or "")
         if column == 8:
             if row.get("list_id"):
                 return "Issued" if row.get("issued_date") else "Active"
@@ -527,11 +555,11 @@ class HistoryListBarsTableModel(_BaseSilverBarTableModel):
             note = payload.get("estimate_note") or ""
             return f"{voucher_no} ({note})" if note else str(voucher_no)
         if column == 2:
-            return self._format_float(payload.get("weight"), 1)
+            return self._format_float(payload.get("weight"), 3)
         if column == 3:
             return self._format_float(payload.get("purity"), 1)
         if column == 4:
-            return self._format_float(payload.get("fine_weight"), 1)
+            return self._format_float(payload.get("fine_weight"), 3)
         if column == 5:
             return str(payload.get("status") or "Unknown")
         if column == 6:
@@ -580,13 +608,13 @@ class HistoryListBarsTableModel(_BaseSilverBarTableModel):
             note = row.get("estimate_note") or ""
             return f"{voucher_no} ({note})" if note else str(voucher_no)
         if column == 2:
-            return self._format_float(row.get("weight"), 1)
+            return self._format_float(row.get("weight"), 3)
         if column == 3:
             return self._format_float(row.get("purity"), 1)
         if column == 4:
-            return self._format_float(row.get("fine_weight"), 1)
+            return self._format_float(row.get("fine_weight"), 3)
         if column == 5:
             return str(row.get("status") or "Unknown")
         if column == 6:
-            return self._format_date(row.get("date_added"))
+            return str(row.get("date_added") or "")
         return ""

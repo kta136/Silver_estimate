@@ -11,19 +11,22 @@ from silverestimate.domain.estimate_models import (
     TotalsResult,
 )
 from silverestimate.domain.estimate_totals import build_totals_result
+from silverestimate.domain.numeric_policy import (
+    fine_weight,
+    net_weight,
+    sum_values,
+    wage_amount,
+)
 
 
 def compute_net_weight(gross: float, poly: float) -> float:
     """Return the non-negative net weight for a line item."""
-    net = gross - poly
-    return net if net > 0 else 0.0
+    return net_weight(gross, poly)
 
 
 def compute_fine_weight(net_weight: float, purity: float) -> float:
     """Return the fine weight based on net weight and purity percentage."""
-    if purity <= 0:
-        return 0.0
-    return net_weight * (purity / 100.0)
+    return fine_weight(net_weight, purity)
 
 
 def compute_wage_amount(
@@ -32,23 +35,21 @@ def compute_wage_amount(
     """Return the wage amount using either per-piece or weight basis."""
     basis_normalized = (basis or "").strip().upper()
     if basis_normalized == "PC":
-        return float(pieces) * wage_rate
-    return net_weight * wage_rate
+        return wage_amount(pieces, wage_rate)
+    return wage_amount(net_weight, wage_rate)
 
 
 def compute_category_totals(
     lines: Iterable[EstimateLine], category: EstimateLineCategory
 ) -> CategoryTotals:
     """Aggregate totals for the specified category."""
-    gross = net = fine = wage = 0.0
-    for line in lines:
-        if line.category is not category:
-            continue
-        gross += line.gross
-        net += line.net_weight
-        fine += line.fine_weight
-        wage += line.wage_amount
-    return CategoryTotals(gross=gross, net=net, fine=fine, wage=wage)
+    selected = [line for line in lines if line.category is category]
+    return CategoryTotals(
+        gross=sum_values(line.gross for line in selected),
+        net=sum_values(line.net_weight for line in selected),
+        fine=sum_values(line.fine_weight for line in selected),
+        wage=sum_values(line.wage_amount for line in selected),
+    )
 
 
 def compute_totals(
@@ -61,8 +62,8 @@ def compute_totals(
     """Compute aggregate totals across all line items."""
     line_list = list(lines)
 
-    overall_gross = sum(line.gross for line in line_list)
-    overall_poly = sum(line.poly for line in line_list)
+    overall_gross = sum_values(line.gross for line in line_list)
+    overall_poly = sum_values(line.poly for line in line_list)
 
     regular_totals = compute_category_totals(line_list, EstimateLineCategory.REGULAR)
     return_totals = compute_category_totals(line_list, EstimateLineCategory.RETURN)

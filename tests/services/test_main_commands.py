@@ -184,6 +184,11 @@ class _WorkerStub:
 
 
 def _install_stubs(monkeypatch):
+    monkeypatch.setattr(
+        main_commands,
+        "run_database_maintenance",
+        lambda database, operation, title, parent: operation(database),
+    )
     _MessageBoxStub.reset()
     _WorkerStub.reset()
     _FileDialogStub.next_save_result = ("", "")

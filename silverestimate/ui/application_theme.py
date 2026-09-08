@@ -156,7 +156,7 @@ QProgressDialog QLabel {{
 QLabel#TableEmptyStateOverlay {{
     background-color: {SURFACE_BG};
     color: {TEXT_MUTED};
-    font-size: 10pt;
+
     padding: 18px;
 }}
 
@@ -298,7 +298,7 @@ QComboBox:hover {{
 }}
 
 QComboBox:focus {{
-    border: 2px solid {FOCUS_RING};
+    border: 1px solid {FOCUS_RING};
 }}
 
 QComboBox:disabled {{
@@ -557,7 +557,7 @@ QDoubleSpinBox:focus,
 QDateEdit:focus,
 QTimeEdit:focus,
 QDateTimeEdit:focus {{
-    border: 2px solid {FOCUS_RING};
+    border: 1px solid {FOCUS_RING};
 }}
 
 QLineEdit:disabled,
@@ -582,39 +582,6 @@ QRadioButton {{
 QCheckBox:disabled,
 QRadioButton:disabled {{
     color: {TEXT_MUTED};
-}}
-
-QCheckBox::indicator,
-QRadioButton::indicator {{
-    background-color: {SURFACE_BG};
-    border: 1px solid {INPUT_BORDER};
-    height: 14px;
-    width: 14px;
-}}
-
-QCheckBox::indicator {{
-    border-radius: 4px;
-}}
-
-QRadioButton::indicator {{
-    border-radius: 7px;
-}}
-
-QCheckBox::indicator:hover,
-QRadioButton::indicator:hover {{
-    border-color: {FOCUS_RING};
-}}
-
-QCheckBox::indicator:checked,
-QRadioButton::indicator:checked {{
-    background-color: {PRIMARY_BG};
-    border-color: {PRIMARY_BG};
-}}
-
-QCheckBox::indicator:disabled,
-QRadioButton::indicator:disabled {{
-    background-color: {HEADER_BG};
-    border-color: {CARD_BORDER_SOFT};
 }}
 
 QScrollBar:vertical,
@@ -722,6 +689,16 @@ QMessageBox QPushButton:disabled {{
 LIGHT_APPLICATION_STYLESHEET = build_light_application_stylesheet()
 
 
+def apply_application_font(app: ApplicationThemeTarget, font: QFont) -> None:
+    """Use the interface font for Windows' separate menu and header defaults."""
+    set_font = getattr(app, "setFont", None)
+    if not callable(set_font):
+        return
+    set_font(font)
+    for widget_class in ("QMenu", "QMenuBar", "QHeaderView"):
+        set_font(font, widget_class)
+
+
 def apply_light_application_theme(
     app: ApplicationThemeTarget,
     logger: logging.Logger | None = None,
@@ -738,14 +715,6 @@ def apply_light_application_theme(
                 logger.debug("Failed to force Fusion Qt style: %s", exc)
 
     try:
-        set_font = getattr(app, "setFont", None)
-        if callable(set_font):
-            set_font(QFont("Segoe UI", 10))
-    except Exception as exc:
-        if logger:
-            logger.debug("Failed to apply light theme font: %s", exc)
-
-    try:
         app.setPalette(build_light_palette())
     except Exception as exc:
         if logger:
@@ -756,3 +725,24 @@ def apply_light_application_theme(
     except Exception as exc:
         if logger:
             logger.debug("Failed to apply light application stylesheet: %s", exc)
+
+    # Installing a stylesheet resets Windows' class-specific font defaults.
+    try:
+        set_font = getattr(app, "setFont", None)
+        if callable(set_font):
+            from silverestimate.infrastructure.settings import (
+                SettingsKey,
+                get_app_settings,
+            )
+
+            settings = get_app_settings()
+            apply_application_font(
+                app,
+                QFont(
+                    settings.get_text(SettingsKey.UI_FONT_FAMILY, "Segoe UI"),
+                    settings.get_int(SettingsKey.UI_TABLE_FONT_SIZE, 11),
+                ),
+            )
+    except Exception as exc:
+        if logger:
+            logger.debug("Failed to apply light theme font: %s", exc)

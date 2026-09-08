@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+## [4.0] - 2026-09-08
+
+### Changed
+
+- Apply the approved compact white/gray interface with teal accents across
+  estimate entry, item catalog, history, silver bars, settings, and dialogs.
+- Add live appearance and print previews, responsive controls, and a one-time
+  migration to the approved appearance defaults that preserves later customization.
+- Update Modern printing with section subtotals, date and item metadata, and
+  rate-aware summaries while retaining Classic printing.
+- Set the application and Windows executable version to 4.0.
+- Omit item codes from print output and label wage rates as "Lbr" throughout
+  the interface and print layouts. Classic labels calculated wages as "Wage Amt".
+- Compact the estimate toolbar, status bar, live-rate card, and sidebar actions.
+  Replace the totals breakdown with aligned tables and remove redundant headings.
+- Fit estimate columns to the available width, show weight/purity/rate units,
+  and use the interface font with tabular digits for numeric values.
+- Widen the note field, move estimate tools into the menu bar, and add a keyboard
+  shortcut reference under Help while shortening the status bar.
+- Reflow larger totals into grouped tables without horizontal scrolling.
+- Label calculated labour amounts as "Lbr Amt" in the interface and both print layouts.
+
+### Fixed
+
+- Keep menu and table headings at the selected interface size on Windows, and
+  refresh styled controls immediately when changing appearance settings.
+- Save table and totals font sizes and totals placement through the estimate
+  layout controller, fixing the appearance-settings save error.
+- Allow for printer font rounding so Classic portrait output fits within the
+  printable width when Tunch is shown.
+- Apply the totals font size to column headings, row labels, and values together.
+- Stack large grand totals below their caption when the sidebar is too narrow
+  to keep the amount readable on one line.
+
 ## [3.12] - 2026-07-30
 
 ### Added

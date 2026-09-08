@@ -506,7 +506,11 @@ class SilverBarCommandRepository(_SilverBarRepositoryBase):
         if not conn or not cursor:
             return None
         date_added = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        fine_weight = weight * (purity / 100)
+        from silverestimate.domain.numeric_policy import (
+            fine_weight as calculate_fine_weight,
+        )
+
+        fine_weight = calculate_fine_weight(weight, purity)
         try:
             cursor.execute(
                 """

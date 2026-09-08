@@ -3,6 +3,7 @@ from typing import Dict, Iterable, List, Optional
 
 import pytest
 
+from silverestimate.domain.estimate_save import EstimateSaveResult
 from silverestimate.presenter import (
     EstimateEntryPresenter,
     EstimateEntryViewState,
@@ -33,12 +34,9 @@ class FakeRepository:
         self.generated_voucher = "V001"
         self.load_estimate_response: Optional[Dict] = None
         self.save_calls: List[Dict] = []
-        self.save_result = True
-        self.last_error_value: Optional[str] = None
+        self.save_result = EstimateSaveResult(True)
         self.fetch_item_map: Dict[str, Dict] = {}
         self.fetch_items_calls: List[List[str]] = []
-        self.sync_calls: List[Dict] = []
-        self.sync_result: tuple[int, int] = (0, 0)
         self.deleted_vouchers: List[str] = []
 
     def generate_voucher_no(self) -> str:
@@ -67,7 +65,7 @@ class FakeRepository:
         regular_items: Iterable[Dict],
         return_items: Iterable[Dict],
         totals: Dict,
-    ) -> bool:
+    ) -> EstimateSaveResult:
         self.save_calls.append(
             {
                 "voucher": voucher_no,
@@ -79,15 +77,6 @@ class FakeRepository:
             }
         )
         return self.save_result
-
-    def sync_silver_bars_for_estimate(
-        self, voucher_no: str, bars: Iterable[Dict]
-    ) -> tuple[int, int]:
-        self.sync_calls.append({"voucher": voucher_no, "bars": list(bars)})
-        return self.sync_result
-
-    def last_error(self) -> Optional[str]:
-        return self.last_error_value
 
     def delete_estimate(self, voucher_no: str) -> bool:
         self.deleted_vouchers.append(voucher_no)
@@ -315,7 +304,7 @@ def test_handle_item_code_cancel_selection_reports_not_found(presenter_fixtures)
 def test_save_estimate_success_adds_new_bar(presenter_fixtures):
     presenter, view, repo = presenter_fixtures
     payload = _Make_sample_payload()
-    repo.sync_result = (1, 0)
+    repo.save_result = EstimateSaveResult(True, bars_added=1)
 
     outcome = presenter.save_estimate(payload)
 
@@ -325,26 +314,26 @@ def test_save_estimate_success_adds_new_bar(presenter_fixtures):
     assert repo.save_calls
 
 
-def test_save_estimate_prefers_bulk_bar_sync_when_available(presenter_fixtures):
+def test_save_estimate_passes_bar_identity_in_the_single_atomic_save(
+    presenter_fixtures,
+):
     presenter, view, repo = presenter_fixtures
     payload = _Make_sample_payload()
-    repo.sync_result = (1, 0)
+    repo.save_result = EstimateSaveResult(True, bars_added=1)
 
     outcome = presenter.save_estimate(payload)
 
     assert outcome.success
     assert outcome.bars_added == 1
-    assert len(repo.sync_calls) == 1
-    assert repo.sync_calls[0]["bars"] == [
-        {"weight": 2.0, "purity": 99.0, "line_key": "line-bar"}
-    ]
+    assert len(repo.save_calls) == 1
+    bar = next(item for item in repo.save_calls[0]["returns"] if item["is_silver_bar"])
+    assert (bar["net_wt"], bar["purity"], bar["line_key"]) == (2.0, 99.0, "line-bar")
 
 
 def test_save_estimate_failure_returns_error(presenter_fixtures):
     presenter, view, repo = presenter_fixtures
     payload = _Make_sample_payload()
-    repo.save_result = False
-    repo.last_error_value = "database failure"
+    repo.save_result = EstimateSaveResult(False, error_detail="database failure")
 
     outcome = presenter.save_estimate(payload)
 

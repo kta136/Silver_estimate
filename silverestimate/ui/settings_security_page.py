@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QFormLayout,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -15,26 +18,48 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from silverestimate.persistence.database_protocols import MainCommandsDatabase
 from silverestimate.services.password_change_service import (
     PasswordChangeRequest,
     PasswordChangeResult,
     PasswordChangeService,
     PasswordChangeStatus,
     PasswordField,
+    default_password_change_actions,
 )
+from silverestimate.ui.database_maintenance import run_database_maintenance
 
 
 class SettingsSecurityController:
     """Expose the password-change service to the security page."""
 
-    def __init__(self, password_change_service: PasswordChangeService) -> None:
-        self._password_change_service = password_change_service
+    def __init__(
+        self, database_provider: Callable[[], MainCommandsDatabase | None]
+    ) -> None:
+        self._database_provider = database_provider
 
     def change_passwords(
         self,
         request: PasswordChangeRequest,
+        parent: QWidget | None = None,
     ) -> PasswordChangeResult:
-        return self._password_change_service.change_passwords(request)
+        database = self._database_provider()
+        if database is None:
+            return PasswordChangeResult(
+                PasswordChangeStatus.FAILED,
+                "Encrypted database connection is unavailable",
+            )
+        try:
+            return run_database_maintenance(
+                database,
+                lambda worker: PasswordChangeService(
+                    default_password_change_actions(lambda: worker)
+                ).change_passwords(request),
+                "Changing Passwords",
+                parent,
+            )
+        except Exception as exc:
+            return PasswordChangeResult(PasswordChangeStatus.FAILED, str(exc))
 
 
 class SecuritySettingsPage(QWidget):
@@ -47,6 +72,7 @@ class SecuritySettingsPage(QWidget):
     ) -> None:
         super().__init__(parent)
         self._controller = controller
+        self._maintenance_active = False
         self._build_ui()
 
     def state(self) -> PasswordChangeRequest:
@@ -59,7 +85,18 @@ class SecuritySettingsPage(QWidget):
         )
 
     def change_passwords(self) -> PasswordChangeResult:
-        result = self._controller.change_passwords(self.state())
+        if self._maintenance_active:
+            return PasswordChangeResult(
+                PasswordChangeStatus.FAILED, "A password change is already running."
+            )
+        request = self.state()
+        self._maintenance_active = True
+        self.change_password_button.setEnabled(False)
+        try:
+            result = self._controller.change_passwords(request, self)
+        finally:
+            self._maintenance_active = False
+            self.change_password_button.setEnabled(True)
         self._apply_result(result)
         return result
 
@@ -68,51 +105,77 @@ class SecuritySettingsPage(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(12)
 
-        password_group = QGroupBox("Change Passwords")
-        form = QFormLayout(password_group)
-        self._configure_form(form)
-
         self.current_password_input = self._password_input(
             "Enter your current main password"
         )
-        form.addRow("Current Password:", self.current_password_input)
-
         self.new_password_input = self._password_input("Enter new main password")
-        form.addRow("New Main Password:", self.new_password_input)
-
         self.confirm_new_password_input = self._password_input(
             "Confirm new main password"
         )
-        form.addRow("Confirm New Main:", self.confirm_new_password_input)
-
-        form.addRow(QLabel("-" * 40))
-
         self.new_secondary_password_input = self._password_input(
             "Enter new recovery password"
         )
-        form.addRow(
-            "New Recovery Password:",
-            self.new_secondary_password_input,
-        )
-
         self.confirm_new_secondary_password_input = self._password_input(
             "Confirm new recovery password"
         )
-        form.addRow(
-            "Confirm New Recovery:",
-            self.confirm_new_secondary_password_input,
-        )
-
         self.change_password_button = QPushButton("Change Passwords")
         self.change_password_button.clicked.connect(self.change_passwords)
-        form.addRow("", self.change_password_button)
-
         self.show_passwords_checkbox = QCheckBox("Show passwords")
         self.show_passwords_checkbox.toggled.connect(self._toggle_password_visibility)
-        form.addRow("", self.show_passwords_checkbox)
 
-        main_layout.addWidget(password_group)
+        title = QLabel("Security")
+        title.setObjectName("SettingsTitleLabel")
+        main_layout.addWidget(title)
+        main_layout.addWidget(QLabel("Current password"))
+        main_layout.addWidget(self.current_password_input)
+        columns = QHBoxLayout()
+        for label, fields in (
+            (
+                "Main password",
+                (self.new_password_input, self.confirm_new_password_input),
+            ),
+            (
+                "Recovery password",
+                (
+                    self.new_secondary_password_input,
+                    self.confirm_new_secondary_password_input,
+                ),
+            ),
+        ):
+            group = QGroupBox(label)
+            column = QVBoxLayout(group)
+            for caption, field in zip(
+                ("New password", "Confirm password"), fields, strict=True
+            ):
+                column.addWidget(QLabel(caption))
+                column.addWidget(field)
+            columns.addWidget(group)
+        main_layout.addLayout(columns)
+        main_layout.addWidget(self.show_passwords_checkbox)
+        main_layout.addWidget(
+            QLabel(
+                "Use at least 8 characters. Main and recovery passwords must differ."
+            )
+        )
+        note = QLabel(
+            "Changes take effect when you choose Change passwords, independently of Apply."
+        )
+        note.setWordWrap(True)
+        main_layout.addWidget(note)
+        actions = QHBoxLayout()
+        actions.addStretch()
+        self.change_password_button.setObjectName("SettingsPrimaryButton")
+        self.change_password_button.setStyleSheet("QPushButton { color: white; }")
+        actions.addWidget(self.change_password_button)
+        clear = QPushButton("Clear fields")
+        clear.clicked.connect(self._clear_fields)
+        actions.addWidget(clear)
+        main_layout.addLayout(actions)
         main_layout.addStretch()
+
+    def _clear_fields(self):
+        for field in self._password_fields().values():
+            field.clear()
 
     def _apply_result(self, result: PasswordChangeResult) -> None:
         fields = self._password_fields()

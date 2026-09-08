@@ -83,8 +83,8 @@ def test_v1_migration_normalizes_alias_and_removes_retired_key() -> None:
 
     version = migrate_settings(backend)
 
-    assert version == SETTINGS_SCHEMA_VERSION == 1
-    assert backend.values[str(SettingsKey.SCHEMA_VERSION)] == 1
+    assert version == SETTINGS_SCHEMA_VERSION == 2
+    assert backend.values[str(SettingsKey.SCHEMA_VERSION)] == 2
     assert backend.values[str(SettingsKey.PRINT_PAGE_SIZE)] == "Letter"
     assert "rates/refresh_interval_sec" not in backend.values
     assert backend.sync_count == 1
@@ -123,3 +123,26 @@ def test_application_settings_only_accepts_declared_keys_for_typed_writes() -> N
     settings.remove(SettingsKey.PRINT_SHOW_TUNCH)
 
     assert not backend.values
+
+
+def test_approved_defaults_migrate_once_and_preserve_print_preferences():
+    backend = MemorySettingsBackend(
+        {
+            str(SettingsKey.SCHEMA_VERSION): 1,
+            str(SettingsKey.UI_TABLE_FONT_SIZE): 9,
+            str(SettingsKey.FONT_FAMILY): "Courier New",
+            str(SettingsKey.PRINT_PAGE_SIZE): "A5",
+            str(SettingsKey.PRINT_SHOW_TUNCH): True,
+        }
+    )
+    migrate_settings(backend)
+    assert backend.values[str(SettingsKey.UI_TABLE_FONT_SIZE)] == 11
+    assert backend.values[str(SettingsKey.UI_FINAL_CALC_FONT_SIZE)] == 16
+    assert backend.values[str(SettingsKey.FONT_FAMILY)] == "Courier New"
+    assert backend.values[str(SettingsKey.PRINT_PAGE_SIZE)] == "A5"
+    assert backend.values[str(SettingsKey.PRINT_SHOW_TUNCH)] is True
+    backend.setValue(str(SettingsKey.UI_TABLE_FONT_SIZE), 14)
+    backend.setValue(str(SettingsKey.UI_ROW_DENSITY), "comfortable")
+    snapshot = dict(backend.values)
+    migrate_settings(backend)
+    assert backend.values == snapshot

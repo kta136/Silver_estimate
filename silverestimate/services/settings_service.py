@@ -56,16 +56,6 @@ class SettingsService:
         self._settings.set(SettingsKey.FONT_BOLD, settings.bold)
         self._settings.sync()
 
-    def load_table_font_size(self, default_size: int = 9) -> int:
-        return self._settings.get_int(
-            SettingsKey.UI_TABLE_FONT_SIZE,
-            int(default_size),
-        )
-
-    def save_table_font_size(self, size: int) -> None:
-        self._settings.set(SettingsKey.UI_TABLE_FONT_SIZE, int(size))
-        self._settings.sync()
-
     # --- Geometry/state -----------------------------------------------
     def restore_geometry(self, window) -> bool:
         geometry = self._settings.read(SettingsKey.UI_MAIN_GEOMETRY)

@@ -2,71 +2,78 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 from PySide6.QtCore import Qt
 
-from ._host_proxy import HostProxy
+if TYPE_CHECKING:
+    from .silver_bar_management import SilverBarDialog
 
 
-class SilverBarSelectionStateController(HostProxy):
+class SilverBarSelectionStateController:
     """Keep selection summaries and transfer button state in sync."""
 
-    def _update_transfer_buttons_state(self):
+    def __init__(self, host: SilverBarDialog) -> None:
+        self.host = host
+
+    def _update_transfer_buttons_state(self) -> None:
         try:
-            list_selected = self.current_list_id is not None
-            available_selection = self.available_bars_table.selectionModel()
-            list_selection = self.list_bars_table.selectionModel()
+            list_selected = self.host.current_list_id is not None
+            available_selection = self.host.available_bars_table.selectionModel()
+            list_selection = self.host.list_bars_table.selectionModel()
             has_available_selection = bool(
                 available_selection and available_selection.selectedRows()
             )
             has_list_selection = bool(list_selection and list_selection.selectedRows())
 
-            if hasattr(self, "add_to_list_button"):
-                self.add_to_list_button.setEnabled(
+            if hasattr(self.host, "add_to_list_button"):
+                self.host.add_to_list_button.setEnabled(
                     list_selected and has_available_selection
                 )
-            if hasattr(self, "remove_from_list_button"):
-                self.remove_from_list_button.setEnabled(
+            if hasattr(self.host, "remove_from_list_button"):
+                self.host.remove_from_list_button.setEnabled(
                     list_selected and has_list_selection
                 )
-            if hasattr(self, "add_all_button"):
-                self.add_all_button.setEnabled(
-                    list_selected and self.available_bars_table.model().rowCount() > 0
+            if hasattr(self.host, "add_all_button"):
+                self.host.add_all_button.setEnabled(
+                    list_selected
+                    and self.host.available_bars_table.model().rowCount() > 0
                 )
-            if hasattr(self, "remove_all_button"):
-                self.remove_all_button.setEnabled(
-                    list_selected and self.list_bars_table.model().rowCount() > 0
+            if hasattr(self.host, "remove_all_button"):
+                self.host.remove_all_button.setEnabled(
+                    list_selected and self.host.list_bars_table.model().rowCount() > 0
                 )
         except Exception as exc:
-            self.logger.debug("Failed to update transfer button state: %s", exc)
+            self.host.logger.debug("Failed to update transfer button state: %s", exc)
 
-    def _on_selection_changed(self, *args, **kwargs):
+    def _on_selection_changed(self, *args, **kwargs) -> None:
         del args, kwargs
         try:
             self._update_transfer_buttons_state()
             self._update_selection_summaries()
         except Exception as exc:
-            self.logger.debug("Failed to refresh selection summaries: %s", exc)
+            self.host.logger.debug("Failed to refresh selection summaries: %s", exc)
 
-    def _update_selection_summaries(self):
+    def _update_selection_summaries(self) -> None:
         try:
             available_count, available_weight, available_fine = (
-                self._selection_totals_for_table(self.available_bars_table)
+                self._selection_totals_for_table(self.host.available_bars_table)
             )
             list_count, list_weight, list_fine = self._selection_totals_for_table(
-                self.list_bars_table
+                self.host.list_bars_table
             )
-            if hasattr(self, "available_selection_label"):
-                self.available_selection_label.setText(
+            if hasattr(self.host, "available_selection_label"):
+                self.host.available_selection_label.setText(
                     f"Selected: {available_count} | Weight: {available_weight:.3f} g | Fine: {available_fine:.3f} g"
                 )
-            if hasattr(self, "list_selection_label"):
-                self.list_selection_label.setText(
+            if hasattr(self.host, "list_selection_label"):
+                self.host.list_selection_label.setText(
                     f"Selected: {list_count} | Weight: {list_weight:.3f} g | Fine: {list_fine:.3f} g"
                 )
         except Exception as exc:
-            self.logger.debug("Failed to update selection summary labels: %s", exc)
+            self.host.logger.debug("Failed to update selection summary labels: %s", exc)
 
-    def _selection_totals_for_table(self, table):
+    def _selection_totals_for_table(self, table) -> Any:
         selection_model = table.selectionModel()
         selected = selection_model.selectedRows() if selection_model else []
         count = len(selected)
@@ -75,10 +82,10 @@ class SilverBarSelectionStateController(HostProxy):
         for index in selected:
             row = index.row()
             try:
-                weight_val = self._table_cell_value(
+                weight_val = self.host._table_cell_value(
                     table, row, 1, Qt.ItemDataRole.EditRole
                 )
-                fine_val = self._table_cell_value(
+                fine_val = self.host._table_cell_value(
                     table, row, 3, Qt.ItemDataRole.EditRole
                 )
                 weight_sum += float(weight_val or 0.0)

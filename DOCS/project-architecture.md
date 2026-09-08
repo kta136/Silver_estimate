@@ -20,10 +20,55 @@ Qt views and dialogs
   -> encrypted database, WAL, and journals
 ```
 
+## Database startup
+
+After authentication and device-secret retrieval, `StartupController` shows an
+indeterminate `MaintenanceProgressDialog`. Its worker runs the normal database
+constructor, including journal recovery, key derivation, schema upgrades and all
+integrity checks, then checkpoints and closes its writer. No open connection or
+cursor crosses back to Qt's GUI thread. A one-use detached manager handoff checks
+file freshness and opens a new authenticated writer on the GUI thread. Cache
+preload starts only after that attachment; pending first-run credentials are
+promoted only after successful initialization. Failed opens roll back uncommitted
+work and close the connection on its owner thread.
+
+The modal dialog cannot be dismissed while an upgrade/recovery operation is
+running. Authentication and device-secret access still run on the GUI thread,
+as does the final writer open. Startup remains synchronous to its caller through
+Qt's nested event loop; full scans are not repeated during attachment. Other
+`DatabaseManager` constructor callers keep their existing synchronous contract.
+
+## Live database maintenance
+
+Password changes and catalog imports use `run_database_maintenance` with an
+exclusive `DatabaseMaintenanceJob`. The GUI reserves the original broker without
+waiting. The worker drains existing readers and opens a separate writer before a
+queued Qt slot closes the GUI writer. Keeping the worker writer open prevents
+that close from performing a last-connection WAL checkpoint on the GUI thread.
+The original manager exposes no writer during the operation; its broker blocks
+new readers, and the existing draft-recovery maintenance guard pauses writes.
+
+The worker manager has separate connection, cursor, guard and repositories. It
+shares the locked item cache, which import refreshes after committing. Password
+verification, Argon2 hashing, credential staging/promotion, rekey export,
+validation and file switching all run on the worker. Catalog file parsing,
+validation, merge/replace and cache rebuilding also run there. The existing
+transaction, snapshot-removal protections and replacement confirmation remain.
+No database provider or widget is read by the worker; the UI captures those
+inputs first.
+
+After the worker closes/checkpoints its session and terminates, the GUI restores
+its writer and releases the original broker. Rekey updates that broker's key so
+previously captured factories also work. Failed jobs roll back unfinished
+transactions. A failed GUI reopen leaves readers blocked and reports that a
+restart is needed; the operation may already have committed. Password recovery
+hashes are cleared only on success or confirmed rollback, and retained when the
+outcome is uncertain. Duplicate page/command submissions are rejected.
+
 ## UI and controller boundaries
 
-- `EstimateEntryWidget` is a `QWidget` that explicitly owns workflow, layout, table, and totals controllers. Its public surface is limited to application commands and the `EstimateEntryView` presenter protocol; cross-controller calls name the target controller.
-- `SilverBarDialog` follows the same pattern through `SilverBarManagementFacade`.
+- `EstimateEntryWidget` is a `QWidget` that explicitly owns workflow, layout, table, and totals controllers. Application commands are explicit and the widget satisfies `EstimateEntryView` without a cast. Entry layout/table/totals/workflow controllers and recovery use a checked `EstimateEntryWidget` host; layout-created controls have concrete Qt types, and the former catch-all `__getattr__` is removed. Cross-controller calls name the target controller. Optional-member checks (`union-attr`) are enabled for this area.
+- `SilverBarDialog` owns nine plain controller/builder objects with checked `SilverBarDialog` hosts. `SilverBarManagementFacade` declares their actual types and directly invokes methods with explicit signatures; string dispatch and `HostProxy` are removed. Controls have concrete Qt declarations, the catch-all `__getattr__` is removed, and optional-member checks are enabled across this area. Load runners/page states/shutdown state belong to the load controller; preview lifecycle is delegated to its shared `PreviewBuildController`.
 - `LatestRequestRunner[RequestT, ResultT]` owns one persistent worker, a monotonically increasing generation, cooperative cancellation, and at most one pending replacement request. Only the latest generation may deliver a result.
 - `PagedLoadState[RowT, CursorT]` owns only mutable page accumulation: replace/append, loaded and total counts, cursor advancement, reset, and has-more state. Item Master, Estimate History, Silver-Bar History, and Silver-Bar Management retain their own queries, cursor types, row conversion, selection, feedback, and telemetry.
 - SQLite background work uses a connection owned by its worker thread and a progress handler bound to the cancellation event.
@@ -37,11 +82,55 @@ Qt views and dialogs
 
 Views cancel work, disconnect delivery, and let workers exit normally during shutdown. `QThread.terminate()` is prohibited.
 
+## Estimate application data
+
+`domain/estimate_entry.py` owns the frozen row, calculation-state, save/load and
+save-outcome data classes. Existing presenter and view-model import paths re-export
+the same classes for compatibility; application code imports from the domain.
+The mutable `EstimateEntryViewModel` remains in the UI layer.
+
+Before save or current-entry preview, the workflow synchronizes the active model
+and calls `as_save_snapshot()`. The UI assigns stable line keys, then captures a
+tuple of frozen rows and numeric inputs in `EstimateEntrySnapshot`. Subsequent
+screen edits cannot change that request. `EstimateEntryPersistenceService` consumes
+only this snapshot and the narrow `EstimateSaveExecutor.save_estimate(payload)`
+protocol; it imports no UI or presenter modules. It validates rows and totals before
+calling the executor once. The existing presenter/repository path still owns its
+save outcome and atomic database transaction.
+
+This is an incremental contract improvement. Native entry controllers remain
+coupled to their Qt widget, while the application save input is independent of Qt.
+Silver-bar controllers likewise use checked native-widget dependencies and explicit
+state ownership. Preview-worker reuse is implemented below; database lifecycle orchestration remains open.
+
+## Shared preview preparation
+
+Entry, Estimate History and silver-bar lists use `PreviewBuildController` from
+`ui/preview_build_worker.py`. Each screen lazily creates one persistent
+`LatestRequestRunner` on its first preview. It runs one captured-data build at a
+time, retains at most one replacement and suppresses obsolete results. No preview
+worker starts just from opening History. Per-request QThreads and callback routers
+are removed.
+
+The shared QObject owns progress and current delivery/error callbacks. Qt slots
+deliver on the GUI thread and recheck the request generation, including results
+queued before replacement or shutdown. Progress is disposed before opening preview
+or an error dialog, so a nested preview cannot accidentally clear newer progress.
+Builders receive captured data and must not touch widgets or the main database
+writer. Existing estimate/list queries still happen before submission.
+
+Screen close shuts down preview delivery without blocking for document conversion;
+direct owner destruction is also handled. The runner has no Qt parent so it cannot
+be destroyed by Qt while its Python worker is still completing a pure build. It
+finishes that build, suppresses delivery and exits cooperatively. Running builds
+are not forcibly interrupted and no claim is made to cancel them mid-conversion.
+Existing Save/preview/new-estimate behavior and all output layouts are unchanged.
+
 ## Persistence
 
-Fresh schema-v8 creation, mandatory indexes, validation, and the schema-version
-write run in a single transaction. Existing databases must already be version 8;
-historical and unversioned schemas fail closed. The silver-bar availability index is:
+Fresh schema-v10 creation, the v8 snapshot upgrade or the v9 draft-table upgrade, mandatory indexes, validation,
+and the schema-version write run in a single transaction. Versions older than v8
+and unversioned schemas fail closed. The silver-bar availability index is:
 
 ```sql
 (status, list_id, weight, date_added DESC, bar_id DESC)
@@ -75,7 +164,7 @@ The active format is machine-bound SQLCipher. `DatabaseManager` reads SQLCipher'
 256-bit device secret from local-machine Windows Credential Manager, and passes the final raw 32-byte key to
 `SqlCipherConnectionBroker`. Every connection is keyed before reading
 `sqlite_master`, verifies the controlled driver, authenticates the database,
-and then applies foreign keys, WAL, `synchronous=NORMAL`, memory-only temporary
+and then applies foreign keys, WAL, `synchronous=FULL`, memory-only temporary
 storage, the application cache size, and `mmap_size=0`.
 
 Worker APIs carry a connection factory, never a database path or raw key.
@@ -93,7 +182,7 @@ the only keyring boundary.
 The `SILVDB01` importer and its AES-GCM dependency have been retired. An
 authenticated local two-file SQLCipher database is migrated once to the
 machine-bound single-file format. Existing files without the local device secret,
-plaintext files, unversioned files, and historical schemas fail closed.
+plaintext files, unversioned files, and schemas older than v8 fail closed.
 
 Encrypted `.sedbbackup` archives contain a machine-bound SQLCipher database and a
 digested non-secret manifest. Restore and password change use staged

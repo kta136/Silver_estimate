@@ -5,16 +5,21 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any, Optional
 
-from PySide6.QtCore import QItemSelection, QModelIndex, Qt, Signal
+from PySide6.QtCore import QItemSelection, QModelIndex, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QColor, QKeySequence, QPalette, QShortcut
-from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QMenu, QTableView
+from PySide6.QtWidgets import (
+    QAbstractItemDelegate,
+    QAbstractItemView,
+    QHeaderView,
+    QMenu,
+    QTableView,
+    QWidget,
+)
 
+from silverestimate.domain.estimate_entry import EstimateEntryRowState
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.ui.icons import get_icon
 from silverestimate.ui.models.estimate_table_model import EstimateTableModel
-from silverestimate.ui.view_models.estimate_entry_view_model import (
-    EstimateEntryRowState,
-)
 
 
 class EstimateTableView(QTableView):
@@ -40,11 +45,14 @@ class EstimateTableView(QTableView):
         int, int, int, int
     )  # currentRow, currentCol, prevRow, prevCol
 
-    host_widget: QTableView | None
+    host_widget: QWidget | None
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.host_widget = None
+        self._layout_resize_timer = QTimer(self)
+        self._layout_resize_timer.setSingleShot(True)
+        self._layout_resize_timer.timeout.connect(self._resize_columns)
         self._table_model = EstimateTableModel(self)
         self._setup_ui()
         self._connect_signals()
@@ -52,6 +60,7 @@ class EstimateTableView(QTableView):
 
     def _setup_ui(self) -> None:
         self.setObjectName("EstimateTableView")
+        self.setProperty("denseTable", True)
         self.setModel(self._table_model)
 
         self.setAlternatingRowColors(True)
@@ -76,13 +85,13 @@ class EstimateTableView(QTableView):
 
         palette = self.palette()
         palette.setColor(QPalette.ColorRole.Base, QColor("#ffffff"))
-        palette.setColor(QPalette.ColorRole.AlternateBase, QColor("#f8fbff"))
-        palette.setColor(QPalette.ColorRole.Highlight, QColor("#dbeafe"))
+        palette.setColor(QPalette.ColorRole.AlternateBase, QColor("#f6f7f8"))
+        palette.setColor(QPalette.ColorRole.Highlight, QColor("#e0f2f3"))
         palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#0f172a"))
         palette.setColor(
             QPalette.ColorGroup.Inactive,
             QPalette.ColorRole.Highlight,
-            QColor("#dbeafe"),
+            QColor("#e0f2f3"),
         )
         palette.setColor(
             QPalette.ColorGroup.Inactive,
@@ -204,6 +213,27 @@ class EstimateTableView(QTableView):
         if row_state.row_index <= 0:
             row_state = replace(row_state, row_index=self._table_model.rowCount() + 1)
         return self.add_row(row_state)
+
+    def commit_active_editor(self) -> bool:
+        """Commit a focused cell before commands capture the entry model."""
+        editor = self.focusWidget()
+        if (
+            self.state() != QAbstractItemView.State.EditingState
+            or editor is None
+            or not self.isAncestorOf(editor)
+        ):
+            return True
+        while editor.parentWidget() is not self.viewport():
+            parent = editor.parentWidget()
+            if parent is None or parent is self:
+                return True
+            editor = parent
+        acceptable = getattr(editor, "hasAcceptableInput", None)
+        if callable(acceptable) and not acceptable():
+            return False
+        self.commitData(editor)
+        self.closeEditor(editor, QAbstractItemDelegate.EndEditHint.NoHint)
+        return True
 
     def delete_row(self, row_idx: int) -> bool:
         return self._table_model.remove_row(row_idx)
@@ -365,6 +395,15 @@ class EstimateTableView(QTableView):
             10: 80,
         }
         self.restore_column_widths(default_widths)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._layout_resize_timer.start(0)
+
+    def _resize_columns(self):
+        controller = getattr(self.host_widget, "layout_controller", None)
+        if controller is not None:
+            controller._auto_stretch_item_name()
 
     def set_column_stretch(self, column: int, stretch: bool = True) -> None:
         header = self.horizontalHeader()

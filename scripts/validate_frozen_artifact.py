@@ -37,6 +37,12 @@ def _validate_payload(payload: dict[str, Any], artifact: Path) -> None:
         raise ValueError("Artifact did not initialize the Windows Qt platform plugin")
     if payload.get("svg_image_format") is not True:
         raise ValueError("Artifact did not initialize SVG image support")
+    expected_fonts = dict.fromkeys(
+        ("button", "menu", "table", "header", "totals_header", "totals"), 11
+    )
+    expected_fonts["final_amount"] = 16
+    if payload.get("ui_fonts") != expected_fonts:
+        raise ValueError("Artifact did not apply the selected interface fonts")
     if payload.get("password_hashing") is not True:
         raise ValueError("Artifact did not verify direct Argon2id password hashing")
     if int(payload.get("pdf_bytes", 0)) < 1_000:

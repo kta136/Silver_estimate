@@ -3,12 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict
 
-try:
-    from hypothesis import strategies as st
-except ModuleNotFoundError:  # pragma: no cover - optional dependency
-    st = None
-
-_HYPOTHESIS_AVAILABLE = st is not None
+from hypothesis import strategies as st
 
 
 def _build(base: Dict[str, Any], **overrides: Any) -> Dict[str, Any]:
@@ -153,9 +148,6 @@ class WageCalculationCase:
 
 def fine_calculation_cases():
     """Hypothesis strategy producing realistic fine-weight scenarios."""
-    if not _HYPOTHESIS_AVAILABLE:  # pragma: no cover - optional dependency
-        raise RuntimeError("Hypothesis is not installed")
-
     weight = st.floats(
         min_value=0.0, max_value=250.0, allow_nan=False, allow_infinity=False
     )
@@ -178,9 +170,6 @@ def fine_calculation_cases():
 
 def wage_calculation_cases():
     """Hypothesis strategy producing realistic wage scenarios."""
-    if not _HYPOTHESIS_AVAILABLE:  # pragma: no cover - optional dependency
-        raise RuntimeError("Hypothesis is not installed")
-
     wage_type = st.sampled_from(["WT", "PC"])
     net = st.floats(
         min_value=0.0, max_value=250.0, allow_nan=False, allow_infinity=False

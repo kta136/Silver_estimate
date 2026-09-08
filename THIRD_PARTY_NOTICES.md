@@ -25,7 +25,7 @@ Pinned tag object: `f52b9f81a985dc1e45b28cd7b5671feb32815b83`;
 peeled commit: `7b371d80d959ec9ab4139d09d78e83c090de9779`.
 Source and license: <https://github.com/openssl/openssl>.
 
-## PySide6 6.11.1, Shiboken6 6.11.1, and Qt 6.11.1
+## PySide6 6.11.2, Shiboken6 6.11.2, and Qt 6.11.2
 
 Copyright The Qt Company Ltd. and contributors. PySide6 and Shiboken6 are
 available under LGPL-3.0-only, GPL-2.0-only, GPL-3.0-only, and commercial

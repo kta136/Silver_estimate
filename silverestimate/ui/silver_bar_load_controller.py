@@ -7,7 +7,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, Callable, TypeAlias, cast
 
 from PySide6.QtWidgets import QMessageBox
 
@@ -22,7 +22,8 @@ from silverestimate.persistence.silver_bars_snapshot_repository import (
     SilverBarsSnapshotRepository,
 )
 
-from ._host_proxy import HostProxy
+if TYPE_CHECKING:
+    from .silver_bar_management import SilverBarDialog
 
 
 @dataclass(frozen=True)
@@ -65,12 +66,14 @@ def _load_bars_page(
                 date_range=request.payload.get("date_range"),
                 cursor=cast(AvailableBarCursor | None, request.cursor),
                 limit=1500,
+                include_total=not request.append,
             )
         elif request.target == "list":
             page = snapshot.get_bars_in_list_keyset_page(
                 request.payload.get("list_id"),
                 cursor=cast(BarListCursor | None, request.cursor),
                 limit=1500,
+                include_total=not request.append,
             )
         else:
             raise ValueError(f"Unknown load target: {request.target}")
@@ -79,12 +82,12 @@ def _load_bars_page(
     return request, page
 
 
-class SilverBarLoadController(HostProxy):
+class SilverBarLoadController:
     """Coordinate async available/list loads and stale-response handling."""
 
-    def __init__(self, host) -> None:
-        super().__init__(host)
-        object.__setattr__(self, "_load_shutdown", False)
+    def __init__(self, host: SilverBarDialog) -> None:
+        self.host = host
+        self._load_shutdown = False
         self._available_page_state = PagedLoadState[
             dict[str, Any],
             AvailableBarCursor,
@@ -105,12 +108,12 @@ class SilverBarLoadController(HostProxy):
             runner.failed.connect(self._on_bars_load_error)
             runner.settled.connect(self._on_bars_load_finished)
 
-    def _schedule_available_reload(self, *args, **kwargs):
+    def _schedule_available_reload(self, *args, **kwargs) -> None:
         del args, kwargs
         try:
-            self._filter_reload_timer.start()
+            self.host._filter_reload_timer.start()
         except (AttributeError, RuntimeError, TypeError) as exc:
-            self.logger.debug("Failed to start available reload timer: %s", exc)
+            self.host.logger.debug("Failed to start available reload timer: %s", exc)
             self.load_available_bars()
 
     @staticmethod
@@ -126,7 +129,7 @@ class SilverBarLoadController(HostProxy):
             return
 
     def _set_list_table_active_state(self, is_active: bool) -> None:
-        list_table = getattr(self, "list_bars_table", None)
+        list_table = getattr(self.host, "list_bars_table", None)
         if list_table is None:
             return
         state = "active" if is_active else "inactive"
@@ -151,7 +154,7 @@ class SilverBarLoadController(HostProxy):
         *,
         append: bool = False,
     ) -> int:
-        if object.__getattribute__(self, "_load_shutdown"):
+        if self._load_shutdown:
             return 0
         cursor: AvailableBarCursor | BarListCursor | None
         if target == "available":
@@ -162,7 +165,7 @@ class SilverBarLoadController(HostProxy):
                 cursor = None
             elif not self._available_page_state.has_more:
                 return runner.generation
-            button = getattr(self, "available_load_more_button", None)
+            button = getattr(self.host, "available_load_more_button", None)
         elif target == "list":
             cursor = self._list_page_state.cursor
             runner = self._list_runner
@@ -171,7 +174,7 @@ class SilverBarLoadController(HostProxy):
                 cursor = None
             elif not self._list_page_state.has_more:
                 return runner.generation
-            button = getattr(self, "list_load_more_button", None)
+            button = getattr(self.host, "list_load_more_button", None)
         else:
             raise ValueError(f"Unknown load target: {target}")
         if button is not None:
@@ -179,12 +182,12 @@ class SilverBarLoadController(HostProxy):
 
         started_at = time.perf_counter()
         page: _BarsPage
-        connection_factory = getattr(self.db_manager, "open_read_connection", None)
+        connection_factory = getattr(self.host.db_manager, "open_read_connection", None)
         if not callable(connection_factory):
             try:
                 if target == "available":
                     getter = getattr(
-                        self.db_manager,
+                        self.host.db_manager,
                         "get_available_silver_bars_keyset_page",
                         None,
                     )
@@ -199,18 +202,20 @@ class SilverBarLoadController(HostProxy):
                             limit=1500,
                         )
                     else:
-                        rows, total = self.db_manager.get_available_silver_bars_page(
-                            weight_query=payload.get("weight_query"),
-                            weight_tolerance=payload.get("weight_tolerance", 0.001),
-                            min_purity=payload.get("min_purity"),
-                            max_purity=payload.get("max_purity"),
-                            date_range=payload.get("date_range"),
-                            limit=1500,
+                        rows, total = (
+                            self.host.db_manager.get_available_silver_bars_page(
+                                weight_query=payload.get("weight_query"),
+                                weight_tolerance=payload.get("weight_tolerance", 0.001),
+                                min_purity=payload.get("min_purity"),
+                                max_purity=payload.get("max_purity"),
+                                date_range=payload.get("date_range"),
+                                limit=1500,
+                            )
                         )
                         page = Page(tuple(dict(row) for row in rows), total, None)
                 else:
                     getter = getattr(
-                        self.db_manager,
+                        self.host.db_manager,
                         "get_silver_bars_in_list_keyset_page",
                         None,
                     )
@@ -221,7 +226,7 @@ class SilverBarLoadController(HostProxy):
                             limit=1500,
                         )
                     else:
-                        rows, total = self.db_manager.get_silver_bars_in_list_page(
+                        rows, total = self.host.db_manager.get_silver_bars_in_list_page(
                             payload.get("list_id"),
                             limit=1500,
                             offset=0,
@@ -266,13 +271,14 @@ class SilverBarLoadController(HostProxy):
                 available_page,
                 append=request.append,
             )
-            self._populate_table(
-                self.available_bars_table,
-                rows,
+            self.host._populate_table(
+                self.host.available_bars_table,
+                self._available_page_state.last_page_rows,
                 total_rows=page.total,
+                append=request.append,
             )
-            self._restore_table_column_widths()
-            button = getattr(self, "available_load_more_button", None)
+            self.host._restore_table_column_widths()
+            button = getattr(self.host, "available_load_more_button", None)
             if button is not None:
                 button.setVisible(self._available_page_state.has_more)
         elif target == "list":
@@ -285,21 +291,22 @@ class SilverBarLoadController(HostProxy):
                 list_page,
                 append=request.append,
             )
-            self._populate_table(
-                self.list_bars_table,
-                rows,
+            self.host._populate_table(
+                self.host.list_bars_table,
+                self._list_page_state.last_page_rows,
                 total_rows=page.total,
+                append=request.append,
             )
-            button = getattr(self, "list_load_more_button", None)
+            button = getattr(self.host, "list_load_more_button", None)
             if button is not None:
                 button.setVisible(self._list_page_state.has_more)
         else:
             return
-        self._update_transfer_buttons_state()
-        self._update_selection_summaries()
+        self.host._update_transfer_buttons_state()
+        self.host._update_selection_summaries()
 
         elapsed_ms = (time.perf_counter() - request.started_at) * 1000.0
-        self.logger.debug(
+        self.host.logger.debug(
             "[perf] silver_bars.load_%s=%.2fms rows=%s total=%s",
             target,
             elapsed_ms,
@@ -314,16 +321,16 @@ class SilverBarLoadController(HostProxy):
     def _on_direct_load_error(self, target: str, error: object) -> None:
         message = str(error)
         if target == "available":
-            self._populate_table(self.available_bars_table, [], total_rows=0)
+            self.host._populate_table(self.host.available_bars_table, [], total_rows=0)
             QMessageBox.critical(
                 self.host, "Error", f"Failed to load available bars: {message}"
             )
         elif target == "list":
-            self._populate_table(self.list_bars_table, [], total_rows=0)
+            self.host._populate_table(self.host.list_bars_table, [], total_rows=0)
             QMessageBox.critical(
                 self.host,
                 "Error",
-                f"Failed to load bars for list {self.current_list_id}: {message}",
+                f"Failed to load bars for list {self.host.current_list_id}: {message}",
             )
 
     def _on_bars_load_finished(self, generation: int) -> None:
@@ -333,7 +340,7 @@ class SilverBarLoadController(HostProxy):
             self._finish_target_load("list")
 
     def _finish_target_load(self, target: str) -> None:
-        button = getattr(self, f"{target}_load_more_button", None)
+        button = getattr(self.host, f"{target}_load_more_button", None)
         if button is not None:
             button.setEnabled(True)
 
@@ -342,9 +349,9 @@ class SilverBarLoadController(HostProxy):
             runner.cancel()
 
     def _shutdown_loads(self) -> None:
-        if object.__getattribute__(self, "_load_shutdown"):
+        if self._load_shutdown:
             return
-        object.__setattr__(self, "_load_shutdown", True)
+        self._load_shutdown = True
         for runner in (self._available_runner, self._list_runner):
             with contextlib.suppress(TypeError, RuntimeError):
                 runner.result.disconnect(self._on_bars_load_ready)
@@ -354,27 +361,27 @@ class SilverBarLoadController(HostProxy):
                 runner.settled.disconnect(self._on_bars_load_finished)
             runner.shutdown()
 
-    def load_available_bars(self, *, append: bool = False):
-        if object.__getattribute__(self, "_load_shutdown"):
+    def load_available_bars(self, *, append: bool = False) -> None:
+        if self._load_shutdown:
             return
-        weight_query = self.weight_search_edit.text().strip()
+        weight_query = self.host.weight_search_edit.text().strip()
         self._start_bars_load(
             "available",
             {
                 "weight_query": weight_query if weight_query else None,
                 "weight_tolerance": 0.0,
-                "date_range": self._current_date_range(),
+                "date_range": self.host._current_date_range(),
             },
             append=append,
         )
 
-    def load_lists(self):
+    def load_lists(self) -> None:
         logging.getLogger(__name__).debug("Loading lists...")
-        self.list_combo.blockSignals(True)
-        self.list_combo.clear()
-        self.list_combo.addItem("--- Select a List ---", None)
+        self.host.list_combo.blockSignals(True)
+        self.host.list_combo.clear()
+        self.host.list_combo.addItem("--- Select a List ---", None)
         try:
-            lists = self.db_manager.get_silver_bar_lists(include_issued=False)
+            lists = self.host.db_manager.get_silver_bar_lists(include_issued=False)
             for list_row in lists:
                 list_note = list_row["list_note"] or ""
                 list_date = (
@@ -385,45 +392,47 @@ class SilverBarLoadController(HostProxy):
                 display_text = f"{list_row['list_identifier']} ({list_date})"
                 if list_note:
                     display_text += f" - {list_note}"
-                self.list_combo.addItem(display_text, list_row["list_id"])
+                self.host.list_combo.addItem(display_text, list_row["list_id"])
         except Exception as exc:
-            self.logger.warning(
+            self.host.logger.warning(
                 "Failed to load silver bar lists: %s", exc, exc_info=True
             )
             QMessageBox.critical(self.host, "Error", f"Failed to load lists: {exc}")
         finally:
             try:
-                self._restore_selected_list_from_settings()
+                self.host._restore_selected_list_from_settings()
             except Exception as exc:
-                self.logger.debug(
+                self.host.logger.debug(
                     "Failed to restore selected list from settings: %s", exc
                 )
-            self.list_combo.blockSignals(False)
+            self.host.list_combo.blockSignals(False)
             self.list_selection_changed()
 
-    def list_selection_changed(self, *args, **kwargs):
+    def list_selection_changed(self, *args, **kwargs) -> None:
         del args, kwargs
-        if object.__getattribute__(self, "_load_shutdown"):
+        if self._load_shutdown:
             return
-        selected_index = self.list_combo.currentIndex()
-        self.current_list_id = self.list_combo.itemData(selected_index)
+        selected_index = self.host.list_combo.currentIndex()
+        self.host.current_list_id = self.host.list_combo.itemData(selected_index)
 
-        is_list_selected = self.current_list_id is not None
-        self.edit_note_button.setEnabled(is_list_selected)
-        self.print_list_button.setEnabled(is_list_selected)
-        export_button = getattr(self, "export_list_button", None)
+        is_list_selected = self.host.current_list_id is not None
+        self.host.edit_note_button.setEnabled(is_list_selected)
+        self.host.print_list_button.setEnabled(is_list_selected)
+        export_button = getattr(self.host, "export_list_button", None)
         if export_button is not None:
             export_button.setEnabled(is_list_selected)
         self._set_list_table_active_state(is_list_selected)
-        print_bottom_button = getattr(self, "print_bottom_button", None)
+        print_bottom_button = getattr(self.host, "print_bottom_button", None)
         if print_bottom_button is not None:
             print_bottom_button.setEnabled(is_list_selected)
-        self.delete_list_button.setEnabled(is_list_selected)
-        self.mark_issued_button.setEnabled(is_list_selected)
-        self._update_transfer_buttons_state()
+        self.host.delete_list_button.setEnabled(is_list_selected)
+        self.host.mark_issued_button.setEnabled(is_list_selected)
+        self.host._update_transfer_buttons_state()
 
         if is_list_selected:
-            details = self.db_manager.get_silver_bar_list_details(self.current_list_id)
+            details = self.host.db_manager.get_silver_bar_list_details(
+                self.host.current_list_id
+            )
             if details:
                 info = f"{details['list_identifier']}"
                 try:
@@ -432,19 +441,19 @@ class SilverBarLoadController(HostProxy):
                     note_val = getattr(details, "list_note", None)
                 if note_val:
                     info += f"  –  {note_val}"
-                self.list_info_label.setText(info)
+                self.host.list_info_label.setText(info)
             else:
-                self.list_info_label.setText("Error loading list details")
+                self.host.list_info_label.setText("Error loading list details")
             self.load_bars_in_selected_list()
         else:
-            self.list_info_label.setText("No list selected")
-            self._clear_management_table(self.list_bars_table)
+            self.host.list_info_label.setText("No list selected")
+            self.host._clear_management_table(self.host.list_bars_table)
 
-    def load_bars_in_selected_list(self, *, append: bool = False):
-        if self.current_list_id is None:
+    def load_bars_in_selected_list(self, *, append: bool = False) -> None:
+        if self.host.current_list_id is None:
             self._list_page_state.reset()
-            self._clear_management_table(self.list_bars_table)
-            button = getattr(self, "list_load_more_button", None)
+            self.host._clear_management_table(self.host.list_bars_table)
+            button = getattr(self.host, "list_load_more_button", None)
             if button is not None:
                 button.setVisible(False)
             return
@@ -452,7 +461,7 @@ class SilverBarLoadController(HostProxy):
         self._start_bars_load(
             "list",
             {
-                "list_id": self.current_list_id,
+                "list_id": self.host.current_list_id,
             },
             append=append,
         )

@@ -11,18 +11,20 @@ from PySide6.QtCore import (
     Qt,
 )
 
+from silverestimate.ui.models.table_sorting import insert_model_rows, sort_model_rows
+
 
 class ItemMasterTableModel(QAbstractTableModel):
     """Expose catalog items to the item-master table view."""
 
-    HEADERS = ["Code", "Name", "Tunch", "Purity (%)", "Wage Type", "Wage Rate"]
+    HEADERS = ["Code", "Name", "Tunch", "Purity (%)", "Wage Type", "Lbr"]
     HEADER_TOOLTIPS = [
         "Item Code",
         "Item Name",
         "Optional Tunch text",
         "Default Purity",
         "Default Wage Calc Type",
-        "Default Wage Rate",
+        "Default Lbr",
     ]
     _NUMERIC_COLUMNS = {3, 5}
 
@@ -89,11 +91,14 @@ class ItemMasterTableModel(QAbstractTableModel):
     ) -> None:
         if not (0 <= column < self.columnCount()):
             return
-        self.layoutAboutToBeChanged.emit()
         self._sort_column = int(column)
         self._sort_order = order
-        self._sort_rows()
-        self.layoutChanged.emit()
+        sort_model_rows(
+            self,
+            self._rows,
+            key=lambda row: self._sort_key_for_row(row, column),
+            reverse=order == Qt.SortOrder.DescendingOrder,
+        )
 
     def set_rows(self, rows: list[object]) -> None:
         self.beginResetModel()
@@ -101,6 +106,18 @@ class ItemMasterTableModel(QAbstractTableModel):
         if self._sort_column is not None and self._rows:
             self._sort_rows()
         self.endResetModel()
+
+    def append_rows(self, rows: list[object]) -> None:
+        column = self._sort_column
+        insert_model_rows(
+            self,
+            self._rows,
+            [self._normalize_row(row) for row in rows],
+            key=(lambda row: self._sort_key_for_row(row, column))
+            if column is not None
+            else None,
+            reverse=self._sort_order == Qt.SortOrder.DescendingOrder,
+        )
 
     def row_payload(self, row: int) -> dict[str, Any] | None:
         if 0 <= row < len(self._rows):
@@ -112,6 +129,8 @@ class ItemMasterTableModel(QAbstractTableModel):
         value = payload.get(key)
         if value is None:
             return ""
+        if key == "wage_type":
+            return {"PC": "Per piece", "WT": "Per gram"}.get(str(value), str(value))
         return str(value)
 
     def sort_key_value(self, payload: dict[str, Any], column: int) -> Any:

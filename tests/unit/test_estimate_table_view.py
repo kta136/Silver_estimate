@@ -19,9 +19,11 @@ from silverestimate.ui.view_models.estimate_entry_view_model import (
 
 
 @pytest.fixture
-def table_view(qt_app):
+def table_view(qtbot):
     """Create a fresh EstimateTableView for testing."""
-    return EstimateTableView()
+    widget = EstimateTableView()
+    qtbot.addWidget(widget)
+    return widget
 
 
 def test_initial_state(table_view):
@@ -230,24 +232,6 @@ def test_cell_edited_signal(table_view):
     assert edits[0] == (0, 0)
 
 
-def test_column_layout_reset_signal(table_view):
-    """Test that context menu reset emits signal."""
-    reset_requested = []
-    table_view.column_layout_reset_requested.connect(
-        lambda: reset_requested.append(True)
-    )
-
-    # Simulate context menu action
-    # Note: We can't easily test the actual context menu without GUI interaction
-    # but we can verify the signal exists and is connectable
-    assert hasattr(table_view, "column_layout_reset_requested")
-
-
-def test_history_requested_signal(table_view):
-    """Test that history signal exists."""
-    assert hasattr(table_view, "history_requested")
-
-
 def test_page_keys_navigate_visible_rows_even_from_cell_editor(qtbot, table_view):
     for row in range(30):
         table_view.add_row(
@@ -300,19 +284,14 @@ def test_context_menu_actions_have_icons(table_view, monkeypatch):
             assert not icon.isNull(), text
 
 
-def test_item_lookup_requested_signal(table_view):
-    """Test that item lookup signal exists."""
-    assert hasattr(table_view, "item_lookup_requested")
-
-
 def test_selection_palette_matches_active_and_inactive_states(table_view):
     palette = table_view.palette()
 
-    assert palette.color(QPalette.ColorRole.Highlight).name() == "#dbeafe"
+    assert palette.color(QPalette.ColorRole.Highlight).name() == "#e0f2f3"
     assert palette.color(QPalette.ColorRole.HighlightedText).name() == "#0f172a"
     assert (
         palette.color(QPalette.ColorGroup.Inactive, QPalette.ColorRole.Highlight).name()
-        == "#dbeafe"
+        == "#e0f2f3"
     )
     assert (
         palette.color(

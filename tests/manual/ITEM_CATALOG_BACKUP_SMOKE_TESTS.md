@@ -1,59 +1,45 @@
-# Item Catalog Backup Smoke Tests
+# Windows item-catalog backup release check
 
-Use this checklist after changes to the item catalog backup/restore workflow.
+Use a dedicated Windows test profile and disposable database. Include a WT item,
+a PC item, optional Tunch text, an unused item and one item referenced by a saved
+estimate. Automated tests cover file validation and transactional safeguards;
+these checks verify native dialogs and the visible restore workflow.
 
-## Preconditions
+## Backup file chooser
 
-- Launch the app with a test database.
-- Open `Item Master`.
-- Ensure at least two item codes exist before creating a backup.
+- In Item Master, select `Save Item Backup...` and cancel. The catalog must remain
+  unchanged and no success notification should appear.
+- Save to a directory containing spaces. Verify the native `.seitems.json` suffix,
+  the selected location and a readable completion message.
+- Save again to the same file and check the native overwrite confirmation.
 
-## Scenario 1: Create Backup
+## Merge restore
 
-- [ ] Open `Settings` > `Data Management`
-- [ ] In `Item Master Backup`, click `Create Item Backup...`
-- [ ] Save the file as `item_catalog_backup.seitems.json`
-- [ ] Verify the success dialog shows the expected record count
-- [ ] Open the saved file in a text editor
-- [ ] Verify it is JSON with top-level keys `format`, `version`, `exported_at`, and `items`
-- [ ] Verify `format` is `silverestimate.item_catalog`
-- [ ] Verify `version` is `2` and each item includes its optional `tunch` value
+- Change an existing item's name, add a local-only item and remove an unused item
+  that is present in the backup.
+- Select `Restore Item Backup...`, choose the saved file and leave full replacement
+  disabled. Confirm the action.
+- Check the reported inserted/updated counts and the restored values, including
+  WT/PC wage type and optional Tunch. The local-only item must remain present.
+- Cancel the chooser and the confirmation in separate attempts. Neither should
+  modify the catalog.
 
-## Scenario 2: Restore Into Empty Catalog
+## Full replacement and saved-estimate references
 
-- [ ] Start with a fresh test database or clear the `items` table only
-- [ ] Open `Settings` > `Data Management`
-- [ ] In `Item Master Backup`, click `Restore Item Backup...`
-- [ ] Choose the previously exported `.seitems.json` file
-- [ ] Confirm the restore
-- [ ] Verify the completion dialog shows inserted records and zero unexpected errors
-- [ ] Open `Item Master`
-- [ ] Verify all exported item codes are present with exact Tunch text (including blanks), name, purity, wage type, and wage rate
+- Choose full replacement using a backup that retains every referenced item code.
+  Verify unused local-only codes are removed and counts match the visible result.
+- Prepare a backup that omits a code referenced by a saved estimate. Apply full
+  replacement and verify the catalog code is removed while the estimate retains
+  its original code, name, purity, wages and Tunch in History and both print formats.
+- Reopen that estimate, change only its note, save, and verify every line remains.
+- Repeat with single-item deletion and with a later catalog item reusing the code.
+  Existing lines must keep their saved Tunch; new lines use the new catalog value.
 
-## Scenario 3: Restore Into Populated Catalog
+## Invalid files and filesystem failures
 
-- [ ] In `Item Master`, edit one existing exported item so its values differ from the backup
-- [ ] Add one extra item code that does not exist in the backup file
-- [ ] Run `Restore Item Backup...` again using the same file
-- [ ] Verify the completion dialog reports both inserted and updated counts as expected
-- [ ] Verify the edited existing item is restored to the values from the backup file
-- [ ] Verify item codes from the backup that were missing locally are inserted
-- [ ] Verify the extra local-only item code is still present and unchanged
-
-## Scenario 4: Full Replace Toggle
-
-- [ ] In `Item Master`, keep one extra local-only item code that is not present in the backup file
-- [ ] Run `Restore Item Backup...` again using the same file
-- [ ] Enable `Replace the entire current item master with this backup`
-- [ ] Confirm the restore
-- [ ] Verify the completion dialog reports a non-zero `Deleted` count
-- [ ] Verify the extra local-only item code has been removed from `Item Master`
-- [ ] Verify item codes that exist in the backup are still present with the backup values
-- [ ] Verify the warning text explains that removing old codes can break item-code links on older estimates
-
-## Scenario 5: Invalid File Handling
-
-- [ ] Copy the backup file and change `format` or `version` to an invalid value
-- [ ] Run `Restore Item Backup...` with the modified file
-- [ ] Verify the restore is rejected with a clear error dialog
-- [ ] Verify `Item Master` data remains unchanged after the failed restore
+- Try malformed JSON and unsupported format/version values. Confirm rejection is
+  readable, the dialog remains usable and no catalog data changes.
+- Try an unwritable destination and a destination whose existing backup is locked.
+  Verify the failure is shown and the previous valid backup remains intact.
+- Finish with a valid backup and restore to confirm the workflow recovers after
+  errors. Record the build, Windows version and exact steps for any failure.

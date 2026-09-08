@@ -1,13 +1,16 @@
-"""Estimate-to-inventory silver-bar synchronization component."""
+"""Plan and apply estimate inventory changes inside the caller's transaction."""
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Tuple
+from typing import Any
+from uuid import uuid4
 
-from silverestimate.persistence.database_driver import dbapi as sqlite3
+from silverestimate.domain.estimate_validation import finite_number
+from silverestimate.domain.numeric_policy import fine_weight
+from silverestimate.persistence.database_driver import Cursor
 from silverestimate.persistence.silver_bar_repository_base import (
     _SilverBarRepositoryBase,
 )
@@ -17,279 +20,245 @@ from silverestimate.persistence.silver_bar_repository_base import (
 class SilverBarSyncResult:
     added: int
     failed: int
+    updated: int = 0
+    removed: int = 0
+    error_detail: str | None = None
 
     @property
     def succeeded(self) -> bool:
         return self.failed == 0
 
 
+@dataclass(frozen=True)
+class BarReconciliationPlan:
+    inserts: list[dict[str, Any]]
+    updates: list[tuple[int, dict[str, Any]]]
+    removals: list[int]
+    links: list[tuple[int, str]]
+
+
 class SilverBarSynchronizationRepository(_SilverBarRepositoryBase):
-    """Own reconciliation of estimate rows with mutable inventory rows."""
+    """Preserve bar identity and reject edits to inventory with a lifecycle history."""
 
     @staticmethod
-    def _normalize_sync_bar_payload(
-        bar: Mapping[str, Any],
-    ) -> Mapping[str, Any] | None:
-        try:
-            weight = float(bar.get("weight", bar.get("net_wt", 0.0)) or 0.0)
-            purity = float(bar.get("purity", 0.0) or 0.0)
-        except Exception:
-            return None
-        line_key = str(bar.get("line_key", "") or "").strip()
+    def _values(bar: Mapping[str, Any]) -> tuple[float, float]:
+        return float(bar["weight"]), float(bar["purity"])
+
+    @staticmethod
+    def _mutable(bar: Mapping[str, Any]) -> bool:
+        return (
+            bar["status"] == "In Stock"
+            and bar["list_id"] is None
+            and not bar["has_transfers"]
+        )
+
+    @staticmethod
+    def _normalize(item: Mapping[str, Any]) -> dict[str, Any]:
+        weight = finite_number(item.get("weight", item.get("net_wt", 0)), "Bar weight")
+        purity = finite_number(item.get("purity", 0), "Bar purity")
+        if weight < 0:
+            raise ValueError("Bar weight cannot be negative.")
+        if not 0 <= purity <= 100:
+            raise ValueError("Bar purity must be between 0 and 100.")
         return {
             "weight": weight,
             "purity": purity,
-            "line_key": line_key or None,
+            "fine_weight": finite_number(
+                item.get("fine", fine_weight(weight, purity)), "Bar fine weight"
+            ),
+            "line_key": str(item.get("line_key") or "").strip(),
         }
 
-    @staticmethod
-    def _row_value(row: Mapping[str, Any], key: str, default: Any = None) -> Any:
-        try:
-            return row[key]
-        except Exception:
-            getter = getattr(row, "get", None)
-            if callable(getter):
-                return getter(key, default)
-            return default
+    def prepare(
+        self, cursor: Cursor, voucher_no: str, items: list[dict[str, Any]]
+    ) -> BarReconciliationPlan:
+        """Validate all changes and put resolved keys into the saved line copies.
 
-    @classmethod
-    def _synced_bar_values_match(
-        cls,
-        row: Mapping[str, Any],
-        weight: float,
-        purity: float,
-    ) -> bool:
-        old_weight = float(cls._row_value(row, "weight", 0.0) or 0.0)
-        old_purity = float(cls._row_value(row, "purity", 0.0) or 0.0)
-        return abs(weight - old_weight) <= 1e-6 and abs(purity - old_purity) <= 1e-6
-
-    @classmethod
-    def _bar_row_is_mutable(cls, row: Mapping[str, Any]) -> bool:
-        return (
-            cls._row_value(row, "status") == "In Stock"
-            and cls._row_value(row, "list_id") is None
-        )
-
-    def _sync_silver_bars_for_estimate_by_order(
-        self,
-        cursor: sqlite3.Cursor,
-        voucher_no: str,
-        desired: list[Mapping[str, Any]],
-    ) -> tuple[int, int]:
+        The caller must hold the writer transaction until apply/commit. Legacy bars
+        can acquire a key only through an unambiguous, unchanged weight/purity match.
+        No row-order guesses are made, including for bars that are back in stock.
+        """
+        desired = [self._normalize(item) for item in items]
         cursor.execute(
-            "SELECT bar_id, weight, purity FROM silver_bars "
-            "WHERE estimate_voucher_no = ? ORDER BY bar_id",
+            """SELECT bars.*, EXISTS (
+                   SELECT 1 FROM bar_transfers AS transfers
+                   WHERE transfers.silver_bar_id = bars.bar_id
+               ) AS has_transfers
+               FROM silver_bars AS bars
+               WHERE bars.estimate_voucher_no = ? ORDER BY bars.bar_id""",
             (voucher_no,),
         )
-        existing_rows = cursor.fetchall()
+        existing = [dict(row) for row in cursor.fetchall()]
+        by_key: dict[str, dict[str, Any]] = {}
+        for bar in existing:
+            key = str(bar["source_line_key"] or "").strip()
+            if key and key in by_key:
+                raise ValueError(
+                    "Inventory has duplicate line keys; review its bar links before saving."
+                )
+            if key:
+                by_key[key] = bar
 
-        added = 0
-        failed = 0
-        overlap = min(len(existing_rows), len(desired))
-        for idx in range(overlap):
-            existing = existing_rows[idx]
-            new_weight = float(desired[idx]["weight"])
-            new_purity = float(desired[idx]["purity"])
-            if self._synced_bar_values_match(existing, new_weight, new_purity):
+        desired_keys = [bar["line_key"] for bar in desired if bar["line_key"]]
+        if len(set(desired_keys)) != len(desired_keys):
+            raise ValueError("Estimate contains duplicate silver-bar line keys.")
+        # Reserve explicit identities first so a blank/legacy line cannot take one.
+        claimed = {by_key[key]["bar_id"] for key in desired_keys if key in by_key}
+        matches = {
+            i: by_key[bar["line_key"]]
+            for i, bar in enumerate(desired)
+            if bar["line_key"] in by_key
+        }
+        for i, bar in enumerate(desired):
+            if i in matches:
                 continue
-            fine_weight = new_weight * (new_purity / 100.0)
-            cursor.execute(
-                "UPDATE silver_bars SET weight = ?, purity = ?, fine_weight = ? "
-                "WHERE bar_id = ?",
-                (new_weight, new_purity, fine_weight, existing["bar_id"]),
-            )
-            if cursor.rowcount <= 0:
-                failed += 1
+            candidates = [
+                old
+                for old in existing
+                if old["bar_id"] not in claimed
+                and (
+                    not bar["line_key"] or not str(old["source_line_key"] or "").strip()
+                )
+                and self._values(old) == self._values(bar)
+            ]
+            if candidates:
+                competing = [
+                    entry
+                    for j, entry in enumerate(desired)
+                    if j not in matches
+                    and self._values(entry) == self._values(bar)
+                    and (
+                        not entry["line_key"]
+                        or not str(candidates[0]["source_line_key"] or "").strip()
+                    )
+                ]
+                if len(candidates) != 1 or len(competing) != 1:
+                    raise ValueError(
+                        "Legacy silver-bar links are ambiguous; review them before saving."
+                    )
+                old = candidates[0]
+                matches[i] = old
+                claimed.add(old["bar_id"])
+                if not bar["line_key"]:
+                    bar["line_key"] = str(old["source_line_key"] or "").strip()
+            if not bar["line_key"]:
+                bar["line_key"] = uuid4().hex
 
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        for desired_entry in desired[overlap:]:
-            new_weight = float(desired_entry["weight"])
-            new_purity = float(desired_entry["purity"])
-            fine_weight = new_weight * (new_purity / 100.0)
+        inserts = []
+        updates = []
+        removals = []
+        links = []
+        for i, bar in enumerate(desired):
+            matched = matches.get(i)
+            if matched is None:
+                inserts.append(bar)
+            elif self._values(matched) != self._values(bar):
+                if not self._mutable(matched):
+                    raise ValueError(
+                        f"Silver bar {matched['bar_id']} is assigned, issued, or has transfer history. "
+                        "Its weight and purity cannot be changed from the estimate."
+                    )
+                updates.append((matched["bar_id"], bar))
+            elif matched["source_line_key"] != bar["line_key"]:
+                links.append((matched["bar_id"], bar["line_key"]))
+            items[i]["line_key"] = bar["line_key"]
+        for old in existing:
+            if old["bar_id"] in claimed:
+                continue
+            if not str(old["source_line_key"] or "").strip():
+                raise ValueError(
+                    f"Legacy silver bar {old['bar_id']} could not be linked safely. "
+                    "Save its original weight and purity first, or review the inventory link."
+                )
+            if not self._mutable(old):
+                raise ValueError(
+                    f"Silver bar {old['bar_id']} is assigned, issued, or has transfer history. "
+                    "Its estimate line cannot be removed or replaced."
+                )
+            removals.append(old["bar_id"])
+        return BarReconciliationPlan(inserts, updates, removals, links)
+
+    @staticmethod
+    def apply(
+        cursor: Cursor, voucher_no: str, plan: BarReconciliationPlan
+    ) -> SilverBarSyncResult:
+        """Apply a validated plan without starting or committing a transaction."""
+        if plan.links:
+            cursor.executemany(
+                "UPDATE silver_bars SET source_line_key = ? WHERE bar_id = ?",
+                [(key, bar_id) for bar_id, key in plan.links],
+            )
+        for bar_id, bar in plan.updates:
             cursor.execute(
-                "INSERT INTO silver_bars "
-                "(estimate_voucher_no, weight, purity, fine_weight, date_added, status, list_id, source_line_key) "
-                "VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)",
+                "UPDATE silver_bars SET weight = ?, purity = ?, fine_weight = ?, "
+                "source_line_key = ? WHERE bar_id = ?",
                 (
-                    voucher_no,
-                    new_weight,
-                    new_purity,
-                    fine_weight,
-                    now,
-                    "In Stock",
+                    bar["weight"],
+                    bar["purity"],
+                    bar["fine_weight"],
+                    bar["line_key"],
+                    bar_id,
                 ),
             )
-            added += 1
-
-        return added, failed
-
-    def _synchronize_counts(
-        self,
-        voucher_no: str,
-        bars: Iterable[Mapping[str, Any]],
-    ) -> Tuple[int, int]:
-        conn, cursor = self._conn, self._cursor
-        if not conn or not cursor or not voucher_no:
-            return 0, 0
-
-        desired: list[Mapping[str, Any]] = []
-        parse_failures = 0
-        seen_line_keys: set[str] = set()
-        for bar in list(bars or []):
-            normalized = self._normalize_sync_bar_payload(bar)
-            if normalized is None:
-                parse_failures += 1
-                continue
-            line_key = normalized.get("line_key")
-            if isinstance(line_key, str) and line_key:
-                if line_key in seen_line_keys:
-                    parse_failures += 1
-                    continue
-                seen_line_keys.add(line_key)
-            desired.append(normalized)
-
-        added = 0
-        failed = parse_failures
-
-        try:
-            conn.execute("BEGIN TRANSACTION")
-            use_line_keys = any(
-                isinstance(entry.get("line_key"), str) and entry.get("line_key")
-                for entry in desired
+        if plan.removals:
+            cursor.executemany(
+                "DELETE FROM silver_bars WHERE bar_id = ?",
+                [(bar_id,) for bar_id in plan.removals],
             )
-            if not use_line_keys:
-                added, sync_failed = self._sync_silver_bars_for_estimate_by_order(
-                    cursor,
-                    voucher_no,
-                    desired,
-                )
-                failed += sync_failed
-            else:
-                cursor.execute(
-                    "SELECT bar_id, weight, purity, status, list_id, source_line_key "
-                    "FROM silver_bars WHERE estimate_voucher_no = ? ORDER BY bar_id",
-                    (voucher_no,),
-                )
-                existing_rows = cursor.fetchall()
-                existing_by_key: dict[str, Any] = {}
-                unkeyed_rows: list[Any] = []
-                for row in existing_rows:
-                    source_line_key = str(row["source_line_key"] or "").strip()
-                    if source_line_key:
-                        existing_by_key[source_line_key] = row
-                    else:
-                        unkeyed_rows.append(row)
-
-                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                for desired_entry in desired:
-                    new_weight = float(desired_entry["weight"])
-                    new_purity = float(desired_entry["purity"])
-                    line_key = str(desired_entry.get("line_key") or "").strip() or None
-
-                    existing = existing_by_key.get(line_key) if line_key else None
-                    matched_unkeyed = False
-                    if existing is None and unkeyed_rows:
-                        existing = unkeyed_rows.pop(0)
-                        matched_unkeyed = True
-
-                    if existing is not None:
-                        if matched_unkeyed and line_key:
-                            cursor.execute(
-                                "UPDATE silver_bars SET source_line_key = ? WHERE bar_id = ?",
-                                (line_key, existing["bar_id"]),
-                            )
-                            if cursor.rowcount <= 0:
-                                failed += 1
-
-                        if self._synced_bar_values_match(
-                            existing, new_weight, new_purity
-                        ):
-                            continue
-
-                        if not self._bar_row_is_mutable(existing):
-                            failed += 1
-                            continue
-
-                        fine_weight = new_weight * (new_purity / 100.0)
-                        if line_key:
-                            cursor.execute(
-                                "UPDATE silver_bars SET weight = ?, purity = ?, fine_weight = ?, source_line_key = ? "
-                                "WHERE bar_id = ?",
-                                (
-                                    new_weight,
-                                    new_purity,
-                                    fine_weight,
-                                    line_key,
-                                    existing["bar_id"],
-                                ),
-                            )
-                        else:
-                            cursor.execute(
-                                "UPDATE silver_bars SET weight = ?, purity = ?, fine_weight = ? "
-                                "WHERE bar_id = ?",
-                                (
-                                    new_weight,
-                                    new_purity,
-                                    fine_weight,
-                                    existing["bar_id"],
-                                ),
-                            )
-                        if cursor.rowcount <= 0:
-                            failed += 1
-                        continue
-
-                    fine_weight = new_weight * (new_purity / 100.0)
-                    cursor.execute(
-                        "INSERT INTO silver_bars "
-                        "(estimate_voucher_no, weight, purity, fine_weight, date_added, status, list_id, source_line_key) "
-                        "VALUES (?, ?, ?, ?, ?, ?, NULL, ?)",
-                        (
-                            voucher_no,
-                            new_weight,
-                            new_purity,
-                            fine_weight,
-                            now,
-                            "In Stock",
-                            line_key,
-                        ),
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if plan.inserts:
+            cursor.executemany(
+                "INSERT INTO silver_bars (estimate_voucher_no, weight, purity, fine_weight, "
+                "date_added, status, list_id, source_line_key) VALUES (?, ?, ?, ?, ?, 'In Stock', NULL, ?)",
+                [
+                    (
+                        voucher_no,
+                        bar["weight"],
+                        bar["purity"],
+                        bar["fine_weight"],
+                        now,
+                        bar["line_key"],
                     )
-                    added += 1
-
-            conn.commit()
-            return added, failed
-        except sqlite3.Error as exc:
-            conn.rollback()
-            self._logger.error(
-                "DB error syncing silver bars for estimate %s: %s",
-                voucher_no,
-                exc,
-                exc_info=True,
+                    for bar in plan.inserts
+                ],
             )
-            return 0, failed + len(desired)
-        except Exception as exc:
-            try:
-                conn.rollback()
-            except Exception as rollback_error:
-                self._logger.debug(
-                    "Failed to roll back silver-bar sync transaction for estimate %s: %s",
-                    voucher_no,
-                    rollback_error,
-                )
-            self._logger.error(
-                "Unexpected error syncing silver bars for estimate %s: %s",
-                voucher_no,
-                exc,
-                exc_info=True,
-            )
-            return 0, failed + len(desired)
+        return SilverBarSyncResult(
+            len(plan.inserts),
+            0,
+            len(plan.updates) + len(plan.links),
+            len(plan.removals),
+        )
 
     def synchronize(
-        self,
-        voucher_no: str,
-        bars: Iterable[Mapping[str, Any]],
+        self, voucher_no: str, bars: Iterable[Mapping[str, Any]]
     ) -> SilverBarSyncResult:
-        added, failed = self._synchronize_counts(voucher_no, bars)
-        return SilverBarSyncResult(added=int(added), failed=int(failed))
+        """Compatibility inventory operation; estimate saves use prepare/apply instead."""
+        conn, cursor = self._conn, self._cursor
+        started = False
+        items: list[dict[str, Any]] = []
+        try:
+            items = [dict(bar) for bar in bars]
+            if conn is None or cursor is None or not voucher_no:
+                raise ValueError(
+                    "Cannot synchronize bars without a database connection and voucher."
+                )
+            conn.execute("BEGIN IMMEDIATE")
+            started = True
+            plan = self.prepare(cursor, voucher_no, items)
+            result = self.apply(cursor, voucher_no, plan)
+            conn.commit()
+            started = False
+            self._db.last_error = None
+            return result
+        except Exception as exc:
+            self._db.last_error = str(exc)
+            self._logger.error(
+                "Bar synchronization failed for %s: %s", voucher_no, exc, exc_info=True
+            )
+            return SilverBarSyncResult(0, max(1, len(items)), error_detail=str(exc))
+        finally:
+            if started:
+                conn.rollback()
 
 
 __all__ = ["SilverBarSynchronizationRepository", "SilverBarSyncResult"]

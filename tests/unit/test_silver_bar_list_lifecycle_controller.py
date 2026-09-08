@@ -1,4 +1,5 @@
 import logging
+from types import SimpleNamespace
 
 from PySide6.QtCore import QItemSelectionModel, Qt
 from PySide6.QtWidgets import (
@@ -101,6 +102,10 @@ def test_lifecycle_controller_creates_list_from_selection_and_assigns_bars(
     from PySide6.QtWidgets import QInputDialog, QMessageBox
 
     host = _LifecycleHost()
+    host._transfer_controller = SimpleNamespace(
+        _bar_ids_from_indexes=host._bar_ids_from_indexes,
+        _run_with_wait_cursor=host._run_with_wait_cursor,
+    )
     controller = SilverBarListLifecycleController(host)
     qtbot.addWidget(host)
     selection_model = host.available_bars_table.selectionModel()

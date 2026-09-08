@@ -1,6 +1,9 @@
 """Calculator-focused estimate-logic tests."""
 
+from decimal import ROUND_HALF_UP, Decimal
+
 import pytest
+from hypothesis import given
 
 from silverestimate.domain.estimate_models import EstimateLine, EstimateLineCategory
 from silverestimate.services.estimate_calculator import (
@@ -9,13 +12,6 @@ from silverestimate.services.estimate_calculator import (
     compute_totals,
     compute_wage_amount,
 )
-
-try:
-    from hypothesis import given
-
-    _HYPOTHESIS_AVAILABLE = True
-except ModuleNotFoundError:
-    _HYPOTHESIS_AVAILABLE = False
 
 
 def test_compute_net_weight_clamps_to_zero():
@@ -89,40 +85,31 @@ def test_compute_totals_groups_categories_and_balances():
     assert totals.net_wage == pytest.approx(590.0)
 
 
-if _HYPOTHESIS_AVAILABLE:
-    from tests.factories import fine_calculation_cases, wage_calculation_cases
+from tests.factories import fine_calculation_cases, wage_calculation_cases
 
-    @given(case=fine_calculation_cases())
-    def test_compute_fine_property(case):
-        expected_net = max(case.gross - case.poly, 0.0)
-        expected_fine = (
-            0.0 if case.purity <= 0.0 else expected_net * (case.purity / 100)
-        )
-        assert compute_net_weight(case.gross, case.poly) == pytest.approx(expected_net)
-        assert compute_fine_weight(expected_net, case.purity) == pytest.approx(
-            expected_fine
-        )
 
-    @given(case=wage_calculation_cases())
-    def test_compute_wage_property(case):
-        expected = (
-            case.pieces * case.wage_rate
-            if case.wage_type == "PC"
-            else case.net_weight * case.wage_rate
-        )
-        assert compute_wage_amount(
-            case.wage_type,
-            net_weight=case.net_weight,
-            wage_rate=case.wage_rate,
-            pieces=case.pieces,
-        ) == pytest.approx(expected)
+@given(case=fine_calculation_cases())
+def test_compute_fine_property(case):
+    expected_net = max(Decimal(str(case.gross)) - Decimal(str(case.poly)), Decimal(0))
+    expected_fine = (expected_net * Decimal(str(case.purity)) / 100).quantize(
+        Decimal("0.001"), rounding=ROUND_HALF_UP
+    )
+    assert compute_net_weight(case.gross, case.poly) == float(expected_net)
+    assert compute_fine_weight(float(expected_net), case.purity) == pytest.approx(
+        float(expected_fine)
+    )
 
-else:
 
-    @pytest.mark.skip(reason="hypothesis not installed")
-    def test_compute_fine_property():  # pragma: no cover - optional dependency
-        pytest.skip("hypothesis not installed")
-
-    @pytest.mark.skip(reason="hypothesis not installed")
-    def test_compute_wage_property():  # pragma: no cover - optional dependency
-        pytest.skip("hypothesis not installed")
+@given(case=wage_calculation_cases())
+def test_compute_wage_property(case):
+    expected = (
+        Decimal(case.pieces) * Decimal(str(case.wage_rate))
+        if case.wage_type == "PC"
+        else Decimal(str(case.net_weight)) * Decimal(str(case.wage_rate))
+    )
+    assert compute_wage_amount(
+        case.wage_type,
+        net_weight=case.net_weight,
+        wage_rate=case.wage_rate,
+        pieces=case.pieces,
+    ) == float(expected.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))

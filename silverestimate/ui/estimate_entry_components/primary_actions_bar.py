@@ -6,7 +6,12 @@ from typing import Optional
 
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
-from PySide6.QtWidgets import QHBoxLayout, QPushButton, QSizePolicy, QWidget
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QPushButton,
+    QSizePolicy,
+    QWidget,
+)
 
 from silverestimate.ui.icons import get_icon
 
@@ -36,7 +41,7 @@ class PrimaryActionsBar(QWidget):
 
         layout = QHBoxLayout(self)
         layout.setSpacing(3)
-        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         # Save button (primary action - will get emphasis later)
         self.save_button = QPushButton()
@@ -45,8 +50,7 @@ class PrimaryActionsBar(QWidget):
         self._configure_icon_button(self.save_button, label="Save")
         self.save_button.setToolTip(
             "Save the current estimate details (Ctrl+S)\n\n"
-            "Saves all items and totals to database\n"
-            "Required before printing"
+            "Saves all items and totals, opens print preview, then starts a new estimate"
         )
         layout.addWidget(self.save_button)
 
@@ -57,7 +61,7 @@ class PrimaryActionsBar(QWidget):
         self._configure_icon_button(self.print_button, label="Print")
         self.print_button.setToolTip(
             "Preview and print the current estimate (Ctrl+P)\n\n"
-            "Requires saving the estimate first\n"
+            "Previews the current entry without saving or clearing it\n"
             "Opens print preview dialog"
         )
         layout.addWidget(self.print_button)
@@ -101,7 +105,7 @@ class PrimaryActionsBar(QWidget):
         # Ctrl+S and Ctrl+P are handled by the main-window menu bar.
         # Only register Ctrl+N here for new estimate
         new_shortcut = QShortcut(QKeySequence("Ctrl+N"), target)
-        new_shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
+        new_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         new_shortcut.activated.connect(self.new_clicked.emit)
         self._shortcuts.append(new_shortcut)
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -17,8 +17,17 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QRadioButton,
+    QScrollArea,
     QVBoxLayout,
+    QWidget,
 )
+
+if TYPE_CHECKING:
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QComboBox, QSplitter, QTableView
+
+    from .models import AvailableSilverBarsTableModel, SelectedListSilverBarsTableModel
+    from .modern_components import BottomStatusStrip, TableEmptyStateOverlay
 
 from .shared_screen_theme import build_management_screen_stylesheet
 from .silver_bar_list_lifecycle_controller import SilverBarListLifecycleController
@@ -38,15 +47,47 @@ from .window_sizing import resize_to_available_screen
 class SilverBarDialog(SilverBarManagementFacade, QDialog):
     """Dialog for managing silver bars and grouping them into lists."""
 
-    if TYPE_CHECKING:
-
-        def __getattr__(self, name: str) -> Any: ...
+    # Explicit controls and shared state, populated by their owning controllers.
+    _available_empty_state: TableEmptyStateOverlay
+    _filter_reload_timer: QTimer
+    _list_empty_state: TableEmptyStateOverlay
+    _splitter: QSplitter
+    add_all_button: QPushButton
+    add_to_list_button: QPushButton
+    available_bars_model: AvailableSilverBarsTableModel
+    available_bars_table: QTableView
+    available_header_badge: QLabel
+    available_load_more_button: QPushButton
+    available_selection_label: QLabel
+    available_totals_label: QLabel
+    bottom_status_strip: BottomStatusStrip
+    clear_filters_button: QPushButton
+    create_list_button: QPushButton
+    date_range_combo: QComboBox
+    delete_list_button: QPushButton
+    edit_note_button: QPushButton
+    export_list_button: QPushButton
+    generate_optimal_button: QPushButton
+    list_bars_model: SelectedListSilverBarsTableModel
+    list_bars_table: QTableView
+    list_combo: QComboBox
+    list_details_label: QLabel
+    list_header_badge: QLabel
+    list_info_label: QLabel
+    list_load_more_button: QPushButton
+    list_selection_label: QLabel
+    list_totals_label: QLabel
+    mark_issued_button: QPushButton
+    print_list_button: QPushButton
+    remove_all_button: QPushButton
+    remove_from_list_button: QPushButton
+    weight_search_edit: QLineEdit
 
     def __init__(self, db_manager, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
         self.logger = logging.getLogger(__name__)
-        self.current_list_id = None
+        self.current_list_id: int | None = None
         self._active_load_workers = {}
         self._load_started_at = {}
 
@@ -121,11 +162,11 @@ class OptimalListDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Generate Optimal List")
-        self.setMinimumSize(620, 600)
+        self.setMinimumSize(520, 480)
         resize_to_available_screen(
             self,
-            preferred_width=660,
-            preferred_height=620,
+            preferred_width=600,
+            preferred_height=640,
         )
         self.setObjectName("OptimalListDialog")
         self.setStyleSheet(
@@ -146,7 +187,7 @@ class OptimalListDialog(QDialog):
                 extra_rules="""
                 QLabel#OptimalListBodyLabel {
                     color: __FIELD_TEXT__;
-                    font-size: 9pt;
+
                 }
                 QLabel#OptimalListRangeSummary {
                     background-color: __HEADER_BG__;
@@ -167,9 +208,17 @@ class OptimalListDialog(QDialog):
         self._init_ui()
 
     def _init_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setSpacing(16)
-        layout.setContentsMargins(12, 12, 12, 12)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(12, 12, 12, 12)
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        layout.setSpacing(10)
+        layout.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidget(content)
+        outer.addWidget(scroll, 1)
 
         header_card = QFrame(self)
         header_card.setObjectName("OptimalListHeaderCard")
@@ -223,7 +272,7 @@ class OptimalListDialog(QDialog):
         minmax_layout.addLayout(max_group)
 
         weight_layout.addLayout(minmax_layout)
-        weight_layout.addSpacing(16)
+        weight_layout.addSpacing(2)
         self.range_summary_label = QLabel()
         self.range_summary_label.setObjectName("OptimalListRangeSummary")
         weight_layout.addWidget(self.range_summary_label)
@@ -291,7 +340,7 @@ class OptimalListDialog(QDialog):
         generate_button.setDefault(True)
         generate_button.clicked.connect(self.accept)
         button_layout.addWidget(generate_button)
-        layout.addLayout(button_layout)
+        outer.addLayout(button_layout)
 
     def _update_range_summary(self) -> None:
         minimum = self.min_weight_spin.value()

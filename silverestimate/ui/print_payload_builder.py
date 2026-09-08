@@ -64,6 +64,12 @@ class PrintPayloadBuilder:
             return None
 
         base_document = EstimatePrintDocument.from_mapping(resolved_data)
+        preview_state = resolved_data.get("_preview_state", "")
+        state_suffix = (
+            f" — {preview_state}"
+            if preview_state in {"Unsaved draft", "Saved estimate"}
+            else ""
+        )
 
         def build_payload(
             selected_format: str,
@@ -76,7 +82,7 @@ class PrintPayloadBuilder:
                     format_key=normalized_format,
                     show_tunch=bool(tunch_visible),
                 ),
-                title=f"Print Preview - Estimate {voucher_no}",
+                title=f"Print Preview - Estimate {voucher_no}{state_suffix}",
                 document_kind="estimate",
                 identifier=str(voucher_no or ""),
                 suggested_filename=(

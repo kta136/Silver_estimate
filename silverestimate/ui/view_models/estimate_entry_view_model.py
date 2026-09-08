@@ -1,60 +1,21 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from typing import Iterable, Iterator, Sequence
 from uuid import uuid4
 
+from silverestimate.domain.estimate_entry import (
+    EstimateEntryRowState as EstimateEntryRowState,
+)
+from silverestimate.domain.estimate_entry import (
+    EstimateEntrySnapshot,
+    EstimateEntryViewState,
+)
 from silverestimate.domain.estimate_models import (
     EstimateLine,
-    EstimateLineCategory,
     TotalsResult,
 )
-from silverestimate.presenter.estimate_entry_presenter import EstimateEntryViewState
 from silverestimate.services.estimate_calculator import compute_totals
-
-
-@dataclass(frozen=True)
-class EstimateEntryRowState:
-    """Represents a single row captured from the estimate entry grid."""
-
-    code: str = ""
-    name: str = ""
-    gross: float = 0.0
-    poly: float = 0.0
-    net_weight: float = 0.0
-    purity: float = 0.0
-    wage_rate: float = 0.0
-    pieces: int = 1
-    wage_type: str = "WT"
-    wage_amount: float = 0.0
-    fine_weight: float = 0.0
-    category: EstimateLineCategory = EstimateLineCategory.REGULAR
-    row_index: int = 0
-    line_key: str = ""
-
-    def __post_init__(self) -> None:
-        normalized = (self.wage_type or "").strip().upper()
-        object.__setattr__(self, "wage_type", "PC" if normalized == "PC" else "WT")
-
-    def is_empty(self) -> bool:
-        """Return True when the row does not contain a code."""
-        return not self.code.strip()
-
-    def to_estimate_line(self) -> EstimateLine:
-        """Convert this row into the lightweight line model used for totals."""
-        return EstimateLine(
-            code=self.code,
-            category=self.category,
-            gross=self.gross,
-            poly=self.poly,
-            net_weight=self.net_weight,
-            fine_weight=self.fine_weight,
-            wage_amount=self.wage_amount,
-        )
-
-    def with_category(self, category: EstimateLineCategory) -> "EstimateEntryRowState":
-        """Return a copy with a different category."""
-        return replace(self, category=category)
 
 
 class EstimateEntryViewModel:
@@ -212,6 +173,16 @@ class EstimateEntryViewModel:
     # ------------------------------------------------------------------ #
     # Derived values
     # ------------------------------------------------------------------ #
+    def as_save_snapshot(self) -> EstimateEntrySnapshot:
+        """Assign line identities in the UI, then detach the application save input."""
+        self.ensure_line_keys()
+        return EstimateEntrySnapshot(
+            rows=tuple(self._rows),
+            silver_rate=self.silver_rate,
+            last_balance_silver=self.last_balance_silver,
+            last_balance_amount=self.last_balance_amount,
+        )
+
     def as_view_state(self) -> EstimateEntryViewState:
         """Return the presenter-facing view state snapshot."""
         return EstimateEntryViewState(

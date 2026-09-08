@@ -115,7 +115,7 @@ def test_compute_totals_with_balances():
     assert totals.net_fine == pytest.approx(7.475)
     assert totals.net_wage_core == pytest.approx(90.0)
     assert totals.net_wage == pytest.approx(190.0)
-    assert totals.grand_total == pytest.approx(750.625)
+    assert totals.grand_total == pytest.approx(750.63)
 
     state = view_model.as_view_state()
     assert len(state.lines) == 2

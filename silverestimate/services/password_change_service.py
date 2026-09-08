@@ -168,12 +168,18 @@ class PasswordChangeService:
                 stored_backup_hash,
             )
             outcome = self._actions.change_database_password(request.new_main_password)
-            if getattr(getattr(outcome, "status", None), "name", "") != "SUCCESS":
-                self._delete_transitional_credentials()
+            outcome_status = getattr(getattr(outcome, "status", None), "name", "")
+            if outcome_status != "SUCCESS":
+                if outcome_status == "ROLLED_BACK":
+                    self._delete_transitional_credentials()
                 return PasswordChangeResult(
-                    PasswordChangeStatus.ROLLED_BACK,
+                    PasswordChangeStatus.ROLLED_BACK
+                    if outcome_status == "ROLLED_BACK"
+                    else PasswordChangeStatus.FAILED,
                     str(
-                        getattr(outcome, "message", "Password change was rolled back.")
+                        getattr(
+                            outcome, "message", "Password change requires recovery."
+                        )
                     ),
                 )
 

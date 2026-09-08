@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from .theme_tokens import CARD_BORDER, PAGE_BG
+from .toolbar_overflow import ToolbarOverflow
 
 
 class PrintPreviewDialog(QDialog):
@@ -27,7 +28,7 @@ class PrintPreviewDialog(QDialog):
         self.setObjectName("PrintPreviewDialog")
         self.setModal(True)
         self.setSizeGripEnabled(True)
-        self.setMinimumSize(760, 540)
+        self.setMinimumSize(760, 420)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -36,7 +37,7 @@ class PrintPreviewDialog(QDialog):
         self.primary_toolbar = QToolBar(self)
         self.primary_toolbar.setObjectName("PrintPreviewToolbar")
         self.toolbar = self.primary_toolbar
-        layout.addWidget(self.primary_toolbar)
+        layout.addWidget(ToolbarOverflow(self.primary_toolbar))
 
         self.preview_widget = QPrintPreviewWidget(printer, self)
         self.preview_widget.setObjectName("PrintPreviewCanvas")

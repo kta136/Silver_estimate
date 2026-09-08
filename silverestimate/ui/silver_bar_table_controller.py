@@ -4,20 +4,25 @@ from __future__ import annotations
 
 import time
 import traceback
+from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QItemSelectionModel, Qt
 from PySide6.QtWidgets import QApplication, QMenu, QMessageBox
 
-from ._host_proxy import HostProxy
+if TYPE_CHECKING:
+    from .silver_bar_management import SilverBarDialog
 
 
-class SilverBarTableController(HostProxy):
+class SilverBarTableController:
     """Own table utilities, totals refresh, and context menus."""
+
+    def __init__(self, host: SilverBarDialog) -> None:
+        self.host = host
 
     @staticmethod
     def _table_cell_value(
         table, row: int, column: int, role: int = Qt.ItemDataRole.DisplayRole
-    ):
+    ) -> Any:
         try:
             model = table.model()
             if model is None:
@@ -35,7 +40,7 @@ class SilverBarTableController(HostProxy):
         return "" if value is None else str(value)
 
     @staticmethod
-    def _bar_id_from_table(table, row: int):
+    def _bar_id_from_table(table, row: int) -> Any:
         try:
             model = table.model()
             getter = getattr(model, "bar_id_at", None)
@@ -60,7 +65,7 @@ class SilverBarTableController(HostProxy):
                 selected_ids.append(int(bar_id))
             return selected_ids
         except Exception as exc:
-            self.logger.debug("Could not read selected bar IDs: %s", exc)
+            self.host.logger.debug("Could not read selected bar IDs: %s", exc)
             return []
 
     def _restore_selected_bar_ids(self, table, selected_bar_ids: list[int]) -> None:
@@ -91,7 +96,7 @@ class SilverBarTableController(HostProxy):
                         | QItemSelectionModel.SelectionFlag.Rows,
                     )
         except Exception as exc:
-            self.logger.debug("Could not restore selected bar IDs: %s", exc)
+            self.host.logger.debug("Could not restore selected bar IDs: %s", exc)
 
     def _clear_management_table(self, table) -> None:
         try:
@@ -110,17 +115,20 @@ class SilverBarTableController(HostProxy):
                 if selection_model is not None:
                     selection_model.clearSelection()
         except Exception as exc:
-            self.logger.debug("Could not clear management table: %s", exc)
+            self.host.logger.debug("Could not clear management table: %s", exc)
 
-    def _populate_table(self, table, bars_data, *, total_rows=None):
+    def _populate_table(
+        self, table, bars_data, *, total_rows=None, append=False
+    ) -> None:
         start = time.perf_counter()
         try:
             selected_bar_ids = self._selected_bar_ids(table)
             model = table.model()
-            setter = getattr(model, "set_rows", None)
+            setter = getattr(model, "append_rows" if append else "set_rows", None)
             if callable(setter):
                 setter(list(bars_data or []), total_count=total_rows)
-                self._restore_selected_bar_ids(table, selected_bar_ids)
+                if not append:
+                    self._restore_selected_bar_ids(table, selected_bar_ids)
 
             loaded_count_getter = getattr(model, "loaded_count", None)
             total_weight_getter = getattr(model, "total_weight", None)
@@ -140,16 +148,28 @@ class SilverBarTableController(HostProxy):
             totals_text = (
                 f"Total: {total_weight:.3f} g  ·  Fine: {total_fine_weight:.3f} g"
             )
-            if table == self.available_bars_table:
-                self.available_totals_label.setText(f"Available {totals_text}")
-                badge = getattr(self, "available_header_badge", None)
+            if table == self.host.available_bars_table:
+                state = getattr(
+                    self.host._load_controller, "_available_page_state", None
+                )
+                suffix = (
+                    " · Display limit reached" if state and state.limit_reached else ""
+                )
+                self.host.available_totals_label.setText(
+                    f"Available {totals_text}{suffix}"
+                )
+                badge = getattr(self.host, "available_header_badge", None)
                 if badge is not None:
-                    badge.setText(f"Available: {bar_count}")
-            elif table == self.list_bars_table:
-                self.list_totals_label.setText(f"List {totals_text}")
-                badge = getattr(self, "list_header_badge", None)
+                    badge.setText(f"Available: {bar_count} · Sort: loaded rows")
+            elif table == self.host.list_bars_table:
+                state = getattr(self.host._load_controller, "_list_page_state", None)
+                suffix = (
+                    " · Display limit reached" if state and state.limit_reached else ""
+                )
+                self.host.list_totals_label.setText(f"List {totals_text}{suffix}")
+                badge = getattr(self.host, "list_header_badge", None)
                 if badge is not None:
-                    badge.setText(f"List: {bar_count}")
+                    badge.setText(f"List: {bar_count} · Sort: loaded rows")
         except Exception as exc:
             QMessageBox.critical(
                 self.host,
@@ -160,36 +180,40 @@ class SilverBarTableController(HostProxy):
             try:
                 table.viewport().update()
             except Exception as exc:
-                self.logger.debug("Failed to refresh table viewport: %s", exc)
-            self._update_selection_summaries()
+                self.host.logger.debug("Failed to refresh table viewport: %s", exc)
+            self.host._update_selection_summaries()
             elapsed_ms = (time.perf_counter() - start) * 1000.0
             if elapsed_ms >= 20.0:
-                self.logger.debug(
+                self.host.logger.debug(
                     "[perf] silver_bars.populate_table=%.2fms rows=%s",
                     elapsed_ms,
                     len(bars_data or []),
                 )
 
-    def _show_available_context_menu(self, pos):
+    def _show_available_context_menu(self, pos) -> None:
         try:
             menu = QMenu(self.host)
             add_action = menu.addAction("Add Selected Bars to List")
             add_all_action = menu.addAction("Add All Filtered to List")
             create_list_sel_action = menu.addAction("Create New List from Selection…")
             copy_action = menu.addAction("Copy Selected Rows")
-            action = menu.exec(self.available_bars_table.viewport().mapToGlobal(pos))
+            action = menu.exec(
+                self.host.available_bars_table.viewport().mapToGlobal(pos)
+            )
             if action == add_action:
-                self.add_selected_to_list()
+                self.host.add_selected_to_list()
             elif action == add_all_action:
-                self.add_all_filtered_to_list()
+                self.host.add_all_filtered_to_list()
             elif action == create_list_sel_action:
-                self._create_list_from_selection()
+                self.host._create_list_from_selection()
             elif action == copy_action:
-                self._copy_selected_rows(self.available_bars_table)
+                self._copy_selected_rows(self.host.available_bars_table)
         except Exception as exc:
-            self.logger.debug("Failed to show available-bars context menu: %s", exc)
+            self.host.logger.debug(
+                "Failed to show available-bars context menu: %s", exc
+            )
 
-    def _show_list_context_menu(self, pos):
+    def _show_list_context_menu(self, pos) -> None:
         try:
             menu = QMenu(self.host)
             remove_action = menu.addAction("Remove Selected Bars from List")
@@ -197,21 +221,21 @@ class SilverBarTableController(HostProxy):
             print_action = menu.addAction("Print List")
             export_action = menu.addAction("Export List to CSV…")
             copy_action = menu.addAction("Copy Selected Rows")
-            action = menu.exec(self.list_bars_table.viewport().mapToGlobal(pos))
+            action = menu.exec(self.host.list_bars_table.viewport().mapToGlobal(pos))
             if action == remove_action:
-                self.remove_selected_from_list()
+                self.host.remove_selected_from_list()
             elif action == remove_all_action:
-                self.remove_all_from_list()
+                self.host.remove_all_from_list()
             elif action == print_action:
-                self.print_selected_list()
+                self.host.print_selected_list()
             elif action == export_action:
-                self.export_current_list_to_csv()
+                self.host.export_current_list_to_csv()
             elif action == copy_action:
-                self._copy_selected_rows(self.list_bars_table)
+                self._copy_selected_rows(self.host.list_bars_table)
         except Exception as exc:
-            self.logger.debug("Failed to show list context menu: %s", exc)
+            self.host.logger.debug("Failed to show list context menu: %s", exc)
 
-    def _copy_selected_rows(self, table):
+    def _copy_selected_rows(self, table) -> None:
         try:
             selected = table.selectionModel().selectedRows()
             if not selected:
@@ -226,23 +250,23 @@ class SilverBarTableController(HostProxy):
                 rows.append("\t".join(values))
             QApplication.clipboard().setText("\n".join(rows))
         except Exception as exc:
-            self.logger.debug("Failed to copy selected silver bar rows: %s", exc)
+            self.host.logger.debug("Failed to copy selected silver bar rows: %s", exc)
 
-    def _clear_filters(self):
+    def _clear_filters(self) -> None:
         try:
-            self._filter_reload_timer.stop()
+            self.host._filter_reload_timer.stop()
         except Exception as exc:
-            self.logger.debug("Failed to stop filter reload timer: %s", exc)
+            self.host.logger.debug("Failed to stop filter reload timer: %s", exc)
         try:
             inputs = [
-                self.weight_search_edit,
-                getattr(self, "date_range_combo", None),
+                self.host.weight_search_edit,
+                getattr(self.host, "date_range_combo", None),
             ]
             for widget in inputs:
                 if widget is not None:
                     widget.blockSignals(True)
-            self.weight_search_edit.clear()
-            date_combo = getattr(self, "date_range_combo", None)
+            self.host.weight_search_edit.clear()
+            date_combo = getattr(self.host, "date_range_combo", None)
             if date_combo is not None:
                 idx = date_combo.findText("Any")
                 if idx >= 0:
@@ -250,6 +274,6 @@ class SilverBarTableController(HostProxy):
             for widget in inputs:
                 if widget is not None:
                     widget.blockSignals(False)
-            self.load_available_bars()
+            self.host.load_available_bars()
         except Exception as exc:
-            self.logger.warning("Failed to clear silver bar filters: %s", exc)
+            self.host.logger.warning("Failed to clear silver bar filters: %s", exc)

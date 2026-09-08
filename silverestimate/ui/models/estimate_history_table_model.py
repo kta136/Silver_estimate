@@ -12,7 +12,10 @@ from PySide6.QtCore import (
     Qt,
 )
 
+from silverestimate.domain.numeric_policy import WEIGHT_PLACES
 from silverestimate.ui.display_formatting import format_display_date, format_rupees
+from silverestimate.ui.estimate_table_formatting import format_indian_number
+from silverestimate.ui.models.table_sorting import insert_model_rows, sort_model_rows
 
 
 @dataclass(frozen=True)
@@ -107,11 +110,14 @@ class EstimateHistoryTableModel(QAbstractTableModel):
     ) -> None:
         if not (0 <= column < self.columnCount()):
             return
-        self.layoutAboutToBeChanged.emit()
         self._sort_column = int(column)
         self._sort_order = order
-        self._sort_rows()
-        self.layoutChanged.emit()
+        sort_model_rows(
+            self,
+            self._rows,
+            key=lambda row: self._sort_key_for_row(row, column),
+            reverse=order == Qt.SortOrder.DescendingOrder,
+        )
 
     def set_rows(self, rows: list[EstimateHistoryRow]) -> None:
         self.beginResetModel()
@@ -119,6 +125,18 @@ class EstimateHistoryTableModel(QAbstractTableModel):
         if self._sort_column is not None and self._rows:
             self._sort_rows()
         self.endResetModel()
+
+    def append_rows(self, rows: list[EstimateHistoryRow]) -> None:
+        column = self._sort_column
+        insert_model_rows(
+            self,
+            self._rows,
+            list(rows or []),
+            key=(lambda row: self._sort_key_for_row(row, column))
+            if column is not None
+            else None,
+            reverse=self._sort_order == Qt.SortOrder.DescendingOrder,
+        )
 
     def row_payload(self, row: int) -> EstimateHistoryRow | None:
         if 0 <= row < len(self._rows):
@@ -135,11 +153,11 @@ class EstimateHistoryTableModel(QAbstractTableModel):
         if column == 3:
             return format_rupees(row.silver_rate)
         if column == 4:
-            return f"{row.total_gross:.3f}"
+            return format_indian_number(row.total_gross, WEIGHT_PLACES)
         if column == 5:
-            return f"{row.total_net:.3f}"
+            return format_indian_number(row.total_net, WEIGHT_PLACES)
         if column == 6:
-            return f"{row.net_fine:.3f}"
+            return format_indian_number(row.net_fine, WEIGHT_PLACES)
         if column == 7:
             return format_rupees(row.net_wage)
         if column == 8:
@@ -182,6 +200,11 @@ class EstimateHistoryTableModel(QAbstractTableModel):
         column: int,
     ) -> tuple[Any, ...]:
         value = self._sort_value(row, column)
+        if column == 0:
+            try:
+                return (0, int(row.voucher_no), row.voucher_no)
+            except ValueError:
+                return (1, value, row.voucher_no)
         return (value is None, value)
 
 

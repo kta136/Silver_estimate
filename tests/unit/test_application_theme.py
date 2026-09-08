@@ -107,8 +107,8 @@ def test_build_light_application_stylesheet_covers_popup_dialog_and_view_surface
         "QDateTimeEdit::down-button",
         "QPushButton:disabled",
         "QToolButton:disabled",
-        "QCheckBox::indicator:checked",
-        "QRadioButton::indicator:checked",
+        "QCheckBox:disabled",
+        "QRadioButton:disabled",
         "QScrollBar::handle:vertical",
         "QStatusBar",
         "QDialogButtonBox QPushButton",
@@ -161,9 +161,10 @@ def test_apply_light_application_theme_sets_stub_app_palette_and_qss():
     )
 
 
-def test_apply_light_application_theme_allows_headless_widget_instantiation(qt_app):
-    previous_palette = qt_app.palette()
-    previous_stylesheet = qt_app.styleSheet()
+def test_apply_light_application_theme_allows_headless_widget_instantiation(
+    qt_application_state,
+):
+    qt_app = qt_application_state
     widgets = []
 
     try:
@@ -202,5 +203,3 @@ def test_apply_light_application_theme_allows_headless_widget_instantiation(qt_a
     finally:
         for widget in widgets:
             widget.deleteLater()
-        qt_app.setStyleSheet(previous_stylesheet)
-        qt_app.setPalette(previous_palette)

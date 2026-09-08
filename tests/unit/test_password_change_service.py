@@ -128,3 +128,14 @@ def test_credential_store_failure_returns_explicit_error() -> None:
 
     assert result.status is PasswordChangeStatus.CREDENTIAL_STORE_UNAVAILABLE
     assert not result.succeeded
+
+
+def test_uncertain_database_outcome_keeps_recovery_credentials():
+    harness = _PasswordHarness(database_status="RECOVERY_REQUIRED")
+    result = PasswordChangeService(harness.actions()).change_passwords(_valid_request())
+    assert result.status is PasswordChangeStatus.FAILED
+    assert harness.credentials["main"] == "hash-old-main"
+    assert harness.credentials["pending_main"] == "hash-new-main"
+    assert harness.credentials["recovery_main"] == "hash-old-main"
+    assert harness.credentials["pending_backup"] == "hash-new-recovery"
+    assert harness.credentials["recovery_backup"] == "hash-old-recovery"

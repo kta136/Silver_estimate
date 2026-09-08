@@ -145,7 +145,8 @@ def configure_connection(
     connection.execute("PRAGMA foreign_keys = ON")
     if writer:
         connection.execute("PRAGMA journal_mode = WAL").fetchone()
-        connection.execute("PRAGMA synchronous = NORMAL")
+        # Flush each committed WAL transaction before reporting save success.
+        connection.execute("PRAGMA synchronous = FULL")
     else:
         connection.execute("PRAGMA query_only = ON")
     connection.execute("PRAGMA temp_store = MEMORY")
@@ -286,32 +287,47 @@ class SqlCipherConnectionBroker:
             self._readers.discard(reader)
             self._condition.notify_all()
 
-    @contextmanager
-    def maintenance(self, *, timeout_seconds: float = 15.0) -> Iterator[None]:
-        """Block new readers, cancel active queries, and wait for them to drain."""
-        deadline = time.monotonic() + timeout_seconds
+    @property
+    def maintenance_active(self) -> bool:
+        with self._condition:
+            return self._maintenance
+
+    def reserve_maintenance(self) -> None:
+        """Block new readers immediately; draining happens on the worker."""
         with self._condition:
             if self._maintenance:
                 raise MaintenanceBusyError("Database maintenance is already active")
             self._maintenance = True
             self._reader_interrupt.set()
+
+    def drain_readers(self, *, timeout_seconds: float = 15.0) -> None:
+        deadline = time.monotonic() + timeout_seconds
+        with self._condition:
+            if not self._maintenance:
+                raise MaintenanceBusyError("Database maintenance was not reserved")
             while self._readers:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    self._maintenance = False
-                    self._reader_interrupt.clear()
-                    self._condition.notify_all()
                     raise MaintenanceBusyError(
                         f"Timed out draining {len(self._readers)} database reader(s)"
                     )
                 self._condition.wait(min(remaining, 0.25))
+
+    def release_maintenance(self) -> None:
+        with self._condition:
+            self._reader_interrupt.clear()
+            self._maintenance = False
+            self._condition.notify_all()
+
+    @contextmanager
+    def maintenance(self, *, timeout_seconds: float = 15.0) -> Iterator[None]:
+        """Block new readers, cancel active queries, and wait for them to drain."""
+        self.reserve_maintenance()
         try:
+            self.drain_readers(timeout_seconds=timeout_seconds)
             yield
         finally:
-            with self._condition:
-                self._reader_interrupt.clear()
-                self._maintenance = False
-                self._condition.notify_all()
+            self.release_maintenance()
 
 
 def export_database(

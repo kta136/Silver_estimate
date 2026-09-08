@@ -5,7 +5,7 @@ import types
 from typing import Any
 
 import pytest
-from PySide6.QtCore import QDate, QObject, QThread, Signal
+from PySide6.QtCore import QDate, QObject, Signal
 from PySide6.QtWidgets import (
     QDateEdit,
     QDialog,
@@ -20,9 +20,7 @@ from silverestimate.presenter import LoadedEstimate, SaveItem, SaveOutcome
 from silverestimate.ui import estimate_entry_workflow_controller as workflow_module
 from silverestimate.ui.estimate_entry_workflow_controller import (
     EstimateEntryWorkflowController,
-    _EstimatePreviewBuildWorker,
 )
-from silverestimate.ui.preview_build_worker import PreviewBuildCallbackRouter
 from silverestimate.ui.view_models import EstimateEntryRowState, EstimateEntryViewModel
 
 
@@ -30,11 +28,14 @@ class _MessageBoxStub:
     class StandardButton:
         Yes = 1
         No = 2
-        Cancel = 3
+        Cancel = 4
+        Save = 8
+        Discard = 16
 
     Yes = StandardButton.Yes
     No = StandardButton.No
     Cancel = StandardButton.Cancel
+    Discard = StandardButton.Discard
 
     question_return = Yes
     warning_calls: list[tuple[Any, ...]] = []
@@ -120,42 +121,6 @@ class _AdapterStub:
         self.focus_calls.append(update_visuals)
 
 
-class _ProgressStub:
-    def __init__(self) -> None:
-        self.closed = 0
-        self.deleted = 0
-
-    def close(self) -> None:
-        self.closed += 1
-
-    def deleteLater(self) -> None:
-        self.deleted += 1
-
-
-class _ThreadStub:
-    def __init__(self) -> None:
-        self.quit_calls = 0
-        self.wait_calls: list[int] = []
-        self.deleted = 0
-
-    def quit(self) -> None:
-        self.quit_calls += 1
-
-    def wait(self, timeout: int) -> None:
-        self.wait_calls.append(timeout)
-
-    def deleteLater(self) -> None:
-        self.deleted += 1
-
-
-class _WorkerDisposeStub:
-    def __init__(self) -> None:
-        self.deleted = 0
-
-    def deleteLater(self) -> None:
-        self.deleted += 1
-
-
 class _SignalStub:
     def __init__(self) -> None:
         self.emitted: list[Any] = []
@@ -211,8 +176,6 @@ class _Host(QWidget):
         self.silver_bar_mode = False
         self.last_balance_silver = 0.0
         self.last_balance_amount = 0.0
-        self._print_preview_request_id = 0
-        self._active_print_preview_workers: dict[Any, Any] = {}
 
         self.voucher_edit = _VoucherEditStub()
         self.date_edit = QDateEdit()
@@ -316,87 +279,11 @@ def workflow_host(qt_app, monkeypatch):  # noqa: ARG001
     host.deleteLater()
 
 
-def test_preview_worker_emits_payload_and_finished():
-    ready = []
-    finished = []
-    worker = _EstimatePreviewBuildWorker(4, lambda: {"ok": True})
-    worker.preview_ready.connect(
-        lambda request_id, payload: ready.append((request_id, payload))
-    )
-    worker.finished.connect(lambda request_id: finished.append(request_id))
-
-    worker.run()
-
-    assert ready == [(4, {"ok": True})]
-    assert finished == [4]
-
-
-def test_preview_worker_emits_error_and_finished():
-    errors = []
-    finished = []
-    worker = _EstimatePreviewBuildWorker(
-        7, lambda: (_ for _ in ()).throw(RuntimeError("boom"))
-    )
-    worker.preview_error.connect(
-        lambda request_id, message: errors.append((request_id, message))
-    )
-    worker.finished.connect(lambda request_id: finished.append(request_id))
-
-    worker.run()
-
-    assert errors == [(7, "boom")]
-    assert finished == [7]
-
-
-def test_preview_callbacks_are_marshaled_to_gui_thread(qt_app, qtbot):
-    host = QWidget()
-    qtbot.addWidget(host)
-    worker = _EstimatePreviewBuildWorker(11, lambda: {"ok": True})
-    thread = QThread(host)
-    worker.moveToThread(thread)
-    callbacks = []
-
-    def record_finished(request_id):
-        callbacks.append(
-            ("finished", request_id, QThread.currentThread() is qt_app.thread())
-        )
-        thread.quit()
-
-    router = PreviewBuildCallbackRouter(
-        on_ready=lambda request_id, _payload: callbacks.append(
-            ("ready", request_id, QThread.currentThread() is qt_app.thread())
-        ),
-        on_error=lambda request_id, _message: callbacks.append(
-            ("error", request_id, QThread.currentThread() is qt_app.thread())
-        ),
-        on_finished=record_finished,
-        parent=host,
-    )
-    thread.started.connect(worker.run)
-    worker.preview_ready.connect(router.handle_ready)
-    worker.preview_error.connect(router.handle_error)
-    worker.finished.connect(router.handle_finished)
-    thread.start()
-
-    qtbot.waitUntil(lambda: len(callbacks) == 2, timeout=1000)
-    qtbot.waitUntil(lambda: not thread.isRunning(), timeout=1000)
-
-    assert callbacks == [("ready", 11, True), ("finished", 11, True)]
-    assert thread.wait(1000)
-
-
-def test_format_currency_falls_back_for_bad_locale(workflow_host, monkeypatch):
+def test_format_currency_preserves_paise_and_uses_indian_grouping(workflow_host):
     _host, controller = workflow_host
-
-    class _BadLocale:
-        def toCurrencyString(self, value):
-            del value
-            raise RuntimeError("bad locale")
-
-    monkeypatch.setattr(workflow_module.QLocale, "system", lambda: _BadLocale())
-
     assert controller._format_currency("oops") == "oops"
-    assert controller._format_currency(1234.4) == "₹ 1,234"
+    assert controller._format_currency(1234.4) == "₹ 1,234.40"
+    assert controller._format_currency(-10.125) == "₹ -10.13"
 
 
 def test_generate_voucher_delegates_and_resets_loaded_state(workflow_host):
@@ -434,7 +321,7 @@ def test_load_estimate_success_reports_status_and_enables_delete(
     assert host.status_calls[-1] == ("Estimate V101 loaded successfully.", 3000)
 
 
-def test_load_estimate_not_found_starts_new_entry(workflow_host):
+def test_load_estimate_not_found_preserves_current_entry(workflow_host):
     host, controller = workflow_host
     host.voucher_edit.setText("MISS1")
     host.presenter = types.SimpleNamespace(load_estimate=lambda voucher_no: None)
@@ -443,10 +330,10 @@ def test_load_estimate_not_found_starts_new_entry(workflow_host):
     controller.load_estimate()
 
     assert host._estimate_loaded is False
-    assert host.delete_estimate_button.isEnabled() is False
-    assert host.focus_calls == [0]
+    assert host.delete_estimate_button.isEnabled() is True
+    assert host.focus_calls == []
     assert host.status_calls[-1] == (
-        "Estimate MISS1 not found. Starting new entry.",
+        "Estimate MISS1 not found. Current entry kept.",
         4000,
     )
 
@@ -588,7 +475,9 @@ def test_save_estimate_failure_shows_critical(workflow_host, monkeypatch):
 
         def execute_save(self, **kwargs):
             del kwargs
-            return SaveOutcome(success=False, message="No good"), object()
+            return SaveOutcome(
+                success=False, message="No good", error_detail="Database is locked"
+            ), object()
 
     monkeypatch.setattr(
         workflow_module, "EstimateEntryPersistenceService", _ServiceStub
@@ -598,9 +487,16 @@ def test_save_estimate_failure_shows_critical(workflow_host, monkeypatch):
 
     assert ("No good", 5000) in host.status_calls
     assert any(args[1] == "Save Error" for args in _MessageBoxStub.critical_calls)
+    assert any(
+        "Database is locked" in args[2] for args in _MessageBoxStub.critical_calls
+    )
 
 
-def test_delete_current_estimate_success_clears_form(workflow_host):
+def test_delete_current_estimate_success_clears_form(workflow_host, monkeypatch):
+    monkeypatch.setattr(
+        "silverestimate.ui.estimate_entry_workflow_controller.confirm_estimate_deletion",
+        lambda *_: True,
+    )
     host, controller = workflow_host
     host.voucher_edit.setText("DEL1")
     host.presenter = types.SimpleNamespace(delete_estimate=lambda voucher_no: True)
@@ -613,14 +509,24 @@ def test_delete_current_estimate_success_clears_form(workflow_host):
     assert host.status_calls[-1] == ("Estimate DEL1 deleted.", 3000)
 
 
-def test_delete_current_estimate_failure_shows_warning(workflow_host):
+def test_delete_current_estimate_failure_shows_warning(workflow_host, monkeypatch):
+    monkeypatch.setattr(
+        "silverestimate.ui.estimate_entry_workflow_controller.confirm_estimate_deletion",
+        lambda *_: True,
+    )
     host, controller = workflow_host
     host.voucher_edit.setText("DEL2")
     host.presenter = types.SimpleNamespace(delete_estimate=lambda voucher_no: False)
+    host.db_manager = types.SimpleNamespace(
+        last_error="Estimate has issued silver bars."
+    )
 
     controller.delete_current_estimate()
 
     assert any(args[1] == "Error" for args in _MessageBoxStub.warning_calls)
+    assert any(
+        "issued silver bars" in args[2] for args in _MessageBoxStub.warning_calls
+    )
 
 
 def test_print_estimate_handles_preview_validation_error(workflow_host):
@@ -648,118 +554,6 @@ def test_print_estimate_handles_preview_build_exception(workflow_host):
     controller.print_estimate()
 
     assert any(args[1] == "Print Error" for args in _MessageBoxStub.critical_calls)
-
-
-def test_print_preview_ready_closes_progress_and_shows_preview(workflow_host):
-    host, controller = workflow_host
-    progress = _ProgressStub()
-    shown = []
-    print_manager = types.SimpleNamespace(
-        show_preview=lambda payload, parent_widget=None: shown.append(
-            (payload, parent_widget)
-        )
-    )
-    host._print_preview_request_id = 5
-
-    controller._on_estimate_print_preview_ready(
-        5,
-        {"html": "<p>ok</p>"},
-        print_manager=print_manager,
-        progress=progress,
-    )
-
-    assert progress.closed == 1
-    assert shown and shown[0][0] == {"html": "<p>ok</p>"}
-
-
-def test_print_preview_ready_ignores_stale_request(workflow_host):
-    host, controller = workflow_host
-    progress = _ProgressStub()
-    shown = []
-    host._print_preview_request_id = 8
-    print_manager = types.SimpleNamespace(
-        show_preview=lambda payload, parent_widget=None: shown.append(
-            (payload, parent_widget)
-        )
-    )
-
-    controller._on_estimate_print_preview_ready(
-        7,
-        {"html": "<p>stale</p>"},
-        print_manager=print_manager,
-        progress=progress,
-    )
-
-    assert progress.closed == 0
-    assert shown == []
-
-
-def test_print_preview_ready_none_payload_routes_to_error(workflow_host, monkeypatch):
-    host, controller = workflow_host
-    progress = _ProgressStub()
-    calls = []
-    host._print_preview_request_id = 9
-    monkeypatch.setattr(
-        workflow_module.EstimateEntryWorkflowController,
-        "_on_estimate_print_preview_error",
-        lambda self, request_id, message, *, progress: calls.append(
-            (request_id, message, progress)
-        ),
-    )
-
-    controller._on_estimate_print_preview_ready(
-        9,
-        None,
-        print_manager=object(),
-        progress=progress,
-    )
-
-    assert calls and calls[0][1] == "Estimate preview data could not be prepared."
-
-
-def test_print_preview_error_shows_message(workflow_host):
-    host, controller = workflow_host
-    progress = _ProgressStub()
-    host._print_preview_request_id = 3
-
-    controller._on_estimate_print_preview_error(3, "bad payload", progress=progress)
-
-    assert progress.closed == 1
-    assert any("bad payload" in args[2] for args in _MessageBoxStub.critical_calls)
-
-
-def test_print_preview_error_ignores_stale_request(workflow_host):
-    host, controller = workflow_host
-    progress = _ProgressStub()
-    host._print_preview_request_id = 5
-
-    controller._on_estimate_print_preview_error(4, "stale", progress=progress)
-
-    assert progress.closed == 0
-    assert _MessageBoxStub.critical_calls == []
-
-
-def test_finalize_print_preview_build_disposes_resources(workflow_host):
-    host, controller = workflow_host
-    progress = _ProgressStub()
-    thread = _ThreadStub()
-    worker = _WorkerDisposeStub()
-    host._active_print_preview_workers = {thread: worker}
-
-    controller._finalize_estimate_print_preview_build(
-        1,
-        thread=thread,
-        worker=worker,
-        progress=progress,
-    )
-
-    assert progress.closed == 1
-    assert progress.deleted == 1
-    assert thread.quit_calls == 1
-    assert thread.wait_calls == [2000]
-    assert worker.deleted == 1
-    assert thread.deleted == 1
-    assert host._active_print_preview_workers == {}
 
 
 def test_clear_form_resets_modes_and_focuses_first_row(workflow_host, monkeypatch):
@@ -799,7 +593,7 @@ def test_confirm_exit_respects_unsaved_state(workflow_host):
     host._unsaved_changes = True
     _MessageBoxStub.question_return = _MessageBoxStub.No
     assert controller.confirm_exit() is False
-    _MessageBoxStub.question_return = _MessageBoxStub.Yes
+    _MessageBoxStub.question_return = _MessageBoxStub.Discard
     assert controller.confirm_exit() is True
 
 
@@ -882,6 +676,12 @@ def test_prompt_item_selection_and_open_history_dialog(workflow_host, monkeypatc
         def exec(self):
             return workflow_module.QDialog.DialogCode.Accepted
 
+        def shutdown_workers(self):
+            pass
+
+        def deleteLater(self):
+            pass
+
     monkeypatch.setattr(workflow_module, "ItemSelectionDialog", _SelectionDialog)
     monkeypatch.setitem(
         __import__("sys").modules,
@@ -909,7 +709,7 @@ def test_show_silver_bar_management_and_alias(workflow_host):
     assert calls == ["bars", "bars"]
 
 
-def test_apply_loaded_estimate_populates_rows_and_normalizes_values(workflow_host):
+def test_apply_loaded_estimate_preserves_saved_codes_and_pieces(workflow_host):
     host, controller = workflow_host
     loaded = LoadedEstimate(
         voucher_no="L001",
@@ -964,10 +764,10 @@ def test_apply_loaded_estimate_populates_rows_and_normalizes_values(workflow_hos
     assert host.calculate_totals_calls == 1
     assert host.schedule_columns_calls == [True]
     assert len(host.item_table.replaced_rows) == 2
-    assert host.item_table.replaced_rows[0].code == "PC01"
-    assert host.item_table.replaced_rows[0].pieces == 1
-    assert host.item_table.replaced_rows[1].code == "WT01"
-    assert host.item_table.replaced_rows[1].pieces == 0
+    assert host.item_table.replaced_rows[0].code == "pc01"
+    assert host.item_table.replaced_rows[0].pieces == 0
+    assert host.item_table.replaced_rows[1].code == "wt01"
+    assert host.item_table.replaced_rows[1].pieces == 9
 
 
 def test_apply_loaded_estimate_returns_false_on_error(workflow_host):
@@ -1058,6 +858,8 @@ def test_build_current_estimate_preview_data_reports_skipped_rows(
             items=[
                 types.SimpleNamespace(
                     row_number=1,
+                    snapshot_version=0,
+                    tunch=None,
                     code="REG001",
                     name="Regular",
                     gross=10.0,
@@ -1096,16 +898,14 @@ def test_build_current_estimate_preview_data_reports_skipped_rows(
     assert preview["items"][0]["is_return"] == 0
 
 
-def test_get_cell_helpers_and_last_balance_dialog(workflow_host, monkeypatch):
+def test_last_balance_dialog_updates_totals_and_marks_unsaved(
+    workflow_host, monkeypatch
+):
     host, controller = workflow_host
-    host.item_table.text_cells[(0, workflow_module.COL_CODE)] = "AB01"
-    host.item_table.text_cells[(0, 99)] = "x"
     monkeypatch.setattr(QDialog, "exec", lambda self: True)
 
     controller.show_last_balance_dialog()
 
-    assert controller._get_row_code(0) == "AB01"
-    assert controller._get_cell_str(0, 99) == "x"
     assert host.calculate_totals_calls == 1
     assert host.mark_unsaved_calls == 1
 

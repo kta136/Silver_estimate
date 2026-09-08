@@ -1,5 +1,6 @@
 import logging
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
 import pytest
@@ -18,6 +19,59 @@ from silverestimate.ui.estimate_entry_logic.constants import (
     COL_WAGE_RATE,
 )
 from silverestimate.ui.main_window import MainWindow
+
+
+def test_close_stops_recovery_before_closing_database(main_window_fixture):
+    context = main_window_fixture
+    window, database = context["window"], context["db"]
+    events = []
+    window.estimate_widget.draft_recovery = SimpleNamespace(
+        stop=lambda: events.append(("stop", database.closed)), flush=lambda: None
+    )
+    window.close()
+    assert events == [("stop", False)]
+    assert database.closed
+
+
+def test_estimate_tools_and_shortcut_help_remain_reachable_from_menu(
+    main_window_fixture, monkeypatch
+):
+    window = main_window_fixture["window"]
+    estimate = window.estimate_widget
+    tools = next(
+        action.menu()
+        for action in window.menuBar().actions()
+        if action.text() == "&Tools"
+    )
+    assert any(
+        action.menu() is estimate.estimate_tools_menu for action in tools.actions()
+    )
+    assert estimate.command_undo_row_action in estimate.estimate_tools_menu.actions()
+    assert estimate.command_settings_action in estimate.estimate_tools_menu.actions()
+    shortcut_action = next(
+        action
+        for action in window.findChildren(QAction)
+        if action.text() == "&Keyboard Shortcuts"
+    )
+    assert shortcut_action.shortcut().toString() == "F1"
+    captured = []
+    monkeypatch.setattr(
+        "silverestimate.controllers.navigation_controller.QMessageBox.information",
+        lambda parent, title, text: captured.append((title, text)),
+    )
+    shortcut_action.trigger()
+    assert captured[0][0] == "Keyboard Shortcuts"
+    for shortcut in (
+        "Ctrl+N",
+        "Ctrl+H",
+        "Ctrl+D",
+        "Ctrl+R",
+        "Ctrl+B",
+        "Page Up",
+        "Alt+E",
+        "Alt+I",
+    ):
+        assert shortcut in captured[0][1]
 
 
 @dataclass
@@ -148,7 +202,7 @@ class StubLiveRateController:
 
 
 @pytest.fixture
-def main_window_fixture(qt_app, settings_stub, monkeypatch):
+def main_window_fixture(qtbot, qt_app, settings_stub, monkeypatch):
     """Create a MainWindow instance with test doubles injected."""
     previous_quit_on_close = qt_app.quitOnLastWindowClosed()
     qt_app.setQuitOnLastWindowClosed(False)
@@ -179,6 +233,7 @@ def main_window_fixture(qt_app, settings_stub, monkeypatch):
     db = FakeDbManager()
     logger = logging.getLogger("test.mainwindow")
     window = MainWindow(db_manager=db, logger=logger)
+    qtbot.addWidget(window)
     live_rate = StubLiveRateController.instances[-1]
 
     try:
@@ -234,13 +289,13 @@ def test_main_window_startup_sets_up_estimate_view(main_window_fixture, qt_app, 
     assert widget.save_button.text() == "Save"
     assert widget.print_button.text() == "Print"
     assert widget.clear_button.text() == "New"
-    assert widget.delete_row_button.text() == ""
+    assert widget.delete_row_button.text() == "Delete Row"
     assert widget.return_toggle_button.text() == ""
     assert widget.silver_bar_toggle_button.text() == ""
-    assert widget.history_button.text() == ""
-    assert widget.last_balance_button.text() == ""
-    assert widget.silver_bars_button.text() == ""
-    assert widget.delete_estimate_button.text() == ""
+    assert widget.history_button.text() == "History"
+    assert widget.last_balance_button.text() == "Last Balance"
+    assert widget.silver_bars_button.text() == "Manage Silver Bars"
+    assert widget.delete_estimate_button.text() == "Delete Estimate"
 
     assert widget.save_button.accessibleName() == "Save"
     assert widget.print_button.accessibleName() == "Print"

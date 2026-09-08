@@ -93,3 +93,56 @@ def test_validate_deployment_rejects_stdlib_sqlite_in_compilation_report(tmp_pat
 
     with pytest.raises(ValueError, match="sqlite3"):
         deployment_validator.validate_deployment(root, report)
+
+
+def test_validate_deployment_accepts_sqlcipher_extension_filename(tmp_path):
+    root = tmp_path / "SilverEstimate.dist"
+    report = tmp_path / "nuitka-report.xml"
+    _write_deployment(root)
+    _write_report(report)
+    report.write_text(
+        report.read_text(encoding="utf-8").replace(
+            "</report>",
+            '<included_extension name="_sqlite3.pyd" '
+            'dest_path="sqlcipher3/_sqlite3.pyd" package="sqlcipher3" /></report>',
+        ),
+        encoding="utf-8",
+    )
+
+    deployment_validator.validate_deployment(root, report)
+
+
+def test_validate_deployment_requires_module_not_only_import_reference(tmp_path):
+    root = tmp_path / "SilverEstimate.dist"
+    report = tmp_path / "nuitka-report.xml"
+    _write_deployment(root)
+    _write_report(report)
+    report.write_text(
+        report.read_text(encoding="utf-8").replace(
+            '<module name="sqlcipher3._sqlite3" />',
+            '<module name="consumer"><module_usages>'
+            '<module_usage name="sqlcipher3._sqlite3" />'
+            "</module_usages></module>",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Required modules.*sqlcipher3"):
+        deployment_validator.validate_deployment(root, report)
+
+
+def test_validate_deployment_rejects_stdlib_sqlite_extension_module(tmp_path):
+    root = tmp_path / "SilverEstimate.dist"
+    report = tmp_path / "nuitka-report.xml"
+    _write_deployment(root)
+    _write_report(report)
+    report.write_text(
+        report.read_text(encoding="utf-8").replace(
+            "</report>",
+            '<module name="_sqlite3" kind="PythonExtensionModule" /></report>',
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="forbidden modules.*_sqlite3"):
+        deployment_validator.validate_deployment(root, report)

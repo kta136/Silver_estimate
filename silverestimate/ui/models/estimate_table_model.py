@@ -15,6 +15,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QBrush, QColor, QFont
 
+from silverestimate.domain.estimate_entry import EstimateEntryRowState
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.ui.estimate_entry_logic.column_specs import (
     NUMERIC_COLUMNS,
@@ -38,9 +39,6 @@ from silverestimate.ui.estimate_entry_logic.constants import (
 )
 from silverestimate.ui.estimate_table_formatting import format_indian_number
 from silverestimate.ui.numeric_font import numeric_table_font
-from silverestimate.ui.view_models.estimate_entry_view_model import (
-    EstimateEntryRowState,
-)
 
 
 class EstimateTableModel(QAbstractTableModel):
@@ -55,16 +53,16 @@ class EstimateTableModel(QAbstractTableModel):
 
     _NUMERIC_COLUMNS = NUMERIC_COLUMNS
     _TYPE_BACKGROUND_BRUSHES = {
-        EstimateLineCategory.RETURN: QBrush(QColor("#dbeafe")),
+        EstimateLineCategory.RETURN: QBrush(QColor("#e0f2f3")),
         EstimateLineCategory.SILVER_BAR: QBrush(QColor("#fff7ed")),
-        EstimateLineCategory.REGULAR: QBrush(QColor("#f8fafc")),
+        EstimateLineCategory.REGULAR: QBrush(QColor("#f6f7f8")),
     }
     _TYPE_FOREGROUND_BRUSHES = {
-        EstimateLineCategory.RETURN: QBrush(QColor("#1d4ed8")),
+        EstimateLineCategory.RETURN: QBrush(QColor("#006d77")),
         EstimateLineCategory.SILVER_BAR: QBrush(QColor("#b45309")),
         EstimateLineCategory.REGULAR: QBrush(QColor("#334155")),
     }
-    _CALCULATED_BACKGROUND_BRUSH = QBrush(QColor("#f1f5f9"))
+    _CALCULATED_BACKGROUND_BRUSH = QBrush(QColor("#edf2f5"))
     _CALCULATED_FOREGROUND_BRUSH = QBrush(QColor("#0f172a"))
 
     def __init__(self, parent=None):
@@ -125,6 +123,8 @@ class EstimateTableModel(QAbstractTableModel):
         return None
 
     def _display_cell_value(self, row_data: EstimateEntryRowState, col: int) -> Any:
+        if col == COL_CODE and not row_data.code and row_data.snapshot_version:
+            return "[Code unavailable]"
         raw_value = self._raw_cell_value(row_data, col)
         precision = precision_for_column(col)
         if precision is not None:
@@ -248,6 +248,10 @@ class EstimateTableModel(QAbstractTableModel):
                 new_row = replace(
                     old_row,
                     code=new_code,
+                    snapshot_version=old_row.snapshot_version
+                    if new_code == old_row.code
+                    else 0,
+                    tunch=old_row.tunch if new_code == old_row.code else None,
                     line_key=old_row.line_key if new_code.strip() else "",
                 )
             elif col == COL_ITEM_NAME:

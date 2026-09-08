@@ -15,6 +15,7 @@ from silverestimate.domain.pagination import (
 from silverestimate.persistence.silver_bars_queries import (
     build_available_bars_queries,
     build_bars_in_list_queries,
+    build_history_bars_count_query,
     build_history_bars_query,
 )
 
@@ -73,6 +74,7 @@ class SilverBarsSnapshotRepository:
         max_purity: Any = None,
         date_range: Any = None,
         cursor: AvailableBarCursor | None = None,
+        include_total: bool = True,
         limit: int = 1500,
     ) -> Page[dict[str, Any], AvailableBarCursor]:
         page_size = max(1, min(int(limit), 5000))
@@ -87,13 +89,16 @@ class SilverBarsSnapshotRepository:
             after_bar_id=cursor.bar_id if cursor else None,
         )
         with closing(self._connect()) as conn:
+            conn.execute("BEGIN")
             db_cursor = conn.cursor()
-            db_cursor.execute(
-                statements.count_query.query,
-                tuple(statements.count_query.params),
-            )
-            count_row = db_cursor.fetchone()
-            total = int(count_row[0]) if count_row else 0
+            total = None
+            if include_total:
+                db_cursor.execute(
+                    statements.count_query.query,
+                    tuple(statements.count_query.params),
+                )
+                count_row = db_cursor.fetchone()
+                total = int(count_row[0]) if count_row else 0
             db_cursor.execute(statements.query.query, tuple(statements.query.params))
             fetched = [dict(row) for row in db_cursor.fetchall()]
         has_more = len(fetched) > page_size
@@ -132,6 +137,7 @@ class SilverBarsSnapshotRepository:
         list_id: int | None,
         *,
         cursor: BarListCursor | None = None,
+        include_total: bool = True,
         limit: int = 1500,
     ) -> Page[dict[str, Any], BarListCursor]:
         page_size = max(1, min(int(limit), 5000))
@@ -141,13 +147,16 @@ class SilverBarsSnapshotRepository:
             after_bar_id=cursor.bar_id if cursor else None,
         )
         with closing(self._connect()) as conn:
+            conn.execute("BEGIN")
             db_cursor = conn.cursor()
-            db_cursor.execute(
-                statements.count_query.query,
-                tuple(statements.count_query.params),
-            )
-            count_row = db_cursor.fetchone()
-            total = int(count_row[0]) if count_row else 0
+            total = None
+            if include_total:
+                db_cursor.execute(
+                    statements.count_query.query,
+                    tuple(statements.count_query.params),
+                )
+                count_row = db_cursor.fetchone()
+                total = int(count_row[0]) if count_row else 0
             db_cursor.execute(statements.query.query, tuple(statements.query.params))
             fetched = [dict(row) for row in db_cursor.fetchall()]
         has_more = len(fetched) > page_size
@@ -183,14 +192,14 @@ class SilverBarsSnapshotRepository:
         weight_text: str = "",
         status_text: str = "All Statuses",
         cursor: SilverBarHistoryCursor | None = None,
+        include_total: bool = True,
         limit: int = 1000,
     ) -> Page[dict[str, Any], SilverBarHistoryCursor]:
         page_size = max(1, min(int(limit), 5000))
-        count_statement = build_history_bars_query(
+        count_statement = build_history_bars_count_query(
             voucher_term=voucher_term,
             weight_text=weight_text,
             status_text=status_text,
-            limit=1,
         )
         statement = build_history_bars_query(
             voucher_term=voucher_term,
@@ -201,14 +210,16 @@ class SilverBarsSnapshotRepository:
             after_bar_id=cursor.bar_id if cursor else None,
         )
         with closing(self._connect()) as conn:
+            conn.execute("BEGIN")
             db_cursor = conn.cursor()
-            count_base = count_statement.query.rsplit(" ORDER BY ", 1)[0]
-            db_cursor.execute(
-                f"SELECT COUNT(*) FROM ({count_base})",  # nosec B608
-                tuple(count_statement.params[:-1]),
-            )
-            count_row = db_cursor.fetchone()
-            total = int(count_row[0]) if count_row else 0
+            total = None
+            if include_total:
+                db_cursor.execute(
+                    count_statement.query,
+                    tuple(count_statement.params),
+                )
+                count_row = db_cursor.fetchone()
+                total = int(count_row[0]) if count_row else 0
             db_cursor.execute(statement.query, tuple(statement.params))
             fetched = [dict(row) for row in db_cursor.fetchall()]
         has_more = len(fetched) > page_size

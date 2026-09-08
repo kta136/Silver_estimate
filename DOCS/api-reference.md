@@ -2,12 +2,23 @@
 
 This guide documents the primary controller, service, and persistence APIs exposed by the modern SilverEstimate architecture. Namespace paths are relative to the repository root.
 
+## Live maintenance APIs
+
+- `DatabaseManager.create_maintenance_job()` reserves maintenance on the writer's owner thread; rejects an active transaction, unavailable writer or existing reservation.
+- `DatabaseMaintenanceJob.run(operation, release_owner)` is worker-only. It drains readers, creates its own session, requests owner release through the supplied bridge, runs the operation and closes the worker session. Operations must finish their transactions; exceptions/uncommitted returns roll back.
+- `DatabaseMaintenanceJob.resume_owner()` runs after worker termination on the GUI thread. It reopens the GUI writer with the resulting key and releases the original broker. A reopen failure keeps access blocked and requires restart.
+- `run_database_maintenance(database, operation, title, parent=None)` owns the Qt signal bridge, non-dismissible progress dialog and final owner resume. Its callback receives only the separate worker manager. The helper returns after both worker shutdown and writer resumption.
+- `SettingsSecurityController` now receives a database provider, resolved on the GUI thread. It captures the password request and builds the production password service against the worker session. The page handles field clearing/focus and messages on the GUI thread.
+- `MainCommands.restore_item_catalog()` retains file selection/replacement confirmation and uses the shared maintenance helper for the entire import. It refreshes a visible Item Master and reports counts after the UI writer resumes.
+
 ## Controller Layer
 
 ### StartupController (silverestimate/controllers/startup_controller.py)
     StartupController(logger: Optional[logging.Logger] = None)
 
-- **authenticate_and_prepare() -> StartupResult** - runs the authentication flow, performs optional wipes, and returns a database-connected StartupResult.
+- **authenticate_and_prepare() -> StartupResult** - runs authentication and optional wipes, prepares encrypted storage through a responsive modal worker, attaches a fresh UI-owned writer, then promotes pending credentials and returns a connected result. Errors return `FAILED`; no partially initialized manager is exposed.
+- **DatabaseManager.prepare_startup(path, password, device_secret=...)** - internal startup handoff: runs normal recovery, schema upgrades and full validation, closes/checkpoints the worker writer, and returns a detached manager. Do not access repositories or start caches before attachment.
+- **DatabaseManager.attach_prepared_connection()** - consumes the handoff once, checks database/WAL/metadata/journal file freshness, and opens an authenticated writer on the calling thread without repeating key derivation or full scans. Changed files require startup validation again. `close()` invalidates an unused handoff. Direct constructor users retain synchronous initialization.
 - **StartupResult (dataclass)** - fields: status (StartupStatus), db (Optional[DatabaseManager]), and silent_wipe (bool) indicating whether the last wipe suppressed logging.
 - **StartupStatus (Enum)** - values: OK, CANCELLED, WIPED, FAILED.
 
@@ -45,8 +56,15 @@ This guide documents the primary controller, service, and persistence APIs expos
 
 ### Presenter Contracts (silverestimate/presenter/__init__.py)
 - **EstimateEntryView** protocol for Qt widgets (`capture_state`, `apply_totals`, `populate_row`, etc.).
-- Dataclasses: `EstimateEntryViewState`, `SaveItem`, `SavePayload`, `SaveOutcome`, `LoadedEstimate` encapsulate presenter inputs/outputs.
+- Compatibility exports: `EstimateEntryViewState`, `SaveItem`, `SavePayload`, `SaveOutcome`, `LoadedEstimate` are defined in `silverestimate.domain.estimate_entry` and re-exported here as the same classes.
 - Totals ownership note: `EstimateEntryWidget` owns hot-path totals scheduling/recompute for cell edits; presenter totals refresh remains callable for explicit non-edit flows.
+
+### Shared Estimate Data (silverestimate/domain/estimate_entry.py)
+
+- Frozen `EstimateEntryRowState` carries editable row values, category, stable line identity and historical snapshots. UI view-model paths remain compatible imports.
+- Frozen `EstimateEntrySnapshot` carries a tuple of rows, silver rate and carried balances. `EstimateEntryViewModel.as_save_snapshot()` assigns missing line keys at the UI boundary and detaches these inputs.
+- `EstimateEntryPersistenceService(snapshot)` prepares validated save payloads. `execute_save(..., presenter: EstimateSaveExecutor)` requires only `save_estimate(payload) -> SaveOutcome`. It no longer accepts a mutable view model or imports presentation modules.
+- `build_row_states_from_items(items)` converts loaded domain save rows to domain entry rows without requiring Qt.
 
 ## Service Layer
 
@@ -69,7 +87,7 @@ This guide documents the primary controller, service, and persistence APIs expos
 
 - **FontSettings** - immutable print-font family, point size, and bold state with explicit `QFont` conversion.
 - **load_print_font(default_font: QFont) -> QFont / save_print_font(font: QFont)** – round-trip print font selections.
-- **load_table_font_size(default_size: int = 9) -> int / save_table_font_size(size: int)** – persist grid font sizing.
+- Table font sizing is owned by the appearance settings page and entry layout through typed `ApplicationSettings`; `SettingsService` handles print fonts and main-window geometry.
 - **restore_geometry(window) -> bool / save_geometry(window)** – handle main window geometry and state.
 
 ### ApplicationSettings (silverestimate/infrastructure/settings.py)
@@ -94,7 +112,7 @@ This guide documents the primary controller, service, and persistence APIs expos
 ### Data Management Settings (silverestimate/ui/settings_data_page.py)
 - **MainCommandOutcome** - typed success, started, cancelled, or failed result returned by destructive and catalog commands.
 - **DataManagementActions** - narrow application callbacks for estimate/data deletion and item-catalog backup/restore commands.
-- **SettingsDataController** - invokes application commands and encrypted database backup/restore through an injected `DatabaseMaintenanceGateway`.
+- **SettingsDataController** - invokes application commands and encrypted database backup/restore through an injected `DatabaseMaintenanceGateway`. `for_worker()` resolves the provider on the UI thread before dispatch.
 - **DataActionResult** - immutable success, message, and path outcome for every page action.
 - **DataManagementPage** - owns file/password prompts and result feedback without directly accessing `MainWindow` or `DatabaseManager`.
 
@@ -165,14 +183,15 @@ Responsibilities:
 - Detect/create current storage, validate the controlled driver and schema, and serialize maintenance operations.
 
 Key Public Methods:
-- **setup_database() -> None** – create a fresh schema v8 or validate an existing schema v8.
+- **setup_database() -> None** – create schema v10, transactionally upgrade v8 snapshots/v9 recovery storage, or validate v10.
+- Estimate browsing uses `get_estimate_history_page()`; individual estimates use `get_estimate_by_voucher()`. The unused eager `get_estimates()` / `get_estimate_headers()` APIs and their exclusive bulk loader were retired during verified cleanup.
 - **generate_voucher_no() -> str** – delegate to `EstimatesRepository` through the repository facade.
 - **save_estimate_with_returns(... ) -> bool** – transactional save for headers/items, with bar sync.
 - **get_estimate_by_voucher(voucher_no: str) -> Optional[dict]** – retrieve composite estimate payloads.
 - **delete_all_estimates() / delete_single_estimate(voucher_no)** – destructive operations used by MainCommands.
 - **open_read_connection(cancel_event=None)** – return a keyed read-only worker connection owned by the caller.
-- **create_encrypted_backup(destination=None) -> MaintenanceOutcome** – export and validate a `.sedbbackup` archive.
-- **stage_encrypted_restore(path, archive_password) -> MaintenanceOutcome** – validate and stage restore activation for the next open.
+- **create_encrypted_backup(destination=None) -> MaintenanceOutcome** – export committed data using a caller-owned connection, validate and flush a `.sedbbackup` archive, then atomically replace the destination. Does not commit the main writer.
+- **stage_encrypted_restore(path, archive_password) -> MaintenanceOutcome** – validate and flush a candidate, then stage restore activation for the next open. Rejects a second pending restore. Both database maintenance methods support the dedicated Settings worker; callers must prevent conflicting user actions while maintenance runs.
 - **change_passwords(new_password) -> MaintenanceOutcome** – copy, validate, switch, and remove rollback material after successful activation.
 - **close()** – commit, checkpoint when possible, and close the live encrypted connection.
 
@@ -228,3 +247,54 @@ While the focus of this reference is the controller/service stack, the following
   interactions through the role-specific database-manager APIs.
 
 Use controllers and services as the primary integration surface; direct UI manipulation should be reserved for Qt widget customisations.
+
+
+### Optional pagination counts
+
+`Page.total` is `int | None`. `None` means a count was not requested, not zero
+matches. The low-level estimate/catalog page readers and `SilverBarsSnapshotRepository`
+keyset readers accept `include_total=False`; its default remains `True` for callers
+requiring exact counts. Production asynchronous append requests use `False` and
+show loaded-row counts. Count and data reads in these worker requests share one
+read transaction. UI `PagedLoadState` retains up to 20,000 rows and exposes
+`last_page_rows` for incremental insertion and `limit_reached` for display feedback.
+
+### Draft recovery
+
+`DatabaseManager.draft_repository` resolves the current main-thread writer after
+rekey. `DraftRepository.load()` returns `DraftRecord | None`; `write(token,
+voucher_no, payload, expected_token=...)` and `delete(token)` return success and
+check slot ownership. Mutations skip maintenance or an existing writer transaction,
+use a temporary 50 ms busy timeout and roll back on failure. They never commit a
+caller's pending business transaction. Payloads are limited to 8 MiB.
+
+`EstimateDraftRecovery` owns the entry's two-second capture timer, delayed startup
+recovery offer, payload validation, editor restoration and footer status. Timers
+are parented to the entry and stopped on accepted close. `flush()` captures only
+changes; `discard_current()` removes the owned copy; `offer_recovery()` resolves a
+retained copy through Restore/Discard/Cancel. See the workflow document for limits
+and the original Save contract.
+
+
+### Silver-bar controller contracts
+
+`SilverBarDialog` owns nine concrete controllers/builders. Each constructor takes
+`host: SilverBarDialog`; methods access shared controls/state through `self.host`
+and retain their own helper methods. The facade preserves dialog commands with
+explicit argument signatures and direct typed controller calls. There is no
+attribute redirection, string dispatch or catch-all for unknown dialog commands.
+
+`SilverBarLoadController` owns its two runners, paged states and shutdown flag.
+`SilverBarListPrintController` delegates preview generations, progress and worker
+lifetime to `PreviewBuildController`. UI
+controls remain owned by Qt/the dialog. Create List from Selection invokes the
+transfer controller's selected-ID and wait-cursor helpers directly before refreshing
+the displayed lists. Existing transfer, issue, print and settings behavior remains.
+
+
+### PreviewBuildController (silverestimate/ui/preview_build_worker.py)
+
+- Constructor: `PreviewBuildController(owner, *, message="Preparing print preview...", modal=False)`; creates no worker yet.
+- `start(build, *, on_ready, on_error, empty_message)` submits a captured-data builder and keeps only the newest pending request. The builder returns `PrintPreviewPayload | None`; callbacks run on the GUI thread. Empty payloads and build/display errors route to `on_error` after progress cleanup.
+- `shutdown()` invalidates delivery, clears callbacks/progress and requests nonblocking cooperative worker shutdown. Submissions to that closed controller are ignored. Owner destruction triggers equivalent delivery protection.
+- Entry and list controllers lazily own a builder and release it on close. History creates the lightweight controller on initialization and starts its worker only for printing. The old `PreviewBuildWorker` / `PreviewBuildCallbackRouter` and screen-specific request/cleanup helpers are retired.

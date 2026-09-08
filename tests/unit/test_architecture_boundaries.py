@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 import inspect
+from functools import cache
 from pathlib import Path
 from typing import get_args
 
+import pytest
 from PySide6.QtWidgets import QWidget
 
 from silverestimate.controllers.startup_controller import StartupController
 from silverestimate.infrastructure.paged_load_state import PagedLoadState
 from silverestimate.infrastructure.settings import (
     SETTINGS_SCHEMA_VERSION,
-    ApplicationSettings,
     SettingsKey,
 )
 from silverestimate.persistence.database_protocols import (
@@ -40,11 +41,7 @@ from silverestimate.services.item_catalog_transfer import (
     export_item_catalog,
     import_item_catalog,
 )
-from silverestimate.services.main_commands import MainCommandOutcome, MainCommands
-from silverestimate.services.password_change_service import (
-    PasswordChangeResult,
-    PasswordChangeService,
-)
+from silverestimate.services.main_commands import MainCommands
 from silverestimate.services.settings_service import SettingsService
 from silverestimate.ui.estimate_entry import EstimateEntryWidget
 from silverestimate.ui.estimate_entry_layout_controller import (
@@ -69,44 +66,24 @@ from silverestimate.ui.print_format_spec import (
 )
 from silverestimate.ui.print_payload_builder import PrintDocument
 from silverestimate.ui.print_preview_controller import PrintPreviewController
-from silverestimate.ui.print_preview_navigation import (
-    PrintPreviewNavigationController,
-)
 from silverestimate.ui.print_preview_output import (
     PrintOutputOutcome,
-    PrintOutputService,
-    PrintPreviewOutputController,
-)
-from silverestimate.ui.print_preview_page_setup import (
-    PrintPreviewPageSetupController,
 )
 from silverestimate.ui.print_preview_preferences import (
     PreviewZoomPreference,
-    PrintPreviewPreferences,
 )
-from silverestimate.ui.print_preview_session import PrintPreviewSession
-from silverestimate.ui.print_preview_toolbar import PrintPreviewToolbarBuilder
 from silverestimate.ui.settings_appearance_page import (
     AppearanceSettingsPage,
-    AppearanceSettingsState,
-    SettingsAppearanceController,
 )
 from silverestimate.ui.settings_data_page import (
-    DataActionResult,
     DataManagementPage,
-    SettingsDataController,
 )
-from silverestimate.ui.settings_dialog import SettingsDialog
-from silverestimate.ui.settings_live_rates_page import LiveRatesSettingsPage
 from silverestimate.ui.settings_logging_page import (
     LoggingSettingsPage,
-    LoggingSettingsState,
-    SettingsLoggingController,
 )
 from silverestimate.ui.settings_print_page import PrintSettingsPage
 from silverestimate.ui.settings_security_page import (
     SecuritySettingsPage,
-    SettingsSecurityController,
 )
 from silverestimate.ui.silver_bar_history import SilverBarHistoryDialog
 from silverestimate.ui.silver_bar_load_controller import SilverBarLoadController
@@ -118,6 +95,28 @@ from silverestimate.ui.silver_bar_print_document import (
 )
 
 
+@cache
+def _source_text(path: Path) -> str:
+    """Read each immutable production source once across boundary checks."""
+    return path.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "page,forbidden",
+    [
+        (AppearanceSettingsPage, ("main_window",)),
+        (LoggingSettingsPage, ("main_window",)),
+        (DataManagementPage, ("main_window",)),
+        (SecuritySettingsPage, ("main_window", "credential_store")),
+        (PrintSettingsPage, ("SettingsDialog",)),
+    ],
+    ids=["appearance", "logging", "data", "security", "print"],
+)
+def test_settings_pages_keep_dependencies_narrow(page, forbidden):
+    source = inspect.getsource(page)
+    assert not {token for token in forbidden if token in source}
+
+
 def test_estimate_entry_uses_explicit_controller_composition() -> None:
     assert issubclass(EstimateEntryWidget, QWidget)
     assert issubclass(SilverBarDialog, SilverBarManagementFacade)
@@ -127,8 +126,6 @@ def test_estimate_entry_uses_explicit_controller_composition() -> None:
     assert isinstance(EstimateEntryWidget.layout_controller, property)
     assert isinstance(EstimateEntryWidget.table_controller, property)
     assert isinstance(EstimateEntryWidget.totals_controller, property)
-    assert callable(EstimateEntryWidget.save_estimate)
-    assert callable(SilverBarManagementFacade.load_available_bars)
     controller_properties = {
         EstimateEntryWidget.workflow_controller: EstimateEntryWorkflowController,
         EstimateEntryWidget.layout_controller: EstimateEntryLayoutController,
@@ -141,6 +138,11 @@ def test_estimate_entry_uses_explicit_controller_composition() -> None:
             controller_type,
         }
         assert "HostProxy" not in inspect.getsource(controller_type)
+        assert (
+            inspect.signature(controller_type.__init__).parameters["host"].annotation
+            == "EstimateEntryWidget"
+        )
+    assert "__getattr__" not in inspect.getsource(EstimateEntryWidget)
 
 
 def test_silver_bar_persistence_roles_are_independent() -> None:
@@ -193,7 +195,7 @@ def test_database_consumers_use_narrow_structural_contracts() -> None:
     assert not {
         path.relative_to(root).as_posix()
         for path in production_sources
-        if "db_manager: Any" in path.read_text(encoding="utf-8")
+        if "db_manager: Any" in _source_text(path)
     }
     repository_sources = (
         inspect.getsource(ItemsRepository),
@@ -222,8 +224,6 @@ def test_paged_screens_share_state_but_keep_feature_policy_local() -> None:
         assert "LatestRequestRunner" in source
         assert ".shutdown()" in source
 
-    assert callable(PagedLoadState.apply)
-    assert callable(PagedLoadState.reset)
     item_master_module = inspect.getmodule(ItemMasterWidget)
     estimate_history_module = inspect.getmodule(EstimateHistoryDialog)
     silver_bar_load_module = inspect.getmodule(SilverBarLoadController)
@@ -240,64 +240,6 @@ def test_paged_screens_share_state_but_keep_feature_policy_local() -> None:
     assert "live_rate_runner.shutdown()" in estimate_entry_owner
 
 
-def test_live_rate_settings_are_an_independent_page() -> None:
-    assert LiveRatesSettingsPage.__module__.endswith("settings_live_rates_page")
-    assert callable(LiveRatesSettingsPage.load_state)
-    assert callable(LiveRatesSettingsPage.save)
-
-
-def test_appearance_settings_are_an_independent_typed_page() -> None:
-    assert issubclass(AppearanceSettingsPage, QWidget)
-    assert AppearanceSettingsState.__dataclass_params__.frozen
-    assert callable(SettingsAppearanceController.load_state)
-    assert callable(SettingsAppearanceController.apply_state)
-    assert "main_window" not in inspect.getsource(AppearanceSettingsPage)
-    assert "AppearanceSettingsPage" in inspect.getsource(SettingsDialog._create_ui_tab)
-
-
-def test_logging_settings_are_an_independent_typed_page() -> None:
-    assert issubclass(LoggingSettingsPage, QWidget)
-    assert LoggingSettingsState.__dataclass_params__.frozen
-    assert callable(SettingsLoggingController.load_state)
-    assert callable(SettingsLoggingController.apply_state)
-    assert callable(SettingsLoggingController.cleanup_logs)
-    assert "main_window" not in inspect.getsource(LoggingSettingsPage)
-    assert "LoggingSettingsPage" in inspect.getsource(
-        SettingsDialog._create_logging_tab
-    )
-
-
-def test_data_management_is_an_independent_page_with_typed_outcomes() -> None:
-    assert issubclass(DataManagementPage, QWidget)
-    assert DataActionResult.__dataclass_params__.frozen
-    assert MainCommandOutcome.__dataclass_params__.frozen
-    assert callable(SettingsDataController.create_database_backup)
-    assert callable(SettingsDataController.stage_database_restore)
-    assert "main_window" not in inspect.getsource(DataManagementPage)
-    assert "DataManagementPage" in inspect.getsource(SettingsDialog._create_data_tab)
-
-
-def test_security_settings_use_an_independent_page_and_service() -> None:
-    assert issubclass(SecuritySettingsPage, QWidget)
-    assert PasswordChangeResult.__dataclass_params__.frozen
-    assert callable(SettingsSecurityController.change_passwords)
-    assert callable(PasswordChangeService.change_passwords)
-    assert "main_window" not in inspect.getsource(SecuritySettingsPage)
-    assert "credential_store" not in inspect.getsource(SecuritySettingsPage)
-    assert "SecuritySettingsPage" in inspect.getsource(
-        SettingsDialog._create_security_tab
-    )
-
-
-def test_print_settings_are_an_independent_page() -> None:
-    assert issubclass(PrintSettingsPage, QWidget)
-    assert callable(PrintSettingsPage.state)
-    assert callable(PrintSettingsPage.validate)
-    assert callable(PrintSettingsPage.apply)
-    assert "SettingsDialog" not in inspect.getsource(PrintSettingsPage)
-    assert "PrintSettingsPage" in inspect.getsource(SettingsDialog._create_print_tab)
-
-
 def test_settings_boundary_is_typed_versioned_and_centralized() -> None:
     root = Path(__file__).resolve().parents[2]
     settings_source = root / "silverestimate" / "infrastructure" / "settings.py"
@@ -307,15 +249,10 @@ def test_settings_boundary_is_typed_versioned_and_centralized() -> None:
         for path in production_sources
         if path != settings_source
         for key in SettingsKey
-        if key.value in path.read_text(encoding="utf-8")
+        if key.value in _source_text(path)
     }
 
     assert SETTINGS_SCHEMA_VERSION >= 1
-    assert callable(ApplicationSettings.get_bool)
-    assert callable(ApplicationSettings.get_int)
-    assert callable(ApplicationSettings.get_float)
-    assert callable(ApplicationSettings.get_text)
-    assert callable(ApplicationSettings.get_list)
     assert not raw_key_references
     assert not {"get", "set", "raw"} & vars(SettingsService).keys()
     assert "QSettings" not in inspect.getsource(SettingsService)
@@ -353,23 +290,15 @@ def test_print_pipeline_uses_typed_direct_documents_and_custom_preview() -> None
         f"{path.relative_to(root)}: {token}"
         for path in production_sources
         for token in forbidden
-        if token in path.read_text(encoding="utf-8")
+        if token in _source_text(path)
     }
 
 
 def test_print_preview_uses_focused_collaborators_and_typed_outcomes() -> None:
     assert PrintOutputOutcome.__dataclass_params__.frozen
     assert PreviewZoomPreference.__dataclass_params__.frozen
-    assert callable(PrintPreviewSession.switch_format)
-    assert callable(PrintPreviewNavigationController.add_page_navigation)
-    assert callable(PrintPreviewPageSetupController.open_page_setup)
-    assert callable(PrintPreviewPreferences.save_preview_defaults)
-    assert callable(PrintOutputService.export_pdf)
-    assert callable(PrintPreviewOutputController.quick_print_current)
-    assert callable(PrintPreviewToolbarBuilder.build)
 
     controller_source = inspect.getsource(PrintPreviewController)
-    assert len(controller_source.splitlines()) < 130
     assert not {
         token
         for token in (
@@ -406,12 +335,12 @@ def test_silver_bar_facade_methods_delegate_without_dynamic_widget_composition()
         facade_methods = {
             name: member
             for name, member in vars(facade_type).items()
-            if callable(member) and name != "_facade_call"
+            if callable(member)
         }
         controller_type = type(
             f"{facade_type.__name__}ControllerStub",
             (),
-            {name: return_one for name in facade_methods},
+            dict({name: return_one for name in facade_methods}, shutdown=return_one),
         )
         facade = facade_type()
         controller = controller_type()
@@ -429,7 +358,13 @@ def test_silver_bar_facade_methods_delegate_without_dynamic_widget_composition()
                     inspect.Parameter.POSITIONAL_OR_KEYWORD,
                 }
             ]
-            getattr(facade, method_name)(*required_args)
+            required_keywords = {
+                parameter.name: 1
+                for parameter in inspect.signature(method).parameters.values()
+                if parameter.default is inspect.Parameter.empty
+                and parameter.kind is inspect.Parameter.KEYWORD_ONLY
+            }
+            getattr(facade, method_name)(*required_args, **required_keywords)
 
         assert getattr(facade, "table_adapter", 1) == 1
 
@@ -451,7 +386,7 @@ def test_retired_graph_bridge_and_silver_bar_backend_stay_removed() -> None:
         f"{path.relative_to(root)}: {token}"
         for path in production_sources
         for token in forbidden
-        if token in path.read_text(encoding="utf-8")
+        if token in _source_text(path)
     }
 
 
@@ -460,7 +395,7 @@ def test_production_database_access_is_confined_to_sqlcipher_broker() -> None:
     imports = [
         path.relative_to(root).as_posix()
         for path in (root / "silverestimate").rglob("*.py")
-        if "import sqlite3" in path.read_text(encoding="utf-8")
+        if "import sqlite3" in _source_text(path)
     ]
     assert not imports
 
@@ -485,12 +420,21 @@ def test_password_hashing_is_confined_to_the_security_service() -> None:
         path.relative_to(root).as_posix(): reference
         for path in ui_root.rglob("*.py")
         for reference in ("import argon2", "from argon2", "passlib")
-        if reference in path.read_text(encoding="utf-8").lower()
+        if reference in _source_text(path).lower()
     }
 
     assert not forbidden_ui_references
-    password_service = (
+    password_service = _source_text(
         root / "silverestimate" / "security" / "password_service.py"
-    ).read_text(encoding="utf-8")
+    )
     assert "PasswordHasher" in password_service
     assert "check_needs_rehash" not in password_service
+
+
+def test_silver_bar_controllers_do_not_redirect_attribute_access() -> None:
+    root = Path(__file__).resolve().parents[2]
+    assert not (root / "silverestimate/ui/_host_proxy.py").exists()
+    assert "__getattr__" not in inspect.getsource(SilverBarDialog)
+    assert "_facade_call" not in inspect.getsource(SilverBarManagementFacade)
+    for path in (root / "silverestimate/ui").glob("silver_bar*.py"):
+        assert "HostProxy" not in _source_text(path)

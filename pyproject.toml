@@ -33,9 +33,9 @@ classifiers = [
 ]
 
 dependencies = [
-    "PySide6>=6.11.1,<6.12",
+    "PySide6>=6.11.2,<6.12",
     "argon2-cffi>=25.1.0,<26",
-    "keyring>=24.3.0",
+    "keyring>=25.7.0",
     "sqlcipher3==0.6.2+silverestimate.4.17.0.1; sys_platform == 'win32'",
 ]
 
@@ -45,23 +45,23 @@ sqlcipher3 = { path = "vendor/sqlcipher/sqlcipher3-0.6.2+silverestimate.4.17.0.1
 [project.optional-dependencies]
 dev = [
     # Testing
-    "pytest>=7.4.0",
-    "pytest-qt>=4.2.0",
-    "pytest-cov>=4.1.0",
-    "hypothesis>=6.0.0",
+    "pytest>=9.1.1",
+    "pytest-qt>=4.5.0",
+    "pytest-cov>=7.1.0",
+    "hypothesis>=6.167.1",
     # Code Quality
-    "ruff>=0.15.5",
-    "mypy>=1.5.0",
-    "nox>=2024.4.15",
+    "ruff>=0.16.6",
+    "mypy>=2.3.1",
+    "nox>=2026.8.17",
     # Pre-commit hooks
-    "pre-commit>=3.3.0",
+    "pre-commit>=4.6.2",
     # Development tools
-    "Nuitka==4.1.3",
+    "Nuitka==4.2.1",
     "zstandard==0.25.0",
-    "bandit[toml]>=1.7.9",
+    "bandit[toml]>=1.9.4",
     "pip-audit>=2.10.1,<3",
-    "diff-cover>=9.7.1",
-    "cyclonedx-bom>=7.2.1",
+    "diff-cover>=10.5.1",
+    "cyclonedx-bom>=7.3.1",
 ]
 
 [project.urls]
@@ -149,6 +149,7 @@ max-complexity = 15
 "silverestimate/ui/shared_screen_theme.py" = ["PLR0913"]
 "silverestimate/ui/silver_bar_history.py" = ["PLR0915"]
 "silverestimate/ui/silver_bar_list_print_controller.py" = ["PLR0913"]
+"silverestimate/ui/silver_bar_management_facade.py" = ["PLR0913"]
 "silverestimate/ui/silver_bar_load_controller.py" = ["PLR0912"]
 "silverestimate/ui/silver_bar_management.py" = ["PLR0915"]
 "silverestimate/ui/silver_bar_management_ui.py" = ["PLR0915"]
@@ -201,7 +202,6 @@ module = [
     "silverestimate.persistence.silver_bars_snapshot_repository",
     "silverestimate.presenter.estimate_entry_presenter",
     "silverestimate.infrastructure.application",
-    "silverestimate.ui._host_proxy",
     "silverestimate.ui.estimate_entry_components.primary_actions_bar",
     "silverestimate.ui.estimate_entry_components.secondary_actions_bar",
     "silverestimate.ui.estimate_entry_logic.constants",
@@ -273,3 +273,40 @@ exclude_lines = [
 
 [tool.bandit]
 exclude_dirs = ["tests", "build", "dist"]
+
+
+[[tool.mypy.overrides]]
+module = [
+    "silverestimate.domain.estimate_entry",
+    "silverestimate.services.estimate_entry_persistence",
+    "silverestimate.ui.estimate_entry",
+    "silverestimate.ui.estimate_entry_layout_controller",
+    "silverestimate.ui.estimate_entry_table_controller",
+    "silverestimate.ui.estimate_entry_totals_controller",
+    "silverestimate.ui.estimate_entry_workflow_controller",
+    "silverestimate.ui.estimate_draft_recovery",
+]
+enable_error_code = ["union-attr"]
+
+
+[[tool.mypy.overrides]]
+module = [
+    "silverestimate.ui.silver_bar_management",
+    "silverestimate.ui.silver_bar_management_facade",
+    "silverestimate.ui.silver_bar_management_ui",
+    "silverestimate.ui.silver_bar_management_state",
+    "silverestimate.ui.silver_bar_load_controller",
+    "silverestimate.ui.silver_bar_transfer_controller",
+    "silverestimate.ui.silver_bar_list_lifecycle_controller",
+    "silverestimate.ui.silver_bar_list_print_controller",
+    "silverestimate.ui.silver_bar_optimization_controller",
+    "silverestimate.ui.silver_bar_table_controller",
+    "silverestimate.ui.silver_bar_selection_state_controller",
+]
+enable_error_code = ["union-attr"]
+
+
+[[tool.mypy.overrides]]
+module = ["silverestimate.ui.preview_build_worker"]
+enable_error_code = ["union-attr"]
+disallow_untyped_defs = true

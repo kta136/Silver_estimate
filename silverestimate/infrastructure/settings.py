@@ -12,13 +12,14 @@ from .app_constants import SETTINGS_APP, SETTINGS_ORG
 # Marked crash snapshots can be offered for recovery on the next startup.
 ENABLE_TEMP_DB_RECOVERY = True
 
-SETTINGS_SCHEMA_VERSION = 1
+SETTINGS_SCHEMA_VERSION = 2
 
 
 class SettingsKey(StrEnum):
     """Canonical keys for every production application preference."""
 
     SCHEMA_VERSION = "meta/settings_schema_version"
+    BACKUP_LAST_VALIDATED_UTC = "backup/last_validated_utc"
 
     FONT_FAMILY = "font/family"
     FONT_SIZE = "font/size_float"
@@ -27,6 +28,9 @@ class SettingsKey(StrEnum):
     UI_MAIN_GEOMETRY = "ui/main_geometry"
     UI_MAIN_STATE = "ui/main_state"
     UI_SETTINGS_LAST_TAB = "ui/settings_last_tab"
+    UI_FONT_FAMILY = "ui/font_family"
+    UI_ROW_DENSITY = "ui/row_density"
+    UI_ALTERNATING_ROWS = "ui/alternating_rows"
     UI_TABLE_FONT_SIZE = "ui/table_font_size"
     UI_BREAKDOWN_FONT_SIZE = "ui/breakdown_font_size"
     UI_FINAL_CALC_FONT_SIZE = "ui/final_calc_font_size"
@@ -313,7 +317,7 @@ def migrate_settings(backend: RawSettingsBackend) -> int:
     if version > SETTINGS_SCHEMA_VERSION:
         return version
     original_version = version
-    migrations = {1: _migrate_to_v1}
+    migrations = {1: _migrate_to_v1, 2: _migrate_to_v2}
     while version < SETTINGS_SCHEMA_VERSION:
         next_version = version + 1
         migrations[next_version](backend)
@@ -359,3 +363,20 @@ __all__ = [
     "get_app_settings",
     "migrate_settings",
 ]
+
+
+def _migrate_to_v2(backend: RawSettingsBackend) -> None:
+    """Adopt the approved appearance once, without resetting print preferences."""
+    defaults = {
+        SettingsKey.UI_FONT_FAMILY: "Segoe UI",
+        SettingsKey.UI_TABLE_FONT_SIZE: 11,
+        SettingsKey.UI_BREAKDOWN_FONT_SIZE: 11,
+        SettingsKey.UI_FINAL_CALC_FONT_SIZE: 16,
+        SettingsKey.UI_ROW_DENSITY: "compact",
+        SettingsKey.UI_ALTERNATING_ROWS: True,
+        SettingsKey.UI_ESTIMATE_TOTALS_POSITION: "right",
+    }
+    for key, value in defaults.items():
+        backend.setValue(str(key), value)
+    backend.remove(str(SettingsKey.UI_ESTIMATE_TABLE_COLUMN_WIDTHS))
+    backend.remove(str(SettingsKey.UI_ESTIMATE_TOTALS_SECTION_ORDER))

@@ -17,7 +17,7 @@ uv sync --frozen --extra dev
 
 Do not install an ad-hoc release dependency set. PR, main, and tag workflows
 all run the same frozen development sync so tests, security tools, SBOM
-generation, `pyside6-deploy`, Nuitka 4.1.3, and zstandard 0.25.0 use the locked
+generation, `pyside6-deploy`, Nuitka 4.2.1, and zstandard 0.25.0 use the locked
 graph.
 
 ## Local validation
@@ -34,7 +34,7 @@ uv run nox -s build_standalone
 uv run nox -s standalone_artifact_smoke
 uv run nox -s build_clean
 uv run nox -s artifact_smoke
-uv run python scripts/check_startup_budgets.py --artifact dist\SilverEstimate-v3.12.exe --samples 5 --p95-budget-ms 3000
+uv run python scripts/check_startup_budgets.py --artifact dist\SilverEstimate-v4.0.exe --samples 5 --p95-budget-ms 3000
 ```
 
 The standalone build is a diagnostic artifact at
@@ -51,7 +51,9 @@ The clean one-file build produces:
 For a local release build, run `scripts\build_windows_local.cmd`. The launcher
 quotes the PowerShell script path so repositories stored in workspace paths
 containing spaces are supported. The PowerShell script
-requires the locked `uv` environment and Python 3.14, removes the stale
+reads the exact Python patch version from `.python-version` (currently 3.14.7),
+uses `uv` to find or download that interpreter, verifies the synchronized
+environment matches it, and removes the stale
 unversioned artifact before compilation, builds the one-file loader with MSVC,
 and runs the frozen artifact under a system-only `PATH`. It also inspects the
 outer PE import table and rejects the build if it requires anything beyond
@@ -134,11 +136,10 @@ The `main` source version may be newer than the latest published package. The
 is authoritative for supported downloads; a release is not current until its
 matching tag workflow completes successfully.
 
-Signing is intentionally non-blocking until `WINDOWS_SIGNING_CERTIFICATE_BASE64` and `WINDOWS_SIGNING_CERTIFICATE_PASSWORD` are configured. Once production credentials are available, remove `continue-on-error` after validating the timestamp and certificate chain.
+Signing is skipped when `WINDOWS_SIGNING_CERTIFICATE_BASE64` is absent. When a certificate is configured, `WINDOWS_SIGNING_CERTIFICATE_PASSWORD` must match it and any signing failure stops the release. Validate the timestamp and certificate chain before promoting a signed executable.
 
-Nuitka 4.1.3 is the selected stable release for the current toolchain and
-adds Python 3.14 support, but still labels Python 3.14 experimental during the
-build. The executable must not be promoted until the hosted Windows build,
+Nuitka 4.2.1 is pinned for the current toolchain; the 4.2 series officially
+supports Python 3.14. The executable must not be promoted until the hosted Windows build,
 artifact smoke, complete tests, and startup budget all pass with the locked
 Python 3.14 patch release.
 

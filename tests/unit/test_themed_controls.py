@@ -28,8 +28,9 @@ def _right_edge_color_count(widget, color_name: str) -> int:
     return count
 
 
-def test_themed_spin_and_combo_arrows_remain_visible_under_qss(qt_app):
+def test_themed_spin_and_combo_arrows_remain_visible_under_qss(qtbot, qt_app):
     host = QWidget()
+    qtbot.addWidget(host)
     host.setStyleSheet(
         build_management_screen_stylesheet(
             root_selector="QWidget",

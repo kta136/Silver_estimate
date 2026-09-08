@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.14"
+          python-version-file: ".python-version"
           architecture: x64
       - name: Install generation dependencies
         shell: pwsh
@@ -24,11 +24,11 @@ jobs:
       - name: Build and probe candidate from pinned sources
         shell: pwsh
         run: ./scripts/build_sqlcipher_wheel.ps1
-      - name: Install and probe candidate runtime
+      - name: Install candidate runtime
         shell: pwsh
-        run: |
-          python -m pip install --force-reinstall dist/sqlcipher/*.whl
-          python scripts/verify_sqlcipher_runtime.py --provenance vendor/sqlcipher/PROVENANCE.json
+        run: python -m pip install --force-reinstall dist/sqlcipher/*.whl
+      - name: Probe candidate runtime
+        run: python scripts/verify_sqlcipher_runtime.py --provenance vendor/sqlcipher/PROVENANCE.json
       - name: Native dependency inventory
         shell: pwsh
         run: |

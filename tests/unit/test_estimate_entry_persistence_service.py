@@ -92,7 +92,7 @@ def test_prepare_save_payload_aggregates_rows():
         last_balance_amount=50.0,
     )
 
-    service = EstimateEntryPersistenceService(view_model)
+    service = EstimateEntryPersistenceService(view_model.as_save_snapshot())
     prep = service.prepare_save_payload(
         voucher_no="ABC123",
         date="2025-10-17",
@@ -143,7 +143,7 @@ def test_prepare_save_payload_skips_invalid_rows():
         ]
     )
 
-    service = EstimateEntryPersistenceService(view_model)
+    service = EstimateEntryPersistenceService(view_model.as_save_snapshot())
     prep = service.prepare_save_payload(
         voucher_no="SKIP",
         date="2025-10-17",
@@ -154,6 +154,72 @@ def test_prepare_save_payload_skips_invalid_rows():
     assert "cannot be negative" in prep.row_errors[2].lower()
     assert len(prep.payload.items) == 1
     assert prep.payload.items[0].code == "GOOD"
+    assert prep.payload.totals["net_fine"] == pytest.approx(4.1625)
+    presenter = _PresenterStub()
+    outcome, _ = service.execute_save(
+        voucher_no="SKIP", date="2025-10-17", note="note", presenter=presenter
+    )
+    assert not outcome.success
+    assert "Row 2" in outcome.error_detail
+    assert presenter.last_payload is None
+    assert len(view_model.rows()) == 2
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("gross", float("nan")),
+        ("fine_weight", float("inf")),
+        ("wage_rate", float("nan")),
+        ("purity", 101),
+        ("pieces", 2**63),
+        ("pieces", 1.5),
+        ("poly", 11),
+    ],
+)
+def test_execute_save_rejects_invalid_row_numbers(field, value):
+    from dataclasses import replace
+
+    view_model = EstimateEntryViewModel()
+    good = _row(
+        "GOOD", EstimateLineCategory.REGULAR, gross=10, poly=0, net=10, fine=9, wage=10
+    )
+    view_model.set_rows([good, replace(good, code="BAD", **{field: value})])
+    presenter = _PresenterStub()
+    outcome, prep = EstimateEntryPersistenceService(
+        view_model.as_save_snapshot()
+    ).execute_save(voucher_no="1", date="2026-09-05", note="draft", presenter=presenter)
+    assert not outcome.success
+    assert prep.skipped_rows == [2]
+    assert "Row 2" in outcome.error_detail
+    assert presenter.last_payload is None
+
+
+def test_populated_row_without_code_cannot_be_silently_dropped():
+    view_model = EstimateEntryViewModel()
+    view_model.set_rows(
+        [
+            _row(
+                "GOOD",
+                EstimateLineCategory.REGULAR,
+                gross=10,
+                poly=0,
+                net=10,
+                fine=9,
+                wage=10,
+            ),
+            EstimateEntryRowState(gross=2),
+            EstimateEntryRowState(),
+        ]
+    )
+    presenter = _PresenterStub()
+    outcome, prep = EstimateEntryPersistenceService(
+        view_model.as_save_snapshot()
+    ).execute_save(voucher_no="1", date="2026-09-05", note="", presenter=presenter)
+    assert not outcome.success
+    assert prep.skipped_rows == [2]
+    assert "code" in prep.row_errors[2].lower()
+    assert presenter.last_payload is None
 
 
 def test_prepare_save_payload_raises_when_no_valid_rows():
@@ -172,7 +238,7 @@ def test_prepare_save_payload_raises_when_no_valid_rows():
         ]
     )
 
-    service = EstimateEntryPersistenceService(view_model)
+    service = EstimateEntryPersistenceService(view_model.as_save_snapshot())
 
     with pytest.raises(ValueError):
         service.prepare_save_payload(
@@ -199,7 +265,7 @@ def test_execute_save_invokes_presenter():
     )
 
     presenter = _PresenterStub()
-    service = EstimateEntryPersistenceService(view_model)
+    service = EstimateEntryPersistenceService(view_model.as_save_snapshot())
 
     outcome, prep = service.execute_save(
         voucher_no="DOIT",

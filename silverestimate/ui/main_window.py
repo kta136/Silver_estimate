@@ -449,6 +449,10 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """Handle window close event."""
+        catalog = getattr(self, "item_master_widget", None)
+        if catalog is not None and not catalog.confirm_discard_edits():
+            event.ignore()
+            return
         estimate_widget = getattr(self, "estimate_widget", None)
         if estimate_widget and hasattr(estimate_widget, "confirm_exit"):
             try:
@@ -459,6 +463,7 @@ class MainWindow(QMainWindow):
                 self.logger.debug("Estimate exit confirmation failed: %s", exc)
 
         self._closing = True
+        self._stop_entry_background_work()
         self.logger.info("Application closing")
         try:
             settings_service = self.settings_service
@@ -498,6 +503,11 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             self.logger.debug("Failed to quit QApplication cleanly: %s", exc)
         super().closeEvent(event)
+
+    def _stop_entry_background_work(self):
+        stop = getattr(self.estimate_widget, "stop_background_work", None)
+        if callable(stop):
+            stop()
 
     def show_settings_dialog(self):
         """Show the centralized settings dialog."""

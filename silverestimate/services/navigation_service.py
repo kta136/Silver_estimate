@@ -33,7 +33,8 @@ class NavigationService:
                 "Estimate entry is not available. Please restart the application.",
             )
             return
-        self._switch_widget(widget)
+        if not self._switch_widget(widget):
+            return
         self._sync_actions(
             nav=getattr(self.main_window, "nav_estimate_action", None),
             menu=getattr(self.main_window, "_menu_estimate_action", None),
@@ -61,7 +62,8 @@ class NavigationService:
                     f"Item master could not be initialized: {exc}",
                 )
                 return
-        self._switch_widget(widget)
+        if not self._switch_widget(widget):
+            return
         self._sync_actions(
             nav=getattr(self.main_window, "nav_item_master_action", None),
             menu=getattr(self.main_window, "_menu_item_master_action", None),
@@ -138,9 +140,14 @@ class NavigationService:
             )
 
     # --- Helpers -------------------------------------------------------
-    def _switch_widget(self, widget) -> None:
+    def _switch_widget(self, widget) -> bool:
         if self.stack:
+            current = self.stack.currentWidget()
+            guard = getattr(current, "confirm_discard_edits", None)
+            if current is not widget and callable(guard) and not guard():
+                return False
             self.stack.setCurrentWidget(widget)
+        return True
 
     def _sync_actions(self, *, nav=None, menu=None, view=None) -> None:
         for action in (nav, menu, view):

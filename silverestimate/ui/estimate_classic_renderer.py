@@ -9,20 +9,24 @@ from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QFont, QFontMetricsF, QPainter
 from PySide6.QtPrintSupport import QPrinter
 
+from silverestimate.domain.estimate_totals import calculate_grand_total
+from silverestimate.domain.numeric_policy import fixed_decimal, silver_value, sum_values
+from silverestimate.ui.estimate_table_formatting import format_indian_number
+
 from .estimate_print_document import EstimatePrintDocument, EstimatePrintItem
 from .print_format_spec import CLASSIC_ESTIMATE_FORMAT_SPEC
 
 _SNO_WIDTH = 3
 _NAME_WIDTH = 18
 _TUNCH_WIDTH = 7
-_GROSS_WIDTH = 9
-_POLY_WIDTH = 9
-_NET_WIDTH = 9
+_GROSS_WIDTH = 10
+_POLY_WIDTH = 10
+_NET_WIDTH = 10
 _PURITY_WIDTH = 8
 _WAGE_RATE_WIDTH = 9
 _PIECES_WIDTH = 9
-_FINE_WIDTH = 9
-_LABOUR_WIDTH = 9
+_FINE_WIDTH = 10
+_LABOUR_WIDTH = 16
 _LINE_WIDTH = sum(
     (
         _SNO_WIDTH,
@@ -137,10 +141,10 @@ def build_classic_estimate_layout(
 
     last_silver = header.last_balance_silver
     last_amount = header.last_balance_amount
-    if last_silver > 0 or last_amount > 0:
+    if last_silver != 0 or last_amount != 0:
         balance = (
-            f"Silver: {_grouped(last_silver, decimals=1)} g   "
-            f"Amount: Rs. {_grouped(last_amount, decimals=1)}"
+            f"Silver: {_grouped(last_silver, decimals=3)} g   "
+            f"Amount: Rs. {_grouped(last_amount, decimals=2)}"
         )
         lines.extend(
             (
@@ -151,22 +155,28 @@ def build_classic_estimate_layout(
             )
         )
 
-    net_fine = (
-        regular_totals.fine
-        - bar_totals.fine
-        - return_totals.fine
-        - returned_bar_totals.fine
-        + (last_silver if last_silver > 0 else 0.0)
+    net_fine = sum_values(
+        (
+            regular_totals.fine,
+            -bar_totals.fine,
+            -return_totals.fine,
+            -returned_bar_totals.fine,
+            last_silver,
+        )
     )
-    net_wage = (
-        regular_totals.wage
-        - bar_totals.wage
-        - return_totals.wage
-        - returned_bar_totals.wage
-        + (last_amount if last_amount > 0 else 0.0)
+    net_wage = sum_values(
+        (
+            regular_totals.wage,
+            -bar_totals.wage,
+            -return_totals.wage,
+            -returned_bar_totals.wage,
+            last_amount,
+        )
     )
-    silver_cost = net_fine * header.silver_rate
-    total_cost = net_wage + silver_cost
+    silver_cost = silver_value(net_fine, header.silver_rate)
+    total_cost = calculate_grand_total(
+        net_fine=net_fine, net_wage=net_wage, silver_rate=header.silver_rate
+    )
     lines.extend(
         (
             "Final Silver & Amount".center(line_width),
@@ -244,7 +254,8 @@ def _fit_font(
     line_width: int,
 ) -> tuple[QFont, QFontMetricsF]:
     metrics = QFontMetricsF(font, printer)
-    required = metrics.horizontalAdvance("M" * line_width)
+    # Leave one character of headroom for printer font-metric rounding.
+    required = metrics.horizontalAdvance("M" * (line_width + 1))
     if required <= page_width or required <= 0:
         return font, metrics
     fitted = QFont(font)
@@ -284,7 +295,7 @@ def _title_line(note: str, *, line_width: int) -> str:
 
 def _voucher_line(voucher_no: str, silver_rate: float, *, line_width: int) -> str:
     voucher = voucher_no.ljust(15)
-    rate = f"S.Rate :{silver_rate:10.1f}"
+    rate = f"S.Rate :{fixed_decimal(silver_rate, 2):>10}"
     return f"{voucher}{' ' * max(1, line_width - len(voucher) - len(rate))}{rate}"
 
 
@@ -301,10 +312,10 @@ def _column_header(*, show_tunch: bool, line_width: int) -> str:
             "Poly".ljust(_POLY_WIDTH),
             "Net".ljust(_NET_WIDTH),
             "%".ljust(_PURITY_WIDTH),
-            "W Rate".ljust(_WAGE_RATE_WIDTH),
+            "Lbr".ljust(_WAGE_RATE_WIDTH),
             "PCS".ljust(_PIECES_WIDTH),
             "Fine".ljust(_FINE_WIDTH),
-            "Lbr".ljust(_LABOUR_WIDTH),
+            "Lbr Amt".ljust(_LABOUR_WIDTH),
         )
     )
     return " ".join(parts)[:line_width]
@@ -324,11 +335,11 @@ def _append_section(  # noqa: PLR0913 - explicit fixed-width rendering context
         lines.extend((section.title.center(line_width), dash, column_header, dash))
     totals = _Totals()
     for index, item in enumerate(section.items, start=1):
-        totals.fine += item.fine
-        totals.wage += item.wage
-        totals.gross += item.gross
-        totals.poly += item.poly
-        totals.net += item.net_wt
+        totals.fine = sum_values((totals.fine, item.fine))
+        totals.wage = sum_values((totals.wage, item.wage))
+        totals.gross = sum_values((totals.gross, item.gross))
+        totals.poly = sum_values((totals.poly, item.poly))
+        totals.net = sum_values((totals.net, item.net_wt))
         lines.append(
             _row_line(
                 _RowValues(
@@ -383,14 +394,14 @@ def _row_line(
         parts.append(_text(row.tunch, _TUNCH_WIDTH))
     parts.extend(
         (
-            _number(row.gross, _GROSS_WIDTH, decimals=2),
-            _number(row.poly, _POLY_WIDTH, decimals=0),
-            _number(row.net, _NET_WIDTH, decimals=2),
+            _number(row.gross, _GROSS_WIDTH, decimals=3),
+            _number(row.poly, _POLY_WIDTH, decimals=3),
+            _number(row.net, _NET_WIDTH, decimals=3),
             _number(row.purity, _PURITY_WIDTH, decimals=2),
             _number(row.wage_rate, _WAGE_RATE_WIDTH, decimals=2),
             _number(row.pieces, _PIECES_WIDTH, decimals=0),
-            _number(row.fine, _FINE_WIDTH, decimals=2),
-            _number(row.labour, _LABOUR_WIDTH, decimals=0),
+            _number(row.fine, _FINE_WIDTH, decimals=3),
+            _number(row.labour, _LABOUR_WIDTH, decimals=2),
         )
     )
     return " ".join(parts)[:line_width]
@@ -399,7 +410,7 @@ def _row_line(
 def _number(value: float | None, width: int, *, decimals: int) -> str:
     if value is None:
         return " " * width
-    text = str(int(round(value))) if decimals <= 0 else f"{value:.{decimals}f}"
+    text = fixed_decimal(value, decimals)
     return text[:width].ljust(width)
 
 
@@ -416,34 +427,22 @@ def _final_line(  # noqa: PLR0913 - explicit fixed-width summary inputs
     include_cost: bool,
     line_width: int,
 ) -> str:
-    fine = f"{_grouped(net_fine, decimals=2)} gm"
-    wage = _grouped(net_wage, decimals=0)
+    fine = f"{_grouped(net_fine, decimals=3)} gm"
+    wage = _grouped(net_wage, decimals=2)
     prefix = f"{' ' * (_SNO_WIDTH + 1)}{fine.rjust(max(_FINE_WIDTH, len(fine)))} "
     if not include_cost:
-        return f"{prefix}{('Rs. ' + _grouped(total_cost, decimals=1)).rjust(_LABOUR_WIDTH)}"[
+        return f"{prefix}{('Rs. ' + _grouped(total_cost, decimals=2)).rjust(_LABOUR_WIDTH)}"[
             :line_width
         ]
     prefix += wage.rjust(max(_LABOUR_WIDTH, len(wage)))
-    cost = ("S.Cost : Rs. " + _grouped(silver_cost, decimals=1)).rjust(22)
-    total = ("Total: Rs. " + _grouped(total_cost, decimals=1)).rjust(18)
+    cost = ("S.Cost : Rs. " + _grouped(silver_cost, decimals=2)).rjust(22)
+    total = ("Total: Rs. " + _grouped(total_cost, decimals=2)).rjust(18)
     spacing = max(1, line_width - len(prefix) - len(cost) - len(total) - 1)
     return f"{prefix}{' ' * spacing}{cost} {total}"[:line_width]
 
 
 def _grouped(value: float, *, decimals: int) -> str:
-    sign = "-" if value < 0 else ""
-    integer, separator, fraction = f"{abs(value):.{decimals}f}".partition(".")
-    if len(integer) > 3:
-        suffix = integer[-3:]
-        prefix = integer[:-3]
-        groups = []
-        while prefix:
-            groups.append(prefix[-2:])
-            prefix = prefix[:-2]
-        integer = f"{','.join(reversed(groups))},{suffix}"
-    if decimals <= 0:
-        return f"{sign}{integer}"
-    return f"{sign}{integer}{separator}{fraction}"
+    return format_indian_number(value, decimals)
 
 
 def _truncate(value: str, width: int) -> str:

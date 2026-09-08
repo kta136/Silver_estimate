@@ -51,26 +51,26 @@ class LoginDialog(QDialog):
                 QFrame#LoginPanelFrame {
                     background-color: __SURFACE_BG__;
                     border: 1px solid __CARD_BORDER__;
-                    border-radius: 18px;
+                    border-radius: 8px;
                 }
                 QLabel#LoginSubtitleLabel {
-                    font-size: 9pt;
+
                 }
                 QLabel#LoginHelpLabel {
                     color: __TEXT_MUTED__;
-                    font-size: 9pt;
+
                 }
                 QLabel#LoginRequirementsLabel {
                     background-color: __HEADER_BG__;
                     border: 1px solid __CARD_BORDER_SOFT__;
                     border-radius: 8px;
                     color: __FIELD_TEXT__;
-                    font-size: 9pt;
+
                     padding: 7px 9px;
                 }
                 QCheckBox#LoginShowPasswords {
                     color: __FIELD_TEXT__;
-                    font-size: 8.6pt;
+
                     spacing: 8px;
                 }
                 QCheckBox#LoginShowPasswords::indicator {
@@ -98,7 +98,7 @@ class LoginDialog(QDialog):
                 }
                 QPushButton#LoginForgotButton {
                     color: __PRIMARY_BG__;
-                    font-size: 9pt;
+
                     font-weight: 600;
                     text-align: left;
                     border: none;
@@ -111,12 +111,12 @@ class LoginDialog(QDialog):
                 }
                 QLabel#LoginDangerTitle {
                     color: #991b1b;
-                    font-size: 8.9pt;
+
                     font-weight: 700;
                 }
                 QLabel#LoginDangerBody {
                     color: #7f1d1d;
-                    font-size: 8.3pt;
+
                 }
                 QFrame#LoginDangerCard {
                     background-color: __DANGER_BG__;
@@ -135,7 +135,7 @@ class LoginDialog(QDialog):
         self._setup_ui()
         resize_to_available_screen(
             self,
-            preferred_width=500 if self.is_setup else 460,
+            preferred_width=540 if self.is_setup else 460,
             preferred_height=self.sizeHint().height() + 36,
         )
         self._connect_signals()
@@ -250,7 +250,17 @@ class LoginDialog(QDialog):
             "Show passwords" if self.is_setup else "Show password"
         )
         self.show_passwords_checkbox.setObjectName("LoginShowPasswords")
-        panel_layout.addWidget(self.show_passwords_checkbox)
+        visibility_row = QHBoxLayout()
+        visibility_row.addWidget(self.show_passwords_checkbox)
+        visibility_row.addStretch()
+        self.caps_lock_label = QLabel("Caps Lock is on")
+        self.caps_lock_label.setStyleSheet("color: #9a3412;")
+        visibility_row.addWidget(self.caps_lock_label)
+        self.caps_lock_label.hide()
+        self._caps_timer = QTimer(self)
+        self._caps_timer.timeout.connect(self._update_caps_lock)
+        self._caps_timer.start(250)
+        panel_layout.addLayout(visibility_row)
 
         button_layout = QHBoxLayout()
         button_layout.setSpacing(10)
@@ -281,12 +291,13 @@ class LoginDialog(QDialog):
         panel_layout.addLayout(button_layout)
 
         if not self.is_setup:
-            forgot_link = QPushButton("Forgot password?")
+            forgot_link = QPushButton("Need help?")
             forgot_link.setObjectName("LoginForgotButton")
             forgot_link.setCursor(Qt.CursorShape.PointingHandCursor)
             forgot_link.setAccessibleName("Show password recovery options")
             forgot_link.setFlat(True)
-            panel_layout.addWidget(forgot_link)
+            button_layout.insertWidget(0, forgot_link)
+            button_layout.insertStretch(1)
 
             danger_card = QFrame(panel)
             danger_card.setObjectName("LoginDangerCard")
@@ -323,6 +334,16 @@ class LoginDialog(QDialog):
             forgot_link.clicked.connect(
                 lambda: danger_card.setVisible(not danger_card.isVisible())
             )
+
+    def _update_caps_lock(self):
+        import sys
+
+        enabled = False
+        if sys.platform == "win32":
+            import ctypes
+
+            enabled = bool(ctypes.windll.user32.GetKeyState(0x14) & 1)
+        self.caps_lock_label.setVisible(enabled)
 
     def _connect_signals(self):
         """Connect UI signals to slots."""

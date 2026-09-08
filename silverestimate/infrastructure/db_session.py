@@ -34,17 +34,3 @@ class ConnectionThreadGuard:
             )
         except Exception:
             return False
-
-    def commit_if_owner(self, connection) -> bool:
-        """Commit on the owning thread and skip politely on others."""
-        if connection is None:
-            return True
-        if not self.is_owner():
-            self._logger.debug("Skipping commit on non-owner thread")
-            return True
-        try:
-            connection.commit()
-            return True
-        except Exception as exc:  # pragma: no cover - callers log the failure
-            self._logger.error("Commit failed: %s", exc, exc_info=True)
-            return False

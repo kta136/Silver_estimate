@@ -74,7 +74,7 @@ def test_load_state_normalizes_invalid_and_out_of_range_values() -> None:
         print_font=FontSettings("Arial", 8.0, True),
         table_font_size=16,
         breakdown_font_size=7,
-        final_calc_font_size=10,
+        final_calc_font_size=16,
         totals_position="right",
     )
 
@@ -104,6 +104,9 @@ def test_apply_state_uses_narrow_actions_then_persists_typed_values() -> None:
         ("position", "bottom"),
     ]
     assert settings.values == {
+        "ui/font_family": "Segoe UI",
+        "ui/row_density": "compact",
+        "ui/alternating_rows": True,
         "font/family": "Segoe UI",
         "font/size_float": 9.5,
         "font/bold": True,

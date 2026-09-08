@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 
 from PySide6.QtCore import QRectF
-from PySide6.QtGui import QFont, QPainter
+from PySide6.QtGui import QColor, QFont, QPainter
 from PySide6.QtPrintSupport import QPrinter
 
 from .estimate_classic_renderer import (
@@ -25,25 +25,13 @@ from .modern_print_primitives import (
     ALTERNATE_ROW_BG as _ALTERNATE_ROW_BG,
 )
 from .modern_print_primitives import (
-    COLUMN_HEADER_BG as _COLUMN_HEADER_BG,
-)
-from .modern_print_primitives import (
     FINAL_BG as _FINAL_BG,
 )
 from .modern_print_primitives import (
     MUTED_TEXT as _MUTED_TEXT,
 )
 from .modern_print_primitives import (
-    RETURN_SECTION_BG as _RETURN_SECTION_BG,
-)
-from .modern_print_primitives import (
-    SECTION_BG as _SECTION_BG,
-)
-from .modern_print_primitives import (
     TEXT as _TEXT,
-)
-from .modern_print_primitives import (
-    TOTAL_BG as _TOTAL_BG,
 )
 from .modern_print_primitives import (
     WHITE as _WHITE,
@@ -53,7 +41,6 @@ from .modern_print_primitives import (
 )
 from .modern_print_primitives import (
     PrintAlignment,
-    column_divider_positions,
 )
 from .modern_print_primitives import (
     build_modern_print_style as _build_style,
@@ -64,12 +51,10 @@ from .modern_print_primitives import (
 from .modern_print_primitives import (
     draw_text as _draw_text,
 )
-from .modern_print_primitives import (
-    minimize_bottom_page_margin as _minimize_bottom_page_margin,
-)
 from .print_format_spec import MODERN_ESTIMATE_FORMAT_SPEC, normalize_estimate_format
 
-_REGULAR_SECTION_GAP_ROWS = 2.0
+_TOTAL_BG = QColor("#e0f2f3")
+_COLUMN_HEADER_BG = QColor("#f4f5f6")
 
 
 @dataclass(frozen=True)
@@ -126,7 +111,6 @@ class EstimatePrintRenderer:
             )
         layout = self.build_modern_layout(document)
         base_font = self._resolve_font(print_font)
-        _minimize_bottom_page_margin(printer)
         painter = QPainter()
         if not painter.begin(printer):
             raise RuntimeError("Could not initialize the estimate print painter.")
@@ -339,11 +323,9 @@ def _header_height(layout: ModernEstimateLayout, style: _PaintStyle) -> float:
 
 
 def _summary_height(layout: ModernEstimateLayout, style: _PaintStyle) -> float:
-    height = style.metric_title_height + style.metric_row_height
+    height = style.summary_gap + len(layout.final_metrics) * style.total_height
     if layout.last_balance_metrics:
-        height += (
-            style.metric_title_height + style.metric_row_height + style.summary_gap
-        )
+        height += style.metadata_height + style.summary_gap
     return height
 
 
@@ -379,20 +361,21 @@ def _draw_header(
     _draw_text(
         painter,
         title_rect,
-        "ESTIMATE SLIP ONLY",
+        "ESTIMATE SLIP",
         font=style.title_font,
         metrics=style.title_metrics,
-        alignment="center",
+        alignment="left",
         padding=style.padding,
     )
     y += style.title_height
 
-    widths = (0.50, 0.50)
+    widths = (0.30, 0.35, 0.35)
     labels = (
         f"Voucher: {layout.voucher_no}",
+        f"Date: {layout.date}",
         f"Silver Rate: {layout.silver_rate}",
     )
-    alignments: tuple[PrintAlignment, ...] = ("left", "right")
+    alignments: tuple[PrintAlignment, ...] = ("left", "left", "right")
     x = 0.0
     for ratio, label, alignment in zip(widths, labels, alignments, strict=True):
         width = page_width * ratio
@@ -439,17 +422,16 @@ def _draw_section_fragment(
     section_rect = QRectF(0.0, y, page_width, style.section_header_height)
     painter.fillRect(
         section_rect,
-        _RETURN_SECTION_BG if section.is_return else _SECTION_BG,
+        _WHITE,
     )
     painter.setPen(style.border_pen)
-    painter.drawRect(section_rect)
     _draw_text(
         painter,
         section_rect,
         title,
         font=style.section_font,
         metrics=style.section_metrics,
-        alignment="center",
+        alignment="left",
         padding=style.padding,
     )
     y += style.section_header_height
@@ -482,6 +464,12 @@ def _draw_section_fragment(
             font=style.base_font,
             metrics=style.base_metrics,
             background=_ALTERNATE_ROW_BG if row_index % 2 else _WHITE,
+            fit_to_width=True,
+            elide_columns=tuple(
+                i
+                for i, column in enumerate(section.columns)
+                if column.key in {"name", "tunch", "type"}
+            ),
         )
         y += style.row_height
 
@@ -498,6 +486,7 @@ def _draw_section_fragment(
             metrics=style.bold_metrics,
             background=_TOTAL_BG,
             strong_border=True,
+            fit_to_width=True,
         )
         y += style.total_height + _section_gap_height(section, style)
     return y
@@ -507,13 +496,7 @@ def _section_gap_height(
     section: EstimatePrintSection,
     style: _PaintStyle,
 ) -> float:
-    return style.section_gap if section.key == "regular" else 0.0
-
-
-def _column_divider_positions(columns, page_width):
-    """Compatibility wrapper over the shared Modern table geometry."""
-
-    return column_divider_positions(columns, page_width)
+    return style.section_gap * 0.25
 
 
 def _draw_summary(
@@ -525,25 +508,81 @@ def _draw_summary(
     y: float,
 ) -> float:
     if layout.last_balance_metrics:
-        y = _draw_metric_block(
-            painter,
-            "LAST BALANCE",
-            layout.last_balance_metrics,
-            style,
-            page_width=page_width,
-            y=y,
-            dark_title=False,
+        disclosure = "Last balance included: " + "  ·  ".join(
+            f"{metric.label}: {metric.value}" for metric in layout.last_balance_metrics
         )
-        y += style.summary_gap
-    return _draw_metric_block(
-        painter,
-        "FINAL SILVER & AMOUNT",
-        layout.final_metrics,
-        style,
-        page_width=page_width,
-        y=y,
-        dark_title=True,
-    )
+        _draw_text(
+            painter,
+            QRectF(0, y, page_width, style.metadata_height),
+            disclosure,
+            font=style.base_font,
+            metrics=style.base_metrics,
+            alignment="left",
+            padding=style.padding,
+            color=_MUTED_TEXT,
+            fit_to_width=True,
+        )
+        y += style.metadata_height + style.summary_gap
+    y += style.summary_gap
+    table_x = page_width * 0.50
+    table_width = page_width - table_x
+    row_height = style.total_height
+    if layout.has_rate:
+        rect = QRectF(0, y, page_width * 0.46, row_height * len(layout.final_metrics))
+        painter.fillRect(rect, _TOTAL_BG)
+        painter.setPen(style.border_pen)
+        painter.drawRect(rect)
+        _draw_text(
+            painter,
+            QRectF(rect.x(), rect.y(), rect.width(), rect.height() / 2),
+            "Total Fine Weight (g)",
+            font=style.bold_font,
+            metrics=style.bold_metrics,
+            alignment="center",
+            padding=style.padding,
+            fit_to_width=True,
+        )
+        _draw_text(
+            painter,
+            QRectF(
+                rect.x(), rect.y() + rect.height() / 2, rect.width(), rect.height() / 2
+            ),
+            layout.fine_weight,
+            font=style.summary_font,
+            metrics=style.summary_metrics,
+            alignment="center",
+            padding=style.padding,
+            fit_to_width=True,
+        )
+    for metric in layout.final_metrics:
+        rect = QRectF(table_x, y, table_width, row_height)
+        painter.fillRect(rect, _TOTAL_BG if metric.emphasis else _WHITE)
+        painter.setPen(style.border_pen)
+        painter.drawRect(rect)
+        font = style.bold_font if metric.emphasis else style.base_font
+        metrics = style.bold_metrics if metric.emphasis else style.base_metrics
+        _draw_text(
+            painter,
+            QRectF(table_x, y, table_width * 0.58, row_height),
+            metric.label,
+            font=font,
+            metrics=metrics,
+            alignment="left",
+            padding=style.padding,
+            fit_to_width=True,
+        )
+        _draw_text(
+            painter,
+            QRectF(table_x + table_width * 0.58, y, table_width * 0.42, row_height),
+            metric.value,
+            font=font,
+            metrics=metrics,
+            alignment="right",
+            padding=style.padding,
+            fit_to_width=True,
+        )
+        y += row_height
+    return y
 
 
 def _draw_metric_block(

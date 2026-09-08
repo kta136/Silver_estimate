@@ -71,7 +71,7 @@ def build_management_screen_stylesheet(
         }}
         QLabel#{subtitle_label} {{
             color: {TEXT_MUTED};
-            font-size: 9.5pt;
+
         }}
         """
     )
@@ -81,7 +81,7 @@ def build_management_screen_stylesheet(
             f"""
             QLabel#{field_label} {{
                 color: {FIELD_TEXT};
-                font-size: 9pt;
+
                 font-weight: 600;
             }}
             """
@@ -164,15 +164,15 @@ def build_management_screen_stylesheet(
                 selection-background-color: {SELECTION_BG};
                 selection-color: {TEXT_STRONG};
             }}
-            {input_selector}:focus {{
-                border: 2px solid {FOCUS_RING};
+            {", ".join(selector + ":focus" for selector in input_selectors)} {{
+                border: 1px solid {FOCUS_RING};
             }}
-            {input_selector}:disabled {{
+            {", ".join(selector + ":disabled" for selector in input_selectors)} {{
                 background-color: {HEADER_BG};
                 border-color: {CARD_BORDER_SOFT};
                 color: {TEXT_MUTED};
             }}
-            {input_selector}:read-only {{
+            {", ".join(selector + ":read-only" for selector in input_selectors if selector in ("QLineEdit", "QTextEdit"))} {{
                 background-color: {HEADER_BG};
                 border-color: {CARD_BORDER_SOFT};
                 color: {FIELD_TEXT};
@@ -265,24 +265,6 @@ def build_management_screen_stylesheet(
         QCheckBox:disabled,
         QRadioButton:disabled {{
             color: {TEXT_MUTED};
-        }}
-        QCheckBox::indicator,
-        QRadioButton::indicator {{
-            background-color: {SURFACE_BG};
-            border: 1px solid {INPUT_BORDER};
-            height: 14px;
-            width: 14px;
-        }}
-        QCheckBox::indicator {{
-            border-radius: 4px;
-        }}
-        QRadioButton::indicator {{
-            border-radius: 7px;
-        }}
-        QCheckBox::indicator:checked,
-        QRadioButton::indicator:checked {{
-            background-color: {PRIMARY_BG};
-            border-color: {PRIMARY_BG};
         }}
         QMenu {{
             background-color: {SURFACE_BG};

@@ -7,9 +7,11 @@ from silverestimate.ui.estimate_entry_components.voucher_toolbar import VoucherT
 
 
 @pytest.fixture
-def toolbar(qt_app):
+def toolbar(qtbot):
     """Create a fresh VoucherToolbar for testing."""
-    return VoucherToolbar()
+    widget = VoucherToolbar()
+    qtbot.addWidget(widget)
+    return widget
 
 
 def test_initial_state(toolbar):
@@ -20,8 +22,8 @@ def test_initial_state(toolbar):
     assert toolbar.unsaved_badge.text() == "● Ready"
     assert toolbar.unsaved_badge.property("dirty") == "false"
     assert toolbar.mode_indicator_label.text() == "Mode: Regular"
-    assert not toolbar.mode_indicator_label.isHidden()
-    assert toolbar.layout().indexOf(toolbar.mode_indicator_label) >= 0
+    assert toolbar.mode_combo.currentText() == "Regular"
+    assert toolbar.layout().indexOf(toolbar.mode_combo) >= 0
     assert toolbar.mode_indicator_label.property("modeState") == "regular"
     assert toolbar.status_message_label.text() == ""
 

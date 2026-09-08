@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 REQUIRED_FILES = (
@@ -114,11 +115,12 @@ def validate_deployment(root: Path, report: Path) -> dict[str, int]:
     if forbidden:
         raise ValueError(f"Forbidden deployment files are present: {forbidden}")
 
-    report_text = report.read_text(encoding="utf-8")
+    # Module records describe bundled imports; extension filenames and usage
+    # references can have the same names without being standalone modules.
+    report_root = ET.parse(report).getroot()
+    module_names = {module.get("name", "") for module in report_root.findall("module")}
     missing_modules = [
-        module
-        for module in REQUIRED_REPORT_MODULES
-        if f'name="{module}"' not in report_text
+        module for module in REQUIRED_REPORT_MODULES if module not in module_names
     ]
     if missing_modules:
         raise ValueError(
@@ -127,7 +129,7 @@ def validate_deployment(root: Path, report: Path) -> dict[str, int]:
     forbidden_modules = [
         prefix
         for prefix in FORBIDDEN_REPORT_MODULE_PREFIXES
-        if f'name="{prefix}' in report_text
+        if any(name == prefix or name.startswith(f"{prefix}.") for name in module_names)
     ]
     if forbidden_modules:
         raise ValueError(

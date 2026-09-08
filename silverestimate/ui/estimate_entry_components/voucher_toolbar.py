@@ -15,6 +15,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from silverestimate.ui.themed_controls import ThemedComboBox
+
 
 class VoucherToolbar(QWidget):
     """Header form for voucher metadata.
@@ -45,7 +47,7 @@ class VoucherToolbar(QWidget):
         """Set up a compact single-row metadata toolbar."""
         layout = QHBoxLayout(self)
         layout.setSpacing(5)
-        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         self.unsaved_badge = QLabel("")
         self.unsaved_badge.setObjectName("UnsavedBadge")
@@ -67,7 +69,12 @@ class VoucherToolbar(QWidget):
         self.mode_indicator_label.setToolTip(
             "Current mode: Regular Items\nCtrl+R: Return Items\nCtrl+B: Silver Bars"
         )
-        layout.addWidget(self.mode_indicator_label)
+        self.mode_indicator_label.hide()
+        layout.addWidget(QLabel("Mode:"))
+        self.mode_combo = ThemedComboBox()
+        self.mode_combo.addItems(["Regular", "Return", "Silver Bar"])
+        self.mode_combo.setMinimumWidth(95)
+        layout.addWidget(self.mode_combo)
 
         self.status_message_label = QLabel("")
         self.status_message_label.setObjectName("EstimateStatusLabel")
@@ -83,7 +90,7 @@ class VoucherToolbar(QWidget):
         layout.addWidget(voucher_label)
         self.voucher_edit = QLineEdit()
         self.voucher_edit.setObjectName("VoucherNumberEdit")
-        self.voucher_edit.setMaximumWidth(112)
+        self.voucher_edit.setMaximumWidth(96)
         self.voucher_edit.setToolTip("Voucher number (Enter to load)")
         layout.addWidget(self.voucher_edit)
 
@@ -104,7 +111,7 @@ class VoucherToolbar(QWidget):
         self.date_edit.setToolTip("Estimate date")
         layout.addWidget(self.date_edit)
 
-        silver_rate_label = QLabel("Rate:")
+        silver_rate_label = QLabel("Rate ₹/g:")
         silver_rate_label.setObjectName("VoucherFieldLabel")
         layout.addWidget(silver_rate_label)
         self.silver_rate_spin = QDoubleSpinBox()
@@ -114,19 +121,20 @@ class VoucherToolbar(QWidget):
         self.silver_rate_spin.setValue(0.0)
         self.silver_rate_spin.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         self.silver_rate_spin.setMaximumWidth(116)
-        self.silver_rate_spin.setToolTip("Silver rate (₹/kg)")
+        self.silver_rate_spin.setToolTip("Estimate silver rate in rupees per gram")
+        self.silver_rate_spin.setAlignment(Qt.AlignmentFlag.AlignRight)
         layout.addWidget(self.silver_rate_spin)
 
-        note_label = QLabel("Note / Customer:")
+        note_label = QLabel("Note:")
         note_label.setObjectName("VoucherFieldLabel")
         layout.addWidget(note_label)
         self.note_edit = QLineEdit()
         self.note_edit.setObjectName("EstimateNoteEdit")
         self.note_edit.setPlaceholderText("Customer, instructions...")
-        self.note_edit.setMinimumWidth(240)
+        self.note_edit.setMinimumWidth(160)
         self.note_edit.setToolTip("Customer name or optional estimate instructions")
         layout.addWidget(self.note_edit, 1)
-        layout.addWidget(self.status_message_label)
+        self.status_message_label.hide()
 
     def _connect_signals(self) -> None:
         """Connect internal widget signals."""

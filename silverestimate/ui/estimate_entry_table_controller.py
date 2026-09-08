@@ -23,17 +23,15 @@ from .estimate_entry_logic.constants import (
     COL_PIECES,
 )
 
+if TYPE_CHECKING:
+    from .estimate_entry import EstimateEntryWidget
+
 
 class EstimateEntryTableController:
     """Handle row management, focus, editing, and cell navigation."""
 
-    def __init__(self, host: Any) -> None:
+    def __init__(self, host: EstimateEntryWidget) -> None:
         self.host = host
-
-    if TYPE_CHECKING:
-        _enforcing_code_nav: bool
-        _loading_estimate: bool
-        _table_adapter: EstimateTableAdapter | None
 
     def _get_table_adapter(self) -> EstimateTableAdapter:
         if (
@@ -504,9 +502,7 @@ class EstimateEntryTableController:
         if not self._is_table_valid():
             return False
         table = self.host.item_table
-        model = table.model() if table is not None else None
-        if model is None:
-            return True
+        model = table.get_model()
         try:
             index = model.index(row, COL_PIECES)
             if not index.isValid():

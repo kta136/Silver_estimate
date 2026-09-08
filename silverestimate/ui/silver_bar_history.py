@@ -38,12 +38,13 @@ from silverestimate.ui.models import (
 )
 from silverestimate.ui.modern_components import (
     BottomStatusStrip,
-    DetailsStrip,
+    RecordInspector,
     install_table_empty_state,
     polish_dense_table,
 )
 from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
 from silverestimate.ui.themed_controls import ThemedComboBox, ThemedSpinBox
+from silverestimate.ui.toolbar_overflow import ToolbarOverflow
 from silverestimate.ui.window_sizing import resize_to_available_screen
 
 
@@ -70,6 +71,7 @@ def _load_bars_history_page(
         weight_text=request.weight_text,
         status_text=request.status_text,
         cursor=request.cursor,
+        include_total=not request.append,
         limit=1000,
     )
     return request, page
@@ -83,7 +85,7 @@ class SilverBarHistoryDialog(QDialog):
         self.db_manager = db_manager
         self.logger = logging.getLogger(__name__)
         self.setWindowTitle("Silver Bar History")
-        self.setMinimumSize(780, 520)
+        self.setMinimumSize(760, 420)
         resize_to_available_screen(
             self,
             preferred_width=1120,
@@ -178,7 +180,7 @@ class SilverBarHistoryDialog(QDialog):
         subtitle.setObjectName("SilverBarHistorySubtitleLabel")
         subtitle.setWordWrap(True)
         header_layout.addWidget(subtitle)
-        main_layout.addWidget(header_card)
+        header_card.hide()
 
         # Create tab widget
         self.tab_widget = QTabWidget()
@@ -279,7 +281,7 @@ class SilverBarHistoryDialog(QDialog):
         clear_button.clicked.connect(self.clear_filters)
         filters_row.addWidget(clear_button)
 
-        layout.addLayout(filters_row)
+        layout.addWidget(ToolbarOverflow(filters_row))
 
         # Results table
         self.bars_model = HistorySilverBarsTableModel(self)
@@ -294,6 +296,9 @@ class SilverBarHistoryDialog(QDialog):
         )
         self.bars_table.setAlternatingRowColors(True)
         self.bars_table.setSortingEnabled(True)
+        self.bars_table.horizontalHeader().setToolTip(
+            "Sort loaded rows only. Filters search all records. Up to 20,000 rows are displayed; narrow filters to see more."
+        )
         self.bars_table.verticalHeader().setVisible(False)
 
         self.bars_table.horizontalHeader().setSectionResizeMode(
@@ -330,10 +335,11 @@ class SilverBarHistoryDialog(QDialog):
         self.bars_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.bars_table.customContextMenuRequested.connect(self.show_bars_context_menu)
 
-        layout.addWidget(self.bars_table)
-
-        self.selected_bar_details = DetailsStrip("Selected Bar Details", self)
-        layout.addWidget(self.selected_bar_details)
+        body = QHBoxLayout()
+        body.addWidget(self.bars_table, 1)
+        self.selected_bar_details = RecordInspector("Selected Bar", self)
+        body.addWidget(self.selected_bar_details)
+        layout.addLayout(body, 1)
 
         paging_row = QHBoxLayout()
         paging_row.addStretch()
@@ -344,6 +350,8 @@ class SilverBarHistoryDialog(QDialog):
             lambda: self._start_bars_load(self._current_bars_payload(), append=True)
         )
         paging_row.addWidget(self.load_more_button)
+        self.paging_scope_label = QLabel("Sort: loaded rows")
+        paging_row.addWidget(self.paging_scope_label)
         layout.addLayout(paging_row)
 
         self.bars_bottom_status = BottomStatusStrip(self)
@@ -363,7 +371,13 @@ class SilverBarHistoryDialog(QDialog):
         # Issued lists table
         lists_header = QLabel("Issued Lists")
         lists_header.setObjectName("SilverBarHistoryFieldLabel")
-        layout.addWidget(lists_header)
+        columns = QHBoxLayout()
+        left = QVBoxLayout()
+        right = QVBoxLayout()
+        left.addWidget(lists_header)
+        columns.addLayout(left, 1)
+        columns.addLayout(right, 1)
+        layout.addLayout(columns, 1)
 
         self.lists_model = IssuedSilverBarListsTableModel(self)
         self.lists_table = QTableView()
@@ -377,6 +391,9 @@ class SilverBarHistoryDialog(QDialog):
         )
         self.lists_table.setAlternatingRowColors(True)
         self.lists_table.setSortingEnabled(True)
+        self.lists_table.horizontalHeader().setToolTip(
+            "Sort loaded rows only. Filters search all records. Up to 20,000 rows are displayed; narrow filters to see more."
+        )
         self.lists_table.verticalHeader().setVisible(False)
 
         self.lists_table.horizontalHeader().setSectionResizeMode(
@@ -412,12 +429,13 @@ class SilverBarHistoryDialog(QDialog):
             self.list_selection_changed
         )
 
-        layout.addWidget(self.lists_table)
+        left.addWidget(self.lists_table, 1)
 
         # List details section
         details_header = QLabel("List Details")
         details_header.setObjectName("SilverBarHistoryFieldLabel")
-        layout.addWidget(details_header)
+        details_header.setText("Selected List Contents")
+        right.addWidget(details_header)
 
         # Bars in selected list
         self.list_bars_model = HistoryListBarsTableModel(self)
@@ -434,6 +452,9 @@ class SilverBarHistoryDialog(QDialog):
         )
         self.list_bars_table.setAlternatingRowColors(True)
         self.list_bars_table.setSortingEnabled(True)
+        self.list_bars_table.horizontalHeader().setToolTip(
+            "Sort loaded rows only. Filters search all records. Up to 20,000 rows are displayed; narrow filters to see more."
+        )
         self.list_bars_table.verticalHeader().setVisible(False)
         self.list_bars_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Interactive
@@ -458,7 +479,7 @@ class SilverBarHistoryDialog(QDialog):
             "Select an issued list to view its bars.",
         )
 
-        layout.addWidget(self.list_bars_table)
+        right.addWidget(self.list_bars_table, 1)
 
         # Action buttons for lists
         actions_layout = QHBoxLayout()
@@ -473,7 +494,7 @@ class SilverBarHistoryDialog(QDialog):
         self.reactivate_button.setEnabled(False)
         actions_layout.addWidget(self.reactivate_button)
 
-        layout.addLayout(actions_layout)
+        right.addLayout(actions_layout)
 
         return tab_widget
 
@@ -590,11 +611,13 @@ class SilverBarHistoryDialog(QDialog):
             page.total,
             page.next_cursor,
         )
-        history_rows = self._bars_page_state.apply(
+        self._bars_page_state.apply(
             normalized_page,
             append=request.append,
         )
-        self.populate_bars_table(history_rows)
+        self.populate_bars_table(
+            self._bars_page_state.last_page_rows, append=request.append
+        )
 
     def _on_bars_load_error(self, _generation: int, error: object) -> None:
         QMessageBox.critical(
@@ -640,19 +663,30 @@ class SilverBarHistoryDialog(QDialog):
         self._save_row_limit_setting(value)
         self._schedule_search()
 
-    def populate_bars_table(self, bars_data):
+    def populate_bars_table(self, bars_data, *, append: bool = False):
         """Populate the bars table with data."""
         normalized_rows = [
             dict(bar) if not isinstance(bar, dict) else dict(bar)
             for bar in list(bars_data or [])
         ]
-        self.bars_model.set_rows(normalized_rows)
+        if append:
+            self.bars_model.append_rows(normalized_rows)
+        else:
+            self.bars_model.set_rows(normalized_rows)
         self.load_more_button.setVisible(self._bars_page_state.has_more)
+        self.paging_scope_label.setText(
+            "Sort: loaded rows"
+            + (
+                " · Display limit reached; narrow filters"
+                if self._bars_page_state.limit_reached
+                else ""
+            )
+        )
         self._last_refreshed_text = datetime.now().strftime("%d/%m/%Y %I:%M %p")
-        if normalized_rows:
+        if not append and normalized_rows:
             self.bars_table.clearSelection()
             self.bars_table.selectRow(0)
-        else:
+        elif not append:
             self.bars_table.clearSelection()
         self._update_selected_bar_details()
         try:

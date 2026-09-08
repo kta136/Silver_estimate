@@ -163,7 +163,7 @@ def test_numeric_display_role_formats_using_column_precision_and_grouping(model)
     )
     assert (
         model.data(model.index(0, COL_NET_WT), Qt.ItemDataRole.DisplayRole)
-        == "12,34,567.50"
+        == "12,34,567.500"
     )
     assert (
         model.data(model.index(0, COL_PURITY), Qt.ItemDataRole.DisplayRole) == "91.60"
@@ -178,11 +178,11 @@ def test_numeric_display_role_formats_using_column_precision_and_grouping(model)
     )
     assert (
         model.data(model.index(0, COL_WAGE_AMT), Qt.ItemDataRole.DisplayRole)
-        == "12,34,567"
+        == "12,34,567.00"
     )
     assert (
         model.data(model.index(0, COL_FINE_WT), Qt.ItemDataRole.DisplayRole)
-        == "11,30,778.77"
+        == "11,30,778.770"
     )
 
     assert model.data(model.index(0, COL_GROSS), Qt.ItemDataRole.EditRole) == 1234567.5
@@ -262,7 +262,7 @@ def test_header_data(model):
         model.headerData(
             COL_GROSS, Qt.Orientation.Horizontal, Qt.ItemDataRole.DisplayRole
         )
-        == "Gross"
+        == "Gross (g)"
     )
 
     # Vertical headers (row numbers)
@@ -276,8 +276,9 @@ def test_header_data(model):
     )
 
 
-def test_numeric_columns_return_font_role_derived_from_table_font(qt_app):
+def test_numeric_columns_return_font_role_derived_from_table_font(qtbot, qt_app):
     table = QTableView()
+    qtbot.addWidget(table)
     table_font = table.font()
     table_font.setPointSize(13)
     table.setFont(table_font)
@@ -301,8 +302,11 @@ def test_numeric_columns_return_font_role_derived_from_table_font(qt_app):
         assert font.key() == expected_font.key()
 
 
-def test_numeric_font_role_is_cached_until_parent_font_changes(qt_app, monkeypatch):
+def test_numeric_font_role_is_cached_until_parent_font_changes(
+    qtbot, qt_app, monkeypatch
+):
     table = QTableView()
+    qtbot.addWidget(table)
     model = EstimateTableModel(table)
     model.add_row(EstimateEntryRowState())
     calls = []
@@ -511,10 +515,10 @@ def test_type_column_uses_semantic_mode_colors(model):
     bar_bg = model.data(model.index(2, COL_TYPE), Qt.ItemDataRole.BackgroundRole)
     bar_fg = model.data(model.index(2, COL_TYPE), Qt.ItemDataRole.ForegroundRole)
 
-    assert regular_bg.color().name() == "#f8fafc"
+    assert regular_bg.color().name() == "#f6f7f8"
     assert regular_fg.color().name() == "#334155"
-    assert return_bg.color().name() == "#dbeafe"
-    assert return_fg.color().name() == "#1d4ed8"
+    assert return_bg.color().name() == "#e0f2f3"
+    assert return_fg.color().name() == "#006d77"
     assert bar_bg.color().name() == "#fff7ed"
     assert bar_fg.color().name() == "#b45309"
 

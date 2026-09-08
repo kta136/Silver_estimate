@@ -20,6 +20,15 @@ def _valid_payload(artifact: Path) -> dict[str, object]:
         "qt_platform": "windows",
         "runtime_root": str(artifact.parent),
         "svg_image_format": True,
+        "ui_fonts": {
+            "button": 11,
+            "menu": 11,
+            "table": 11,
+            "header": 11,
+            "totals_header": 11,
+            "totals": 11,
+            "final_amount": 16,
+        },
     }
 
 
@@ -27,6 +36,14 @@ def test_validate_payload_accepts_password_service_smoke(tmp_path: Path) -> None
     artifact = tmp_path / "SilverEstimate.exe"
 
     _validate_payload(_valid_payload(artifact), artifact)
+
+
+def test_validate_payload_rejects_stale_interface_fonts(tmp_path: Path) -> None:
+    artifact = tmp_path / "SilverEstimate.exe"
+    payload = _valid_payload(artifact)
+    payload["ui_fonts"]["button"] = 14
+    with pytest.raises(ValueError, match="interface fonts"):
+        _validate_payload(payload, artifact)
 
 
 def test_validate_payload_requires_password_service_smoke(tmp_path: Path) -> None:

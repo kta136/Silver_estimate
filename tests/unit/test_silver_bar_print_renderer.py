@@ -130,12 +130,3 @@ def test_inventory_document_groups_large_values_and_validates_numbers() -> None:
         SilverBarInventoryPrintDocument.from_rows(
             [{"weight": "not-a-number"}],
         )
-
-
-def test_silver_bar_renderer_exposes_direct_layout_and_painting_only() -> None:
-    renderer = SilverBarPrintRenderer()
-
-    assert callable(renderer.build_layout)
-    assert callable(renderer.paint)
-    assert not hasattr(renderer, "generate_inventory_html_table")
-    assert not hasattr(renderer, "generate_list_details_html")

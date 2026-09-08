@@ -129,7 +129,8 @@ class PrintPreviewToolbarBuilder:
         self._page_setup.add_menu_actions(more_menu, preview)
 
         self._add_output_actions(toolbar, session, parent_widget)
-        toolbar.addSeparator()
+        for action in more_menu.actions():
+            add_icon_only_action(toolbar, action)
         toolbar.addWidget(self._page_setup.build_orientation_combo(preview))
         self._add_report_controls(toolbar, session)
         self._add_print_font_action(toolbar, preview)
@@ -156,6 +157,8 @@ class PrintPreviewToolbarBuilder:
         )
         toolbar.addWidget(self._more_button(preview, more_menu))
         self._add_close_action(more_menu, preview)
+        add_icon_only_action(toolbar, more_menu.actions()[-1])
+        toolbar.setMinimumWidth(toolbar.sizeHint().width())
 
     @staticmethod
     def _configure_toolbar(toolbar: QToolBar) -> None:
@@ -163,8 +166,8 @@ class PrintPreviewToolbarBuilder:
         toolbar.setMovable(False)
         toolbar.setFloatable(False)
         toolbar.setContentsMargins(4, 4, 4, 4)
-        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-        toolbar.setIconSize(QSize(22, 22))
+        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        toolbar.setIconSize(QSize(16, 16))
         toolbar.setStyleSheet(TOOLBAR_STYLE)
 
     def _add_output_actions(
@@ -186,6 +189,9 @@ class PrintPreviewToolbarBuilder:
             )
         )
         add_icon_only_action(toolbar, print_action)
+        toolbar.widgetForAction(print_action).setStyleSheet(
+            "background: #007f89; color: white; border-color: #007f89;"
+        )
 
         export_action = QAction(
             get_icon("save_pdf", widget=preview),
@@ -295,7 +301,7 @@ class PrintPreviewToolbarBuilder:
         more_button.setAccessibleName("More preview actions")
         more_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         more_button.setMenu(more_menu)
-        more_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        more_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         return more_button
 
     @staticmethod
@@ -316,7 +322,7 @@ def add_icon_only_action(toolbar: QToolBar, action: QAction) -> None:
     toolbar.addAction(action)
     button = toolbar.widgetForAction(action)
     if isinstance(button, QToolButton):
-        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         button.setAccessibleName(action.text())
 
 

@@ -139,6 +139,7 @@ def draw_table_row(  # noqa: PLR0913 - explicit painter geometry inputs
     background: QColor,
     strong_border: bool = False,
     fit_to_width: bool = False,
+    elide_columns: tuple[int, ...] = (),
 ) -> None:
     """Draw one grid-aligned table row."""
 
@@ -146,11 +147,13 @@ def draw_table_row(  # noqa: PLR0913 - explicit painter geometry inputs
     painter.fillRect(row_rect, background)
     painter.setPen(style.border_pen if strong_border else style.thin_pen)
     painter.drawRect(row_rect)
-    for column, value, cell_rect in zip(
-        columns,
-        values,
-        _column_rects(columns, page_width, y, height),
-        strict=True,
+    for column_index, (column, value, cell_rect) in enumerate(
+        zip(
+            columns,
+            values,
+            _column_rects(columns, page_width, y, height),
+            strict=True,
+        )
     ):
         draw_text(
             painter,
@@ -160,7 +163,7 @@ def draw_table_row(  # noqa: PLR0913 - explicit painter geometry inputs
             metrics=metrics,
             alignment=column.alignment,
             padding=style.padding,
-            fit_to_width=fit_to_width,
+            fit_to_width=fit_to_width and column_index not in elide_columns,
         )
 
     painter.setPen(style.thin_pen)

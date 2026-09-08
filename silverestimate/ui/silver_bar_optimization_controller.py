@@ -3,17 +3,22 @@
 from __future__ import annotations
 
 import traceback
+from typing import TYPE_CHECKING
 
 from PySide6.QtWidgets import QMessageBox
 
-from ._host_proxy import HostProxy
+if TYPE_CHECKING:
+    from .silver_bar_management import SilverBarDialog
 from .silver_bar_optimization import find_optimal_combination
 
 
-class SilverBarOptimizationController(HostProxy):
+class SilverBarOptimizationController:
     """Generate optimized silver-bar lists from available stock."""
 
-    def generate_optimal_list(self, dialog_cls):
+    def __init__(self, host: SilverBarDialog) -> None:
+        self.host = host
+
+    def generate_optimal_list(self, dialog_cls) -> None:
         dialog = dialog_cls(self.host)
         if dialog.exec() != dialog_cls.Accepted:
             return
@@ -24,7 +29,7 @@ class SilverBarOptimizationController(HostProxy):
         optimization_type = dialog.optimization_type
 
         try:
-            available_bars = self.db_manager.get_silver_bars(
+            available_bars = self.host.db_manager.get_silver_bars(
                 status="In Stock",
                 unassigned_only=True,
             )
@@ -52,13 +57,13 @@ class SilverBarOptimizationController(HostProxy):
                 )
                 return
 
-            new_list_id = self.db_manager.create_silver_bar_list(list_name)
+            new_list_id = self.host.db_manager.create_silver_bar_list(list_name)
             if not new_list_id:
                 QMessageBox.critical(self.host, "Error", "Failed to create new list.")
                 return
 
             selected_ids = [bar["bar_id"] for bar in selected_bars]
-            added_count, failed_bars = self._bulk_assign_to_list(
+            added_count, failed_bars = self.host._bulk_assign_to_list(
                 selected_ids,
                 new_list_id,
             )
@@ -82,15 +87,17 @@ class SilverBarOptimizationController(HostProxy):
                 )
 
             QMessageBox.information(self.host, "List Generated", message)
-            self.load_lists()
-            self.load_available_bars()
+            self.host.load_lists()
+            self.host.load_available_bars()
 
-            index = self.list_combo.findData(new_list_id)
+            index = self.host.list_combo.findData(new_list_id)
             if index >= 0:
-                self.list_combo.setCurrentIndex(index)
+                self.host.list_combo.setCurrentIndex(index)
 
         except Exception as exc:
-            self.logger.error("Failed to generate optimal list: %s", exc, exc_info=True)
+            self.host.logger.error(
+                "Failed to generate optimal list: %s", exc, exc_info=True
+            )
             QMessageBox.critical(
                 self.host,
                 "Error",

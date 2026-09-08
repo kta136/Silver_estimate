@@ -14,6 +14,7 @@ from silverestimate.persistence.database_protocols import (
     MainCommandsDatabase,
     ReadConnectionFactory,
 )
+from silverestimate.ui.database_maintenance import run_database_maintenance
 
 
 class MainCommandStatus(Enum):
@@ -80,6 +81,7 @@ class MainCommands:
         self.main_window = main_window
         self.db = db_manager
         self.logger = logger or logging.getLogger(__name__)
+        self._catalog_import_active = False
         self._catalog_export_thread: QThread | None = None
         self._catalog_export_worker: _ItemCatalogExportWorker | None = None
 
@@ -181,6 +183,10 @@ class MainCommands:
 
     def restore_item_catalog(self) -> MainCommandOutcome:
         """Restore a native Silver Estimate item catalog backup."""
+        if self._catalog_import_active:
+            return MainCommandOutcome(
+                MainCommandStatus.FAILED, "Catalog import is already running."
+            )
         if not self._ensure_db():
             return MainCommandOutcome(
                 MainCommandStatus.FAILED,
@@ -227,11 +233,15 @@ class MainCommands:
             return MainCommandOutcome(MainCommandStatus.CANCELLED)
         replace_existing = replace_checkbox.isChecked()
 
+        self._catalog_import_active = True
         try:
-            summary = import_item_catalog(
+            summary = run_database_maintenance(
                 self.db,
-                file_path,
-                replace_existing=replace_existing,
+                lambda worker: import_item_catalog(
+                    worker, file_path, replace_existing=replace_existing
+                ),
+                "Restoring Item Catalog",
+                self.main_window,
             )
         except Exception as exc:
             self.logger.error("Item catalog restore failed: %s", exc, exc_info=True)
@@ -241,6 +251,8 @@ class MainCommands:
                 str(exc),
             )
             return MainCommandOutcome(MainCommandStatus.FAILED, str(exc))
+        finally:
+            self._catalog_import_active = False
 
         item_master = getattr(self.main_window, "item_master_widget", None)
         if item_master is not None and item_master.isVisible():

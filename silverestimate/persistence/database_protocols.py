@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Iterable, Mapping
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
+from silverestimate.domain.estimate_save import EstimateSaveResult
 from silverestimate.persistence.database_driver import (
     Connection,
     Cursor,
     ReadConnection,
 )
+
+if TYPE_CHECKING:
+    from silverestimate.persistence.database_maintenance import DatabaseMaintenanceJob
 
 DatabaseRecord = Mapping[str, Any]
 ReadConnectionFactory = Callable[[], ReadConnection]
@@ -70,6 +74,8 @@ class ItemCatalogDatabase(Protocol):
 class MainCommandsDatabase(ItemCatalogDatabase, Protocol):
     """Maintenance surface used by main-window commands."""
 
+    def create_maintenance_job(self) -> DatabaseMaintenanceJob: ...
+
     def drop_tables(self) -> bool: ...
 
     def setup_database(self) -> None: ...
@@ -98,7 +104,7 @@ class EstimateDataSource(Protocol):
         voucher_no: str,
     ) -> DatabaseRecord | None: ...
 
-    def save_estimate_with_returns(  # noqa: PLR0913 - existing persistence API
+    def save_estimate_atomic(  # noqa: PLR0913 - existing persistence API
         self,
         voucher_no: str,
         date: str,
@@ -106,13 +112,7 @@ class EstimateDataSource(Protocol):
         regular_items: list[DatabaseRecord],
         return_items: list[DatabaseRecord],
         totals: dict[str, Any],
-    ) -> bool: ...
-
-    def sync_silver_bars_for_estimate(
-        self,
-        voucher_no: str,
-        bars: list[DatabaseRecord],
-    ) -> tuple[int, int]: ...
+    ) -> EstimateSaveResult: ...
 
     def delete_single_estimate(self, voucher_no: str) -> bool: ...
 

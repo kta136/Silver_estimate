@@ -63,6 +63,8 @@ BACKUP_FORMAT_VERSION = 2
 JOURNAL_VERSION = 2
 BINDING_MIGRATION_VERSION = 1
 
+StartupFileSignature = tuple[tuple[int, int, int, int] | None, ...]
+
 
 class StorageFormat(Enum):
     MISSING = auto()
@@ -95,6 +97,14 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
     """Manage a live SQLCipher database without plaintext working snapshots."""
 
     def __init__(self, db_path: str, password: str, *, device_secret: bytes):
+        self._initialize_state(db_path, device_secret)
+        try:
+            self._open_database(password)
+        except BaseException:
+            self._discard_connection()
+            raise
+
+    def _initialize_state(self, db_path: str, device_secret: bytes) -> None:
         self.logger = logging.getLogger(__name__)
         self.database_path = str(Path(db_path).resolve())
         if len(device_secret) != crypto_utils.DEVICE_BINDING_BYTES:
@@ -119,6 +129,17 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         self._rekey_journal = self._path.with_suffix(".rekey.json")
         self._restore_journal = self._path.with_suffix(".restore.json")
         self._binding_journal = self._path.with_suffix(".binding.json")
+        self._prepared_startup_signature: StartupFileSignature | None = None
+
+    def create_maintenance_job(self):
+        from silverestimate.persistence.database_maintenance import (
+            DatabaseMaintenanceJob,
+        )
+
+        return DatabaseMaintenanceJob(self)
+
+    def _open_database(self, password: str) -> None:
+        """Run recovery, upgrades and validation on the connection-owning thread."""
         self._recover_missing_live_from_journal()
         binding_switch_pending = self._inspect_binding_migration()
 
@@ -142,7 +163,7 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
                 self.setup_database()
                 self.validate_database(self.conn)
             except BaseException:
-                self._close_connection()
+                self._discard_connection()
                 self._remove_database_family(self._path)
                 raise
             self.open_status = DatabaseOpenStatus.CREATED
@@ -172,6 +193,79 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
             self._finalize_binding_migration()
             self.open_status = DatabaseOpenStatus.MIGRATED_TO_DEVICE_BOUND
 
+    @classmethod
+    def prepare_startup(
+        cls, db_path: str, password: str, *, device_secret: bytes
+    ) -> DatabaseManager:
+        """Validate on a worker and return state with no live SQL connections.
+
+        Only the startup controller uses this handoff. A fresh writer must be
+        attached on the receiving thread before any repository/cache work.
+        """
+        manager = cls(db_path, password, device_secret=device_secret)
+        try:
+            manager.close()
+            manager._prepared_startup_signature = manager._startup_file_signature()
+            return manager
+        except BaseException:
+            manager._discard_connection()
+            raise
+
+    def attach_prepared_connection(self) -> None:
+        """Consume a validated startup handoff and open this thread's writer."""
+        signature = self._prepared_startup_signature
+        self._prepared_startup_signature = None
+        if self.conn is not None or signature is None:
+            raise RuntimeError("No detached, validated startup is available")
+        if signature != self._startup_file_signature():
+            raise StorageMetadataError(
+                "Database files changed during startup. Restart to validate them again."
+            )
+        try:
+            self.conn, self.driver_identity = self._broker.open_writer()
+            self._bind_connection()
+        except BaseException:
+            self._discard_connection()
+            raise
+
+    def _startup_file_signature(self) -> StartupFileSignature:
+        # Detect ordinary external changes across the brief closed-connection gap.
+        # This is a freshness check, not a cryptographic integrity substitute.
+        paths = (
+            self._path,
+            Path(f"{self._path}-wal"),
+            self._metadata_path,
+            self._rekey_journal,
+            self._restore_journal,
+            self._binding_journal,
+        )
+        signature: list[tuple[int, int, int, int] | None] = []
+        for path in paths:
+            try:
+                stat = path.stat()
+            except FileNotFoundError:
+                signature.append(None)
+            else:
+                signature.append(
+                    (stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+                )
+        return tuple(signature)
+
+    def _discard_connection(self) -> None:
+        """Roll back and release a failed open on its owning thread."""
+        connection, self.conn = self.conn, None
+        self.cursor = None
+        self._session.clear()
+        if connection is None:
+            return
+        try:
+            try:
+                connection.rollback()
+            finally:
+                connection.close()
+        except Exception:
+            self.logger.exception("Failed to release database after unsuccessful open")
+
     @staticmethod
     def detect_storage(path: str | Path) -> StorageFormat:
         candidate = Path(path)
@@ -182,6 +276,14 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         if header == SQLITE_HEADER:
             return StorageFormat.PLAINTEXT_SQLITE
         return StorageFormat.SQLCIPHER
+
+    @property
+    def draft_repository(self):
+        from silverestimate.persistence.draft_repository import DraftRepository
+
+        return DraftRepository(
+            lambda: self.conn, lambda: self._broker.maintenance_active
+        )
 
     @property
     def items_repo(self):
@@ -501,7 +603,9 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         schema.run_schema_setup(self)
 
     @staticmethod
-    def validate_database(connection: Connection) -> None:
+    def validate_database(
+        connection: Connection, *, allow_previous_schema: bool = False
+    ) -> None:
         quick = connection.execute("PRAGMA quick_check").fetchone()
         if not quick or str(quick[0]).lower() != "ok":
             raise DatabaseError(f"SQLCipher quick_check failed: {quick!r}")
@@ -538,10 +642,16 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         version = connection.execute(
             "SELECT MAX(version) FROM schema_version"
         ).fetchone()
-        if not version or int(version[0] or 0) != CURRENT_SCHEMA_VERSION:
+        if not version or int(version[0] or 0) not in (
+            {8, 9, CURRENT_SCHEMA_VERSION}
+            if allow_previous_schema
+            else {CURRENT_SCHEMA_VERSION}
+        ):
             raise DatabaseError(
                 f"Unsupported application schema version: {version[0] if version else None}"
             )
+        if int(version[0]) == CURRENT_SCHEMA_VERSION and "estimate_draft" not in tables:
+            raise DatabaseError("Application schema is missing estimate_draft")
         required_indexes = {
             "idx_items_code_upper",
             "idx_estimates_history_keyset",
@@ -562,6 +672,7 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
             )
 
     def close(self) -> None:
+        self._prepared_startup_signature = None
         self._close_connection()
 
     def _close_connection(self) -> None:
@@ -583,6 +694,7 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         if self.conn is None or self.cursor is None:
             return False
         tables = (
+            "estimate_draft",
             "estimate_items",
             "estimates",
             "items",
@@ -610,8 +722,6 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         )
         destination_path = destination_path.resolve()
         with self._broker.maintenance():
-            assert self.conn is not None
-            self.conn.commit()
             stage_dir = Path(
                 tempfile.mkdtemp(
                     prefix=".silverestimate-backup-", dir=destination_path.parent
@@ -620,18 +730,37 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
             try:
                 database_copy = stage_dir / "database.sqlcipher"
                 assert self.database_salt is not None
-                export_database(
-                    self.conn,
-                    database_copy,
-                    self.key,
-                    target_salt=self.database_salt,
-                )
+                # Each caller owns its connection, including a maintenance worker.
+                # The archive contains committed data; never commit an entry draft.
+                source, _ = self._broker.open_writer()
+                try:
+                    export_database(
+                        source,
+                        database_copy,
+                        self.key,
+                        target_salt=self.database_salt,
+                    )
+                finally:
+                    source.close()
                 self._validate_external(
                     database_copy,
                     self.key,
                     self.database_salt,
                 )
-                schema_version = self._check_schema_version()
+                copied_broker = SqlCipherConnectionBroker(
+                    database_copy,
+                    self.key,
+                    database_salt=self.database_salt,
+                )
+                copied, _ = copied_broker.open_writer()
+                try:
+                    schema_version = int(
+                        copied.execute(
+                            "SELECT MAX(version) FROM schema_version"
+                        ).fetchone()[0]
+                    )
+                finally:
+                    copied.close()
                 manifest = BackupManifest(
                     version=BACKUP_FORMAT_VERSION,
                     created_utc=datetime.now(UTC).isoformat(),
@@ -649,15 +778,15 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
                     + "\n"
                 ).encode()
                 manifest_digest = hashlib.sha256(manifest_bytes).hexdigest().encode()
-                archive_stage = destination_path.with_suffix(
-                    destination_path.suffix + ".tmp"
-                )
+                archive_stage = stage_dir / "archive.sedbbackup"
                 with zipfile.ZipFile(
                     archive_stage, "w", compression=zipfile.ZIP_STORED
                 ) as archive:
                     archive.write(database_copy, "database.sqlcipher")
                     archive.writestr("manifest.json", manifest_bytes)
                     archive.writestr("manifest.sha256", manifest_digest + b"\n")
+                with archive_stage.open("r+b") as stream:
+                    os.fsync(stream.fileno())
                 os.replace(archive_stage, destination_path)
             finally:
                 shutil.rmtree(stage_dir, ignore_errors=True)
@@ -672,6 +801,10 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
     ) -> MaintenanceOutcome:
         archive_path = Path(archive_path).resolve()
         with self._broker.maintenance():
+            if self._restore_journal.exists():
+                raise StorageMetadataError(
+                    "A restore is already staged. Restart to activate it first."
+                )
             stage_dir = Path(
                 tempfile.mkdtemp(
                     prefix=".silverestimate-restore-", dir=self._path.parent
@@ -684,7 +817,9 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
                         "manifest.json",
                         "manifest.sha256",
                     }
-                    if set(archive.namelist()) != expected_names:
+                    if set(archive.namelist()) != expected_names or len(
+                        archive.namelist()
+                    ) != len(expected_names):
                         raise StorageMetadataError("Backup archive members are invalid")
                     archive.extractall(stage_dir)
                 manifest_bytes = (stage_dir / "manifest.json").read_bytes()
@@ -715,8 +850,7 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
                     database_salt=backup_salt,
                 )
                 source, _ = source_broker.open_writer()
-                staged = self._path.with_suffix(".restore.staged")
-                self._remove_database_family(staged)
+                staged = stage_dir / "validated.sqlcipher"
                 try:
                     assert self.database_salt is not None
                     export_database(
@@ -728,6 +862,12 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
                 finally:
                     source.close()
                 self._validate_external(staged, self.key, self.database_salt)
+                with staged.open("r+b") as stream:
+                    os.fsync(stream.fileno())
+                published = self._path.with_suffix(".restore.staged")
+                self._remove_database_family(published)
+                os.replace(staged, published)
+                staged = published
                 journal = RestoreJournal(
                     version=JOURNAL_VERSION,
                     phase="ready",
@@ -740,7 +880,8 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
                 shutil.rmtree(stage_dir, ignore_errors=True)
         return MaintenanceOutcome(
             MaintenanceStatus.STAGED_RESTART_REQUIRED,
-            "Restore validated and staged; restart Silver Estimate to activate it",
+            "Restore validated and staged; restart Silver Estimate to activate it. "
+            "Any changes saved before that restart will be replaced by the backup.",
             str(self._path.with_suffix(".restore.staged")),
         )
 
@@ -833,7 +974,7 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         )
         connection, identity = broker.open_writer()
         try:
-            self.validate_database(connection)
+            self.validate_database(connection, allow_previous_schema=True)
         finally:
             connection.close()
         return identity

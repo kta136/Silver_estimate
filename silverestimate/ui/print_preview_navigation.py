@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Callable
 
-from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtCore import QEvent, QObject, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup
 from PySide6.QtPrintSupport import QPrintPreviewWidget
 from PySide6.QtWidgets import (
@@ -144,6 +144,36 @@ class PrintPreviewNavigationController:
                 lambda checked=False, handler=callback: handler(preview_widget)
             )
             add_action(toolbar, action)
+        toolbar.addWidget(self._zoom_control(preview, preview_widget))
+
+    @staticmethod
+    def _zoom_control(preview, preview_widget):
+        spin = ThemedSpinBox(preview)
+        spin.setObjectName("PreviewZoomSpin")
+        spin.setAccessibleName("Zoom percentage")
+        spin.setToolTip("Preview zoom percentage")
+        spin.setRange(10, 500)
+        spin.setSingleStep(10)
+        spin.setSuffix(" %")
+        spin.setKeyboardTracking(False)
+        spin.setFixedWidth(112)
+
+        def sync_zoom():
+            spin.blockSignals(True)
+            spin.setValue(round(preview_widget.zoomFactor() * 100))
+            spin.blockSignals(False)
+
+        sync_zoom()
+        spin.valueChanged.connect(
+            lambda value: preview_widget.setZoomFactor(value / 100)
+        )
+        preview_widget.previewChanged.connect(sync_zoom)
+        # Qt exposes no zoom-factor change signal for fit actions or Ctrl+wheel.
+        timer = QTimer(spin)
+        timer.setInterval(150)
+        timer.timeout.connect(lambda: sync_zoom() if not spin.hasFocus() else None)
+        timer.start()
+        return spin
 
     def add_page_navigation(
         self,

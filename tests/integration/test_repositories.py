@@ -17,7 +17,6 @@ from silverestimate.persistence.silver_bar_query_repository import (
 )
 from silverestimate.persistence.silver_bar_synchronization_repository import (
     SilverBarSynchronizationRepository,
-    SilverBarSyncResult,
 )
 from tests.factories import estimate_totals, regular_item, return_item, silver_bar_item
 
@@ -82,33 +81,17 @@ def test_items_repository_roundtrip(fake_db):
     assert fetched["tunch"] == "92 + wastage"
 
 
-def test_estimate_lookup_resolves_current_master_tunch(fake_db):
+def test_estimate_lookup_keeps_saved_tunch(fake_db):
     items_repo = ItemsRepository(fake_db)
     estimates_repo = EstimatesRepository(fake_db)
-    assert items_repo.add_item(
-        "LIVE1", "Live Tunch Item", 92.5, "WT", 10.0, tunch="91.25%"
+    assert items_repo.add_item("REG001", "Original", 92.5, "WT", 10, tunch="91.25%")
+    assert estimates_repo.save_estimate_with_returns(
+        "T-1", "2026-07-19", 75, [regular_item()], [], estimate_totals()
     )
-    fake_db.cursor.execute(
-        "INSERT INTO estimates (voucher_no, date) VALUES ('T-1', '2026-07-19')"
+    assert items_repo.update_item("REG001", "Changed", 80, "PC", 20, tunch="Market")
+    assert (
+        estimates_repo.get_estimate_by_voucher("T-1")["items"][0]["tunch"] == "91.25%"
     )
-    fake_db.cursor.execute(
-        "INSERT INTO estimate_items (voucher_no, item_code, item_name) "
-        "VALUES ('T-1', 'LIVE1', 'Live Tunch Item')"
-    )
-    fake_db.conn.commit()
-
-    loaded = estimates_repo.get_estimate_by_voucher("T-1")
-    assert loaded["items"][0]["tunch"] == "91.25%"
-
-    assert items_repo.update_item(
-        "LIVE1", "Live Tunch Item", 92.5, "WT", 10.0, tunch="Market"
-    )
-    loaded = estimates_repo.get_estimate_by_voucher("T-1")
-    assert loaded["items"][0]["tunch"] == "Market"
-
-    assert items_repo.update_item("LIVE1", "Live Tunch Item", 92.5, "WT", 10.0)
-    loaded = estimates_repo.get_estimate_by_voucher("T-1")
-    assert loaded["items"][0]["tunch"] is None
 
 
 def test_items_tunch_database_accepts_text(fake_db):
@@ -187,10 +170,10 @@ def test_estimate_history_keyset_page_reads_header_totals(fake_db):
     assert [row["voucher_no"] for row in second.items] == ["1"]
 
 
-def test_schema_setup_creates_current_v8_schema(fake_db):
+def test_schema_setup_creates_current_v9_schema(fake_db):
     fake_db.cursor.execute("SELECT MAX(version) AS v FROM schema_version")
     row = fake_db.cursor.fetchone()
-    assert row["v"] == 8
+    assert row["v"] == schema.CURRENT_SCHEMA_VERSION
     assert fake_db._column_exists("items", "tunch")
     columns = {
         column["name"]: column["type"]
@@ -461,68 +444,11 @@ def test_estimates_repository_numeric_voucher_order_and_next_value(fake_db):
             ),
         )
 
-    headers = repo.get_estimate_headers()
+    headers = repo.get_estimate_history_page(limit=10).items
     ordered = [row["voucher_no"] for row in headers]
     assert ordered[:2] == ["10", "2"]
     assert ordered[-1] == "A1"
     assert repo.generate_voucher_no() == "11"
-
-
-def test_get_estimates_uses_bulk_item_query(fake_db):
-    repo = EstimatesRepository(fake_db)
-    items_repo = ItemsRepository(fake_db)
-    assert items_repo.add_item("ITM001", "Sample Item", 92.5, "WT", 10.0)
-
-    for voucher_no, gross in (("100", 10.0), ("101", 12.0)):
-        assert repo.save_estimate_with_returns(
-            voucher_no=voucher_no,
-            date="2025-01-01",
-            silver_rate=75000.0,
-            regular_items=[
-                regular_item(
-                    code="ITM001",
-                    name="Sample Item",
-                    gross=gross,
-                    poly=0.0,
-                    net_wt=gross,
-                    purity=92.5,
-                    wage_rate=10.0,
-                    pieces=1,
-                    wage=gross * 10.0,
-                    fine=gross * 0.925,
-                )
-            ],
-            return_items=[],
-            totals=estimate_totals(
-                total_gross=gross,
-                total_net=gross,
-                net_fine=gross * 0.925,
-                net_wage=gross * 10.0,
-            ),
-        )
-
-    statements: list[str] = []
-    fake_db.conn.set_trace_callback(statements.append)
-    try:
-        estimates = repo.get_estimates()
-    finally:
-        fake_db.conn.set_trace_callback(None)
-
-    assert len(estimates) == 2
-    item_queries_bulk = [
-        stmt
-        for stmt in statements
-        if "from estimate_items ei" in stmt.lower()
-        and "ei.voucher_no in" in stmt.lower()
-    ]
-    item_queries_per_voucher = [
-        stmt
-        for stmt in statements
-        if "from estimate_items ei" in stmt.lower()
-        and "ei.voucher_no =" in stmt.lower()
-    ]
-    assert len(item_queries_bulk) == 1
-    assert item_queries_per_voucher == []
 
 
 def test_estimates_repository_generate_voucher_falls_back_when_only_non_numeric(
@@ -571,7 +497,7 @@ def test_save_estimate_reports_missing_item_code(fake_db):
     assert "MISSING001" in fake_db.last_error
 
 
-def test_estimate_delete_cleans_silver_bars(fake_db):
+def test_estimate_delete_preserves_assigned_silver_bars(fake_db):
     est_repo = EstimatesRepository(fake_db)
     silver_commands = SilverBarCommandRepository(fake_db)
     silver_queries = SilverBarQueryRepository(fake_db)
@@ -592,9 +518,10 @@ def test_estimate_delete_cleans_silver_bars(fake_db):
     assert list_id is not None
     assert silver_commands.assign_bar_to_list(bar_id, list_id, perform_commit=True)
     deleted = est_repo.delete_single_estimate("200")
-    assert deleted
+    assert not deleted
     remaining_bars = silver_queries.get_silver_bars(estimate_voucher_no="200")
-    assert remaining_bars == []
+    assert [bar["bar_id"] for bar in remaining_bars] == [bar_id]
+    assert "silver bars" in fake_db.last_error
 
 
 def test_silver_bar_assignment_cycle(fake_db):
@@ -700,20 +627,22 @@ def test_silver_bar_query_unassigned_only_filter(fake_db):
 
 
 def test_silver_bar_sync_for_estimate_updates_and_inserts_in_one_call(fake_db):
-    commands = SilverBarCommandRepository(fake_db)
     queries = SilverBarQueryRepository(fake_db)
     synchronization = SilverBarSynchronizationRepository(fake_db)
-    first = commands.add_silver_bar("SYNC1", 5.0, 99.0)
-    second = commands.add_silver_bar("SYNC1", 6.0, 99.0)
-    assert first is not None
-    assert second is not None
+    assert synchronization.synchronize(
+        "SYNC1",
+        [
+            {"line_key": "first", "weight": 5.0, "purity": 99.0},
+            {"line_key": "second", "weight": 6.0, "purity": 99.0},
+        ],
+    ).succeeded
 
     sync_result = synchronization.synchronize(
         "SYNC1",
         [
-            {"weight": 5.5, "purity": 99.5},
-            {"weight": 6.0, "purity": 99.0},
-            {"weight": 7.0, "purity": 98.0},
+            {"line_key": "first", "weight": 5.5, "purity": 99.5},
+            {"line_key": "second", "weight": 6.0, "purity": 99.0},
+            {"line_key": "third", "weight": 7.0, "purity": 98.0},
         ],
     )
 
@@ -1043,9 +972,9 @@ def test_silver_bar_repository_handles_missing_database_runtime() -> None:
     assert queries.search_history_bars_page().items == ()
     assert queries.count_bars_by_list_ids([1]) == {}
     assert queries.get_silver_bars_for_estimate("1") == []
-    assert synchronization.synchronize("1", []) == SilverBarSyncResult(
-        added=0, failed=0
-    )
+    sync_result = synchronization.synchronize("1", [])
+    assert sync_result.failed == 1
+    assert sync_result.error_detail
     assert commands.add_silver_bar("1", 1.0, 99.9) is None
     assert queries.get_silver_bars() == []
     assert commands.delete_bars_for_estimate("1") == (0, set())
@@ -1094,9 +1023,9 @@ def test_silver_bar_repository_storage_errors_are_contained(fake_db) -> None:
         queries.search_history_bars_page()
     assert queries.count_bars_by_list_ids([1]) == {}
     assert queries.get_silver_bars_for_estimate("1") == []
-    assert synchronization.synchronize(
-        "1", [{"weight": 1, "purity": 99}]
-    ) == SilverBarSyncResult(added=0, failed=1)
+    sync_result = synchronization.synchronize("1", [{"weight": 1, "purity": 99}])
+    assert sync_result.failed == 1 and sync_result.added == 0
+    assert "injected storage fault" in sync_result.error_detail
     assert commands.add_silver_bar("1", 1.0, 99.9) is None
     assert queries.get_silver_bars() == []
     with pytest.raises(sqlite3.OperationalError, match="injected storage fault"):
@@ -1163,4 +1092,5 @@ def test_silver_bar_repository_exercises_edge_outcomes(fake_db) -> None:
             {"weight": 2, "purity": 98, "line_key": "same"},
         ],
     )
-    assert (sync_result.added, sync_result.failed) == (1, 2)
+    assert (sync_result.added, sync_result.failed) == (0, 3)
+    assert queries.get_silver_bars_for_estimate("edge-sync") == []

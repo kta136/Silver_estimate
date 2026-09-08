@@ -21,10 +21,6 @@ from PySide6.QtWidgets import (
 )
 
 from silverestimate.infrastructure.settings import SettingsKey, get_app_settings
-from silverestimate.services.password_change_service import (
-    PasswordChangeService,
-    default_password_change_actions,
-)
 from silverestimate.services.settings_service import FontSettings
 
 from .icons import get_icon
@@ -87,7 +83,7 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.main_window = main_window_ref  # Store reference to main window
         self.setWindowTitle("Application Settings")
-        self.setMinimumSize(900, 540)
+        self.setMinimumSize(760, 420)
         self.setObjectName("SettingsDialog")
         self.setStyleSheet(
             build_management_screen_stylesheet(
@@ -159,7 +155,7 @@ class SettingsDialog(QDialog):
                 }}
                 QLabel#SettingsMutedDescription {{
                     color: {TEXT_MUTED};
-                    font-size: 9pt;
+
                 }}
                 QLabel#SettingsValueLabel {{
                     color: {TEXT_STRONG};
@@ -205,7 +201,7 @@ class SettingsDialog(QDialog):
                 }}
                 QLabel#SettingsPreviewTitle {{
                     color: {TEXT_STRONG};
-                    font-size: 10.5pt;
+
                     font-weight: 700;
                 }}
                 QLabel#SettingsGrandTotalPreview {{
@@ -257,11 +253,7 @@ class SettingsDialog(QDialog):
             ),
         )
         self._security_settings_controller = SettingsSecurityController(
-            PasswordChangeService(
-                default_password_change_actions(
-                    lambda: getattr(self.main_window, "db", None)
-                )
-            )
+            lambda: getattr(self.main_window, "db", None)
         )
 
         # Sidebar + pages (cleaner than rotated west tabs)
@@ -296,7 +288,7 @@ class SettingsDialog(QDialog):
                 self._create_print_tab(),
             ),
             (
-                "Data Management",
+                "Data & Backups",
                 get_icon("data_management", widget=self),
                 self._create_data_tab(),
             ),
@@ -314,6 +306,18 @@ class SettingsDialog(QDialog):
         for title, icon, widget in page_defs:
             self.sidebar.addItem(QListWidgetItem(icon, title))
             self.pages.addWidget(widget)
+
+        self.appearance_page.print_settings_requested.connect(
+            lambda: self.sidebar.setCurrentRow(2)
+        )
+        self.print_page.attach_font_controls(self.appearance_page)
+        from PySide6.QtCore import QTimer
+
+        self._rate_display_timer = QTimer(self)
+        self._rate_display_timer.setInterval(1000)
+        self._rate_display_timer.timeout.connect(self._refresh_rate_status)
+        self._rate_display_timer.start()
+        self._refresh_rate_status()
 
         # Remember last page
         try:
@@ -335,6 +339,9 @@ class SettingsDialog(QDialog):
             | QDialogButtonBox.StandardButton.Cancel
             | QDialogButtonBox.StandardButton.Apply
         )  # Store as self.buttonBox
+        self.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setText(
+            "Save && Close"
+        )
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
         self.buttonBox.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(
@@ -343,7 +350,7 @@ class SettingsDialog(QDialog):
         # Disable Apply until change
         self.buttonBox.button(QDialogButtonBox.StandardButton.Apply).setEnabled(False)
         self.buttonBox.button(QDialogButtonBox.StandardButton.Apply).setObjectName(
-            "SettingsPrimaryButton"
+            "SettingsSecondaryButton"
         )
         self.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setObjectName(
             "SettingsPrimaryButton"
@@ -351,9 +358,9 @@ class SettingsDialog(QDialog):
 
         # Add Restore Defaults button
         restore_btn = QPushButton("Restore Defaults…")
-        restore_btn.setObjectName("SettingsDangerButton")
+        restore_btn.setObjectName("SettingsSecondaryButton")
         restore_btn.setToolTip(
-            "Reset all settings to default values\nWill not affect saved estimates or data\nChanges take effect immediately"
+            "Reset all settings to default values\nWill not affect saved estimates or data\nChanges take effect when applied"
         )
         self.buttonBox.addButton(restore_btn, QDialogButtonBox.ButtonRole.ResetRole)
         restore_btn.clicked.connect(self._restore_defaults)
@@ -378,7 +385,7 @@ class SettingsDialog(QDialog):
         )
         subtitle_label.setObjectName("SettingsSubtitleLabel")
         header_layout.addWidget(subtitle_label)
-        layout.addWidget(header_card)
+        header_card.hide()
 
         # content row: sidebar + pages
         content = QHBoxLayout()
@@ -396,7 +403,7 @@ class SettingsDialog(QDialog):
         self.page_scroll.setWidgetResizable(True)
         self.page_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.page_scroll.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
         )
         self.page_scroll.setVerticalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff
@@ -405,12 +412,23 @@ class SettingsDialog(QDialog):
         page_card_layout.addWidget(self.page_scroll)
         content.addWidget(page_card, 1)
 
-        layout.addLayout(content)
+        layout.addLayout(content, 1)
         self.settings_feedback_label = QLabel("")
         self.settings_feedback_label.setObjectName("SettingsFeedbackLabel")
         self.settings_feedback_label.setVisible(False)
         layout.addWidget(self.settings_feedback_label)
-        layout.addWidget(self.buttonBox)  # Use self.buttonBox here
+        footer = QHBoxLayout()
+        self.buttonBox.removeButton(restore_btn)
+        footer.addWidget(restore_btn)
+        footer.addStretch()
+        for role in (
+            QDialogButtonBox.StandardButton.Cancel,
+            QDialogButtonBox.StandardButton.Apply,
+            QDialogButtonBox.StandardButton.Ok,
+        ):
+            footer.addWidget(self.buttonBox.button(role))
+        self.buttonBox.hide()
+        layout.addLayout(footer)
         self.setLayout(layout)
         self._resize_to_available_screen()
         self._sync_page_scrollbar()
@@ -422,6 +440,12 @@ class SettingsDialog(QDialog):
             )
 
     # --- Tab Creation Methods ---
+
+    def _refresh_rate_status(self) -> None:
+        controller = getattr(self.main_window, "live_rate_controller", None)
+        getter = getattr(controller, "presentation_status", None)
+        if callable(getter):
+            self._live_rates_page.set_rate_status(*getter())
 
     def _set_current_settings_page(self, index: int) -> None:
         if 0 <= index < self.pages.count():
@@ -507,22 +531,22 @@ class SettingsDialog(QDialog):
     def _appearance_settings_actions(self) -> AppearanceSettingsActions:
         return AppearanceSettingsActions(
             apply_print_font=self._apply_print_font,
-            apply_table_font_size=lambda value: self._apply_estimate_widget_value(
+            apply_table_font_size=lambda value: self._apply_estimate_layout_value(
                 "apply_table_font_size",
                 value,
                 "table font size",
             ),
-            apply_breakdown_font_size=lambda value: self._apply_estimate_widget_value(
+            apply_breakdown_font_size=lambda value: self._apply_estimate_layout_value(
                 "apply_breakdown_font_size",
                 value,
                 "breakdown font size",
             ),
-            apply_final_calc_font_size=lambda value: self._apply_estimate_widget_value(
+            apply_final_calc_font_size=lambda value: self._apply_estimate_layout_value(
                 "apply_final_calc_font_size",
                 value,
                 "final calculation font size",
             ),
-            apply_totals_position=lambda value: self._apply_estimate_widget_value(
+            apply_totals_position=lambda value: self._apply_estimate_layout_value(
                 "apply_totals_position",
                 value,
                 "totals panel position",
@@ -532,7 +556,7 @@ class SettingsDialog(QDialog):
     def _apply_print_font(self, font: FontSettings) -> None:
         self.main_window.print_font = font.to_qfont()
 
-    def _apply_estimate_widget_value(
+    def _apply_estimate_layout_value(
         self,
         method_name: str,
         value: int | TotalsPosition,
@@ -541,10 +565,11 @@ class SettingsDialog(QDialog):
         widget = getattr(self.main_window, "estimate_widget", None)
         if widget is None:
             return None
-        method = getattr(widget, method_name, None)
+        controller = widget.layout_controller
+        method = getattr(controller, method_name, None)
         if not callable(method):
             raise RuntimeError(
-                f"Estimate view does not support '{method_name}' for {label}."
+                f"Estimate layout does not support '{method_name}' for {label}."
             )
         result = method(value)
         if result is False:
@@ -555,8 +580,8 @@ class SettingsDialog(QDialog):
         """Keep the settings dialog usable at larger Windows scale factors."""
         screen = self.screen()
         available = screen.availableGeometry()
-        target_width = min(900, max(self.minimumWidth(), available.width() - 80))
-        target_height = min(760, max(self.minimumHeight(), available.height() - 80))
+        target_width = min(1500, available.width() - 40)
+        target_height = min(920, available.height() - 40)
         self.resize(target_width, target_height)
 
     # --- Apply/Save/Accept/Reject ---
@@ -661,6 +686,7 @@ class SettingsDialog(QDialog):
         self.print_page.restore_defaults()
 
         self.logging_page.restore_defaults()
+        self._live_rates_page.restore_defaults()
 
         # Mark dirty so user can Apply
         self._mark_dirty()

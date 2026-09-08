@@ -52,6 +52,23 @@ class LiveRateController(QObject):
         self._manual_refresh = False
         self._ui_enabled = True
 
+    def presentation_status(self) -> tuple[str, str]:
+        """Expose the current display without starting another rate transport."""
+        widget = self._widget_getter()
+        value = getattr(widget, "live_rate_value_label", None)
+        meta = getattr(widget, "live_rate_meta_label", None)
+        return (
+            value.text() if value is not None else "Not updated",
+            " · ".join(
+                part
+                for part in (
+                    meta.text() if meta is not None else "",
+                    self._connection_state,
+                )
+                if part
+            ),
+        )
+
     def initialize(self, *, initial_refresh_delay_ms: int = 500) -> None:
         show_ui = self.apply_visibility_settings()
         self.apply_timer_settings(force_show_ui=show_ui)

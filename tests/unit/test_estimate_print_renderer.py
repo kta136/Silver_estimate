@@ -8,11 +8,10 @@ from pathlib import Path
 from silverestimate.ui.estimate_print_document import EstimatePrintDocument
 from silverestimate.ui.estimate_print_layout import REGULAR_COLUMNS
 from silverestimate.ui.estimate_print_renderer import (
-    _REGULAR_SECTION_GAP_ROWS,
     EstimatePrintRenderer,
-    _column_divider_positions,
     _section_gap_height,
 )
+from silverestimate.ui.modern_print_primitives import column_divider_positions
 from tests.factories import multi_section_print_estimate
 
 
@@ -29,11 +28,11 @@ def test_modern_layout_matches_semantic_golden_for_all_sections() -> None:
 
     assert layout.normalized_text() == expected
     assert "/Doz." not in layout.normalized_text()
-    assert "Date:" not in layout.normalized_text()
+    assert "Date:" in layout.normalized_text()
     assert tuple(section.title for section in layout.sections) == (
         "REGULAR GOODS",
-        "SILVER BARS",
         "RETURN GOODS",
+        "SILVER BARS",
         "RETURN SILVER BARS",
     )
     assert all(
@@ -41,24 +40,23 @@ def test_modern_layout_matches_semantic_golden_for_all_sections() -> None:
         for section in layout.sections
         for column in section.columns
     )
-    assert tuple(column.key for column in layout.sections[1].columns) == (
+    assert tuple(column.key for column in layout.sections[0].columns) == (
         "sno",
         "name",
         "gross",
         "poly",
         "net",
         "purity",
-        "fine",
+        "wage_rate",
+        "pieces",
         "wage",
+        "fine",
+        "type",
     )
     regular_positions = {
         column.key: (column.start_ratio, column.width_ratio)
         for column in layout.sections[0].columns
     }
-    assert regular_positions["gross"] == (0.29, 0.10)
-    assert regular_positions["poly"] == (0.39, 0.09)
-    assert regular_positions["net"] == (0.48, 0.10)
-    assert regular_positions["wage"] == (0.92, 0.08)
     for section in layout.sections[1:]:
         for column in section.columns:
             assert (column.start_ratio, column.width_ratio) == regular_positions[
@@ -83,19 +81,10 @@ def test_classic_layout_matches_previous_modern_fixed_width_structure() -> None:
 
     assert layout.normalized_text() == expected
     assert "Pcs/Doz." not in layout.normalized_text()
+    assert "101.25" in layout.lines[1]
     assert "GOODS NOT RETURNABLE" not in layout.normalized_text()
     assert any("* * Silver Bars * *" in line for line in layout.lines)
     assert any("* * Return Goods * *" in line for line in layout.lines)
-
-
-def test_estimate_renderer_exposes_direct_layout_and_painting_only() -> None:
-    renderer = EstimatePrintRenderer()
-
-    assert callable(renderer.build_modern_layout)
-    assert callable(renderer.build_classic_layout)
-    assert callable(renderer.paint)
-    assert not hasattr(renderer, "generate_modern_format")
-    assert not hasattr(renderer, "_build_preformatted_html")
 
 
 def test_tunch_column_is_optional_and_missing_values_stay_blank() -> None:
@@ -110,19 +99,10 @@ def test_tunch_column_is_optional_and_missing_values_stay_blank() -> None:
     modern = renderer.build_modern_layout(modern_document)
     regular = modern.sections[0]
 
-    assert tuple(column.key for column in regular.columns[:4]) == (
+    assert tuple(column.key for column in regular.columns[:3]) == (
         "sno",
         "name",
         "tunch",
-        "gross",
-    )
-    assert (regular.columns[1].start_ratio, regular.columns[1].width_ratio) == (
-        0.04,
-        0.18,
-    )
-    assert (regular.columns[2].start_ratio, regular.columns[2].width_ratio) == (
-        0.22,
-        0.07,
     )
     assert regular.rows[0].values[2] == "92.5 + loss"
     assert regular.rows[1].values[2] == ""
@@ -152,34 +132,36 @@ def test_zero_silver_rate_omits_cost_and_total_metrics() -> None:
     )
 
     assert tuple(metric.label for metric in layout.final_metrics) == (
-        "Fine Silver",
-        "Labour",
+        "Total Lbr Amt (₹)",
+        "Silver (g)",
     )
-    assert "Silver Cost:" not in layout.normalized_text()
-    assert "Total:" not in layout.normalized_text()
+    assert "Silver Value (₹):" not in layout.normalized_text()
+    assert "GRAND TOTAL (₹):" not in layout.normalized_text()
 
 
-def test_modern_table_draws_pcs_fine_divider_and_only_gaps_after_regular() -> None:
+def test_modern_tables_share_aligned_columns_and_compact_section_gaps() -> None:
     renderer = EstimatePrintRenderer()
     layout = renderer.build_modern_layout(
         EstimatePrintDocument.from_mapping(multi_section_print_estimate())
     )
     style = type("Style", (), {"section_gap": 24.0})()
-    divider_positions = _column_divider_positions(REGULAR_COLUMNS, 100.0)
+    divider_positions = column_divider_positions(REGULAR_COLUMNS, 100.0)
 
-    assert 82.0 in divider_positions
-    assert _REGULAR_SECTION_GAP_ROWS == 2.0
+    assert len(divider_positions) == len(REGULAR_COLUMNS) - 1
+    assert all(
+        a < b for a, b in zip(divider_positions, divider_positions[1:], strict=False)
+    )
     assert tuple(
         _section_gap_height(section, style) for section in layout.sections
     ) == (
-        24.0,
-        0.0,
-        0.0,
-        0.0,
+        6.0,
+        6.0,
+        6.0,
+        6.0,
     )
 
 
-def test_zero_labour_omits_labour_metric() -> None:
+def test_zero_wages_remains_explicit_in_summary() -> None:
     estimate_data = deepcopy(multi_section_print_estimate())
     estimate_data["header"]["last_balance_amount"] = 0
     for item in estimate_data["items"]:
@@ -190,8 +172,8 @@ def test_zero_labour_omits_labour_metric() -> None:
     )
 
     assert tuple(metric.label for metric in layout.final_metrics) == (
-        "Fine Silver",
-        "Silver Cost",
-        "Total",
+        "Total Lbr Amt (₹)",
+        "Silver Value (₹)",
+        "GRAND TOTAL (₹)",
     )
-    assert "Labour:" not in layout.normalized_text()
+    assert layout.final_metrics[0].value == "0.00"

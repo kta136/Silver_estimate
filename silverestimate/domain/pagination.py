@@ -11,10 +11,10 @@ CursorT = TypeVar("CursorT")
 
 @dataclass(frozen=True)
 class Page(Generic[ItemT, CursorT]):
-    """A stable page of rows and the cursor needed to continue the query."""
+    """A page and its continuation cursor; total is None when no count was requested."""
 
     items: tuple[ItemT, ...]
-    total: int
+    total: int | None
     next_cursor: CursorT | None = None
 
     @property

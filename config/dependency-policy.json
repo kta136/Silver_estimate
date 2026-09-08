@@ -20,10 +20,10 @@
     }
   ],
   "lock_review": {
-    "rationale": "Phase 13 replaces Safety with pip-audit 2.10.x and removes Safety's transitive dependency graph.",
-    "reviewed_by": "project maintainer",
-    "reviewed_on": "2026-07-30",
-    "sha256": "1401d16f14e4fc4fddfed3c80956fa3b87833fad5bc4c161c29192d0f6949740"
+    "rationale": "Reviewed 12 package version updates: Qt/PySide6/Shiboken6 6.11.2, Nuitka 4.2.1 and selected direct development tools. No package additions/removals or transitive major upgrades. Python build pin updated to 3.14.7; controlled SQLCipher wheel unchanged.",
+    "reviewed_by": "Codex (automated dependency review)",
+    "reviewed_on": "2026-09-08",
+    "sha256": "03f0e9d50cd7a34ab297250f55a9662e5569d972e826f311ade2089d01e513f1"
   },
   "native_provenance": {
     "path": "vendor/sqlcipher/PROVENANCE.json",
@@ -52,7 +52,7 @@
     {
       "component": "Qt for Python",
       "path": "THIRD_PARTY_NOTICES.md",
-      "required_text": "PySide6 6.11.1, Shiboken6 6.11.1, and Qt 6.11.1"
+      "required_text": "PySide6 6.11.2, Shiboken6 6.11.2, and Qt 6.11.2"
     }
   ],
   "required_native_components": [

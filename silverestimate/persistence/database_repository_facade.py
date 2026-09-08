@@ -146,6 +146,13 @@ class DatabaseRepositoryFacadeMixin:
     def delete_all_estimates(self):
         return self.estimates_repo.delete_all_estimates()
 
+    def save_estimate_atomic(
+        self, voucher_no, date, silver_rate, regular_items, return_items, totals
+    ):
+        return self.estimates_repo.save_estimate_atomic(
+            voucher_no, date, silver_rate, regular_items, return_items, totals
+        )
+
     def delete_single_estimate(self, voucher_no):
         return self.estimates_repo.delete_single_estimate(voucher_no)
 

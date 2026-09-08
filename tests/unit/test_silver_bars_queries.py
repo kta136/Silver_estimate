@@ -87,7 +87,10 @@ def test_build_history_bars_query_applies_filters_and_normalizes_limit():
         limit=25,
     )
 
-    assert "(sb.estimate_voucher_no LIKE ? OR e.note LIKE ?)" in statement.query
+    assert (
+        "(sb.estimate_voucher_no LIKE ? OR sb.estimate_voucher_no IN (SELECT voucher_no FROM estimates WHERE note LIKE ?))"
+        in statement.query
+    )
     assert "sb.weight = ?" in statement.query
     assert "sb.status = ?" in statement.query
     assert statement.query.endswith(
@@ -134,6 +137,7 @@ def test_keyset_queries_bind_stable_cursor_values():
     )
     assert "COALESCE(sb.date_added, '') < ?" in history.query
     assert history.params == (
+        "2026-07-15T01:00:00",
         "2026-07-15T01:00:00",
         "2026-07-15T01:00:00",
         42,

@@ -21,48 +21,18 @@ def fetch_item_catalog_rows(
     search_term: str,
 ) -> list[Any]:
     """Return item-master rows while preserving current search semantics."""
-    term = (search_term or "").strip()
-    if not term:
-        cursor.execute(
-            "SELECT code, name, tunch, purity, wage_type, wage_rate "
-            "FROM items ORDER BY code COLLATE NOCASE"
+    page = fetch_item_catalog_page(cursor, search_term, limit=5000)
+    rows = list(page.items)
+    while page.next_cursor is not None:
+        page = fetch_item_catalog_page(
+            cursor,
+            search_term,
+            page_cursor=page.next_cursor,
+            include_total=False,
+            limit=5000,
         )
-        return list(cursor.fetchall())
-
-    prefix_pattern = f"{term}%"
-    cursor.execute(
-        """
-        SELECT code, name, tunch, purity, wage_type, wage_rate
-        FROM items WHERE code LIKE ? COLLATE NOCASE
-        UNION ALL
-        SELECT code, name, tunch, purity, wage_type, wage_rate FROM items
-        WHERE name LIKE ? COLLATE NOCASE
-          AND code NOT LIKE ? COLLATE NOCASE
-        ORDER BY code COLLATE NOCASE
-        """,
-        (prefix_pattern, prefix_pattern, prefix_pattern),
-    )
-    prefix_rows: list[Any] = list(cursor.fetchall())
-    if prefix_rows:
-        return prefix_rows
-
-    if len(term) < 2:
-        return []
-
-    pattern = f"%{term}%"
-    cursor.execute(
-        """
-        SELECT code, name, tunch, purity, wage_type, wage_rate
-        FROM items WHERE code LIKE ? COLLATE NOCASE
-        UNION ALL
-        SELECT code, name, tunch, purity, wage_type, wage_rate FROM items
-        WHERE name LIKE ? COLLATE NOCASE
-          AND code NOT LIKE ? COLLATE NOCASE
-        ORDER BY code COLLATE NOCASE
-        """,
-        (pattern, pattern, pattern),
-    )
-    return list(cursor.fetchall())
+        rows.extend(page.items)
+    return rows
 
 
 def fetch_item_catalog_page(
@@ -70,6 +40,7 @@ def fetch_item_catalog_page(
     search_term: str,
     *,
     page_cursor: ItemCursor | None = None,
+    include_total: bool = True,
     limit: int = 1000,
 ) -> Page[dict[str, Any], ItemCursor]:
     """Return one keyset-ordered item-master page and its total match count."""
@@ -82,8 +53,8 @@ def fetch_item_catalog_page(
         prefix = f"{term}%"
         cursor.execute(
             "SELECT EXISTS(SELECT 1 FROM items "
-            "WHERE code LIKE ? COLLATE NOCASE OR name LIKE ? COLLATE NOCASE)",
-            (prefix, prefix),
+            "WHERE code LIKE ? COLLATE NOCASE OR name LIKE ? COLLATE NOCASE OR tunch LIKE ? COLLATE NOCASE)",
+            (prefix, prefix, prefix),
         )
         has_prefix = bool(cursor.fetchone()[0])
         if has_prefix:
@@ -92,12 +63,14 @@ def fetch_item_catalog_page(
             pattern = f"%{term}%"
         else:
             return Page(items=(), total=0, next_cursor=None)
-        where_sql = "(code LIKE ? COLLATE NOCASE OR name LIKE ? COLLATE NOCASE)"
-        where_params.extend((pattern, pattern))
+        where_sql = "(code LIKE ? COLLATE NOCASE OR name LIKE ? COLLATE NOCASE OR tunch LIKE ? COLLATE NOCASE)"
+        where_params.extend((pattern, pattern, pattern))
 
-    cursor.execute(f"SELECT COUNT(*) FROM items WHERE {where_sql}", where_params)  # nosec B608
-    count_row = cursor.fetchone()
-    total = int(count_row[0]) if count_row else 0
+    total = None
+    if include_total:
+        cursor.execute(f"SELECT COUNT(*) FROM items WHERE {where_sql}", where_params)  # nosec B608
+        count_row = cursor.fetchone()
+        total = int(count_row[0]) if count_row else 0
 
     keyset_sql = ""
     params = list(where_params)
@@ -447,6 +420,7 @@ class ItemsRepository:
     ) -> Optional[dict[str, int]]:
         """Synchronize item catalog rows in one transaction."""
         conn, cursor = self._conn, self._cursor
+        self._db.last_error = None
         if not conn or not cursor:
             return None
 
@@ -458,12 +432,13 @@ class ItemsRepository:
                 validated = validate_item(
                     code=str(payload.get("code", "") or ""),
                     name=str(payload.get("name", "") or ""),
-                    purity=float(payload.get("purity", 0.0)),
+                    purity=payload.get("purity", 0.0),
                     wage_type=str(payload.get("wage_type", "") or ""),
-                    wage_rate=float(payload.get("wage_rate", 0.0)),
+                    wage_rate=payload.get("wage_rate", 0.0),
                     tunch=payload.get("tunch"),
                 )
                 if validated.code in seen_codes:
+                    self._db.last_error = f"Duplicate item code '{validated.code}'."
                     self._logger.warning(
                         "Rejected item catalog payload with duplicate code %s",
                         validated.code,
@@ -472,15 +447,20 @@ class ItemsRepository:
                 seen_codes.add(validated.code)
                 normalized_items.append(validated)
         except (ItemValidationError, TypeError, ValueError) as exc:
+            self._db.last_error = f"Invalid item catalog: {exc}"
             self._logger.warning("Rejected invalid item catalog payload: %s", exc)
             return None
 
-        existing_codes = self._load_all_item_codes()
-        inserted = sum(item.code not in existing_codes for item in normalized_items)
-        updated = len(normalized_items) - inserted
         deleted = 0
+        transaction_started = False
         try:
-            conn.execute("BEGIN")
+            conn.execute("BEGIN IMMEDIATE")
+            transaction_started = True
+            existing_codes = self._load_all_item_codes()
+            obsolete_codes = existing_codes - seen_codes if replace_existing else set()
+            self._ensure_item_snapshots(cursor, obsolete_codes)
+            inserted = sum(item.code not in existing_codes for item in normalized_items)
+            updated = len(normalized_items) - inserted
             cursor.executemany(
                 """
                 INSERT INTO items (code, name, purity, wage_type, wage_rate, tunch)
@@ -506,16 +486,19 @@ class ItemsRepository:
             )
 
             if replace_existing:
-                obsolete_codes = existing_codes - seen_codes
                 deleted = self._delete_codes(cursor, obsolete_codes)
 
             conn.commit()
-        except sqlite3.Error as exc:
+            transaction_started = False
+        except Exception as exc:
+            self._db.last_error = f"Item catalog import was not applied: {exc}"
             self._logger.error(
                 "DB Error upserting item catalog: %s", exc, exc_info=True
             )
-            conn.rollback()
             return None
+        finally:
+            if transaction_started:
+                conn.rollback()
 
         cursor.execute(f"SELECT {ITEM_CATALOG_COLUMNS} FROM items")  # nosec B608
         catalog_rows = [dict(row) for row in cursor.fetchall()]
@@ -537,21 +520,51 @@ class ItemsRepository:
 
     def delete_item(self, code: str) -> bool:
         conn, cursor = self._conn, self._cursor
+        self._db.last_error = None
         if not conn or not cursor:
             return False
+        transaction_started = False
         try:
+            conn.execute("BEGIN IMMEDIATE")
+            transaction_started = True
+            self._ensure_item_snapshots(cursor, {code.strip().upper()})
             cursor.execute("DELETE FROM items WHERE code = ?", (code,))
             conn.commit()
+            transaction_started = False
             if cursor.rowcount > 0:
                 self._invalidate_cache(code)
                 return True
             return False
-        except sqlite3.Error as exc:
+        except Exception as exc:
+            self._db.last_error = f"Could not delete item '{code}': {exc}"
             self._logger.error("DB Error deleting item: %s", exc, exc_info=True)
-            conn.rollback()
             return False
+        finally:
+            if transaction_started:
+                conn.rollback()
 
     # --- helpers -----------------------------------------------------------------
+
+    @staticmethod
+    def _ensure_item_snapshots(cursor: sqlite3.Cursor, codes: set[str]) -> None:
+        normalized = sorted(codes)
+        referenced: list[str] = []
+        for start in range(0, len(normalized), 900):
+            chunk = normalized[start : start + 900]
+            placeholders = ",".join("?" for _ in chunk)
+            cursor.execute(
+                f"SELECT code FROM items WHERE UPPER(code) IN ({placeholders}) "  # nosec B608
+                "AND EXISTS (SELECT 1 FROM estimate_items WHERE item_code = items.code "
+                "AND (item_code_snapshot IS NULL OR snapshot_version < 1))",
+                chunk,
+            )
+            referenced.extend(str(row[0]) for row in cursor.fetchall())
+        if referenced:
+            raise ValueError(
+                "Items with incomplete saved estimate snapshots cannot be removed: "
+                + ", ".join(sorted(referenced))
+                + ". Repair these snapshots before removing the catalog codes."
+            )
 
     def _invalidate_cache(self, code: str) -> None:
         try:
@@ -578,16 +591,12 @@ class ItemsRepository:
         cursor = self._cursor
         if not cursor:
             return set()
-        try:
-            cursor.execute("SELECT code FROM items")
-            return {
-                str(row[0] or "").strip().upper()
-                for row in cursor.fetchall()
-                if row and str(row[0] or "").strip()
-            }
-        except sqlite3.Error as exc:
-            self._logger.error("DB Error loading item codes: %s", exc, exc_info=True)
-            return set()
+        cursor.execute("SELECT code FROM items")
+        return {
+            str(row[0] or "").strip().upper()
+            for row in cursor.fetchall()
+            if row and str(row[0] or "").strip()
+        }
 
     def _delete_codes(self, cursor: sqlite3.Cursor, codes: set[str]) -> int:
         if not codes:

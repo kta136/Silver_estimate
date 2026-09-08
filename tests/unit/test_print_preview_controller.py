@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 from PySide6.QtCore import QSizeF, Qt
 from PySide6.QtGui import QAction, QFont, QKeySequence, QPageLayout, QPageSize
 from PySide6.QtPrintSupport import QPrinter, QPrintPreviewWidget
@@ -623,28 +624,27 @@ def test_preview_defaults_store_custom_page_size_dimensions(qt_app, settings_stu
     assert settings.value("print/page_height_mm") == 190.0
 
 
-def test_quick_print_closes_preview_without_success_popup(monkeypatch):
-    render_calls = []
-    controller = PrintPreviewController(
-        printer=QPrinter(),
-        render_document=lambda *args: render_calls.append(args),
-    )
-    payload = PrintPreviewPayload(
-        document=_estimate_document(),
-        title="Print Preview",
-        document_kind="estimate",
-        identifier="V-003",
-        suggested_filename="Estimate-V-003.pdf",
-    )
-
-    class _PreviewStub:
+@pytest.fixture
+def quick_print_preview(qt_app):
+    class Preview:
         def __init__(self):
             self.accept_calls = 0
 
         def accept(self):
             self.accept_calls += 1
 
-    preview = _PreviewStub()
+    return Preview(), _estimate_payload()
+
+
+def test_quick_print_closes_preview_without_success_popup(
+    monkeypatch, quick_print_preview
+):
+    render_calls = []
+    controller = PrintPreviewController(
+        printer=QPrinter(),
+        render_document=lambda *args: render_calls.append(args),
+    )
+    preview, payload = quick_print_preview
 
     def _unexpected_information(*args, **kwargs):
         raise AssertionError("Success popup should not be shown after quick print")
@@ -666,27 +666,14 @@ def test_quick_print_closes_preview_without_success_popup(monkeypatch):
     assert preview.accept_calls == 1
 
 
-def test_quick_print_failure_keeps_preview_open_and_shows_error(monkeypatch):
+def test_quick_print_failure_keeps_preview_open_and_shows_error(
+    monkeypatch, quick_print_preview
+):
     controller = PrintPreviewController(
         printer=QPrinter(),
         render_document=lambda *args: (_ for _ in ()).throw(RuntimeError("offline")),
     )
-    payload = PrintPreviewPayload(
-        document=_estimate_document(),
-        title="Print Preview",
-        document_kind="estimate",
-        identifier="V-004",
-        suggested_filename="Estimate-V-004.pdf",
-    )
-
-    class _PreviewStub:
-        def __init__(self):
-            self.accept_calls = 0
-
-        def accept(self):
-            self.accept_calls += 1
-
-    preview = _PreviewStub()
+    preview, payload = quick_print_preview
     critical_calls = []
     monkeypatch.setattr(
         QMessageBox,
@@ -709,28 +696,15 @@ def test_quick_print_failure_keeps_preview_open_and_shows_error(monkeypatch):
     assert len(critical_calls) == 1
 
 
-def test_quick_print_blocks_missing_printer_before_render(monkeypatch):
+def test_quick_print_blocks_missing_printer_before_render(
+    monkeypatch, quick_print_preview
+):
     render_calls = []
     controller = PrintPreviewController(
         printer=QPrinter(),
         render_document=lambda *args: render_calls.append(args),
     )
-    payload = PrintPreviewPayload(
-        document=_estimate_document(),
-        title="Print Preview",
-        document_kind="estimate",
-        identifier="V-005",
-        suggested_filename="Estimate-V-005.pdf",
-    )
-
-    class _PreviewStub:
-        def __init__(self):
-            self.accept_calls = 0
-
-        def accept(self):
-            self.accept_calls += 1
-
-    preview = _PreviewStub()
+    preview, payload = quick_print_preview
     critical_calls = []
     monkeypatch.setattr(
         "silverestimate.ui.print_preview_output.validate_quick_print_printer",

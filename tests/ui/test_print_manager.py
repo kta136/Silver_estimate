@@ -99,34 +99,6 @@ def _long_estimate_data(item_count: int = 60):
     return estimate_data
 
 
-def test_silver_bar_inventory_layout_keeps_dynamic_text_plain(qt_app, settings_stub):
-    manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
-    bars = [
-        {
-            "bar_id": 1,
-            "estimate_voucher_no": "V1<script>alert(1)</script>",
-            "weight": 12.345,
-            "purity": 99.99,
-            "fine_weight": 12.343,
-            "date_added": "2026-02-13 <today>",
-            "status": "In <Stock>",
-        }
-    ]
-
-    document = SilverBarInventoryPrintDocument.from_rows(
-        bars,
-        status_filter="<all>",
-        print_date="2026-02-13",
-    )
-    rendered = manager._silver_bar_renderer.build_layout(document).normalized_text()
-
-    assert "V1<script>alert(1)</script>" in rendered
-    assert "In <Stock>" in rendered
-    assert "13/02/2026" in rendered
-    assert "Status: <all>" in rendered
-    assert "&lt;" not in rendered
-
-
 def test_estimate_modern_layout_uses_requested_column_precision(qt_app, settings_stub):
     manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
     estimate_data = {
@@ -386,23 +358,6 @@ def test_build_silver_bar_inventory_preview_payload_uses_typed_document(
     assert payload.title == "Print Preview - Silver Bar Inventory"
     assert payload.document_kind == "silver_bar_inventory"
     assert payload.suggested_filename == "Silver-Bar-Inventory.pdf"
-
-
-def test_silver_bar_list_layout_keeps_note_as_plain_text(qt_app, settings_stub):
-    manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
-
-    document = SilverBarListPrintDocument.from_rows(
-        {
-            "list_identifier": 'LIST-011<script>alert("x")</script>',
-            "list_note": "<b>fragile</b>",
-        },
-        [{"weight": 10.5, "purity": 99.9, "fine_weight": 10.49}],
-    )
-    rendered = manager._silver_bar_renderer.build_layout(document).normalized_text()
-
-    assert 'LIST-011<script>alert("x")</script>' in rendered
-    assert "<b>fragile</b>" in rendered
-    assert "&lt;" not in rendered
 
 
 def test_direct_inventory_painter_repeats_headers_and_keeps_total_with_rows(

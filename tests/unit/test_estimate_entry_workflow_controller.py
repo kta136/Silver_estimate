@@ -384,42 +384,6 @@ def test_safe_load_estimate_ignores_empty_voucher(workflow_host, monkeypatch):
     assert calls == []
 
 
-def test_save_estimate_success_invokes_print_and_clear(workflow_host, monkeypatch):
-    host, controller = workflow_host
-    host.voucher_edit.setText("S001")
-    host.note_edit.setText("note")
-    host.print_calls = 0
-    host.clear_calls = []
-    controller.print_estimate = lambda: setattr(
-        host, "print_calls", host.print_calls + 1
-    )
-    controller.clear_form = lambda confirm=False: host.clear_calls.append(confirm)
-    controller._update_view_model_snapshot = lambda: host.status_calls.append(
-        ("snapshot", 0)
-    )
-    host.presenter = object()
-
-    class _ServiceStub:
-        def __init__(self, view_model):
-            self.view_model = view_model
-
-        def execute_save(self, **kwargs):
-            del kwargs
-            return SaveOutcome(success=True, message="Saved ok"), object()
-
-    monkeypatch.setattr(
-        workflow_module, "EstimateEntryPersistenceService", _ServiceStub
-    )
-
-    controller.save_estimate()
-
-    assert ("Saving estimate S001...", 2000) in host.status_calls
-    assert ("Saved ok", 5000) in host.status_calls
-    assert host.print_calls == 1
-    assert host.clear_calls == [False]
-    assert any(args[1] == "Success" for args in _MessageBoxStub.information_calls)
-
-
 def test_save_estimate_requires_voucher_number(workflow_host):
     _host, controller = workflow_host
 

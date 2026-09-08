@@ -176,7 +176,7 @@ def test_management_dialog_uses_model_ids_for_add_and_copy(
     assert dialog.list_bars_model.rowCount() == 2
 
 
-def test_management_dialog_disables_list_actions_when_no_list_selected(
+def test_management_dialog_updates_actions_and_table_when_list_selected(
     qtbot, settings_stub
 ):
     del settings_stub
@@ -200,17 +200,6 @@ def test_management_dialog_disables_list_actions_when_no_list_selected(
     assert dialog.list_bars_table.isEnabled() is False
     assert dialog.list_bars_table.property("listState") == "inactive"
     assert dialog.list_bars_table.horizontalHeader().property("listState") == "inactive"
-
-
-def test_management_dialog_activates_list_table_visual_state_when_list_selected(
-    qtbot, settings_stub
-):
-    del settings_stub
-    dialog = SilverBarDialog(_FakeSilverBarManagementDb())
-    qtbot.addWidget(dialog)
-    dialog.show()
-    qtbot.waitUntil(lambda: dialog.isVisible(), timeout=1000)
-    qtbot.waitUntil(lambda: dialog.available_bars_model.rowCount() == 2, timeout=1000)
 
     dialog.list_combo.setCurrentIndex(1)
     qtbot.waitUntil(lambda: dialog.current_list_id == 10, timeout=1000)

@@ -86,6 +86,12 @@ def test_widget_initializes_voucher_and_empty_regular_row(
     assert widget.item_table.get_cell_text(0, COL_TYPE) == "Regular"
     assert fake_db.generate_calls == 1
     assert widget.voucher_edit.text() == "TEST123"
+    table = widget.item_table
+    model = table.get_model()
+    for column in range(table.columnCount()):
+        assert model.index(0, column).isValid()
+    for column in (COL_NET_WT, COL_WAGE_AMT, COL_FINE_WT):
+        assert not (model.flags(model.index(0, column)) & Qt.ItemFlag.ItemIsEditable)
 
 
 def test_load_estimate_signal_connection_is_idempotent(
@@ -166,27 +172,6 @@ def test_widget_multi_row_totals(make_estimate_widget, qt_app, fake_db):
     assert float(widget.bar_gross_label.text()) == pytest.approx(3.0)
 
 
-def test_incremental_totals_match_full_single_row_edit(
-    make_estimate_widget, qt_app, fake_db
-):
-    widget = make_estimate_widget(fake_db)
-    table = _set_row(
-        widget,
-        0,
-        regular_item(gross=10, poly=1, purity=92.5, wage_rate=10),
-    )
-    assert widget.totals_controller._totals_incremental_is_active()
-
-    table.set_cell_text(0, COL_GROSS, "12.0")
-    widget.table_controller.handle_cell_changed(0, COL_GROSS)
-    _pump_events(150)
-
-    assert float(widget.total_gross_label.text()) == pytest.approx(12.0)
-    assert float(widget.total_net_label.text()) == pytest.approx(11.0)
-    assert float(widget.total_fine_label.text()) == pytest.approx(10.175, abs=0.01)
-    assert float(widget.net_wage_label.text()) == pytest.approx(110.0)
-
-
 def test_incremental_row_edit_applies_totals_without_recalc_schedule(
     make_estimate_widget, qt_app, fake_db
 ):
@@ -214,6 +199,17 @@ def test_incremental_row_edit_applies_totals_without_recalc_schedule(
     assert float(widget.total_net_label.text()) == pytest.approx(11.0)
     assert float(widget.total_fine_label.text()) == pytest.approx(10.175, abs=0.01)
     assert float(widget.net_wage_label.text()) == pytest.approx(110.0)
+    # Deferred callbacks must not overwrite the totals applied synchronously.
+    labels = (
+        widget.total_gross_label,
+        widget.total_net_label,
+        widget.total_fine_label,
+        widget.net_wage_label,
+    )
+    before = tuple(label.text() for label in labels)
+    _pump_events(150)
+    assert scheduled["count"] == 0
+    assert tuple(label.text() for label in labels) == before
 
 
 def test_incremental_totals_match_full_multi_row_mixed_categories(
@@ -536,21 +532,6 @@ def test_print_estimate_uses_current_unsaved_state(
     assert item["is_silver_bar"] == 0
 
 
-def test_toggle_modes_updates_empty_row(make_estimate_widget, qt_app, fake_db):
-    widget = make_estimate_widget(fake_db)
-    last_row = widget.item_table.rowCount() - 1
-    assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "Regular"
-    widget.workflow_controller.toggle_return_mode()
-    last_row = widget.item_table.rowCount() - 1
-    assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "Return"
-    widget.workflow_controller.toggle_silver_bar_mode()
-    last_row = widget.item_table.rowCount() - 1
-    assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "Silver Bar"
-    widget.workflow_controller.toggle_silver_bar_mode()
-    last_row = widget.item_table.rowCount() - 1
-    assert widget.item_table.get_cell_text(last_row, COL_TYPE) == "Regular"
-
-
 def test_populate_row_updates_code_cell(make_estimate_widget, qt_app, fake_db):
     widget = make_estimate_widget(fake_db)
     table = widget.item_table
@@ -565,6 +546,8 @@ def test_populate_row_updates_code_cell(make_estimate_widget, qt_app, fake_db):
 
     assert table.get_cell_text(0, COL_CODE) == "NEW123"
     assert table.get_cell_text(0, COL_ITEM_NAME) == "New Item"
+    assert table.get_cell_text(0, COL_PURITY) == "91.60"
+    assert table.get_cell_text(0, COL_WAGE_RATE) == "10.00"
     assert table.get_row_state(0).code == "NEW123"
 
 

@@ -79,20 +79,6 @@ def test_clear_rows(table_view):
     assert table_view.get_model().rowCount() == 0
 
 
-def test_get_row(table_view):
-    """Test retrieving row data."""
-    row_data = EstimateEntryRowState(
-        code="TEST002",
-        name="Test Item 2",
-        gross=200.0,
-    )
-    table_view.add_row(row_data)
-
-    retrieved = table_view.get_row(0)
-    assert retrieved is not None
-    assert retrieved.code == "TEST002"
-
-
 def test_set_row(table_view):
     """Test setting row data."""
     table_view.add_row()

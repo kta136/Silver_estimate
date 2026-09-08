@@ -690,15 +690,15 @@
     "semantic_hash": ""
   },
   "tests/ui/test_estimate_entry_integration.py": {
-    "mtime": 1788613065.1854963,
-    "seen": 1788613500.4624472,
-    "ast_hash": "ae296ff631e3a7ed580271e8184ed150",
+    "mtime": 1788868014.1206412,
+    "seen": 1788868039.8078377,
+    "ast_hash": "0bf71b2dcfb691eaa75f4eced17cce5a",
     "semantic_hash": ""
   },
   "tests/ui/test_estimate_entry_widget.py": {
-    "mtime": 1788863621.7531078,
-    "seen": 1788863705.7078645,
-    "ast_hash": "30b57d44d8a0016357bb1307b09800f6",
+    "mtime": 1788867753.9740326,
+    "seen": 1788867786.4735487,
+    "ast_hash": "0ed1c4da24cbf767ad26c5165531f978",
     "semantic_hash": ""
   },
   "tests/ui/test_estimate_history.py": {
@@ -744,9 +744,9 @@
     "semantic_hash": ""
   },
   "tests/ui/test_print_manager.py": {
-    "mtime": 1788863838.000992,
-    "seen": 1788863952.6288087,
-    "ast_hash": "dc08675ae67ae5045a064a3b3251001b",
+    "mtime": 1788867553.2455301,
+    "seen": 1788867602.7594419,
+    "ast_hash": "500fda3cec8b16f1fe8a16719005c011",
     "semantic_hash": ""
   },
   "tests/ui/test_settings_dialog.py": {
@@ -762,9 +762,9 @@
     "semantic_hash": ""
   },
   "tests/ui/test_silver_bar_management.py": {
-    "mtime": 1788682862.706744,
-    "seen": 1788856339.8110387,
-    "ast_hash": "f1f529b103ee63759bbf26fc3c532387",
+    "mtime": 1788867587.3667257,
+    "seen": 1788867602.7594466,
+    "ast_hash": "f9b645d891311ded72e2539ac198304c",
     "semantic_hash": ""
   },
   "tests/unit/test_application_builder.py": {
@@ -797,12 +797,6 @@
     "ast_hash": "387921fe3f3f36f7f622c549acabe68f",
     "semantic_hash": ""
   },
-  "tests/unit/test_estimate_entry_theme.py": {
-    "mtime": 1773319515.5781565,
-    "seen": 1788613500.4624655,
-    "ast_hash": "93c34c1931b513b33a323f7548acde1d",
-    "semantic_hash": "93c34c1931b513b33a323f7548acde1d"
-  },
   "tests/unit/test_estimate_entry_view_model.py": {
     "mtime": 1788867151.748632,
     "seen": 1788867180.9843457,
@@ -810,9 +804,9 @@
     "semantic_hash": ""
   },
   "tests/unit/test_estimate_entry_workflow_controller.py": {
-    "mtime": 1788855973.1222904,
-    "seen": 1788856339.8110538,
-    "ast_hash": "6ef4e73770c52e93db6b19f049c3e55f",
+    "mtime": 1788867553.250409,
+    "seen": 1788867602.7594612,
+    "ast_hash": "f5976fd036cc3b7101f1865481126025",
     "semantic_hash": ""
   },
   "tests/unit/test_estimate_history_table_model.py": {
@@ -834,9 +828,9 @@
     "semantic_hash": ""
   },
   "tests/unit/test_estimate_table_view.py": {
-    "mtime": 1788853930.8576615,
-    "seen": 1788856339.8110576,
-    "ast_hash": "f8cadc6f3c537efe4f7094ac43c36efc",
+    "mtime": 1788867725.244135,
+    "seen": 1788867786.4735816,
+    "ast_hash": "fc5ced490b7757ff436f824208c1bd27",
     "semantic_hash": ""
   },
   "tests/unit/test_estimate_totals.py": {
@@ -888,9 +882,9 @@
     "semantic_hash": "4df6ebc6dc45e796a5f08bc5b2a1ee57"
   },
   "tests/unit/test_print_preview_controller.py": {
-    "mtime": 1788857027.6894033,
-    "seen": 1788857083.1983442,
-    "ast_hash": "959bf56e09a01e1f40a97a54720b5b90",
+    "mtime": 1788868014.1206412,
+    "seen": 1788868039.8078847,
+    "ast_hash": "5af2897a9e44a2ab7d174a33a5272650",
     "semantic_hash": ""
   },
   "tests/unit/test_silver_bars_queries.py": {
@@ -1272,9 +1266,9 @@
     "semantic_hash": ""
   },
   "tests/unit/test_architecture_boundaries.py": {
-    "mtime": 1788682863.4818368,
-    "seen": 1788856339.8110418,
-    "ast_hash": "b7c36479a18563c3c77b84dfe88aadbc",
+    "mtime": 1788867339.4734354,
+    "seen": 1788867381.329166,
+    "ast_hash": "0acc76ea1ddfd597d8019d63dbc73113",
     "semantic_hash": ""
   },
   "tests/unit/test_credential_backend_status.py": {
@@ -1596,9 +1590,9 @@
     "semantic_hash": ""
   },
   "tests/unit/test_build_windows_local_script.py": {
-    "mtime": 1788849376.5445857,
-    "seen": 1788856339.811044,
-    "ast_hash": "a746927aca695403496c2dd9af56a84e",
+    "mtime": 1788867339.222973,
+    "seen": 1788867381.3291688,
+    "ast_hash": "22b0cc38842643aae81b07788ed7cd14",
     "semantic_hash": ""
   },
   "silverestimate/ui/preview_build_worker.py": {
@@ -1872,9 +1866,9 @@
     "semantic_hash": ""
   },
   "tests/unit/test_print_preview_output.py": {
-    "mtime": 1785411711.4274068,
-    "seen": 1788613500.4624822,
-    "ast_hash": "2c4ac6a3919b596b08932e173f271454",
+    "mtime": 1788868011.8968666,
+    "seen": 1788868039.807886,
+    "ast_hash": "ed3fc7da9fbc04d37e6c9e54b9aa0a81",
     "semantic_hash": ""
   },
   "silverestimate/persistence/database_protocols.py": {
@@ -2082,9 +2076,9 @@
     "semantic_hash": ""
   },
   "tests/ui/test_save_workflows.py": {
-    "mtime": 1788678696.3433452,
-    "seen": 1788681942.733301,
-    "ast_hash": "ba36a730b07823e3bf727c80f6f6a972",
+    "mtime": 1788867553.3302948,
+    "seen": 1788867602.7594433,
+    "ast_hash": "3f55defae0cb588e7a65f3aa8ed082c0",
     "semantic_hash": ""
   },
   "tests/unit/test_estimate_contracts.py": {

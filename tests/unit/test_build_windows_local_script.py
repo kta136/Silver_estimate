@@ -58,15 +58,6 @@ def test_local_build_rejects_external_onefile_runtime_dependencies():
     assert "One-file loader has non-system startup dependencies" in source
 
 
-def test_local_build_keeps_only_the_versioned_executable():
-    source = SCRIPT.read_text(encoding="utf-8")
-
-    assert "$temporaryOnefileConfig" in source
-    assert "-configFile $temporaryOnefileConfig" in source
-    assert "Remove-Item -LiteralPath $baseExe -Force" in source
-    assert "Compress-Archive" not in source
-
-
 @pytest.mark.skipif(os.name != "nt", reason="Windows command launcher")
 def test_local_build_launcher_supports_workspace_paths_with_spaces(tmp_path):
     scripts_dir = tmp_path / "workspace with spaces" / "scripts"

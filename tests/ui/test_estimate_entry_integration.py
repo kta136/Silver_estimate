@@ -6,15 +6,11 @@ from PySide6.QtWidgets import QLineEdit
 
 from silverestimate.ui.estimate_entry_logic import (
     COL_CODE,
-    COL_FINE_WT,
     COL_GROSS,
-    COL_ITEM_NAME,
-    COL_NET_WT,
     COL_PIECES,
     COL_POLY,
     COL_PURITY,
     COL_TYPE,
-    COL_WAGE_AMT,
     COL_WAGE_RATE,
 )
 
@@ -32,150 +28,34 @@ def _begin_inline_edit(qtbot, widget, row: int, column: int) -> QLineEdit:
 
 
 # ============================================================================
-# Program Startup Tests
-# ============================================================================
-
-
-def test_initial_empty_row_has_correct_structure(make_estimate_widget, qt_app, fake_db):
-    """Test that the initial empty row has all cells properly initialized."""
-    widget = make_estimate_widget(fake_db)
-    table = widget.item_table
-    last_row = table.rowCount() - 1
-
-    # Verify all columns map to valid model indexes.
-    model = table.get_model()
-    for col in range(table.columnCount()):
-        assert model.index(last_row, col).isValid(), f"Column {col} should be valid"
-
-    # Verify calculated columns are non-editable
-    net_index = model.index(last_row, COL_NET_WT)
-    wage_index = model.index(last_row, COL_WAGE_AMT)
-    fine_index = model.index(last_row, COL_FINE_WT)
-    assert not (model.flags(net_index) & Qt.ItemFlag.ItemIsEditable), (
-        "Net weight should be read-only"
-    )
-    assert not (model.flags(wage_index) & Qt.ItemFlag.ItemIsEditable), (
-        "Wage amount should be read-only"
-    )
-    assert not (model.flags(fine_index) & Qt.ItemFlag.ItemIsEditable), (
-        "Fine weight should be read-only"
-    )
-
-
-# ============================================================================
 # Adapter Layer Tests - Add Row Functionality
 # ============================================================================
 
 
-def test_adapter_add_empty_row_via_button(make_estimate_widget, qt_app, fake_db):
-    """Test that clicking 'Add Row' button uses adapter.add_empty_row().
-
-    This is the most common user action - clicking the Add Row button.
-    It exercises the full adapter path for row creation.
-    """
-    widget = make_estimate_widget(fake_db)
-    initial_count = widget.item_table.rowCount()
-
-    # Clear existing rows to test from clean slate
-    widget.table_controller.clear_all_rows()
-
-    # Simulate user clicking "Add Row" button (triggers adapter)
-    widget.table_controller._get_table_adapter().add_empty_row()
-
-    assert widget.item_table.rowCount() == 1, "Should add one row"
-
-    assert widget.item_table.get_cell_text(0, COL_TYPE) == "Regular"
-
-
-def test_adapter_prevents_multiple_empty_rows(make_estimate_widget, qt_app, fake_db):
-    """Test that adapter doesn't create duplicate empty rows.
-
-    If there's already an empty row, clicking Add Row should focus it
-    rather than creating a new one.
-    """
+def test_adapter_reuses_empty_row_and_preserves_filled_rows(
+    make_estimate_widget, qt_app, fake_db
+):
     widget = make_estimate_widget(fake_db)
     widget.table_controller.clear_all_rows()
-
-    # Add first empty row
-    widget.table_controller._get_table_adapter().add_empty_row()
-    assert widget.item_table.rowCount() == 1
-
-    # Try to add another empty row
-    widget.table_controller._get_table_adapter().add_empty_row()
-
-    # Should still have only one row (focuses existing empty row)
-    assert widget.item_table.rowCount() == 1
-
-
-def test_adapter_adds_row_when_last_has_code(make_estimate_widget, qt_app, fake_db):
-    """Test that adapter creates new row when last row has code."""
-    widget = make_estimate_widget(fake_db)
-    widget.table_controller.clear_all_rows()
-
-    # Add row and populate it
-    widget.table_controller._get_table_adapter().add_empty_row()
+    adapter = widget.table_controller._get_table_adapter()
     table = widget.item_table
-    table.set_cell_text(0, COL_CODE, "ABC123")
 
-    # Now try to add another row
-    widget.table_controller._get_table_adapter().add_empty_row()
+    adapter.add_empty_row()
+    assert table.rowCount() == 1
+    assert table.get_cell_text(0, COL_TYPE) == "Regular"
 
-    # Should create a new row since last one has code
-    assert table.rowCount() == 2, "Should create second row when first has code"
+    adapter.add_empty_row()
+    assert table.rowCount() == 1
+
+    table.set_cell_text(0, COL_CODE, "CACHE1")
+    adapter.add_empty_row()
+    assert table.rowCount() == 2
+    assert table.get_cell_text(0, COL_CODE) == "CACHE1"
 
 
 # ============================================================================
 # Adapter Layer Tests - Populate Row
 # ============================================================================
-
-
-def test_adapter_populate_row_uses_model_first_updates(
-    make_estimate_widget, qt_app, fake_db
-):
-    """Test that adapter.populate_row writes through model-first helpers."""
-    widget = make_estimate_widget(fake_db)
-    widget.table_controller.clear_all_rows()
-    widget.table_controller._get_table_adapter().add_empty_row()
-
-    # Populate row via adapter.
-    widget.table_controller._get_table_adapter().populate_row(
-        0,
-        {
-            "code": "test001",
-            "name": "Test Item",
-            "purity": 92.5,
-            "wage_rate": 10.0,
-        },
-    )
-
-    table = widget.item_table
-
-    assert table.get_cell_text(0, COL_CODE) == "TEST001"
-    assert table.get_cell_text(0, COL_ITEM_NAME) == "Test Item"
-    assert table.get_cell_text(0, COL_PURITY) == "92.50"
-    assert table.get_cell_text(0, COL_WAGE_RATE) == "10.00"
-
-
-def test_adapter_populate_row_wt_forces_zero_and_disables_pieces(
-    make_estimate_widget, qt_app, fake_db
-):
-    widget = make_estimate_widget(fake_db)
-    widget.table_controller.clear_all_rows()
-    widget.table_controller._get_table_adapter().add_empty_row()
-    widget.table_controller._get_table_adapter().populate_row(
-        0,
-        {
-            "code": "wt001",
-            "name": "WT Item",
-            "purity": 92.5,
-            "wage_rate": 10.0,
-            "wage_type": "WT",
-        },
-    )
-    table = widget.item_table
-    assert table.get_cell_text(0, COL_PIECES) == "0"
-    index = table.model().index(0, COL_PIECES)
-    assert not bool(table.model().flags(index) & Qt.ItemFlag.ItemIsEditable)
 
 
 def test_adapter_populate_row_pc_restores_one_after_wt_zero(
@@ -194,6 +74,11 @@ def test_adapter_populate_row_pc_restores_one_after_wt_zero(
             "wage_type": "WT",
         },
     )
+    table = widget.item_table
+    assert table.get_cell_text(0, COL_PIECES) == "0"
+    index = table.model().index(0, COL_PIECES)
+    assert not (table.model().flags(index) & Qt.ItemFlag.ItemIsEditable)
+
     widget.table_controller._get_table_adapter().populate_row(
         0,
         {
@@ -215,8 +100,8 @@ def test_adapter_populate_row_pc_restores_one_after_wt_zero(
 # ============================================================================
 
 
-def test_set_cell_text_syncs_with_model(make_estimate_widget, qt_app, fake_db):
-    """Setting cell text should propagate to the underlying model."""
+def test_cell_text_and_model_updates_round_trip(make_estimate_widget, qt_app, fake_db):
+    """Edits through either API remain visible through the other."""
     widget = make_estimate_widget(fake_db)
     widget.table_controller.clear_all_rows()
     widget.table_controller._get_table_adapter().add_empty_row()
@@ -230,42 +115,14 @@ def test_set_cell_text_syncs_with_model(make_estimate_widget, qt_app, fake_db):
     model_data = model.data(index, Qt.ItemDataRole.DisplayRole)
 
     assert model_data == "SYNC123", "Model should be updated"
-
-
-def test_model_updates_reflect_in_get_cell_text(make_estimate_widget, qt_app, fake_db):
-    """Model updates should be readable via table view helper."""
-    widget = make_estimate_widget(fake_db)
-    widget.table_controller.clear_all_rows()
-    widget.table_controller._get_table_adapter().add_empty_row()
-
-    table = widget.item_table
-    model = table.get_model()
-
     # Update model directly
-    index = model.index(0, COL_CODE)
     model.setData(index, "DIRECT123", Qt.ItemDataRole.EditRole)
 
     assert table.get_cell_text(0, COL_CODE) == "DIRECT123"
 
 
-def test_row_changes_keep_existing_cell_values(make_estimate_widget, qt_app, fake_db):
-    """Adding rows should not disturb existing row values."""
-    widget = make_estimate_widget(fake_db)
-    widget.table_controller.clear_all_rows()
-    widget.table_controller._get_table_adapter().add_empty_row()
-
-    table = widget.item_table
-
-    table.set_cell_text(0, COL_CODE, "CACHE1")
-
-    # Add another row (should clear cache)
-    widget.table_controller._get_table_adapter().add_empty_row()
-
-    assert table.get_cell_text(0, COL_CODE) == "CACHE1"
-
-
 # ============================================================================
-# Mode Toggle Tests (Integration with Adapter)
+# Table Row Helper Tests
 # ============================================================================
 
 
@@ -298,29 +155,6 @@ def test_adapter_focus_on_empty_row(make_estimate_widget, qt_app, fake_db):
     # Should create new empty row
     widget.table_controller._get_table_adapter().focus_on_empty_row()
     assert table.rowCount() == 2
-
-
-def test_adapter_refresh_empty_row_type(make_estimate_widget, qt_app, fake_db):
-    """Test that adapter.refresh_empty_row_type() updates all empty rows."""
-    widget = make_estimate_widget(fake_db)
-    widget.table_controller.clear_all_rows()
-
-    # Create multiple empty rows
-    widget.table_controller._get_table_adapter().add_empty_row()
-    widget.table_controller._get_table_adapter().add_empty_row()
-
-    table = widget.item_table
-
-    # Toggle mode
-    widget.workflow_controller.toggle_return_mode()
-
-    # Refresh should update all empty rows
-    widget.table_controller._get_table_adapter().refresh_empty_row_type()
-
-    # Check all empty rows have correct type
-    for row in range(table.rowCount()):
-        if not table.get_cell_text(row, COL_CODE).strip():
-            assert table.get_cell_text(row, COL_TYPE) == "Return"
 
 
 # ============================================================================

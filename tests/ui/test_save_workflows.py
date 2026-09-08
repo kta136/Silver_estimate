@@ -154,16 +154,29 @@ def test_save_captures_active_cell_editor(history_db, make_estimate_widget, qtbo
     assert saved["items"][0]["gross"] == pytest.approx(12.345)
 
 
-def test_original_save_actions_remain(history_db, make_estimate_widget, monkeypatch):
+def test_save_button_persists_then_previews_and_clears(
+    history_db, make_estimate_widget, monkeypatch
+):
     widget = make_estimate_widget(history_db)
     _draft(widget)
     events = []
-    monkeypatch.setattr(QMessageBox, "information", lambda *a: events.append("success"))
+    statuses = []
+    success_messages = []
+    monkeypatch.setattr(widget, "_status", lambda *args: statuses.append(args))
+
+    def report_success(_parent, title, message):
+        assert title == "Success"
+        success_messages.append(message)
+        events.append("success")
+
+    monkeypatch.setattr(QMessageBox, "information", report_success)
     monkeypatch.setattr(
         widget.workflow_controller, "print_estimate", lambda: events.append("preview")
     )
     widget.primary_actions.save_button.click()
     assert events == ["success", "preview"]
+    assert ("Saving estimate DRAFT...", 2000) in statuses
+    assert (success_messages[0], 5000) in statuses
     assert widget.voucher_edit.text() != "DRAFT"
     assert history_db.get_estimate_by_voucher("DRAFT") is not None
     assert not hasattr(widget.primary_actions, "save_options_button")

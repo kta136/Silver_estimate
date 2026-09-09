@@ -40,8 +40,6 @@ def validate_estimate_item(
         values[field] = value
     if values["poly"] > values["gross"]:
         raise ValueError("Poly weight cannot exceed gross weight.")
-    if values["purity"] > 100:
-        raise ValueError("Purity must be between 0 and 100.")
     pieces = item.get("pieces", 1)
     finite_number(pieces, "Pieces")
     count = int(pieces)

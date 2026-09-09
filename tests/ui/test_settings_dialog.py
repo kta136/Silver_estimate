@@ -79,7 +79,7 @@ def test_settings_dialog_uses_visible_arrow_controls(qtbot, qt_app, settings_stu
         assert isinstance(dialog.print_page.preview_zoom_spin, ThemedDoubleSpinBox)
         assert isinstance(dialog.appearance_page.totals_position_combo, ThemedComboBox)
         assert isinstance(dialog.print_page.printer_combo, ThemedComboBox)
-        assert isinstance(dialog.print_page.estimate_format_combo, ThemedComboBox)
+        assert not hasattr(dialog.print_page, "estimate_format_combo")
         assert (
             dialog.sidebar.horizontalScrollBarPolicy()
             == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
@@ -151,9 +151,6 @@ def test_settings_apply_persists_print_preferences(
         dialog.print_page.printer_combo.setCurrentText("Warehouse Printer")
         dialog.print_page.page_size_combo.setCurrentText("Legal")
         dialog.print_page.orientation_combo.setCurrentText("Landscape")
-        dialog.print_page.estimate_format_combo.setCurrentIndex(
-            dialog.print_page.estimate_format_combo.findData("classic")
-        )
 
         assert dialog.apply_settings() is True
         assert settings.value("print/margins") == "12,3,14,4"
@@ -161,7 +158,7 @@ def test_settings_apply_persists_print_preferences(
         assert settings.value("print/default_printer") == "Warehouse Printer"
         assert settings.value("print/page_size") == "Legal"
         assert settings.value("print/orientation") == "Landscape"
-        assert settings.value("print/estimate_layout") == "classic"
+        assert settings.value("print/estimate_layout") == "modern"
     finally:
         dialog.deleteLater()
 
@@ -200,7 +197,6 @@ def test_settings_dialog_uses_defaults_for_invalid_print_settings(
         assert dialog.print_page.page_size_combo.currentText() == "A4"
         assert dialog.print_page.orientation_combo.currentText() == "Landscape"
         assert settings.value("print/estimate_layout") == "modern"
-        assert dialog.print_page.estimate_format_combo.currentData() == "modern"
         assert dialog.print_page.printer_combo.currentData() == ""
     finally:
         dialog.deleteLater()
@@ -349,6 +345,57 @@ def test_settings_save_appearance_on_real_estimate_screen(
     reloaded_estimate = make_estimate_widget(fake_db)
     assert reloaded_estimate.item_table.font().pointSize() == 13
     assert reloaded_estimate._totals_position == "bottom"
+
+
+def test_apply_stays_visible_and_reenables_after_repeated_text_changes(
+    qtbot, qt_application_state, monkeypatch, make_estimate_widget, fake_db
+):
+    from silverestimate.ui.application_theme import apply_light_application_theme
+
+    apply_light_application_theme(qt_application_state)
+    _MessageBoxStub.reset()
+    monkeypatch.setattr(
+        "silverestimate.ui.settings_dialog.QMessageBox", _MessageBoxStub
+    )
+    monkeypatch.setattr(
+        "silverestimate.ui.settings_print_controller.QPrinterInfo.availablePrinters",
+        lambda: [],
+    )
+    monkeypatch.setattr(
+        "silverestimate.infrastructure.logger.reconfigure_logging", lambda: None
+    )
+    estimate = make_estimate_widget(fake_db)
+    main_window = _make_main_window(estimate.layout_controller)
+    main_window.estimate_widget = estimate
+    dialog = SettingsDialog(main_window_ref=main_window)
+    qtbot.addWidget(dialog)
+    dialog.show()
+    apply_button = dialog.buttonBox.button(QDialogButtonBox.StandardButton.Apply)
+    page = dialog.appearance_page
+    for size, totals_size, final_size, position in (
+        (12, 10, 16, "right"),
+        (14, 11, 18, "left"),
+        (11, 12, 20, "bottom"),
+    ):
+        page.table_font_size_spin.setValue(size)
+        page.breakdown_font_size_spin.setValue(totals_size)
+        page.final_calc_font_size_spin.setValue(final_size)
+        page.totals_position_combo.setCurrentIndex(
+            page.totals_position_combo.findData(position)
+        )
+        qt_application_state.processEvents()
+        assert apply_button.isVisible()
+        assert apply_button.isEnabled()
+        qtbot.mouseClick(apply_button, Qt.MouseButton.LeftButton)
+        qt_application_state.processEvents()
+        assert not _MessageBoxStub.critical_calls
+        assert get_app_settings().get_int("ui/table_font_size") == size
+        assert estimate.totals_panel.total_fine_label.font().pointSize() == totals_size
+        assert estimate.totals_panel.net_fine_label.font().pointSize() == final_size
+        assert estimate.totals_panel.net_wage_label.font().pointSize() == final_size
+        assert estimate.totals_panel.grand_total_label.font().pointSize() == final_size
+        assert apply_button.isVisible()
+        assert not apply_button.isEnabled()
 
 
 def test_settings_apply_persists_logging_preferences(

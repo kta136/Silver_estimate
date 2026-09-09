@@ -110,8 +110,8 @@ def test_selection_state_controller_updates_buttons_and_summaries(qtbot):
     assert host.add_all_button.isEnabled() is True
     assert host.remove_all_button.isEnabled() is True
     assert host.available_selection_label.text() == (
-        "Selected: 1 | Weight: 10.500 g | Fine: 10.489 g"
+        "Selected: 1 | Weight: 10.50 g | Fine: 10.49 g"
     )
     assert host.list_selection_label.text() == (
-        "Selected: 1 | Weight: 9.000 g | Fine: 8.820 g"
+        "Selected: 1 | Weight: 9.00 g | Fine: 8.82 g"
     )

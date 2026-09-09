@@ -6,7 +6,6 @@ import math
 from dataclasses import dataclass
 
 MIN_PURITY = 0.0
-MAX_PURITY = 100.0
 MIN_WAGE_RATE = 0.0
 MAX_WAGE_RATE = 1_000_000.0
 VALID_WAGE_TYPES = {"PC", "WT", "Q", "P"}
@@ -52,10 +51,9 @@ def validate_item(  # noqa: PLR0913 - stable public field-by-field validation AP
         )
 
     purity_value = _finite_number(purity, "Purity")
-    if not (MIN_PURITY <= purity_value <= MAX_PURITY):
-        raise ItemValidationError(
-            f"Purity must be between {MIN_PURITY:.0f} and {MAX_PURITY:.0f}."
-        )
+    # Numeric Tunch/purity is a business multiplier and may exceed 100%.
+    if purity_value < MIN_PURITY:
+        raise ItemValidationError("Purity cannot be negative.")
 
     wage_rate_value = _finite_number(wage_rate, "Lbr")
     if wage_rate_value < MIN_WAGE_RATE:

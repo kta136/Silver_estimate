@@ -56,11 +56,16 @@ Create one WT item and one PC item with purity 91.6 and wage rate 250.
 
 ## Estimate and inventory consistency
 
-- Enter two regular rows with gross/net `10.125 g`, purity `92.50%`, and a WT wage
-  rate of `₹1.00`. Each fine weight must be `9.366 g` and each wage `₹10.13`; totals
-  must add these rounded rows. Save, reopen, and compare Entry, History and both
-  print formats. Check that silver rates retain two decimals in the classic header.
-- Enter carried balances of `-0.005 g` and `-₹1.25`. Reopen the balance dialog and
+- Add an item with numeric Purity/Tunch `125.50%` and optional Tunch text
+  `125.50% + loss`. Export/import its catalog backup and confirm both are preserved.
+  Enter `10.00 g` net weight: fine weight must be `12.55 g`. Save and reopen
+  regular, return, and silver-bar estimates; inventory and Modern printing must
+  retain these values. Negative and non-finite numeric percentages remain invalid.
+- Enter two regular rows with gross/net `10.13 g`, purity `92.50%`, and a WT wage
+  rate of `₹1.00`. Each fine weight must be `9.37 g` and each wage `₹10.13`; totals
+  must add these rounded rows. Save, reopen, and compare Entry, History and
+  the Modern print. Check that silver rates retain two decimals in the header.
+- Enter carried balances of `-0.01 g` and `-₹1.25`. Reopen the balance dialog and
   accept it unchanged; both values must be preserved and included in print totals.
 - Reopen a disposable historical estimate with stored amounts beyond the current
   precision. Printing or changing only its note must preserve the recorded row
@@ -89,7 +94,7 @@ Create one WT item and one PC item with purity 91.6 and wage rate 250.
 
 ## Print and export
 
-- Preview classic and modern estimates with multiple pages and long item names.
+- Preview Modern estimates with multiple pages and long item names.
   Inspect headers, totals, page breaks, optional Tunch and landscape/portrait layout.
 - Change print font and page size, then reopen the preview to verify preferences.
 - Export a PDF through the native file chooser, cancel a second export, then try

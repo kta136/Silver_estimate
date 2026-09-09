@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 from silverestimate.domain.estimate_models import TotalsResult
+from silverestimate.domain.numeric_policy import WEIGHT_PLACES
 from silverestimate.ui.appearance import set_table_font
 from silverestimate.ui.estimate_table_formatting import format_indian_number
 from silverestimate.ui.numeric_font import numeric_table_font
@@ -103,32 +104,32 @@ class TotalsPanel(QWidget):
         "totals": (
             "Totals",
             [
-                ("Total Gross Wt:", "overall_gross_label", "0.000"),
-                ("Total Poly Wt:", "overall_poly_label", "0.000"),
+                ("Total Gross Wt:", "overall_gross_label", "0.00"),
+                ("Total Poly Wt:", "overall_poly_label", "0.00"),
             ],
         ),
         "regular": (
             "Regular",
             [
-                ("Gross Wt:", "total_gross_label", "0.000"),
-                ("Net Wt:", "total_net_label", "0.000"),
-                ("Fine Wt:", "total_fine_label", "0.000"),
+                ("Gross Wt:", "total_gross_label", "0.00"),
+                ("Net Wt:", "total_net_label", "0.00"),
+                ("Fine Wt:", "total_fine_label", "0.00"),
             ],
         ),
         "return": (
             "Return",
             [
-                ("Gross Wt:", "return_gross_label", "0.000"),
-                ("Net Wt:", "return_net_label", "0.000"),
-                ("Fine Wt:", "return_fine_label", "0.000"),
+                ("Gross Wt:", "return_gross_label", "0.00"),
+                ("Net Wt:", "return_net_label", "0.00"),
+                ("Fine Wt:", "return_fine_label", "0.00"),
             ],
         ),
         "silver_bar": (
             "Silver Bar",
             [
-                ("Gross Wt:", "bar_gross_label", "0.000"),
-                ("Net Wt:", "bar_net_label", "0.000"),
-                ("Fine Wt:", "bar_fine_label", "0.000"),
+                ("Gross Wt:", "bar_gross_label", "0.00"),
+                ("Net Wt:", "bar_net_label", "0.00"),
+                ("Fine Wt:", "bar_fine_label", "0.00"),
             ],
         ),
     }
@@ -321,6 +322,7 @@ class TotalsPanel(QWidget):
     ) -> QLabel:
         label = QLabel(text)
         label.setObjectName(object_name)
+        label.setProperty("sectionKind", TotalsPanel._FINAL_SECTION_KEY)
         header_font = label.font()
         header_font.setBold(True)
         label.setFont(header_font)
@@ -354,7 +356,7 @@ class TotalsPanel(QWidget):
         final_title_label.setFont(final_title_font)
         final_calc_form.addRow(final_title_label)
 
-        self.net_fine_label = QLabel("0.000")
+        self.net_fine_label = QLabel("0.00")
         self.net_fine_label.setObjectName("MetricValue")
         self.net_fine_label.setProperty("sectionKind", self._FINAL_SECTION_KEY)
         self.net_fine_label.setAlignment(
@@ -387,6 +389,7 @@ class TotalsPanel(QWidget):
 
         self.grand_total_label = QLabel(self._format_currency(0))
         self.grand_total_label.setObjectName("GrandTotalValue")
+        self.grand_total_label.setProperty("sectionKind", self._FINAL_SECTION_KEY)
         self.grand_total_label.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
@@ -660,6 +663,7 @@ class TotalsPanel(QWidget):
 
         self.grand_total_label = QLabel(self._format_currency(0))
         self.grand_total_label.setObjectName("GrandTotalValue")
+        self.grand_total_label.setProperty("sectionKind", self._FINAL_SECTION_KEY)
         self.grand_total_label.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
@@ -674,7 +678,7 @@ class TotalsPanel(QWidget):
             QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow
         )
 
-        self.net_fine_label = QLabel("0.000")
+        self.net_fine_label = QLabel("0.00")
         self.net_fine_label.setObjectName("MetricValue")
         self.net_fine_label.setProperty("sectionKind", self._FINAL_SECTION_KEY)
         self.net_fine_label.setAlignment(
@@ -984,11 +988,11 @@ class TotalsPanel(QWidget):
 
     @staticmethod
     def _format_weight(value: float) -> str:
-        """Format weights in grams to the shared milligram precision."""
+        """Format weights in grams to the shared weight precision."""
         try:
-            return format_indian_number(value, 3)
+            return format_indian_number(value, WEIGHT_PLACES)
         except Exception:
-            return "0.000"
+            return "0.00"
 
     @staticmethod
     def _format_amount(value: float) -> str:
@@ -1080,6 +1084,8 @@ class TotalsPanel(QWidget):
         """
         self._breakdown_font_size = int(size)
         for label in self.findChildren(QLabel):
+            if label.property("sectionKind") == self._FINAL_SECTION_KEY:
+                continue
             if label.objectName() not in {
                 "MetricLabel",
                 "MetricValue",
@@ -1110,16 +1116,15 @@ class TotalsPanel(QWidget):
         Args:
             size: Font point size
         """
-        # Preserve stylesheet while setting font size
-        for label in [self.net_fine_label, self.net_wage_label]:
+        for label in self.findChildren(QLabel):
+            if label.property("sectionKind") != self._FINAL_SECTION_KEY:
+                continue
             font = label.font()
-            font.setPointSize(getattr(self, "_breakdown_font_size", 11))
-            font.setBold(False)
+            font.setPointSize(int(size))
+            if label.objectName() == "MetricValue":
+                font = numeric_table_font(font)
+                font.setBold(False)
+            elif label.objectName() == "GrandTotalValue":
+                font.setBold(True)
             label.setFont(font)
-
-        # Keep grand total visually dominant without consuming extra layout height.
-        font = self.grand_total_label.font()
-        font.setPointSize(int(size))
-        font.setBold(True)
-        self.grand_total_label.setFont(font)
         self._schedule_sidebar_item_size_sync()

@@ -61,6 +61,44 @@ outer PE import table and rejects the build if it requires anything beyond
 developer machine's Universal CRT installation. The script rejects copy
 mismatches and prints the deliverable's SHA-256 hash.
 
+For faster local iteration, run:
+
+```powershell
+scripts\build_windows_local.cmd -Fast
+```
+
+This builds `dist/SilverEstimate-v<APP_VERSION>-fast.exe` with `--lto=no`,
+skipping whole-program link-time optimization while retaining normal C
+optimization, one-file compression, locked dependency synchronization, and
+every frozen-runtime/native-dependency validation. An explicit
+`-ArtifactSuffix my-test` overrides the default `fast` suffix. Use the default
+command without `-Fast` for release builds; the fast profile may produce a
+larger executable and different runtime performance. The committed deployment
+specification and CI/release configuration are unchanged.
+
+Both profiles print dependency, compilation/packaging, validation, and total
+durations. They write a success/failure report to
+`artifacts/local-build/build-timings[-suffix].json`, including timings for a
+failed stage. A failed validation does not replace an existing versioned
+executable. Compare repeated builds of the same profile after its first build:
+the compiler flags affect cache keys, so the first fast build needs to populate
+its own object cache.
+
+Measured on the development workstation on 2026-09-08 with the same application
+source and locked toolchain: standard build with a populated cache, 173.89 s;
+first fast build, 173.85 s; repeated fast build, 104.15 s (40% less elapsed time).
+The standard and repeated fast compilation reports each recorded 243 cache
+hits; the first fast report recorded 243 misses. These are individual local
+measurements, not a CI performance guarantee. All three executables passed the
+frozen runtime and native dependency checks.
+
+Nuitka already uses all available CPUs for C compilation and automatically
+uses its MSVC `clcache`; increasing a fixed job count or clearing those caches
+is not a build-speed improvement. Qt's pinned deploy wrapper cleans its
+`deployment` directory at the start of each run, even with
+`--keep-deployment-files`, so preserving that directory does not provide
+incremental builds. See [Nuitka's compilation cache documentation](https://nuitka.net/user-documentation/tips.html).
+
 The frozen application writes an early bootstrap trace to
 `logs/SilverEstimate-startup.log` beside the executable. If that directory is
 not writable, diagnostics and normal logs fall back to

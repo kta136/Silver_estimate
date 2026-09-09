@@ -58,8 +58,8 @@ class SilverBarSynchronizationRepository(_SilverBarRepositoryBase):
         purity = finite_number(item.get("purity", 0), "Bar purity")
         if weight < 0:
             raise ValueError("Bar weight cannot be negative.")
-        if not 0 <= purity <= 100:
-            raise ValueError("Bar purity must be between 0 and 100.")
+        if purity < 0:
+            raise ValueError("Bar purity cannot be negative.")
         return {
             "weight": weight,
             "purity": purity,

@@ -6,7 +6,12 @@ from dataclasses import dataclass
 from typing import Literal
 
 from silverestimate.domain.estimate_totals import calculate_grand_total
-from silverestimate.domain.numeric_policy import fixed_decimal, silver_value, sum_values
+from silverestimate.domain.numeric_policy import (
+    WEIGHT_PLACES,
+    fixed_decimal,
+    silver_value,
+    sum_values,
+)
 from silverestimate.ui.estimate_table_formatting import format_indian_number
 
 from .estimate_print_document import (
@@ -14,6 +19,7 @@ from .estimate_print_document import (
     EstimatePrintHeader,
     EstimatePrintItem,
 )
+from .print_numeric_formatting import print_column_places
 
 ColumnAlignment = Literal["left", "center", "right"]
 
@@ -92,8 +98,8 @@ class ModernEstimateLayout:
                     " | ".join(column.title for column in section.columns),
                 )
             )
-            lines.extend(" | ".join(row.values) for row in section.rows)
-            lines.append(" | ".join(section.total_row.values))
+            lines.extend(" | ".join(row.values).rstrip() for row in section.rows)
+            lines.append(" | ".join(section.total_row.values).rstrip())
 
         if self.last_balance_metrics:
             lines.append("[LAST BALANCE]")
@@ -133,7 +139,6 @@ def _columns(show_tunch: bool = False) -> tuple[EstimatePrintColumn, ...]:
             ("pieces", "Pieces", 5, "right"),
             ("wage", "Lbr Amt (₹)", 10, "right"),
             ("fine", "Fine Wt (g)", 8, "right"),
-            ("type", "Type", 8, "left"),
         ]
     )
     total = sum(spec[2] for spec in specs)
@@ -224,16 +229,37 @@ def _build_section(  # noqa: PLR0913 - explicit semantic section inputs
         )
         for index, item in enumerate(items, start=1)
     )
+    total_row = _total_row(totals, is_bar=is_bar, show_tunch=show_tunch)
+    numeric_fields = {
+        "gross": "gross",
+        "poly": "poly",
+        "net": "net_wt",
+        "purity": "purity",
+        "wage_rate": "wage_rate",
+        "pieces": "pieces",
+        "wage": "wage",
+        "fine": "fine",
+    }
+    places = {
+        key: print_column_places(
+            [getattr(item, field) for item in items] + [getattr(totals, key, None)]
+        )
+        for key, field in numeric_fields.items()
+    }
+
+    def format_row(row: EstimatePrintRow) -> EstimatePrintRow:
+        values = tuple(
+            value.removesuffix(".00") if places.get(column.key) == 0 else value
+            for column, value in zip(columns, row.values, strict=True)
+        )
+        return EstimatePrintRow(values, is_total=row.is_total)
+
     section = EstimatePrintSection(
         key=key,
         title=title,
         columns=columns,
-        rows=rows,
-        total_row=_total_row(
-            totals,
-            is_bar=is_bar,
-            show_tunch=show_tunch,
-        ),
+        rows=tuple(format_row(row) for row in rows),
+        total_row=format_row(total_row),
         is_return=is_return,
     )
     return section, totals
@@ -249,15 +275,6 @@ def _item_row(
     leading: tuple[str, ...] = (str(index), item.item_name)
     if show_tunch:
         leading += (_tunch(item.tunch),)
-    kind = (
-        "Return Silver Bar"
-        if item.is_return and item.is_silver_bar
-        else "Return"
-        if item.is_return
-        else "Silver Bar"
-        if item.is_silver_bar
-        else "Regular"
-    )
     return EstimatePrintRow(
         leading
         + (
@@ -269,7 +286,6 @@ def _item_row(
             _pieces(item.pieces),
             _amount(item.wage, decimals=2),
             _weight(item.fine),
-            kind,
         )
     )
 
@@ -289,7 +305,6 @@ def _total_row(
             _pieces(totals.pieces),
             _amount(totals.wage, decimals=2),
             _weight(totals.fine),
-            "",
         ),
         is_total=True,
     )
@@ -414,7 +429,7 @@ def _zero_totals() -> _SectionTotals:
 
 
 def _weight(value: float) -> str:
-    return _decimal(value, decimals=3, grouped=True)
+    return _decimal(value, decimals=WEIGHT_PLACES, grouped=True)
 
 
 def _tunch(value: str | None) -> str:
@@ -422,8 +437,6 @@ def _tunch(value: str | None) -> str:
 
 
 def _pieces(value: float) -> str:
-    if float(value).is_integer():
-        return _amount(value, decimals=0)
     return _amount(value, decimals=2)
 
 

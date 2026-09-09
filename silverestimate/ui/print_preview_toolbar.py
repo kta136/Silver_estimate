@@ -18,7 +18,6 @@ from PySide6.QtWidgets import (
 
 from .custom_font_dialog import CustomFontDialog
 from .icons import get_icon
-from .print_format_spec import ESTIMATE_FORMAT_LABELS
 from .print_preview_navigation import PrintPreviewNavigationController
 from .print_preview_output import PrintPreviewOutputController
 from .print_preview_page_setup import PrintPreviewPageSetupController
@@ -33,7 +32,6 @@ from .theme_tokens import (
     SURFACE_BG,
     TEXT_STRONG,
 )
-from .themed_controls import ThemedComboBox
 
 TOOLBAR_STYLE = f"""
     QToolBar#PrintPreviewToolbar {{
@@ -80,11 +78,6 @@ TOOLBAR_STYLE = f"""
     QComboBox#PreviewOrientationCombo {{
         min-width: 88px;
         max-width: 94px;
-        min-height: 28px;
-    }}
-    QComboBox#PreviewFormatCombo {{
-        min-width: 82px;
-        max-width: 90px;
         min-height: 28px;
     }}
     QSpinBox#PreviewPageSpin {{
@@ -214,11 +207,9 @@ class PrintPreviewToolbarBuilder:
         session: PrintPreviewSession,
     ) -> None:
         payload = session.payload
-        if payload.document_kind != "estimate" or not payload.available_formats:
+        if payload.document_kind != "estimate":
             return
 
-        format_combo = self._build_format_combo(session)
-        toolbar.addWidget(format_combo)
         if payload.tunch_visibility_factory is None:
             return
 
@@ -230,29 +221,6 @@ class PrintPreviewToolbarBuilder:
         )
         tunch_checkbox.toggled.connect(session.switch_tunch_visibility)
         toolbar.addWidget(tunch_checkbox)
-
-    def _build_format_combo(
-        self,
-        session: PrintPreviewSession,
-    ) -> ThemedComboBox:
-        payload = session.payload
-        combo = ThemedComboBox(session.preview)
-        combo.setObjectName("PreviewFormatCombo")
-        combo.setMinimumWidth(82)
-        combo.setMaximumWidth(90)
-        combo.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        combo.setToolTip("Switch between Classic and Modern estimate formats")
-        for format_key in payload.available_formats:
-            combo.addItem(
-                ESTIMATE_FORMAT_LABELS.get(format_key, format_key.title()),
-                format_key,
-            )
-        index = combo.findData(payload.format_key)
-        combo.setCurrentIndex(index if index >= 0 else 0)
-        combo.currentIndexChanged.connect(
-            lambda: session.switch_format(combo.currentData())
-        )
-        return combo
 
     def _add_print_font_action(
         self,

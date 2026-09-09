@@ -26,6 +26,17 @@ def test_catalog_numbers_must_be_finite(field, value):
         validate_item(**_item(**{field: value}))
 
 
+@pytest.mark.parametrize("purity", [0, 100, 100.01, 125.5, 250.25, 1000.01])
+def test_catalog_backup_round_trip_preserves_numeric_tunch_above_100(tmp_path, purity):
+    item = _item(purity=purity, tunch=f"{purity}% + loss")
+    assert validate_item(**item).purity == purity
+    path = tmp_path / "catalog.json"
+
+    catalog.export_item_catalog_rows([item], str(path))
+
+    assert catalog.load_item_catalog_file(str(path)) == [item]
+
+
 @pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
 def test_import_rejects_nonstandard_json_numbers_even_in_metadata(tmp_path, constant):
     path = tmp_path / "catalog.json"

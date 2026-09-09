@@ -4,6 +4,7 @@ from dataclasses import replace
 
 import pytest
 
+from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.ui.settings_print_controller import (
     PrintSettingsState,
     SettingsPrintController,
@@ -12,6 +13,16 @@ from silverestimate.ui.settings_print_controller import (
 
 def test_default_print_settings_state_is_valid() -> None:
     SettingsPrintController.validate_state(PrintSettingsState())
+
+
+def test_removed_classic_preference_is_normalized_to_modern(settings_stub) -> None:
+    settings = get_app_settings()
+    settings.setValue("print/estimate_layout", "classic")
+
+    state = SettingsPrintController(settings).load_state()
+
+    assert state.estimate_format == "modern"
+    assert settings.value("print/estimate_layout") == "modern"
 
 
 @pytest.mark.parametrize(

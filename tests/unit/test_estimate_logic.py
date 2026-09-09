@@ -25,7 +25,7 @@ def test_compute_fine_weight_handles_zero_purity():
 
 
 def test_compute_fine_weight_uses_purity_percentage():
-    assert compute_fine_weight(9.0, 92.5) == pytest.approx(8.325)
+    assert compute_fine_weight(9.0, 92.5) == pytest.approx(8.33)
 
 
 def test_compute_wage_amount_uses_basis():
@@ -92,9 +92,11 @@ from tests.factories import fine_calculation_cases, wage_calculation_cases
 def test_compute_fine_property(case):
     expected_net = max(Decimal(str(case.gross)) - Decimal(str(case.poly)), Decimal(0))
     expected_fine = (expected_net * Decimal(str(case.purity)) / 100).quantize(
-        Decimal("0.001"), rounding=ROUND_HALF_UP
+        Decimal("0.01"), rounding=ROUND_HALF_UP
     )
-    assert compute_net_weight(case.gross, case.poly) == float(expected_net)
+    assert compute_net_weight(case.gross, case.poly) == float(
+        expected_net.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    )
     assert compute_fine_weight(float(expected_net), case.purity) == pytest.approx(
         float(expected_fine)
     )

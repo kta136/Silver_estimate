@@ -56,7 +56,6 @@ class PrintSettingsWidgets:
     printer_combo: QComboBox
     page_size_combo: QComboBox
     orientation_combo: QComboBox
-    estimate_format_combo: QComboBox
 
 
 class SettingsPrintController:
@@ -119,10 +118,6 @@ class SettingsPrintController:
         if idx_orientation >= 0:
             widgets.orientation_combo.setCurrentIndex(idx_orientation)
 
-        idx_format = widgets.estimate_format_combo.findData(state.estimate_format)
-        if idx_format >= 0:
-            widgets.estimate_format_combo.setCurrentIndex(idx_format)
-
         return state
 
     def save_from_ui(self, widgets: PrintSettingsWidgets) -> PrintSettingsState:
@@ -163,9 +158,7 @@ class SettingsPrintController:
             page_width_mm=page_width_mm,
             page_height_mm=page_height_mm,
             orientation=widgets.orientation_combo.currentText() or DEFAULT_ORIENTATION,
-            estimate_format=(
-                widgets.estimate_format_combo.currentData() or DEFAULT_ESTIMATE_FORMAT
-            ),
+            estimate_format=DEFAULT_ESTIMATE_FORMAT,
         )
         self.validate_state(state)
         return state
@@ -220,10 +213,6 @@ class SettingsPrintController:
         idx_orientation = widgets.orientation_combo.findText(state.orientation)
         if idx_orientation >= 0:
             widgets.orientation_combo.setCurrentIndex(idx_orientation)
-
-        idx_format = widgets.estimate_format_combo.findData(state.estimate_format)
-        if idx_format >= 0:
-            widgets.estimate_format_combo.setCurrentIndex(idx_format)
 
         return state
 

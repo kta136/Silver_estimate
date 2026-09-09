@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from pathlib import Path
 
 import pytest
@@ -20,7 +21,10 @@ from PySide6.QtWidgets import (
 
 from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.ui.estimate_print_document import EstimatePrintDocument
-from silverestimate.ui.print_payload_builder import PrintPreviewPayload
+from silverestimate.ui.print_payload_builder import (
+    PrintPayloadBuilder,
+    PrintPreviewPayload,
+)
 from silverestimate.ui.print_preview_controller import PrintPreviewController
 from silverestimate.ui.print_preview_dialog import PrintPreviewDialog
 from silverestimate.ui.print_preview_output import PrintOutputStatus
@@ -69,27 +73,13 @@ def _report_document() -> SilverBarListPrintDocument:
 
 
 def _estimate_payload(format_key: str = "modern") -> PrintPreviewPayload:
-    def build(
-        selected_format: str,
-        show_tunch: bool = False,
-    ) -> PrintPreviewPayload:
-        return PrintPreviewPayload(
-            document=_estimate_document(
-                selected_format,
-                show_tunch=show_tunch,
-            ),
-            title="Print Preview",
-            document_kind="estimate",
-            identifier="V-001",
-            suggested_filename="Estimate-V-001.pdf",
-            format_key=selected_format,
-            available_formats=("classic", "modern"),
-            format_factory=lambda next_format: build(next_format, show_tunch),
-            show_tunch=show_tunch,
-            tunch_visibility_factory=lambda visible: build(selected_format, visible),
-        )
-
-    return build(format_key)
+    payload = PrintPayloadBuilder().build_estimate_preview_payload(
+        "V-001",
+        fetch_estimate=lambda _voucher: asdict(_estimate_document()),
+        format_key=format_key,
+    )
+    assert payload is not None
+    return payload
 
 
 def _preview_session(
@@ -137,12 +127,7 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
     assert toolbar.iconSize().width() == 16
     assert preview.findChild(QWidget, "PreviewPageNavigator") is not None
     format_combo = preview.findChild(QComboBox, "PreviewFormatCombo")
-    assert format_combo is not None
-    assert [format_combo.itemText(index) for index in range(format_combo.count())] == [
-        "Classic",
-        "Modern",
-    ]
-    assert format_combo.currentData() == "modern"
+    assert format_combo is None
     tunch_checkbox = preview.findChild(QCheckBox, "PreviewTunchCheckbox")
     assert tunch_checkbox is not None
     assert tunch_checkbox.isChecked() is False
@@ -239,11 +224,6 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
         for action in toolbar.actions()
         if toolbar.widgetForAction(action) is orientation_combo
     )
-    format_action = next(
-        action
-        for action in toolbar.actions()
-        if toolbar.widgetForAction(action) is format_combo
-    )
     tunch_action = next(
         action
         for action in toolbar.actions()
@@ -255,9 +235,8 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
         orientation_action
     )
     assert ordered_actions.index(orientation_action) < ordered_actions.index(
-        format_action
+        tunch_action
     )
-    assert ordered_actions.index(format_action) < ordered_actions.index(tunch_action)
     assert ordered_actions.index(tunch_action) < ordered_actions.index(font_action)
     assert ordered_actions.index(font_action) < ordered_actions.index(fit_width_action)
     assert toolbar.actions().index(more_action) > toolbar.actions().index(
@@ -559,13 +538,13 @@ def test_preview_defaults_persist_updated_print_preferences(
     assert settings.value("print/page_width_mm") == 215.9
     assert settings.value("print/page_height_mm") == 355.6
     assert settings.value("print/margins") == expected_margins_str
-    assert settings.value("print/estimate_layout") == "classic"
+    assert settings.value("print/estimate_layout") == "modern"
     assert settings.value("print/show_tunch", type=bool) is False
-    assert persisted_formats == ["classic"]
+    assert persisted_formats == ["modern"]
     assert persisted_tunch == [False]
 
 
-def test_preview_format_switch_rebuilds_current_estimate_payload(qtbot) -> None:
+def test_preview_format_request_falls_back_to_modern(qtbot) -> None:
     controller = PrintPreviewController(
         printer=QPrinter(),
         render_document=lambda *args: None,
@@ -576,8 +555,8 @@ def test_preview_format_switch_rebuilds_current_estimate_payload(qtbot) -> None:
 
     session.switch_format("classic")
 
-    assert session.payload.format_key == "classic"
-    assert session.payload.document.format_key == "classic"
+    assert session.payload.format_key == "modern"
+    assert session.payload.document.format_key == "modern"
 
 
 def test_preview_tunch_toggle_refreshes_and_survives_format_switch(qtbot) -> None:
@@ -593,7 +572,7 @@ def test_preview_tunch_toggle_refreshes_and_survives_format_switch(qtbot) -> Non
 
     assert session.payload.show_tunch is True
     session.switch_format("classic")
-    assert session.payload.format_key == "classic"
+    assert session.payload.format_key == "modern"
     assert session.payload.show_tunch is True
 
 

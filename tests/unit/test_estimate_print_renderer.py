@@ -51,7 +51,6 @@ def test_modern_layout_matches_semantic_golden_for_all_sections() -> None:
         "pieces",
         "wage",
         "fine",
-        "type",
     )
     regular_positions = {
         column.key: (column.start_ratio, column.width_ratio)
@@ -65,28 +64,6 @@ def test_modern_layout_matches_semantic_golden_for_all_sections() -> None:
     assert "GOODS NOT RETURNABLE" not in layout.normalized_text()
 
 
-def test_classic_layout_matches_previous_modern_fixed_width_structure() -> None:
-    renderer = EstimatePrintRenderer()
-    document = EstimatePrintDocument.from_mapping(
-        multi_section_print_estimate(),
-        format_key="classic",
-    )
-    expected = (
-        (Path(__file__).parents[1] / "golden" / "classic_estimate_multi_section.txt")
-        .read_text(encoding="utf-8")
-        .rstrip("\n")
-    )
-
-    layout = renderer.build_classic_layout(document)
-
-    assert layout.normalized_text() == expected
-    assert "Pcs/Doz." not in layout.normalized_text()
-    assert "101.25" in layout.lines[1]
-    assert "GOODS NOT RETURNABLE" not in layout.normalized_text()
-    assert any("* * Silver Bars * *" in line for line in layout.lines)
-    assert any("* * Return Goods * *" in line for line in layout.lines)
-
-
 def test_tunch_column_is_optional_and_missing_values_stay_blank() -> None:
     renderer = EstimatePrintRenderer()
     estimate_data = deepcopy(multi_section_print_estimate())
@@ -98,6 +75,11 @@ def test_tunch_column_is_optional_and_missing_values_stay_blank() -> None:
     )
     modern = renderer.build_modern_layout(modern_document)
     regular = modern.sections[0]
+    assert all(
+        column.key != "type"
+        for section in modern.sections
+        for column in section.columns
+    )
 
     assert tuple(column.key for column in regular.columns[:3]) == (
         "sno",
@@ -107,20 +89,6 @@ def test_tunch_column_is_optional_and_missing_values_stay_blank() -> None:
     assert regular.rows[0].values[2] == "92.5 + loss"
     assert regular.rows[1].values[2] == ""
     assert regular.total_row.values[2] == ""
-
-    classic_document = EstimatePrintDocument.from_mapping(
-        estimate_data,
-        format_key="classic",
-        show_tunch=True,
-    )
-    classic = renderer.build_classic_layout(classic_document)
-    header = next(line for line in classic.lines if "Item Name" in line)
-    populated = next(line for line in classic.lines if "Chain Deluxe" in line)
-    missing = next(line for line in classic.lines if "Anklet Pair" in line)
-
-    assert "Item Name          Tunch" in header
-    assert "92.5 +" in populated
-    assert "92.5 +" not in missing
 
 
 def test_zero_silver_rate_omits_cost_and_total_metrics() -> None:

@@ -421,13 +421,9 @@ class SettingsDialog(QDialog):
         self.buttonBox.removeButton(restore_btn)
         footer.addWidget(restore_btn)
         footer.addStretch()
-        for role in (
-            QDialogButtonBox.StandardButton.Cancel,
-            QDialogButtonBox.StandardButton.Apply,
-            QDialogButtonBox.StandardButton.Ok,
-        ):
-            footer.addWidget(self.buttonBox.button(role))
-        self.buttonBox.hide()
+        # Keep Qt's managed buttons in their box: re-polishing the application
+        # theme relayouts that box and hides buttons reparented into the footer.
+        footer.addWidget(self.buttonBox)
         layout.addLayout(footer)
         self.setLayout(layout)
         self._resize_to_available_screen()

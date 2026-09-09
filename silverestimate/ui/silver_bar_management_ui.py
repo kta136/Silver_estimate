@@ -217,7 +217,7 @@ class SilverBarManagementUiBuilder:
 
         self.host.available_totals_label = QLabel("Available Bars: 0")
         self.host.available_selection_label = QLabel(
-            "Selected: 0 | Weight: 0.000 g | Fine: 0.000 g"
+            "Selected: 0 | Weight: 0.00 g | Fine: 0.00 g"
         )
         left_layout.addWidget(self.host.available_totals_label)
         left_layout.addWidget(self.host.available_selection_label)
@@ -397,7 +397,7 @@ class SilverBarManagementUiBuilder:
 
         self.host.list_totals_label = QLabel("List Bars: 0")
         self.host.list_selection_label = QLabel(
-            "Selected: 0 | Weight: 0.000 g | Fine: 0.000 g"
+            "Selected: 0 | Weight: 0.00 g | Fine: 0.00 g"
         )
         self.host.list_totals_label.setObjectName("SilverBarSummaryLabel")
         self.host.list_selection_label.setObjectName("SilverBarSummaryLabel")

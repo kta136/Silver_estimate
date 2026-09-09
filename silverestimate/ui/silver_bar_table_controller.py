@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any
 from PySide6.QtCore import QItemSelectionModel, Qt
 from PySide6.QtWidgets import QApplication, QMenu, QMessageBox
 
+from silverestimate.domain.numeric_policy import WEIGHT_PLACES, fixed_decimal
+
 if TYPE_CHECKING:
     from .silver_bar_management import SilverBarDialog
 
@@ -145,9 +147,7 @@ class SilverBarTableController:
             total_fine_weight = (
                 float(total_fine_getter()) if callable(total_fine_getter) else 0.0
             )
-            totals_text = (
-                f"Total: {total_weight:.3f} g  ·  Fine: {total_fine_weight:.3f} g"
-            )
+            totals_text = f"Total: {fixed_decimal(total_weight, WEIGHT_PLACES)} g  ·  Fine: {fixed_decimal(total_fine_weight, WEIGHT_PLACES)} g"
             if table == self.host.available_bars_table:
                 state = getattr(
                     self.host._load_controller, "_available_page_state", None

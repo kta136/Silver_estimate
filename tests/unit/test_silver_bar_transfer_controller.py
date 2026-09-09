@@ -164,9 +164,9 @@ def test_transfer_controller_exports_current_list_to_csv(qtbot, monkeypatch, tmp
     assert rows[1] == [
         "20",
         "L001 (Listed)",
-        "12.000",
+        "12.00",
         "99.90",
-        "11.640",
+        "11.64",
         "2026-02-15 10:00:00",
         "In Stock",
     ]

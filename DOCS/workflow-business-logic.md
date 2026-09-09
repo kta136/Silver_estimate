@@ -101,7 +101,7 @@ Issued list → Reactivated → Assigned
 
 ### 2. Item Master Rules
 - Codes must be unique and uppercase
-- Purity range: 0-100%
+- Numeric Purity/Tunch must be finite and non-negative; values above 100% are valid.
 - Wage types: PC (per piece) or WT (per weight)
 - Catalog deletion preserves saved estimate details; incomplete snapshots block removal
 
@@ -116,25 +116,38 @@ Issued list → Reactivated → Assigned
 - All weights in grams
 - Purity as percentage
 - Wage rates in rupees
-- Rounding: 3 decimals for weights, 2 for money
+- Rounding: 2 decimals for weights and money
 - Indian number formatting for display
 
 Calculation precision policy:
-- Gross/poly inputs and computed net/fine weights use 3 decimal places in grams.
+- Numeric Purity/Tunch is a commercial calculation multiplier, not a physical
+  purity constraint. Do not cap, clamp, reject, or rescale it at 100% in item entry,
+  catalog backup/import, estimate entry/save/reload, inventory, or printing.
+  For example, net weight `10.00 g` at `125.50%` produces fine weight `12.55 g`.
+  Fine weight may therefore exceed net weight. Reject negative values, NaN, and
+  infinity; retain the entered finite percentage and the existing `/ 100` formula.
+- The separate optional `tunch` catalog field is free text (for example
+  `125.50% + loss`), retained in saved print snapshots. It has no percentage cap
+  and does not drive calculations; the numeric `purity` field does.
+- Gross/poly inputs and computed net/fine weights use 2 decimal places in grams.
   Purity percentages and monetary rates use 2 decimal places; pieces are integers.
 - New line calculations use decimal arithmetic. Net weight is gross minus poly,
-  clamped at zero and rounded to 3 decimals. Fine weight is net weight times purity
-  divided by 100, rounded to 3 decimals. WT wages use net weight times wage rate;
+  clamped at zero and rounded to 2 decimals. Fine weight is net weight times purity
+  divided by 100, rounded to 2 decimals. WT wages use net weight times wage rate;
   PC wages use pieces times wage rate. Both wage results round to 2 decimals.
-- Halfway values round away from zero (`ROUND_HALF_UP`): `1.2345 g` becomes
-  `1.235 g`, `₹10.125` becomes `₹10.13`, and `-₹10.125` becomes `-₹10.13`.
+- Halfway values round away from zero (`ROUND_HALF_UP`): `1.235 g` becomes
+  `1.24 g`, `₹10.125` becomes `₹10.13`, and `-₹10.125` becomes `-₹10.13`.
   Rounded zero is displayed without a negative sign.
 - Totals add the recorded line values. Carried silver and cash can be positive or
   negative. Silver cost rounds to 2 decimals after applying the carried silver and
   rate; the final monetary total rounds to 2 decimals after wages and carried cash.
   A zero/non-positive silver rate contributes no silver cost.
-- Entry, History and both print formats display weights to 3 decimals and monetary
-  values to 2. Formatters do not overwrite stored row values. Inventory created or
+- Entry, History and print summaries display weights and monetary values to 2
+  decimals. Within each estimate print section, Modern omits `.00`
+  from a numeric column only if all its rows and its subtotal round to whole
+  numbers at 2 decimals. Otherwise every populated cell uses 2 decimals, including
+  across page breaks. Blank cells stay blank.
+  Formatters do not overwrite stored row values. Inventory created or
   updated by an estimate uses that line's recorded fine weight.
 - Loading, printing or changing only a note does not recalculate historical line
   amounts. Editing a line's calculation inputs applies the current policy to that
@@ -151,7 +164,7 @@ Calculation precision policy:
 ### 1. Input Validation
 - Numeric fields use validators
 - Code format enforced
-- Purity range checked
+- Numeric Purity/Tunch checked for finite, non-negative values, with no 100% cap
 - Required fields validated
 
 ### 2. Database Operations

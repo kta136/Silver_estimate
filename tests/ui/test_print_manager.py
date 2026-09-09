@@ -135,7 +135,7 @@ def test_estimate_modern_layout_uses_requested_column_precision(qt_app, settings
     final_line = next(line for line in lines if "Total Fine Weight (g):" in line)
 
     assert "12.34" in item_line
-    assert "5.00" in item_line
+    assert item_line.split(" | ")[3] == "5"
     assert "7.34" in item_line
     assert "92.50" in item_line
     assert "11" in item_line
@@ -143,12 +143,12 @@ def test_estimate_modern_layout_uses_requested_column_precision(qt_app, settings
     assert "100.20" in item_line
 
     assert "12.34" in total_line
-    assert "5.00" in total_line
+    assert total_line.split(" | ")[3] == "5"
     assert "7.34" in total_line
     assert "1.23" in total_line
     assert "100.20" in total_line
 
-    assert "Total Fine Weight (g): 1.230" in final_line
+    assert "Total Fine Weight (g): 1.23" in final_line
     assert "Total Lbr Amt (₹): 100.20" in rendered
     assert "Silver Value (₹): 12.42" in rendered
     assert "GRAND TOTAL (₹): 112.62" in rendered
@@ -204,8 +204,8 @@ def test_estimate_modern_layout_keeps_amount_totals_at_two_decimals(
     assert "1.23" in total_line
     assert "100.24" in total_line
 
-    assert "Silver: 0.270 g | Amount: Rs. 50.54" in rendered
-    assert "Total Fine Weight (g): 1.500" in final_line
+    assert "Silver: 0.27 g | Amount: Rs. 50.54" in rendered
+    assert "Total Fine Weight (g): 1.50" in final_line
     assert "Silver Value (₹): 15.15" in rendered
     assert "GRAND TOTAL (₹): 165.93" in rendered
 
@@ -238,15 +238,15 @@ def test_build_estimate_preview_payload_uses_modern_layout(qt_app, settings_stub
     assert payload.identifier == "V-002"
     assert payload.suggested_filename == "Estimate-V-002.pdf"
     assert payload.format_key == "modern"
-    assert payload.available_formats == ("classic", "modern")
+    assert payload.available_formats == ("modern",)
     assert payload.format_factory is not None
 
-    classic_payload = payload.format_factory("classic")
+    fallback_payload = payload.format_factory("classic")
 
-    assert classic_payload is not None
-    assert isinstance(classic_payload.document, EstimatePrintDocument)
-    assert classic_payload.document.format_key == "classic"
-    assert classic_payload.format_key == "classic"
+    assert fallback_payload is not None
+    assert isinstance(fallback_payload.document, EstimatePrintDocument)
+    assert fallback_payload.document.format_key == "modern"
+    assert fallback_payload.format_key == "modern"
 
 
 def test_estimate_payload_uses_remembered_tunch_visibility(qt_app, settings_stub):
@@ -276,10 +276,10 @@ def test_estimate_payload_uses_remembered_tunch_visibility(qt_app, settings_stub
     assert hidden_payload.show_tunch is False
     assert hidden_payload.document.show_tunch is False
     assert hidden_payload.format_factory is not None
-    hidden_classic = hidden_payload.format_factory("classic")
-    assert hidden_classic is not None
-    assert hidden_classic.show_tunch is False
-    assert hidden_classic.document.show_tunch is False
+    hidden_fallback = hidden_payload.format_factory("classic")
+    assert hidden_fallback is not None
+    assert hidden_fallback.show_tunch is False
+    assert hidden_fallback.document.show_tunch is False
 
 
 def test_show_preview_delegates_to_preview_dialog(qt_app, settings_stub):
@@ -504,7 +504,7 @@ def test_preview_print_font_change_updates_manager_and_persists(
     assert settings.value("font/bold") is True
 
 
-def test_classic_estimate_painter_writes_previous_modern_style_without_html(
+def test_saved_classic_preference_prints_modern_pdf(
     qt_app,
     settings_stub,
     tmp_path,
@@ -513,7 +513,7 @@ def test_classic_estimate_painter_writes_previous_modern_style_without_html(
     get_app_settings().setValue("print/estimate_layout", "classic")
     font = QFont("Courier New", 7)
     manager = PrintManager(_DbStub(), print_font=font)
-    output_path = tmp_path / "classic-estimate-direct.pdf"
+    output_path = tmp_path / "fallback-estimate-direct.pdf"
 
     _render_estimate_pdf(manager, multi_section_print_estimate(), output_path)
     pages, document = _pdf_pages(output_path)
@@ -525,9 +525,9 @@ def test_classic_estimate_painter_writes_previous_modern_style_without_html(
     assert "Net" in rendered
     assert "S.Per%" not in rendered
     assert "%" in rendered
-    assert "Silver Bars" in rendered
+    assert "SILVER BARS" in rendered
     assert "Quantity" not in rendered
-    assert "Gross (g)" not in rendered
+    assert "Gross (g)" in rendered
     assert "/Doz." not in rendered
     assert "GOODS NOT RETURNABLE" not in rendered
 

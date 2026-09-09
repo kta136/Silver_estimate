@@ -38,7 +38,7 @@ def test_add_item_rejects_invalid_purity():
     try:
         repo = ItemsRepository(db)
 
-        assert not repo.add_item("BAD1", "Bad", 123.0, "WT", 10.0)
+        assert not repo.add_item("BAD1", "Bad", -0.01, "WT", 10.0)
         db.cursor.execute("SELECT COUNT(*) AS c FROM items")
         assert db.cursor.fetchone()["c"] == 0
     finally:
@@ -54,6 +54,20 @@ def test_update_item_rejects_negative_wage_rate():
         assert not repo.update_item("OK1", "Still Valid", 95.0, "WT", -1.0)
         db.cursor.execute("SELECT wage_rate FROM items WHERE code = 'OK1'")
         assert db.cursor.fetchone()["wage_rate"] == 10.0
+    finally:
+        db.close()
+
+
+def test_add_and_update_preserve_purity_and_tunch_above_100():
+    db = _DbStub()
+    try:
+        repo = ItemsRepository(db)
+        assert repo.add_item("HIGH", "High Tunch", 125.5, "WT", 10, tunch="125.50%")
+        assert repo.get_item_by_code("HIGH")["purity"] == 125.5
+        assert repo.get_item_by_code("HIGH")["tunch"] == "125.50%"
+        assert repo.update_item("HIGH", "High Tunch", 250.25, "WT", 10, tunch="250.25%")
+        assert repo.get_item_by_code("HIGH")["purity"] == 250.25
+        assert repo.get_item_by_code("HIGH")["tunch"] == "250.25%"
     finally:
         db.close()
 

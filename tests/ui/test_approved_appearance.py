@@ -122,11 +122,10 @@ def test_preview_changes_are_staged_and_footer_buttons_work(
     save = dialog.buttonBox.button(QDialogButtonBox.StandardButton.Ok)
     cancel = dialog.buttonBox.button(QDialogButtonBox.StandardButton.Cancel)
     apply = dialog.buttonBox.button(QDialogButtonBox.StandardButton.Apply)
-    assert (
-        cancel.mapTo(dialog, cancel.rect().topLeft()).x()
-        < apply.mapTo(dialog, apply.rect().topLeft()).x()
-        < save.mapTo(dialog, save.rect().topLeft()).x()
-    )
+    # Qt owns button placement so theme/font refreshes keep the footer visible.
+    for button in (cancel, apply, save):
+        assert dialog.buttonBox.isAncestorOf(button)
+        assert button.isVisible()
     qtbot.mouseClick(save, Qt.MouseButton.LeftButton)
     assert calls == ["saved"]
     assert dialog.result() == dialog.DialogCode.Accepted

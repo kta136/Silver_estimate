@@ -1,6 +1,7 @@
 param(
     [ValidatePattern('^[A-Za-z0-9-]*$')]
-    [string]$ArtifactSuffix = ""
+    [string]$ArtifactSuffix = "",
+    [switch]$Fast
 )
 
 Set-StrictMode -Version Latest
@@ -133,6 +134,19 @@ function Get-Sha256([string]$path) {
     }
 }
 
+function Invoke-BuildStage([string]$name, [scriptblock]$action) {
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    Write-Host "Starting: $name"
+    try {
+        & $action
+    }
+    finally {
+        $timer.Stop()
+        $stageTimings[$name] = [Math]::Round($timer.Elapsed.TotalSeconds, 2)
+        Write-Host ("{0}: {1:N2}s" -f $name, $timer.Elapsed.TotalSeconds)
+    }
+}
+
 function Invoke-PySideDeployBuild(
     [string]$deployExe,
     [string]$configFile,
@@ -222,6 +236,11 @@ if ($env:OS -ne "Windows_NT" -or -not [Environment]::Is64BitOperatingSystem) {
 }
 
 $version = Get-AppVersion
+# Keep development artifacts separate from the release executable by default.
+if ($Fast -and -not $ArtifactSuffix) {
+    $ArtifactSuffix = "fast"
+}
+$buildProfile = if ($Fast) { "fast" } else { "release" }
 $artifactTag = if ($ArtifactSuffix) { "-$ArtifactSuffix" } else { "" }
 $versionedExe = Join-Path $distDir "SilverEstimate-v$version$artifactTag.exe"
 $baseExe = Join-Path $distDir "SilverEstimate.exe"
@@ -230,10 +249,17 @@ $portableDir = Join-Path $distDir "SilverEstimate-v$version-portable"
 $portableZip = Join-Path $distDir "SilverEstimate-v$version-portable-win64.zip"
 $versionedZip = Join-Path $distDir "SilverEstimate-v$version-win64.zip"
 $temporaryOnefileConfig = Join-Path $repoRoot ".pysidedeploy-local-onefile.spec"
+$timingsDir = Join-Path $repoRoot "artifacts\local-build"
+$timingsFile = Join-Path $timingsDir "build-timings$artifactTag.json"
+$stageTimings = [ordered]@{}
+$buildStatus = "failed"
+$buildTimer = [Diagnostics.Stopwatch]::StartNew()
 
 Push-Location $repoRoot
 try {
-    $buildPython = Sync-ProjectDependencies
+    New-Item -ItemType Directory -Path $timingsDir -Force | Out-Null
+    Write-Host "Build profile: $buildProfile"
+    $buildPython = Invoke-BuildStage "dependencies" { Sync-ProjectDependencies }
     $deployExe = Get-PySideDeploy -pythonExe $buildPython
     $dumpbinExe = Find-Dumpbin
 
@@ -252,18 +278,27 @@ try {
     Copy-Item -LiteralPath $deployConfig -Destination $temporaryOnefileConfig -Force
     $configContent = Get-Content -LiteralPath $temporaryOnefileConfig -Raw
     $configContent = $configContent -replace '(?m)^extra_args = ', "extra_args = --file-version=$version --product-version=$version "
+    if ($Fast) {
+        # Retain normal C optimization and all packaging checks; avoid the
+        # expensive whole-program optimization pass for local iteration.
+        $configContent = $configContent -replace '(?m)^extra_args = ', 'extra_args = --lto=no '
+    }
     [IO.File]::WriteAllText($temporaryOnefileConfig, $configContent, [Text.UTF8Encoding]::new($false))
-    Invoke-PySideDeployBuild `
-        -deployExe $deployExe `
-        -configFile $temporaryOnefileConfig `
-        -mode "onefile" `
-        -dumpbinExe $dumpbinExe
+    Invoke-BuildStage "compile_and_package" {
+        Invoke-PySideDeployBuild `
+            -deployExe $deployExe `
+            -configFile $temporaryOnefileConfig `
+            -mode "onefile" `
+            -dumpbinExe $dumpbinExe
+    }
 
     if (-not (Test-Path -LiteralPath $baseExe -PathType Leaf)) {
         throw "Build did not produce $baseExe"
     }
-    Invoke-ArtifactValidation -pythonExe $buildPython -artifact $baseExe
-    Invoke-NativeOnefileValidation -dumpbinExe $dumpbinExe -artifact $baseExe
+    Invoke-BuildStage "validation" {
+        Invoke-ArtifactValidation -pythonExe $buildPython -artifact $baseExe
+        Invoke-NativeOnefileValidation -dumpbinExe $dumpbinExe -artifact $baseExe
+    }
 
     if (Test-Path -LiteralPath $versionedExe) {
         Remove-Item -LiteralPath $versionedExe -Force
@@ -279,10 +314,23 @@ try {
     Remove-Item -LiteralPath $baseExe -Force
     Write-Host "Windows executable: $versionedExe"
     Write-Host "Executable SHA-256: $versionedHash"
+    $buildStatus = "success"
 }
 finally {
     if (Test-Path -LiteralPath $temporaryOnefileConfig) {
         Remove-Item -LiteralPath $temporaryOnefileConfig -Force
     }
     Pop-Location
+    $buildTimer.Stop()
+    $timings = [ordered]@{
+        profile = $buildProfile
+        status = $buildStatus
+        total_seconds = [Math]::Round($buildTimer.Elapsed.TotalSeconds, 2)
+        stages_seconds = $stageTimings
+    }
+    if (Test-Path -LiteralPath $timingsDir) {
+        $timings | ConvertTo-Json | Set-Content -LiteralPath $timingsFile -Encoding UTF8
+    }
+    Write-Host ("Total build time: {0:N2}s ({1})" -f $buildTimer.Elapsed.TotalSeconds, $buildStatus)
+    Write-Host "Build timings: $timingsFile"
 }

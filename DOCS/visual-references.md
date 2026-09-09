@@ -14,7 +14,6 @@ precision, snapshot metadata or layout can make current output differ.
 
 | Example | PDF | PNG |
 |---|---|---|
-| Classic estimate | [PDF](../output/pdf/estimate-classic-short-headers-a4.pdf) | [PNG](../output/pdf/estimate-classic-short-headers-a4.png) |
 | Modern estimate | [PDF](../output/pdf/modern-estimate-a4-semantic.pdf) | [PNG](../output/pdf/modern-estimate-a4-semantic.png) |
 | Modern multipage estimate | [PDF](../output/pdf/modern-estimate-multipage.pdf) | [Page 1](../output/pdf/modern-estimate-multipage-page-1.png), [Page 2](../output/pdf/modern-estimate-multipage-page-2.png), [Page 3](../output/pdf/modern-estimate-multipage-page-3.png) |
 | Silver-bar inventory | [PDF](../output/pdf/silver-bar-inventory-modern-a4.pdf) | [PNG](../output/pdf/silver-bar-inventory-modern-a4.png) |

@@ -12,6 +12,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QBrush, QColor
 
+from silverestimate.domain.numeric_policy import WEIGHT_PLACES, fixed_decimal
 from silverestimate.ui.display_formatting import format_display_date
 from silverestimate.ui.models.table_sorting import insert_model_rows, sort_model_rows
 
@@ -208,7 +209,7 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
     @staticmethod
     def _format_float(value: Any, places: int) -> str:
         try:
-            return f"{float(value or 0.0):.{places}f}"
+            return fixed_decimal(float(value or 0.0), places)
         except TypeError, ValueError:
             return f"{0.0:.{places}f}"
 
@@ -290,11 +291,11 @@ class _ManagementSilverBarsTableModel(_BaseSilverBarTableModel):
             note = payload.get("estimate_note") or ""
             return f"{voucher_no} ({note})" if note else str(voucher_no)
         if column == 1:
-            return self._format_float(payload.get("weight"), 3)
+            return self._format_float(payload.get("weight"), WEIGHT_PLACES)
         if column == 2:
             return self._format_float(payload.get("purity"), 2)
         if column == 3:
-            return self._format_float(payload.get("fine_weight"), 3)
+            return self._format_float(payload.get("fine_weight"), WEIGHT_PLACES)
         if column == 4:
             return self._format_date(payload.get("date_added"))
         if column == 5:
@@ -340,11 +341,11 @@ class _ManagementSilverBarsTableModel(_BaseSilverBarTableModel):
             note = row.get("estimate_note") or ""
             return f"{voucher_no} ({note})" if note else str(voucher_no)
         if column == 1:
-            return self._format_float(row.get("weight"), 3)
+            return self._format_float(row.get("weight"), WEIGHT_PLACES)
         if column == 2:
             return self._format_float(row.get("purity"), 2)
         if column == 3:
-            return self._format_float(row.get("fine_weight"), 3)
+            return self._format_float(row.get("fine_weight"), WEIGHT_PLACES)
         if column == 4:
             return self._format_date(row.get("date_added"))
         if column == 5:
@@ -398,11 +399,11 @@ class HistorySilverBarsTableModel(_BaseSilverBarTableModel):
             note = payload.get("estimate_note") or ""
             return f"{voucher_no} ({note})" if note else str(voucher_no)
         if column == 2:
-            return self._format_float(payload.get("weight"), 3)
+            return self._format_float(payload.get("weight"), WEIGHT_PLACES)
         if column == 3:
             return self._format_float(payload.get("purity"), 1)
         if column == 4:
-            return self._format_float(payload.get("fine_weight"), 3)
+            return self._format_float(payload.get("fine_weight"), WEIGHT_PLACES)
         if column == 5:
             return str(payload.get("status") or "Unknown")
         if column == 6:
@@ -461,11 +462,11 @@ class HistorySilverBarsTableModel(_BaseSilverBarTableModel):
             note = row.get("estimate_note") or ""
             return f"{voucher_no} ({note})" if note else str(voucher_no)
         if column == 2:
-            return self._format_float(row.get("weight"), 3)
+            return self._format_float(row.get("weight"), WEIGHT_PLACES)
         if column == 3:
             return self._format_float(row.get("purity"), 1)
         if column == 4:
-            return self._format_float(row.get("fine_weight"), 3)
+            return self._format_float(row.get("fine_weight"), WEIGHT_PLACES)
         if column == 5:
             return str(row.get("status") or "Unknown")
         if column == 6:
@@ -555,11 +556,11 @@ class HistoryListBarsTableModel(_BaseSilverBarTableModel):
             note = payload.get("estimate_note") or ""
             return f"{voucher_no} ({note})" if note else str(voucher_no)
         if column == 2:
-            return self._format_float(payload.get("weight"), 3)
+            return self._format_float(payload.get("weight"), WEIGHT_PLACES)
         if column == 3:
             return self._format_float(payload.get("purity"), 1)
         if column == 4:
-            return self._format_float(payload.get("fine_weight"), 3)
+            return self._format_float(payload.get("fine_weight"), WEIGHT_PLACES)
         if column == 5:
             return str(payload.get("status") or "Unknown")
         if column == 6:
@@ -608,11 +609,11 @@ class HistoryListBarsTableModel(_BaseSilverBarTableModel):
             note = row.get("estimate_note") or ""
             return f"{voucher_no} ({note})" if note else str(voucher_no)
         if column == 2:
-            return self._format_float(row.get("weight"), 3)
+            return self._format_float(row.get("weight"), WEIGHT_PLACES)
         if column == 3:
             return self._format_float(row.get("purity"), 1)
         if column == 4:
-            return self._format_float(row.get("fine_weight"), 3)
+            return self._format_float(row.get("fine_weight"), WEIGHT_PLACES)
         if column == 5:
             return str(row.get("status") or "Unknown")
         if column == 6:

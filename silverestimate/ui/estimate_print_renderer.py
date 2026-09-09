@@ -1,4 +1,4 @@
-"""Direct QPainter rendering for Classic and Modern estimate documents."""
+"""Direct QPainter rendering for Modern estimate documents."""
 
 from __future__ import annotations
 
@@ -8,11 +8,6 @@ from PySide6.QtCore import QRectF
 from PySide6.QtGui import QColor, QFont, QPainter
 from PySide6.QtPrintSupport import QPrinter
 
-from .estimate_classic_renderer import (
-    ClassicEstimateLayout,
-    build_classic_estimate_layout,
-    paint_classic_estimate,
-)
 from .estimate_print_document import EstimatePrintDocument
 from .estimate_print_layout import (
     EstimatePrintMetric,
@@ -51,7 +46,7 @@ from .modern_print_primitives import (
 from .modern_print_primitives import (
     draw_text as _draw_text,
 )
-from .print_format_spec import MODERN_ESTIMATE_FORMAT_SPEC, normalize_estimate_format
+from .print_format_spec import MODERN_ESTIMATE_FORMAT_SPEC
 
 _TOTAL_BG = QColor("#e0f2f3")
 _COLUMN_HEADER_BG = QColor("#f4f5f6")
@@ -79,14 +74,7 @@ class _PrintPage:
 
 
 class EstimatePrintRenderer:
-    """Build and directly paint Classic or Modern estimate documents."""
-
-    def build_classic_layout(
-        self,
-        document: EstimatePrintDocument,
-    ) -> ClassicEstimateLayout:
-        """Build the former Modern/New fixed-width model, now named Classic."""
-        return build_classic_estimate_layout(document)
+    """Build and directly paint Modern estimate documents."""
 
     def build_modern_layout(
         self,
@@ -101,14 +89,8 @@ class EstimatePrintRenderer:
         document: EstimatePrintDocument,
         *,
         print_font: QFont | None = None,
-    ) -> ModernEstimateLayout | ClassicEstimateLayout:
+    ) -> ModernEstimateLayout:
         """Paint the selected estimate format onto preview, PDF, or printer devices."""
-        if normalize_estimate_format(document.format_key) == "classic":
-            return paint_classic_estimate(
-                printer,
-                document,
-                print_font=print_font,
-            )
         layout = self.build_modern_layout(document)
         base_font = self._resolve_font(print_font)
         painter = QPainter()
@@ -654,7 +636,6 @@ def _draw_metric_block(
 
 
 __all__ = [
-    "ClassicEstimateLayout",
     "EstimatePrintRenderer",
     "ModernEstimateLayout",
 ]

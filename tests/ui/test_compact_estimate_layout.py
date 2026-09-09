@@ -18,7 +18,7 @@ from tests.ui.test_estimate_entry_widget import _set_row
 @pytest.mark.parametrize(
     "width,height,totals_size", [(1366, 768, 11), (1100, 700, 11), (1366, 768, 14)]
 )
-def test_compact_totals_use_aligned_table_and_shared_font_size(
+def test_compact_totals_use_aligned_table_and_independent_grand_total_font_size(
     qtbot,
     qt_application_state,
     make_estimate_widget,
@@ -53,7 +53,8 @@ def test_compact_totals_use_aligned_table_and_shared_font_size(
         table.horizontalHeaderItem(col).text() for col in range(table.columnCount())
     ]
     assert headers[-3:] == ["Gross (g)", "Net (g)", "Fine (g)"]
-    assert table.horizontalScrollBar().maximum() == 0
+    # Column widths and the scrollbar range settle in separate Qt layout events.
+    qtbot.waitUntil(lambda: table.horizontalScrollBar().maximum() == 0)
     assert table.horizontalHeader().defaultAlignment() & Qt.AlignmentFlag.AlignRight
     assert table.horizontalHeader().font().pointSize() == totals_size
     assert all(
@@ -69,7 +70,10 @@ def test_compact_totals_use_aligned_table_and_shared_font_size(
             "FinalMetricLabel",
             "SectionTitle",
         }:
-            assert label.font().pointSize() == totals_size
+            expected_size = (
+                16 if label.property("sectionKind") == "final_calc" else totals_size
+            )
+            assert label.font().pointSize() == expected_size
     for row in range(table.rowCount()):
         for column in range(table.columnCount()):
             label = table.cellWidget(row, column)

@@ -1,4 +1,4 @@
-"""Shared specifications for Classic and Modern estimate printing."""
+"""Specifications for Modern estimate printing."""
 
 from __future__ import annotations
 
@@ -20,19 +20,8 @@ MODERN_ESTIMATE_FORMAT_SPEC = PrintFormatSpec(
     8.0,
     1.0,
 )
-CLASSIC_ESTIMATE_FORMAT_SPEC = PrintFormatSpec(
-    "classic",
-    "Courier New",
-    7.0,
-    1.0,
-)
 ESTIMATE_FORMAT_SPECS: Mapping[str, PrintFormatSpec] = {
-    "classic": CLASSIC_ESTIMATE_FORMAT_SPEC,
     "modern": MODERN_ESTIMATE_FORMAT_SPEC,
-}
-ESTIMATE_FORMAT_LABELS: Mapping[str, str] = {
-    "classic": "Classic",
-    "modern": "Modern",
 }
 DEFAULT_ESTIMATE_FORMAT = "modern"
 
@@ -46,9 +35,7 @@ def normalize_estimate_format(value: object) -> str:
 
 
 __all__ = [
-    "CLASSIC_ESTIMATE_FORMAT_SPEC",
     "DEFAULT_ESTIMATE_FORMAT",
-    "ESTIMATE_FORMAT_LABELS",
     "ESTIMATE_FORMAT_SPECS",
     "MODERN_ESTIMATE_FORMAT_SPEC",
     "PrintFormatSpec",

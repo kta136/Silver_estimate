@@ -103,7 +103,7 @@ class FineCalculationCase:
         poly = max(_round_weight(self.poly), 0.0)
         self.poly = min(poly, self.gross)
         purity = round(float(self.purity), 3)
-        self.purity = min(max(purity, 0.0), 100.0)
+        self.purity = max(purity, 0.0)
 
     @property
     def net_weight(self) -> float:
@@ -155,7 +155,7 @@ def fine_calculation_cases():
         min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False
     )
     purity = st.floats(
-        min_value=0.0, max_value=100.0, allow_nan=False, allow_infinity=False
+        min_value=0.0, max_value=250.0, allow_nan=False, allow_infinity=False
     )
 
     return st.builds(

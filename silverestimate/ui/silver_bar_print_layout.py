@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from silverestimate.domain.numeric_policy import WEIGHT_PLACES
+
 from .estimate_table_formatting import format_indian_number
 from .modern_print_primitives import PrintAlignment
 from .silver_bar_print_document import (
@@ -179,7 +181,7 @@ def _totals(bars: tuple[SilverBarPrintRow, ...]) -> tuple[float, float]:
 
 
 def _weight(value: float) -> str:
-    return format_indian_number(value, 3)
+    return format_indian_number(value, WEIGHT_PLACES)
 
 
 def _purity(value: float) -> str:

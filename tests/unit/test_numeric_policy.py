@@ -35,10 +35,10 @@ def test_nonfinite_values_cannot_be_formatted_as_business_numbers(value):
 
 
 def test_line_rounding_happens_before_aggregation():
-    assert compute_net_weight(10.125, 0) == 10.125
+    assert compute_net_weight(10.125, 0) == 10.13
     first = compute_fine_weight(10.125, 92.5)
-    assert first == 9.366
-    assert sum_values((first, first)) == 18.732
+    assert first == 9.37
+    assert sum_values((first, first)) == 18.74
     assert compute_wage_amount("WT", net_weight=10.125, wage_rate=1, pieces=1) == 10.13
     assert compute_wage_amount("PC", net_weight=999, wage_rate=3.375, pieces=3) == 10.13
     assert format_indian_number(123456.785, 2) == "1,23,456.79"

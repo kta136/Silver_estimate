@@ -123,6 +123,28 @@ def test_item_master_search_reloads_table_model(qtbot):
         widget.deleteLater()
 
 
+def test_item_master_accepts_numeric_and_text_tunch_above_100(qtbot, monkeypatch):
+    db = _StubDbManager()
+    widget = ItemMasterWidget(db)
+    qtbot.addWidget(widget)
+    saved = []
+    monkeypatch.setattr(
+        db, "add_item", lambda *args, **kwargs: saved.append((args, kwargs)) or True
+    )
+    widget.code_edit.setText("HIGH")
+    widget.name_edit.setText("High Tunch")
+    widget.tunch_edit.setText("125.50% + loss")
+    qtbot.keyClicks(widget.purity_edit, "125.50")
+    assert widget.purity_edit.text() == "125.50"
+    assert widget.purity_edit.hasAcceptableInput()
+
+    widget.add_item()
+
+    assert len(saved) == 1
+    assert saved[0][0][2] == 125.5
+    assert saved[0][1]["tunch"] == "125.50% + loss"
+
+
 def test_item_master_async_snapshot_load_populates_rows(qtbot, tmp_path):
     db_path = tmp_path / "items.sqlite"
     conn = sqlite3.connect(db_path)

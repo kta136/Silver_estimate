@@ -67,6 +67,7 @@ def verify_artifact_ui_fonts(app: QApplication) -> dict[str, int]:
             "final_amount": totals.grand_total_label.font().pointSize(),
         }
         expected = dict.fromkeys(fonts, 11)
+        expected["totals"] = 16
         expected["final_amount"] = 16
         if fonts != expected or window.grab().isNull():
             raise RuntimeError(f"Frozen interface typography check failed: {fonts}")

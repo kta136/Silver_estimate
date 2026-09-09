@@ -66,7 +66,7 @@ def test_column_specs_define_table_contract(model):
         COL_WAGE_RATE,
         COL_PIECES,
     )
-    assert precision_for_column(COL_GROSS) == 3
+    assert precision_for_column(COL_GROSS) == 2
     assert precision_for_column(COL_WAGE_RATE) == 2
     assert precision_for_column(COL_PIECES) == 0
     assert is_stretch_column(COL_ITEM_NAME)
@@ -135,7 +135,7 @@ def test_set_data(model):
     index = model.index(0, COL_GROSS)
     success = model.setData(index, 150.5, Qt.ItemDataRole.EditRole)
     assert success is True
-    assert model.data(index, Qt.ItemDataRole.DisplayRole) == "150.500"
+    assert model.data(index, Qt.ItemDataRole.DisplayRole) == "150.50"
     assert model.data(index, Qt.ItemDataRole.EditRole) == 150.5
 
 
@@ -155,15 +155,14 @@ def test_numeric_display_role_formats_using_column_precision_and_grouping(model)
 
     assert (
         model.data(model.index(0, COL_GROSS), Qt.ItemDataRole.DisplayRole)
-        == "12,34,567.500"
+        == "12,34,567.50"
     )
     assert (
-        model.data(model.index(0, COL_POLY), Qt.ItemDataRole.DisplayRole)
-        == "12,345.250"
+        model.data(model.index(0, COL_POLY), Qt.ItemDataRole.DisplayRole) == "12,345.25"
     )
     assert (
         model.data(model.index(0, COL_NET_WT), Qt.ItemDataRole.DisplayRole)
-        == "12,34,567.500"
+        == "12,34,567.50"
     )
     assert (
         model.data(model.index(0, COL_PURITY), Qt.ItemDataRole.DisplayRole) == "91.60"
@@ -182,7 +181,7 @@ def test_numeric_display_role_formats_using_column_precision_and_grouping(model)
     )
     assert (
         model.data(model.index(0, COL_FINE_WT), Qt.ItemDataRole.DisplayRole)
-        == "11,30,778.770"
+        == "11,30,778.77"
     )
 
     assert model.data(model.index(0, COL_GROSS), Qt.ItemDataRole.EditRole) == 1234567.5

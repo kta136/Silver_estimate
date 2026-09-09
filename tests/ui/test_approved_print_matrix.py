@@ -17,6 +17,38 @@ from tests.factories import multi_section_print_estimate
 from tests.ui.test_print_manager import _ensure_print_test_font
 
 
+def test_column_precision_is_preserved_across_pdf_pages(qt_app, tmp_path):
+    _ensure_print_test_font()
+    sample = deepcopy(multi_section_print_estimate())
+    sample["items"] = [
+        dict(sample["items"][0], item_name="WholeRow", gross=10, poly=0)
+        for _ in range(180)
+    ]
+    sample["items"].append(
+        dict(sample["items"][0], item_name="FractionRow", gross=10.25)
+    )
+    document = EstimatePrintDocument.from_mapping(sample)
+    output = tmp_path / "column-precision.pdf"
+    printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+    printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+    printer.setOutputFileName(str(output))
+    apply_print_page_settings_to_printer(
+        printer, PrintPageSettings(page_size="A5"), include_default_printer=False
+    )
+    EstimatePrintRenderer().paint(printer, document, print_font=QFont("Arial", 8))
+    del printer
+    pdf = QPdfDocument()
+    try:
+        assert pdf.load(str(output)) == QPdfDocument.Error.None_
+        assert pdf.pageCount() > 1
+        pages = [pdf.getAllText(page).text() for page in range(pdf.pageCount())]
+        assert "WholeRow" in pages[0] and "FractionRow" not in pages[0]
+        assert "10.00" in pages[0]
+        assert any("FractionRow" in page and "10.25" in page for page in pages[1:])
+    finally:
+        pdf.close()
+
+
 @pytest.mark.parametrize(
     "paper", ["A4", "A5", "Letter", "Legal", "Thermal 80mm", "Custom"]
 )
@@ -97,20 +129,15 @@ def test_subtotal_cells_include_only_additive_columns():
         assert values["purity"] == values["wage_rate"] == ""
 
 
-@pytest.mark.parametrize("format_key", ["modern", "classic"])
 @pytest.mark.parametrize("show_tunch", [False, True])
-def test_print_omits_item_codes_and_labels_lbr(
-    qt_app, tmp_path, format_key, show_tunch
-):
+def test_print_omits_item_codes_and_labels_lbr(qt_app, tmp_path, show_tunch):
     _ensure_print_test_font()
     sample = deepcopy(multi_section_print_estimate())
     for index, item in enumerate(sample["items"]):
         item["item_code"] = f"PRIVATE-CODE-{index:03d}"
         item["tunch"] = "92.5"
     sample["items"][1]["item_name"] = ""
-    document = EstimatePrintDocument.from_mapping(
-        sample, format_key=format_key, show_tunch=show_tunch
-    )
+    document = EstimatePrintDocument.from_mapping(sample, show_tunch=show_tunch)
     output = tmp_path / "no-item-codes.pdf"
     printer = QPrinter(QPrinter.PrinterMode.HighResolution)
     printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)

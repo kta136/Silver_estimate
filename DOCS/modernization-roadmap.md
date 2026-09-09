@@ -809,7 +809,7 @@ Recommended sequence:
 - Ruff, mypy, all automated tests, performance gates, and smoke screenshots
   pass.
 - All user-critical keyboard and table-editing workflows behave identically.
-- Classic and Modern estimate PDFs retain approved layout and pagination.
+- Modern estimate PDFs retain approved layout and pagination.
 - Silver-bar print and preview workflows remain functional.
 - The frozen artifact starts on a clean Windows machine and includes only the
   required Qt modules/plugins.
@@ -1010,7 +1010,7 @@ Split `PrintPreviewController` into focused collaborators:
 - `PrintPreviewOutputController` for file prompts and one user-facing error
   translation boundary.
 
-Keep Classic and Modern estimate renderers as strategies over the shared typed
+Keep the Modern estimate renderer over the shared typed
 `EstimatePrintDocument`. Move silver-bar inventory and list reports toward a
 typed document model and direct painter strategy, then remove the legacy HTML
 branch when parity is proven.
@@ -1167,7 +1167,7 @@ historical migration evidence only.
 | Plaintext exposure | canaries absent from DB/WAL/journal/temp/backup and packaged runtime artifacts |
 | Schema/data | quick check, foreign keys, table/index contract, counts, digests, domain invariants |
 | PySide6 | signals, ownership, deletion, dialogs, keyboard navigation, worker shutdown, settings |
-| Printing | Classic/Modern, multipage, DPI, orientation, fonts, PDF export, preview, physical-printer abstraction |
+| Printing | Modern, multipage, DPI, orientation, fonts, PDF export, preview, physical-printer abstraction |
 | Packaging | clean machine, frozen startup, SQLCipher identity, Qt plugins, keyring backend, single-instance lock |
 | Upgrade | existing installation, retained backup, failed upgrade, successful restart, rollback documentation |
 | Performance | startup stages, first editable input, save/flush replacement, search, paging, live rate, printing |

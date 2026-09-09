@@ -245,10 +245,12 @@ uv run pre-commit run --all-files
 
 ### Build Locally (Windows)
 - Prereqs: Python 3.14+, PowerShell
-- Fast iteration: `uv run nox -s build`
+- Fast validated Windows iteration: `scripts\build_windows_local.cmd -Fast` (outputs `dist/SilverEstimate-v4.0-fast.exe`)
+- Standard one-file build: `uv run nox -s build`
 - Inspectable standalone build: `uv run nox -s build_standalone standalone_artifact_smoke`
 - Clean one-file rebuild: `uv run nox -s build_clean artifact_smoke`
 - Validated local Windows build: `scripts\build_windows_local.cmd` (safe when the workspace path contains spaces)
+- Local builds print stage durations and save `artifacts/local-build/build-timings[-suffix].json`. `-Fast` disables link-time optimization for development; use the default command for releases.
 - Validated local output: `dist/SilverEstimate-v4.0.exe`. Nox builds also produce `dist/SilverEstimate.exe` and `dist/SilverEstimate-v4.0-win64.zip` on Windows.
 - Release/CI builds use Qt's `pyside6-deploy`, the committed `pysidedeploy.spec`, and locked Nuitka 4.2.1
 - Packaged releases are Windows-only; macOS/Linux are untested development environments.

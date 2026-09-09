@@ -22,7 +22,7 @@ silver_bars (1) ----< (M) bar_transfers
 | code       | TEXT    | PRIMARY KEY                         | Unique item identifier              |
 | name       | TEXT    | NOT NULL                            | Item description                    |
 | tunch      | TEXT    | NULL                                | Optional free-text Tunch value for print |
-| purity     | REAL    | DEFAULT 0                           | Silver purity %                     |
+| purity     | REAL    | DEFAULT 0                           | Numeric Purity/Tunch multiplier %; values above 100 are valid |
 | wage_type  | TEXT    | DEFAULT 'P'                         | 'PC' or 'WT'                        |
 | wage_rate  | REAL    | DEFAULT 0                           | Rate per piece/weight               |
 
@@ -58,7 +58,7 @@ silver_bars (1) ----< (M) bar_transfers
 | gross       | REAL    | DEFAULT 0                             | Gross weight        |
 | poly        | REAL    | DEFAULT 0                             | Poly/stone weight   |
 | net_wt      | REAL    | DEFAULT 0                             | Net weight          |
-| purity      | REAL    | DEFAULT 0                             | Purity %            |
+| purity      | REAL    | DEFAULT 0                             | Numeric Purity/Tunch %; no 100% cap |
 | wage_rate   | REAL    | DEFAULT 0                             | Applied rate        |
 | pieces      | INTEGER | DEFAULT 1                             | Quantity            |
 | wage_type   | TEXT    |                                       | Applied `PC`/`WT` wage mode |
@@ -76,7 +76,7 @@ silver_bars (1) ----< (M) bar_transfers
 | bar_id            | INTEGER | PRIMARY KEY AUTOINCREMENT                | Unique bar ID        |
 | estimate_voucher_no| TEXT   | FOREIGN KEY → estimates ON DELETE CASCADE | Source estimate      |
 | weight            | REAL    | DEFAULT 0                                | Bar weight           |
-| purity            | REAL    | DEFAULT 0                                | Bar purity           |
+| purity            | REAL    | DEFAULT 0                                | Numeric Purity/Tunch %; no 100% cap |
 | fine_weight       | REAL    | DEFAULT 0                                | Fine silver content  |
 | date_added        | TEXT    |                                          | Creation timestamp   |
 | status            | TEXT    | DEFAULT 'In Stock'                       | Current status       |
@@ -149,11 +149,11 @@ silver_bars (1) ----< (M) bar_transfers
 1. **Item Codes**: Must be unique, uppercase
 2. **Voucher Numbers**: Sequential, numeric
 3. **Silver Bars**: Created only on first estimate save
-4. **Calculations**: Net = Gross - Poly, Fine = Net × (Purity/100)
+4. **Calculations**: Net = Gross - Poly, Fine = Net × (Purity/100). Numeric Purity/Tunch is finite and non-negative, and may exceed 100; 10.00 g at 125.50% yields 12.55 g fine. Do not add a 100% database constraint or clamp fine weight to net weight.
 5. **Wage Types**: PC (per piece) or WT (per weight)
 6. **Status Values**: `In Stock`, `Assigned`, `Issued`, and `Sold`
 7. **Stable Line Identity**: `estimate_items.line_key` links a source line to `silver_bars.source_line_key`
-8. **Tunch**: Optional free-text catalog value; estimates print the line snapshot captured at save or v8 upgrade
+8. **Tunch**: Optional free-text catalog value with no percentage cap; estimates print the line snapshot captured at save or v8 upgrade. This text field is distinct from numeric `purity`, which drives calculations.
 
 ## Historical Schema Versions
 

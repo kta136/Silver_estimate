@@ -244,7 +244,7 @@ def test_load_item_catalog_file_rejects_invalid_domain_data(tmp_path):
                     {
                         "code": "BAD001",
                         "name": "Bad",
-                        "purity": 101.0,
+                        "purity": -0.01,
                         "wage_type": "WT",
                         "wage_rate": 10.0,
                     }

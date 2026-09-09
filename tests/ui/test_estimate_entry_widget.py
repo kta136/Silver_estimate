@@ -927,7 +927,7 @@ def test_numeric_cell_editor_is_right_aligned_and_selects_text(
 ):
     widget = make_estimate_widget(fake_db)
     widget.item_table.set_cell_text(0, COL_GROSS, "1234567.5")
-    assert widget.item_table.get_cell_text(0, COL_GROSS) == "12,34,567.500"
+    assert widget.item_table.get_cell_text(0, COL_GROSS) == "12,34,567.50"
     widget.item_table.setCurrentCell(0, COL_GROSS)
     assert widget.item_table.begin_cell_edit(0, COL_GROSS)
     qtbot.waitUntil(
@@ -953,7 +953,7 @@ def test_numeric_helpers_read_raw_values_when_display_is_grouped(
     table.set_cell_text(0, COL_GROSS, "1234567.5")
     table.set_cell_text(0, COL_PIECES, "123456")
 
-    assert table.get_cell_text(0, COL_GROSS) == "12,34,567.500"
+    assert table.get_cell_text(0, COL_GROSS) == "12,34,567.50"
     assert table.get_cell_text(0, COL_PIECES) == "1,23,456"
     assert widget.table_controller._get_cell_float(0, COL_GROSS) == pytest.approx(
         1234567.5

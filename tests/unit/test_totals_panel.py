@@ -17,18 +17,18 @@ def panel(qtbot):
 
 def test_initial_state(panel):
     """Test that panel initializes with zero values."""
-    assert panel.overall_gross_label.text() == "0.000"
-    assert panel.overall_poly_label.text() == "0.000"
-    assert panel.total_gross_label.text() == "0.000"
-    assert panel.total_net_label.text() == "0.000"
-    assert panel.total_fine_label.text() == "0.000"
-    assert panel.return_gross_label.text() == "0.000"
-    assert panel.return_net_label.text() == "0.000"
-    assert panel.return_fine_label.text() == "0.000"
-    assert panel.bar_gross_label.text() == "0.000"
-    assert panel.bar_net_label.text() == "0.000"
-    assert panel.bar_fine_label.text() == "0.000"
-    assert panel.net_fine_label.text() == "0.000"
+    assert panel.overall_gross_label.text() == "0.00"
+    assert panel.overall_poly_label.text() == "0.00"
+    assert panel.total_gross_label.text() == "0.00"
+    assert panel.total_net_label.text() == "0.00"
+    assert panel.total_fine_label.text() == "0.00"
+    assert panel.return_gross_label.text() == "0.00"
+    assert panel.return_net_label.text() == "0.00"
+    assert panel.return_fine_label.text() == "0.00"
+    assert panel.bar_gross_label.text() == "0.00"
+    assert panel.bar_net_label.text() == "0.00"
+    assert panel.bar_fine_label.text() == "0.00"
+    assert panel.net_fine_label.text() == "0.00"
     assert panel.net_wage_label.text() == "0.00"
     # Note: grand_total_label shows "0" not "₹ 0" initially
     assert panel.grand_total_label.text() == "₹ 0.00"
@@ -57,18 +57,18 @@ def test_set_totals(panel):
     panel.set_totals(totals)
 
     # Verify all values are updated
-    assert panel.overall_gross_label.text() == "500.000"
-    assert panel.overall_poly_label.text() == "25.000"
-    assert panel.total_gross_label.text() == "300.000"
-    assert panel.total_net_label.text() == "275.000"
-    assert panel.total_fine_label.text() == "252.000"
-    assert panel.return_gross_label.text() == "100.000"
-    assert panel.return_net_label.text() == "95.000"
-    assert panel.return_fine_label.text() == "87.000"
-    assert panel.bar_gross_label.text() == "100.000"
-    assert panel.bar_net_label.text() == "95.000"
-    assert panel.bar_fine_label.text() == "87.000"
-    assert panel.net_fine_label.text() == "252.000"
+    assert panel.overall_gross_label.text() == "500.00"
+    assert panel.overall_poly_label.text() == "25.00"
+    assert panel.total_gross_label.text() == "300.00"
+    assert panel.total_net_label.text() == "275.00"
+    assert panel.total_fine_label.text() == "252.00"
+    assert panel.return_gross_label.text() == "100.00"
+    assert panel.return_net_label.text() == "95.00"
+    assert panel.return_fine_label.text() == "87.00"
+    assert panel.bar_gross_label.text() == "100.00"
+    assert panel.bar_net_label.text() == "95.00"
+    assert panel.bar_fine_label.text() == "87.00"
+    assert panel.net_fine_label.text() == "252.00"
     assert panel.net_wage_label.text() == "5,000.00"
     assert panel.grand_total_label.text() == "₹ 1,25,000.00"
 
@@ -99,18 +99,18 @@ def test_clear_totals(panel):
     panel.clear_totals()
 
     # Verify all back to zero
-    assert panel.overall_gross_label.text() == "0.000"
-    assert panel.overall_poly_label.text() == "0.000"
-    assert panel.total_gross_label.text() == "0.000"
-    assert panel.total_net_label.text() == "0.000"
-    assert panel.total_fine_label.text() == "0.000"
-    assert panel.return_gross_label.text() == "0.000"
-    assert panel.return_net_label.text() == "0.000"
-    assert panel.return_fine_label.text() == "0.000"
-    assert panel.bar_gross_label.text() == "0.000"
-    assert panel.bar_net_label.text() == "0.000"
-    assert panel.bar_fine_label.text() == "0.000"
-    assert panel.net_fine_label.text() == "0.000"
+    assert panel.overall_gross_label.text() == "0.00"
+    assert panel.overall_poly_label.text() == "0.00"
+    assert panel.total_gross_label.text() == "0.00"
+    assert panel.total_net_label.text() == "0.00"
+    assert panel.total_fine_label.text() == "0.00"
+    assert panel.return_gross_label.text() == "0.00"
+    assert panel.return_net_label.text() == "0.00"
+    assert panel.return_fine_label.text() == "0.00"
+    assert panel.bar_gross_label.text() == "0.00"
+    assert panel.bar_net_label.text() == "0.00"
+    assert panel.bar_fine_label.text() == "0.00"
+    assert panel.net_fine_label.text() == "0.00"
     assert panel.net_wage_label.text() == "0.00"
     assert panel.grand_total_label.text() == "₹ 0.00"
 
@@ -138,7 +138,7 @@ def test_set_totals_with_zero_values(panel):
     panel.set_totals(totals)
 
     # Should display "0.00" or "0" appropriately
-    assert panel.overall_gross_label.text() == "0.000"
+    assert panel.overall_gross_label.text() == "0.00"
     assert panel.net_wage_label.text() == "0.00"
     assert panel.grand_total_label.text() == "₹ 0.00"
 
@@ -178,11 +178,11 @@ def test_optional_return_and_silver_bar_sections_only_show_when_used(panel):
 def test_decimal_formatting(panel):
     """Test that decimal values are formatted correctly."""
     totals = TotalsResult(
-        overall_gross=123.456,  # Retains three weight decimals
+        overall_gross=123.456,  # Rounds to two weight decimals
         overall_poly=0.0,
         regular=CategoryTotals(
             gross=0.0, net=0.0, fine=999.999, wage=0.0
-        ),  # Retains three weight decimals
+        ),  # Rounds to two weight decimals
         returns=CategoryTotals(),
         silver_bars=CategoryTotals(),
         net_fine_core=0.0,
@@ -199,19 +199,29 @@ def test_decimal_formatting(panel):
 
     panel.set_totals(totals)
 
-    assert panel.overall_gross_label.text() == "123.456"
-    assert panel.total_fine_label.text() == "999.999"
+    assert panel.overall_gross_label.text() == "123.46"
+    assert panel.total_fine_label.text() == "1,000.00"
     assert panel.net_wage_label.text() == "1,234.56"
 
 
-def test_final_calc_font_size_keeps_grand_total_more_prominent(panel):
+@pytest.mark.parametrize("layout_mode", ["horizontal", "sidebar"])
+def test_grand_total_area_has_independent_font_size(qtbot, layout_mode):
+    from PySide6.QtWidgets import QLabel
+
+    panel = TotalsPanel(layout_mode=layout_mode)
+    qtbot.addWidget(panel)
     panel.set_breakdown_font_size(11)
     panel.set_final_calc_font_size(16)
+    panel.set_breakdown_font_size(12)
 
-    assert panel.net_fine_label.font().pointSize() == 11
-    assert panel.net_wage_label.font().pointSize() == 11
+    assert panel.total_fine_label.font().pointSize() == 12
+    assert panel.net_fine_label.font().pointSize() == 16
+    assert panel.net_wage_label.font().pointSize() == 16
     assert panel.grand_total_label.font().pointSize() == 16
     assert panel.grand_total_label.font().bold()
+    for label in panel.findChildren(QLabel):
+        if label.property("sectionKind") == "final_calc":
+            assert label.font().pointSize() == 16
 
 
 def test_sidebar_section_order_can_be_reordered(qtbot, qt_app):

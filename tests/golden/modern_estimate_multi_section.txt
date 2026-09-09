@@ -2,26 +2,26 @@ ESTIMATE SLIP
 Voucher: EST-PARITY-001 | Date: 2026-07-19 | Silver Rate: 101.25
 Note: Parity fixture
 [REGULAR GOODS]
-# | Item Name | Gross (g) | Poly (g) | Net Wt (g) | Purity (%) | Lbr | Pieces | Lbr Amt (₹) | Fine Wt (g) | Type
-1 | Chain Deluxe | 200.340 | 0.250 | 200.090 | 92.50 | 15.75 | 2 | 190.42 | 185.083 | Regular
-2 | Anklet Pair | 150.875 | 0.125 | 150.750 | 90.00 | 12.00 | 4 | 105.00 | 135.675 | Regular
- | SUBTOTAL | 351.215 | 0.375 | 350.840 |  |  | 6 | 295.42 | 320.758 | 
+# | Item Name | Gross (g) | Poly (g) | Net Wt (g) | Purity (%) | Lbr | Pieces | Lbr Amt (₹) | Fine Wt (g)
+1 | Chain Deluxe | 200.34 | 0.25 | 200.09 | 92.50 | 15.75 | 2 | 190.42 | 185.08
+2 | Anklet Pair | 150.88 | 0.13 | 150.75 | 90.00 | 12.00 | 4 | 105.00 | 135.68
+ | SUBTOTAL | 351.22 | 0.38 | 350.84 |  |  | 6 | 295.42 | 320.76
 [RETURN GOODS]
-# | Item Name | Gross (g) | Poly (g) | Net Wt (g) | Purity (%) | Lbr | Pieces | Lbr Amt (₹) | Fine Wt (g) | Type
-1 | Return Ring | 4.500 | 0.100 | 4.400 | 91.60 | 8.00 | 1 | 35.00 | 4.030 | Return
-2 | Return Chain | 6.250 | 0.250 | 6.000 | 92.50 | 7.50 | 1 | 45.00 | 5.550 | Return
- | SUBTOTAL | 10.750 | 0.350 | 10.400 |  |  | 2 | 80.00 | 9.580 | 
+# | Item Name | Gross (g) | Poly (g) | Net Wt (g) | Purity (%) | Lbr | Pieces | Lbr Amt (₹) | Fine Wt (g)
+1 | Return Ring | 4.50 | 0.10 | 4.40 | 91.60 | 8.00 | 1 | 35 | 4.03
+2 | Return Chain | 6.25 | 0.25 | 6.00 | 92.50 | 7.50 | 1 | 45 | 5.55
+ | SUBTOTAL | 10.75 | 0.35 | 10.40 |  |  | 2 | 80 | 9.58
 [SILVER BARS]
-# | Item Name | Gross (g) | Poly (g) | Net Wt (g) | Purity (%) | Lbr | Pieces | Lbr Amt (₹) | Fine Wt (g) | Type
-1 | Silver Bar 100g | 100.000 | 0.000 | 100.000 | 99.90 | 0.00 | 1 | 0.00 | 99.900 | Silver Bar
-2 | Silver Bar 50g | 50.000 | 0.000 | 50.000 | 99.50 | 0.00 | 1 | 0.00 | 49.750 | Silver Bar
- | SUBTOTAL | 150.000 | 0.000 | 150.000 |  |  | 2 | 0.00 | 149.650 | 
+# | Item Name | Gross (g) | Poly (g) | Net Wt (g) | Purity (%) | Lbr | Pieces | Lbr Amt (₹) | Fine Wt (g)
+1 | Silver Bar 100g | 100 | 0 | 100 | 99.90 | 0 | 1 | 0 | 99.90
+2 | Silver Bar 50g | 50 | 0 | 50 | 99.50 | 0 | 1 | 0 | 49.75
+ | SUBTOTAL | 150 | 0 | 150 |  |  | 2 | 0 | 149.65
 [RETURN SILVER BARS]
-# | Item Name | Gross (g) | Poly (g) | Net Wt (g) | Purity (%) | Lbr | Pieces | Lbr Amt (₹) | Fine Wt (g) | Type
-1 | Return Silver Bar | 20.000 | 0.000 | 20.000 | 99.90 | 0.00 | 1 | 0.00 | 19.980 | Return Silver Bar
- | SUBTOTAL | 20.000 | 0.000 | 20.000 |  |  | 1 | 0.00 | 19.980 | 
+# | Item Name | Gross (g) | Poly (g) | Net Wt (g) | Purity (%) | Lbr | Pieces | Lbr Amt (₹) | Fine Wt (g)
+1 | Return Silver Bar | 20 | 0 | 20 | 99.90 | 0 | 1 | 0 | 19.98
+ | SUBTOTAL | 20 | 0 | 20 |  |  | 1 | 0 | 19.98
 [LAST BALANCE]
-Silver: 2.750 g | Amount: Rs. 1,250.50
-Total Fine Weight (g): 144.298
+Silver: 2.75 g | Amount: Rs. 1,250.50
+Total Fine Weight (g): 144.30
 [SUMMARY]
 Total Lbr Amt (₹): 1,465.92 | Silver Value (₹): 14,610.16 | GRAND TOTAL (₹): 16,076.08

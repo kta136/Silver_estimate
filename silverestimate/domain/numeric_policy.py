@@ -1,13 +1,13 @@
 """Decimal arithmetic and presentation rules for estimates.
 
-Newly calculated line weights use milligrams and monetary amounts use paise.
+Newly calculated line weights use hundredths of a gram and amounts use paise.
 Halfway values round away from zero. Loading a saved value does not quantize it.
 """
 
 from collections.abc import Iterable
 from decimal import ROUND_HALF_UP, Decimal, localcontext
 
-WEIGHT_PLACES = 3
+WEIGHT_PLACES = 2
 MONEY_PLACES = 2
 PURITY_PLACES = 2
 

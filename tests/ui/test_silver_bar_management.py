@@ -166,7 +166,7 @@ def test_management_dialog_uses_model_ids_for_add_and_copy(
 
     dialog._copy_selected_rows(dialog.available_bars_table)
     copied = QApplication.clipboard().text()
-    assert copied.startswith("V001 (Alpha)\t10.000\t99.00")
+    assert copied.startswith("V001 (Alpha)\t10.00\t99.00")
     assert not copied.startswith("1\t")
 
     dialog.add_selected_to_list()

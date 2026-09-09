@@ -414,15 +414,15 @@ class AppearanceSettingsPage(QWidget):
         self.final_calc_font_size_spin = ThemedSpinBox()
         self.final_calc_font_size_spin.setRange(8, 20)
         self.final_calc_font_size_spin.setToolTip(
-            "Text size for Final Calculation panel\n"
+            "Text size for the entire Grand Total area\n"
             "Range: 8–20 points\n"
-            "Controls right-side grand totals display\n"
+            "Includes headings, net fine weight, net wage, and grand total\n"
             "Can be larger for emphasis"
         )
         self.final_calc_font_size_spin.setSuffix(" pt")
         self._polish_field(self.final_calc_font_size_spin, width=160)
         form_layout.addRow(
-            "Final amount:",
+            "Grand total text:",
             self.final_calc_font_size_spin,
         )
 
@@ -525,11 +525,11 @@ class AppearanceSettingsPage(QWidget):
             ["Code", "Item Name", "Gross", "Poly", "Net Wt", "Lbr Amt"]
         )
         sample_rows = [
-            ("RING001", "Silver Ring", "10.000", "0.500", "9.500", "250.00"),
-            ("NECK001", "Silver Necklace", "15.000", "0.750", "14.250", "325.00"),
-            ("BRAC001", "Silver Bracelet", "20.000", "1.000", "19.000", "275.00"),
-            ("BAR001", "Silver Bar", "40.000", "0.040", "39.960", "0.00"),
-            ("ANKL001", "Silver Anklet", "25.000", "0.300", "24.700", "85.00"),
+            ("RING001", "Silver Ring", "10.00", "0.50", "9.50", "250.00"),
+            ("NECK001", "Silver Necklace", "15.00", "0.75", "14.25", "325.00"),
+            ("BRAC001", "Silver Bracelet", "20.00", "1.00", "19.00", "275.00"),
+            ("BAR001", "Silver Bar", "40.00", "0.04", "39.96", "0.00"),
+            ("ANKL001", "Silver Anklet", "25.00", "0.30", "24.70", "85.00"),
         ]
         for row, values in enumerate(sample_rows * 3):
             for column, value in enumerate(values):
@@ -590,7 +590,7 @@ class AppearanceSettingsPage(QWidget):
             self.alternating_checkbox.isChecked()
         )
         self.preview_total.setFont(
-            QFont(font.family(), self.breakdown_font_size_spin.value())
+            QFont(font.family(), self.final_calc_font_size_spin.value())
         )
         self.preview_total.setText(
             f"Grand Total<br><br>Net Fine<br>145.800 g<br><br>Net Wages<br>₹15,500.00<br><br>"

@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import Qt
 
+from silverestimate.domain.numeric_policy import WEIGHT_PLACES, fixed_decimal
+
 if TYPE_CHECKING:
     from .silver_bar_management import SilverBarDialog
 
@@ -64,11 +66,11 @@ class SilverBarSelectionStateController:
             )
             if hasattr(self.host, "available_selection_label"):
                 self.host.available_selection_label.setText(
-                    f"Selected: {available_count} | Weight: {available_weight:.3f} g | Fine: {available_fine:.3f} g"
+                    f"Selected: {available_count} | Weight: {fixed_decimal(available_weight, WEIGHT_PLACES)} g | Fine: {fixed_decimal(available_fine, WEIGHT_PLACES)} g"
                 )
             if hasattr(self.host, "list_selection_label"):
                 self.host.list_selection_label.setText(
-                    f"Selected: {list_count} | Weight: {list_weight:.3f} g | Fine: {list_fine:.3f} g"
+                    f"Selected: {list_count} | Weight: {fixed_decimal(list_weight, WEIGHT_PLACES)} g | Fine: {fixed_decimal(list_fine, WEIGHT_PLACES)} g"
                 )
         except Exception as exc:
             self.host.logger.debug("Failed to update selection summary labels: %s", exc)

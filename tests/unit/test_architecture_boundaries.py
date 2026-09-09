@@ -43,7 +43,6 @@ from silverestimate.services.main_commands import MainCommands
 from silverestimate.services.settings_service import SettingsService
 from silverestimate.ui.estimate_print_document import EstimatePrintDocument
 from silverestimate.ui.print_format_spec import (
-    CLASSIC_ESTIMATE_FORMAT_SPEC,
     ESTIMATE_FORMAT_SPECS,
     MODERN_ESTIMATE_FORMAT_SPEC,
 )
@@ -173,11 +172,9 @@ def test_settings_boundary_is_typed_versioned_and_centralized() -> None:
     assert "QSettings" not in inspect.getsource(SettingsService)
 
 
-def test_classic_and_modern_are_the_only_estimate_formats() -> None:
-    assert tuple(ESTIMATE_FORMAT_SPECS) == ("classic", "modern")
-    assert ESTIMATE_FORMAT_SPECS["classic"] is CLASSIC_ESTIMATE_FORMAT_SPEC
+def test_modern_is_the_only_estimate_format() -> None:
+    assert tuple(ESTIMATE_FORMAT_SPECS) == ("modern",)
     assert ESTIMATE_FORMAT_SPECS["modern"] is MODERN_ESTIMATE_FORMAT_SPEC
-    assert CLASSIC_ESTIMATE_FORMAT_SPEC.key == "classic"
     assert MODERN_ESTIMATE_FORMAT_SPEC.key == "modern"
 
 

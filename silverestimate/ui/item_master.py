@@ -221,9 +221,11 @@ class ItemMasterWidget(QWidget):
         purity_lbl = QLabel("Purity (%)")
         purity_lbl.setObjectName("ItemMasterFieldLabel")
         self.purity_edit = QLineEdit()
-        self.purity_edit.setPlaceholderText("0.00 – 100.00")
-        self.purity_edit.setToolTip("Default silver purity percentage.")
-        purity_validator = QDoubleValidator(0.00, 100.00, 2, self.purity_edit)
+        self.purity_edit.setPlaceholderText("e.g. 92.50 or 125.50")
+        self.purity_edit.setToolTip(
+            "Numeric Purity/Tunch %. Values above 100% are allowed."
+        )
+        purity_validator = QDoubleValidator(0.00, float("inf"), 2, self.purity_edit)
         purity_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
         purity_validator.setLocale(QLocale.system())
         self.purity_edit.setValidator(purity_validator)

@@ -620,7 +620,7 @@ def test_empty_gross_enter_commits_zero_and_advances_to_poly(
         ),
         timeout=1000,
     )
-    assert table.get_cell_text(0, COL_GROSS) == "0.000"
+    assert table.get_cell_text(0, COL_GROSS) == "0.00"
 
 
 def test_empty_gross_backspace_moves_to_code_column(

@@ -54,6 +54,17 @@ def test_startup_and_apply_keep_controls_headers_and_totals_consistent(
     assert widget.item_table.font().pointSize() == 11
     assert widget.item_table.horizontalHeader().font().pointSize() == 11
     assert panel.category_table.horizontalHeader().font().pointSize() == 11
-    assert panel.net_fine_label.font().pointSize() == 11
+    assert panel.net_fine_label.font().pointSize() == 16
     assert panel.grand_total_label.font().pointSize() == 16
     assert appearance.load_state() == AppearanceSettingsState()
+
+
+def test_artifact_typography_smoke_uses_independent_grand_total_size(
+    qt_application_state,
+):
+    from silverestimate.infrastructure.artifact_ui_smoke import verify_artifact_ui_fonts
+
+    fonts = verify_artifact_ui_fonts(qt_application_state)
+    assert fonts["totals_header"] == 11
+    assert fonts["totals"] == 16
+    assert fonts["final_amount"] == 16

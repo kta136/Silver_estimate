@@ -26,7 +26,7 @@ def _valid_payload(artifact: Path) -> dict[str, object]:
             "table": 11,
             "header": 11,
             "totals_header": 11,
-            "totals": 11,
+            "totals": 16,
             "final_amount": 16,
         },
     }

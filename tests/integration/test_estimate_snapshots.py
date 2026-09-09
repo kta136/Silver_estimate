@@ -237,26 +237,17 @@ def test_detached_line_exemption_cannot_be_used_for_new_or_changed_codes(
     assert not db.conn.in_transaction
 
 
-def test_both_print_layouts_remain_identical_after_catalog_changes(snapshot_db):
-    from silverestimate.ui.estimate_classic_renderer import (
-        build_classic_estimate_layout,
-    )
+def test_print_layout_remains_identical_after_catalog_changes(snapshot_db):
     from silverestimate.ui.estimate_print_layout import build_modern_estimate_layout
 
     db = snapshot_db
     document = EstimatePrintDocument.from_mapping(
         db.get_estimate_by_voucher("1"), show_tunch=True
     )
-    before = (
-        build_classic_estimate_layout(document).normalized_text(),
-        build_modern_estimate_layout(document).normalized_text(),
-    )
+    before = build_modern_estimate_layout(document).normalized_text()
     assert db.update_item("REG001", "Changed", 20, "PC", 99, tunch="Changed")
     assert db.delete_item("REG001")
     document = EstimatePrintDocument.from_mapping(
         db.get_estimate_by_voucher("1"), show_tunch=True
     )
-    assert (
-        build_classic_estimate_layout(document).normalized_text(),
-        build_modern_estimate_layout(document).normalized_text(),
-    ) == before
+    assert build_modern_estimate_layout(document).normalized_text() == before

@@ -6,7 +6,6 @@ import pytest
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.persistence.database_manager import DatabaseManager
-from silverestimate.ui.estimate_classic_renderer import build_classic_estimate_layout
 from silverestimate.ui.estimate_print_document import EstimatePrintDocument
 from silverestimate.ui.estimate_print_layout import build_modern_estimate_layout
 from silverestimate.ui.view_models import EstimateEntryRowState
@@ -23,7 +22,53 @@ def precision_db(tmp_path):
     db.close()
 
 
-def test_entry_save_inventory_history_and_both_print_formats_agree(
+@pytest.mark.parametrize("category", list(EstimateLineCategory))
+def test_purity_above_100_survives_calculation_save_inventory_and_print(
+    qtbot, precision_db, make_estimate_widget, category
+):
+    db = precision_db
+    assert db.update_item("REG001", "High Tunch", 125.5, "WT", 1, tunch="125.50%")
+    widget = make_estimate_widget(db)
+    widget.voucher_edit.setText("HIGH")
+    widget.item_table.replace_all_rows(
+        [
+            EstimateEntryRowState(
+                code="REG001",
+                name="High Tunch",
+                gross=10,
+                purity=125.5,
+                wage_rate=1,
+                category=category,
+                line_key="high-tunch",
+            )
+        ]
+    )
+    widget.totals_controller._recompute_row_derived_values(0, schedule_totals=False)
+    widget.totals_controller.calculate_totals()
+    assert widget.item_table.get_all_rows()[0].fine_weight == 12.55
+    assert widget.workflow_controller.save_estimate(continue_editing=True)
+    saved = db.get_estimate_by_voucher("HIGH")
+    assert saved["items"][0]["purity"] == 125.5
+    assert saved["items"][0]["fine"] == 12.55
+    assert saved["items"][0]["tunch"] == "125.50%"
+    if category == EstimateLineCategory.SILVER_BAR:
+        bar = db.silver_bar_query_repo.get_silver_bars_for_estimate("HIGH")[0]
+        assert bar["purity"] == 125.5
+        assert bar["fine_weight"] == 12.55
+    document = EstimatePrintDocument.from_mapping(saved, show_tunch=True)
+    printed = build_modern_estimate_layout(document).normalized_text()
+    assert "125.50%" in printed and "125.50" in printed and "12.55" in printed
+    assert widget.workflow_controller.apply_loaded_estimate(
+        widget.presenter.load_estimate("HIGH")
+    )
+    widget.note_edit.setText("Preserve high Tunch")
+    assert widget.workflow_controller.save_estimate(continue_editing=True)
+    reloaded = db.get_estimate_by_voucher("HIGH")
+    assert reloaded["items"][0]["purity"] == 125.5
+    assert reloaded["items"][0]["fine"] == 12.55
+
+
+def test_entry_save_inventory_history_and_print_agree(
     qtbot, precision_db, make_estimate_widget
 ):
     db = precision_db
@@ -65,16 +110,16 @@ def test_entry_save_inventory_history_and_both_print_formats_agree(
     widget.totals_controller.calculate_totals()
     rows = widget.item_table.get_all_rows()
     assert [(row.net_weight, row.fine_weight, row.wage_amount) for row in rows] == [
-        (10.125, 9.366, 10.13),
-        (10.125, 9.366, 10.13),
-        (1.001, 0.501, 0),
-        (10.125, 9.366, 0),
+        (10.13, 9.37, 10.13),
+        (10.13, 9.37, 10.13),
+        (1.00, 0.50, 0),
+        (10.13, 9.37, 0),
     ]
     assert widget.workflow_controller.save_estimate(continue_editing=True)
     saved = db.get_estimate_by_voucher("1")
     bar = db.silver_bar_query_repo.get_silver_bars_for_estimate("1")[0]
-    assert bar["fine_weight"] == 9.366
-    assert saved["header"]["total_fine"] == 8.865
+    assert bar["fine_weight"] == 9.37
+    assert saved["header"]["total_fine"] == 8.87
     from silverestimate.domain.estimate_totals import calculate_grand_total
 
     history = db.get_estimate_history_rows()[0]
@@ -86,20 +131,17 @@ def test_entry_save_inventory_history_and_both_print_formats_agree(
             last_balance_silver=history["last_balance_silver"],
             last_balance_amount=history["last_balance_amount"],
         )
-        == 128.34
+        == 128.40
     )
     document = EstimatePrintDocument.from_mapping(saved)
     modern = build_modern_estimate_layout(document)
-    assert modern.fine_weight == "8.860"
+    assert modern.fine_weight == "8.87"
     metrics = {metric.label: metric.value for metric in modern.final_metrics}
     assert metrics == {
         "Total Lbr Amt (₹)": "19.01",
-        "Silver Value (₹)": "109.33",
-        "GRAND TOTAL (₹)": "128.34",
+        "Silver Value (₹)": "109.39",
+        "GRAND TOTAL (₹)": "128.40",
     }
-    classic = build_classic_estimate_layout(document).normalized_text()
-    for value in ("10.125", "9.366", "10.13", "8.860", "128.34", "-0.005", "-1.25"):
-        assert value in classic
     assert widget.workflow_controller.apply_loaded_estimate(
         widget.presenter.load_estimate("1")
     )
@@ -133,7 +175,6 @@ def test_loading_printing_and_note_only_save_preserve_legacy_line_amounts(
     assert row.fine_weight == 9.365625 and row.wage_amount == 10.125
     document = EstimatePrintDocument.from_mapping(before)
     build_modern_estimate_layout(document)
-    build_classic_estimate_layout(document)
     assert db.get_estimate_by_voucher("old") == before
     widget.note_edit.setText("Note changed")
     assert widget.workflow_controller.save_estimate(continue_editing=True)
@@ -142,7 +183,7 @@ def test_loading_printing_and_note_only_save_preserve_legacy_line_amounts(
         assert saved["items"][0][field] == before["items"][0][field]
 
 
-def test_balance_dialog_preserves_signed_milligrams_and_paise(
+def test_balance_dialog_rounds_signed_weights_to_two_decimals(
     qtbot, precision_db, make_estimate_widget, monkeypatch
 ):
     from PySide6.QtWidgets import QDialog
@@ -156,12 +197,12 @@ def test_balance_dialog_preserves_signed_milligrams_and_paise(
     def accept(dialog):
         fields = dialog.findChildren(ThemedDoubleSpinBox)
         assert [(field.decimals(), field.value()) for field in fields] == [
-            (3, -0.005),
+            (2, -0.01),
             (2, -1.25),
         ]
         return QDialog.DialogCode.Accepted
 
     monkeypatch.setattr(QDialog, "exec", accept)
     widget.workflow_controller.show_last_balance_dialog()
-    assert widget.last_balance_silver == -0.005
+    assert widget.last_balance_silver == -0.01
     assert widget.last_balance_amount == -1.25

@@ -148,10 +148,10 @@ def test_save_captures_active_cell_editor(history_db, make_estimate_widget, qtbo
     assert isinstance(editor, QLineEdit)
     editor.setFocus()
     editor.selectAll()
-    qtbot.keyClicks(editor, "12.345")
+    qtbot.keyClicks(editor, "12.34")
     assert widget.workflow_controller.save_estimate(continue_editing=True)
     saved = history_db.get_estimate_by_voucher("DRAFT")
-    assert saved["items"][0]["gross"] == pytest.approx(12.345)
+    assert saved["items"][0]["gross"] == pytest.approx(12.34)
 
 
 def test_save_button_persists_then_previews_and_clears(

@@ -30,7 +30,7 @@ these checks verify native dialogs and the visible restore workflow.
   Verify unused local-only codes are removed and counts match the visible result.
 - Prepare a backup that omits a code referenced by a saved estimate. Apply full
   replacement and verify the catalog code is removed while the estimate retains
-  its original code, name, purity, wages and Tunch in History and both print formats.
+  its original code, name, purity, wages and Tunch in History and Modern printing.
 - Reopen that estimate, change only its note, save, and verify every line remains.
 - Repeat with single-item deletion and with a later catalog item reusing the code.
   Existing lines must keep their saved Tunch; new lines use the new catalog value.

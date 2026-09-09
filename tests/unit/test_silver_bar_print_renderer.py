@@ -103,11 +103,11 @@ def test_list_document_reads_sqlite_rows_and_formats_empty_report() -> None:
     populated_text = SilverBarPrintRenderer().build_layout(populated).normalized_text()
     empty_text = SilverBarPrintRenderer().build_layout(empty).normalized_text()
 
-    assert "12.500 | 99.20 | 12.400" in populated_text
-    assert "TOTAL (1) | 12.500 |  | 12.400" in populated_text
+    assert "12.50 | 99.20 | 12.40" in populated_text
+    assert "TOTAL (1) | 12.50 |  | 12.40" in populated_text
     assert "Note: N/A" in empty_text
     assert "-- No bars assigned --" in empty_text
-    assert "TOTAL (0) | 0.000 |  | 0.000" in empty_text
+    assert "TOTAL (0) | 0.00 |  | 0.00" in empty_text
 
 
 def test_inventory_document_groups_large_values_and_validates_numbers() -> None:
@@ -123,8 +123,8 @@ def test_inventory_document_groups_large_values_and_validates_numbers() -> None:
     )
     rendered = SilverBarPrintRenderer().build_layout(document).normalized_text()
 
-    assert "1,23,456.789" in rendered
-    assert "1,23,333.332" in rendered
+    assert "1,23,456.79" in rendered
+    assert "1,23,333.33" in rendered
 
     with pytest.raises(ValueError, match=r"bars\[0\]\.weight must be numeric"):
         SilverBarInventoryPrintDocument.from_rows(

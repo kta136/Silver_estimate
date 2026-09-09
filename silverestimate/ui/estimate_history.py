@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from silverestimate.domain.estimate_totals import calculate_grand_total
+from silverestimate.domain.numeric_policy import WEIGHT_PLACES, fixed_decimal
 from silverestimate.domain.pagination import EstimateHistoryCursor, Page
 from silverestimate.infrastructure.latest_request_runner import (
     LatestRequestRunner,
@@ -628,9 +629,9 @@ class EstimateHistoryDialog(QDialog):
                 ("Date", format_display_date(payload.date)),
                 ("Note", payload.note or "-"),
                 ("Silver rate", format_rupees(payload.silver_rate)),
-                ("Gross", f"{payload.total_gross:.3f}g"),
-                ("Net Wt", f"{payload.total_net:.3f}g"),
-                ("Net Fine", f"{payload.net_fine:.3f}g"),
+                ("Gross", f"{fixed_decimal(payload.total_gross, WEIGHT_PLACES)}g"),
+                ("Net Wt", f"{fixed_decimal(payload.total_net, WEIGHT_PLACES)}g"),
+                ("Net Fine", f"{fixed_decimal(payload.net_fine, WEIGHT_PLACES)}g"),
                 ("Net Wage", format_rupees(payload.net_wage)),
                 ("Grand Total", format_rupees(payload.grand_total)),
             ]

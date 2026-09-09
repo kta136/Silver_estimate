@@ -59,7 +59,6 @@ class PrintSettingsPage(QWidget):
             printer_combo=self.printer_combo,
             page_size_combo=self.page_size_combo,
             orientation_combo=self.orientation_combo,
-            estimate_format_combo=self.estimate_format_combo,
         )
 
     def _build_ui(self) -> None:
@@ -183,16 +182,6 @@ class PrintSettingsPage(QWidget):
         self._polish_field(self.orientation_combo, width=240)
         self.orientation_combo.currentIndexChanged.connect(self._emit_changed)
         form.addRow("Orientation:", self.orientation_combo)
-
-        self.estimate_format_combo = ThemedComboBox()
-        self.estimate_format_combo.addItem("Classic", "classic")
-        self.estimate_format_combo.addItem("Modern", "modern")
-        self.estimate_format_combo.setToolTip(
-            "Choose the default estimate format; it can also be changed in preview"
-        )
-        self._polish_field(self.estimate_format_combo, width=240)
-        self.estimate_format_combo.currentIndexChanged.connect(self._emit_changed)
-        form.addRow("Estimate Format:", self.estimate_format_combo)
 
     def _emit_changed(self, *_args: object) -> None:
         self.changed.emit()

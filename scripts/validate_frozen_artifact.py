@@ -41,6 +41,7 @@ def _validate_payload(payload: dict[str, Any], artifact: Path) -> None:
         ("button", "menu", "table", "header", "totals_header", "totals"), 11
     )
     expected_fonts["final_amount"] = 16
+    expected_fonts["totals"] = 16
     if payload.get("ui_fonts") != expected_fonts:
         raise ValueError("Artifact did not apply the selected interface fonts")
     if payload.get("password_hashing") is not True:

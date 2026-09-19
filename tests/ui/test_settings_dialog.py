@@ -80,6 +80,10 @@ def test_settings_dialog_uses_visible_arrow_controls(qtbot, qt_app, settings_stu
         assert isinstance(dialog.appearance_page.totals_position_combo, ThemedComboBox)
         assert isinstance(dialog.print_page.printer_combo, ThemedComboBox)
         assert not hasattr(dialog.print_page, "estimate_format_combo")
+        assert [
+            dialog.print_page.page_size_combo.itemText(index)
+            for index in range(dialog.print_page.page_size_combo.count())
+        ] == ["A4", "A5", "Letter", "Legal"]
         assert (
             dialog.sidebar.horizontalScrollBarPolicy()
             == Qt.ScrollBarPolicy.ScrollBarAlwaysOff

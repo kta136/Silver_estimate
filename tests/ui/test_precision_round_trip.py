@@ -138,6 +138,7 @@ def test_entry_save_inventory_history_and_print_agree(
     assert modern.fine_weight == "8.87"
     metrics = {metric.label: metric.value for metric in modern.final_metrics}
     assert metrics == {
+        "Total Fine Weight (g)": "8.87",
         "Total Lbr Amt (₹)": "19",
         "Silver Value (₹)": "109",
         "GRAND TOTAL (₹)": "128",

@@ -306,8 +306,6 @@ def _header_height(layout: ModernEstimateLayout, style: _PaintStyle) -> float:
 
 def _summary_height(layout: ModernEstimateLayout, style: _PaintStyle) -> float:
     height = style.summary_gap + style.metric_title_height + style.metric_row_height
-    if layout.has_rate:
-        height += style.metadata_height + style.summary_gap
     if layout.last_balance_metrics:
         height += style.metadata_height + style.summary_gap
     return height
@@ -507,19 +505,6 @@ def _draw_summary(
         )
         y += style.metadata_height + style.summary_gap
     y += style.summary_gap
-    if layout.has_rate:
-        _draw_text(
-            painter,
-            QRectF(0, y, page_width, style.metadata_height),
-            f"Total Fine Weight (g): {layout.fine_weight}",
-            font=style.base_font,
-            metrics=style.base_metrics,
-            alignment="left",
-            padding=style.padding,
-            color=_MUTED_TEXT,
-            fit_to_width=True,
-        )
-        y += style.metadata_height + style.summary_gap
     return _draw_metric_block(
         painter,
         "FINAL SILVER & AMOUNT",

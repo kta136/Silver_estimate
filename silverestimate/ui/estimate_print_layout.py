@@ -75,7 +75,6 @@ class ModernEstimateLayout:
     last_balance_metrics: tuple[EstimatePrintMetric, ...]
     final_metrics: tuple[EstimatePrintMetric, ...]
     fine_weight: str = ""
-    has_rate: bool = False
 
     @property
     def lines(self) -> tuple[str, ...]:
@@ -104,8 +103,6 @@ class ModernEstimateLayout:
             lines.append("[LAST BALANCE]")
             lines.append(_metrics_text(self.last_balance_metrics))
 
-        if self.has_rate:
-            lines.append(f"Total Fine Weight (g): {self.fine_weight}")
         lines.append("[SUMMARY]")
         lines.append(_metrics_text(self.final_metrics))
         return "\n".join(lines)
@@ -344,7 +341,8 @@ def _complete_layout(
 
     last_balance = _last_balance_metrics(header)
     final_metrics = [
-        EstimatePrintMetric("Total Lbr Amt (₹)", _amount(net_wage, decimals=0))
+        EstimatePrintMetric("Total Fine Weight (g)", _weight(net_fine)),
+        EstimatePrintMetric("Total Lbr Amt (₹)", _amount(net_wage, decimals=0)),
     ]
     if header.silver_rate > 0:
         final_metrics.extend(
@@ -357,14 +355,9 @@ def _complete_layout(
                 ),
             )
         )
-    else:
-        final_metrics.append(
-            EstimatePrintMetric("Silver (g)", _weight(net_fine), emphasis=True)
-        )
     return ModernEstimateLayout(
         voucher_no=header.voucher_no,
         fine_weight=_weight(net_fine),
-        has_rate=header.silver_rate > 0,
         silver_rate=_amount(header.silver_rate, decimals=2)
         if header.silver_rate > 0
         else "—",

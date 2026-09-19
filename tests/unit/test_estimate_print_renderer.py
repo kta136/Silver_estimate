@@ -101,8 +101,8 @@ def test_zero_silver_rate_omits_cost_and_total_metrics() -> None:
     )
 
     assert tuple(metric.label for metric in layout.final_metrics) == (
+        "Total Fine Weight (g)",
         "Total Lbr Amt (₹)",
-        "Silver (g)",
     )
     assert "Silver Value (₹):" not in layout.normalized_text()
     assert "GRAND TOTAL (₹):" not in layout.normalized_text()
@@ -141,14 +141,15 @@ def test_zero_wages_remains_explicit_in_summary() -> None:
     )
 
     assert tuple(metric.label for metric in layout.final_metrics) == (
+        "Total Fine Weight (g)",
         "Total Lbr Amt (₹)",
         "Silver Value (₹)",
         "GRAND TOTAL (₹)",
     )
-    assert layout.final_metrics[0].value == "0"
+    assert layout.final_metrics[1].value == "0"
 
 
-def test_summary_footer_uses_full_width_three_metric_block(monkeypatch) -> None:
+def test_summary_footer_uses_full_width_four_metric_block(monkeypatch) -> None:
     estimate_data = deepcopy(multi_section_print_estimate())
     estimate_data["header"].update(
         last_balance_silver=0,
@@ -200,14 +201,15 @@ def test_summary_footer_uses_full_width_three_metric_block(monkeypatch) -> None:
         y=20.0,
     )
 
-    assert text_calls[0][1] == f"Total Fine Weight (g): {layout.fine_weight}"
+    assert text_calls == []
     title, metrics, page_width, y, dark_title = block_calls[0]
     assert title == "FINAL SILVER & AMOUNT"
     assert tuple(metric.label for metric in metrics) == (
+        "Total Fine Weight (g)",
         "Total Lbr Amt (₹)",
         "Silver Value (₹)",
         "GRAND TOTAL (₹)",
     )
     assert page_width == 300.0
-    assert y == 36.0
+    assert y == 24.0
     assert dark_title is True

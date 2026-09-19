@@ -170,7 +170,7 @@ class PrintSettingsPage(QWidget):
         form.addRow("Default Printer:", self.printer_combo)
 
         self.page_size_combo = ThemedComboBox()
-        self.page_size_combo.addItems(["A4", "A5", "Letter", "Legal", "Thermal 80mm"])
+        self.page_size_combo.addItems(["A4", "A5", "Letter", "Legal"])
         self.page_size_combo.setToolTip("Default page size for printing")
         self._polish_field(self.page_size_combo, width=240)
         self.page_size_combo.currentIndexChanged.connect(self._emit_changed)

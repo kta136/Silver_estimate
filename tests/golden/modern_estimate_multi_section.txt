@@ -22,6 +22,5 @@ Note: Parity fixture
  | SUBTOTAL | 20 | 0 | 20 |  |  | 1 | 0 | 19.98
 [LAST BALANCE]
 Silver: 2.75 g | Amount: Rs. 1,250.50
-Total Fine Weight (g): 144.30
 [SUMMARY]
-Total Lbr Amt (₹): 1,466 | Silver Value (₹): 14,610 | GRAND TOTAL (₹): 16,076
+Total Fine Weight (g): 144.30 | Total Lbr Amt (₹): 1,466 | Silver Value (₹): 14,610 | GRAND TOTAL (₹): 16,076

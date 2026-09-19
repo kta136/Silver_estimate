@@ -324,9 +324,9 @@
     "semantic_hash": ""
   },
   "silverestimate/ui/estimate_print_renderer.py": {
-    "mtime": 1789811205.5628655,
-    "seen": 1789811950.8886633,
-    "ast_hash": "a27f13e966b1183c2e7939ea2f012288",
+    "mtime": 1789813956.0958097,
+    "seen": 1789814339.8270483,
+    "ast_hash": "0f7d9dc0f9321b03fb736266ff5f342e",
     "semantic_hash": ""
   },
   "silverestimate/ui/estimate_table_formatting.py": {
@@ -750,9 +750,9 @@
     "semantic_hash": ""
   },
   "tests/ui/test_settings_dialog.py": {
-    "mtime": 1789811205.592122,
-    "seen": 1789811950.8887467,
-    "ast_hash": "404ec2eeafa85e3eb1803b4f327a2c0b",
+    "mtime": 1789814010.2314878,
+    "seen": 1789814339.8271477,
+    "ast_hash": "3803f0a7ad84ea11e73ab830aafb1ca1",
     "semantic_hash": ""
   },
   "tests/ui/test_silver_bar_history.py": {
@@ -1116,9 +1116,9 @@
     "semantic_hash": ""
   },
   "silverestimate/ui/print_page_settings.py": {
-    "mtime": 1785415662.88284,
-    "seen": 1788613500.4624064,
-    "ast_hash": "09a606179b125b5b5662d548c6cb3dc8",
+    "mtime": 1789814094.963047,
+    "seen": 1789814339.8270664,
+    "ast_hash": "33136836d787fabba04574fea9b07a9c",
     "semantic_hash": ""
   },
   "silverestimate/ui/estimate_entry_logic/column_specs.py": {
@@ -1326,9 +1326,9 @@
     "semantic_hash": "f6c95ad17a416f7e0c9eb8dbefc391c0"
   },
   "tests/unit/test_estimate_print_renderer.py": {
-    "mtime": 1789811205.5941358,
-    "seen": 1789811950.8887644,
-    "ast_hash": "4d59ce1559877f61261ca77c31421489",
+    "mtime": 1789814010.2314878,
+    "seen": 1789814339.8271701,
+    "ast_hash": "56e9f0a8387597a854ef702cad7a4132",
     "semantic_hash": ""
   },
   "scripts/check_startup_budgets.py": {
@@ -1404,15 +1404,15 @@
     "semantic_hash": "5fdaeaf9601fdaeb5da7fc209b5c6ba7"
   },
   "tests/golden/modern_estimate_multi_section.txt": {
-    "mtime": 1789811205.5807445,
-    "seen": 1789811950.8888268,
-    "ast_hash": "bca858073f59d1fa2a59b1113e3ca8c3",
+    "mtime": 1789813956.0982904,
+    "seen": 1789814339.8272417,
+    "ast_hash": "9f5dd9e300677866871bb5048bdd1938",
     "semantic_hash": ""
   },
   "silverestimate/ui/estimate_print_layout.py": {
-    "mtime": 1789811205.587224,
-    "seen": 1789811950.8886628,
-    "ast_hash": "951e5aaa6e16827a2e28d8f10722948b",
+    "mtime": 1789814234.8645985,
+    "seen": 1789814339.8270469,
+    "ast_hash": "34efe9e93c8753e23d668ed36a89b51f",
     "semantic_hash": ""
   },
   "scripts/build_sqlcipher_wheel.ps1": {
@@ -1638,9 +1638,9 @@
     "semantic_hash": ""
   },
   "silverestimate/ui/settings_print_page.py": {
-    "mtime": 1789811205.592122,
-    "seen": 1789811950.8886917,
-    "ast_hash": "951055544da35dede573aca7424aff04",
+    "mtime": 1789813956.0967772,
+    "seen": 1789814339.827079,
+    "ast_hash": "5aa0da3f3639e9f68f6e9d3591d05530",
     "semantic_hash": ""
   },
   "silverestimate/ui/settings_security_page.py": {
@@ -1668,9 +1668,9 @@
     "semantic_hash": ""
   },
   "tests/unit/test_settings_print_controller.py": {
-    "mtime": 1788872051.145509,
-    "seen": 1788872171.6733406,
-    "ast_hash": "2152075b8c12cdb5cc5488d874423074",
+    "mtime": 1789814368.8170803,
+    "seen": 1789814402.7285051,
+    "ast_hash": "828d885366beb97b3bb26d4d223f59a7",
     "semantic_hash": ""
   },
   "silverestimate/ui/print_preview_navigation.py": {
@@ -1914,9 +1914,9 @@
     "semantic_hash": ""
   },
   "tests/ui/test_precision_round_trip.py": {
-    "mtime": 1789811205.5820491,
-    "seen": 1789811950.888744,
-    "ast_hash": "6a253b62966d9b1d779db087cc304b57",
+    "mtime": 1789814087.1155093,
+    "seen": 1789814339.8271449,
+    "ast_hash": "f00fe399f57986cbdf436ea553334462",
     "semantic_hash": ""
   },
   "tests/ui/test_save_workflows.py": {
@@ -2016,9 +2016,9 @@
     "semantic_hash": ""
   },
   "tests/ui/test_approved_print_matrix.py": {
-    "mtime": 1789811205.5795894,
-    "seen": 1789811950.8887308,
-    "ast_hash": "2e0020a53bf81832d83d716821798d02",
+    "mtime": 1789814094.963047,
+    "seen": 1789814339.8271286,
+    "ast_hash": "bba505104b3a76a015b45da82152899f",
     "semantic_hash": ""
   },
   "tests/ui/test_live_database_maintenance.py": {

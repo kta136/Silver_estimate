@@ -49,9 +49,7 @@ def test_column_precision_is_preserved_across_pdf_pages(qt_app, tmp_path):
         pdf.close()
 
 
-@pytest.mark.parametrize(
-    "paper", ["A4", "A5", "Letter", "Legal", "Thermal 80mm", "Custom"]
-)
+@pytest.mark.parametrize("paper", ["A4", "A5", "Letter", "Legal", "Custom"])
 @pytest.mark.parametrize("orientation", ["Portrait", "Landscape"])
 @pytest.mark.parametrize("rate", [0, 75000])
 def test_modern_pdf_preserves_section_totals_and_final_summary(
@@ -107,8 +105,9 @@ def test_modern_pdf_preserves_section_totals_and_final_summary(
             assert "GRAND TOTAL" in pages[-1] and "Total Fine Weight" in pages[-1]
         else:
             assert "GRAND TOTAL" not in text and "Silver Value" not in text
-            assert "Silver (g)" in pages[-1]
-            assert layout.final_metrics[0].value == "0"
+            assert "Total Fine Weight" in pages[-1]
+            metrics = {metric.label: metric.value for metric in layout.final_metrics}
+            assert metrics["Total Lbr Amt (₹)"] == "0"
     finally:
         pdf.close()
 

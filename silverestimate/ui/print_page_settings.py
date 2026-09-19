@@ -20,8 +20,6 @@ DEFAULT_PRINT_MARGINS = (10, 2, 10, 2)
 DEFAULT_PAGE_SIZE = "A4"
 DEFAULT_ORIENTATION = "Landscape"
 SUPPORTED_ORIENTATIONS = ("Portrait", "Landscape")
-THERMAL_PAGE_WIDTH_MM = 79.5
-THERMAL_PAGE_HEIGHT_MM = 200.0
 
 _PAGE_SIZE_IDS = {
     "A4": QPageSize.PageSizeId.A4,
@@ -51,15 +49,10 @@ class PrintPageSettings:
     orientation: str = DEFAULT_ORIENTATION
 
     def to_qpage_size(self) -> QPageSize:
-        if self.page_size == "Thermal 80mm":
-            return QPageSize(
-                QSizeF(
-                    self.page_width_mm or THERMAL_PAGE_WIDTH_MM,
-                    self.page_height_mm or THERMAL_PAGE_HEIGHT_MM,
-                ),
-                QPageSize.Unit.Millimeter,
-                "Thermal 80mm",
-            )
+        if _is_retired_page_size(self.page_size) or _is_retired_page_size(
+            self.page_size_name
+        ):
+            return QPageSize(_PAGE_SIZE_IDS[DEFAULT_PAGE_SIZE])
         if self.page_size in _PAGE_SIZE_IDS:
             return QPageSize(_PAGE_SIZE_IDS[self.page_size])
         if self.page_width_mm > 0 and self.page_height_mm > 0:
@@ -96,14 +89,20 @@ def save_print_page_settings(settings, state: PrintPageSettings) -> None:
         store.remove(SettingsKey.PRINT_DEFAULT_PRINTER)
 
     page_size = _clean_text(state.page_size) or DEFAULT_PAGE_SIZE
+    page_size_name = _clean_text(state.page_size_name) or page_size
+    retired_page_size = _is_retired_page_size(page_size) or _is_retired_page_size(
+        page_size_name
+    )
+    if retired_page_size:
+        page_size = DEFAULT_PAGE_SIZE
+        page_size_name = DEFAULT_PAGE_SIZE
     store.set(SettingsKey.PRINT_PAGE_SIZE, page_size)
-    store.set(SettingsKey.PRINT_PAGE_SIZE_NAME, state.page_size_name or page_size)
+    store.set(SettingsKey.PRINT_PAGE_SIZE_NAME, page_size_name)
 
     width_mm = float(state.page_width_mm or 0.0)
     height_mm = float(state.page_height_mm or 0.0)
-    if page_size == "Thermal 80mm" and (width_mm <= 0 or height_mm <= 0):
-        width_mm = THERMAL_PAGE_WIDTH_MM
-        height_mm = THERMAL_PAGE_HEIGHT_MM
+    if retired_page_size or page_size in _PAGE_SIZE_IDS:
+        width_mm = height_mm = 0.0
 
     if width_mm > 0 and height_mm > 0:
         store.set(SettingsKey.PRINT_PAGE_WIDTH_MM, width_mm)
@@ -254,8 +253,8 @@ def page_size_label(page_size: QPageSize) -> str:
     lowered = raw_name.lower()
     if lowered.startswith("letter"):
         return "Letter"
-    if "thermal" in lowered and "80" in lowered:
-        return "Thermal 80mm"
+    if _is_retired_page_size(raw_name):
+        return DEFAULT_PAGE_SIZE
     return raw_name or DEFAULT_PAGE_SIZE
 
 
@@ -312,6 +311,9 @@ def _load_page_size(settings) -> tuple[str, str, float, float]:
     custom_name = _clean_text(
         store.get_text(SettingsKey.PRINT_PAGE_SIZE_NAME, raw_page_size)
     )
+    if _is_retired_page_size(raw_page_size) or _is_retired_page_size(custom_name):
+        LOGGER.info("Retired print page size found; using %s", DEFAULT_PAGE_SIZE)
+        return DEFAULT_PAGE_SIZE, DEFAULT_PAGE_SIZE, 0.0, 0.0
     width_mm = store.get_float(
         SettingsKey.PRINT_PAGE_WIDTH_MM,
         0.0,
@@ -325,13 +327,6 @@ def _load_page_size(settings) -> tuple[str, str, float, float]:
 
     if raw_page_size in _PAGE_SIZE_IDS:
         return raw_page_size, raw_page_size, 0.0, 0.0
-    if raw_page_size == "Thermal 80mm":
-        return (
-            raw_page_size,
-            custom_name or raw_page_size,
-            width_mm or THERMAL_PAGE_WIDTH_MM,
-            height_mm or THERMAL_PAGE_HEIGHT_MM,
-        )
     if width_mm > 0 and height_mm > 0:
         label = custom_name or raw_page_size or "Custom"
         return label, label, width_mm, height_mm
@@ -347,6 +342,10 @@ def _load_page_size(settings) -> tuple[str, str, float, float]:
 
 def _clean_text(value) -> str:
     return str(value or "").strip()
+
+
+def _is_retired_page_size(value: object) -> bool:
+    return "thermal" in _clean_text(value).casefold()
 
 
 def _round_mm(value: float) -> float:

@@ -66,8 +66,8 @@ class EstimateEntryLayoutController:
         self.host.setStyleSheet(ESTIMATE_ENTRY_STYLESHEET)
 
         layout = QVBoxLayout(self.host)
-        layout.setSpacing(0)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        layout.setContentsMargins(10, 4, 10, 0)
 
         header_container = QWidget()
         header_container.setObjectName("EstimateHeaderContainer")
@@ -75,8 +75,8 @@ class EstimateEntryLayoutController:
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
         header_layout = QHBoxLayout(header_container)
-        header_layout.setContentsMargins(6, 2, 6, 2)
-        header_layout.setSpacing(6)
+        header_layout.setContentsMargins(10, 6, 10, 6)
+        header_layout.setSpacing(10)
 
         self.host.toolbar = VoucherToolbar()
         self.host.toolbar.setSizePolicy(
@@ -104,13 +104,14 @@ class EstimateEntryLayoutController:
         self.host._content_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.host._content_splitter.setChildrenCollapsible(False)
         self.host._content_splitter.setOpaqueResize(True)
+        self.host._content_splitter.setHandleWidth(10)
 
         self.host.item_table = EstimateTableView()
         self.host.item_table.host_widget = self.host
         polish_dense_table(
             self.host.item_table,
-            row_height=26,
-            header_height=28,
+            row_height=32,
+            header_height=36,
             show_grid=True,
             hide_vertical_header=False,
         )
@@ -197,8 +198,8 @@ class EstimateEntryLayoutController:
             actions = QFrame(self.host)
             actions.setObjectName("EstimateSidebarActions")
             grid = QGridLayout(actions)
-            grid.setContentsMargins(6, 6, 6, 6)
-            grid.setSpacing(4)
+            grid.setContentsMargins(6, 10, 6, 6)
+            grid.setSpacing(8)
             specs = [
                 ("last_balance_button", "Last Balance", 0, 0, 1),
                 ("history_button", "History", 0, 1, 1),
@@ -210,7 +211,7 @@ class EstimateEntryLayoutController:
                 button = getattr(self.host.secondary_actions, attr)
                 button.setProperty("iconOnly", False)
                 button.setText(text)
-                button.setMinimumSize(0, 26)
+                button.setMinimumSize(0, 34)
                 button.setMaximumSize(16777215, 16777215)
                 button.setSizePolicy(
                     QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed

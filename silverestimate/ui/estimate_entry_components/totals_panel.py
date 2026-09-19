@@ -644,13 +644,13 @@ class TotalsPanel(QWidget):
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         outer_layout = QVBoxLayout(card)
-        outer_layout.setContentsMargins(0, 0, 0, 4)
-        outer_layout.setSpacing(4)
+        outer_layout.setContentsMargins(0, 0, 0, 10)
+        outer_layout.setSpacing(10)
 
         header = QFrame(card)
         header.setObjectName("FinalCalcHeader")
         header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(8, 4, 8, 4)
+        header_layout.setContentsMargins(10, 10, 10, 10)
         header_layout.setSpacing(8)
 
         final_title = QLabel("Grand Total")
@@ -671,9 +671,10 @@ class TotalsPanel(QWidget):
         outer_layout.addWidget(header)
 
         final_layout = QFormLayout()
-        final_layout.setContentsMargins(8, 0, 8, 0)
+        final_layout.setContentsMargins(10, 0, 10, 0)
         final_layout.setHorizontalSpacing(8)
-        final_layout.setVerticalSpacing(2)
+        final_layout.setVerticalSpacing(6)
+        final_layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         final_layout.setFieldGrowthPolicy(
             QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow
         )
@@ -782,6 +783,16 @@ class TotalsPanel(QWidget):
             card = self._summary_sections_list.itemWidget(item)
             card.setFixedWidth(target_width)
             if card.property("sectionKind") == self._FINAL_SECTION_KEY:
+                # Reserve the actual painted text width before choosing a layout.
+                # Large totals must reflow instead of being squeezed by QFormLayout.
+                for label in (
+                    self.grand_total_label,
+                    self.net_fine_label,
+                    self.net_wage_label,
+                ):
+                    label.setMinimumWidth(
+                        label.fontMetrics().horizontalAdvance(label.text()) + 2
+                    )
                 header_layout = self._grand_total_header_layout
                 margins = header_layout.contentsMargins()
                 required_width = (
@@ -894,7 +905,7 @@ class TotalsPanel(QWidget):
         outer.addWidget(scroll)
         main_layout = QVBoxLayout(contents)
         main_layout.setContentsMargins(4, 4, 4, 4)
-        main_layout.setSpacing(4)
+        main_layout.setSpacing(8)
 
         self._sidebar_top_host = QWidget()
         self._sidebar_top_layout = QVBoxLayout(self._sidebar_top_host)

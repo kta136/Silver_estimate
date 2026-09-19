@@ -138,9 +138,9 @@ def test_entry_save_inventory_history_and_print_agree(
     assert modern.fine_weight == "8.87"
     metrics = {metric.label: metric.value for metric in modern.final_metrics}
     assert metrics == {
-        "Total Lbr Amt (₹)": "19.01",
-        "Silver Value (₹)": "109.39",
-        "GRAND TOTAL (₹)": "128.40",
+        "Total Lbr Amt (₹)": "19",
+        "Silver Value (₹)": "109",
+        "GRAND TOTAL (₹)": "128",
     }
     assert widget.workflow_controller.apply_loaded_estimate(
         widget.presenter.load_estimate("1")

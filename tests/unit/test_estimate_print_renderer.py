@@ -5,6 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path
 
+from silverestimate.ui import estimate_print_renderer as renderer_module
 from silverestimate.ui.estimate_print_document import EstimatePrintDocument
 from silverestimate.ui.estimate_print_layout import REGULAR_COLUMNS
 from silverestimate.ui.estimate_print_renderer import (
@@ -28,7 +29,7 @@ def test_modern_layout_matches_semantic_golden_for_all_sections() -> None:
 
     assert layout.normalized_text() == expected
     assert "/Doz." not in layout.normalized_text()
-    assert "Date:" in layout.normalized_text()
+    assert "Date:" not in layout.normalized_text()
     assert tuple(section.title for section in layout.sections) == (
         "REGULAR GOODS",
         "RETURN GOODS",
@@ -144,4 +145,69 @@ def test_zero_wages_remains_explicit_in_summary() -> None:
         "Silver Value (₹)",
         "GRAND TOTAL (₹)",
     )
-    assert layout.final_metrics[0].value == "0.00"
+    assert layout.final_metrics[0].value == "0"
+
+
+def test_summary_footer_uses_full_width_three_metric_block(monkeypatch) -> None:
+    estimate_data = deepcopy(multi_section_print_estimate())
+    estimate_data["header"].update(
+        last_balance_silver=0,
+        last_balance_amount=0,
+    )
+    layout = EstimatePrintRenderer().build_modern_layout(
+        EstimatePrintDocument.from_mapping(estimate_data)
+    )
+    text_calls = []
+    block_calls = []
+
+    monkeypatch.setattr(
+        renderer_module,
+        "_draw_text",
+        lambda _painter, rect, text, **_kwargs: text_calls.append((rect, text)),
+    )
+
+    def record_metric_block(
+        _painter,
+        title,
+        metrics,
+        _style,
+        *,
+        page_width,
+        y,
+        dark_title,
+    ):
+        block_calls.append((title, metrics, page_width, y, dark_title))
+        return y + 1
+
+    monkeypatch.setattr(renderer_module, "_draw_metric_block", record_metric_block)
+    style = type(
+        "Style",
+        (),
+        {
+            "metadata_height": 8.0,
+            "summary_gap": 4.0,
+            "base_font": None,
+            "base_metrics": None,
+            "padding": 0.0,
+        },
+    )()
+
+    renderer_module._draw_summary(
+        None,
+        layout,
+        style,
+        page_width=300.0,
+        y=20.0,
+    )
+
+    assert text_calls[0][1] == f"Total Fine Weight (g): {layout.fine_weight}"
+    title, metrics, page_width, y, dark_title = block_calls[0]
+    assert title == "FINAL SILVER & AMOUNT"
+    assert tuple(metric.label for metric in metrics) == (
+        "Total Lbr Amt (₹)",
+        "Silver Value (₹)",
+        "GRAND TOTAL (₹)",
+    )
+    assert page_width == 300.0
+    assert y == 36.0
+    assert dark_title is True

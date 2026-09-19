@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## [4.01] - 2026-09-19
+
+### Changed
+
+- Refresh the estimate-entry workstation layout, spacing, table presentation,
+  and responsive final-calculation panel.
+- Simplify Modern estimate printouts by removing the date, using a full-width
+  final summary, and rounding displayed rupee totals to whole amounts.
+- Remove superseded generated GUI-audit and PDF-preview artifacts from source
+  control while retaining the maintained golden fixtures.
+- Set the application and Windows executable version to 4.01.
+
+### Fixed
+
+- Preserve each estimate row's Regular, Return, or Silver Bar type when its
+  item lookup, name, or other editable values change.
+- Keep large totals readable by reflowing the final-calculation values instead
+  of squeezing or clipping them in narrow layouts.
+
 ## [4.0] - 2026-09-08
 
 ### Changed

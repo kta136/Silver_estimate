@@ -97,7 +97,8 @@ def test_modern_pdf_preserves_section_totals_and_final_summary(
         pages = [pdf.getAllText(page).text() for page in range(pdf.pageCount())]
         text = "\n".join(pages)
         assert text.count("SUBTOTAL") == 4
-        assert all("Date: 2026-09-06" in page for page in pages)
+        assert "Date:" not in text
+        assert "2026-09-06" not in text
         assert "Tunch" in text and "(continued)" in text
         assert "Last balance included:" in pages[-1]
         assert "Total Lbr Amt" in pages[-1]
@@ -107,7 +108,7 @@ def test_modern_pdf_preserves_section_totals_and_final_summary(
         else:
             assert "GRAND TOTAL" not in text and "Silver Value" not in text
             assert "Silver (g)" in pages[-1]
-            assert layout.final_metrics[0].value == "0.00"
+            assert layout.final_metrics[0].value == "0"
     finally:
         pdf.close()
 

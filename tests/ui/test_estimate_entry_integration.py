@@ -1,9 +1,11 @@
 """Integration tests for EstimateEntryWidget real user workflows."""
 
+import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QLineEdit
 
+from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.ui.estimate_entry_logic import (
     COL_CODE,
     COL_GROSS,
@@ -93,6 +95,35 @@ def test_adapter_populate_row_pc_restores_one_after_wt_zero(
     assert table.get_cell_text(0, COL_PIECES) == "1"
     index = table.model().index(0, COL_PIECES)
     assert bool(table.model().flags(index) & Qt.ItemFlag.ItemIsEditable)
+
+
+@pytest.mark.parametrize(
+    "category",
+    [EstimateLineCategory.RETURN, EstimateLineCategory.SILVER_BAR],
+)
+def test_adapter_populate_row_preserves_existing_row_type(
+    make_estimate_widget, qt_app, fake_db, category
+):
+    widget = make_estimate_widget(fake_db)
+    widget.table_controller.clear_all_rows()
+    adapter = widget.table_controller._get_table_adapter()
+    adapter.add_empty_row()
+    table = widget.item_table
+    table.set_row_category(0, category)
+
+    adapter.populate_row(
+        0,
+        {
+            "code": "updated",
+            "name": "Updated Item Name",
+            "purity": 92.5,
+            "wage_rate": 10.0,
+            "wage_type": "WT",
+        },
+    )
+
+    assert table.get_cell_text(0, COL_TYPE) == category.display_name()
+    assert table.get_row_state(0).category is category
 
 
 # ============================================================================

@@ -222,6 +222,11 @@ Calculation precision policy:
 
 ### Historical estimates and reprints
 
+Estimate printouts never display a date, including repeated page headers, print
+previews, PDF exports, and historical reprints. The printed header contains the
+voucher number and silver rate. The estimate date remains stored for entry and
+history; there is no option to include it in estimate printing.
+
 Saved line names, codes, purity, wage rates/mode, piece counts, calculated weights
 and wages remain independent of later catalog changes. New saves snapshot Tunch
 from the catalog in the save transaction. Updating an existing line with the same

@@ -139,6 +139,36 @@ def test_set_data(model):
     assert model.data(index, Qt.ItemDataRole.EditRole) == 150.5
 
 
+@pytest.mark.parametrize(
+    "category",
+    [EstimateLineCategory.RETURN, EstimateLineCategory.SILVER_BAR],
+)
+@pytest.mark.parametrize(
+    ("column", "value"),
+    [
+        (COL_CODE, "NEWCODE"),
+        (COL_ITEM_NAME, "Renamed Item"),
+        (COL_GROSS, 12.5),
+        (COL_POLY, 1.5),
+        (COL_PURITY, 125.5),
+        (COL_WAGE_RATE, 20.0),
+        (COL_PIECES, 3),
+    ],
+)
+def test_editing_row_values_preserves_existing_type(model, category, column, value):
+    model.add_row(
+        EstimateEntryRowState(
+            code="EXISTING",
+            name="Existing Item",
+            category=category,
+            wage_type="PC",
+        )
+    )
+
+    assert model.setData(model.index(0, column), value, Qt.ItemDataRole.EditRole)
+    assert model.get_row(0).category is category
+
+
 def test_numeric_display_role_formats_using_column_precision_and_grouping(model):
     model.add_row(
         EstimateEntryRowState(

@@ -500,20 +500,38 @@ QLabel#StatusStripText {
 )
 
 ESTIMATE_ENTRY_STYLESHEET += apply_theme_tokens("""
-QWidget#TotalsSidebar { background: __SURFACE_BG__; border: none; }
-QFrame#TotalsCard[sectionKind="totals"] { background: __SURFACE_BG__; border-color: __CARD_BORDER__; }
-QFrame#EstimateSidebarActions { background: __SURFACE_BG__; border: 1px solid __CARD_BORDER__; border-radius: 6px; }
-QFrame#EstimateSidebarActions QPushButton, QFrame#EstimateSidebarActions QToolButton {
- background: __SURFACE_BG__; border: 1px solid __INPUT_BORDER__; border-radius: 4px; padding: 1px 6px; color: __TEXT_STRONG__;
+/* Native adaptation of the selected 12ui estimate workstation design. */
+QWidget#EstimateEntryRoot { background: #f6f7f5; color: #173744; }
+QWidget#EstimateHeaderContainer {
+ background: #ffffff; border: 1px solid #d5dfe0; border-radius: 6px; min-height: 42px;
 }
+QWidget#TotalsSidebar { background: #f6f7f5; border: 1px solid #d5dfe0; border-radius: 6px; }
+QFrame#TotalsCard[sectionKind="totals"] { background: #ffffff; border-color: #d5dfe0; }
+QFrame#EstimateSidebarActions { background: transparent; border: none; }
+QFrame#EstimateSidebarActions QPushButton, QFrame#EstimateSidebarActions QToolButton {
+ background: #ffffff; border: 1px solid #cfdbdd; border-radius: 5px; padding: 3px 8px; color: #173744; text-align: left;
+}
+QFrame#EstimateSidebarActions QPushButton:hover, QFrame#EstimateSidebarActions QToolButton:hover {
+ background: #eaf4f2; border-color: #81b9b5;
+}
+QFrame#EstimateSidebarActions QPushButton#DeleteRowButton { color: #bf3542; }
 QFrame#EstimateSidebarActions QToolButton#DeleteEstimateButton { color: #df202e; border-color: __DANGER_BORDER__; }
+QFrame#EstimateSidebarActions QToolButton#DeleteEstimateButton:hover { background: #fff1f2; }
 QLabel#MetricLabel[sectionKind="totals"], QLabel#MetricValue[sectionKind="totals"], QLabel#SectionTitle[sectionKind="totals"] { color: __TEXT_STRONG__; }
-QTableView#EstimateTableView::item:selected { border: none; background: __SELECTION_BG__; }
+QTableView#EstimateTableView {
+ background: #ffffff; alternate-background-color: #fafcfb; border: 1px solid #d5dfe0;
+ border-radius: 4px; gridline-color: #e2e9e8; color: #173744;
+}
+QTableView#EstimateTableView::item:selected { border: none; background: #dff1ed; color: #123d43; }
 QTableView#EstimateTableView QLineEdit { background: white; border: 1px solid __FOCUS_RING__; border-radius: 0; }
-QWidget#LiveRateCard { background: white; border-color: __CARD_BORDER__; }
+QWidget#LiveRateCard { background: white; border-color: #d5dfe0; border-radius: 5px; }
+QFrame#FinalCalcCard { background: white; border: 1px solid #bddbd8; border-radius: 6px; }
+QFrame#FinalCalcHeader { background: #007f83; border-radius: 5px; }
+QLabel#UnsavedBadge { background: #e7f5ec; color: #147548; border: none; padding: 5px 8px; }
+QLabel#UnsavedBadge[dirty="true"] { background: #fff4d9; color: #94631b; }
 QTableWidget#SummaryTable {
- background: __SURFACE_BG__; color: __TEXT_STRONG__; border: none;
- gridline-color: __CARD_BORDER__; selection-background-color: __SURFACE_BG__;
+ background: #ffffff; color: #173744; border: none;
+ gridline-color: #e0e7e5; selection-background-color: #ffffff;
 }
 QTableWidget#SummaryTable::item { padding: 0px 5px; }
 QTableWidget#SummaryTable QHeaderView::section {
@@ -521,10 +539,22 @@ QTableWidget#SummaryTable QHeaderView::section {
  border: none; border-right: 1px solid __CARD_BORDER__; border-bottom: 1px solid __CARD_BORDER__;
 }
 QTableView#EstimateTableView QHeaderView::section {
-    padding: 2px 4px;
-    border-right: 1px solid #edf0f3;
+    background: #f4f7f5; color: #173744; padding: 4px;
+    border-right: 1px solid #e2e9e8; border-bottom: 1px solid #d5dfe0;
 }
-QWidget#VoucherToolbar QComboBox { padding-top: 1px; padding-bottom: 1px; min-height: 22px; }
+QWidget#VoucherToolbar QComboBox { padding-top: 3px; padding-bottom: 3px; min-height: 24px; }
+QWidget#VoucherToolbar QLineEdit, QWidget#VoucherToolbar QDateEdit,
+QWidget#VoucherToolbar QDoubleSpinBox {
+ background: #ffffff; border-color: #cfdbdd; border-radius: 4px; padding: 3px 6px; min-height: 24px;
+}
+QWidget#PrimaryActionStrip QPushButton, QPushButton#VoucherLoadButton {
+ background: #ffffff; color: #173744; border-color: #cfdbdd; padding: 4px 8px; min-height: 26px;
+}
+QWidget#PrimaryActionStrip QPushButton#SavePrimaryButton {
+ background: #007f83; border-color: #007f83; color: #ffffff;
+}
+QWidget#PrimaryActionStrip QPushButton#SavePrimaryButton:hover { background: #00696c; }
+QFrame#BottomStatusStrip { background: #f6f7f5; border: none; }
 """)
 
 

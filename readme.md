@@ -1,4 +1,4 @@
-# Silver Estimation App - v4.0
+# Silver Estimation App - v4.01
 
 A Windows desktop application built with PySide6 and a local SQLCipher database
 for managing silver sales estimates, item-wise entries, silver-bar inventory,
@@ -7,7 +7,7 @@ returns, and print-ready outputs.
 [![Python](https://img.shields.io/badge/Python-3.14+-blue.svg)](https://www.python.org/)
 [![PySide6](https://img.shields.io/badge/PySide6-6.11-green.svg)](https://doc.qt.io/qtforpython-6/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE)
-[![Source Version](https://img.shields.io/badge/source-v4.0-orange.svg)](CHANGELOG.md#40---2026-09-08)
+[![Source Version](https://img.shields.io/badge/source-v4.01-orange.svg)](CHANGELOG.md#401---2026-09-19)
 [![Latest Release](https://img.shields.io/github/v/release/kta136/Silver_estimate?label=stable%20release)](https://github.com/kta136/Silver_estimate/releases/latest)
 [![PR Validation](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml)
 [![Main Validation](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml)
@@ -24,7 +24,7 @@ returns, and print-ready outputs.
 - [Download latest stable release](https://github.com/kta136/Silver_estimate/releases/latest)
 - [Documentation index](DOCS/README.md)
 - [Changelog](CHANGELOG.md)
-- [v4.0 changelog](CHANGELOG.md#40---2026-09-08)
+- [v4.01 changelog](CHANGELOG.md#401---2026-09-19)
 - [Deployment guide](DOCS/deployment-guide.md)
 
 > The source tree can be ahead of the latest packaged release. Use the release
@@ -245,13 +245,13 @@ uv run pre-commit run --all-files
 
 ### Build Locally (Windows)
 - Prereqs: Python 3.14+, PowerShell
-- Fast validated Windows iteration: `scripts\build_windows_local.cmd -Fast` (outputs `dist/SilverEstimate-v4.0-fast.exe`)
+- Fast validated Windows iteration: `scripts\build_windows_local.cmd -Fast` (outputs `dist/SilverEstimate-v4.01-fast.exe`)
 - Standard one-file build: `uv run nox -s build`
 - Inspectable standalone build: `uv run nox -s build_standalone standalone_artifact_smoke`
 - Clean one-file rebuild: `uv run nox -s build_clean artifact_smoke`
 - Validated local Windows build: `scripts\build_windows_local.cmd` (safe when the workspace path contains spaces)
 - Local builds print stage durations and save `artifacts/local-build/build-timings[-suffix].json`. `-Fast` disables link-time optimization for development; use the default command for releases.
-- Validated local output: `dist/SilverEstimate-v4.0.exe`. Nox builds also produce `dist/SilverEstimate.exe` and `dist/SilverEstimate-v4.0-win64.zip` on Windows.
+- Validated local output: `dist/SilverEstimate-v4.01.exe`. Nox builds also produce `dist/SilverEstimate.exe` and `dist/SilverEstimate-v4.01-win64.zip` on Windows.
 - Release/CI builds use Qt's `pyside6-deploy`, the committed `pysidedeploy.spec`, and locked Nuitka 4.2.1
 - Packaged releases are Windows-only; macOS/Linux are untested development environments.
 
@@ -305,6 +305,11 @@ Copyright (C) 2023-2026 Silver Estimation App
 ---
 
 ## Version History (highlights)
+
+### v4.01 (2026-09-19)
+- Refreshes the estimate-entry workstation and responsive final totals
+- Simplifies Modern estimate print headers and final amount presentation
+- Preserves each estimate row's type while its item values are edited
 
 ### v4.0 (2026-09-08)
 - Implements the approved compact UI across the main workspaces, settings, and dialogs

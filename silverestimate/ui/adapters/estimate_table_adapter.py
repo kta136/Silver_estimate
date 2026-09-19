@@ -124,8 +124,8 @@ class EstimateTableAdapter:
             elif not current_pieces or current_pieces == "0":
                 table.set_cell_text(row_index, COL_PIECES, "1")
 
-            self._apply_mode_category(row_index)
-
+            # The row's category is established when the row is created or its
+            # mode is selected. Item lookup must not reclassify an existing row.
             owner.current_row = row_index
             owner.totals_controller.calculate_net_weight()
         except Exception as exc:  # pragma: no cover - UI failure reporting

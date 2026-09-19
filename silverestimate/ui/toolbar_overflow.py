@@ -31,7 +31,7 @@ class ToolbarOverflow(QScrollArea):
             if overflow
             else 0
         )
-        self.setFixedHeight(content.sizeHint().height() + extra + 2)
+        self.setFixedHeight(content.sizeHint().height() + extra)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

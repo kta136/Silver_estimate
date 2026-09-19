@@ -1,5 +1,5 @@
 ESTIMATE SLIP
-Voucher: EST-PARITY-001 | Date: 2026-07-19 | Silver Rate: 101.25
+Voucher: EST-PARITY-001 | Silver Rate: 101.25
 Note: Parity fixture
 [REGULAR GOODS]
 # | Item Name | Gross (g) | Poly (g) | Net Wt (g) | Purity (%) | Lbr | Pieces | Lbr Amt (₹) | Fine Wt (g)
@@ -24,4 +24,4 @@ Note: Parity fixture
 Silver: 2.75 g | Amount: Rs. 1,250.50
 Total Fine Weight (g): 144.30
 [SUMMARY]
-Total Lbr Amt (₹): 1,465.92 | Silver Value (₹): 14,610.16 | GRAND TOTAL (₹): 16,076.08
+Total Lbr Amt (₹): 1,466 | Silver Value (₹): 14,610 | GRAND TOTAL (₹): 16,076

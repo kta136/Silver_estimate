@@ -149,12 +149,12 @@ def test_estimate_modern_layout_uses_requested_column_precision(qt_app, settings
     assert "100.20" in total_line
 
     assert "Total Fine Weight (g): 1.23" in final_line
-    assert "Total Lbr Amt (₹): 100.20" in rendered
-    assert "Silver Value (₹): 12.42" in rendered
-    assert "GRAND TOTAL (₹): 112.62" in rendered
+    assert "Total Lbr Amt (₹): 100" in rendered
+    assert "Silver Value (₹): 12" in rendered
+    assert "GRAND TOTAL (₹): 113" in rendered
 
 
-def test_estimate_modern_layout_keeps_amount_totals_at_two_decimals(
+def test_estimate_modern_layout_rounds_summary_amounts_to_whole_rupees(
     qt_app, settings_stub
 ):
     manager = PrintManager(_DbStub(), print_font=QFont("Courier New", 8))
@@ -206,8 +206,9 @@ def test_estimate_modern_layout_keeps_amount_totals_at_two_decimals(
 
     assert "Silver: 0.27 g | Amount: Rs. 50.54" in rendered
     assert "Total Fine Weight (g): 1.50" in final_line
-    assert "Silver Value (₹): 15.15" in rendered
-    assert "GRAND TOTAL (₹): 165.93" in rendered
+    assert "Total Lbr Amt (₹): 151" in rendered
+    assert "Silver Value (₹): 15" in rendered
+    assert "GRAND TOTAL (₹): 166" in rendered
 
 
 def test_build_estimate_preview_payload_uses_modern_layout(qt_app, settings_stub):
@@ -680,9 +681,9 @@ def test_direct_estimate_painter_handles_portrait_and_large_font(
         "Net Wt (g)",
         "Fine Wt (g)",
         "Purity (%)",
-        "Date:",
     ):
         assert label in pages[0]
+    assert all("Date:" not in page for page in pages)
     assert "GRAND TOTAL" in pages[-1]
 
 

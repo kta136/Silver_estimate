@@ -74,7 +74,6 @@ class ModernEstimateLayout:
     sections: tuple[EstimatePrintSection, ...]
     last_balance_metrics: tuple[EstimatePrintMetric, ...]
     final_metrics: tuple[EstimatePrintMetric, ...]
-    date: str = ""
     fine_weight: str = ""
     has_rate: bool = False
 
@@ -86,7 +85,7 @@ class ModernEstimateLayout:
     def normalized_text(self) -> str:
         lines = [
             "ESTIMATE SLIP",
-            f"Voucher: {self.voucher_no} | Date: {self.date} | Silver Rate: {self.silver_rate}",
+            f"Voucher: {self.voucher_no} | Silver Rate: {self.silver_rate}",
         ]
         if self.note:
             lines.append(f"Note: {self.note}")
@@ -345,16 +344,16 @@ def _complete_layout(
 
     last_balance = _last_balance_metrics(header)
     final_metrics = [
-        EstimatePrintMetric("Total Lbr Amt (₹)", _amount(net_wage, decimals=2))
+        EstimatePrintMetric("Total Lbr Amt (₹)", _amount(net_wage, decimals=0))
     ]
     if header.silver_rate > 0:
         final_metrics.extend(
             (
                 EstimatePrintMetric(
-                    "Silver Value (₹)", _amount(silver_cost, decimals=2)
+                    "Silver Value (₹)", _amount(silver_cost, decimals=0)
                 ),
                 EstimatePrintMetric(
-                    "GRAND TOTAL (₹)", _amount(total_cost, decimals=2), emphasis=True
+                    "GRAND TOTAL (₹)", _amount(total_cost, decimals=0), emphasis=True
                 ),
             )
         )
@@ -364,7 +363,6 @@ def _complete_layout(
         )
     return ModernEstimateLayout(
         voucher_no=header.voucher_no,
-        date=header.date,
         fine_weight=_weight(net_fine),
         has_rate=header.silver_rate > 0,
         silver_rate=_amount(header.silver_rate, decimals=2)

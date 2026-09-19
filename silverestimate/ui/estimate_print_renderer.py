@@ -305,7 +305,9 @@ def _header_height(layout: ModernEstimateLayout, style: _PaintStyle) -> float:
 
 
 def _summary_height(layout: ModernEstimateLayout, style: _PaintStyle) -> float:
-    height = style.summary_gap + len(layout.final_metrics) * style.total_height
+    height = style.summary_gap + style.metric_title_height + style.metric_row_height
+    if layout.has_rate:
+        height += style.metadata_height + style.summary_gap
     if layout.last_balance_metrics:
         height += style.metadata_height + style.summary_gap
     return height
@@ -351,13 +353,12 @@ def _draw_header(
     )
     y += style.title_height
 
-    widths = (0.30, 0.35, 0.35)
+    widths = (0.50, 0.50)
     labels = (
         f"Voucher: {layout.voucher_no}",
-        f"Date: {layout.date}",
         f"Silver Rate: {layout.silver_rate}",
     )
-    alignments: tuple[PrintAlignment, ...] = ("left", "left", "right")
+    alignments: tuple[PrintAlignment, ...] = ("left", "right")
     x = 0.0
     for ratio, label, alignment in zip(widths, labels, alignments, strict=True):
         width = page_width * ratio
@@ -506,65 +507,28 @@ def _draw_summary(
         )
         y += style.metadata_height + style.summary_gap
     y += style.summary_gap
-    table_x = page_width * 0.50
-    table_width = page_width - table_x
-    row_height = style.total_height
     if layout.has_rate:
-        rect = QRectF(0, y, page_width * 0.46, row_height * len(layout.final_metrics))
-        painter.fillRect(rect, _TOTAL_BG)
-        painter.setPen(style.border_pen)
-        painter.drawRect(rect)
         _draw_text(
             painter,
-            QRectF(rect.x(), rect.y(), rect.width(), rect.height() / 2),
-            "Total Fine Weight (g)",
-            font=style.bold_font,
-            metrics=style.bold_metrics,
-            alignment="center",
-            padding=style.padding,
-            fit_to_width=True,
-        )
-        _draw_text(
-            painter,
-            QRectF(
-                rect.x(), rect.y() + rect.height() / 2, rect.width(), rect.height() / 2
-            ),
-            layout.fine_weight,
-            font=style.summary_font,
-            metrics=style.summary_metrics,
-            alignment="center",
-            padding=style.padding,
-            fit_to_width=True,
-        )
-    for metric in layout.final_metrics:
-        rect = QRectF(table_x, y, table_width, row_height)
-        painter.fillRect(rect, _TOTAL_BG if metric.emphasis else _WHITE)
-        painter.setPen(style.border_pen)
-        painter.drawRect(rect)
-        font = style.bold_font if metric.emphasis else style.base_font
-        metrics = style.bold_metrics if metric.emphasis else style.base_metrics
-        _draw_text(
-            painter,
-            QRectF(table_x, y, table_width * 0.58, row_height),
-            metric.label,
-            font=font,
-            metrics=metrics,
+            QRectF(0, y, page_width, style.metadata_height),
+            f"Total Fine Weight (g): {layout.fine_weight}",
+            font=style.base_font,
+            metrics=style.base_metrics,
             alignment="left",
             padding=style.padding,
+            color=_MUTED_TEXT,
             fit_to_width=True,
         )
-        _draw_text(
-            painter,
-            QRectF(table_x + table_width * 0.58, y, table_width * 0.42, row_height),
-            metric.value,
-            font=font,
-            metrics=metrics,
-            alignment="right",
-            padding=style.padding,
-            fit_to_width=True,
-        )
-        y += row_height
-    return y
+        y += style.metadata_height + style.summary_gap
+    return _draw_metric_block(
+        painter,
+        "FINAL SILVER & AMOUNT",
+        layout.final_metrics,
+        style,
+        page_width=page_width,
+        y=y,
+        dark_title=True,
+    )
 
 
 def _draw_metric_block(
@@ -622,6 +586,7 @@ def _draw_metric_block(
             alignment="center",
             padding=style.padding,
             color=_MUTED_TEXT,
+            fit_to_width=True,
         )
         _draw_text(
             painter,
@@ -631,6 +596,7 @@ def _draw_metric_block(
             metrics=style.summary_metrics,
             alignment="center",
             padding=style.padding,
+            fit_to_width=True,
         )
     return y + style.metric_row_height
 

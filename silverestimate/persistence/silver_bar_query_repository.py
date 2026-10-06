@@ -11,6 +11,7 @@ from silverestimate.domain.pagination import (
     Page,
     SilverBarHistoryCursor,
 )
+from silverestimate.domain.silver_bar_workspace import BarListSnapshot, BarWeightCursor
 from silverestimate.persistence.database_driver import dbapi as sqlite3
 from silverestimate.persistence.repository_results import (
     RepositoryFailureKind,
@@ -18,6 +19,10 @@ from silverestimate.persistence.repository_results import (
 )
 from silverestimate.persistence.silver_bar_repository_base import (
     _SilverBarRepositoryBase,
+)
+from silverestimate.persistence.silver_bar_workspace_queries import (
+    read_list_snapshot,
+    search_weight_prefix,
 )
 from silverestimate.persistence.silver_bars_queries import (
     build_available_bars_queries,
@@ -31,6 +36,22 @@ SilverBarRow = Mapping[str, Any]
 
 class SilverBarQueryRepository(_SilverBarRepositoryBase):
     """Own every silver-bar and list read."""
+
+    def search_weight_prefix(
+        self, prefix: str, *, cursor: BarWeightCursor | None = None, limit: int = 50
+    ) -> Page[dict[str, Any], BarWeightCursor]:
+        return search_weight_prefix(self._conn, prefix, cursor=cursor, limit=limit)
+
+    def get_list_snapshot(self, list_id: int) -> BarListSnapshot:
+        conn = self._conn
+        own_transaction = not conn.in_transaction
+        if own_transaction:
+            conn.execute("BEGIN")
+        try:
+            return read_list_snapshot(conn, list_id)
+        finally:
+            if own_transaction:
+                conn.rollback()
 
     def get_lists(self, include_issued: bool = True) -> list[SilverBarRow]:
         cursor = self._cursor

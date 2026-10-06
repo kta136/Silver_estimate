@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+## [4.04] - 2026-10-06
+
+### Changed
+
+- Show available silver bars automatically in management, including after adding
+  a bar and starting a new list. Weight entry is now an optional filter; clearing
+  it restores all available bars with the existing keyboard selection and paging.
+- Set the application and Windows executable version to 4.04.
+
+## [4.03] - 2026-10-04
+
+### Changed
+
+- Ctrl+P prints the current silver-bar list to the configured printer, issues it
+  after successful submission, and starts a fresh list with weight entry focused.
+  Ctrl+Shift+P opens preview, PDF export, and printer settings.
+- Merge saved lists, issued lists, and silver-bar history into one keyboard-driven
+  history window. Filter lists by All/Active/Issued, switch to individual bars,
+  and open issued contents in the same window to reprint or reopen for editing.
+- Keep lists active after print cancellation or failure. If issuing fails after
+  printing, retry an unchanged list without submitting a duplicate print job.
+- Set the application and Windows executable version to 4.03.
+
+## [4.02] - 2026-10-04
+
+### Changed
+
+- Rebuild Silver Bar Management around keyboard entry: type a weight, choose a
+  match with the arrow keys, and press Enter to add and save immediately.
+- Remove the separate list-assignment step; removing a bar with Delete makes it
+  available again automatically.
+- Place the silver-bar controls in one toolbar and maximize vertical table space.
+- Confirm issuing only after a successful print, with a retry for an unchanged
+  printed list and no issuing on cancellation or PDF export alone.
+- Set the application and Windows executable version to 4.02.
+
 ## [4.01] - 2026-09-19
 
 ### Changed

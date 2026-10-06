@@ -10,12 +10,12 @@ from silverestimate.persistence.repository_results import (
     RepositoryFailureKind,
     RepositoryResult,
 )
-from silverestimate.persistence.silver_bar_repository_base import (
-    _SilverBarRepositoryBase,
+from silverestimate.persistence.silver_bar_workspace_commands import (
+    SilverBarWorkspaceCommands,
 )
 
 
-class SilverBarCommandRepository(_SilverBarRepositoryBase):
+class SilverBarCommandRepository(SilverBarWorkspaceCommands):
     """Own list lifecycle and inventory mutation commands."""
 
     def generate_list_identifier(self) -> str:
@@ -124,40 +124,7 @@ class SilverBarCommandRepository(_SilverBarRepositoryBase):
             return False
 
     def reactivate_list(self, list_id: int) -> bool:
-        conn, cursor = self._conn, self._cursor
-        if not conn or not cursor:
-            return False
-        try:
-            conn.execute("BEGIN TRANSACTION")
-            cursor.execute(
-                "UPDATE silver_bar_lists SET issued_date = NULL WHERE list_id = ?",
-                (list_id,),
-            )
-            if cursor.rowcount <= 0:
-                conn.rollback()
-                return False
-            cursor.execute(
-                "UPDATE silver_bars SET status = 'Assigned' WHERE list_id = ?",
-                (list_id,),
-            )
-            conn.commit()
-            return True
-        except sqlite3.Error as exc:
-            try:
-                conn.rollback()
-            except Exception as rollback_error:
-                self._logger.debug(
-                    "Failed to roll back reactivate-list transaction for list %s: %s",
-                    list_id,
-                    rollback_error,
-                )
-            self._logger.error(
-                "DB error reactivating list %s: %s",
-                list_id,
-                exc,
-                exc_info=True,
-            )
-            return False
+        return self.reactivate_issued_list(list_id).succeeded
 
     def delete_list(self, list_id: int) -> Tuple[bool, str]:
         conn, cursor = self._conn, self._cursor

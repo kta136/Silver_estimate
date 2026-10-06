@@ -49,6 +49,7 @@ def _make_main_window(estimate_layout, *, db=None):
         show_catalog_restore_dialog=lambda: None,
         show_catalog_backup_dialog=lambda: None,
         delete_all_estimates=lambda: None,
+        delete_vouchers_by_range=lambda: None,
         delete_all_data=lambda: None,
         reconfigure_rate_visibility_from_settings=lambda: True,
         reconfigure_rate_timer_from_settings=lambda: True,

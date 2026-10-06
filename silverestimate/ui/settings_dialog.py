@@ -247,6 +247,7 @@ class SettingsDialog(QDialog):
             database_provider=lambda: getattr(self.main_window, "db", None),
             actions=DataManagementActions(
                 delete_all_estimates=self.main_window.delete_all_estimates,
+                delete_vouchers_by_range=self.main_window.delete_vouchers_by_range,
                 delete_all_data=self.main_window.delete_all_data,
                 restore_item_catalog=self.main_window.show_catalog_restore_dialog,
                 create_item_catalog_backup=self.main_window.show_catalog_backup_dialog,
@@ -712,6 +713,9 @@ if __name__ == "__main__":
                 "Dummy Show Catalog Backup Dialog"
             )
             self.delete_all_estimates = lambda: print("Dummy Delete All Estimates")
+            self.delete_vouchers_by_range = lambda: print(
+                "Dummy Delete Vouchers by Range"
+            )
             self.delete_all_data = lambda: print("Dummy Delete All Data")
             # Dummy db object for export handler check
             self.db = True  # Or a dummy object with needed methods if exporter uses them directly

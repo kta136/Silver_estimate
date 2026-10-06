@@ -12,6 +12,11 @@ from silverestimate.domain.pagination import (
     Page,
     SilverBarHistoryCursor,
 )
+from silverestimate.domain.silver_bar_workspace import BarListSnapshot, BarWeightCursor
+from silverestimate.persistence.silver_bar_workspace_queries import (
+    read_list_snapshot,
+    search_weight_prefix,
+)
 from silverestimate.persistence.silver_bars_queries import (
     build_available_bars_queries,
     build_bars_in_list_queries,
@@ -34,6 +39,68 @@ class SilverBarsSnapshotRepository:
 
     def _connect(self) -> Any:
         return self._connection_factory(self._cancel_event)
+
+    def search_weight_prefix(
+        self, prefix: str, *, cursor: BarWeightCursor | None = None, limit: int = 50
+    ) -> Page[dict[str, Any], BarWeightCursor]:
+        with closing(self._connect()) as conn:
+            return search_weight_prefix(conn, prefix, cursor=cursor, limit=limit)
+
+    def get_list_snapshot(self, list_id: int) -> BarListSnapshot:
+        with closing(self._connect()) as conn:
+            conn.execute("BEGIN")
+            return read_list_snapshot(conn, list_id)
+
+    def get_list_history_page(
+        self,
+        *,
+        search_term: str = "",
+        state: str = "All",
+        cursor: int | None = None,
+        include_total: bool = True,
+        limit: int = 500,
+    ) -> Page[dict[str, Any], int]:
+        """Search saved lists with complete inventory totals in one read snapshot."""
+        conditions = ["1 = 1"]
+        params: list[Any] = []
+        if search_term.strip():
+            conditions.append("(l.list_identifier LIKE ? OR l.list_note LIKE ?)")
+            params.extend([f"%{search_term.strip()}%"] * 2)
+        if state in ("Active", "Issued"):
+            conditions.append(
+                "l.issued_date IS NULL"
+                if state == "Active"
+                else "l.issued_date IS NOT NULL"
+            )
+        where = " AND ".join(conditions)
+        size = max(1, min(int(limit), 1000))
+        with closing(self._connect()) as conn:
+            conn.execute("BEGIN")
+            total = None
+            if include_total:
+                total = int(
+                    conn.execute(
+                        f"SELECT COUNT(*) FROM silver_bar_lists l WHERE {where}", params
+                    ).fetchone()[0]
+                )
+            if cursor is not None:
+                where += " AND l.list_id < ?"
+                params.append(cursor)
+            rows = [
+                dict(row)
+                for row in conn.execute(
+                    f"""SELECT l.*, COUNT(sb.bar_id) AS bar_count,
+                           COALESCE(SUM(sb.weight), 0) AS weight,
+                           COALESCE(SUM(sb.fine_weight), 0) AS fine_weight
+                    FROM silver_bar_lists l
+                    LEFT JOIN silver_bars sb ON sb.list_id = l.list_id
+                    WHERE {where} GROUP BY l.list_id ORDER BY l.list_id DESC LIMIT ?""",
+                    [*params, size + 1],
+                ).fetchall()
+            ]
+        has_more = len(rows) > size
+        rows = rows[:size]
+        return Page(tuple(rows), total, int(rows[-1]["list_id"]) if has_more else None)
 
     def get_available_bars_page(
         self,

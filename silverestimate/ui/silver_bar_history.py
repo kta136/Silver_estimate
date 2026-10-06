@@ -1,51 +1,50 @@
-#!/usr/bin/env python
-import logging
+"""One keyboard-driven browser for saved lists, issued lists, and silver bars."""
+
+from __future__ import annotations
+
 import threading
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, Callable, cast
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QEvent, Qt, QTimer
+from PySide6.QtGui import QAction, QKeyEvent, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QDialog,
-    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
-    QMenu,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
+    QStackedWidget,
     QTableView,
-    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from silverestimate.domain.numeric_policy import fixed_decimal
 from silverestimate.domain.pagination import Page, SilverBarHistoryCursor
+from silverestimate.domain.silver_bar_workspace import BarListSnapshot
 from silverestimate.infrastructure.latest_request_runner import LatestRequestRunner
 from silverestimate.infrastructure.paged_load_state import PagedLoadState
-from silverestimate.infrastructure.settings import SettingsKey, get_app_settings
 from silverestimate.persistence.silver_bars_snapshot_repository import (
     SilverBarsSnapshotRepository,
 )
-from silverestimate.ui.models import (
-    HistoryListBarsTableModel,
-    HistorySilverBarsTableModel,
-    IssuedSilverBarListsTableModel,
+
+from .models.silver_bar_entry_model import SilverBarEntryModel
+from .models.silver_bar_history_models import (
+    SilverBarHistoryModel,
+    SilverBarListsHistoryModel,
 )
-from silverestimate.ui.modern_components import (
-    BottomStatusStrip,
-    RecordInspector,
-    install_table_empty_state,
-    polish_dense_table,
-)
-from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
-from silverestimate.ui.themed_controls import ThemedComboBox, ThemedSpinBox
-from silverestimate.ui.toolbar_overflow import ToolbarOverflow
-from silverestimate.ui.window_sizing import resize_to_available_screen
+from .modern_components import install_table_empty_state, polish_dense_table
+from .preview_build_worker import PreviewBuildController
+from .print_manager import PrintManager
+from .shared_screen_theme import build_management_screen_stylesheet
+from .themed_controls import ThemedComboBox
+from .window_sizing import resize_to_available_screen
 
 
 @dataclass(frozen=True)
@@ -59,14 +58,12 @@ class _BarsHistoryRequest:
 
 
 def _load_bars_history_page(
-    request: _BarsHistoryRequest,
-    cancel_event: threading.Event,
-) -> tuple[_BarsHistoryRequest, Page[dict[str, Any], SilverBarHistoryCursor]]:
-    snapshot = SilverBarsSnapshotRepository(
-        request.connection_factory,
-        cancel_event=cancel_event,
+    request: _BarsHistoryRequest, cancel_event: threading.Event
+):
+    repo = SilverBarsSnapshotRepository(
+        request.connection_factory, cancel_event=cancel_event
     )
-    page = snapshot.search_history_bars_page(
+    return request, repo.search_history_bars_page(
         voucher_term=request.voucher_term,
         weight_text=request.weight_text,
         status_text=request.status_text,
@@ -74,890 +71,713 @@ def _load_bars_history_page(
         include_total=not request.append,
         limit=1000,
     )
-    return request, page
+
+
+@dataclass(frozen=True)
+class _ListsHistoryRequest:
+    factory: Callable
+    search_term: str
+    state: str
+    cursor: int | None
+    append: bool
+
+
+def _load_lists_history_page(request: _ListsHistoryRequest, cancel: threading.Event):
+    repo = SilverBarsSnapshotRepository(request.factory, cancel_event=cancel)
+    return request, repo.get_list_history_page(
+        search_term=request.search_term,
+        state=request.state,
+        cursor=request.cursor,
+        include_total=not request.append,
+    )
+
+
+def _load_details(request: tuple[Callable, int], cancel: threading.Event):
+    factory, list_id = request
+    return SilverBarsSnapshotRepository(factory, cancel_event=cancel).get_list_snapshot(
+        list_id
+    )
 
 
 class SilverBarHistoryDialog(QDialog):
-    """Dialog for viewing silver bar history and searching all bars in the database."""
-
     def __init__(self, db_manager, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
-        self.logger = logging.getLogger(__name__)
-        self.setWindowTitle("Silver Bar History")
-        self.setMinimumSize(760, 420)
-        resize_to_available_screen(
-            self,
-            preferred_width=1120,
-            preferred_height=680,
+        self.selected_list_id: int | None = None
+        self.snapshot: BarListSnapshot | None = None
+        self._closed = False
+        self._busy = False
+        self._loading = [False, False]
+        self._detail_intent = "view"
+        self._lists_page_state = PagedLoadState[dict[str, Any], int]()
+        self._bars_page_state = PagedLoadState[dict[str, Any], SilverBarHistoryCursor]()
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.setInterval(150)
+        self._search_timer.timeout.connect(self.refresh)
+        self._lists_load_runner = LatestRequestRunner(
+            _load_lists_history_page, self, name="bar-list-history"
         )
+        self._bars_load_runner = LatestRequestRunner(
+            _load_bars_history_page, self, name="silver-bar-history-loader"
+        )
+        self._detail_runner = LatestRequestRunner(
+            _load_details, self, name="bar-history-details"
+        )
+        self._lists_load_runner.result.connect(self._lists_ready)
+        self._bars_load_runner.result.connect(self._bars_ready)
+        self._detail_runner.result.connect(self._details_ready)
+        self._lists_load_runner.failed.connect(
+            lambda _, error: self._load_error(0, error)
+        )
+        self._bars_load_runner.failed.connect(
+            lambda _, error: self._load_error(1, error)
+        )
+        self._detail_runner.failed.connect(self._details_error)
+        self._preview_builder = PreviewBuildController(
+            self, message="Preparing list for printing…"
+        )
+        self.init_ui()
+        self.refresh()
+        QTimer.singleShot(0, self.focus_search)
+
+    def init_ui(self):
+        self.setWindowTitle("Silver Bar History")
         self.setObjectName("SilverBarHistoryDialog")
+        self.setMinimumSize(760, 520)
+        resize_to_available_screen(self, preferred_width=1120, preferred_height=760)
         self.setStyleSheet(
             build_management_screen_stylesheet(
                 root_selector="QDialog#SilverBarHistoryDialog",
-                card_names=["SilverBarHistoryHeaderCard"],
-                title_label="SilverBarHistoryTitleLabel",
-                subtitle_label="SilverBarHistorySubtitleLabel",
-                field_label="SilverBarHistoryFieldLabel",
-                primary_button="SilverBarHistoryPrimaryButton",
-                secondary_button="SilverBarHistorySecondaryButton",
-                input_selectors=["QLineEdit", "QComboBox", "QSpinBox"],
+                card_names=[],
+                title_label="HistoryTitle",
+                subtitle_label="HistoryHint",
+                primary_button="HistoryPrimary",
+                secondary_button="HistoryButton",
+                input_selectors=["QLineEdit", "QComboBox"],
                 include_table=True,
-                extra_rules="""
-                QTabWidget::pane {
-                    background-color: __SURFACE_BG__;
-                    border: 1px solid __CARD_BORDER__;
-                    border-radius: 8px;
-                    top: -1px;
-                }
-                QTabBar::tab {
-                    padding: 8px 14px;
-                    margin-right: 4px;
-                    background-color: __HEADER_BG__;
-                    border: 1px solid __CARD_BORDER__;
-                    border-bottom: none;
-                    border-radius: 6px 6px 0 0;
-                    color: __HEADER_TEXT__;
-                }
-                QTabBar::tab:selected {
-                    background-color: __SURFACE_BG__;
-                    color: __TEXT_STRONG__;
-                    font-weight: 700;
-                }
-                QTabBar::tab:hover:!selected {
-                    background-color: __SELECTION_BG__;
-                }
-                QLabel#SilverBarHistorySummaryLabel {
-                    background-color: __HEADER_BG__;
-                    border: 1px solid __CARD_BORDER__;
-                    border-radius: 6px;
-                    color: __HEADER_TEXT__;
-                    font-weight: 600;
-                    padding: 8px;
-                }
-                """,
+                extra_rules='QPushButton#HistoryButton, QPushButton#HistoryPrimary { padding: 3px 7px; min-height: 24px; } QLabel[error="true"] { color: __TEXT_STRONG__; background: __DANGER_BG__; }',
             )
         )
-        self._suppress_search = False
-        self._search_timer = QTimer(self)
-        self._search_timer.setSingleShot(True)
-        self._search_timer.setInterval(180)
-        self._search_timer.timeout.connect(self.search_bars)
-        self._bars_page_state = PagedLoadState[
-            dict[str, Any],
-            SilverBarHistoryCursor,
-        ]()
-        self._bars_load_runner = LatestRequestRunner(
-            _load_bars_history_page,
-            self,
-            name="silver-bar-history-loader",
+        root = QVBoxLayout(self)
+        root.setContentsMargins(10, 8, 10, 6)
+        self.pages = QStackedWidget()
+        root.addWidget(self.pages)
+        overview = QWidget()
+        layout = self._layout(overview)
+        toolbar = QHBoxLayout()
+        self.view_combo = ThemedComboBox()
+        self.view_combo.addItems(["Lists", "Bars"])
+        self.view_combo.setToolTip("Lists: Ctrl+1 · Bars: Ctrl+2")
+        toolbar.addWidget(self.view_combo)
+        self.filters = QStackedWidget()
+        toolbar.addWidget(self.filters, 1)
+        self._build_filters()
+        toolbar.addWidget(self._button("Clear", self.clear_filters, "Clear filters"))
+        toolbar.addWidget(self._button("Refresh", self.refresh, "Refresh · F5"))
+        self.open_button = self._button(
+            "Open", self.open_selected_list, "Open selected list · Enter"
         )
-        self._bars_load_runner.result.connect(self._on_bars_load_ready)
-        self._bars_load_runner.failed.connect(self._on_bars_load_error)
-        self._bars_load_runner.settled.connect(self._on_bars_load_finished)
-
-        self.init_ui()
-        self.load_all_bars()
-        self.load_issued_lists()
-
-    def init_ui(self):
-        """Set up the user interface."""
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(12, 12, 12, 12)
-        main_layout.setSpacing(10)
-
-        header_card = QFrame(self)
-        header_card.setObjectName("SilverBarHistoryHeaderCard")
-        header_layout = QVBoxLayout(header_card)
-        header_layout.setContentsMargins(12, 12, 12, 12)
-        header_layout.setSpacing(2)
-        title = QLabel("Silver Bar History")
-        title.setObjectName("SilverBarHistoryTitleLabel")
-        header_layout.addWidget(title)
-        subtitle = QLabel(
-            "Search all bars, inspect issued lists, and reactivate historical lists when needed."
+        toolbar.addWidget(self.open_button)
+        layout.addLayout(toolbar)
+        self.tables = QStackedWidget()
+        self.lists_model = SilverBarListsHistoryModel(self)
+        self.bars_model = SilverBarHistoryModel(self)
+        self.lists_table = self._table(
+            self.lists_model,
+            "No lists match your search.",
+            {0: 145, 2: 70, 3: 50, 4: 100, 5: 100, 6: 105, 7: 105},
+            stretch=1,
         )
-        subtitle.setObjectName("SilverBarHistorySubtitleLabel")
-        subtitle.setWordWrap(True)
-        header_layout.addWidget(subtitle)
-        header_card.hide()
+        self.bars_table = self._table(
+            self.bars_model,
+            "No bars match your search.",
+            {0: 55, 2: 95, 3: 85, 4: 95, 5: 125, 6: 145, 7: 110},
+            stretch=1,
+        )
+        for table in (self.lists_table, self.bars_table):
+            self.tables.addWidget(table)
+            table.selectionModel().selectionChanged.connect(self._update_actions)
+            table.doubleClicked.connect(self.open_selected_list)
+        layout.addWidget(self.tables, 1)
+        footer = QHBoxLayout()
+        self.status_label = QLabel()
+        self.status_label.setWordWrap(True)
+        footer.addWidget(self.status_label, 1)
+        self.load_more_button = self._button(
+            "Load more", self.load_more, "Down on the last row also loads more"
+        )
+        footer.addWidget(self.load_more_button)
+        layout.addLayout(footer)
+        self.pages.addWidget(overview)
+        self._build_details()
+        self.view_combo.currentIndexChanged.connect(self._switch_view)
+        for sequence, callback in (
+            ("Ctrl+1", lambda: self._select_view(0)),
+            ("Ctrl+2", lambda: self._select_view(1)),
+            ("Ctrl+F", self.focus_search),
+            ("F5", self.refresh),
+            ("Ctrl+P", self.print_list),
+            ("Ctrl+Shift+P", lambda: self.print_list(preview=True)),
+            ("Ctrl+R", self.reactivate_list),
+            ("Alt+Left", self.back_to_results),
+            ("Ctrl+C", self.copy_rows),
+        ):
+            action = QAction(self)
+            action.setShortcut(QKeySequence(sequence))
+            action.setAutoRepeat(False)
+            action.triggered.connect(lambda _=False, cb=callback: self._shortcut(cb))
+            self.addAction(action)
+        self._update_actions()
 
-        # Create tab widget
-        self.tab_widget = QTabWidget()
-
-        # Tab 1: All Silver Bars
-        self.bars_tab = self.create_bars_tab()
-        self.tab_widget.addTab(self.bars_tab, "All Silver Bars")
-
-        # Tab 2: Issued Lists
-        self.lists_tab = self.create_lists_tab()
-        self.tab_widget.addTab(self.lists_tab, "Issued Lists")
-
-        main_layout.addWidget(self.tab_widget)
-
-        # Close button
-        close_layout = QHBoxLayout()
-        close_layout.addStretch()
-
-        close_button = QPushButton("Close")
-        close_button.setObjectName("SilverBarHistorySecondaryButton")
-        close_button.clicked.connect(self.reject)
-        close_layout.addWidget(close_button)
-
-        main_layout.addLayout(close_layout)
-
-    def create_bars_tab(self):
-        """Create the all bars search tab."""
-        tab_widget = QWidget()
-        layout = QVBoxLayout(tab_widget)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(10)
-
-        # Search filters — single row
-        filters_row = QHBoxLayout()
-        filters_row.setSpacing(10)
-
-        voucher_label = QLabel("Voucher/Note")
-        voucher_label.setObjectName("SilverBarHistoryFieldLabel")
-        filters_row.addWidget(voucher_label)
+    def _build_filters(self):
+        lists = QWidget()
+        row = QHBoxLayout(lists)
+        row.setContentsMargins(0, 0, 0, 0)
+        self.list_search_edit = QLineEdit()
+        self.list_search_edit.setPlaceholderText("Search list number or note · Ctrl+F")
+        self.list_search_edit.setAccessibleName("Search saved lists")
+        row.addWidget(self.list_search_edit, 1)
+        self.list_state_combo = ThemedComboBox()
+        self.list_state_combo.addItems(["All", "Active", "Issued"])
+        self.list_state_combo.setAccessibleName("List state")
+        row.addWidget(self.list_state_combo)
+        self.filters.addWidget(lists)
+        bars = QWidget()
+        row = QHBoxLayout(bars)
+        row.setContentsMargins(0, 0, 0, 0)
         self.voucher_edit = QLineEdit()
-        self.voucher_edit.setPlaceholderText("Search voucher or note")
-        self.voucher_edit.textChanged.connect(self._schedule_search)
-        filters_row.addWidget(self.voucher_edit, 2)
-
-        weight_label = QLabel("Weight (g)")
-        weight_label.setObjectName("SilverBarHistoryFieldLabel")
-        filters_row.addWidget(weight_label)
+        self.voucher_edit.setPlaceholderText("Voucher or note · Ctrl+F")
+        self.voucher_edit.setAccessibleName("Search bar voucher or note")
+        row.addWidget(self.voucher_edit, 1)
         self.weight_edit = QLineEdit()
-        self.weight_edit.setPlaceholderText("Enter weight")
+        self.weight_edit.setPlaceholderText("Weight (g)")
+        self.weight_edit.setAccessibleName("Filter bar weight in grams")
         self.weight_edit.setMaximumWidth(110)
-        self.weight_edit.textChanged.connect(self._schedule_search)
-        filters_row.addWidget(self.weight_edit)
-
-        status_label = QLabel("Status")
-        status_label.setObjectName("SilverBarHistoryFieldLabel")
-        filters_row.addWidget(status_label)
+        row.addWidget(self.weight_edit)
         self.status_combo = ThemedComboBox()
-        self.status_combo.addItems(
-            ["All Statuses", "In Stock", "Assigned", "Issued", "Sold"]
-        )
-        self.status_combo.setMinimumWidth(132)
-        self.status_combo.currentTextChanged.connect(self._schedule_search)
-        filters_row.addWidget(self.status_combo)
+        for label, value in (
+            ("All bars", "All Statuses"),
+            ("Available", "In Stock"),
+            ("In active list", "Assigned"),
+            ("Issued", "Issued"),
+            ("Sold", "Sold"),
+        ):
+            self.status_combo.addItem(label, value)
+        self.status_combo.setAccessibleName("Bar status")
+        row.addWidget(self.status_combo)
+        self.filters.addWidget(bars)
+        for edit in (self.list_search_edit, self.voucher_edit, self.weight_edit):
+            edit.textChanged.connect(self._schedule_search)
+            edit.installEventFilter(self)
+        self.list_state_combo.currentIndexChanged.connect(self._schedule_search)
+        self.status_combo.currentIndexChanged.connect(self._schedule_search)
 
-        limit_label = QLabel("Rows")
-        limit_label.setObjectName("SilverBarHistoryFieldLabel")
-        filters_row.addWidget(limit_label)
-        self.max_rows_spin = ThemedSpinBox()
-        self.max_rows_spin.setRange(100, 1000)
-        self.max_rows_spin.setSingleStep(100)
-        self.max_rows_spin.setMinimumWidth(116)
-        self.max_rows_spin.setMaximumWidth(132)
-        default_limit = 500
-        try:
-            stored_limit = get_app_settings().get_int(
-                SettingsKey.SILVER_BAR_HISTORY_MAX_ROWS,
-                500,
-                minimum=100,
-                maximum=1000,
+    def _build_details(self):
+        detail = QWidget()
+        layout = self._layout(detail)
+        toolbar = QHBoxLayout()
+        toolbar.addWidget(
+            self._button(
+                "Back", self.back_to_results, "Back to results · Esc / Alt+Left"
             )
-            if isinstance(stored_limit, (int, float, str, bytes, bytearray)):
-                default_limit = int(stored_limit)
-        except Exception as exc:
-            self.logger.debug(
-                "Could not read persisted history max rows setting: %s", exc
-            )
-        self.max_rows_spin.setValue(min(1000, max(100, int(default_limit or 500))))
-        self.max_rows_spin.setSuffix(" max")
-        self.max_rows_spin.setToolTip(
-            "Limit maximum rows loaded in history tables to keep UI responsive."
         )
-        self.max_rows_spin.valueChanged.connect(self._on_row_limit_changed)
-        filters_row.addWidget(self.max_rows_spin)
+        self.detail_title = QLabel()
+        toolbar.addWidget(self.detail_title)
+        self.detail_note = QLabel()
+        self.detail_note.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
+        toolbar.addWidget(self.detail_note, 1)
+        self.reprint_button = self._button(
+            "Reprint", self.print_list, "Reprint · Ctrl+P"
+        )
+        self.preview_button = self._button(
+            "Preview",
+            lambda: self.print_list(preview=True),
+            "Preview / PDF / printer settings · Ctrl+Shift+P",
+        )
+        self.reactivate_button = self._button(
+            "Reopen", self.reactivate_list, "Reopen list for editing · Ctrl+R"
+        )
+        for button in (
+            self.reprint_button,
+            self.preview_button,
+            self.reactivate_button,
+        ):
+            toolbar.addWidget(button)
+        layout.addLayout(toolbar)
+        self.list_bars_model = SilverBarEntryModel(self)
+        self.list_bars_table = self._table(
+            self.list_bars_model,
+            "Loading list…",
+            {0: 140, 1: 110, 2: 140, 4: 85},
+            stretch=3,
+        )
+        layout.addWidget(self.list_bars_table, 1)
+        footer = QHBoxLayout()
+        self.detail_status = QLabel()
+        self.detail_status.setWordWrap(True)
+        footer.addWidget(self.detail_status, 1)
+        self.detail_more_button = self._button("Load more", self.load_more_details)
+        footer.addWidget(self.detail_more_button)
+        self.list_totals_label = QLabel()
+        footer.addWidget(self.list_totals_label)
+        layout.addLayout(footer)
+        self.pages.addWidget(detail)
 
-        clear_button = QPushButton("Clear")
-        clear_button.setObjectName("SilverBarHistorySecondaryButton")
-        clear_button.setToolTip("Clear all filters")
-        clear_button.clicked.connect(self.clear_filters)
-        filters_row.addWidget(clear_button)
+    @staticmethod
+    def _layout(widget):
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        return layout
 
-        layout.addWidget(ToolbarOverflow(filters_row))
+    def _button(self, text, callback, tooltip=""):
+        button = QPushButton(text, self)
+        button.setObjectName("HistoryButton")
+        button.setAutoDefault(False)
+        button.setToolTip(tooltip)
+        button.clicked.connect(lambda _=False: callback())
+        return button
 
-        # Results table
-        self.bars_model = HistorySilverBarsTableModel(self)
-        self.bars_table = QTableView()
-        self.bars_table.setModel(self.bars_model)
-        self.bars_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.bars_table.setSelectionBehavior(
-            QAbstractItemView.SelectionBehavior.SelectRows
+    def _table(self, model, empty, widths, *, stretch):
+        table = QTableView(self)
+        table.setModel(model)
+        table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        table.horizontalHeader().setSortIndicator(-1, Qt.SortOrder.AscendingOrder)
+        table.setSortingEnabled(True)
+        table.horizontalHeader().setToolTip(
+            "Sort loaded rows; filters search all records."
         )
-        self.bars_table.setSelectionMode(
-            QAbstractItemView.SelectionMode.SingleSelection
+        for column, width in widths.items():
+            table.setColumnWidth(column, width)
+        table.horizontalHeader().setSectionResizeMode(
+            stretch, QHeaderView.ResizeMode.Stretch
         )
-        self.bars_table.setAlternatingRowColors(True)
-        self.bars_table.setSortingEnabled(True)
-        self.bars_table.horizontalHeader().setToolTip(
-            "Sort loaded rows only. Filters search all records. Up to 20,000 rows are displayed; narrow filters to see more."
-        )
-        self.bars_table.verticalHeader().setVisible(False)
-
-        self.bars_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Interactive
-        )
-        self.bars_table.setColumnWidth(0, 56)
-        self.bars_table.setColumnWidth(1, 226)
-        self.bars_table.setColumnWidth(2, 78)
-        self.bars_table.setColumnWidth(3, 78)
-        self.bars_table.setColumnWidth(4, 88)
-        self.bars_table.setColumnWidth(5, 82)
-        self.bars_table.setColumnWidth(6, 136)
-        self.bars_table.setColumnWidth(7, 94)
-        self.bars_table.setColumnWidth(8, 72)
-        self.bars_table.horizontalHeader().setStretchLastSection(True)
+        table.installEventFilter(self)
         polish_dense_table(
-            self.bars_table,
+            table,
             row_height=28,
             header_height=30,
             show_grid=False,
             hide_vertical_header=True,
         )
-        install_table_empty_state(
-            self.bars_table,
-            "No silver bars match the current filters.",
+        install_table_empty_state(table, empty)
+        return table
+
+    def _shortcut(self, callback):
+        if QApplication.activeModalWidget() in (None, self):
+            callback()
+
+    def _message(self, text: str, *, error=False):
+        label = self.detail_status if self.pages.currentIndex() else self.status_label
+        label.setText(text)
+        label.setToolTip(text)
+        label.setProperty("error", error)
+        label.style().unpolish(label)
+        label.style().polish(label)
+
+    def _select_view(self, index):
+        if not self._busy:
+            self.view_combo.setCurrentIndex(index)
+
+    def _switch_view(self, index):
+        if self._busy:
+            return
+        self.back_to_results()
+        self.filters.setCurrentIndex(index)
+        self.tables.setCurrentIndex(index)
+        self.refresh()
+        self.focus_search()
+
+    def focus_search(self):
+        if self._busy:
+            return
+        self.back_to_results()
+        edit = (
+            self.list_search_edit
+            if self.view_combo.currentIndex() == 0
+            else self.voucher_edit
         )
-        selection_model = self.bars_table.selectionModel()
-        if selection_model is not None:
-            selection_model.selectionChanged.connect(
-                lambda *_: self._update_selected_bar_details()
+        edit.setFocus()
+        edit.selectAll()
+
+    def _schedule_search(self, *_):
+        self._lists_load_runner.cancel()
+        self._bars_load_runner.cancel()
+        index = self.view_combo.currentIndex()
+        self._loading[index] = True
+        self._search_timer.start()
+        self._update_actions()
+
+    def refresh(self):
+        if self._busy:
+            return
+        self._search_timer.stop()
+        if self.pages.currentIndex() and self.snapshot:
+            self._read_details(self.snapshot.list_id, "view")
+        elif self.view_combo.currentIndex() == 0:
+            self.load_lists()
+        else:
+            self.load_all_bars()
+
+    def load_lists(self, *, append=False):
+        if not append:
+            self._lists_page_state.reset()
+            self.lists_model.clear_rows()
+        self._loading[0] = True
+        self._message("Loading lists…")
+        self._lists_load_runner.submit(
+            _ListsHistoryRequest(
+                self.db_manager.open_read_connection,
+                self.list_search_edit.text().strip(),
+                self.list_state_combo.currentText(),
+                self._lists_page_state.cursor,
+                append,
             )
-
-        # Context menu for bars table
-        self.bars_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.bars_table.customContextMenuRequested.connect(self.show_bars_context_menu)
-
-        body = QHBoxLayout()
-        body.addWidget(self.bars_table, 1)
-        self.selected_bar_details = RecordInspector("Selected Bar", self)
-        body.addWidget(self.selected_bar_details)
-        layout.addLayout(body, 1)
-
-        paging_row = QHBoxLayout()
-        paging_row.addStretch()
-        self.load_more_button = QPushButton("Load more")
-        self.load_more_button.setObjectName("SilverBarHistorySecondaryButton")
-        self.load_more_button.setVisible(False)
-        self.load_more_button.clicked.connect(
-            lambda: self._start_bars_load(self._current_bars_payload(), append=True)
         )
-        paging_row.addWidget(self.load_more_button)
-        self.paging_scope_label = QLabel("Sort: loaded rows")
-        paging_row.addWidget(self.paging_scope_label)
-        layout.addLayout(paging_row)
+        self._update_actions()
 
-        self.bars_bottom_status = BottomStatusStrip(self)
-        self.bars_bottom_status.set_left_items(["Loaded Bars: 0"])
-        layout.addWidget(self.bars_bottom_status)
-        self._update_selected_bar_details()
-
-        return tab_widget
-
-    def create_lists_tab(self):
-        """Create the issued lists tab."""
-        tab_widget = QWidget()
-        layout = QVBoxLayout(tab_widget)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
-
-        # Issued lists table
-        lists_header = QLabel("Issued Lists")
-        lists_header.setObjectName("SilverBarHistoryFieldLabel")
-        columns = QHBoxLayout()
-        left = QVBoxLayout()
-        right = QVBoxLayout()
-        left.addWidget(lists_header)
-        columns.addLayout(left, 1)
-        columns.addLayout(right, 1)
-        layout.addLayout(columns, 1)
-
-        self.lists_model = IssuedSilverBarListsTableModel(self)
-        self.lists_table = QTableView()
-        self.lists_table.setModel(self.lists_model)
-        self.lists_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.lists_table.setSelectionBehavior(
-            QAbstractItemView.SelectionBehavior.SelectRows
-        )
-        self.lists_table.setSelectionMode(
-            QAbstractItemView.SelectionMode.SingleSelection
-        )
-        self.lists_table.setAlternatingRowColors(True)
-        self.lists_table.setSortingEnabled(True)
-        self.lists_table.horizontalHeader().setToolTip(
-            "Sort loaded rows only. Filters search all records. Up to 20,000 rows are displayed; narrow filters to see more."
-        )
-        self.lists_table.verticalHeader().setVisible(False)
-
-        self.lists_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Interactive
-        )
-        self.lists_table.setColumnWidth(0, 64)
-        self.lists_table.setColumnWidth(1, 170)
-        self.lists_table.setColumnWidth(2, 290)
-        self.lists_table.setColumnWidth(3, 118)
-        self.lists_table.setColumnWidth(4, 118)
-        self.lists_table.setColumnWidth(5, 78)
-        self.lists_table.horizontalHeader().setStretchLastSection(True)
-        polish_dense_table(
-            self.lists_table,
-            row_height=28,
-            header_height=30,
-            show_grid=False,
-            hide_vertical_header=True,
-        )
-        install_table_empty_state(
-            self.lists_table,
-            "No issued silver-bar lists are available.",
-        )
-
-        # Context menu for lists table
-        self.lists_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.lists_table.customContextMenuRequested.connect(
-            self.show_lists_context_menu
-        )
-
-        # Selection changed handler
-        self.lists_table.selectionModel().selectionChanged.connect(
-            self.list_selection_changed
-        )
-
-        left.addWidget(self.lists_table, 1)
-
-        # List details section
-        details_header = QLabel("List Details")
-        details_header.setObjectName("SilverBarHistoryFieldLabel")
-        details_header.setText("Selected List Contents")
-        right.addWidget(details_header)
-
-        # Bars in selected list
-        self.list_bars_model = HistoryListBarsTableModel(self)
-        self.list_bars_table = QTableView()
-        self.list_bars_table.setModel(self.list_bars_model)
-        self.list_bars_table.setEditTriggers(
-            QAbstractItemView.EditTrigger.NoEditTriggers
-        )
-        self.list_bars_table.setSelectionBehavior(
-            QAbstractItemView.SelectionBehavior.SelectRows
-        )
-        self.list_bars_table.setSelectionMode(
-            QAbstractItemView.SelectionMode.SingleSelection
-        )
-        self.list_bars_table.setAlternatingRowColors(True)
-        self.list_bars_table.setSortingEnabled(True)
-        self.list_bars_table.horizontalHeader().setToolTip(
-            "Sort loaded rows only. Filters search all records. Up to 20,000 rows are displayed; narrow filters to see more."
-        )
-        self.list_bars_table.verticalHeader().setVisible(False)
-        self.list_bars_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Interactive
-        )
-        self.list_bars_table.setColumnWidth(0, 56)
-        self.list_bars_table.setColumnWidth(1, 250)
-        self.list_bars_table.setColumnWidth(2, 78)
-        self.list_bars_table.setColumnWidth(3, 78)
-        self.list_bars_table.setColumnWidth(4, 88)
-        self.list_bars_table.setColumnWidth(5, 88)
-        self.list_bars_table.setColumnWidth(6, 94)
-        self.list_bars_table.horizontalHeader().setStretchLastSection(True)
-        polish_dense_table(
-            self.list_bars_table,
-            row_height=28,
-            header_height=30,
-            show_grid=False,
-            hide_vertical_header=True,
-        )
-        install_table_empty_state(
-            self.list_bars_table,
-            "Select an issued list to view its bars.",
-        )
-
-        right.addWidget(self.list_bars_table, 1)
-
-        # Action buttons for lists
-        actions_layout = QHBoxLayout()
-        actions_layout.addStretch()
-
-        self.reactivate_button = QPushButton("Reactivate List")
-        self.reactivate_button.setObjectName("SilverBarHistoryPrimaryButton")
-        self.reactivate_button.setToolTip(
-            "Reactivate selected list (move back to active lists)"
-        )
-        self.reactivate_button.clicked.connect(self.reactivate_list)
-        self.reactivate_button.setEnabled(False)
-        actions_layout.addWidget(self.reactivate_button)
-
-        right.addLayout(actions_layout)
-
-        return tab_widget
-
-    def load_all_bars(self):
-        """Load all silver bars with their current status and list information."""
-        self._start_bars_load(
-            {
-                "voucher_term": "",
-                "weight_text": "",
-                "status_text": "All Statuses",
-            }
-        )
-
-    def _start_bars_load(self, payload: dict, *, append: bool = False) -> None:
+    def load_all_bars(self, *, append=False):
         if not append:
             self._bars_page_state.reset()
-            self.bars_model.set_rows([])
-            self.load_more_button.setVisible(False)
-        elif not self._bars_page_state.has_more:
-            return
-        self.load_more_button.setEnabled(False)
-        connection_factory = getattr(self.db_manager, "open_read_connection", None)
-        if not callable(connection_factory):
-            self._load_bars_fallback(payload, append=append)
-            return
-
+            self.bars_model.clear_rows()
+        self._loading[1] = True
+        self._message("Loading bars…")
         self._bars_load_runner.submit(
             _BarsHistoryRequest(
-                connection_factory,
-                str(payload.get("voucher_term") or "").strip(),
-                str(payload.get("weight_text") or "").strip(),
-                str(payload.get("status_text") or "All Statuses").strip(),
+                self.db_manager.open_read_connection,
+                self.voucher_edit.text().strip(),
+                self.weight_edit.text().strip(),
+                self.status_combo.currentData(),
                 self._bars_page_state.cursor,
                 append,
             )
         )
+        self._update_actions()
 
-    @staticmethod
-    def _table_cell_value(
-        table, row: int, column: int, role: int = Qt.ItemDataRole.DisplayRole
-    ):
-        try:
-            model = table.model()
-            if model is None:
-                return None
-            index = model.index(row, column)
-            if not index.isValid():
-                return None
-            return model.data(index, role)
-        except Exception:
-            return None
-
-    @classmethod
-    def _table_cell_text(cls, table, row: int, column: int) -> str:
-        value = cls._table_cell_value(table, row, column, Qt.ItemDataRole.DisplayRole)
-        return "" if value is None else str(value)
-
-    @staticmethod
-    def _clear_history_table(table) -> None:
-        try:
-            model = table.model()
-            setter = getattr(model, "set_rows", None)
-            if callable(setter):
-                setter([])
-        except Exception as exc:
-            logging.getLogger(__name__).debug(
-                "Failed to clear silver bar history table rows: %s", exc
-            )
-
-    def _load_bars_fallback(self, payload: dict, *, append: bool) -> None:
-        try:
-            getter = getattr(self.db_manager, "search_silver_bar_history_page", None)
-            if callable(getter):
-                page = getter(
-                    voucher_term=str(payload.get("voucher_term") or "").strip(),
-                    weight_text=str(payload.get("weight_text") or "").strip(),
-                    status_text=str(payload.get("status_text") or "").strip(),
-                    cursor=self._bars_page_state.cursor,
-                    limit=1000,
-                )
-            else:
-                rows = self.db_manager.search_silver_bar_history(
-                    voucher_term=str(payload.get("voucher_term") or "").strip(),
-                    weight_text=str(payload.get("weight_text") or "").strip(),
-                    status_text=str(payload.get("status_text") or "").strip(),
-                    limit=1000,
-                )
-                normalized = tuple(dict(row) for row in rows)
-                page = Page(normalized, len(normalized), None)
-            request = _BarsHistoryRequest(
-                cast(Any, None),
-                str(payload.get("voucher_term") or "").strip(),
-                str(payload.get("weight_text") or "").strip(),
-                str(payload.get("status_text") or "All Statuses").strip(),
-                self._bars_page_state.cursor,
-                append,
-            )
-            self._on_bars_load_ready(0, (request, page))
-        except Exception as exc:
-            self._on_bars_load_error(0, exc)
-        finally:
-            self._on_bars_load_finished(0)
-
-    def _on_bars_load_ready(self, _generation: int, value: object) -> None:
-        request, page = cast(
-            tuple[
-                _BarsHistoryRequest,
-                Page[dict[str, Any], SilverBarHistoryCursor],
-            ],
-            value,
-        )
-        normalized_page = Page(
-            tuple(dict(row) for row in page.items),
-            page.total,
+    def _apply_page(self, index, request, page):
+        state = self._lists_page_state if index == 0 else self._bars_page_state
+        model = self.lists_model if index == 0 else self.bars_model
+        table = self.lists_table if index == 0 else self.bars_table
+        normalized = Page(
+            page.items,
+            page.total if page.total is not None else state.total,
             page.next_cursor,
         )
-        self._bars_page_state.apply(
-            normalized_page,
-            append=request.append,
-        )
-        self.populate_bars_table(
-            self._bars_page_state.last_page_rows, append=request.append
-        )
-
-    def _on_bars_load_error(self, _generation: int, error: object) -> None:
-        QMessageBox.critical(
-            self, "Search Error", f"Failed to load silver bars: {error}"
-        )
-
-    def _on_bars_load_finished(self, _generation: int) -> None:
-        self.load_more_button.setEnabled(True)
-
-    def _current_bars_payload(self) -> dict:
-        return {
-            "voucher_term": self.voucher_edit.text().strip(),
-            "weight_text": self.weight_edit.text().strip(),
-            "status_text": self.status_combo.currentText(),
-        }
-
-    def _schedule_search(self, *args, **kwargs):
-        if self._suppress_search:
-            return
-        try:
-            self._search_timer.start()
-        except Exception as exc:
-            self.logger.debug("Failed to start history search timer: %s", exc)
-            self.search_bars()
-
-    def _table_result_limit(self) -> int:
-        try:
-            return min(1000, max(100, int(self.max_rows_spin.value())))
-        except Exception as exc:
-            self.logger.debug("Invalid history row limit value: %s", exc)
-            return 1000
-
-    def _save_row_limit_setting(self, value: int) -> None:
-        try:
-            get_app_settings().set(
-                SettingsKey.SILVER_BAR_HISTORY_MAX_ROWS,
-                int(value),
-            )
-        except Exception as exc:
-            self.logger.debug("Could not persist history max rows setting: %s", exc)
-
-    def _on_row_limit_changed(self, value: int) -> None:
-        self._save_row_limit_setting(value)
-        self._schedule_search()
-
-    def populate_bars_table(self, bars_data, *, append: bool = False):
-        """Populate the bars table with data."""
-        normalized_rows = [
-            dict(bar) if not isinstance(bar, dict) else dict(bar)
-            for bar in list(bars_data or [])
-        ]
-        if append:
-            self.bars_model.append_rows(normalized_rows)
+        state.apply(normalized, append=request.append)
+        if request.append:
+            model.append_rows(state.last_page_rows, total_count=state.total)
         else:
-            self.bars_model.set_rows(normalized_rows)
-        self.load_more_button.setVisible(self._bars_page_state.has_more)
-        self.paging_scope_label.setText(
-            "Sort: loaded rows"
-            + (
-                " · Display limit reached; narrow filters"
-                if self._bars_page_state.limit_reached
-                else ""
+            model.set_rows(state.last_page_rows, total_count=state.total)
+            if model.rowCount():
+                table.selectRow(0)
+        self._loading[index] = False
+        if index == self.view_combo.currentIndex():
+            noun = "lists" if index == 0 else "bars"
+            self._message(
+                f"{state.loaded} of {state.total} {noun} · Enter Open · Ctrl+P Reprint · Ctrl+F Search"
+                + (" · Narrow filters to see more" if state.limit_reached else "")
             )
-        )
-        self._last_refreshed_text = datetime.now().strftime("%d/%m/%Y %I:%M %p")
-        if not append and normalized_rows:
-            self.bars_table.clearSelection()
-            self.bars_table.selectRow(0)
-        elif not append:
-            self.bars_table.clearSelection()
-        self._update_selected_bar_details()
-        try:
-            self.bars_table.viewport().update()
-        except Exception as exc:
-            self.logger.debug("Failed to refresh bars table viewport: %s", exc)
+        self._update_actions()
 
-    def load_issued_lists(self):
-        """Load all issued lists."""
-        try:
-            # Get all issued lists
-            lists = self.db_manager.get_silver_bar_lists(include_issued=True)
-            issued_lists = [lst for lst in lists if lst["issued_date"] is not None]
-            list_ids = [int(lst["list_id"]) for lst in issued_lists if lst["list_id"]]
-            counts_by_list = self.db_manager.count_silver_bars_by_list_ids(list_ids)
-            rows = []
-            for lst in issued_lists:
-                row = dict(lst) if not isinstance(lst, dict) else dict(lst)
-                try:
-                    row["bar_count"] = counts_by_list.get(int(row["list_id"]), 0)
-                except TypeError, ValueError, KeyError:
-                    row["bar_count"] = 0
-                rows.append(row)
-            self.lists_model.set_rows(rows)
-            try:
-                self.lists_table.viewport().update()
-            except Exception as exc:
-                self.logger.debug("Failed to refresh issued-lists viewport: %s", exc)
+    def _lists_ready(self, _, value):
+        request, page = value
+        self._apply_page(0, request, page)
 
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to load issued lists: {e}")
+    def _bars_ready(self, _, value):
+        request, page = value
+        self._apply_page(1, request, page)
 
-    def search_bars(self):
-        """Search bars based on current filter criteria."""
-        self._start_bars_load(self._current_bars_payload())
+    def _load_error(self, index, error):
+        self._loading[index] = False
+        self._message(f"Could not load records: {error}. F5 retries.", error=True)
+        self._update_actions()
+
+    def load_more(self):
+        index = self.view_combo.currentIndex()
+        state = self._lists_page_state if index == 0 else self._bars_page_state
+        if not self._loading[index] and state.has_more:
+            (self.load_lists if index == 0 else self.load_all_bars)(append=True)
 
     def clear_filters(self):
-        """Clear all search filters."""
-        self._suppress_search = True
-        try:
-            self._search_timer.stop()
-        except Exception as exc:
-            self.logger.debug("Failed to stop history search timer: %s", exc)
-        for widget in (self.voucher_edit, self.weight_edit, self.status_combo):
-            widget.blockSignals(True)
-        self.voucher_edit.clear()
-        self.weight_edit.clear()
-        self.status_combo.setCurrentIndex(0)
-        for widget in (self.voucher_edit, self.weight_edit, self.status_combo):
-            widget.blockSignals(False)
-        self._suppress_search = False
-        self.load_all_bars()
+        controls = (
+            (self.list_search_edit, self.list_state_combo)
+            if self.view_combo.currentIndex() == 0
+            else (self.voucher_edit, self.weight_edit, self.status_combo)
+        )
+        for control in controls:
+            control.blockSignals(True)
+            if isinstance(control, QLineEdit):
+                control.clear()
+            else:
+                control.setCurrentIndex(0)
+            control.blockSignals(False)
+        self.refresh()
+        self.focus_search()
 
-    def list_selection_changed(self):
-        """Handle selection change in issued lists table."""
-        selected_rows = self.lists_table.selectionModel().selectedRows()
+    def _selected_list_id(self):
+        table = self.tables.currentWidget()
+        rows = table.selectionModel().selectedRows()
+        payload = table.model().row_payload(rows[0].row()) if rows else None
+        return int(payload["list_id"]) if payload and payload.get("list_id") else None
 
-        if selected_rows:
-            self.reactivate_button.setEnabled(True)
-            row = selected_rows[0].row()
-            list_id = int(self._table_cell_text(self.lists_table, row, 0))
-            self.load_list_bars(list_id)
-        else:
-            self.reactivate_button.setEnabled(False)
-            self._clear_history_table(self.list_bars_table)
-
-    def load_list_bars(self, list_id):
-        """Load bars for the selected list."""
-        try:
-            bars = self.db_manager.get_bars_in_list(
-                list_id, limit=self._table_result_limit()
+    def _update_actions(self, *_):
+        self.view_combo.setEnabled(not self._busy)
+        index = self.view_combo.currentIndex()
+        state = self._lists_page_state if index == 0 else self._bars_page_state
+        self.open_button.setEnabled(
+            not self._loading[index] and self._selected_list_id() is not None
+        )
+        self.load_more_button.setVisible(state.has_more)
+        self.load_more_button.setEnabled(not self._loading[index])
+        loaded = self.snapshot is not None and not self._busy
+        self.reactivate_button.setEnabled(loaded)
+        issued = bool(self.snapshot and self.snapshot.issued)
+        self.reactivate_button.setText("Reopen" if issued else "Edit list")
+        self.reprint_button.setEnabled(
+            loaded and issued and bool(self.snapshot.bars if self.snapshot else ())
+        )
+        self.preview_button.setEnabled(loaded and issued)
+        self.detail_more_button.setVisible(
+            bool(
+                self.snapshot
+                and self.list_bars_model.rowCount() < len(self.snapshot.bars)
             )
-            normalized_rows = [
-                dict(bar) if not isinstance(bar, dict) else dict(bar)
-                for bar in list(bars or [])
-            ]
-            self.list_bars_model.set_rows(normalized_rows)
-            try:
-                self.list_bars_table.viewport().update()
-            except Exception as exc:
-                self.logger.debug("Failed to refresh list-bars viewport: %s", exc)
+        )
 
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to load list bars: {e}")
+    def open_selected_list(self, *_):
+        if self._busy or self._loading[self.view_combo.currentIndex()]:
+            return
+        list_id = self._selected_list_id()
+        if list_id is not None:
+            self._read_details(list_id, "open")
+
+    def _read_details(self, list_id: int, intent: str):
+        self._detail_intent = intent
+        self.snapshot = None
+        self.list_bars_model.clear_rows()
+        self.detail_title.setText("Loading list…")
+        self.detail_note.clear()
+        self.list_totals_label.clear()
+        self.pages.setCurrentIndex(1)
+        self._message("Loading all list contents…")
+        self._update_actions()
+        self._detail_runner.submit((self.db_manager.open_read_connection, list_id))
+
+    def _details_ready(self, _, value):
+        snapshot = cast(BarListSnapshot, value)
+        if not snapshot.issued and self._detail_intent == "open":
+            self._choose_for_editing(snapshot.list_id)
+            return
+        self.snapshot = snapshot
+        self.detail_title.setText(
+            str(snapshot.details["list_identifier"])
+            + (" · Issued" if snapshot.issued else " · Active")
+        )
+        note = str(snapshot.details.get("list_note") or "No note")
+        self.detail_note.setText(note)
+        self.detail_note.setToolTip(note)
+        self.list_bars_model.set_rows(
+            list(snapshot.bars[:1500]), total_count=len(snapshot.bars)
+        )
+        self.list_totals_label.setText(
+            f"{len(snapshot.bars)} bars   Weight {fixed_decimal(snapshot.weight, 2)} g   Fine {fixed_decimal(snapshot.fine_weight, 2)} g"
+        )
+        self._message(
+            "Read only · Ctrl+P Reprint · Ctrl+R Reopen"
+            if snapshot.issued
+            else "Active list · Ctrl+R Edit"
+        )
+        self._update_actions()
+        self._restore_detail_focus()
+        if snapshot.bars:
+            self.list_bars_table.selectRow(0)
+        if self._detail_intent in ("print", "preview"):
+            self.print_list(preview=self._detail_intent == "preview")
+
+    def _details_error(self, _, error):
+        self._message(
+            f"Could not open list: {error}. Return to results and retry.", error=True
+        )
+
+    def load_more_details(self):
+        if self.snapshot:
+            shown = self.list_bars_model.rowCount()
+            self.list_bars_model.append_rows(
+                list(self.snapshot.bars[shown : shown + 1500]),
+                total_count=len(self.snapshot.bars),
+            )
+            self._update_actions()
+
+    def back_to_results(self):
+        if self._busy:
+            return
+        self._detail_runner.cancel()
+        self.pages.setCurrentIndex(0)
+        self.snapshot = None
+        self.tables.currentWidget().setFocus()
+
+    def _choose_for_editing(self, list_id):
+        self.selected_list_id = list_id
+        self.done(QDialog.DialogCode.Accepted)
 
     def reactivate_list(self):
-        """Reactivate the selected issued list."""
-        selected_rows = self.lists_table.selectionModel().selectedRows()
-        if not selected_rows:
+        if self._busy or self.snapshot is None:
             return
-
-        row = selected_rows[0].row()
-        list_id = int(self._table_cell_text(self.lists_table, row, 0))
-        list_identifier = self._table_cell_text(self.lists_table, row, 1)
-
-        reply = QMessageBox.question(
-            self,
-            "Reactivate List",
-            f"Are you sure you want to reactivate list '{list_identifier}'?\n\n"
-            f"This will:\n"
-            f"• Move the list back to active lists\n"
-            f"• Set all bars in the list back to 'Assigned' status\n"
-            f"• Remove the issued date",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Cancel,
-        )
-
-        if reply == QMessageBox.StandardButton.Yes:
-            try:
-                success = self.db_manager.reactivate_silver_bar_list(list_id)
-                if not success:
-                    raise RuntimeError("Failed to reactivate the selected list.")
-
-                QMessageBox.information(
-                    self, "Success", f"List '{list_identifier}' has been reactivated."
+        snapshot = self.snapshot
+        if snapshot.issued:
+            answer = QMessageBox.question(
+                self,
+                "Reopen issued list",
+                f"Reopen {snapshot.details['list_identifier']} for editing?\n\nThe bars will stay in this list, and the list will be active again.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+            if not self.db_manager.reactivate_silver_bar_list(snapshot.list_id):
+                self._message(
+                    "Could not reopen this list. Refresh and try again.", error=True
                 )
+                return
+        self._choose_for_editing(snapshot.list_id)
 
-                # Refresh the interface
-                self.load_issued_lists()
-                self.load_all_bars()
-
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to reactivate list: {e}")
-
-    def _update_selected_bar_details(self) -> None:
-        details = getattr(self, "selected_bar_details", None)
-        if details is None:
+    def print_list(self, *, preview=False):
+        if self._busy:
             return
-        selection_model = self.bars_table.selectionModel()
-        selected_rows = selection_model.selectedRows() if selection_model else []
-        if not selected_rows:
-            details.set_items(
-                [
-                    ("Bar ID", "-"),
-                    ("Voucher/Note", "-"),
-                    ("Weight (g)", "-"),
-                    ("Purity (%)", "-"),
-                    ("Fine Wt (g)", "-"),
-                    ("Status", "-"),
-                    ("List", "-"),
-                    ("Date Added", "-"),
-                ]
-            )
-            self._update_bars_bottom_status()
+        if not self.pages.currentIndex():
+            list_id = self._selected_list_id()
+            if (
+                list_id is not None
+                and not self._loading[self.view_combo.currentIndex()]
+            ):
+                self._read_details(list_id, "preview" if preview else "print")
             return
-        row = selected_rows[0].row()
-        details.set_items(
-            [
-                ("Bar ID", self._table_cell_text(self.bars_table, row, 0)),
-                ("Voucher/Note", self._table_cell_text(self.bars_table, row, 1)),
-                ("Weight (g)", self._table_cell_text(self.bars_table, row, 2)),
-                ("Purity (%)", self._table_cell_text(self.bars_table, row, 3)),
-                ("Fine Wt (g)", self._table_cell_text(self.bars_table, row, 4)),
-                ("Status", self._table_cell_text(self.bars_table, row, 5)),
-                ("List", self._table_cell_text(self.bars_table, row, 6)),
-                ("Date Added", self._table_cell_text(self.bars_table, row, 7)),
-            ]
+        if not self.snapshot or not self.snapshot.issued:
+            self._message("Open the active list for editing to print and issue it.")
+            return
+        snapshot = self.snapshot
+        manager = PrintManager(self.db_manager)
+        self._busy = True
+        self._update_actions()
+        self._preview_builder.start(
+            lambda: manager.build_silver_bar_list_preview_payload(
+                snapshot.details, snapshot.bars
+            ),
+            on_ready=lambda payload: self._print_ready(manager, payload, preview),
+            on_error=self._print_error,
+            empty_message="The list is empty.",
         )
-        self._update_bars_bottom_status()
 
-    def _update_bars_bottom_status(self) -> None:
-        strip = getattr(self, "bars_bottom_status", None)
-        if strip is None:
+    def _print_ready(self, manager, payload, preview):
+        try:
+            outcome = (
+                manager.show_preview(payload, parent_widget=self)
+                if preview
+                else manager.quick_print(payload)
+            )
+            self._busy = False
+            self._message(
+                "List reprinted."
+                if outcome.succeeded
+                else outcome.message or "No print submitted.",
+                error=not outcome.succeeded and not outcome.cancelled,
+            )
+        except Exception as exc:
+            self._print_error(str(exc))
+        self._update_actions()
+        self._restore_detail_focus()
+        QTimer.singleShot(0, self._restore_detail_focus)
+
+    def _restore_detail_focus(self):
+        if (
+            not self._closed
+            and self.isVisible()
+            and not self._busy
+            and QApplication.activeModalWidget() in (None, self)
+        ):
+            self.activateWindow()
+            self.list_bars_table.setFocus()
+
+    def _print_error(self, message):
+        self._busy = False
+        self._message(f"Printing failed: {message}", error=True)
+        self._update_actions()
+        self._restore_detail_focus()
+        QTimer.singleShot(0, self._restore_detail_focus)
+
+    def copy_rows(self):
+        focus = QApplication.focusWidget()
+        if isinstance(focus, QLineEdit):
+            focus.copy()
             return
-        total = self.bars_model.rowCount()
-        selection_model = self.bars_table.selectionModel()
-        selected = len(selection_model.selectedRows()) if selection_model else 0
-        refreshed = getattr(self, "_last_refreshed_text", "-")
-        strip.set_left_items([f"Loaded: {total} of {self._bars_page_state.total} bars"])
-        strip.set_right_items([f"Selected: {selected}", f"Refreshed: {refreshed}"])
+        table = (
+            self.list_bars_table
+            if self.pages.currentIndex()
+            else self.tables.currentWidget()
+        )
+        self.copy_selected_rows(table)
 
-    def show_bars_context_menu(self, pos):
-        """Show context menu for bars table."""
-        try:
-            menu = QMenu(self)
-            refresh_action = menu.addAction("Refresh")
-            copy_action = menu.addAction("Copy Selected Rows")
-
-            action = menu.exec(self.bars_table.viewport().mapToGlobal(pos))
-
-            if action == refresh_action:
-                self.load_all_bars()
-            elif action == copy_action:
-                self.copy_selected_rows(self.bars_table)
-
-        except Exception as exc:
-            self.logger.warning(
-                "Failed to show bars context menu: %s", exc, exc_info=True
-            )
-
-    def show_lists_context_menu(self, pos):
-        """Show context menu for lists table."""
-        try:
-            menu = QMenu(self)
-            reactivate_action = menu.addAction("Reactivate List")
-            refresh_action = menu.addAction("Refresh")
-            copy_action = menu.addAction("Copy Selected Rows")
-
-            # Enable reactivate only if a row is selected
-            reactivate_action.setEnabled(
-                bool(self.lists_table.selectionModel().selectedRows())
-            )
-
-            action = menu.exec(self.lists_table.viewport().mapToGlobal(pos))
-
-            if action == reactivate_action:
-                self.reactivate_list()
-            elif action == refresh_action:
-                self.load_issued_lists()
-            elif action == copy_action:
-                self.copy_selected_rows(self.lists_table)
-
-        except Exception as exc:
-            self.logger.warning(
-                "Failed to show lists context menu: %s", exc, exc_info=True
-            )
+    @staticmethod
+    def _table_cell_text(table, row, column):
+        return str(table.model().data(table.model().index(row, column)) or "")
 
     def copy_selected_rows(self, table):
-        """Copy selected rows to clipboard."""
-        try:
-            selected = table.selectionModel().selectedRows()
-            if not selected:
-                return
+        rows = [
+            "\t".join(
+                self._table_cell_text(table, index.row(), column)
+                for column in range(table.model().columnCount())
+            )
+            for index in table.selectionModel().selectedRows()
+        ]
+        QApplication.clipboard().setText("\n".join(rows))
 
-            rows = []
-            for idx in selected:
-                r = idx.row()
-                values = [
-                    self._table_cell_text(table, r, c)
-                    for c in range(table.model().columnCount())
-                ]
-                rows.append("\t".join(values))
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.Type.KeyPress and isinstance(event, QKeyEvent):
+            if (
+                event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+                and not event.isAutoRepeat()
+            ):
+                if watched is not self.list_bars_table:
+                    self.open_selected_list()
+                return True
+            if event.key() == Qt.Key.Key_Down:
+                if isinstance(watched, QLineEdit):
+                    self.tables.currentWidget().setFocus()
+                    return True
+                if (
+                    isinstance(watched, QTableView)
+                    and watched.currentIndex().row() == watched.model().rowCount() - 1
+                ):
+                    self.load_more_details() if watched is self.list_bars_table else self.load_more()
+        return super().eventFilter(watched, event)
 
-            text = "\n".join(rows)
-            QApplication.clipboard().setText(text)
-
-        except Exception as exc:
-            self.logger.warning("Failed to copy selected rows: %s", exc, exc_info=True)
-
-    def _cancel_active_loads(self) -> None:
-        self._bars_load_runner.shutdown()
-
-    def keyPressEvent(self, event):
-        if event.key() == Qt.Key.Key_Escape:
-            self.reject()
-        else:
-            super().keyPressEvent(event)
+    def accept(self):
+        self.open_selected_list()
 
     def reject(self):
-        self._cancel_active_loads()
-        super().reject()
+        if self.pages.currentIndex() and not self._busy:
+            self.back_to_results()
+        else:
+            self.done(QDialog.DialogCode.Rejected)
+
+    def _cancel_active_loads(self):
+        self._search_timer.stop()
+        self._lists_load_runner.shutdown()
+        self._bars_load_runner.shutdown()
+        self._detail_runner.shutdown()
+        self._preview_builder.shutdown()
+
+    def done(self, result):
+        if not self._closed:
+            self._closed = True
+            self._cancel_active_loads()
+        super().done(result)
 
     def closeEvent(self, event):
-        self._cancel_active_loads()
-        super().closeEvent(event)
-
-
-# Example usage (if run directly)
-if __name__ == "__main__":
-    import sys
-
-    # Mock DB Manager for testing
-    class MockDBManager:
-        def get_silver_bar_lists(self, include_issued=True):
-            return []
-
-        def get_bars_in_list(self, list_id, limit=None, offset=0):
-            return []
-
-    app = QApplication(sys.argv)
-    db_manager = MockDBManager()
-    dialog = SilverBarHistoryDialog(db_manager)
-    dialog.show()
-    sys.exit(app.exec())
+        self.done(QDialog.DialogCode.Rejected)
+        event.accept()

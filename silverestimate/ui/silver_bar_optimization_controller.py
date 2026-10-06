@@ -1,105 +1,44 @@
-"""Optimal-list generation workflow for silver-bar management."""
+"""Generate a separate list in one transaction without assignment dialogs."""
 
 from __future__ import annotations
 
-import traceback
 from typing import TYPE_CHECKING
 
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QDialog
+
+from .silver_bar_optimization import find_optimal_combination
 
 if TYPE_CHECKING:
     from .silver_bar_management import SilverBarDialog
-from .silver_bar_optimization import find_optimal_combination
 
 
 class SilverBarOptimizationController:
-    """Generate optimized silver-bar lists from available stock."""
-
     def __init__(self, host: SilverBarDialog) -> None:
         self.host = host
 
     def generate_optimal_list(self, dialog_cls) -> None:
         dialog = dialog_cls(self.host)
-        if dialog.exec() != dialog_cls.Accepted:
+        if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-
-        min_target = dialog.min_target
-        max_target = dialog.max_target
-        list_name = dialog.list_name
-        optimization_type = dialog.optimization_type
-
         try:
-            available_bars = self.host.db_manager.get_silver_bars(
-                status="In Stock",
-                unassigned_only=True,
+            bars = self.host.db_manager.get_silver_bars(
+                status="In Stock", unassigned_only=True
             )
-
-            if not available_bars:
-                QMessageBox.information(
-                    self.host,
-                    "No Bars Available",
-                    "No silver bars are available for list generation.",
+            selected = find_optimal_combination(
+                bars, dialog.min_target, dialog.max_target, dialog.optimization_type
+            )
+            if not selected:
+                self.host.set_status(
+                    "No combination of available bars fits this range."
                 )
                 return
-
-            selected_bars = find_optimal_combination(
-                available_bars,
-                min_target,
-                max_target,
-                optimization_type,
+            result = self.host.db_manager.add_bars_to_list(
+                [bar["bar_id"] for bar in selected], note=dialog.list_name
             )
-
-            if not selected_bars:
-                QMessageBox.information(
-                    self.host,
-                    "No Solution",
-                    f"Could not find a combination of bars within the range {min_target:.1f}g - {max_target:.1f}g.",
-                )
-                return
-
-            new_list_id = self.host.db_manager.create_silver_bar_list(list_name)
-            if not new_list_id:
-                QMessageBox.critical(self.host, "Error", "Failed to create new list.")
-                return
-
-            selected_ids = [bar["bar_id"] for bar in selected_bars]
-            added_count, failed_bars = self.host._bulk_assign_to_list(
-                selected_ids,
-                new_list_id,
-            )
-
-            actual_fine_weight = sum(bar["fine_weight"] for bar in selected_bars)
-            message = "Optimal list created successfully!\n\n"
-            message += f"List Name: {list_name}\n"
-            message += f"Target Range: {min_target:.1f}g - {max_target:.1f}g\n"
-            message += f"Actual Fine Weight: {actual_fine_weight:.1f}g\n"
-            message += f"Bars Added: {added_count}\n"
-            message += (
-                "Optimization: Minimum bars"
-                if optimization_type == "min_bars"
-                else "Optimization: Maximum bars"
-            )
-
-            if failed_bars:
-                message += (
-                    "\n\nWarning: Failed to add "
-                    f"{len(failed_bars)} bars: {', '.join(failed_bars)}"
-                )
-
-            QMessageBox.information(self.host, "List Generated", message)
-            self.host.load_lists()
-            self.host.load_available_bars()
-
-            index = self.host.list_combo.findData(new_list_id)
-            if index >= 0:
-                self.host.list_combo.setCurrentIndex(index)
-
+            if self.host.accept_change(result):
+                self.host.weight_search_edit.clear()
+                self.host.set_status("Optimal list created · Saved automatically.")
+                self.host.focus_weight()
         except Exception as exc:
-            self.host.logger.error(
-                "Failed to generate optimal list: %s", exc, exc_info=True
-            )
-            QMessageBox.critical(
-                self.host,
-                "Error",
-                f"Failed to generate optimal list: {exc}\n{traceback.format_exc()}",
-            )
+            self.host.logger.exception("Optimal-list generation failed")
+            self.host.set_status(f"Could not generate list: {exc}", error=True)

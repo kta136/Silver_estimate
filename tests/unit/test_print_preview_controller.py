@@ -27,7 +27,7 @@ from silverestimate.ui.print_payload_builder import (
 )
 from silverestimate.ui.print_preview_controller import PrintPreviewController
 from silverestimate.ui.print_preview_dialog import PrintPreviewDialog
-from silverestimate.ui.print_preview_output import PrintOutputStatus
+from silverestimate.ui.print_preview_output import PrintOutputOutcome, PrintOutputStatus
 from silverestimate.ui.print_preview_session import PrintPreviewSession
 from silverestimate.ui.silver_bar_print_document import (
     SilverBarListPrintDocument,
@@ -801,3 +801,45 @@ def test_export_pdf_empty_temp_keeps_existing_file(
     assert target.read_bytes() == b"old-pdf"
     assert not list(tmp_path.glob(".silverestimate-*.pdf"))
     assert len(critical_calls) == 1
+
+
+@pytest.mark.parametrize(
+    "operation,expected",
+    [
+        ("Print", PrintOutputStatus.SUCCESS),
+        ("Export PDF", PrintOutputStatus.CANCELLED),
+        ("Close", PrintOutputStatus.CANCELLED),
+    ],
+)
+def test_preview_returns_only_physical_print_outcome(
+    qtbot, monkeypatch, operation, expected
+):
+    controller = PrintPreviewController(
+        printer=QPrinter(),
+        render_document=lambda *args: None,
+        get_print_font=lambda: QFont("Arial", 8),
+        persist_print_font=lambda _font: None,
+    )
+    monkeypatch.setattr(
+        controller._output_controller._service,
+        "quick_print",
+        lambda payload: PrintOutputOutcome(PrintOutputStatus.SUCCESS),
+    )
+    monkeypatch.setattr(
+        controller._output_controller,
+        "export_pdf_via_dialog",
+        lambda *a: PrintOutputOutcome(
+            PrintOutputStatus.SUCCESS, output_path="example.pdf"
+        ),
+    )
+
+    def execute(preview):
+        qtbot.addWidget(preview)
+        next(
+            action for action in preview.toolbar.actions() if action.text() == operation
+        ).trigger()
+        return QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(PrintPreviewDialog, "exec", execute)
+    outcome = controller.open_preview(_estimate_payload())
+    assert outcome.status is expected

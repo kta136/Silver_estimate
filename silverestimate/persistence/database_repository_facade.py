@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from silverestimate.domain.voucher_deletion import (
+    VoucherDeletionPreview,
+    VoucherDeletionRange,
+    VoucherDeletionResult,
+)
+
 if TYPE_CHECKING:
     from silverestimate.infrastructure.item_cache import ItemCacheController
     from silverestimate.persistence.estimates_repository import EstimatesRepository
@@ -146,6 +152,16 @@ class DatabaseRepositoryFacadeMixin:
     def delete_all_estimates(self):
         return self.estimates_repo.delete_all_estimates()
 
+    def preview_voucher_deletion(
+        self, criteria: VoucherDeletionRange
+    ) -> VoucherDeletionPreview:
+        return self.estimates_repo.preview_voucher_deletion(criteria)
+
+    def delete_voucher_range(
+        self, preview: VoucherDeletionPreview
+    ) -> VoucherDeletionResult:
+        return self.estimates_repo.delete_voucher_range(preview)
+
     def save_estimate_atomic(
         self, voucher_no, date, silver_rate, regular_items, return_items, totals
     ):
@@ -158,6 +174,29 @@ class DatabaseRepositoryFacadeMixin:
 
     def create_silver_bar_list(self, note=None):
         return self.silver_bar_command_repo.create_list(note)
+
+    def add_bars_to_list(self, bar_ids, list_id=None, note=""):
+        return self.silver_bar_command_repo.add_bars_to_list(bar_ids, list_id, note)
+
+    def remove_list_bars(self, list_id, bar_ids=None):
+        return self.silver_bar_command_repo.remove_list_bars(list_id, bar_ids)
+
+    def delete_active_list(self, list_id):
+        return self.silver_bar_command_repo.delete_active_list(list_id)
+
+    def save_active_list_note(self, list_id, note):
+        return self.silver_bar_command_repo.save_active_list_note(list_id, note)
+
+    def issue_printed_list(self, list_id, signature):
+        return self.silver_bar_command_repo.issue_printed_list(list_id, signature)
+
+    def search_silver_bar_weight_prefix(self, prefix, *, cursor=None, limit=50):
+        return self.silver_bar_query_repo.search_weight_prefix(
+            prefix, cursor=cursor, limit=limit
+        )
+
+    def get_silver_bar_list_snapshot(self, list_id):
+        return self.silver_bar_query_repo.get_list_snapshot(list_id)
 
     def get_silver_bar_lists(self, include_issued=True):
         return self.silver_bar_query_repo.get_lists(include_issued)

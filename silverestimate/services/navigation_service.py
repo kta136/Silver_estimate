@@ -89,6 +89,39 @@ class NavigationService:
                 f"Silver Bar Management could not be opened: {exc}",
             )
 
+    def show_sales_report(self) -> None:
+        if not self._ensure_db():
+            return
+        widget = getattr(self.main_window, "sales_report_widget", None)
+        if widget is None:
+            try:
+                from silverestimate.ui.sales_report import SalesReportWidget
+
+                widget = SalesReportWidget(self.db, self.main_window)
+                widget.voucher_requested.connect(self.open_sales_voucher)
+                self.main_window.sales_report_widget = widget
+                if self.stack:
+                    self.stack.addWidget(widget)
+            except Exception as exc:
+                self._logger.error(
+                    "Could not open sales report: %s", exc, exc_info=True
+                )
+                QMessageBox.critical(self.main_window, "Sales Reports", str(exc))
+                return
+        already_current = self.stack and self.stack.currentWidget() is widget
+        if not self._switch_widget(widget):
+            return
+        if already_current:
+            widget.refresh()
+        self._sync_actions(
+            view=getattr(self.main_window, "_view_sales_report_action", None)
+        )
+
+    def open_sales_voucher(self, voucher_no: str) -> None:
+        widget = getattr(self.main_window, "estimate_widget", None)
+        if widget is not None and widget.open_saved_estimate(voucher_no):
+            self.show_estimate()
+
     def show_silver_bar_history(self) -> None:
         if not self._ensure_db():
             return
@@ -98,6 +131,15 @@ class NavigationService:
             self._logger.info("Opening Silver Bar History dialog")
             dialog = SilverBarHistoryDialog(self.db, self.main_window)
             dialog.exec()
+            selected_list_id = dialog.selected_list_id
+            dialog.deleteLater()
+            if selected_list_id is not None:
+                from silverestimate.ui.silver_bar_management import SilverBarDialog
+
+                workspace = SilverBarDialog(self.db, self.main_window)
+                workspace.open_list(selected_list_id)
+                workspace.exec()
+                workspace.deleteLater()
         except Exception as exc:
             self._logger.error(
                 "Error opening Silver Bar History: %s", exc, exc_info=True

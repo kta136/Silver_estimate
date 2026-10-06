@@ -8,6 +8,7 @@ from PySide6.QtCore import QCoreApplication, QEvent, Qt
 from PySide6.QtWidgets import QWidget
 from shiboken6 import isValid
 
+from silverestimate.domain.silver_bar_workspace import BarListSnapshot
 from silverestimate.ui.estimate_history import EstimateHistoryDialog
 from silverestimate.ui.preview_build_worker import PreviewBuildController
 from silverestimate.ui.print_payload_builder import PrintPayloadBuilder
@@ -220,7 +221,9 @@ def test_screens_use_shared_worker_and_cancel_on_close(
         owner = SilverBarDialog(history_db)
         qtbot.addWidget(owner)
         owner._list_print_controller._start_list_print_preview_build(
-            print_manager=manager, build_preview=build
+            print_manager=manager,
+            build_preview=build,
+            snapshot=BarListSnapshot({"list_id": 1}, ()),
         )
         controller = owner._list_print_controller._preview_builder
     try:

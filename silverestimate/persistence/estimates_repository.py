@@ -12,11 +12,20 @@ from silverestimate.domain.estimate_validation import (
     validate_estimate,
 )
 from silverestimate.domain.pagination import EstimateHistoryCursor, Page
+from silverestimate.domain.voucher_deletion import (
+    VoucherDeletionPreview,
+    VoucherDeletionRange,
+    VoucherDeletionResult,
+)
 from silverestimate.persistence.database_driver import dbapi as sqlite3
 from silverestimate.persistence.database_protocols import RepositoryDatabase
 from silverestimate.persistence.silver_bar_synchronization_repository import (
     BarReconciliationPlan,
     SilverBarSynchronizationRepository,
+)
+from silverestimate.persistence.voucher_deletion_repository import (
+    PROTECTED_BAR_SQL,
+    VoucherDeletionRepository,
 )
 
 
@@ -648,6 +657,16 @@ class EstimatesRepository:
         except TypeError, ValueError:
             return None
 
+    def preview_voucher_deletion(
+        self, criteria: VoucherDeletionRange
+    ) -> VoucherDeletionPreview:
+        return VoucherDeletionRepository(self._db).preview(criteria)
+
+    def delete_voucher_range(
+        self, preview: VoucherDeletionPreview
+    ) -> VoucherDeletionResult:
+        return VoucherDeletionRepository(self._db).delete(preview)
+
     def delete_all_estimates(self) -> bool:
         conn, cursor = self._conn, self._cursor
         if not conn or not cursor:
@@ -678,15 +697,12 @@ class EstimatesRepository:
             conn.execute("BEGIN IMMEDIATE")
             transaction_started = True
             cursor.execute(
-                """
+                f"""
                 SELECT 1 FROM silver_bars AS bars
                 WHERE bars.estimate_voucher_no = ?
-                  AND (COALESCE(bars.status, '') != 'In Stock'
-                       OR bars.list_id IS NOT NULL
-                       OR EXISTS (SELECT 1 FROM bar_transfers AS transfers
-                                  WHERE transfers.silver_bar_id = bars.bar_id))
+                  AND {PROTECTED_BAR_SQL}
                 LIMIT 1
-                """,
+                """,  # nosec B608 - fixed shared protection predicate
                 (voucher_no,),
             )
             if cursor.fetchone():

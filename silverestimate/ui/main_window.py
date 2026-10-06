@@ -29,6 +29,7 @@ from silverestimate.infrastructure.main_window_runtime import (
 if TYPE_CHECKING:
     from silverestimate.controllers.live_rate_controller import LiveRateController
     from silverestimate.services.settings_service import SettingsService
+    from silverestimate.ui.sales_report import SalesReportWidget
 
     MainWindowRuntimeBuilder = Callable[..., MainWindowRuntime]
 else:
@@ -92,6 +93,7 @@ class MainWindow(QMainWindow):
         self._taskbar_icon_handle: int | None = None
         self._pending_status_message: Optional[tuple[str, int, str]] = None
         self.item_master_widget = None
+        self.sales_report_widget: Optional["SalesReportWidget"] = None
         self.silver_bar_widget = None
         self.live_rate_controller: Optional["LiveRateController"] = None
 
@@ -438,11 +440,17 @@ class MainWindow(QMainWindow):
         del args, kwargs
         return self.navigation_controller.delete_all_estimates()
 
+    def delete_vouchers_by_range(self, *args, **kwargs):
+        return self.navigation_controller.delete_vouchers_by_range()
+
     def show_silver_bar_history(self):
         return self.navigation_controller.show_silver_bar_history()
 
     def show_estimate_history(self):
         return self.navigation_controller.show_estimate_history()
+
+    def show_sales_report(self):
+        return self.navigation_controller.show_sales_report()
 
     def show_about(self):
         return self.navigation_controller.show_about()
@@ -464,6 +472,7 @@ class MainWindow(QMainWindow):
 
         self._closing = True
         self._stop_entry_background_work()
+        self._stop_report_background_work()
         self.logger.info("Application closing")
         try:
             settings_service = self.settings_service
@@ -508,6 +517,10 @@ class MainWindow(QMainWindow):
         stop = getattr(self.estimate_widget, "stop_background_work", None)
         if callable(stop):
             stop()
+
+    def _stop_report_background_work(self):
+        if self.sales_report_widget is not None:
+            self.sales_report_widget.shutdown_workers()
 
     def show_settings_dialog(self):
         """Show the centralized settings dialog."""

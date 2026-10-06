@@ -69,3 +69,29 @@ def test_quick_print_returns_outcome_and_renders_only_with_valid_printer(
     assert len(render_calls) == expected_render_count
     if not printer_available:
         assert outcome.message == "No printer is available."
+
+
+@pytest.mark.parametrize(
+    "state, expected",
+    [
+        (QPrinter.PrinterState.Aborted, PrintOutputStatus.CANCELLED),
+        (QPrinter.PrinterState.Error, PrintOutputStatus.FAILED),
+    ],
+)
+def test_quick_print_does_not_report_success_after_printer_failure(
+    qt_app, state, expected
+):
+    class FailedPrinter(QPrinter):
+        def printerState(self):
+            return state
+
+    service = PrintOutputService(
+        printer=FailedPrinter(),
+        render_document=lambda *_: None,
+        printer_validator=lambda _: (True, ""),
+    )
+
+    outcome = service.quick_print(_payload())
+
+    assert outcome.status is expected
+    assert not outcome.succeeded

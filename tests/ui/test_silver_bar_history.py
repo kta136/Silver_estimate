@@ -1,187 +1,261 @@
-from PySide6.QtWidgets import QApplication, QMessageBox
+"""Unified list/bar browsing, keyboard actions, full totals, and lifecycle."""
 
+from pathlib import Path
+
+import pytest
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
+
+from silverestimate.domain.silver_bar_workspace import BarListSnapshot
+from silverestimate.ui.print_manager import PrintManager
+from silverestimate.ui.print_preview_output import PrintOutputOutcome, PrintOutputStatus
 from silverestimate.ui.silver_bar_history import SilverBarHistoryDialog
+from silverestimate.ui.silver_bar_management import SilverBarDialog
+from tests.silver_bar_workspace_support import seed_workspace_db
 
 
-def _history_bar(
-    bar_id: int,
-    voucher: str,
-    note: str,
-    weight: float,
-    purity: float,
-    fine_weight: float,
-    date_added: str,
-    status: str,
-    list_id=None,
-    list_identifier=None,
-    issued_date=None,
-):
-    return {
-        "bar_id": bar_id,
-        "estimate_voucher_no": voucher,
-        "estimate_note": note,
-        "weight": weight,
-        "purity": purity,
-        "fine_weight": fine_weight,
-        "date_added": date_added,
-        "status": status,
-        "list_id": list_id,
-        "list_identifier": list_identifier,
-        "issued_date": issued_date,
-    }
-
-
-class _FakeSilverBarHistoryDb:
-    def __init__(self):
-        self.temp_db_path = None
-        self.search_calls = []
-        self.reactivated_calls = []
-        self.history_rows = [
-            _history_bar(
-                101,
-                "H001",
-                "Issued note",
-                10.0,
-                99.0,
-                9.90,
-                "2026-02-15 10:00:00",
-                "Issued",
-                20,
-                "LIST-020",
-                "2026-02-15 12:00:00",
-            ),
-            _history_bar(
-                102,
-                "H002",
-                "Stock note",
-                9.5,
-                98.0,
-                9.31,
-                "2026-02-14 10:00:00",
-                "In Stock",
-            ),
-        ]
-        self.issued_lists = [
-            {
-                "list_id": 20,
-                "list_identifier": "LIST-020",
-                "list_note": "Issued batch",
-                "creation_date": "2026-02-14 09:00:00",
-                "issued_date": "2026-02-15 12:00:00",
-            }
-        ]
-        self.list_rows = {
-            20: [
-                _history_bar(
-                    101,
-                    "H001",
-                    "Issued note",
-                    10.0,
-                    99.0,
-                    9.90,
-                    "2026-02-15 10:00:00",
-                    "Issued",
-                    20,
-                    "LIST-020",
-                    "2026-02-15 12:00:00",
-                ),
-                _history_bar(
-                    103,
-                    "H003",
-                    "Issued note 2",
-                    11.0,
-                    97.0,
-                    10.67,
-                    "2026-02-13 10:00:00",
-                    "Issued",
-                    20,
-                    "LIST-020",
-                    "2026-02-15 12:00:00",
-                ),
-            ]
-        }
-
-    @staticmethod
-    def _clone_rows(rows):
-        return [dict(row) for row in rows]
-
-    def search_silver_bar_history(self, **kwargs):
-        self.search_calls.append(dict(kwargs))
-        return self._clone_rows(self.history_rows)
-
-    def get_silver_bar_lists(self, include_issued=True):
-        del include_issued
-        return self._clone_rows(self.issued_lists)
-
-    def count_silver_bars_by_list_ids(self, list_ids):
-        return {
-            int(list_id): len(self.list_rows.get(int(list_id), []))
-            for list_id in list_ids
-        }
-
-    def get_bars_in_list(self, list_id, limit=None, offset=0):
-        rows = self._clone_rows(self.list_rows.get(int(list_id), []))
-        if isinstance(limit, int) and limit > 0:
-            rows = rows[offset : offset + limit]
-        return rows
-
-    def reactivate_silver_bar_list(self, list_id):
-        self.reactivated_calls.append(int(list_id))
-        return True
-
-
-def _row_for_bar_id(model, bar_id: int) -> int:
-    for row in range(model.rowCount()):
-        if model.bar_id_at(row) == bar_id:
-            return row
-    raise AssertionError(f"Could not find bar_id={bar_id} in model")
-
-
-def test_history_dialog_loads_models_and_reactivates_list(
-    qtbot, settings_stub, monkeypatch
-):
-    del settings_stub
-    db = _FakeSilverBarHistoryDb()
-    monkeypatch.setattr(
-        QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.Yes
-    )
-    monkeypatch.setattr(
-        QMessageBox,
-        "information",
-        lambda *args, **kwargs: QMessageBox.StandardButton.Ok,
-    )
-    monkeypatch.setattr(
-        QMessageBox, "critical", lambda *args, **kwargs: QMessageBox.StandardButton.Ok
-    )
-
+@pytest.fixture
+def history(qtbot, tmp_path, settings_stub):
+    db = seed_workspace_db(tmp_path)
+    active = db.add_bars_to_list([1, 6], note="Morning active").unwrap()
+    issued = db.add_bars_to_list([2, 3], note="Evening dispatch").unwrap()
+    issued = db.issue_printed_list(issued.list_id, issued.signature).unwrap()
+    other = db.add_bars_to_list([4], note="Other dispatch").unwrap()
+    db.issue_printed_list(other.list_id, other.signature).unwrap()
     dialog = SilverBarHistoryDialog(db)
     qtbot.addWidget(dialog)
     dialog.show()
-    qtbot.waitUntil(lambda: dialog.isVisible(), timeout=1000)
-    qtbot.waitUntil(lambda: dialog.bars_model.rowCount() == 2, timeout=1000)
+    dialog.activateWindow()
+    qtbot.waitUntil(lambda: dialog.lists_model.rowCount() == 3)
+    yield dialog, db, active, issued
+    dialog.close()
+    db.close()
 
-    assert dialog.minimumWidth() <= 780
-    assert dialog.minimumHeight() <= 520
-    assert dialog.status_combo.minimumWidth() >= 132
-    assert dialog.max_rows_spin.minimumWidth() >= 116
-    assert "QComboBox QAbstractItemView" in dialog.styleSheet()
-    assert dialog.lists_model.rowCount() == 1
-    assert dialog._table_cell_text(dialog.lists_table, 0, 5) == "2"
 
-    selected_row = _row_for_bar_id(dialog.bars_model, 101)
-    dialog.bars_table.selectRow(selected_row)
-    qtbot.waitUntil(
-        lambda: len(dialog.bars_table.selectionModel().selectedRows()) == 1,
-        timeout=1000,
+def select_list(dialog, list_id):
+    row = next(
+        i
+        for i in range(dialog.lists_model.rowCount())
+        if dialog.lists_model.row_payload(i)["list_id"] == list_id
     )
-    dialog.copy_selected_rows(dialog.bars_table)
-    copied = QApplication.clipboard().text()
-    assert copied.startswith("101\tH001 (Issued note)\t10.0")
+    dialog.lists_table.selectRow(row)
 
-    dialog.lists_table.selectRow(0)
-    qtbot.waitUntil(lambda: dialog.list_bars_model.rowCount() == 2, timeout=1000)
-    assert dialog.reactivate_button.isEnabled() is True
 
+def open_issued(qtbot, dialog, issued):
+    select_list(dialog, issued.list_id)
+    qtbot.keyClick(dialog.lists_table, Qt.Key.Key_Return)
+    qtbot.waitUntil(lambda: dialog.snapshot is not None)
+
+
+def test_all_active_issued_filters_search_and_full_totals(history, qtbot):
+    dialog, _, active, issued = history
+    select_list(dialog, issued.list_id)
+    row = dialog.lists_model.row_payload(dialog.lists_table.currentIndex().row())
+    assert row["bar_count"] == 2
+    assert row["weight"] == 80.25
+    assert row["fine_weight"] == pytest.approx(89.91)
+    dialog.list_state_combo.setCurrentText("Active")
+    qtbot.waitUntil(
+        lambda: dialog.lists_model.rowCount() == 1 and not dialog._loading[0]
+    )
+    assert dialog.lists_model.row_payload(0)["list_id"] == active.list_id
+    dialog.list_state_combo.setCurrentText("Issued")
+    qtbot.waitUntil(lambda: dialog.lists_model.rowCount() == 2)
+    dialog.list_search_edit.setText("Evening")
+    qtbot.waitUntil(
+        lambda: dialog.lists_model.rowCount() == 1 and not dialog._loading[0]
+    )
+    assert dialog.lists_model.row_payload(0)["list_id"] == issued.list_id
+
+
+def test_enter_active_list_returns_it_for_editing(history, qtbot):
+    dialog, _, active, _ = history
+    select_list(dialog, active.list_id)
+    qtbot.keyClick(dialog.lists_table, Qt.Key.Key_Return)
+    qtbot.waitUntil(lambda: dialog.result() == QDialog.DialogCode.Accepted)
+    assert dialog.selected_list_id == active.list_id
+
+
+def test_issued_details_reprint_and_reopen_use_selected_identity(
+    history, qtbot, monkeypatch
+):
+    dialog, db, _, issued = history
+    select_list(dialog, issued.list_id)
+    dialog.lists_table.sortByColumn(1, Qt.SortOrder.DescendingOrder)
+    captured = []
+    monkeypatch.setattr(
+        PrintManager,
+        "quick_print",
+        lambda _, payload: (
+            captured.append(payload) or PrintOutputOutcome(PrintOutputStatus.SUCCESS)
+        ),
+    )
+    qtbot.keyClick(
+        dialog.lists_table, Qt.Key.Key_P, Qt.KeyboardModifier.ControlModifier
+    )
+    qtbot.waitUntil(lambda: dialog.detail_status.text() == "List reprinted.")
+    assert captured[0].document.bars[1].purity == 125.5
+    assert db.get_silver_bar_list_snapshot(issued.list_id).issued
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *a: QMessageBox.StandardButton.Yes
+    )
+    qtbot.keyClick(
+        dialog.list_bars_table, Qt.Key.Key_R, Qt.KeyboardModifier.ControlModifier
+    )
+    assert dialog.selected_list_id == issued.list_id
+    reopened = db.get_silver_bar_list_snapshot(issued.list_id)
+    assert not reopened.issued
+    assert all(bar["status"] == "Assigned" for bar in reopened.bars)
+
+
+def test_reopen_cancel_preserves_issued_state(history, qtbot, monkeypatch):
+    dialog, db, _, issued = history
+    open_issued(qtbot, dialog, issued)
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *a: QMessageBox.StandardButton.Cancel
+    )
     dialog.reactivate_list()
+    assert dialog.selected_list_id is None
+    assert db.get_silver_bar_list_snapshot(issued.list_id).issued
+    assert dialog.isVisible()
 
-    assert db.reactivated_calls == [20]
+
+def test_bars_status_names_and_link_to_issued_list(history, qtbot):
+    dialog, _, _, issued = history
+    qtbot.keyClick(
+        dialog.list_search_edit, Qt.Key.Key_2, Qt.KeyboardModifier.ControlModifier
+    )
+    qtbot.waitUntil(lambda: dialog.bars_model.rowCount() == 7)
+    assert dialog.status_combo.findText("Assigned") == -1
+    dialog.status_combo.setCurrentText("In active list")
+    qtbot.waitUntil(
+        lambda: dialog.bars_model.rowCount() == 2 and not dialog._loading[1]
+    )
+    assert dialog.bars_model.display_value(0, 5) == "In active list"
+    assert dialog.bars_model.tooltip_value(0, 5) == "In active list"
+    dialog.status_combo.setCurrentText("Issued")
+    qtbot.waitUntil(lambda: dialog.bars_model.rowCount() == 3)
+    row = next(
+        i
+        for i in range(3)
+        if dialog.bars_model.row_payload(i)["list_id"] == issued.list_id
+    )
+    dialog.bars_table.selectRow(row)
+    qtbot.keyClick(dialog.bars_table, Qt.Key.Key_Return)
+    qtbot.waitUntil(lambda: dialog.snapshot is not None)
+    assert dialog.snapshot.list_id == issued.list_id
+    qtbot.keyClick(dialog.list_bars_table, Qt.Key.Key_Escape)
+    assert dialog.pages.currentIndex() == 0
+    assert dialog.status_combo.currentText() == "Issued"
+
+
+def test_details_totals_and_print_include_rows_after_visible_page(
+    history, qtbot, monkeypatch
+):
+    dialog, _, _, issued = history
+    snapshot = BarListSnapshot(
+        issued.details, tuple({**issued.bars[1], "bar_id": i} for i in range(1601))
+    )
+    dialog.pages.setCurrentIndex(1)
+    dialog._details_ready(0, snapshot)
+    assert dialog.list_bars_model.rowCount() == 1500
+    assert "1601 bars" in dialog.list_totals_label.text()
+    assert fixed_total(snapshot.fine_weight) in dialog.list_totals_label.text()
+    captured = []
+    monkeypatch.setattr(
+        PrintManager,
+        "quick_print",
+        lambda _, payload: (
+            captured.append(payload) or PrintOutputOutcome(PrintOutputStatus.SUCCESS)
+        ),
+    )
+    dialog.print_list()
+    qtbot.waitUntil(lambda: len(captured) == 1)
+    assert len(captured[0].document.bars) == 1601
+    dialog.load_more_details()
+    assert dialog.list_bars_model.rowCount() == 1601
+
+
+def fixed_total(value):
+    from silverestimate.domain.numeric_policy import fixed_decimal
+
+    return fixed_decimal(value, 2)
+
+
+@pytest.mark.parametrize("shortcut", [Qt.Key.Key_O, Qt.Key.Key_H])
+def test_workspace_open_and_history_use_same_browser(
+    history, qtbot, monkeypatch, shortcut
+):
+    browser, db, active, _ = history
+    browser.hide()
+    workspace = SilverBarDialog(db)
+    qtbot.addWidget(workspace)
+    opened = []
+
+    def choose(dialog):
+        opened.append(dialog)
+        dialog.selected_list_id = active.list_id
+        dialog.done(QDialog.DialogCode.Accepted)
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(SilverBarHistoryDialog, "exec", choose)
+    workspace.show()
+    workspace.activateWindow()
+    qtbot.waitUntil(workspace.isActiveWindow)
+    qtbot.keyClick(
+        workspace.weight_search_edit, shortcut, Qt.KeyboardModifier.ControlModifier
+    )
+    qtbot.waitUntil(lambda: workspace.current_list_id == active.list_id)
+    assert len(opened) == 1
+    workspace.close()
+
+
+def test_copy_and_child_shortcuts_do_not_change_history(history, qtbot):
+    dialog, _, _, issued = history
+    open_issued(qtbot, dialog, issued)
+    dialog.list_bars_table.selectRow(0)
+    dialog.copy_selected_rows(dialog.list_bars_table)
+    assert QApplication.clipboard().text().startswith("40.00\t98.50")
+    child = QDialog(dialog)
+    child.setModal(True)
+    qtbot.addWidget(child)
+    child.show()
+    child.activateWindow()
+    qtbot.keyClick(child, Qt.Key.Key_F, Qt.KeyboardModifier.ControlModifier)
+    assert dialog.pages.currentIndex() == 1
+    child.close()
+
+
+def test_view_shortcut_during_print_does_not_desynchronize_filters(history, qtbot):
+    dialog, _, _, issued = history
+    open_issued(qtbot, dialog, issued)
+    dialog._busy = True
+    dialog._update_actions()
+    qtbot.keyClick(
+        dialog.list_bars_table, Qt.Key.Key_2, Qt.KeyboardModifier.ControlModifier
+    )
+    assert dialog.view_combo.currentIndex() == 0
+    assert dialog.filters.currentIndex() == 0
+    assert dialog.pages.currentIndex() == 1
+    dialog._busy = False
+
+
+def test_unified_history_screenshots(history, qtbot, qt_application_state):
+    from silverestimate.ui.application_theme import apply_light_application_theme
+
+    dialog, _, _, issued = history
+    apply_light_application_theme(QApplication.instance())
+    dialog.resize(1120, 760)
+    QApplication.processEvents()
+    assert dialog.lists_table.height() > 640
+    assert dialog.grab().save(str(Path(".pytest_cache/silver-bar-history-lists.png")))
+    open_issued(qtbot, dialog, issued)
+    assert dialog.grab().save(str(Path(".pytest_cache/silver-bar-history-issued.png")))
+    dialog.back_to_results()
+    dialog.view_combo.setCurrentIndex(1)
+    qtbot.waitUntil(lambda: dialog.bars_model.rowCount() == 7)
+    assert dialog.grab().save(str(Path(".pytest_cache/silver-bar-history-bars.png")))
+    dialog.resize(760, 520)
+    QApplication.processEvents()
+    assert dialog.height() == 520
+    assert dialog.bars_table.height() > 400

@@ -1,5 +1,8 @@
 import sqlite3
+from contextlib import closing
 from pathlib import Path
+
+import pytest
 
 from silverestimate.persistence.silver_bars_snapshot_repository import (
     SilverBarsSnapshotRepository,
@@ -166,3 +169,58 @@ def test_snapshot_repository_closes_connections_after_queries():
 
     assert rows == [{"estimate_voucher_no": "V001"}]
     assert conn.closed is True
+
+
+def test_list_history_pages_include_empty_lists_and_complete_totals(tmp_path):
+    path = tmp_path / "snapshot.sqlite"
+    _seed_snapshot_db(path)
+    with closing(sqlite3.connect(path)) as conn, conn:
+        conn.execute(
+            "INSERT INTO silver_bar_lists (list_id, list_identifier, list_note) "
+            "VALUES (3, 'LIST-003', 'Empty')"
+        )
+        conn.execute(
+            "INSERT INTO silver_bars (weight, purity, fine_weight, list_id) "
+            "VALUES (10, 125.5, 12.55, 1)"
+        )
+    repo = SilverBarsSnapshotRepository(_connection_factory(path))
+    first = repo.get_list_history_page(limit=1)
+    assert first.total == 3
+    assert first.items[0]["list_id"] == 3
+    assert first.items[0]["bar_count"] == 0
+    assert first.items[0]["weight"] == first.items[0]["fine_weight"] == 0
+    assert first.next_cursor == 3
+
+    second = repo.get_list_history_page(
+        cursor=first.next_cursor, limit=1, include_total=False
+    )
+    assert second.total is None
+    assert second.items[0]["list_id"] == 2
+    last = repo.get_list_history_page(cursor=second.next_cursor, limit=1)
+    assert last.total == 3
+    assert last.next_cursor is None
+    assert last.items[0]["list_id"] == 1
+    assert last.items[0]["bar_count"] == 3
+    assert last.items[0]["weight"] == 31.5
+    assert last.items[0]["fine_weight"] == pytest.approx(33.22)
+
+
+@pytest.mark.parametrize(
+    "state, search, ids",
+    [
+        ("All", "", [2, 1]),
+        ("Active", "", [1]),
+        ("Issued", "", [2]),
+        ("All", "LIST-001", [1]),
+        ("All", "Issued", [2]),
+        ("Active", "Issued", []),
+    ],
+)
+def test_list_history_search_and_state_filter_counts(tmp_path, state, search, ids):
+    path = tmp_path / "snapshot.sqlite"
+    _seed_snapshot_db(path)
+    repo = SilverBarsSnapshotRepository(_connection_factory(path))
+    page = repo.get_list_history_page(state=state, search_term=search)
+    assert [row["list_id"] for row in page.items] == ids
+    assert page.total == len(ids)
+    assert page.next_cursor is None

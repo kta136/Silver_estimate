@@ -171,6 +171,9 @@ class EstimateEntryWidget(QWidget):
     def safe_load_estimate(self) -> None:
         self.workflow_controller.safe_load_estimate()
 
+    def open_saved_estimate(self, voucher_no: str) -> bool:
+        return self.workflow_controller.open_saved_estimate(voucher_no)
+
     def show_history(self) -> None:
         self.workflow_controller.show_history()
 

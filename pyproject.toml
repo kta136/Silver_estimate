@@ -149,7 +149,6 @@ max-complexity = 15
 "silverestimate/ui/shared_screen_theme.py" = ["PLR0913"]
 "silverestimate/ui/silver_bar_history.py" = ["PLR0915"]
 "silverestimate/ui/silver_bar_list_print_controller.py" = ["PLR0913"]
-"silverestimate/ui/silver_bar_management_facade.py" = ["PLR0913"]
 "silverestimate/ui/silver_bar_load_controller.py" = ["PLR0912"]
 "silverestimate/ui/silver_bar_management.py" = ["PLR0915"]
 "silverestimate/ui/silver_bar_management_ui.py" = ["PLR0915"]
@@ -222,7 +221,6 @@ module = [
     "silverestimate.services.dda_rate_stream",
     "silverestimate.ui.print_format_spec",
     "silverestimate.ui.settings_live_rates_page",
-    "silverestimate.ui.silver_bar_management_facade",
 ]
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
@@ -292,16 +290,10 @@ enable_error_code = ["union-attr"]
 [[tool.mypy.overrides]]
 module = [
     "silverestimate.ui.silver_bar_management",
-    "silverestimate.ui.silver_bar_management_facade",
     "silverestimate.ui.silver_bar_management_ui",
-    "silverestimate.ui.silver_bar_management_state",
     "silverestimate.ui.silver_bar_load_controller",
-    "silverestimate.ui.silver_bar_transfer_controller",
-    "silverestimate.ui.silver_bar_list_lifecycle_controller",
     "silverestimate.ui.silver_bar_list_print_controller",
     "silverestimate.ui.silver_bar_optimization_controller",
-    "silverestimate.ui.silver_bar_table_controller",
-    "silverestimate.ui.silver_bar_selection_state_controller",
 ]
 enable_error_code = ["union-attr"]
 

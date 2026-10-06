@@ -45,21 +45,25 @@ Grand Total = (Net Fine × Silver Rate) + Net Wage + Last Balance Amount
 3. Linked to source estimate
 4. Default status: 'In Stock'
 
-#### List Management
-1. Create lists with unique identifiers
-2. Assign bars to lists
-3. Track status changes
-4. Generate transfer records
-5. Mark lists as issued when dispatched (sets `issued_date` and moves them to history view)
-6. Reactivate issued lists to return bars to active status (clears `issued_date`, resets bar statuses)
+#### Keyboard list workspace
+1. Opening management starts a fresh list with weight entry focused and available bars shown automatically. The first successful addition creates its automatic list number; opening an empty workspace writes nothing.
+2. Weight input is optional. A blank or whitespace-only field browses all available bars, ordered by weight and bar ID, in pages of 50. Type a weight prefix to filter (e.g. `40` matches `40.00`, `40.25`, and `402.50`) using the shared two-decimal display policy. Arrow keys choose a bar; Down at the last row loads more. Enter adds the selected bar, clears the input, and refreshes the remaining available bars. Clearing a filter restores all available bars. Blank Enter during loading does not queue an unseen addition.
+3. Every addition/removal saves atomically. Membership automatically reserves the bar for one active list. There is no separate assignment action. The internal `Assigned` value and existing history remain compatible.
+4. Tab dismisses suggestions and moves to the current list; arrow keys select a bar; Delete removes selected rows, releases the bars, and updates totals. Delete in a text input only edits text. Ctrl+F returns to weight entry and refreshes suggestions. Esc dismisses suggestions (including pending reads), then clears any weight without reopening suggestions, then closes the window. New lists and reopened active lists show available bars automatically; issued lists remain read-only.
+5. Ctrl+N starts another list. Ctrl+O and Ctrl+H open the same unified history window. F2 edits a note. Ctrl+G creates a separate optimal list. Alt+M opens preview, CSV export, clear/delete list, and help. F1 lists shortcuts.
+6. Ctrl+P prints to the configured printer. Successful submission automatically issues the list and opens a fresh workspace with weight entry focused. Ctrl+Shift+P opens preview, PDF export, and printer settings. Cancellation, print failure, closing without printing, and PDF export alone do not issue bars. Printing an issued list only reprints it.
+7. Issuing revalidates the printed list snapshot and commits status changes with transfer history together. If issuing fails after printing, Ctrl+P (or Alt+I) retries without reprinting while contents remain unchanged; edits invalidate that retry.
+8. History combines all saved lists with All/Active/Issued filters (Ctrl+1) and individual bars with voucher/note, weight, and status filters (Ctrl+2). Ctrl+F searches; Enter opens the selected list. Active lists return to the workspace for editing; issued lists show their contents and full totals within history. Esc returns to results, Ctrl+P reprints, and Ctrl+R reopens for editing after confirmation.
+9. Reopening through history clears the issued date and returns the entire list to active membership, preserving bar identities and recording the transition. Existing list and bar records are retained; the separate saved-list picker and issued-list browser are removed.
 
 #### Bar Lifecycle
 ```
-Creation → In Stock → Assigned to List → Issued
-                       ↘ Unassigned → In Stock
-                       ↘ Sold
-Issued list → Reactivated → Assigned
+Creation → In Stock → In an active list → Issued
+                         ↘ Removed → In Stock
+Issued list → Reactivated → In an active list
 ```
+
+Existing lists, bar IDs, source estimate links, and transfer history are preserved. Active-list writes reject issued lists. Reconciliation safeguards continue to protect bars with lifecycle history.
 
 ### 4. Authentication and Security
 
@@ -92,6 +96,54 @@ Issued list → Reactivated → Assigned
 
 ## Business Rules
 
+### Delete Vouchers by Range
+
+- Open **Settings → Data & Backups → Danger Zone → Delete Vouchers by Range…**.
+  Choose saved estimate dates or numeric voucher numbers. Both endpoints are
+  required and inclusive; From cannot exceed To. Date fields initially show today.
+- Numeric ranges compare whole, nonnegative decimal numbers, including leading
+  zeros and IDs larger than a database integer. For example, 100–200 includes
+  both `100` and `00100`. IDs containing letters are excluded from numeric ranges
+  but can be selected by date.
+- Preview lists every matching voucher, its date, and whether it will be deleted
+  or kept. Changing either endpoint or mode requires a fresh preview. Empty ranges
+  and ranges containing only protected vouchers cannot be deleted.
+- A voucher is protected if any associated silver bar is outside In Stock status,
+  belongs to a list, or has transfer history. Skip the entire protected voucher;
+  retain all its lines, bars, and history, including bars later returned to stock.
+- Final confirmation shows the range, eligible/protected counts, and number of
+  associated bars being removed. Cancel is the default. If the active entry is
+  affected, confirmation explicitly includes discarding its unsaved edits.
+- Delete eligible headers, lines, unprotected inventory, and matching recovery
+  drafts in one transaction. Recheck the reviewed snapshot under the write lock;
+  changed vouchers or inventory require another preview. Database failures roll
+  back the batch. Unrelated and protected drafts/entries remain intact.
+- On success, show deleted/skipped counts and keep the voucher results visible.
+  Clear an affected active entry only after commit and refresh visible reports.
+  Existing delete-all commands and voucher-number generation are unchanged;
+  surviving vouchers are not renumbered. Backups remain a separate Settings action.
+
+### Sales Reports
+
+- Open **Reports → Sales Reports** (also available under View). Every saved
+  estimate counts as a sale; drafts do not appear.
+- The date range defaults to Today, can be edited with inclusive From/To dates,
+  and uses the estimate's entered date. Day-wise and month-wise grouping are
+  available, along with Today and This month shortcuts.
+- Sale net/fine weights and return net/fine weights appear in four separate
+  columns. Return weights are not subtracted from sales. Silver-bar lines and
+  carried balances are excluded. Reports are on-screen only.
+- Drill from a period into items, then into contributing vouchers. All items in
+  the selected date range can also be viewed together. Search matches item codes.
+- Group by the saved item code, combining different purities and names. The
+  latest saved name in the selected scope labels an item row. Deleted catalog
+  items remain reportable through their saved snapshots.
+- Sum recorded line weights using decimal arithmetic and display grams to two
+  decimals; do not recalculate historical fine weights or cap purity at 100%.
+- Reopening the report or selecting View report reads current saved data,
+  reflecting edited, backdated and deleted estimates. Opening a contributing
+  voucher uses the existing unsaved-entry confirmation.
+
 ### 1. Estimate Rules
 - Voucher numbers must be unique
 - Return items reduce totals
@@ -106,10 +158,10 @@ Issued list → Reactivated → Assigned
 - Catalog deletion preserves saved estimate details; incomplete snapshots block removal
 
 ### 3. Silver Bar Rules
-- Created only on first estimate save
-- Permanent once created
+- Created and reconciled through atomic estimate saves
+- Bar identities and source-line links preserved
 - Status tracking mandatory
-- List assignment exclusive
+- Membership exclusive to one list
 - Transfer history maintained
 
 ### 4. Calculation Rules
@@ -261,11 +313,11 @@ pages omit the count and display loaded-row counts; they do not reuse an old
 exact total after possible writes. Refresh/filter changes start a new page sequence.
 Each page is a current read; the whole sequence is not a frozen database snapshot.
 
-Each paged display retains at most 20,000 rows and marks when that display limit
-is reached. History/catalog/availability filters can narrow results; a selected
-bar-list pane also has this display cap. This cap affects display only, not stored
-records or repository query limits. The selected-list pane does not currently
-offer additional filters beyond choosing the list.
+History and catalog displays retain at most 20,000 rows and mark when that display
+limit is reached. Filters can narrow results. This cap affects display only, not
+stored records or repository query limits. Keyboard bar management searches inventory
+in pages of 50 matches and displays saved lists in batches of 1,500 rows. Totals,
+export, and printing use the complete saved list snapshot, regardless of displayed rows.
 
 
 ### Entry commands and draft safeguards

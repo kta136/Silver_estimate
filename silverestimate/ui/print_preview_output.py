@@ -129,6 +129,13 @@ class PrintOutputService:
                     message=validation_message,
                 )
             self._render_document(self._printer, payload.document)
+            if self._printer.printerState() == QPrinter.PrinterState.Aborted:
+                return PrintOutputOutcome(PrintOutputStatus.CANCELLED)
+            if self._printer.printerState() == QPrinter.PrinterState.Error:
+                return PrintOutputOutcome(
+                    PrintOutputStatus.FAILED,
+                    message="The printer reported an error. Check the printer and try again.",
+                )
             return PrintOutputOutcome(PrintOutputStatus.SUCCESS)
         except Exception as exc:
             LOGGER.warning("Quick print failed: %s", exc, exc_info=True)

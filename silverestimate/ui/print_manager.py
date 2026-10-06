@@ -22,6 +22,7 @@ from .print_payload_builder import (
     PrintPreviewPayload,
 )
 from .print_preview_controller import PrintPreviewController
+from .print_preview_output import PrintOutputOutcome, PrintOutputService
 from .silver_bar_print_document import (
     SilverBarInventoryPrintDocument,
     SilverBarListPrintDocument,
@@ -140,9 +141,17 @@ class PrintManager:
         payload: PrintPreviewPayload,
         *,
         parent_widget=None,
-    ) -> None:
+    ) -> PrintOutputOutcome:
         """Open a prepared preview payload on the GUI thread."""
-        self._preview_controller.open_preview(payload, parent_widget=parent_widget)
+        return self._preview_controller.open_preview(
+            payload, parent_widget=parent_widget
+        )
+
+    def quick_print(self, payload: PrintPreviewPayload) -> PrintOutputOutcome:
+        """Print a prepared payload using the saved printer and page settings."""
+        return PrintOutputService(
+            printer=self.printer, render_document=self._render_document
+        ).quick_print(payload)
 
     def print_silver_bars(self, status_filter=None, parent_widget=None):
         """Prints the INVENTORY list of silver bars using preview."""

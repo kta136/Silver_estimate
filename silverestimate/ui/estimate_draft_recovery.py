@@ -289,6 +289,19 @@ class EstimateDraftRecovery:
             self._set_status("Update failed")
             return False
 
+    def forget_deleted_draft(self, token: str) -> None:
+        """Release memory ownership after a committed maintenance deletion."""
+        if self._token == token:
+            self._token = None
+            self._last_payload = None
+            self._captured_revision = -1
+            self._discarded_revision = -1
+            self._captured_editor = None
+            self._discarded_editor = None
+        if self._waiting is not None and self._waiting.token == token:
+            self._waiting = None
+        self._set_status("Ready" if self._waiting is None else "Available")
+
     def discard_current(self) -> bool:
         if self._token is None:
             return True

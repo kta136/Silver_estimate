@@ -243,8 +243,12 @@ While the focus of this reference is the controller/service stack, the following
 - **EstimateEntryWidget (silverestimate/ui/estimate_entry.py)** - integrates `EstimateEntryPresenter` with a model-first `EstimateTableView` data path; exposes `save_estimate()`, `print_estimate()`, `safe_load_estimate()`.
 - **ItemMasterWidget (silverestimate/ui/item_master.py)** - allows CRUD via load_items(), add_item(), update_item(), delete_item() (internally using ItemsRepository).
 - **SilverBarDialog (silverestimate/ui/silver_bar_management.py)** - provides
-  `load_available_bars()`, `load_bars_in_selected_list()`, and list assignment
-  interactions through the role-specific database-manager APIs.
+  the keyboard list workspace, atomic additions/removals, `open_list(list_id)`,
+  and print-and-start-new through the role-specific database-manager APIs.
+- **SilverBarHistoryDialog (silverestimate/ui/silver_bar_history.py)** - combines
+  saved/issued lists and individual bars. Returns `selected_list_id` on acceptance
+  for the caller to open in management; issued details, reprinting, and reopening
+  stay inside this single browser.
 
 Use controllers and services as the primary integration surface; direct UI manipulation should be reserved for Qt widget customisations.
 
@@ -278,18 +282,23 @@ and the original Save contract.
 
 ### Silver-bar controller contracts
 
-`SilverBarDialog` owns nine concrete controllers/builders. Each constructor takes
-`host: SilverBarDialog`; methods access shared controls/state through `self.host`
-and retain their own helper methods. The facade preserves dialog commands with
-explicit argument signatures and direct typed controller calls. There is no
-attribute redirection, string dispatch or catch-all for unknown dialog commands.
+`SilverBarDialog` owns its keyboard workspace and delegates asynchronous loading,
+optimal-list creation, UI construction, and printing to focused controllers.
+The former assignment/transfer UI and controller facade are removed. Membership
+changes save immediately through atomic workspace commands.
 
-`SilverBarLoadController` owns its two runners, paged states and shutdown flag.
-`SilverBarListPrintController` delegates preview generations, progress and worker
-lifetime to `PreviewBuildController`. UI
-controls remain owned by Qt/the dialog. Create List from Selection invokes the
-transfer controller's selected-ID and wait-cursor helpers directly before refreshing
-the displayed lists. Existing transfer, issue, print and settings behavior remains.
+`SilverBarListPrintController.print_selected_list(preview=False)` captures the
+full list snapshot, builds its payload with `PreviewBuildController`, then calls
+`PrintManager.quick_print`. Successful submission invokes `complete_issue`, which
+validates the snapshot and starts a new workspace. Passing `preview=True` opens
+preview instead. An unchanged successfully printed snapshot supports issue-only
+retry after a storage failure.
+
+`SilverBarHistoryDialog` has independent latest-request runners for list pages,
+bar pages, and complete list details. `SilverBarsSnapshotRepository.get_list_history_page`
+supports search, All/Active/Issued state, keyset pagination, and optional counts;
+each displayed list includes totals over all its bars. List-details printing uses
+the complete snapshot even when only the first table page is displayed.
 
 
 ### PreviewBuildController (silverestimate/ui/preview_build_worker.py)

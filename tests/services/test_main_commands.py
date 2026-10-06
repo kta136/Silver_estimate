@@ -228,6 +228,27 @@ def test_save_estimate_invokes_widget(monkeypatch):
     assert _MessageBoxStub.information_calls == []
 
 
+def test_save_and_data_reset_refresh_visible_sales_reports(monkeypatch):
+    _install_stubs(monkeypatch)
+    refreshed = []
+    report = types.SimpleNamespace(
+        isVisible=lambda: True, refresh=lambda: refreshed.append(True)
+    )
+    window = types.SimpleNamespace(
+        sales_report_widget=report,
+        estimate_widget=types.SimpleNamespace(
+            save_estimate=lambda: True, clear_form=lambda **kwargs: None
+        ),
+    )
+    commands = _make_commands(window)
+    commands.save_estimate()
+    commands._refresh_views_after_data_reset()
+    assert refreshed == [True, True]
+    report.isVisible = lambda: False
+    commands.save_estimate()
+    assert refreshed == [True, True]
+
+
 def test_save_estimate_shows_info_when_missing(monkeypatch):
     _install_stubs(monkeypatch)
 

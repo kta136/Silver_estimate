@@ -49,6 +49,9 @@ class NavigationController:
     def show_estimate_history(self):
         return self._navigation_service.show_estimate_history()
 
+    def show_sales_report(self):
+        return self._navigation_service.show_sales_report()
+
     def show_about(self):
         QMessageBox.about(
             self._main_window,
@@ -90,6 +93,9 @@ class NavigationController:
 
     def delete_all_estimates(self):
         return self._commands.delete_all_estimates()
+
+    def delete_vouchers_by_range(self):
+        return self._commands.delete_vouchers_by_range()
 
     # --- Builders ------------------------------------------------------
 
@@ -192,6 +198,9 @@ class NavigationController:
             get_icon("item_master", widget=self._main_window)
         )
         view_item_master_action.setCheckable(True)
+        view_sales_report_action = QAction("Sales &Reports", self._main_window)
+        view_sales_report_action.setIcon(get_icon("history", widget=self._main_window))
+        view_sales_report_action.setCheckable(True)
         view_silver_bars_action = QAction("Open &Silver Bars Dialog", self._main_window)
         view_silver_bars_action.setIcon(
             get_icon("silver_bars", widget=self._main_window)
@@ -200,19 +209,29 @@ class NavigationController:
 
         view_group.addAction(view_estimate_action)
         view_group.addAction(view_item_master_action)
+        view_group.addAction(view_sales_report_action)
         view_group.addAction(view_silver_bars_action)
 
         view_estimate_action.setChecked(True)
 
         view_estimate_action.triggered.connect(self.show_estimate)
         view_item_master_action.triggered.connect(self.show_item_master)
+        view_sales_report_action.triggered.connect(self.show_sales_report)
         view_silver_bars_action.triggered.connect(self.show_silver_bars)
 
         view_menu.addAction(view_estimate_action)
         view_menu.addAction(view_item_master_action)
+        view_menu.addAction(view_sales_report_action)
         view_menu.addAction(view_silver_bars_action)
 
         reports_menu = menu_bar.addMenu("&Reports")
+        sales_report_action = QAction("&Sales Reports", self._main_window)
+        sales_report_action.setIcon(get_icon("history", widget=self._main_window))
+        sales_report_action.setStatusTip(
+            "View daily, monthly and item-wise sale and return weights"
+        )
+        sales_report_action.triggered.connect(self.show_sales_report)
+        reports_menu.addAction(sales_report_action)
         history_action = QAction("Estimate &History", self._main_window)
         history_action.setIcon(get_icon("history", widget=self._main_window))
         history_action.triggered.connect(self.show_estimate_history)
@@ -235,4 +254,5 @@ class NavigationController:
         self._main_window._menu_silver_action = silver_bars_action
         self._main_window._view_estimate_action = view_estimate_action
         self._main_window._view_item_master_action = view_item_master_action
+        self._main_window._view_sales_report_action = view_sales_report_action
         self._main_window._view_silver_bars_action = view_silver_bars_action

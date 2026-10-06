@@ -95,7 +95,8 @@ class MainCommands:
         try:
             widget = getattr(self.main_window, "estimate_widget", None)
             if widget:
-                widget.save_estimate()
+                if widget.save_estimate():
+                    self._refresh_sales_report()
             else:
                 QMessageBox.information(
                     self.main_window, "Save", "Estimate view is not available."
@@ -317,6 +318,28 @@ class MainCommands:
             file_path=ensure_catalog_file_suffix(file_path),
         )
 
+    def delete_vouchers_by_range(self) -> MainCommandOutcome:
+        from PySide6.QtWidgets import QApplication
+
+        from silverestimate.services.voucher_deletion import VoucherDeletionController
+        from silverestimate.ui.voucher_range_deletion_dialog import (
+            VoucherRangeDeletionDialog,
+        )
+
+        if not self._ensure_db():
+            return MainCommandOutcome(
+                MainCommandStatus.FAILED, "Database is unavailable."
+            )
+        dialog = VoucherRangeDeletionDialog(
+            VoucherDeletionController(self.db, self.main_window),
+            QApplication.activeModalWidget() or self.main_window,
+        )
+        try:
+            dialog.exec()
+        finally:
+            dialog.deleteLater()
+        return MainCommandOutcome(MainCommandStatus.SUCCESS)
+
     def delete_all_estimates(self) -> MainCommandOutcome:
         if not self._ensure_db():
             return MainCommandOutcome(
@@ -436,6 +459,7 @@ class MainCommands:
         return True
 
     def _refresh_views_after_data_reset(self) -> None:
+        self._refresh_sales_report()
         item_master = getattr(self.main_window, "item_master_widget", None)
         if item_master is not None:
             try:
@@ -449,3 +473,8 @@ class MainCommands:
                 estimate_widget.clear_form(confirm=False)
             except Exception as exc:
                 self.logger.warning("Could not clear estimate form: %s", exc)
+
+    def _refresh_sales_report(self) -> None:
+        report = getattr(self.main_window, "sales_report_widget", None)
+        if report is not None and report.isVisible():
+            report.refresh()

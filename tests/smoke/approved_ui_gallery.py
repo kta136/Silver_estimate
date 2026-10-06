@@ -101,7 +101,7 @@ def capture_approved_gallery(
     save(catalog, "item-master")
     history.estimates_table.selectRow(0)
     save(history, "estimate-history", full=True)
-    inventory.available_bars_table.selectRow(0)
+    inventory.list_bars_table.selectRow(0)
     save(inventory, "silver-bar-management", full=True)
     for index, name in enumerate(
         (
@@ -118,10 +118,13 @@ def capture_approved_gallery(
         if index == 2:
             settings.print_page._refresh_preview()
         save(settings, name, full=True)
-    silver_history.tab_widget.setCurrentIndex(0)
+    silver_history.view_combo.setCurrentIndex(1)
+    qtbot.waitUntil(lambda: not silver_history._loading[1])
     silver_history.bars_table.selectRow(0)
     save(silver_history, "silver-history-all", full=True)
-    silver_history.tab_widget.setCurrentIndex(1)
+    silver_history.view_combo.setCurrentIndex(0)
+    silver_history.list_state_combo.setCurrentText("Issued")
+    qtbot.waitUntil(lambda: not silver_history._loading[0])
     silver_history.lists_table.selectRow(0)
     save(silver_history, "silver-history-issued", full=True)
     save(font_dialog, "font-dialog")

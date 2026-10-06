@@ -66,7 +66,7 @@ def test_worker_error_returns_only_after_thread_stops(qtbot):
 
 
 def make_page(qtbot, database):
-    actions = DataManagementActions(*(lambda: None for _ in range(4)))
+    actions = DataManagementActions(*(lambda: None for _ in range(5)))
     owner = threading.get_ident()
 
     def provider():

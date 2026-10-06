@@ -216,12 +216,7 @@ def smoke_environment(monkeypatch, settings_stub, tmp_path, qt_application_state
         "silverestimate.ui.print_preview_output.QMessageBox",
         "silverestimate.ui.settings_dialog.QMessageBox",
         "silverestimate.ui.silver_bar_history.QMessageBox",
-        "silverestimate.ui.silver_bar_list_lifecycle_controller.QMessageBox",
-        "silverestimate.ui.silver_bar_load_controller.QMessageBox",
         "silverestimate.ui.silver_bar_management.QMessageBox",
-        "silverestimate.ui.silver_bar_optimization_controller.QMessageBox",
-        "silverestimate.ui.silver_bar_table_controller.QMessageBox",
-        "silverestimate.ui.silver_bar_transfer_controller.QMessageBox",
     ):
         monkeypatch.setattr(message_box_target, _MessageBoxStub)
     monkeypatch.setattr(
@@ -502,35 +497,10 @@ def _show_and_capture_dialog(
 
 
 def _populate_silver_bar_management_dialog(dialog, db_manager) -> None:
-    dialog._cancel_active_loads()
-    available_rows, available_total = db_manager.get_available_silver_bars_page()
-    dialog._populate_table(
-        dialog.available_bars_table,
-        _dict_rows(available_rows),
-        total_rows=available_total,
-    )
-
-    active_list_index = next(
-        (
-            index
-            for index in range(dialog.list_combo.count())
-            if dialog.list_combo.itemData(index) is not None
-        ),
-        -1,
-    )
-    assert active_list_index >= 0
-    dialog.list_combo.setCurrentIndex(active_list_index)
-    dialog._cancel_active_loads()
-    list_rows, list_total = db_manager.get_silver_bars_in_list_page(
-        dialog.current_list_id
-    )
-    dialog._populate_table(
-        dialog.list_bars_table,
-        _dict_rows(list_rows),
-        total_rows=list_total,
-    )
-    dialog._update_transfer_buttons_state()
-    dialog._update_selection_summaries()
+    lists = db_manager.get_silver_bar_lists(include_issued=False)
+    assert lists
+    snapshot = db_manager.get_silver_bar_list_snapshot(lists[0]["list_id"])
+    dialog.apply_snapshot(snapshot)
 
 
 def _capture_print_preview_screen(
@@ -790,7 +760,7 @@ def test_full_startup_smoke_with_seeded_database_and_screenshots(
             height=760,
         )
         _populate_silver_bar_management_dialog(silver_bar_dialog, reopened_db)
-        assert silver_bar_dialog.available_bars_model.rowCount() >= 1
+        assert silver_bar_dialog.weight_search_edit.isEnabled()
         assert silver_bar_dialog.list_bars_model.rowCount() >= 1
         smoke_capture(silver_bar_dialog, "10-silver-bar-management.png")
 
@@ -818,11 +788,9 @@ def test_full_startup_smoke_with_seeded_database_and_screenshots(
             width=1000,
             height=680,
         )
-        silver_history_dialog._cancel_active_loads()
-        silver_history_dialog.populate_bars_table(
-            _dict_rows(reopened_db.search_silver_bar_history(limit=2000))
-        )
-        silver_history_dialog.load_issued_lists()
+        silver_history_dialog.view_combo.setCurrentIndex(1)
+        qtbot.waitUntil(lambda: not silver_history_dialog._loading[1])
+        qtbot.waitUntil(lambda: not silver_history_dialog._loading[0])
         assert silver_history_dialog.bars_model.rowCount() >= 3
         assert silver_history_dialog.lists_model.rowCount() >= 1
         smoke_capture(silver_history_dialog, "12-silver-bar-history.png")

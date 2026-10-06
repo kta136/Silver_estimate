@@ -47,6 +47,7 @@ class DataManagementActions:
     delete_all_data: Callable[[], object]
     restore_item_catalog: Callable[[], object]
     create_item_catalog_backup: Callable[[], object]
+    delete_vouchers_by_range: Callable[[], object]
 
 
 @dataclass(frozen=True)
@@ -79,6 +80,12 @@ class SettingsDataController:
         return self._run_command(
             self._actions.delete_all_estimates,
             "Delete-all-estimates command",
+        )
+
+    def delete_vouchers_by_range(self) -> DataActionResult:
+        return self._run_command(
+            self._actions.delete_vouchers_by_range,
+            "Delete-vouchers-by-range command",
         )
 
     def delete_all_data(self) -> DataActionResult:
@@ -201,6 +208,19 @@ class DataManagementPage(QWidget):
         danger.setStyleSheet("QGroupBox { border: 1px solid #ff9ca4; color: #cf2434; }")
         danger_layout = QVBoxLayout(danger)
         danger_layout.addWidget(description)
+        self.delete_range_button = QPushButton("Delete Vouchers by Range…")
+        self.delete_range_button.setObjectName("SettingsDangerButton")
+        self.delete_range_button.setToolTip(
+            "Preview and delete vouchers by date or voucher number range.\n"
+            "Vouchers with protected silver bars are skipped."
+        )
+        self.delete_range_button.clicked.connect(
+            lambda: self._run_command(
+                self._controller.delete_vouchers_by_range,
+                "Delete Vouchers by Range",
+            )
+        )
+        danger_layout.addWidget(self.delete_range_button)
         danger_layout.addLayout(self._create_delete_actions())
         layout.addWidget(danger)
         layout.addStretch()

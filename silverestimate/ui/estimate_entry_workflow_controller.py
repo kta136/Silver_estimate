@@ -567,6 +567,26 @@ class EstimateEntryWorkflowController:
     def _confirm_history_replacement(self) -> bool:
         return self._confirm_unsaved("opening the selected estimate")
 
+    def open_saved_estimate(self, voucher_no: str) -> bool:
+        """Open a report voucher without overwriting an unconfirmed entry draft."""
+        presenter = self.host.presenter
+        if presenter is None:
+            return False
+        if not self._confirm_history_replacement():
+            return False
+        try:
+            loaded = presenter.load_estimate(voucher_no)
+            if loaded is None:
+                self.host._status(f"Estimate {voucher_no} not found.", 4000)
+                return False
+            return self.apply_loaded_estimate(loaded)
+        except Exception as exc:
+            self.host.logger.warning(
+                "Could not open report voucher %s: %s", voucher_no, exc
+            )
+            self.host._status(f"Could not open estimate {voucher_no}: {exc}", 5000)
+            return False
+
     def show_silver_bar_management(self) -> None:
         if hasattr(self.host.main_window, "show_silver_bars"):
             self.host.main_window.show_silver_bars()

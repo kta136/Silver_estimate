@@ -33,6 +33,61 @@ def test_close_stops_recovery_before_closing_database(main_window_fixture):
     assert database.closed
 
 
+def test_sales_report_navigation_reuses_view_and_stops_reader_before_close(
+    main_window_fixture, qtbot, tmp_path, monkeypatch
+):
+    from PySide6.QtCore import QDate
+
+    from tests.sales_report_support import report_database
+
+    window = main_window_fixture["window"]
+    with report_database(tmp_path) as report_db:
+        monkeypatch.setattr(
+            window.db,
+            "open_read_connection",
+            report_db.open_read_connection,
+            raising=False,
+        )
+        window.show()
+        action = next(
+            action
+            for action in window.findChildren(QAction)
+            if action.text() == "&Sales Reports"
+        )
+        action.trigger()
+        report = window.sales_report_widget
+        qtbot.waitUntil(lambda: not report._loading)
+        assert window.stack.currentWidget() is report
+        assert window._view_sales_report_action.isChecked()
+        report.date_from.setDate(QDate(2026, 9, 30))
+        report.date_to.setDate(QDate(2026, 10, 31))
+        report.refresh()
+        qtbot.waitUntil(lambda: not report._loading)
+        assert report.total_labels[0].text() == "18.00 g"
+        monkeypatch.setattr(
+            window.estimate_widget, "open_saved_estimate", lambda voucher: False
+        )
+        report.voucher_requested.emit("2")
+        assert window.stack.currentWidget() is report
+        monkeypatch.setattr(
+            window.estimate_widget, "open_saved_estimate", lambda voucher: True
+        )
+        report.voucher_requested.emit("2")
+        assert window.stack.currentWidget() is window.estimate_widget
+        action.trigger()
+        qtbot.waitUntil(lambda: not report._loading)
+        assert window.sales_report_widget is report
+        assert report.date_from.date() == QDate(2026, 9, 30)
+        events = []
+        monkeypatch.setattr(
+            window.db,
+            "close",
+            lambda: events.append(report._load_runner._thread.is_alive()),
+        )
+        window.close()
+        assert events == [False]
+
+
 def test_estimate_tools_and_shortcut_help_remain_reachable_from_menu(
     main_window_fixture, monkeypatch
 ):

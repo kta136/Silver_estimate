@@ -13,6 +13,7 @@ from .print_payload_builder import PrintDocument, PrintPreviewPayload
 from .print_preview_dialog import PrintPreviewDialog
 from .print_preview_navigation import PrintPreviewNavigationController
 from .print_preview_output import (
+    PrintOutputOutcome,
     PrintOutputService,
     PrintPreviewOutputController,
 )
@@ -70,8 +71,8 @@ class PrintPreviewController:
         payload: PrintPreviewPayload,
         *,
         parent_widget=None,
-    ) -> None:
-        """Open the custom preview window with persistent report controls."""
+    ) -> PrintOutputOutcome:
+        """Open a preview and report printing separately from PDF export/closing."""
         preview = PrintPreviewDialog(self._printer, parent_widget)
         preview.setWindowTitle(payload.title)
         session = PrintPreviewSession(
@@ -106,6 +107,7 @@ class PrintPreviewController:
         preview.exec()
         self._preferences.save_zoom(preview_widget)
         self._preferences.save_preview_defaults(self._printer, session.payload)
+        return session.print_outcome
 
 
 __all__ = ["PrintPreviewController"]

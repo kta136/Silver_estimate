@@ -174,13 +174,15 @@ class PrintPreviewToolbarBuilder:
         print_action.setToolTip("Send directly to the selected printer (Ctrl+P)")
         print_action.setShortcut("Ctrl+P")
         print_action.setShortcutContext(Qt.ShortcutContext.WindowShortcut)
-        print_action.triggered.connect(
-            lambda: self._output.quick_print_current(
+
+        def print_current() -> None:
+            session.print_outcome = self._output.quick_print_current(
                 preview,
                 session.payload,
                 parent_widget,
             )
-        )
+
+        print_action.triggered.connect(print_current)
         add_icon_only_action(toolbar, print_action)
         toolbar.widgetForAction(print_action).setStyleSheet(
             "background: #007f89; color: white; border-color: #007f89;"

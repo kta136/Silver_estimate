@@ -1,23 +1,18 @@
-"""Async loading controller for silver-bar management."""
+"""Cancellable prefix searches and whole-list reads with stale-result guards."""
 
 from __future__ import annotations
 
-import contextlib
-import logging
 import threading
-import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, Callable
 
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtCore import QTimer
 
-from silverestimate.domain.pagination import (
-    AvailableBarCursor,
-    BarListCursor,
-    Page,
+from silverestimate.domain.silver_bar_workspace import (
+    BarWeightCursor,
+    normalize_weight_prefix,
 )
 from silverestimate.infrastructure.latest_request_runner import LatestRequestRunner
-from silverestimate.infrastructure.paged_load_state import PagedLoadState
 from silverestimate.persistence.silver_bars_snapshot_repository import (
     SilverBarsSnapshotRepository,
 )
@@ -27,441 +22,210 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class _BarsLoadRequest:
-    target: str
-    connection_factory: Callable[[threading.Event | None], Any]
-    payload: dict[str, Any]
-    cursor: AvailableBarCursor | BarListCursor | None
-    append: bool
-    started_at: float
+class _SearchRequest:
+    factory: Callable
+    prefix: str
+    cursor: BarWeightCursor | None = None
 
 
-_BarsPage: TypeAlias = (
-    Page[dict[str, Any], AvailableBarCursor] | Page[dict[str, Any], BarListCursor]
-)
+def _search(request: _SearchRequest, cancel: threading.Event):
+    repo = SilverBarsSnapshotRepository(request.factory, cancel_event=cancel)
+    return request, repo.search_weight_prefix(request.prefix, cursor=request.cursor)
 
 
-class _BarsLoadError(RuntimeError):
-    def __init__(self, target: str, cause: Exception) -> None:
-        super().__init__(str(cause))
-        self.target = target
-
-
-def _load_bars_page(
-    request: _BarsLoadRequest,
-    cancel_event: threading.Event,
-) -> tuple[_BarsLoadRequest, _BarsPage]:
-    try:
-        snapshot = SilverBarsSnapshotRepository(
-            request.connection_factory,
-            cancel_event=cancel_event,
-        )
-        page: _BarsPage
-        if request.target == "available":
-            page = snapshot.get_available_bars_keyset_page(
-                weight_query=request.payload.get("weight_query"),
-                weight_tolerance=request.payload.get("weight_tolerance", 0.001),
-                min_purity=request.payload.get("min_purity"),
-                max_purity=request.payload.get("max_purity"),
-                date_range=request.payload.get("date_range"),
-                cursor=cast(AvailableBarCursor | None, request.cursor),
-                limit=1500,
-                include_total=not request.append,
-            )
-        elif request.target == "list":
-            page = snapshot.get_bars_in_list_keyset_page(
-                request.payload.get("list_id"),
-                cursor=cast(BarListCursor | None, request.cursor),
-                limit=1500,
-                include_total=not request.append,
-            )
-        else:
-            raise ValueError(f"Unknown load target: {request.target}")
-    except Exception as exc:
-        raise _BarsLoadError(request.target, exc) from exc
-    return request, page
+def _load_list(request: tuple[Callable, int], cancel: threading.Event):
+    factory, list_id = request
+    return SilverBarsSnapshotRepository(factory, cancel_event=cancel).get_list_snapshot(
+        list_id
+    )
 
 
 class SilverBarLoadController:
-    """Coordinate async available/list loads and stale-response handling."""
-
     def __init__(self, host: SilverBarDialog) -> None:
         self.host = host
-        self._load_shutdown = False
-        self._available_page_state = PagedLoadState[
-            dict[str, Any],
-            AvailableBarCursor,
-        ]()
-        self._list_page_state = PagedLoadState[dict[str, Any], BarListCursor]()
-        self._available_runner = LatestRequestRunner(
-            _load_bars_page,
-            host,
-            name="available-bars-loader",
+        self.timer = QTimer(host)
+        self.timer.setSingleShot(True)
+        self.timer.setInterval(100)
+        self.timer.timeout.connect(self.search)
+        self.search_runner = LatestRequestRunner(
+            _search, host, name="bar-weight-search"
         )
-        self._list_runner = LatestRequestRunner(
-            _load_bars_page,
-            host,
-            name="list-bars-loader",
+        self.list_runner = LatestRequestRunner(_load_list, host, name="bar-list-reader")
+        self.search_runner.result.connect(self._search_ready)
+        self.search_runner.failed.connect(self._search_failed)
+        self.list_runner.result.connect(self._list_ready)
+        self.list_runner.failed.connect(self._list_failed)
+        self.prefix: str | None = None
+        self.dismissed = True
+        self.announce_results = True
+        self.ready_prefix: str | None = None
+        self.cursor: BarWeightCursor | None = None
+        self.pending_add = False
+        self.loading = False
+        self.shutdown_called = False
+        self.advance_on_page = False
+
+    def cancel_search(self, *, dismiss: bool = True) -> None:
+        self.timer.stop()
+        self.search_runner.cancel()
+        self.ready_prefix = None
+        self.pending_add = False
+        self.loading = False
+        self.cursor = None
+        self.advance_on_page = False
+        self.dismissed = dismiss
+        self.host.suggestions_panel.hide()
+
+    def schedule_search(self, text: str, *, announce: bool = True) -> None:
+        self.cancel_search()
+        self.host.suggestions_model.clear_rows()
+        self.prefix = None
+        if self.shutdown_called or not self.host.editable:
+            return
+        try:
+            self.prefix = normalize_weight_prefix(text) if text.strip() else ""
+        except ValueError as exc:
+            self.host.set_status(str(exc), error=True)
+            return
+        self.dismissed = False
+        self.announce_results = announce
+        if announce:
+            self.host.set_status(
+                "Finding matching bars…" if self.prefix else "Loading available bars…"
+            )
+        self.timer.start()
+
+    def search(self, *, append: bool = False) -> None:
+        if (
+            self.shutdown_called
+            or self.prefix is None
+            or self.dismissed
+            or not self.host.editable
+            or (append and (self.loading or self.cursor is None))
+        ):
+            return
+        self.timer.stop()
+        self.loading = True
+        request = _SearchRequest(
+            self.host.db_manager.open_read_connection,
+            self.prefix,
+            self.cursor if append else None,
         )
-        for runner in (self._available_runner, self._list_runner):
-            runner.result.connect(self._on_bars_load_ready)
-            runner.failed.connect(self._on_bars_load_error)
-            runner.settled.connect(self._on_bars_load_finished)
+        self.search_runner.submit(request)
 
-    def _schedule_available_reload(self, *args, **kwargs) -> None:
-        del args, kwargs
-        try:
-            self.host._filter_reload_timer.start()
-        except (AttributeError, RuntimeError, TypeError) as exc:
-            self.host.logger.debug("Failed to start available reload timer: %s", exc)
-            self.load_available_bars()
-
-    @staticmethod
-    def _refresh_widget_style(widget) -> None:
-        if widget is None:
+    def enter(self) -> None:
+        if self.prefix is None or self.dismissed or not self.host.editable:
             return
-        try:
-            style = widget.style()
-            style.unpolish(widget)
-            style.polish(widget)
-            widget.update()
-        except AttributeError, RuntimeError, TypeError:
-            return
+        if self.ready_prefix == self.prefix and not self.loading:
+            self.host.add_current_match()
+        elif self.prefix:
+            # Fast typed Enter may wait for its exact query. Blank browsing only
+            # adds a visible selection, never an unseen result arriving later.
+            self.pending_add = True
+            if self.timer.isActive() or not self.loading:
+                self.search()
+        elif not self.loading:
+            self.search()
 
-    def _set_list_table_active_state(self, is_active: bool) -> None:
-        list_table = getattr(self.host, "list_bars_table", None)
-        if list_table is None:
+    def _search_ready(self, generation: int, value: Any) -> None:
+        if (
+            generation != self.search_runner.generation
+            or self.dismissed
+            or not self.host.editable
+        ):
             return
-        state = "active" if is_active else "inactive"
-        try:
-            header = list_table.horizontalHeader()
-        except AttributeError, RuntimeError, TypeError:
-            header = None
-        list_table.setProperty("listState", state)
-        if header is not None:
-            header.setProperty("listState", state)
-        list_table.setEnabled(is_active)
-        self._refresh_widget_style(list_table)
-        if header is not None:
-            self._refresh_widget_style(header)
-        with contextlib.suppress(AttributeError, RuntimeError, TypeError):
-            self._refresh_widget_style(list_table.viewport())
-
-    def _start_bars_load(
-        self,
-        target: str,
-        payload: dict,
-        *,
-        append: bool = False,
-    ) -> int:
-        if self._load_shutdown:
-            return 0
-        cursor: AvailableBarCursor | BarListCursor | None
-        if target == "available":
-            cursor = self._available_page_state.cursor
-            runner = self._available_runner
-            if not append:
-                self._available_page_state.reset()
-                cursor = None
-            elif not self._available_page_state.has_more:
-                return runner.generation
-            button = getattr(self.host, "available_load_more_button", None)
-        elif target == "list":
-            cursor = self._list_page_state.cursor
-            runner = self._list_runner
-            if not append:
-                self._list_page_state.reset()
-                cursor = None
-            elif not self._list_page_state.has_more:
-                return runner.generation
-            button = getattr(self.host, "list_load_more_button", None)
+        request, page = value
+        if request.prefix != self.prefix:
+            return
+        self.loading = False
+        self.ready_prefix = request.prefix
+        self.cursor = page.next_cursor
+        old_count = self.host.suggestions_model.rowCount()
+        if request.cursor is None:
+            self.host.suggestions_model.set_rows(list(page.items))
+            target = 0
         else:
-            raise ValueError(f"Unknown load target: {target}")
-        if button is not None:
-            button.setEnabled(False)
-
-        started_at = time.perf_counter()
-        page: _BarsPage
-        connection_factory = getattr(self.host.db_manager, "open_read_connection", None)
-        if not callable(connection_factory):
-            try:
-                if target == "available":
-                    getter = getattr(
-                        self.host.db_manager,
-                        "get_available_silver_bars_keyset_page",
-                        None,
-                    )
-                    if callable(getter):
-                        page = getter(
-                            weight_query=payload.get("weight_query"),
-                            weight_tolerance=payload.get("weight_tolerance", 0.001),
-                            min_purity=payload.get("min_purity"),
-                            max_purity=payload.get("max_purity"),
-                            date_range=payload.get("date_range"),
-                            cursor=cursor,
-                            limit=1500,
-                        )
-                    else:
-                        rows, total = (
-                            self.host.db_manager.get_available_silver_bars_page(
-                                weight_query=payload.get("weight_query"),
-                                weight_tolerance=payload.get("weight_tolerance", 0.001),
-                                min_purity=payload.get("min_purity"),
-                                max_purity=payload.get("max_purity"),
-                                date_range=payload.get("date_range"),
-                                limit=1500,
-                            )
-                        )
-                        page = Page(tuple(dict(row) for row in rows), total, None)
-                else:
-                    getter = getattr(
-                        self.host.db_manager,
-                        "get_silver_bars_in_list_keyset_page",
-                        None,
-                    )
-                    if callable(getter):
-                        page = getter(
-                            payload.get("list_id"),
-                            cursor=cursor,
-                            limit=1500,
-                        )
-                    else:
-                        rows, total = self.host.db_manager.get_silver_bars_in_list_page(
-                            payload.get("list_id"),
-                            limit=1500,
-                            offset=0,
-                        )
-                        page = Page(tuple(dict(row) for row in rows), total, None)
-                request = _BarsLoadRequest(
-                    target,
-                    cast(Any, connection_factory),
-                    payload,
-                    cursor,
-                    append,
-                    started_at,
+            self.host.suggestions_model.append_rows(list(page.items))
+            target = old_count if self.advance_on_page else max(0, old_count - 1)
+        self.advance_on_page = False
+        count = self.host.suggestions_model.rowCount()
+        self.host.position_suggestions()
+        self.host.suggestions_panel.setVisible(count > 0)
+        noun = "matching" if request.prefix else "available"
+        self.host.suggestions_hint.setText(
+            f"  {count}{'+' if page.has_more else ''} {noun} bars · ↑ ↓ Choose · Enter Add · Esc Dismiss"
+            + ("     ↓ at end: more matches" if page.has_more else "")
+        )
+        if count:
+            self.host.suggestions_table.selectRow(min(target, count - 1))
+            self.host.suggestions_table.scrollTo(
+                self.host.suggestions_table.currentIndex()
+            )
+            if self.announce_results:
+                self.host.set_status(
+                    f"{count}{'+' if page.has_more else ''} {noun} bars · Enter adds the highlighted bar."
                 )
-                self._on_bars_load_ready(0, (request, page))
-            except Exception as exc:
-                self._on_direct_load_error(target, exc)
-            finally:
-                self._finish_target_load(target)
-            return 0
+        elif self.announce_results or not self.host.status_label.property("error"):
+            self.host.set_status(
+                "No available bars match this weight. Try different digits."
+                if request.prefix
+                else "No available bars."
+            )
+        if self.pending_add:
+            self.pending_add = False
+            if count:
+                self.host.add_current_match()
 
-        return runner.submit(
-            _BarsLoadRequest(
-                target,
-                connection_factory,
-                payload,
-                cursor,
-                append,
-                started_at,
+    def _search_failed(self, generation: int, error: Any) -> None:
+        if generation == self.search_runner.generation:
+            self.loading = False
+            self.pending_add = False
+            self.ready_prefix = None
+            self.host.suggestions_panel.hide()
+            self.host.set_status(
+                f"Could not find bars: {error}. Ctrl+F retries.", error=True
             )
-        )
 
-    def _on_bars_load_ready(self, _generation: int, value: object) -> None:
-        request, page = cast(tuple[_BarsLoadRequest, _BarsPage], value)
-        target = request.target
-        if target == "available":
-            available_page = Page(
-                tuple(dict(row) for row in page.items),
-                page.total,
-                cast(AvailableBarCursor | None, page.next_cursor),
-            )
-            rows = self._available_page_state.apply(
-                available_page,
-                append=request.append,
-            )
-            self.host._populate_table(
-                self.host.available_bars_table,
-                self._available_page_state.last_page_rows,
-                total_rows=page.total,
-                append=request.append,
-            )
-            self.host._restore_table_column_widths()
-            button = getattr(self.host, "available_load_more_button", None)
-            if button is not None:
-                button.setVisible(self._available_page_state.has_more)
-        elif target == "list":
-            list_page = Page(
-                tuple(dict(row) for row in page.items),
-                page.total,
-                cast(BarListCursor | None, page.next_cursor),
-            )
-            rows = self._list_page_state.apply(
-                list_page,
-                append=request.append,
-            )
-            self.host._populate_table(
-                self.host.list_bars_table,
-                self._list_page_state.last_page_rows,
-                total_rows=page.total,
-                append=request.append,
-            )
-            button = getattr(self.host, "list_load_more_button", None)
-            if button is not None:
-                button.setVisible(self._list_page_state.has_more)
-        else:
+    def move_match(self, step: int) -> None:
+        if self.dismissed or self.prefix is None or self.ready_prefix != self.prefix:
             return
-        self.host._update_transfer_buttons_state()
-        self.host._update_selection_summaries()
-
-        elapsed_ms = (time.perf_counter() - request.started_at) * 1000.0
-        self.host.logger.debug(
-            "[perf] silver_bars.load_%s=%.2fms rows=%s total=%s",
-            target,
-            elapsed_ms,
-            len(rows),
-            page.total,
-        )
-
-    def _on_bars_load_error(self, _generation: int, error: object) -> None:
-        target = error.target if isinstance(error, _BarsLoadError) else "available"
-        self._on_direct_load_error(target, error)
-
-    def _on_direct_load_error(self, target: str, error: object) -> None:
-        message = str(error)
-        if target == "available":
-            self.host._populate_table(self.host.available_bars_table, [], total_rows=0)
-            QMessageBox.critical(
-                self.host, "Error", f"Failed to load available bars: {message}"
-            )
-        elif target == "list":
-            self.host._populate_table(self.host.list_bars_table, [], total_rows=0)
-            QMessageBox.critical(
-                self.host,
-                "Error",
-                f"Failed to load bars for list {self.host.current_list_id}: {message}",
-            )
-
-    def _on_bars_load_finished(self, generation: int) -> None:
-        if generation == self._available_runner.generation:
-            self._finish_target_load("available")
-        if generation == self._list_runner.generation:
-            self._finish_target_load("list")
-
-    def _finish_target_load(self, target: str) -> None:
-        button = getattr(self.host, f"{target}_load_more_button", None)
-        if button is not None:
-            button.setEnabled(True)
-
-    def _cancel_active_loads(self) -> None:
-        for runner in (self._available_runner, self._list_runner):
-            runner.cancel()
-
-    def _shutdown_loads(self) -> None:
-        if self._load_shutdown:
+        row = self.host.suggestions_table.currentIndex().row()
+        count = self.host.suggestions_model.rowCount()
+        if step > 0 and row == count - 1 and self.cursor is not None:
+            self.advance_on_page = True
+            self.search(append=True)
             return
-        self._load_shutdown = True
-        for runner in (self._available_runner, self._list_runner):
-            with contextlib.suppress(TypeError, RuntimeError):
-                runner.result.disconnect(self._on_bars_load_ready)
-            with contextlib.suppress(TypeError, RuntimeError):
-                runner.failed.disconnect(self._on_bars_load_error)
-            with contextlib.suppress(TypeError, RuntimeError):
-                runner.settled.disconnect(self._on_bars_load_finished)
-            runner.shutdown()
+        self.host.suggestions_table.selectRow(max(0, min(count - 1, row + step)))
+        self.host.suggestions_table.scrollTo(self.host.suggestions_table.currentIndex())
 
-    def load_available_bars(self, *, append: bool = False) -> None:
-        if self._load_shutdown:
-            return
-        weight_query = self.host.weight_search_edit.text().strip()
-        self._start_bars_load(
-            "available",
-            {
-                "weight_query": weight_query if weight_query else None,
-                "weight_tolerance": 0.0,
-                "date_range": self.host._current_date_range(),
-            },
-            append=append,
-        )
+    def load_list(self, list_id: int) -> None:
+        self.cancel_search()
+        self.host._loading_list = True
+        self.host.current_list_id = list_id
+        self.host._update_actions()
+        self.host.set_status("Loading saved list…")
+        self.list_runner.submit((self.host.db_manager.open_read_connection, list_id))
 
-    def load_lists(self) -> None:
-        logging.getLogger(__name__).debug("Loading lists...")
-        self.host.list_combo.blockSignals(True)
-        self.host.list_combo.clear()
-        self.host.list_combo.addItem("--- Select a List ---", None)
-        try:
-            lists = self.host.db_manager.get_silver_bar_lists(include_issued=False)
-            for list_row in lists:
-                list_note = list_row["list_note"] or ""
-                list_date = (
-                    list_row["creation_date"].split()[0]
-                    if "creation_date" in list_row and list_row["creation_date"]
-                    else ""
-                )
-                display_text = f"{list_row['list_identifier']} ({list_date})"
-                if list_note:
-                    display_text += f" - {list_note}"
-                self.host.list_combo.addItem(display_text, list_row["list_id"])
-        except Exception as exc:
-            self.host.logger.warning(
-                "Failed to load silver bar lists: %s", exc, exc_info=True
+    def _list_ready(self, generation: int, snapshot: Any) -> None:
+        if (
+            generation == self.list_runner.generation
+            and snapshot.list_id == self.host.current_list_id
+        ):
+            self.host.apply_snapshot(snapshot)
+            self.host.focus_weight()
+            self.host.set_status(
+                "List opened. Changes save automatically."
+                if not snapshot.issued
+                else "Issued list · Read only. Reprint or reactivate from history."
             )
-            QMessageBox.critical(self.host, "Error", f"Failed to load lists: {exc}")
-        finally:
-            try:
-                self.host._restore_selected_list_from_settings()
-            except Exception as exc:
-                self.host.logger.debug(
-                    "Failed to restore selected list from settings: %s", exc
-                )
-            self.host.list_combo.blockSignals(False)
-            self.list_selection_changed()
 
-    def list_selection_changed(self, *args, **kwargs) -> None:
-        del args, kwargs
-        if self._load_shutdown:
-            return
-        selected_index = self.host.list_combo.currentIndex()
-        self.host.current_list_id = self.host.list_combo.itemData(selected_index)
+    def _list_failed(self, generation: int, error: Any) -> None:
+        if generation == self.list_runner.generation:
+            self.host.create_new_list()
+            self.host.set_status(f"Could not open list: {error}", error=True)
 
-        is_list_selected = self.host.current_list_id is not None
-        self.host.edit_note_button.setEnabled(is_list_selected)
-        self.host.print_list_button.setEnabled(is_list_selected)
-        export_button = getattr(self.host, "export_list_button", None)
-        if export_button is not None:
-            export_button.setEnabled(is_list_selected)
-        self._set_list_table_active_state(is_list_selected)
-        print_bottom_button = getattr(self.host, "print_bottom_button", None)
-        if print_bottom_button is not None:
-            print_bottom_button.setEnabled(is_list_selected)
-        self.host.delete_list_button.setEnabled(is_list_selected)
-        self.host.mark_issued_button.setEnabled(is_list_selected)
-        self.host._update_transfer_buttons_state()
-
-        if is_list_selected:
-            details = self.host.db_manager.get_silver_bar_list_details(
-                self.host.current_list_id
-            )
-            if details:
-                info = f"{details['list_identifier']}"
-                try:
-                    note_val = details.get("list_note", None)
-                except AttributeError, KeyError, TypeError:
-                    note_val = getattr(details, "list_note", None)
-                if note_val:
-                    info += f"  –  {note_val}"
-                self.host.list_info_label.setText(info)
-            else:
-                self.host.list_info_label.setText("Error loading list details")
-            self.load_bars_in_selected_list()
-        else:
-            self.host.list_info_label.setText("No list selected")
-            self.host._clear_management_table(self.host.list_bars_table)
-
-    def load_bars_in_selected_list(self, *, append: bool = False) -> None:
-        if self.host.current_list_id is None:
-            self._list_page_state.reset()
-            self.host._clear_management_table(self.host.list_bars_table)
-            button = getattr(self.host, "list_load_more_button", None)
-            if button is not None:
-                button.setVisible(False)
-            return
-
-        self._start_bars_load(
-            "list",
-            {
-                "list_id": self.host.current_list_id,
-            },
-            append=append,
-        )
+    def shutdown(self) -> None:
+        self.shutdown_called = True
+        self.timer.stop()
+        self.search_runner.shutdown()
+        self.list_runner.shutdown()

@@ -105,7 +105,30 @@ def qt_app():
     app = QApplication.instance()
     if app is None:
         app = QApplication([])
+    _load_offscreen_preview_fonts(app)
     return app
+
+
+def _load_offscreen_preview_fonts(app):
+    """Windows' headless QPA backend does not discover the native font directory."""
+    if sys.platform != "win32" or app.platformName() not in {"offscreen", "minimal"}:
+        return
+    if app.property("silverestimatePreviewFontsLoaded"):
+        return
+    from PySide6.QtGui import QFontDatabase
+
+    font_dir = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts"
+    for filename in ("segoeui.ttf", "segoeuib.ttf", "seguisym.ttf"):
+        path = font_dir / filename
+        if path.is_file():
+            QFontDatabase.addApplicationFont(str(path))
+    app.setProperty("silverestimatePreviewFontsLoaded", True)
+
+
+@pytest.fixture(autouse=True)
+def load_preview_fonts_for_qt_tests(request):
+    if "qtbot" in request.fixturenames or "qapp" in request.fixturenames:
+        _load_offscreen_preview_fonts(request.getfixturevalue("qapp"))
 
 
 @pytest.fixture(autouse=True)

@@ -7,6 +7,11 @@ from collections.abc import Callable, Iterable, Mapping
 from typing import TYPE_CHECKING, Any, Protocol
 
 from silverestimate.domain.estimate_save import EstimateSaveResult
+from silverestimate.domain.voucher_deletion import (
+    VoucherDeletionPreview,
+    VoucherDeletionRange,
+    VoucherDeletionResult,
+)
 from silverestimate.persistence.database_driver import (
     Connection,
     Cursor,
@@ -81,6 +86,14 @@ class MainCommandsDatabase(ItemCatalogDatabase, Protocol):
     def setup_database(self) -> None: ...
 
     def delete_all_estimates(self) -> bool: ...
+
+    def preview_voucher_deletion(
+        self, criteria: VoucherDeletionRange
+    ) -> VoucherDeletionPreview: ...
+
+    def delete_voucher_range(
+        self, preview: VoucherDeletionPreview
+    ) -> VoucherDeletionResult: ...
 
     def open_read_connection(self) -> ReadConnection: ...
 

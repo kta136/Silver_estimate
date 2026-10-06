@@ -35,6 +35,7 @@ class _DatabaseStub:
 def _actions(calls: list[str]) -> DataManagementActions:
     return DataManagementActions(
         delete_all_estimates=lambda: calls.append("delete_estimates"),
+        delete_vouchers_by_range=lambda: calls.append("delete_range"),
         delete_all_data=lambda: calls.append("delete_data"),
         restore_item_catalog=lambda: calls.append("restore_catalog"),
         create_item_catalog_backup=lambda: calls.append("backup_catalog"),
@@ -47,6 +48,7 @@ def test_high_level_data_commands_use_narrow_injected_actions() -> None:
 
     outcomes = (
         controller.delete_all_estimates(),
+        controller.delete_vouchers_by_range(),
         controller.delete_all_data(),
         controller.restore_item_catalog(),
         controller.create_item_catalog_backup(),
@@ -55,6 +57,7 @@ def test_high_level_data_commands_use_narrow_injected_actions() -> None:
     assert all(outcome.succeeded for outcome in outcomes)
     assert calls == [
         "delete_estimates",
+        "delete_range",
         "delete_data",
         "restore_catalog",
         "backup_catalog",
@@ -89,6 +92,7 @@ def test_database_actions_report_unavailable_or_failed_dependencies() -> None:
 
     failing_actions = DataManagementActions(
         delete_all_estimates=lambda: False,
+        delete_vouchers_by_range=lambda: False,
         delete_all_data=lambda: (_ for _ in ()).throw(RuntimeError("wipe failed")),
         restore_item_catalog=lambda: None,
         create_item_catalog_backup=lambda: None,
@@ -109,6 +113,7 @@ def test_cancelled_application_command_is_not_reported_as_an_error() -> None:
     )
     actions = DataManagementActions(
         delete_all_estimates=lambda: cancelled_command,
+        delete_vouchers_by_range=lambda: cancelled_command,
         delete_all_data=lambda: None,
         restore_item_catalog=lambda: None,
         create_item_catalog_backup=lambda: None,

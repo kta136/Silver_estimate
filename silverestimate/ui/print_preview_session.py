@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QDialog
 
 from .print_payload_builder import PrintDocument, PrintPreviewPayload
 from .print_preview_dialog import PrintPreviewDialog
+from .print_preview_output import PrintOutputOutcome, PrintOutputStatus
 
 
 class PrintPreviewSession:
@@ -26,6 +27,7 @@ class PrintPreviewSession:
         self.preview = preview
         self.payload = payload
         self._render_document = render_document
+        self.print_outcome = PrintOutputOutcome(PrintOutputStatus.CANCELLED)
 
     @property
     def preview_widget(self) -> QPrintPreviewWidget:

@@ -14,9 +14,9 @@ from silverestimate.domain.pagination import (
 from silverestimate.ui.estimate_history import EstimateHistoryDialog
 from silverestimate.ui.item_master import ItemMasterWidget
 from silverestimate.ui.silver_bar_history import SilverBarHistoryDialog
+from tests.silver_bar_workspace_support import seed_workspace_db
 from tests.ui.test_estimate_history import _DialogDbStub
 from tests.ui.test_item_master import _StubDbManager
-from tests.ui.test_silver_bar_history import _FakeSilverBarHistoryDb
 
 
 def test_estimate_append_calculates_only_new_rows_and_preserves_selected_voucher(
@@ -90,10 +90,13 @@ def test_item_append_preserves_selected_item_without_reset(qtbot):
         widget.close()
 
 
-def test_bar_history_append_preserves_selection(qtbot):
-    dialog = SilverBarHistoryDialog(_FakeSilverBarHistoryDb())
+def test_bar_history_append_preserves_selection(qtbot, tmp_path, settings_stub):
+    db = seed_workspace_db(tmp_path)
+    dialog = SilverBarHistoryDialog(db)
     qtbot.addWidget(dialog)
     try:
+        dialog.view_combo.setCurrentIndex(1)
+        qtbot.waitUntil(lambda: dialog.bars_model.rowCount() == 7)
         dialog.bars_table.selectRow(1)
         selected = dialog.bars_model.bar_id_at(1)
         reset = []
@@ -111,7 +114,7 @@ def test_bar_history_append_preserves_selection(qtbot):
             None,
             SilverBarHistoryCursor("2026-09-06", 999),
         )
-        dialog._on_bars_load_ready(0, (request, page))
+        dialog._bars_ready(0, (request, page))
         assert not reset
         assert (
             dialog.bars_model.bar_id_at(
@@ -121,3 +124,4 @@ def test_bar_history_append_preserves_selection(qtbot):
         )
     finally:
         dialog.close()
+        db.close()

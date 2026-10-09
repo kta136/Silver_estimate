@@ -136,3 +136,37 @@ def test_backup_does_not_commit_or_include_pending_writer_changes(manager, tmp_p
     finally:
         copied.close()
         manager.conn.rollback()
+
+
+def test_restore_interrupted_after_file_swap_finishes_on_next_start(
+    manager, tmp_path, monkeypatch
+):
+    manager.conn.execute("UPDATE items SET name='Backed up' WHERE code='A'")
+    manager.conn.commit()
+    backup = manager.create_encrypted_backup(tmp_path / "copy.sedbbackup")
+    manager.conn.execute("UPDATE items SET name='After backup' WHERE code='A'")
+    manager.conn.commit()
+    manager.stage_encrypted_restore(backup.path, "password")
+    manager.close()
+
+    def crash(*_args, **_kwargs):
+        raise KeyboardInterrupt("simulated crash after swap")
+
+    monkeypatch.setattr(DatabaseManager, "_finish_pending_restore", crash)
+    with pytest.raises(KeyboardInterrupt):
+        DatabaseManager(str(tmp_path / "live.db"), "password", device_secret=b"S" * 32)
+    monkeypatch.undo()
+    assert (tmp_path / "live.restore.json").exists()
+    assert not (tmp_path / "live.restore.staged").exists()
+
+    reopened = DatabaseManager(
+        str(tmp_path / "live.db"), "password", device_secret=b"S" * 32
+    )
+    try:
+        assert not (tmp_path / "live.restore.json").exists()
+        assert (
+            reopened.conn.execute("SELECT name FROM items WHERE code='A'").fetchone()[0]
+            == "Backed up"
+        )
+    finally:
+        reopened.close()

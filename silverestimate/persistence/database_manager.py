@@ -999,6 +999,11 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
             self._path.with_suffix(".pre-restore.sqlcipher"),
         )
         if not staged.is_file() or sha256_file(staged) != journal.get("staged_sha256"):
+            if self._restore_swap_completed(journal, retained):
+                # A previous start swapped the files but stopped before the
+                # journal was cleared; finish validating the restored file.
+                self._finish_pending_restore(retained)
+                return
             raise StorageMetadataError("Pending restore target is missing or corrupt")
         if (
             self.database_salt is not None
@@ -1015,6 +1020,18 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         self._remove_database_family(retained)
         os.replace(self._path, retained)
         os.replace(staged, self._path)
+        self._finish_pending_restore(retained)
+
+    def _restore_swap_completed(self, journal: dict, retained: Path) -> bool:
+        expected = journal.get("staged_sha256")
+        return (
+            bool(expected)
+            and retained.is_file()
+            and self._path.is_file()
+            and sha256_file(self._path) == expected
+        )
+
+    def _finish_pending_restore(self, retained: Path) -> None:
         try:
             self._validate_external(self._path, self.key, self.database_salt)
         except BaseException as exc:

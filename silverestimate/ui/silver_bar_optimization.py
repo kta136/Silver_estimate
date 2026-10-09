@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+_EPSILON = 1e-9
+
 
 def find_optimal_combination(
     available_bars, min_target: float, max_target: float, optimization_type: str
@@ -48,15 +50,23 @@ def find_max_bars_combination(bars, min_target: float, max_target: float):
     return selected if min_target <= current_total <= max_target else []
 
 
+def _within_range(bars, min_target: float, max_target: float) -> bool:
+    total = sum(bar["fine_weight"] for bar in bars)
+    return min_target - _EPSILON <= total <= max_target + _EPSILON
+
+
 def dp_combination_range(bars, min_target: float, max_target: float):
-    """Find a minimum-bar solution using a DP range search."""
-    min_target_int = int(min_target * 10)
-    max_target_int = int(max_target * 10)
+    """Find a minimum-bar solution using a DP range search.
+
+    Weights are bucketed to 0.1 g to keep the search small, so every candidate
+    is re-checked against its real fine weight before it is returned.
+    """
+    max_target_int = round(max_target * 10)
 
     dp: dict[int, tuple[int, list[int]]] = {0: (0, [])}
 
     for index, bar in enumerate(bars):
-        bar_weight = int(bar["fine_weight"] * 10)
+        bar_weight = round(bar["fine_weight"] * 10)
         new_dp = dp.copy()
 
         for weight, (count, indices) in dp.items():
@@ -68,15 +78,10 @@ def dp_combination_range(bars, min_target: float, max_target: float):
 
         dp = new_dp
 
-    best_solution = None
-    best_bars_count = float("inf")
-
-    for weight, (count, indices) in dp.items():
-        if min_target_int <= weight <= max_target_int and count < best_bars_count:
-            best_bars_count = count
-            best_solution = indices
-
-    if best_solution:
-        return [bars[index] for index in best_solution]
+    candidates = sorted((count, indices) for count, indices in dp.values() if indices)
+    for _count, indices in candidates:
+        selected = [bars[index] for index in indices]
+        if _within_range(selected, min_target, max_target):
+            return selected
 
     return []

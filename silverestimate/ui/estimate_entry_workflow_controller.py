@@ -512,13 +512,6 @@ class EstimateEntryWorkflowController:
                 del self._deleted_rows[:-20]
                 self._update_row_undo_action()
             self.host.item_table.delete_row(row)
-            if self.host.totals_controller._totals_incremental_is_active():
-                try:
-                    self.host.totals_controller._remove_incremental_row(row)
-                except Exception as exc:
-                    self.host.totals_controller._disable_incremental_totals_and_fallback(
-                        exc
-                    )
             self.host.totals_controller.calculate_totals()
             self.host._mark_unsaved()
             self.host._status(

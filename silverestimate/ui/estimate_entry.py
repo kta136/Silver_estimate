@@ -4,14 +4,13 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Mapping, Optional
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QApplication, QWidget
 
 from silverestimate.domain.estimate_entry import EstimateEntryViewState, LoadedEstimate
-from silverestimate.domain.estimate_models import EstimateLineCategory, TotalsResult
+from silverestimate.domain.estimate_models import TotalsResult
 from silverestimate.persistence.draft_repository import DraftRepository
 from silverestimate.presenter import EstimateEntryPresenter
 
@@ -55,25 +54,6 @@ if TYPE_CHECKING:
         VoucherToolbar,
     )
     from .modern_components import BottomStatusStrip
-
-
-@dataclass(frozen=True)
-class _RowContribution:
-    category: EstimateLineCategory = EstimateLineCategory.REGULAR
-    gross: float = 0.0
-    poly: float = 0.0
-    net: float = 0.0
-    fine: float = 0.0
-    wage: float = 0.0
-    is_active: bool = False
-
-
-@dataclass
-class _RunningCategoryTotals:
-    gross: float = 0.0
-    net: float = 0.0
-    fine: float = 0.0
-    wage: float = 0.0
 
 
 class EstimateEntryWidget(QWidget):
@@ -263,13 +243,6 @@ class EstimateEntryWidget(QWidget):
             return_mode=self.return_mode,
             silver_bar_mode=self.silver_bar_mode,
         )
-        self._incremental_totals_failed = False
-        self._row_contrib_cache: dict[int, _RowContribution] = {}
-        self._agg_regular = _RunningCategoryTotals()
-        self._agg_returns = _RunningCategoryTotals()
-        self._agg_silver_bars = _RunningCategoryTotals()
-        self._agg_overall_gross = 0.0
-        self._agg_overall_poly = 0.0
 
         self._programmatic_resizing = False
         self._column_autofit_mode = (

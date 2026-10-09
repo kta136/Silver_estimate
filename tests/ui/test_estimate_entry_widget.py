@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 from PySide6.QtCore import QDate, QEventLoop, QSize, Qt, QTimer
 from PySide6.QtTest import QTest
@@ -172,7 +174,7 @@ def test_widget_multi_row_totals(make_estimate_widget, qt_app, fake_db):
     assert float(widget.bar_gross_label.text()) == pytest.approx(3.0)
 
 
-def test_incremental_row_edit_applies_totals_without_recalc_schedule(
+def test_row_edit_applies_totals_without_recalc_schedule(
     make_estimate_widget, qt_app, fake_db
 ):
     widget = make_estimate_widget(fake_db)
@@ -181,13 +183,11 @@ def test_incremental_row_edit_applies_totals_without_recalc_schedule(
         0,
         regular_item(gross=10, poly=1, purity=92.5, wage_rate=10),
     )
-    assert widget.totals_controller._totals_incremental_is_active()
-
     scheduled = {"count": 0}
 
     def _unexpected_schedule(*args, **kwargs):
         scheduled["count"] += 1
-        raise AssertionError("incremental row edit should not schedule totals")
+        raise AssertionError("row edit should not schedule totals")
 
     widget.totals_controller._schedule_totals_recalc = _unexpected_schedule
 
@@ -212,7 +212,7 @@ def test_incremental_row_edit_applies_totals_without_recalc_schedule(
     assert tuple(label.text() for label in labels) == before
 
 
-def test_incremental_totals_match_full_multi_row_mixed_categories(
+def test_totals_multi_row_mixed_categories(
     make_estimate_widget, qt_app, qtbot, fake_db
 ):
     widget = make_estimate_widget(fake_db)
@@ -229,8 +229,6 @@ def test_incremental_totals_match_full_multi_row_mixed_categories(
         silver_bar_item(gross=3.0, poly=0.0, purity=99.9, wage_rate=2.0),
     )
     widget.workflow_controller.toggle_silver_bar_mode()
-
-    assert widget.totals_controller._totals_incremental_is_active()
 
     widget.item_table.set_cell_text(0, COL_GROSS, "11.0")
     widget.table_controller.handle_cell_changed(0, COL_GROSS)
@@ -250,9 +248,7 @@ def test_incremental_totals_match_full_multi_row_mixed_categories(
     assert float(widget.net_wage_label.text()) == pytest.approx(84.0, abs=0.01)
 
 
-def test_incremental_rebuild_after_row_delete(
-    make_estimate_widget, qt_app, fake_db, monkeypatch
-):
+def test_totals_after_row_delete(make_estimate_widget, qt_app, fake_db, monkeypatch):
     widget = make_estimate_widget(fake_db)
     _set_row(widget, 0, regular_item(gross=5.0, poly=1.0, purity=90.0, wage_rate=10.0))
     _set_row(widget, 1, regular_item(gross=4.0, poly=1.0, purity=90.0, wage_rate=10.0))
@@ -270,12 +266,9 @@ def test_incremental_rebuild_after_row_delete(
     assert float(widget.total_gross_label.text()) == pytest.approx(8.0)
     assert float(widget.total_net_label.text()) == pytest.approx(6.0)
     assert float(widget.total_fine_label.text()) == pytest.approx(5.4, abs=0.01)
-    assert len(widget._row_contrib_cache) == widget.item_table.rowCount()
 
 
-def test_incremental_rebuild_after_apply_loaded_estimate(
-    make_estimate_widget, qt_app, fake_db
-):
+def test_totals_after_apply_loaded_estimate(make_estimate_widget, qt_app, fake_db):
     widget = make_estimate_widget(fake_db)
     loaded = LoadedEstimate(
         voucher_no="V900",
@@ -322,7 +315,6 @@ def test_incremental_rebuild_after_apply_loaded_estimate(
     assert float(widget.total_gross_label.text()) == pytest.approx(10.0)
     assert float(widget.return_gross_label.text()) == pytest.approx(2.0)
     assert float(widget.net_fine_label.text()) == pytest.approx(6.9, abs=0.01)
-    assert len(widget._row_contrib_cache) == widget.item_table.rowCount()
 
     widget.item_table.set_cell_text(0, COL_GROSS, "12.0")
     widget.table_controller.handle_cell_changed(0, COL_GROSS)
@@ -332,8 +324,8 @@ def test_incremental_rebuild_after_apply_loaded_estimate(
     assert float(widget.net_fine_label.text()) == pytest.approx(8.7, abs=0.01)
 
 
-def test_incremental_failure_does_not_use_removed_full_recalculation(
-    make_estimate_widget, qt_app, fake_db
+def test_totals_recover_after_a_failed_recalculation(
+    make_estimate_widget, qt_app, fake_db, monkeypatch
 ):
     widget = make_estimate_widget(fake_db)
     table = _set_row(
@@ -341,24 +333,44 @@ def test_incremental_failure_does_not_use_removed_full_recalculation(
         0,
         regular_item(gross=10, poly=1, purity=92.5, wage_rate=10.0),
     )
-    assert widget.totals_controller._totals_incremental_is_active()
+    original_build = widget.totals_controller.build_totals
+    failures = []
 
-    def _boom(_row_state):
-        raise RuntimeError("forced incremental failure")
+    def _fail_once(*args, **kwargs):
+        if not failures:
+            failures.append(True)
+            raise RuntimeError("forced totals failure")
+        return original_build(*args, **kwargs)
 
-    widget.totals_controller._row_contribution_from_row_state = _boom
+    monkeypatch.setattr(widget.totals_controller, "build_totals", _fail_once)
     table.set_cell_text(0, COL_GROSS, "11.0")
     widget.table_controller.handle_cell_changed(0, COL_GROSS)
     _pump_events(160)
-
-    assert widget._incremental_totals_failed is True
-    assert float(widget.total_gross_label.text()) == pytest.approx(10.0)
+    assert failures
 
     widget.item_table.set_cell_text(0, COL_GROSS, "12.0")
     widget.table_controller.handle_cell_changed(0, COL_GROSS)
     _pump_events(160)
-    assert float(widget.total_gross_label.text()) == pytest.approx(10.0)
-    assert float(widget.net_wage_label.text()) == pytest.approx(90.0)
+    assert float(widget.total_gross_label.text()) == pytest.approx(12.0)
+
+
+def test_totals_refresh_when_rows_are_replaced_with_same_count(
+    make_estimate_widget, qt_app, fake_db
+):
+    widget = make_estimate_widget(fake_db)
+    _set_row(widget, 0, regular_item(gross=5.0, poly=1.0, purity=90.0, wage_rate=10.0))
+    _pump_events(160)
+    assert float(widget.total_gross_label.text()) == pytest.approx(5.0)
+
+    rows = widget.item_table.get_all_rows()
+    replaced = [replace(rows[0], gross=8.0, net_weight=7.0, fine_weight=6.3)] + list(
+        rows[1:]
+    )
+    widget.item_table.replace_all_rows(replaced)
+    widget.totals_controller.calculate_totals()
+
+    assert float(widget.total_gross_label.text()) == pytest.approx(8.0)
+    assert float(widget.total_fine_label.text()) == pytest.approx(6.3, abs=0.01)
 
 
 def test_widget_save_and_reload(
@@ -1003,7 +1015,7 @@ def test_calculate_wage_uses_row_wage_type_without_repository_lookup(
     table.set_cell_text(0, COL_PIECES, "3")
 
     widget.current_row = 0
-    widget.totals_controller.calculate_wage()
+    widget.totals_controller.calculate_net_weight()
 
     assert float(table.get_cell_text(0, COL_WAGE_AMT)) == pytest.approx(15.0)
     assert repo_calls == []

@@ -75,17 +75,6 @@ class EstimateEntryTableController:
         self._get_table_adapter().add_empty_row()
         if not self._table_runtime_available():
             return
-        if self.host.totals_controller._totals_incremental_is_active():
-            try:
-                row_index = self.host.item_table.rowCount() - 1
-                if row_index >= 0:
-                    self.host._row_contrib_cache[row_index] = (
-                        self.host.totals_controller._inactive_row_contribution()
-                    )
-            except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
-                self.host.totals_controller._disable_incremental_totals_and_fallback(
-                    exc
-                )
         self.host.layout_controller._schedule_columns_autofit()
 
     def clear_all_rows(self):
@@ -94,13 +83,6 @@ class EstimateEntryTableController:
             self.host.item_table.clear_rows()
         finally:
             self.host.item_table.blockSignals(False)
-        if self.host.totals_controller._totals_incremental_is_active():
-            try:
-                self.host.totals_controller._reset_incremental_aggregates()
-            except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
-                self.host.totals_controller._disable_incremental_totals_and_fallback(
-                    exc
-                )
         self.host.current_row = -1
         self.host.current_column = -1
         self.host.layout_controller._schedule_columns_autofit()
@@ -278,10 +260,7 @@ class EstimateEntryTableController:
 
         if not code:
             self.host._status("Enter item code first", 1500)
-            self.host.totals_controller._update_incremental_for_row(
-                self.host.current_row
-            )
-            self.host.totals_controller._refresh_totals_after_row_edit()
+            self.host.totals_controller.calculate_totals()
             if self._should_force_code_focus():
                 QTimer.singleShot(
                     0, lambda: self.focus_on_code_column(self.host.current_row)

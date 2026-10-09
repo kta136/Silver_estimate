@@ -24,7 +24,6 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
         super().__init__(parent)
         self._rows: list[dict[str, Any]] = []
         self._total_count = 0
-        self._numeric_totals = {"weight": 0.0, "fine_weight": 0.0}
         self._sort_column: Optional[int] = None
         self._sort_order = Qt.SortOrder.AscendingOrder
 
@@ -110,17 +109,10 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
                 key=lambda row: self.sort_key_for_row(row, self._sort_column or 0),
                 reverse=reverse,
             )
-        self._numeric_totals = {
-            field: self._sum_rows(self._rows, field)
-            for field in ("weight", "fine_weight")
-        }
         self.endResetModel()
 
     def total_count(self) -> int:
         return self._total_count
-
-    def loaded_count(self) -> int:
-        return len(self._rows)
 
     def clear_rows(self) -> None:
         self.set_rows([], total_count=0)
@@ -128,8 +120,6 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
     def append_rows(
         self, rows: list[dict[str, Any]], total_count: int | None = None
     ) -> None:
-        for field in self._numeric_totals:
-            self._numeric_totals[field] += self._sum_rows(rows, field)
         column = self._sort_column
         insert_model_rows(
             self,
@@ -200,12 +190,6 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
         del row
         return None
 
-    def total_weight(self) -> float:
-        return self._sum_numeric_field("weight")
-
-    def total_fine_weight(self) -> float:
-        return self._sum_numeric_field("fine_weight")
-
     @staticmethod
     def _format_float(value: Any, places: int) -> str:
         try:
@@ -246,119 +230,6 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
         if normalized == "Sold":
             return QBrush(QColor("#f7f0ff"))
         return None
-
-    def _sum_numeric_field(self, key: str) -> float:
-        return self._numeric_totals[key]
-
-    @staticmethod
-    def _sum_rows(rows: list[dict[str, Any]], key: str) -> float:
-        total = 0.0
-        for row in rows:
-            try:
-                total += float(row.get(key) or 0.0)
-            except TypeError, ValueError:
-                continue
-        return total
-
-
-class _ManagementSilverBarsTableModel(_BaseSilverBarTableModel):
-    HEADERS = [
-        "Voucher",
-        "Weight",
-        "Purity",
-        "Fine Wt",
-        "Date",
-        "Status",
-    ]
-
-    def value_key(self, column: int) -> str:
-        mapping = {
-            0: "voucher_display",
-            1: "weight",
-            2: "purity",
-            3: "fine_weight",
-            4: "date_added",
-            5: "status",
-        }
-        return mapping.get(column, "")
-
-    def display_value(self, row: int, column: int) -> str:
-        payload = self.row_payload(row)
-        if payload is None:
-            return ""
-        if column == 0:
-            voucher_no = payload.get("estimate_voucher_no") or "N/A"
-            note = payload.get("estimate_note") or ""
-            return f"{voucher_no} ({note})" if note else str(voucher_no)
-        if column == 1:
-            return self._format_float(payload.get("weight"), WEIGHT_PLACES)
-        if column == 2:
-            return self._format_float(payload.get("purity"), 2)
-        if column == 3:
-            return self._format_float(payload.get("fine_weight"), WEIGHT_PLACES)
-        if column == 4:
-            return self._format_date(payload.get("date_added"))
-        if column == 5:
-            return str(payload.get("status") or "")
-        return ""
-
-    def sort_key_value(self, row: dict[str, Any], column: int) -> Any:
-        if column == 0:
-            return self._voucher_sort_value(row)
-        if column in (1, 2, 3):
-            try:
-                return float(row.get(self.value_key(column)) or 0.0)
-            except TypeError, ValueError:
-                return 0.0
-        if column == 4:
-            return str(row.get("date_added") or "")
-        if column == 5:
-            return str(row.get("status") or "").casefold()
-        return super().sort_key_value(row, column)
-
-    def sort_key_for_row(self, row: dict[str, Any], column: int) -> tuple[Any, ...]:
-        if column == 0:
-            return (*self._voucher_sort_value(row), self._bar_id_sort_value(row))
-        primary = self.sort_key_value(row, column)
-        if column == 4:
-            return (primary is None, primary, self._bar_id_sort_value(row))
-        return (primary is None, primary)
-
-    def text_alignment(self, column: int) -> Optional[Qt.AlignmentFlag]:
-        if column in (1, 2, 3):
-            return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-        return None
-
-    def background_brush(self, row: int) -> Optional[QBrush]:
-        payload = self.row_payload(row)
-        if payload is None:
-            return None
-        return self._status_brush(payload.get("status"))
-
-    def display_value_from_row(self, row: dict[str, Any], column: int) -> str:
-        if column == 0:
-            voucher_no = row.get("estimate_voucher_no") or "N/A"
-            note = row.get("estimate_note") or ""
-            return f"{voucher_no} ({note})" if note else str(voucher_no)
-        if column == 1:
-            return self._format_float(row.get("weight"), WEIGHT_PLACES)
-        if column == 2:
-            return self._format_float(row.get("purity"), 2)
-        if column == 3:
-            return self._format_float(row.get("fine_weight"), WEIGHT_PLACES)
-        if column == 4:
-            return self._format_date(row.get("date_added"))
-        if column == 5:
-            return str(row.get("status") or "")
-        return ""
-
-
-class AvailableSilverBarsTableModel(_ManagementSilverBarsTableModel):
-    """Model for the available bars pane in silver-bar management."""
-
-
-class SelectedListSilverBarsTableModel(_ManagementSilverBarsTableModel):
-    """Model for the selected-list bars pane in silver-bar management."""
 
 
 class HistorySilverBarsTableModel(_BaseSilverBarTableModel):
@@ -479,143 +350,4 @@ class HistorySilverBarsTableModel(_BaseSilverBarTableModel):
             if row.get("list_id"):
                 return "Issued" if row.get("issued_date") else "Active"
             return "Not Listed"
-        return ""
-
-
-class IssuedSilverBarListsTableModel(_BaseSilverBarTableModel):
-    HEADERS = ["List ID", "Identifier", "Note", "Created", "Issued", "Bar Count"]
-
-    def value_key(self, column: int) -> str:
-        mapping = {
-            0: "list_id",
-            1: "list_identifier",
-            2: "list_note",
-            3: "creation_date",
-            4: "issued_date",
-            5: "bar_count",
-        }
-        return mapping.get(column, "")
-
-    def display_value(self, row: int, column: int) -> str:
-        payload = self.row_payload(row)
-        if payload is None:
-            return ""
-        if column == 0:
-            return str(payload.get("list_id") or "")
-        if column == 5:
-            return str(payload.get("bar_count") or 0)
-        if column in (3, 4):
-            return self._format_date(payload.get(self.value_key(column)))
-        return str(payload.get(self.value_key(column)) or "")
-
-    def sort_key_value(self, row: dict[str, Any], column: int) -> Any:
-        if column in (0, 5):
-            try:
-                return int(row.get(self.value_key(column)) or 0)
-            except TypeError, ValueError:
-                return 0
-        return str(row.get(self.value_key(column)) or "").casefold()
-
-    def text_alignment(self, column: int) -> Optional[Qt.AlignmentFlag]:
-        if column in (0, 5):
-            return Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter
-        return None
-
-
-class HistoryListBarsTableModel(_BaseSilverBarTableModel):
-    HEADERS = [
-        "Bar ID",
-        "Voucher/Note",
-        "Weight (g)",
-        "Purity (%)",
-        "Fine Wt (g)",
-        "Status",
-        "Date Added",
-    ]
-
-    def value_key(self, column: int) -> str:
-        mapping = {
-            0: "bar_id",
-            1: "voucher_display",
-            2: "weight",
-            3: "purity",
-            4: "fine_weight",
-            5: "status",
-            6: "date_added",
-        }
-        return mapping.get(column, "")
-
-    def display_value(self, row: int, column: int) -> str:
-        payload = self.row_payload(row)
-        if payload is None:
-            return ""
-        if column == 0:
-            return str(payload.get("bar_id") or "")
-        if column == 1:
-            voucher_no = payload.get("estimate_voucher_no") or "N/A"
-            note = payload.get("estimate_note") or ""
-            return f"{voucher_no} ({note})" if note else str(voucher_no)
-        if column == 2:
-            return self._format_float(payload.get("weight"), WEIGHT_PLACES)
-        if column == 3:
-            return self._format_float(payload.get("purity"), 1)
-        if column == 4:
-            return self._format_float(payload.get("fine_weight"), WEIGHT_PLACES)
-        if column == 5:
-            return str(payload.get("status") or "Unknown")
-        if column == 6:
-            return self._format_date(payload.get("date_added"))
-        return ""
-
-    def sort_key_value(self, row: dict[str, Any], column: int) -> Any:
-        if column == 0:
-            try:
-                return int(row.get("bar_id") or 0)
-            except TypeError, ValueError:
-                return 0
-        if column == 1:
-            return self._voucher_sort_value(row)
-        if column in (2, 3, 4):
-            try:
-                return float(row.get(self.value_key(column)) or 0.0)
-            except TypeError, ValueError:
-                return 0.0
-        return self.display_value_from_row(row, column).casefold()
-
-    def sort_key_for_row(self, row: dict[str, Any], column: int) -> tuple[Any, ...]:
-        if column == 1:
-            return (*self._voucher_sort_value(row), self._bar_id_sort_value(row))
-        primary = self.sort_key_value(row, column)
-        if column == 6:
-            return (primary is None, primary, self._bar_id_sort_value(row))
-        return (primary is None, primary)
-
-    def text_alignment(self, column: int) -> Optional[Qt.AlignmentFlag]:
-        if column in (0, 2, 3, 4):
-            return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-        return None
-
-    def background_brush(self, row: int) -> Optional[QBrush]:
-        payload = self.row_payload(row)
-        if payload is None:
-            return None
-        return self._status_brush(payload.get("status"))
-
-    def display_value_from_row(self, row: dict[str, Any], column: int) -> str:
-        if column == 0:
-            return str(row.get("bar_id") or "")
-        if column == 1:
-            voucher_no = row.get("estimate_voucher_no") or "N/A"
-            note = row.get("estimate_note") or ""
-            return f"{voucher_no} ({note})" if note else str(voucher_no)
-        if column == 2:
-            return self._format_float(row.get("weight"), WEIGHT_PLACES)
-        if column == 3:
-            return self._format_float(row.get("purity"), 1)
-        if column == 4:
-            return self._format_float(row.get("fine_weight"), WEIGHT_PLACES)
-        if column == 5:
-            return str(row.get("status") or "Unknown")
-        if column == 6:
-            return str(row.get("date_added") or "")
         return ""

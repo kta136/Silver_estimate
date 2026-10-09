@@ -3,8 +3,21 @@
 import pytest
 
 from silverestimate.persistence import schema
+from silverestimate.ui.estimate_entry_totals_controller import (
+    EstimateEntryTotalsController,
+)
 from silverestimate.ui.estimate_print_document import EstimatePrintDocument
 from tests.integration.test_estimate_snapshots import downgrade_to_v8, snapshot_db
+
+
+def _view_model_totals(view_model):
+    return EstimateEntryTotalsController.build_totals(
+        view_model.rows(),
+        silver_rate=view_model.silver_rate,
+        last_balance_silver=view_model.last_balance_silver,
+        last_balance_amount=view_model.last_balance_amount,
+    )
+
 
 __all__ = ["snapshot_db"]
 
@@ -35,7 +48,9 @@ def test_open_preview_and_note_save_preserve_historical_lines(
     assert len(preview["items"]) == 1
     assert preview["items"][0]["tunch"] == before["items"][0]["tunch"]
     assert preview["items"][0]["fine"] == before["items"][0]["fine"]
-    assert widget.view_model.compute_totals().regular.fine == before["items"][0]["fine"]
+    assert (
+        _view_model_totals(widget.view_model).regular.fine == before["items"][0]["fine"]
+    )
     widget.note_edit.setText("Only the note changed")
     assert widget.workflow_controller.save_estimate(continue_editing=True)
     after = db.get_estimate_by_voucher("1")

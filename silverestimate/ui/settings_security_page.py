@@ -4,10 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
-    QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -215,17 +213,6 @@ class SecuritySettingsPage(QWidget):
         field.setEchoMode(QLineEdit.EchoMode.Password)
         field.setPlaceholderText(placeholder)
         return field
-
-    @staticmethod
-    def _configure_form(form: QFormLayout) -> None:
-        form.setContentsMargins(0, 0, 0, 0)
-        form.setHorizontalSpacing(12)
-        form.setVerticalSpacing(12)
-        form.setLabelAlignment(
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-        )
-        form.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
 
 
 __all__ = [

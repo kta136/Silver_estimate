@@ -14,7 +14,6 @@ from silverestimate.ui.estimate_entry_logic.column_specs import (
     is_stretch_column,
     navigation_columns,
     precision_for_column,
-    table_headers,
 )
 from silverestimate.ui.estimate_entry_logic.constants import (
     COL_CODE,
@@ -49,7 +48,12 @@ def test_initial_state(model):
 
 
 def test_column_specs_define_table_contract(model):
-    assert len(table_headers()) == model.columnCount()
+    headers = [
+        model.headerData(column, Qt.Orientation.Horizontal)
+        for column in range(model.columnCount())
+    ]
+    assert all(headers)
+    assert model.headerData(model.columnCount(), Qt.Orientation.Horizontal) is None
     assert navigation_columns() == (
         COL_CODE,
         COL_GROSS,

@@ -7,10 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from silverestimate.ui.silver_bar_print_document import (
-    SilverBarInventoryPrintDocument,
-    SilverBarListPrintDocument,
-)
+from silverestimate.ui.silver_bar_print_document import SilverBarListPrintDocument
 from silverestimate.ui.silver_bar_print_renderer import SilverBarPrintRenderer
 
 
@@ -38,29 +35,6 @@ def _golden(name: str) -> str:
         (Path(__file__).parents[1] / "golden" / name)
         .read_text(encoding="utf-8")
         .rstrip("\n")
-    )
-
-
-def test_inventory_layout_matches_semantic_golden_and_keeps_text_literal() -> None:
-    document = SilverBarInventoryPrintDocument.from_rows(
-        _bars(),
-        status_filter="<Available & Ready>",
-        print_date="2026-07-26",
-    )
-
-    layout = SilverBarPrintRenderer().build_layout(document)
-
-    assert layout.normalized_text() == _golden("modern_silver_bar_inventory.txt")
-    assert "<script>" in layout.normalized_text()
-    assert "&lt;" not in layout.normalized_text()
-    assert tuple(column.key for column in layout.columns) == (
-        "bar_id",
-        "voucher",
-        "weight",
-        "purity",
-        "fine",
-        "date",
-        "status",
     )
 
 
@@ -110,8 +84,9 @@ def test_list_document_reads_sqlite_rows_and_formats_empty_report() -> None:
     assert "TOTAL (0) | 0.00 |  | 0.00" in empty_text
 
 
-def test_inventory_document_groups_large_values_and_validates_numbers() -> None:
-    document = SilverBarInventoryPrintDocument.from_rows(
+def test_list_document_groups_large_values_and_validates_numbers() -> None:
+    document = SilverBarListPrintDocument.from_rows(
+        {"list_identifier": "LIST-001"},
         [
             {
                 "weight": 123456.789,
@@ -119,7 +94,6 @@ def test_inventory_document_groups_large_values_and_validates_numbers() -> None:
                 "fine_weight": 123333.332,
             }
         ],
-        print_date="26/07/2026",
     )
     rendered = SilverBarPrintRenderer().build_layout(document).normalized_text()
 
@@ -127,6 +101,7 @@ def test_inventory_document_groups_large_values_and_validates_numbers() -> None:
     assert "1,23,333.33" in rendered
 
     with pytest.raises(ValueError, match=r"bars\[0\]\.weight must be numeric"):
-        SilverBarInventoryPrintDocument.from_rows(
+        SilverBarListPrintDocument.from_rows(
+            {"list_identifier": "LIST-001"},
             [{"weight": "not-a-number"}],
         )

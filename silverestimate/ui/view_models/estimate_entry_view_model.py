@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Iterable, Iterator, Sequence
+from typing import Iterable, Sequence
 from uuid import uuid4
 
 from silverestimate.domain.estimate_entry import (
@@ -9,13 +9,7 @@ from silverestimate.domain.estimate_entry import (
 )
 from silverestimate.domain.estimate_entry import (
     EstimateEntrySnapshot,
-    EstimateEntryViewState,
 )
-from silverestimate.domain.estimate_models import (
-    EstimateLine,
-    TotalsResult,
-)
-from silverestimate.services.estimate_calculator import compute_totals
 
 
 class EstimateEntryViewModel:
@@ -34,9 +28,6 @@ class EstimateEntryViewModel:
         self.voucher_date: str = ""  # ISO format date string
         self.voucher_note: str = ""
 
-        # Unsaved changes tracking
-        self._has_unsaved_changes: bool = False
-
     # ------------------------------------------------------------------ #
     # Row management
     # ------------------------------------------------------------------ #
@@ -45,31 +36,9 @@ class EstimateEntryViewModel:
         self._rows = [self._coerce_row(row) for row in rows]
         self._normalize_row_indices()
 
-    def update_row(self, index: int, row: EstimateEntryRowState) -> None:
-        """Insert or replace the row at the provided index."""
-        coerced = self._coerce_row(row)
-        if index < 0:
-            raise IndexError("Row index cannot be negative")
-        if index >= len(self._rows):
-            self._rows.extend(
-                EstimateEntryRowState() for _ in range(index - len(self._rows) + 1)
-            )
-        if coerced.row_index <= 0:
-            coerced = replace(coerced, row_index=index + 1)
-        self._rows[index] = coerced
-        self._normalize_row_indices()
-
-    def clear_rows(self) -> None:
-        """Reset the stored rows."""
-        self._rows.clear()
-
     def rows(self) -> Sequence[EstimateEntryRowState]:
         """Return an immutable view of the row data."""
         return tuple(self._rows)
-
-    def active_rows(self) -> Sequence[EstimateEntryRowState]:
-        """Return only rows that have an assigned code."""
-        return tuple(row for row in self._rows if not row.is_empty())
 
     def ensure_line_keys(self) -> None:
         """Assign stable line keys for active rows that do not yet have one."""
@@ -77,13 +46,6 @@ class EstimateEntryViewModel:
             if row.is_empty() or str(row.line_key or "").strip():
                 continue
             self._rows[idx] = replace(row, line_key=uuid4().hex)
-
-    def iter_lines(self) -> Iterator[EstimateLine]:
-        """Yield `EstimateLine` objects for active rows."""
-        for row in self._rows:
-            if row.is_empty():
-                continue
-            yield row.to_estimate_line()
 
     # ------------------------------------------------------------------ #
     # Totals inputs and mode flags
@@ -152,25 +114,6 @@ class EstimateEntryViewModel:
         }
 
     # ------------------------------------------------------------------ #
-    # Unsaved changes tracking
-    # ------------------------------------------------------------------ #
-    def mark_as_changed(self) -> None:
-        """Mark the view model as having unsaved changes."""
-        self._has_unsaved_changes = True
-
-    def mark_as_saved(self) -> None:
-        """Mark the view model as saved (no unsaved changes)."""
-        self._has_unsaved_changes = False
-
-    def has_unsaved_changes(self) -> bool:
-        """Check if there are unsaved changes.
-
-        Returns:
-            True if there are unsaved changes, False otherwise
-        """
-        return self._has_unsaved_changes
-
-    # ------------------------------------------------------------------ #
     # Derived values
     # ------------------------------------------------------------------ #
     def as_save_snapshot(self) -> EstimateEntrySnapshot:
@@ -178,25 +121,6 @@ class EstimateEntryViewModel:
         self.ensure_line_keys()
         return EstimateEntrySnapshot(
             rows=tuple(self._rows),
-            silver_rate=self.silver_rate,
-            last_balance_silver=self.last_balance_silver,
-            last_balance_amount=self.last_balance_amount,
-        )
-
-    def as_view_state(self) -> EstimateEntryViewState:
-        """Return the presenter-facing view state snapshot."""
-        return EstimateEntryViewState(
-            lines=tuple(self.iter_lines()),
-            silver_rate=self.silver_rate,
-            last_balance_silver=self.last_balance_silver,
-            last_balance_amount=self.last_balance_amount,
-        )
-
-    def compute_totals(self) -> TotalsResult:
-        """Compute totals using the current snapshot."""
-        lines = tuple(self.iter_lines())
-        return compute_totals(
-            lines,
             silver_rate=self.silver_rate,
             last_balance_silver=self.last_balance_silver,
             last_balance_amount=self.last_balance_amount,

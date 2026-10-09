@@ -8,12 +8,13 @@ from silverestimate.ui.models.estimate_history_table_model import (
     EstimateHistoryTableModel,
 )
 from silverestimate.ui.models.item_master_table_model import ItemMasterTableModel
+from silverestimate.ui.models.silver_bar_entry_model import SilverBarEntryModel
+from silverestimate.ui.models.silver_bar_history_models import (
+    SilverBarHistoryModel,
+    SilverBarListsHistoryModel,
+)
 from silverestimate.ui.models.silver_bar_table_models import (
-    AvailableSilverBarsTableModel,
-    HistoryListBarsTableModel,
     HistorySilverBarsTableModel,
-    IssuedSilverBarListsTableModel,
-    SelectedListSilverBarsTableModel,
 )
 
 
@@ -28,11 +29,10 @@ def history_row(voucher):
     [
         EstimateHistoryTableModel,
         ItemMasterTableModel,
-        AvailableSilverBarsTableModel,
-        SelectedListSilverBarsTableModel,
+        SilverBarEntryModel,
         HistorySilverBarsTableModel,
-        IssuedSilverBarListsTableModel,
-        HistoryListBarsTableModel,
+        SilverBarHistoryModel,
+        SilverBarListsHistoryModel,
     ],
 )
 def test_sort_preserves_current_selection_and_persistent_cells(qtbot, model_class):
@@ -47,6 +47,7 @@ def test_sort_preserves_current_selection_and_persistent_cells(qtbot, model_clas
                 "code": str(n),
                 "list_identifier": str(n),
                 "estimate_voucher_no": str(n),
+                "weight": n,
             }
             for n in (10, 1, 2)
         ]

@@ -7,7 +7,7 @@ import logging
 import math
 import urllib.request
 from collections.abc import Callable, Mapping
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any, Literal, Protocol, cast
 
@@ -51,9 +51,6 @@ class DdaRateSnapshot:
     server_time: datetime
     market_state: Mapping[str, Any] | None
     transport: RateTransport
-
-    def as_cached(self) -> DdaRateSnapshot:
-        return replace(self, transport="cache")
 
 
 class _HttpResponse(Protocol):

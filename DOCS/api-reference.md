@@ -46,18 +46,16 @@ This guide documents the primary controller, service, and persistence APIs expos
     EstimateEntryPresenter(view: EstimateEntryView, repository: EstimateRepository)
 
 - **generate_voucher(silent: bool = False) -> str** - request the next voucher number from the repository and push it to the view.
-- **refresh_totals() -> TotalsResult** - capture current view state and recompute totals via `services.estimate_calculator` (available for explicit presenter-driven refresh flows).
 - **load_estimate(voucher_no: str) -> Optional[LoadedEstimate]** - retrieve persisted estimate payloads and normalise them for the view.
 - **open_history() -> None** - open the history dialog, load the chosen voucher, and apply it to the view.
 - **handle_item_code(row_index: int, code: str) -> bool** - resolve item code from repository or selection dialog, then populate/focus the row.
 - **save_estimate(payload: SavePayload) -> SaveOutcome** - persist header/items, synchronise silver bar metadata (update/add), and surface status messaging.
 - **delete_estimate(voucher_no: str) -> bool** - delegate to the repository and clean up related silver bar records.
-- **open_silver_bar_management() -> None** - request the view to open silver bar management with UI-safe error reporting.
 
 ### Presenter Contracts (silverestimate/presenter/__init__.py)
-- **EstimateEntryView** protocol for Qt widgets (`capture_state`, `apply_totals`, `populate_row`, etc.).
-- Compatibility exports: `EstimateEntryViewState`, `SaveItem`, `SavePayload`, `SaveOutcome`, `LoadedEstimate` are defined in `silverestimate.domain.estimate_entry` and re-exported here as the same classes.
-- Totals ownership note: `EstimateEntryWidget` owns hot-path totals scheduling/recompute for cell edits; presenter totals refresh remains callable for explicit non-edit flows.
+- **EstimateEntryView** protocol for Qt widgets (`set_voucher_number`, `populate_row`, `apply_loaded_estimate`, etc.).
+- Compatibility exports: `SaveItem`, `SavePayload`, `SaveOutcome`, `LoadedEstimate` are defined in `silverestimate.domain.estimate_entry` and re-exported here as the same classes.
+- Totals ownership note: `EstimateEntryWidget` owns totals scheduling and recompute for cell edits.
 
 ### Shared Estimate Data (silverestimate/domain/estimate_entry.py)
 
@@ -143,14 +141,12 @@ This guide documents the primary controller, service, and persistence APIs expos
 ### NavigationService (silverestimate/services/navigation_service.py)
     NavigationService(main_window, stack_widget, logger: Optional[logging.Logger] = None)
 
-- **update_db(db_manager)** – swap the active DatabaseManager after re-authentication.
 - **show_estimate() / show_item_master() / show_silver_bars()** – ensure widgets exist (lazy creation) and set the stacked widget.
 - **show_estimate_history() / show_silver_bar_history()** – open modal dialogs and coordinate selection hand-off.
 
 ### MainCommands (silverestimate/services/main_commands.py)
     MainCommands(main_window, db_manager, logger: Optional[logging.Logger] = None)
 
-- **update_db(db_manager)** – synchronise command targets after DB reconnects.
 - **save_estimate() / print_estimate()** – forward actions to EstimateEntryWidget.
 - **delete_all_data() / delete_all_estimates()** – handle confirmation flows, drop/reseed tables, and refresh views.
 - **create_item_catalog_backup()** – create a native `.seitems.json` item catalog backup via an asynchronous worker.

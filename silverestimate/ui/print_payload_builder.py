@@ -12,10 +12,7 @@ from .print_format_spec import (
     ESTIMATE_FORMAT_SPECS,
     normalize_estimate_format,
 )
-from .silver_bar_print_document import (
-    SilverBarInventoryPrintDocument,
-    SilverBarListPrintDocument,
-)
+from .silver_bar_print_document import SilverBarListPrintDocument
 
 
 def _sanitize_filename_stem(value: str) -> str:
@@ -24,9 +21,7 @@ def _sanitize_filename_stem(value: str) -> str:
     return normalized or "document"
 
 
-PrintDocument = (
-    EstimatePrintDocument | SilverBarInventoryPrintDocument | SilverBarListPrintDocument
-)
+PrintDocument = EstimatePrintDocument | SilverBarListPrintDocument
 
 
 @dataclass(frozen=True)
@@ -102,27 +97,6 @@ class PrintPayloadBuilder:
             )
 
         return build_payload(format_key, show_tunch)
-
-    def build_silver_bar_inventory_preview_payload(
-        self,
-        *,
-        status_filter=None,
-        fetch_bars: Callable[[object], object],
-    ) -> PrintPreviewPayload | None:
-        bars = fetch_bars(status_filter)
-        if not bars:
-            return None
-
-        return PrintPreviewPayload(
-            document=SilverBarInventoryPrintDocument.from_rows(
-                bars,
-                status_filter=status_filter,
-            ),
-            title="Print Preview - Silver Bar Inventory",
-            document_kind="silver_bar_inventory",
-            identifier=str(status_filter or "all"),
-            suggested_filename="Silver-Bar-Inventory.pdf",
-        )
 
     def build_silver_bar_list_preview_payload(
         self,

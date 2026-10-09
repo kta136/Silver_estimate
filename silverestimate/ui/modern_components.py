@@ -94,58 +94,6 @@ class BottomStatusStrip(QFrame):
         self._right.setText("  |  ".join(str(item) for item in items if str(item)))
 
 
-class DetailsStrip(QFrame):
-    """Horizontal selected-record details strip."""
-
-    def __init__(self, title: str = "", parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.setObjectName("DetailsStrip")
-        self.setMinimumHeight(64)
-        self._layout = QHBoxLayout(self)
-        self._layout.setContentsMargins(12, 8, 12, 8)
-        self._layout.setSpacing(12)
-        self._title = title
-        self.set_items([])
-
-    def set_items(self, items: Iterable[tuple[str, object]]) -> None:
-        while self._layout.count():
-            item = self._layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.hide()
-                widget.setParent(None)
-                widget.deleteLater()
-        if self._title:
-            title_label = QLabel(self._title)
-            title_label.setObjectName("DetailsStripTitle")
-            title_label.setMinimumWidth(96)
-            title_label.setSizePolicy(
-                QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred
-            )
-            title_label.setAlignment(
-                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-            )
-            self._layout.addWidget(title_label)
-        for label, value in items:
-            group = QWidget(self)
-            group.setMinimumWidth(76)
-            group.setSizePolicy(
-                QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Preferred
-            )
-            group_layout = QVBoxLayout(group)
-            group_layout.setContentsMargins(0, 0, 0, 0)
-            group_layout.setSpacing(2)
-            label_widget = QLabel(str(label))
-            label_widget.setObjectName("DetailsStripLabel")
-            value_widget = QLabel(str(value))
-            value_widget.setObjectName("DetailsStripValue")
-            value_widget.setToolTip(str(value))
-            group_layout.addWidget(label_widget)
-            group_layout.addWidget(value_widget)
-            self._layout.addWidget(group)
-        self._layout.addStretch(1)
-
-
 class RecordInspector(QFrame):
     """Readable selected-record details, independent of the source table model."""
 

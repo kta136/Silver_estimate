@@ -85,11 +85,6 @@ class MainCommands:
         self._catalog_export_thread: QThread | None = None
         self._catalog_export_worker: _ItemCatalogExportWorker | None = None
 
-    def update_db(self, db_manager: MainCommandsDatabase) -> None:
-        self.db = db_manager
-        self._catalog_export_thread = None
-        self._catalog_export_worker = None
-
     # --- File commands --------------------------------------------------
     def save_estimate(self) -> None:
         try:

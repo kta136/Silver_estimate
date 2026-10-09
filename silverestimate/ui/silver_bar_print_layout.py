@@ -9,7 +9,6 @@ from silverestimate.domain.numeric_policy import WEIGHT_PLACES
 from .estimate_table_formatting import format_indian_number
 from .modern_print_primitives import PrintAlignment
 from .silver_bar_print_document import (
-    SilverBarInventoryPrintDocument,
     SilverBarListPrintDocument,
     SilverBarPrintDocument,
     SilverBarPrintRow,
@@ -32,7 +31,6 @@ class SilverBarPrintTableRow:
 
 @dataclass(frozen=True)
 class SilverBarPrintLayout:
-    report_kind: str
     title: str
     left_metadata: str
     right_metadata: str
@@ -67,16 +65,6 @@ class SilverBarPrintLayout:
         return "\n".join(lines)
 
 
-INVENTORY_COLUMNS = (
-    SilverBarPrintColumn("bar_id", "Bar ID", 0.00, 0.08, "center"),
-    SilverBarPrintColumn("voucher", "Estimate Vch", 0.08, 0.17, "left"),
-    SilverBarPrintColumn("weight", "Weight (g)", 0.25, 0.13, "right"),
-    SilverBarPrintColumn("purity", "Purity (%)", 0.38, 0.10, "right"),
-    SilverBarPrintColumn("fine", "Fine Wt (g)", 0.48, 0.13, "right"),
-    SilverBarPrintColumn("date", "Date Added", 0.61, 0.18, "left"),
-    SilverBarPrintColumn("status", "Status", 0.79, 0.21, "left"),
-)
-
 LIST_COLUMNS = (
     SilverBarPrintColumn("sno", "SNo", 0.00, 0.12, "center"),
     SilverBarPrintColumn("weight", "Weight (g)", 0.12, 0.30, "right"),
@@ -88,53 +76,9 @@ LIST_COLUMNS = (
 def build_silver_bar_print_layout(
     document: SilverBarPrintDocument,
 ) -> SilverBarPrintLayout:
-    if isinstance(document, SilverBarInventoryPrintDocument):
-        return _build_inventory_layout(document)
     if isinstance(document, SilverBarListPrintDocument):
         return _build_list_layout(document)
     raise TypeError(f"Unsupported silver-bar document: {type(document).__name__}")
-
-
-def _build_inventory_layout(
-    document: SilverBarInventoryPrintDocument,
-) -> SilverBarPrintLayout:
-    rows = tuple(
-        SilverBarPrintTableRow(
-            (
-                bar.bar_id,
-                bar.estimate_voucher_no,
-                _weight(bar.weight),
-                _purity(bar.purity),
-                _weight(bar.fine_weight),
-                bar.date_added,
-                bar.status,
-            )
-        )
-        for bar in document.bars
-    )
-    total_weight, total_fine = _totals(document.bars)
-    return SilverBarPrintLayout(
-        report_kind="silver_bar_inventory",
-        title="SILVER BAR INVENTORY",
-        left_metadata=f"Status: {document.status_filter}",
-        right_metadata=f"Print Date: {document.print_date}",
-        note="",
-        section_title="SILVER BARS",
-        columns=INVENTORY_COLUMNS,
-        rows=rows,
-        total_row=SilverBarPrintTableRow(
-            (
-                "",
-                f"TOTAL ({len(rows)})",
-                _weight(total_weight),
-                "",
-                _weight(total_fine),
-                "",
-                "",
-            )
-        ),
-        empty_message="-- No Bars Found --",
-    )
 
 
 def _build_list_layout(
@@ -153,7 +97,6 @@ def _build_list_layout(
     )
     total_weight, total_fine = _totals(document.bars)
     return SilverBarPrintLayout(
-        report_kind="silver_bar_list",
         title="SILVER BAR LIST DETAILS",
         left_metadata=f"List ID: {document.list_identifier}",
         right_metadata="",
@@ -189,7 +132,6 @@ def _purity(value: float) -> str:
 
 
 __all__ = [
-    "INVENTORY_COLUMNS",
     "LIST_COLUMNS",
     "SilverBarPrintColumn",
     "SilverBarPrintLayout",

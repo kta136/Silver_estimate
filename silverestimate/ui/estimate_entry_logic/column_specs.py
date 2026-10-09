@@ -190,9 +190,6 @@ ESTIMATE_TABLE_COLUMN_SPECS: Final[tuple[EstimateColumnSpec, ...]] = (
 
 _SPECS_BY_INDEX: Final = {spec.index: spec for spec in ESTIMATE_TABLE_COLUMN_SPECS}
 
-ESTIMATE_TABLE_HEADERS: Final = tuple(
-    spec.header for spec in ESTIMATE_TABLE_COLUMN_SPECS
-)
 NUMERIC_COLUMNS: Final = frozenset(
     spec.index for spec in ESTIMATE_TABLE_COLUMN_SPECS if spec.precision is not None
 )
@@ -230,10 +227,6 @@ def get_column_spec(column: int) -> EstimateColumnSpec | None:
 
 def column_count() -> int:
     return len(ESTIMATE_TABLE_COLUMN_SPECS)
-
-
-def table_headers() -> tuple[str, ...]:
-    return ESTIMATE_TABLE_HEADERS
 
 
 def header_for_column(column: int) -> str | None:

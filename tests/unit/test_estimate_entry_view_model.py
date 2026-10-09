@@ -1,6 +1,9 @@
 import pytest
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
+from silverestimate.ui.estimate_entry_totals_controller import (
+    EstimateEntryTotalsController,
+)
 from silverestimate.ui.view_models import EstimateEntryRowState, EstimateEntryViewModel
 
 
@@ -34,44 +37,7 @@ def _make_row(
     )
 
 
-def test_iter_lines_skips_blank_rows():
-    view_model = EstimateEntryViewModel()
-    regular_row = _make_row(
-        code="REG001",
-        category=EstimateLineCategory.REGULAR,
-        gross=10.0,
-        poly=1.0,
-        net_weight=9.0,
-        fine_weight=8.325,
-        wage_amount=90.0,
-    )
-    return_row = _make_row(
-        code="RET001",
-        category=EstimateLineCategory.RETURN,
-        gross=2.0,
-        poly=0.2,
-        net_weight=1.8,
-        fine_weight=1.35,
-        wage_amount=0.0,
-    )
-
-    view_model.set_rows(
-        [
-            regular_row,
-            EstimateEntryRowState(),  # blank row should be ignored
-            return_row,
-        ]
-    )
-
-    lines = tuple(view_model.iter_lines())
-    assert len(lines) == 2
-    assert lines[0].code == "REG001"
-    assert lines[0].category is EstimateLineCategory.REGULAR
-    assert lines[1].code == "RET001"
-    assert lines[1].category.is_return()
-
-
-def test_compute_totals_with_balances():
+def test_rows_and_totals_inputs_feed_totals_and_save_snapshot():
     view_model = EstimateEntryViewModel()
     view_model.set_rows(
         [
@@ -105,7 +71,12 @@ def test_compute_totals_with_balances():
         last_balance_amount=100.0,
     )
 
-    totals = view_model.compute_totals()
+    totals = EstimateEntryTotalsController.build_totals(
+        view_model.rows(),
+        silver_rate=view_model.silver_rate,
+        last_balance_silver=view_model.last_balance_silver,
+        last_balance_amount=view_model.last_balance_amount,
+    )
 
     assert totals.overall_gross == pytest.approx(12.0)
     assert totals.overall_poly == pytest.approx(1.2)
@@ -117,36 +88,15 @@ def test_compute_totals_with_balances():
     assert totals.net_wage == pytest.approx(190.0)
     assert totals.grand_total == pytest.approx(750.63)
 
-    state = view_model.as_view_state()
-    assert len(state.lines) == 2
+    state = view_model.as_save_snapshot()
+    assert len(state.rows) == 2
     assert state.silver_rate == pytest.approx(75.0)
     assert state.last_balance_silver == pytest.approx(0.5)
     assert state.last_balance_amount == pytest.approx(100.0)
 
 
-def test_update_row_extends_and_modes_sync():
+def test_set_modes_updates_only_given_flags():
     view_model = EstimateEntryViewModel()
-    view_model.update_row(
-        2,
-        _make_row(
-            code="BAR001",
-            category=EstimateLineCategory.SILVER_BAR,
-            gross=3.0,
-            poly=0.0,
-            net_weight=3.0,
-            fine_weight=2.997,
-            wage_amount=0.0,
-            purity=99.9,
-        ),
-    )
-
-    rows = view_model.rows()
-    assert len(rows) == 3
-    assert rows[2].code == "BAR001"
-    assert rows[2].row_index == 3
-    assert rows[0].row_index == 1
-    assert view_model.active_rows()[-1].category.is_silver_bar()
-
     view_model.set_modes(return_mode=True)
     assert view_model.return_mode is True
     assert view_model.silver_bar_mode is False

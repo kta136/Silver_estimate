@@ -42,7 +42,7 @@ def test_save_snapshot_retains_original_rows_rates_and_line_identity():
     model.set_totals_inputs(
         silver_rate=999, last_balance_silver=9, last_balance_amount=999
     )
-    model.clear_rows()
+    model.set_rows([])
     prepared = EstimateEntryPersistenceService(snapshot).prepare_save_payload(
         voucher_no="1", date="2026-09-06", note="Captured"
     )

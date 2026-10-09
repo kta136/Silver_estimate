@@ -527,11 +527,3 @@ class SilverBarDialog(QDialog):
     def closeEvent(self, event) -> None:
         self.done(QDialog.DialogCode.Rejected)
         event.accept()
-
-
-def show_silver_bar_management(db_manager, parent=None):
-    return SilverBarDialog(db_manager, parent).exec()
-
-
-def show_silver_bars(db_manager, parent=None):
-    return show_silver_bar_management(db_manager, parent)

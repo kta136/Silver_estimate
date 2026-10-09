@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Mapping, Optional
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QApplication, QWidget
 
-from silverestimate.domain.estimate_entry import EstimateEntryViewState, LoadedEstimate
+from silverestimate.domain.estimate_entry import LoadedEstimate
 from silverestimate.domain.estimate_models import TotalsResult
 from silverestimate.persistence.draft_repository import DraftRepository
 from silverestimate.presenter import EstimateEntryPresenter
@@ -18,11 +18,6 @@ from .estimate_draft_recovery import EstimateDraftRecovery
 from .estimate_entry_layout_controller import EstimateEntryLayoutController
 from .estimate_entry_logic.constants import (
     COL_CODE,
-    COL_GROSS,
-    COL_PIECES,
-    COL_POLY,
-    COL_PURITY,
-    COL_WAGE_RATE,
 )
 from .estimate_entry_table_controller import EstimateEntryTableController
 from .estimate_entry_totals_controller import EstimateEntryTotalsController
@@ -118,14 +113,6 @@ class EstimateEntryWidget(QWidget):
     voucher_edit: QLineEdit
 
     live_rate_fetched = Signal(object)
-    EDITABLE_ENTRY_COLS = (
-        COL_CODE,
-        COL_GROSS,
-        COL_POLY,
-        COL_PURITY,
-        COL_WAGE_RATE,
-        COL_PIECES,
-    )
 
     @staticmethod
     def _normalize_wage_type(value: object) -> str:
@@ -184,9 +171,6 @@ class EstimateEntryWidget(QWidget):
 
     def open_history_dialog(self) -> Optional[str]:
         return self.workflow_controller.open_history_dialog()
-
-    def show_silver_bar_management(self) -> None:
-        self.workflow_controller.show_silver_bar_management()
 
     def apply_loaded_estimate(self, loaded: LoadedEstimate) -> bool:
         return self.workflow_controller.apply_loaded_estimate(loaded)
@@ -391,10 +375,6 @@ class EstimateEntryWidget(QWidget):
         self.table_controller._get_table_adapter().focus_on_empty_row(
             update_visuals=update_visuals
         )
-
-    def capture_state(self) -> EstimateEntryViewState:
-        self.workflow_controller._update_view_model_snapshot()
-        return self.view_model.as_view_state()
 
     def apply_totals(self, totals: TotalsResult) -> None:
         self.totals_panel.set_totals(totals)

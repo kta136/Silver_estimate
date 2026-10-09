@@ -320,7 +320,7 @@ def test_build_row_states_from_items_roundtrip():
 
     rows = EstimateEntryPersistenceService.build_row_states_from_items(items)
     assert [row.code for row in rows] == ["R1", "RET"]
-    assert rows[0].category.is_regular()
+    assert rows[0].category is EstimateLineCategory.REGULAR
     assert rows[1].category.is_return()
     assert rows[1].row_index == 2
     assert rows[1].wage_type == "PC"

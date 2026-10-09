@@ -19,9 +19,6 @@ class NavigationService:
         self.db = getattr(main_window, "db", None)
         self._logger = logger or logging.getLogger(__name__)
 
-    def update_db(self, db_manager) -> None:
-        self.db = db_manager
-
     # --- Entry Points --------------------------------------------------
     def show_estimate(self) -> None:
         widget = getattr(self.main_window, "estimate_widget", None)

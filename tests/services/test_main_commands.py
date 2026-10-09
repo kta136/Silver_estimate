@@ -669,20 +669,6 @@ def test_on_item_catalog_export_failed_shows_error(monkeypatch):
     ]
 
 
-def test_update_db_resets_export_worker_state(monkeypatch):
-    _install_stubs(monkeypatch)
-    commands = _make_commands(db_manager=object())
-    commands._catalog_export_thread = object()
-    commands._catalog_export_worker = object()
-    replacement_db = object()
-
-    commands.update_db(replacement_db)
-
-    assert commands.db is replacement_db
-    assert commands._catalog_export_thread is None
-    assert commands._catalog_export_worker is None
-
-
 def test_ensure_db_shows_error_when_missing(monkeypatch):
     _install_stubs(monkeypatch)
     commands = _make_commands(db_manager=None)

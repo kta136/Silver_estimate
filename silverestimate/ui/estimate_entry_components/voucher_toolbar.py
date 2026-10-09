@@ -153,46 +153,6 @@ class VoucherToolbar(QWidget):
         """
         self.voucher_edit.setText(number)
 
-    def get_voucher_number(self) -> str:
-        """Get the current voucher number.
-
-        Returns:
-            The voucher number text
-        """
-        return self.voucher_edit.text()
-
-    def set_date(self, date: QDate) -> None:
-        """Set the estimate date.
-
-        Args:
-            date: The date to set
-        """
-        self.date_edit.setDate(date)
-
-    def get_date(self) -> QDate:
-        """Get the current estimate date.
-
-        Returns:
-            The selected date
-        """
-        return self.date_edit.date()
-
-    def set_note(self, note: str) -> None:
-        """Set the note text.
-
-        Args:
-            note: The note text to display
-        """
-        self.note_edit.setText(note)
-
-    def get_note(self) -> str:
-        """Get the current note text.
-
-        Returns:
-            The note text
-        """
-        return self.note_edit.text()
-
     def show_unsaved_badge(self, show: bool) -> None:
         """Show or hide the unsaved changes badge.
 
@@ -210,10 +170,3 @@ class VoucherToolbar(QWidget):
         style.unpolish(self.unsaved_badge)
         style.polish(self.unsaved_badge)
         self.unsaved_badge.update()
-
-    def clear_voucher_metadata(self) -> None:
-        """Clear all voucher metadata fields."""
-        self.voucher_edit.clear()
-        self.date_edit.setDate(QDate.currentDate())
-        self.note_edit.clear()
-        self.show_unsaved_badge(False)

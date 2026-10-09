@@ -11,10 +11,7 @@ from PySide6.QtPrintSupport import QPrinter
 from silverestimate.infrastructure.settings import get_app_settings
 from silverestimate.ui.estimate_print_document import EstimatePrintDocument
 from silverestimate.ui.print_manager import PrintManager
-from silverestimate.ui.silver_bar_print_document import (
-    SilverBarInventoryPrintDocument,
-    SilverBarListPrintDocument,
-)
+from silverestimate.ui.silver_bar_print_document import SilverBarListPrintDocument
 from tests.factories import multi_section_print_estimate
 
 
@@ -332,36 +329,7 @@ def test_build_silver_bar_list_preview_payload_uses_typed_document(
     assert payload.suggested_filename == "Silver-Bar-List-LIST-010.pdf"
 
 
-def test_build_silver_bar_inventory_preview_payload_uses_typed_document(
-    qt_app, settings_stub
-):
-    class _InventoryDbStub:
-        @staticmethod
-        def get_silver_bars(status_filter):
-            assert status_filter == "AVAILABLE"
-            return [
-                {
-                    "bar_id": 1,
-                    "weight": 10,
-                    "purity": 99,
-                    "fine_weight": 9.9,
-                }
-            ]
-
-    manager = PrintManager(_InventoryDbStub(), print_font=QFont("Courier New", 8))
-
-    payload = manager.build_silver_bar_inventory_preview_payload("AVAILABLE")
-
-    assert payload is not None
-    assert isinstance(payload.document, SilverBarInventoryPrintDocument)
-    assert payload.document.status_filter == "AVAILABLE"
-    assert payload.document.bars[0].bar_id == "1"
-    assert payload.title == "Print Preview - Silver Bar Inventory"
-    assert payload.document_kind == "silver_bar_inventory"
-    assert payload.suggested_filename == "Silver-Bar-Inventory.pdf"
-
-
-def test_direct_inventory_painter_repeats_headers_and_keeps_total_with_rows(
+def test_direct_list_painter_repeats_headers_and_keeps_total_with_rows(
     qt_app,
     settings_stub,
     tmp_path,
@@ -371,21 +339,17 @@ def test_direct_inventory_painter_repeats_headers_and_keeps_total_with_rows(
     bars = [
         {
             "bar_id": index,
-            "estimate_voucher_no": f"V-{index:03d}",
-            "weight": 10 + index / 10,
+            "weight": 100 + index,
             "purity": 99.5,
-            "fine_weight": 9.95 + index / 10,
-            "date_added": "2026-07-26",
-            "status": "In Stock",
+            "fine_weight": 99.5 + index,
         }
-        for index in range(1, 76)
+        for index in range(1, 151)
     ]
-    document = SilverBarInventoryPrintDocument.from_rows(
+    document = SilverBarListPrintDocument.from_rows(
+        {"list_identifier": "LIST-075", "list_note": "Long list"},
         bars,
-        status_filter="AVAILABLE",
-        print_date="2026-07-26",
     )
-    output_path = tmp_path / "modern-silver-bar-inventory.pdf"
+    output_path = tmp_path / "modern-silver-bar-list.pdf"
     page_layout = QPageLayout(
         QPageSize(QPageSize.PageSizeId.A4),
         QPageLayout.Orientation.Portrait,
@@ -402,13 +366,13 @@ def test_direct_inventory_painter_repeats_headers_and_keeps_total_with_rows(
     pages, pdf = _pdf_pages(output_path)
 
     assert pdf.pageCount() >= 2
-    assert all("SILVER BAR INVENTORY" in page for page in pages)
-    assert all("Status: AVAILABLE" in page for page in pages)
-    assert all("Estimate Vch" in page for page in pages)
+    assert all("SILVER BAR LIST DETAILS" in page for page in pages)
+    assert all("List ID: LIST-075" in page for page in pages)
+    assert all("Fine Wt (g)" in page for page in pages)
     assert any("SILVER BARS (continued)" in page for page in pages[1:])
-    assert all("TOTAL (75)" not in page for page in pages[:-1])
-    assert "V-075" in pages[-1]
-    assert "TOTAL (75)" in pages[-1]
+    assert all("TOTAL (150)" not in page for page in pages[:-1])
+    assert "250.00" in pages[-1]
+    assert "TOTAL (150)" in pages[-1]
 
 
 def test_direct_empty_list_painter_handles_custom_page_and_large_font(

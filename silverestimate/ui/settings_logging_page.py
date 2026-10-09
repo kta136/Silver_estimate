@@ -277,26 +277,6 @@ class LoggingSettingsPage(QWidget):
         self.debug_mode_checkbox.toggled.connect(self.enable_debug_checkbox.setEnabled)
         self.enable_debug_checkbox.setEnabled(self.debug_mode_checkbox.isChecked())
 
-    def _create_debug_group(self) -> QGroupBox:
-        group = QGroupBox("Debug Settings")
-        layout = QVBoxLayout(group)
-        layout.setSpacing(8)
-
-        self.debug_mode_checkbox = QCheckBox("Enable Debug Mode")
-        self.debug_mode_checkbox.setToolTip(
-            "Enable detailed debug logging (may affect performance)"
-        )
-        layout.addWidget(self.debug_mode_checkbox)
-
-        description = QLabel(
-            "Debug mode captures detailed information about application operations. "
-            "This is useful for troubleshooting but may affect performance."
-        )
-        description.setWordWrap(True)
-        description.setObjectName("SettingsMutedDescription")
-        layout.addWidget(description)
-        return group
-
     def _create_log_levels_group(self) -> QGroupBox:
         group = QGroupBox("Recording")
         layout = QVBoxLayout(group)

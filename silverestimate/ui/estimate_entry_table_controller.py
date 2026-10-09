@@ -64,11 +64,6 @@ class EstimateEntryTableController:
         model = getattr(table, "_table_model", None)
         return model is not None and self._qt_object_available(model)
 
-    def populate_item_row(self, item_data):
-        if self.host.current_row < 0:
-            return
-        self.host.populate_row(self.host.current_row, item_data)
-
     def add_empty_row(self):
         if not self._table_runtime_available():
             return

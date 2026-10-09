@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional
 
 import pytest
@@ -6,27 +5,10 @@ import pytest
 from silverestimate.domain.estimate_save import EstimateSaveResult
 from silverestimate.presenter import (
     EstimateEntryPresenter,
-    EstimateEntryViewState,
     LoadedEstimate,
     SaveItem,
     SavePayload,
 )
-
-
-@dataclass
-class _StateFixture:
-    lines: Iterable[SaveItem]
-    silver_rate: float = 0.0
-    last_balance_silver: float = 0.0
-    last_balance_amount: float = 0.0
-
-    def to_view_state(self) -> EstimateEntryViewState:
-        return EstimateEntryViewState(
-            lines=list(self.lines),
-            silver_rate=self.silver_rate,
-            last_balance_silver=self.last_balance_silver,
-            last_balance_amount=self.last_balance_amount,
-        )
 
 
 class FakeRepository:
@@ -91,17 +73,9 @@ class FakeView:
         self.apply_loaded_estimate_result = True
         self.loaded_estimate: Optional[LoadedEstimate] = None
         self.history_called = False
-        self.silver_bar_called = False
         self.populate_row_calls: List[Dict] = []
         self.focus_calls: List[int] = []
         self.prompt_return: Optional[Dict] = None
-        self.state_fixture = _StateFixture(lines=[])
-
-    def capture_state(self) -> EstimateEntryViewState:
-        return self.state_fixture.to_view_state()
-
-    def apply_totals(self, totals):  # pragma: no cover - not used directly here
-        self.last_totals = totals
 
     def set_voucher_number(self, voucher_no: str) -> None:
         self.voucher_number = voucher_no
@@ -123,9 +97,6 @@ class FakeView:
     def open_history_dialog(self) -> Optional[str]:
         self.history_called = True
         return self.history_return
-
-    def show_silver_bar_management(self) -> None:
-        self.silver_bar_called = True
 
     def apply_loaded_estimate(self, loaded: LoadedEstimate) -> bool:
         self.loaded_estimate = loaded
@@ -259,14 +230,6 @@ def test_open_history_apply_failure(presenter_fixtures):
     presenter.open_history()
 
     assert view.status_messages[-1] == "Estimate V200 could not be loaded."
-
-
-def test_open_silver_bar_management_delegates_to_view(presenter_fixtures):
-    presenter, view, repo = presenter_fixtures
-
-    presenter.open_silver_bar_management()
-
-    assert view.silver_bar_called
 
 
 def test_handle_item_code_prompts_selection_when_code_missing(presenter_fixtures):

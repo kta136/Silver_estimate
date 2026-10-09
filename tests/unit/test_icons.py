@@ -16,7 +16,7 @@ def test_get_icon_supports_all_semantic_mappings(qtbot):
 def test_get_icon_caches_rendered_native_icon(qtbot):
     widget = QWidget()
     qtbot.addWidget(widget)
-    icons.clear_icon_cache()
+    icons._ICON_CACHE.clear()
 
     first = icons.get_icon("search", widget=widget, color="#ffffff")
     second = icons.get_icon("search", widget=widget, color="#ffffff")
@@ -29,7 +29,7 @@ def test_get_icon_caches_rendered_native_icon(qtbot):
 def test_get_icon_applies_requested_color(qtbot):
     widget = QWidget()
     qtbot.addWidget(widget)
-    icons.clear_icon_cache()
+    icons._ICON_CACHE.clear()
 
     image = (
         icons.get_icon("print", widget=widget, color="#ff0000")

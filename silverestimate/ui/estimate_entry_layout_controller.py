@@ -672,9 +672,6 @@ class EstimateEntryLayoutController:
             splitter.setStretchFactor(1, 0)
             splitter.setSizes([1060, 320])
 
-    def _on_totals_position_requested(self, position: str) -> None:
-        self._apply_totals_position(position, persist=True)
-
     def apply_totals_position(self, position: str) -> bool:
         try:
             self._apply_totals_position(position, persist=True)

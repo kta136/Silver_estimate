@@ -3,7 +3,6 @@
 from .estimate_entry_presenter import (
     EstimateEntryPresenter,
     EstimateEntryView,
-    EstimateEntryViewState,
     LoadedEstimate,
     SaveItem,
     SaveOutcome,
@@ -13,7 +12,6 @@ from .estimate_entry_presenter import (
 __all__ = [
     "EstimateEntryPresenter",
     "EstimateEntryView",
-    "EstimateEntryViewState",
     "LoadedEstimate",
     "SaveItem",
     "SaveOutcome",

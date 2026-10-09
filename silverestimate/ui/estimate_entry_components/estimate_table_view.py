@@ -209,11 +209,6 @@ class EstimateTableView(QTableView):
         )
         return self.add_row(row_data)
 
-    def append_row_state(self, row_state: EstimateEntryRowState) -> int:
-        if row_state.row_index <= 0:
-            row_state = replace(row_state, row_index=self._table_model.rowCount() + 1)
-        return self.add_row(row_state)
-
     def commit_active_editor(self) -> bool:
         """Commit a focused cell before commands capture the entry model."""
         editor = self.focusWidget()
@@ -331,16 +326,6 @@ class EstimateTableView(QTableView):
             return False
         return bool(self._table_model.flags(index) & Qt.ItemFlag.ItemIsEditable)
 
-    def focus_cell(self, row: int, column: int, *, start_edit: bool = False) -> None:
-        if not (0 <= row < self._table_model.rowCount()):
-            return
-        index = self._table_model.index(row, column)
-        if not index.isValid():
-            return
-        self.setCurrentIndex(index)
-        if start_edit and (self._table_model.flags(index) & Qt.ItemFlag.ItemIsEditable):
-            self.edit(index)
-
     def begin_cell_edit(self, row: int, column: int) -> bool:
         if not self.is_cell_editable(row, column):
             return False
@@ -362,39 +347,9 @@ class EstimateTableView(QTableView):
     def currentRow(self) -> int:
         return self.get_current_row()
 
-    def currentColumn(self) -> int:
-        return self.get_current_column()
-
     def setCurrentCell(self, row: int, column: int) -> None:
         index = self._table_model.index(row, column)
         self.setCurrentIndex(index)
-
-    def save_column_widths(self) -> dict[int, int]:
-        widths = {}
-        for col in range(self._table_model.columnCount()):
-            widths[col] = self.columnWidth(col)
-        return widths
-
-    def restore_column_widths(self, widths: dict[int, int]) -> None:
-        for col, width in widths.items():
-            if col < self._table_model.columnCount():
-                self.setColumnWidth(col, width)
-
-    def reset_column_widths(self) -> None:
-        default_widths = {
-            0: 100,
-            1: 200,
-            2: 80,
-            3: 80,
-            4: 80,
-            5: 80,
-            6: 80,
-            7: 80,
-            8: 80,
-            9: 80,
-            10: 80,
-        }
-        self.restore_column_widths(default_widths)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

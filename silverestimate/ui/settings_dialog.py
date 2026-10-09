@@ -2,7 +2,6 @@
 import logging  # Ensure logging is available for getLogger calls
 
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -17,7 +16,6 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QStackedWidget,
     QVBoxLayout,
-    QWidget,
 )
 
 from silverestimate.infrastructure.settings import SettingsKey, get_app_settings
@@ -692,41 +690,3 @@ class SettingsDialog(QDialog):
 
         # Mark dirty so user can Apply
         self._mark_dirty()
-
-
-# Example usage for testing
-if __name__ == "__main__":
-    import sys
-
-    from PySide6.QtWidgets import QApplication, QMainWindow
-
-    class DummyMainWindow(QMainWindow):
-        def __init__(self):
-            super().__init__()
-            self.print_font = QFont("Arial", 10)  # Dummy attribute
-
-            class _DummyEstimateWidget(QWidget):
-                def apply_table_font_size(self, size):
-                    print(f"Dummy Apply Table Font: {size}")
-
-            self.estimate_widget = _DummyEstimateWidget()
-            # Add dummy methods needed by the dialog
-            self.show_catalog_restore_dialog = lambda: print(
-                "Dummy Show Catalog Restore Dialog"
-            )
-            self.show_catalog_backup_dialog = lambda: print(
-                "Dummy Show Catalog Backup Dialog"
-            )
-            self.delete_all_estimates = lambda: print("Dummy Delete All Estimates")
-            self.delete_vouchers_by_range = lambda: print(
-                "Dummy Delete Vouchers by Range"
-            )
-            self.delete_all_data = lambda: print("Dummy Delete All Data")
-            # Dummy db object for export handler check
-            self.db = True  # Or a dummy object with needed methods if exporter uses them directly
-
-    app = QApplication(sys.argv)
-    dummy_main = DummyMainWindow()
-    dialog = SettingsDialog(dummy_main)
-    dialog.exec()
-    sys.exit(app.exec())

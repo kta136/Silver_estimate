@@ -4,16 +4,12 @@ import sqlite3
 import types
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import QDialogButtonBox, QMessageBox, QTableView
+from PySide6.QtWidgets import QDialogButtonBox, QMessageBox
 
 from silverestimate.infrastructure.settings import SettingsKey, get_app_settings
 from silverestimate.persistence.items_repository import fetch_item_catalog_page
 from silverestimate.ui.estimate_deletion_dialog import confirm_estimate_deletion
 from silverestimate.ui.item_master import ItemMasterWidget
-from silverestimate.ui.models.silver_bar_table_models import (
-    AvailableSilverBarsTableModel,
-)
-from silverestimate.ui.selection_check_header import SelectionCheckHeader
 from silverestimate.ui.settings_dialog import SettingsDialog
 from tests.ui.test_item_master import _StubDbManager
 from tests.ui.test_settings_dialog import _make_main_window
@@ -34,21 +30,6 @@ def test_deletion_escape_cancels_and_the_action_caption_fits(qtbot, qt_app):
 
     QTimer.singleShot(0, cancel)
     assert not confirm_estimate_deletion(None, "100")
-
-
-def test_checkbox_selection_uses_the_transfer_selection_model(qtbot):
-    table = QTableView()
-    qtbot.addWidget(table)
-    model = AvailableSilverBarsTableModel(table)
-    model.set_rows([{"bar_id": 1}, {"bar_id": 2}])
-    table.setModel(model)
-    header = SelectionCheckHeader(table)
-    header._toggle(1)
-    assert [index.row() for index in table.selectionModel().selectedRows()] == [1]
-    header._toggle(1)
-    assert not table.selectionModel().hasSelection()
-    table.selectRow(0)
-    assert table.selectionModel().isRowSelected(0)
 
 
 def test_catalog_cancel_keeps_edits_and_discard_restores_record(qtbot, monkeypatch):

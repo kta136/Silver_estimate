@@ -5,9 +5,6 @@ from __future__ import annotations
 from typing import Dict, Mapping, Optional, Protocol, Sequence
 
 from silverestimate.domain.estimate_entry import (
-    EstimateEntryViewState as EstimateEntryViewState,
-)
-from silverestimate.domain.estimate_entry import (
     LoadedEstimate as LoadedEstimate,
 )
 from silverestimate.domain.estimate_entry import (
@@ -19,19 +16,11 @@ from silverestimate.domain.estimate_entry import (
 from silverestimate.domain.estimate_entry import (
     SavePayload as SavePayload,
 )
-from silverestimate.domain.estimate_models import TotalsResult
-from silverestimate.services.estimate_calculator import compute_totals
 from silverestimate.services.estimate_repository import EstimateRepository
 
 
 class EstimateEntryView(Protocol):
     """Interface implemented by the Qt widget so the presenter can talk to it."""
-
-    def capture_state(self) -> EstimateEntryViewState:
-        """Return the current state needed for calculations."""
-
-    def apply_totals(self, totals: TotalsResult) -> None:
-        """Update UI totals and related labels."""
 
     def set_voucher_number(self, voucher_no: str) -> None:
         """Display a voucher number in the UI."""
@@ -52,9 +41,6 @@ class EstimateEntryView(Protocol):
 
     def open_history_dialog(self) -> Optional[str]:
         """Open the estimate history dialog and return selected voucher number."""
-
-    def show_silver_bar_management(self) -> None:
-        """Trigger the silver bar management workflow."""
 
     def apply_loaded_estimate(self, loaded: "LoadedEstimate") -> bool:
         """Apply a loaded estimate to the view."""
@@ -79,18 +65,6 @@ class EstimateEntryPresenter:
         if not silent:
             self._view.show_status(f"Generated new voucher: {voucher_no}", 2500)
         return voucher_no
-
-    def refresh_totals(self) -> TotalsResult:
-        """Recompute totals based on the current view state."""
-        state = self._view.capture_state()
-        totals = compute_totals(
-            state.lines,
-            silver_rate=state.silver_rate,
-            last_balance_silver=state.last_balance_silver,
-            last_balance_amount=state.last_balance_amount,
-        )
-        self._view.apply_totals(totals)
-        return totals
 
     def load_estimate(self, voucher_no: str) -> Optional[LoadedEstimate]:
         """Retrieve an estimate and convert it into presenter-friendly objects."""
@@ -307,10 +281,3 @@ class EstimateEntryPresenter:
     def delete_estimate(self, voucher_no: str) -> bool:
         """Delete an estimate by voucher number."""
         return self._repository.delete_estimate(voucher_no)
-
-    def open_silver_bar_management(self) -> None:
-        """Trigger the silver bar management workflow."""
-        try:
-            self._view.show_silver_bar_management()
-        except Exception as exc:
-            self._view.show_status(f"Error opening Silver Bar Management: {exc}", 5000)

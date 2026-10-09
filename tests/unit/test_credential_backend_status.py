@@ -153,7 +153,7 @@ def test_device_binding_secret_is_stable_and_deletable(monkeypatch):
     assert len(first) == 32
     assert writes == 2
     assert backend.persist == "enterprise"
-    credential_store.delete_device_binding_secret()
+    credential_store.delete_password_hash("device_binding")
     assert credential_store.get_device_binding_secret() is None
 
 

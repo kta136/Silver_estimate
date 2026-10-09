@@ -16,9 +16,10 @@ def toolbar(qtbot):
 
 def test_initial_state(toolbar):
     """Test that toolbar initializes with default values."""
-    assert toolbar.get_voucher_number() == ""
-    assert toolbar.get_note() == ""
-    assert toolbar.get_date() == QDate.currentDate()
+    assert toolbar.voucher_edit.text() == ""
+    assert toolbar.note_edit.text() == ""
+    assert not toolbar.note_edit.isHidden()
+    assert toolbar.date_edit.date() == QDate.currentDate()
     assert toolbar.unsaved_badge.text() == "● Ready"
     assert toolbar.unsaved_badge.property("dirty") == "false"
     assert toolbar.mode_indicator_label.text() == "Mode: Regular"
@@ -31,23 +32,7 @@ def test_initial_state(toolbar):
 def test_set_voucher_number(toolbar):
     """Test setting voucher number."""
     toolbar.set_voucher_number("EST001")
-    assert toolbar.get_voucher_number() == "EST001"
     assert toolbar.voucher_edit.text() == "EST001"
-
-
-def test_set_date(toolbar):
-    """Test setting date."""
-    test_date = QDate(2024, 1, 15)
-    toolbar.set_date(test_date)
-    assert toolbar.get_date() == test_date
-
-
-def test_set_note(toolbar):
-    """Test setting note."""
-    toolbar.set_note("Test note")
-    assert toolbar.get_note() == "Test note"
-    assert toolbar.note_edit.text() == "Test note"
-    assert not toolbar.note_edit.isHidden()
 
 
 def test_show_unsaved_badge(toolbar):
@@ -64,25 +49,6 @@ def test_show_unsaved_badge(toolbar):
     assert toolbar.unsaved_badge.property("dirty") == "true"
 
     toolbar.show_unsaved_badge(False)
-    assert toolbar.unsaved_badge.text() == "● Ready"
-    assert toolbar.unsaved_badge.property("dirty") == "false"
-
-
-def test_clear_voucher_metadata(toolbar):
-    """Test clearing all metadata."""
-    # Set some data
-    toolbar.set_voucher_number("EST001")
-    toolbar.set_note("Test note")
-    toolbar.set_date(QDate(2024, 1, 15))
-    toolbar.show_unsaved_badge(True)
-
-    # Clear it
-    toolbar.clear_voucher_metadata()
-
-    # Verify all cleared
-    assert toolbar.get_voucher_number() == ""
-    assert toolbar.get_note() == ""
-    assert toolbar.get_date() == QDate.currentDate()
     assert toolbar.unsaved_badge.text() == "● Ready"
     assert toolbar.unsaved_badge.property("dirty") == "false"
 

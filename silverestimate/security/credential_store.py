@@ -281,11 +281,3 @@ def create_device_binding_secret(
     encoded = f"{DEVICE_BINDING_VERSION}:{base64.b64encode(secret).decode('ascii')}"
     set_password_hash("device_binding", encoded, logger=logger)
     return secret
-
-
-def delete_device_binding_secret(
-    *,
-    logger: Optional[logging.Logger] = None,
-) -> None:
-    """Remove the device-bound database secret from the OS credential store."""
-    delete_password_hash("device_binding", logger=logger)

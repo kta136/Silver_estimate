@@ -124,12 +124,6 @@ def get_icon(
     return QIcon(icon)
 
 
-def clear_icon_cache() -> None:
-    """Clear rendered icons after an application style or palette change."""
-
-    _ICON_CACHE.clear()
-
-
 def _vector_icon(symbol: str, color: str, active_color: str) -> QIcon:
     rendered = QIcon()
     mode_colors = (

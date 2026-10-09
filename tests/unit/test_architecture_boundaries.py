@@ -60,10 +60,7 @@ from silverestimate.ui.settings_print_page import PrintSettingsPage
 from silverestimate.ui.settings_security_page import (
     SecuritySettingsPage,
 )
-from silverestimate.ui.silver_bar_print_document import (
-    SilverBarInventoryPrintDocument,
-    SilverBarListPrintDocument,
-)
+from silverestimate.ui.silver_bar_print_document import SilverBarListPrintDocument
 
 
 @cache
@@ -195,7 +192,6 @@ def test_print_pipeline_uses_typed_direct_documents_and_custom_preview() -> None
 
     assert set(get_args(PrintDocument)) == {
         EstimatePrintDocument,
-        SilverBarInventoryPrintDocument,
         SilverBarListPrintDocument,
     }
     assert not {

@@ -1,10 +1,9 @@
-"""Typed input models for silver-bar inventory and list printing."""
+"""Typed input models for silver-bar list printing."""
 
 from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date
 from typing import Any, cast
 
 from .display_formatting import format_display_date
@@ -70,31 +69,6 @@ class SilverBarPrintRow:
 
 
 @dataclass(frozen=True)
-class SilverBarInventoryPrintDocument:
-    bars: tuple[SilverBarPrintRow, ...]
-    status_filter: str
-    print_date: str
-
-    @classmethod
-    def from_rows(
-        cls,
-        bars: object,
-        *,
-        status_filter: object = None,
-        print_date: object = None,
-    ) -> SilverBarInventoryPrintDocument:
-        resolved_print_date = print_date if print_date is not None else date.today()
-        return cls(
-            bars=tuple(
-                SilverBarPrintRow.from_row(row, index=index)
-                for index, row in enumerate(_rows(bars, field="bars"))
-            ),
-            status_filter=str(status_filter or "All"),
-            print_date=format_display_date(resolved_print_date),
-        )
-
-
-@dataclass(frozen=True)
 class SilverBarListPrintDocument:
     list_identifier: str
     list_note: str
@@ -116,11 +90,10 @@ class SilverBarListPrintDocument:
         )
 
 
-SilverBarPrintDocument = SilverBarInventoryPrintDocument | SilverBarListPrintDocument
+SilverBarPrintDocument = SilverBarListPrintDocument
 
 
 __all__ = [
-    "SilverBarInventoryPrintDocument",
     "SilverBarListPrintDocument",
     "SilverBarPrintDocument",
     "SilverBarPrintRow",

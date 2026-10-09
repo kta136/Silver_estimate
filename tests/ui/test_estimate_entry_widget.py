@@ -666,7 +666,7 @@ def test_totals_position_switching_and_persistence(
         == "left"
     )
 
-    widget.layout_controller._on_totals_position_requested("bottom")
+    widget.layout_controller.apply_totals_position("bottom")
     assert splitter.orientation() == Qt.Orientation.Vertical
     assert splitter.widget(1) is widget.totals_panel
     assert widget.totals_panel is not original_sidebar
@@ -679,7 +679,7 @@ def test_totals_position_switching_and_persistence(
         == "bottom"
     )
 
-    widget.layout_controller._on_totals_position_requested("right")
+    widget.layout_controller.apply_totals_position("right")
     assert splitter.orientation() == Qt.Orientation.Horizontal
     assert splitter.widget(1) is widget.totals_panel
     assert widget._totals_panel_sidebar is widget.totals_panel

@@ -39,9 +39,6 @@ class EstimateLineCategory(Enum):
             return "Silver Bar"
         return "Regular"
 
-    def is_regular(self) -> bool:
-        return self is self.REGULAR
-
     def is_return(self) -> bool:
         return self is self.RETURN
 

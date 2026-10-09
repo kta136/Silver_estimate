@@ -406,12 +406,6 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             self.logger.debug("Failed to log status message: %s", exc)
 
-    def refresh_live_rate_now(self):
-        controller = self.live_rate_controller
-        if controller:
-            return controller.refresh_now()
-        return None
-
     def reconfigure_rate_visibility_from_settings(self):
         controller = self.live_rate_controller
         if not controller:

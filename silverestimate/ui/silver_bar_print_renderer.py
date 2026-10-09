@@ -40,7 +40,7 @@ class _PrintPage:
 
 
 class SilverBarPrintRenderer:
-    """Build and directly paint silver-bar inventory and list reports."""
+    """Build and directly paint silver-bar list reports."""
 
     def build_layout(
         self,

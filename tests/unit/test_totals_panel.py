@@ -1,5 +1,7 @@
 """Tests for TotalsPanel component."""
 
+from dataclasses import replace
+
 import pytest
 from PySide6.QtCore import Qt
 
@@ -73,48 +75,6 @@ def test_set_totals(panel):
     assert panel.grand_total_label.text() == "₹ 1,25,000.00"
 
 
-def test_clear_totals(panel):
-    """Test clearing all totals."""
-    # First set some values
-    totals = TotalsResult(
-        overall_gross=500.0,
-        overall_poly=25.0,
-        regular=CategoryTotals(gross=300.0, net=275.0, fine=252.0, wage=4000.0),
-        returns=CategoryTotals(gross=100.0, net=95.0, fine=87.0, wage=500.0),
-        silver_bars=CategoryTotals(gross=100.0, net=95.0, fine=87.0, wage=500.0),
-        net_fine_core=252.0,
-        net_wage_core=5000.0,
-        net_value_core=100000.0,
-        net_fine=252.0,
-        net_wage=5000.0,
-        net_value=100000.0,
-        grand_total=125000.0,
-        silver_rate=0.0,
-        last_balance_silver=0.0,
-        last_balance_amount=0.0,
-    )
-    panel.set_totals(totals)
-
-    # Now clear
-    panel.clear_totals()
-
-    # Verify all back to zero
-    assert panel.overall_gross_label.text() == "0.00"
-    assert panel.overall_poly_label.text() == "0.00"
-    assert panel.total_gross_label.text() == "0.00"
-    assert panel.total_net_label.text() == "0.00"
-    assert panel.total_fine_label.text() == "0.00"
-    assert panel.return_gross_label.text() == "0.00"
-    assert panel.return_net_label.text() == "0.00"
-    assert panel.return_fine_label.text() == "0.00"
-    assert panel.bar_gross_label.text() == "0.00"
-    assert panel.bar_net_label.text() == "0.00"
-    assert panel.bar_fine_label.text() == "0.00"
-    assert panel.net_fine_label.text() == "0.00"
-    assert panel.net_wage_label.text() == "0.00"
-    assert panel.grand_total_label.text() == "₹ 0.00"
-
-
 def test_set_totals_with_zero_values(panel):
     """Test setting totals with all zeros."""
     totals = TotalsResult(
@@ -169,7 +129,9 @@ def test_optional_return_and_silver_bar_sections_only_show_when_used(panel):
     assert panel._category_visibility["return"] is True
     assert panel._category_visibility["silver_bar"] is True
 
-    panel.clear_totals()
+    panel.set_totals(
+        replace(totals, returns=CategoryTotals(), silver_bars=CategoryTotals())
+    )
 
     assert panel._category_visibility["return"] is False
     assert panel._category_visibility["silver_bar"] is False

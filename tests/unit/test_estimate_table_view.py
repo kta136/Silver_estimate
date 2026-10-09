@@ -125,10 +125,10 @@ def test_set_all_rows(table_view):
     assert retrieved[0].code == "X"
 
 
-def test_focus_cell(table_view):
+def test_set_current_cell(table_view):
     """Test focusing on a specific cell."""
     table_view.add_row()
-    table_view.focus_cell(0, 0)
+    table_view.setCurrentCell(0, 0)
 
     assert table_view.get_current_row() == 0
     assert table_view.get_current_column() == 0
@@ -151,39 +151,6 @@ def test_get_current_row_when_empty(table_view):
 def test_get_current_column_when_empty(table_view):
     """Test getting current column when no column is selected."""
     assert table_view.get_current_column() == -1
-
-
-def test_save_and_restore_column_widths(table_view):
-    """Test saving and restoring column widths."""
-    # Set some custom widths
-    table_view.setColumnWidth(0, 150)
-    table_view.setColumnWidth(1, 250)
-
-    # Save widths
-    widths = table_view.save_column_widths()
-    assert widths[0] == 150
-    assert widths[1] == 250
-
-    # Change widths
-    table_view.setColumnWidth(0, 100)
-    table_view.setColumnWidth(1, 100)
-
-    # Restore
-    table_view.restore_column_widths(widths)
-    assert table_view.columnWidth(0) == 150
-    assert table_view.columnWidth(1) == 250
-
-
-def test_reset_column_widths(table_view):
-    """Test resetting column widths to defaults."""
-    # Set some custom widths
-    table_view.setColumnWidth(0, 500)
-
-    # Reset
-    table_view.reset_column_widths()
-
-    # Should be default width (100 for code column)
-    assert table_view.columnWidth(0) == 100
 
 
 def test_row_deleted_signal(table_view):

@@ -11,8 +11,20 @@ from shiboken6 import isValid
 
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.persistence.database_manager import DatabaseManager
+from silverestimate.ui.estimate_entry_totals_controller import (
+    EstimateEntryTotalsController,
+)
 from silverestimate.ui.estimate_history import EstimateHistoryDialog
 from silverestimate.ui.view_models import EstimateEntryRowState
+
+
+def _view_model_totals(view_model):
+    return EstimateEntryTotalsController.build_totals(
+        view_model.rows(),
+        silver_rate=view_model.silver_rate,
+        last_balance_silver=view_model.last_balance_silver,
+        last_balance_amount=view_model.last_balance_amount,
+    )
 
 
 @pytest.fixture
@@ -102,7 +114,9 @@ def test_saved_entry_and_history_totals_include_both_balances(
         loaded = widget.presenter.load_estimate("1")
         assert widget.apply_loaded_estimate(loaded)
         widget.workflow_controller._update_view_model_snapshot()
-        assert widget.view_model.compute_totals().grand_total == pytest.approx(expected)
+        assert _view_model_totals(widget.view_model).grand_total == pytest.approx(
+            expected
+        )
     finally:
         dialog.close()
         dialog.deleteLater()

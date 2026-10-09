@@ -364,10 +364,6 @@ def test_main_window_startup_sets_up_estimate_view(main_window_fixture, qt_app, 
     assert widget.delete_estimate_button.accessibleName() == "Delete Estimate"
 
     # Public helpers delegate to controller.
-    live_rate.refresh_calls = 0
-    window.refresh_live_rate_now()
-    assert live_rate.refresh_calls == 1
-
     window.reconfigure_rate_visibility_from_settings()
     assert live_rate.visibility_calls == 1
 
@@ -473,7 +469,7 @@ def test_user_entry_updates_totals_and_view_model(main_window_fixture, qtbot):
 
     # View-model captures the active row for downstream workflows.
     widget.workflow_controller._update_view_model_snapshot()
-    active_rows = widget.view_model.active_rows()
+    active_rows = [row for row in widget.view_model.rows() if not row.is_empty()]
     assert len(active_rows) == 1
     row_state = active_rows[0]
     assert row_state.code == "RING001"

@@ -35,8 +35,6 @@ class SecondaryActionsBar(QWidget):
 
     # Signals
     delete_row_clicked = Signal()
-    return_mode_toggled = Signal(bool)
-    silver_bar_mode_toggled = Signal(bool)
     last_balance_clicked = Signal()
     history_clicked = Signal()
     silver_bars_clicked = Signal()
@@ -391,43 +389,6 @@ class SecondaryActionsBar(QWidget):
             self.silver_bar_toggle_button.click()
 
     # Public methods
-
-    def set_return_mode(self, enabled: bool) -> None:
-        """Set the return mode state.
-
-        Args:
-            enabled: True to enable return mode, False to disable
-        """
-        self.return_toggle_button.setChecked(enabled)
-
-    def set_silver_bar_mode(self, enabled: bool) -> None:
-        """Set the silver bar mode state.
-
-        Args:
-            enabled: True to enable silver bar mode, False to disable
-        """
-        self.silver_bar_toggle_button.setChecked(enabled)
-
-    def get_return_mode(self) -> bool:
-        """Get the return mode state.
-
-        Returns:
-            True if return mode is enabled, False otherwise
-        """
-        return self.return_toggle_button.isChecked()
-
-    def get_silver_bar_mode(self) -> bool:
-        """Get the silver bar mode state.
-
-        Returns:
-            True if silver bar mode is enabled, False otherwise
-        """
-        return self.silver_bar_toggle_button.isChecked()
-
-    def reset_modes(self) -> None:
-        """Reset both modes to disabled state."""
-        self.return_toggle_button.setChecked(False)
-        self.silver_bar_toggle_button.setChecked(False)
 
     def enable_delete_estimate(self, enabled: bool) -> None:
         """Enable or disable the delete estimate button."""

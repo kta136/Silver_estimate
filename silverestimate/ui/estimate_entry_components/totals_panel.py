@@ -1056,35 +1056,6 @@ class TotalsPanel(QWidget):
         self.grand_total_label.setText(self._format_currency(totals.grand_total))
         self._schedule_sidebar_item_size_sync()
 
-    def clear_totals(self) -> None:
-        """Reset all totals to zero."""
-        # Overall totals
-        self.overall_gross_label.setText(self._format_weight(0))
-        self.overall_poly_label.setText(self._format_weight(0))
-
-        # Regular items
-        self.total_gross_label.setText(self._format_weight(0))
-        self.total_net_label.setText(self._format_weight(0))
-        self.total_fine_label.setText(self._format_weight(0))
-
-        # Return items
-        self.return_gross_label.setText(self._format_weight(0))
-        self.return_net_label.setText(self._format_weight(0))
-        self.return_fine_label.setText(self._format_weight(0))
-
-        # Silver bars
-        self.bar_gross_label.setText(self._format_weight(0))
-        self.bar_net_label.setText(self._format_weight(0))
-        self.bar_fine_label.setText(self._format_weight(0))
-
-        # Final calculations
-        self.net_fine_label.setText(self._format_weight(0))
-        self.net_wage_label.setText(self._format_amount(0))
-        self.grand_total_label.setText(self._format_currency(0))
-        self._set_category_visibility("return", False)
-        self._set_category_visibility("silver_bar", False)
-        self._schedule_sidebar_item_size_sync()
-
     # Font size methods used by the estimate layout controller.
 
     def set_breakdown_font_size(self, size: int) -> None:

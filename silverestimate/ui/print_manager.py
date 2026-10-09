@@ -3,7 +3,6 @@ import logging
 
 from PySide6.QtGui import QFont
 from PySide6.QtPrintSupport import QPrinter
-from PySide6.QtWidgets import QMessageBox
 
 from silverestimate.infrastructure.settings import SettingsKey, get_app_settings
 from silverestimate.services.settings_service import SettingsService
@@ -23,10 +22,7 @@ from .print_payload_builder import (
 )
 from .print_preview_controller import PrintPreviewController
 from .print_preview_output import PrintOutputOutcome, PrintOutputService
-from .silver_bar_print_document import (
-    SilverBarInventoryPrintDocument,
-    SilverBarListPrintDocument,
-)
+from .silver_bar_print_document import SilverBarListPrintDocument
 from .silver_bar_print_renderer import SilverBarPrintRenderer
 
 LOGGER = logging.getLogger(__name__)
@@ -84,27 +80,6 @@ class PrintManager:
         )
         self._silver_bar_renderer = SilverBarPrintRenderer()
 
-    def print_estimate(self, voucher_no, parent_widget=None):
-        """Preview and print an estimate through the selected direct painter."""
-        try:
-            payload = self.build_estimate_preview_payload(voucher_no)
-            if payload is None:
-                QMessageBox.warning(
-                    parent_widget, "Print Error", f"Estimate {voucher_no} not found."
-                )
-                return False
-            self.show_preview(payload, parent_widget=parent_widget)
-            return True
-        except Exception as exc:
-            LOGGER.exception("Failed to prepare estimate print preview: %s", exc)
-            QMessageBox.critical(
-                parent_widget,
-                "Print Error",
-                "Could not prepare the estimate print preview.\n\n"
-                "Check the estimate data and print settings, then try again.",
-            )
-            return False
-
     def build_estimate_preview_payload(
         self,
         voucher_no,
@@ -153,70 +128,6 @@ class PrintManager:
             printer=self.printer, render_document=self._render_document
         ).quick_print(payload)
 
-    def print_silver_bars(self, status_filter=None, parent_widget=None):
-        """Prints the INVENTORY list of silver bars using preview."""
-        payload = self.build_silver_bar_inventory_preview_payload(status_filter)
-        if payload is None:
-            status_msg = f" with status '{status_filter}'" if status_filter else ""
-            QMessageBox.warning(
-                parent_widget, "Print Error", f"No silver bars{status_msg} found."
-            )
-            return False
-
-        try:
-            self.show_preview(payload, parent_widget=parent_widget)
-            return True
-
-        except Exception as exc:
-            LOGGER.exception(
-                "Failed to prepare silver bar inventory print preview: %s",
-                exc,
-            )
-            QMessageBox.critical(
-                parent_widget,
-                "Print Error",
-                "Could not prepare the silver bar inventory preview.\n\n"
-                "Check the selected printer and print settings, then try again.",
-            )
-            return False
-
-    def build_silver_bar_inventory_preview_payload(
-        self,
-        status_filter=None,
-    ) -> PrintPreviewPayload | None:
-        """Build the inventory payload for silver bars without opening UI widgets."""
-        return self._payload_builder.build_silver_bar_inventory_preview_payload(
-            status_filter=status_filter,
-            fetch_bars=lambda selected_status: self.db_manager.get_silver_bars(
-                selected_status
-            ),
-        )
-
-    def print_silver_bar_list_details(
-        self, list_info, bars_in_list, parent_widget=None
-    ):
-        """Generates and previews/prints details of a specific silver bar list."""
-        try:
-            payload = self.build_silver_bar_list_preview_payload(
-                list_info, bars_in_list
-            )
-            if payload is None:
-                QMessageBox.warning(
-                    parent_widget, "Print Error", "List information is missing."
-                )
-                return False
-            self.show_preview(payload, parent_widget=parent_widget)
-            return True
-        except Exception as exc:
-            LOGGER.exception("Failed to prepare list print preview: %s", exc)
-            QMessageBox.critical(
-                parent_widget,
-                "Print Error",
-                "Could not prepare the list print preview.\n\n"
-                "Check the list data and print settings, then try again.",
-            )
-            return False
-
     def build_silver_bar_list_preview_payload(
         self,
         list_info,
@@ -237,10 +148,7 @@ class PrintManager:
                 print_font=self.print_font,
             )
             return
-        if isinstance(
-            document,
-            SilverBarInventoryPrintDocument | SilverBarListPrintDocument,
-        ):
+        if isinstance(document, SilverBarListPrintDocument):
             self._silver_bar_renderer.paint(
                 printer,
                 document,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Mapping, Optional, Sequence
 
 from silverestimate.domain.estimate_models import EstimateLine, EstimateLineCategory
@@ -48,20 +48,6 @@ class EstimateEntryRowState:
             fine_weight=self.fine_weight,
             wage_amount=self.wage_amount,
         )
-
-    def with_category(self, category: EstimateLineCategory) -> "EstimateEntryRowState":
-        """Return a copy with a different category."""
-        return replace(self, category=category)
-
-
-@dataclass(frozen=True)
-class EstimateEntryViewState:
-    """Snapshot of the data required to run presenter computations."""
-
-    lines: Sequence[EstimateLine]
-    silver_rate: float
-    last_balance_silver: float = 0.0
-    last_balance_amount: float = 0.0
 
 
 @dataclass(frozen=True)

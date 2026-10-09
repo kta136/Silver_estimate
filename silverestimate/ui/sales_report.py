@@ -52,13 +52,15 @@ from silverestimate.ui.screen_widgets import (
 from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
 from silverestimate.ui.themed_controls import ThemedDateEdit
 
+_UNLIMITED_HEIGHT = 16777215  # Qt's QWIDGETSIZE_MAX
+
 # Below this width the filter bar uses two rows.
 COMPACT_FILTER_WIDTH = 1150
 
 _SALES_QSS = """
 QLabel#SalesFieldLabel { color: __TEXT_MUTED__; font-weight: 600; font-size: 9pt; }
-QLabel#MetricValue { font-size: 18pt; }
-QLabel#MetricValue[accent="true"] { font-size: 18pt; }
+QLabel#MetricValue { font-size: 15pt; }
+QLabel#MetricValue[accent="true"] { font-size: 15pt; }
 QLabel#SalesBreadcrumb { font-size: 10pt; }
 QPushButton#SalesPrimary, QPushButton#SalesSecondary { padding: 6px 14px; min-height: 24px; }
 QPushButton#EmptyStateAction {
@@ -121,8 +123,8 @@ class SalesReportWidget(QWidget):
         layout.setSpacing(0)
         layout.addWidget(self._build_filters())
         body = QVBoxLayout()
-        body.setContentsMargins(18, 14, 18, 16)
-        body.setSpacing(14)
+        body.setContentsMargins(18, 10, 18, 12)
+        body.setSpacing(10)
         body.addLayout(self._build_totals())
         body.addWidget(self._build_table_card(), 1)
         layout.addLayout(body, 1)
@@ -137,8 +139,8 @@ class SalesReportWidget(QWidget):
         header = QFrame()
         header.setObjectName("ScreenHeaderBar")
         layout = QVBoxLayout(header)
-        layout.setContentsMargins(18, 14, 18, 14)
-        layout.setSpacing(10)
+        layout.setContentsMargins(18, 10, 18, 10)
+        layout.setSpacing(6)
         title_row = QHBoxLayout()
         title_row.setSpacing(14)
         title_row.addWidget(label("Sales reports", "ScreenTitle"))
@@ -263,30 +265,28 @@ class SalesReportWidget(QWidget):
         self.scope_label.setSizePolicy(
             QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
         )
+        self.scope_label.setWordWrap(True)
         for title, eyebrow, caption in (
             ("SALES", "EyebrowSale", self.scope_label),
             ("RETURNS", "EyebrowReturn", label("not subtracted from sales", "Muted")),
         ):
             frame = card(title.title())
-            contents = QVBoxLayout(frame)
-            contents.setContentsMargins(18, 12, 18, 14)
-            contents.setSpacing(6)
-            top = QHBoxLayout()
-            top.addWidget(label(title, eyebrow))
-            caption.setAlignment(Qt.AlignmentFlag.AlignRight)
-            top.addWidget(caption, 1)
-            contents.addLayout(top)
-            values = QHBoxLayout()
-            values.setSpacing(16)
-            for name in ("Net weight", "Fine weight"):
+            contents = QHBoxLayout(frame)
+            contents.setContentsMargins(16, 8, 16, 8)
+            contents.setSpacing(16)
+            heading = QVBoxLayout()
+            heading.setSpacing(2)
+            heading.addWidget(label(title, eyebrow))
+            heading.addWidget(caption)
+            contents.addLayout(heading, 3)
+            for name in ("Net", "Fine"):
                 cell = QVBoxLayout()
-                cell.setSpacing(2)
+                cell.setSpacing(0)
                 cell.addWidget(label(name, "Muted"))
                 value = label("—", "MetricValue")
                 cell.addWidget(value)
-                values.addLayout(cell, 1)
+                contents.addLayout(cell, 1)
                 self.total_labels.append(value)
-            contents.addLayout(values)
             layout.addWidget(frame, 1)
         self.total_labels[1].setProperty("accent", True)
         return layout
@@ -332,11 +332,18 @@ class SalesReportWidget(QWidget):
         self.table.doubleClicked.connect(self._activate_selected)
         self.table.selectionModel().selectionChanged.connect(self._update_actions)
         self.table.installEventFilter(self)
-        layout.addWidget(self.table, 1)
+        # The table takes nearly all spare height until it reaches its rows'
+        # height; then the spacer under the totals takes the rest.
+        layout.addWidget(self.table, 100)
+        # The totals row follows the last row like a subtotal; the spacer
+        # below it takes the spare height while the rows are few.
         self.totals_footer = TableTotalsFooter(self.table, frame)
         layout.addWidget(self.totals_footer)
+        self._table_card_layout = layout
+        layout.addStretch(0)
+        self._table_spacer = layout.count() - 1
         hint = QHBoxLayout()
-        hint.setContentsMargins(16, 8, 16, 10)
+        hint.setContentsMargins(16, 5, 16, 6)
         self.status_label = label("Select a period to view its items.", "Muted")
         self.status_label.setWordWrap(True)
         hint.addWidget(self.status_label, 1)
@@ -345,7 +352,7 @@ class SalesReportWidget(QWidget):
 
     def _build_navigation(self):
         layout = QHBoxLayout()
-        layout.setContentsMargins(14, 10, 14, 10)
+        layout.setContentsMargins(12, 6, 12, 6)
         layout.setSpacing(14)
         self.view_switch = QFrame()
         self.view_switch.setObjectName("SegmentGroup")
@@ -447,6 +454,7 @@ class SalesReportWidget(QWidget):
         self.model.set_report(self._level, ())
         self._set_totals(None)
         self.totals_footer.clear()
+        self._fit_table()
 
     def _show_empty(self, title: str, body: str, *, actions: bool = False):
         self._empty_state.set_title(title)
@@ -513,6 +521,7 @@ class SalesReportWidget(QWidget):
         self.table.sortByColumn(column, order)
         self._set_totals(result.totals)
         self._show_table_totals(result.totals)
+        self._fit_table()
         self._apply_weight_bars()
         self._show_no_results()
         instructions = {
@@ -560,9 +569,30 @@ class SalesReportWidget(QWidget):
                 actions=True,
             )
 
+    def _fit_table(self):
+        """Shrink the table to its rows so the totals sit right under them."""
+        layout = self._table_card_layout
+        spacer = self._table_spacer
+        rows = self.model.rowCount()
+        self.totals_footer.setVisible(rows > 0)
+        if not rows:
+            self.table.setMaximumHeight(_UNLIMITED_HEIGHT)
+            layout.setStretch(spacer, 0)
+            return
+        height = (
+            self.table.horizontalHeader().height()
+            + rows * self.table.verticalHeader().defaultSectionSize()
+            + 2 * self.table.frameWidth()
+        )
+        if self.table.horizontalScrollBar().isVisible():
+            height += self.table.horizontalScrollBar().height()
+        self.table.setMaximumHeight(height)
+        layout.setStretch(spacer, 1)
+
     def _show_table_totals(self, totals: SalesWeights):
         if not self.model.rowCount():
             self.totals_footer.clear()
+            self._fit_table()
             return
         offset = self.model.weight_offset
         self.totals_footer.set_values(

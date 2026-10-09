@@ -18,7 +18,11 @@ class SilverBarOptimizationController:
 
     def generate_optimal_list(self, dialog_cls) -> None:
         dialog = dialog_cls(self.host)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
+        try:
+            accepted = dialog.exec() == QDialog.DialogCode.Accepted
+        finally:
+            dialog.deleteLater()
+        if not accepted:
             return
         try:
             bars = self.host.db_manager.get_silver_bars(

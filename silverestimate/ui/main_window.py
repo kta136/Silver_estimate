@@ -527,7 +527,10 @@ class MainWindow(QMainWindow):
         from silverestimate.ui.settings_dialog import SettingsDialog
 
         dialog = SettingsDialog(main_window_ref=self, parent=self)
-        dialog.exec()
+        try:
+            dialog.exec()
+        finally:
+            dialog.deleteLater()
 
     def show_catalog_restore_dialog(self):
         return self.commands.restore_item_catalog()

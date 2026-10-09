@@ -164,6 +164,9 @@ def test_show_silver_bars_lazy_creation(monkeypatch):
             exec_calls.append("exec")
             return QDialog.DialogCode.Accepted
 
+        def deleteLater(self):
+            exec_calls.append("deleteLater")
+
     module = types.SimpleNamespace(SilverBarDialog=_SilverBarDialog)
     monkeypatch.setitem(sys.modules, "silverestimate.ui.silver_bar_management", module)
 
@@ -183,7 +186,7 @@ def test_show_silver_bars_lazy_creation(monkeypatch):
     assert stack.current is None
     assert stack.added == []
     assert created["db"] is main_window.db
-    assert exec_calls == ["exec"]
+    assert exec_calls == ["exec", "deleteLater"]
     assert message_box.calls == []
 
 

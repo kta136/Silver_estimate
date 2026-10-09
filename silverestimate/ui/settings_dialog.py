@@ -656,6 +656,11 @@ class SettingsDialog(QDialog):
         logging.getLogger(__name__).debug("Settings dialog rejected.")
         super().reject()
 
+    def done(self, result):
+        """Stop the live-rate status poll once the dialog closes."""
+        self._rate_display_timer.stop()
+        super().done(result)
+
     # --- UI helpers ---
     def _mark_dirty(self):
         """Enable Apply button when any setting changes."""

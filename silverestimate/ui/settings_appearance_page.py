@@ -457,9 +457,12 @@ class AppearanceSettingsPage(QWidget):
 
     def _show_print_font_dialog(self) -> None:
         dialog = CustomFontDialog(self._current_print_font, self)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        self._current_print_font = dialog.get_selected_font()
+        try:
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            self._current_print_font = dialog.get_selected_font()
+        finally:
+            dialog.deleteLater()
         state = FontSettings.from_qfont(self._current_print_font)
         self.print_font_label.setText(self.font_display_text(state))
         self._update_font_sample()

@@ -175,6 +175,9 @@ def test_optimizer_opens_a_separate_saved_list(workspace):
         def exec(self):
             return QDialog.DialogCode.Accepted
 
+        def deleteLater(self):
+            pass
+
     dialog._optimization_controller.generate_optimal_list(AcceptedTarget)
     assert dialog.current_list_id != old_id
     assert dialog.snapshot.details["list_note"] == "Optimized"

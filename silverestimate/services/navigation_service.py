@@ -78,7 +78,10 @@ class NavigationService:
 
             self._logger.info("Opening Silver Bar Management dialog")
             dialog = SilverBarDialog(self.db, self.main_window)
-            dialog.exec()
+            try:
+                dialog.exec()
+            finally:
+                dialog.deleteLater()
         except Exception as exc:
             self._logger.error(
                 "Failed to open Silver Bar Management: %s", exc, exc_info=True

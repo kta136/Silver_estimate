@@ -126,6 +126,23 @@ def test_settings_accept_does_not_close_when_apply_fails(
         dialog.deleteLater()
 
 
+def test_settings_dialog_stops_rate_poll_when_closed(qtbot, qt_app, settings_stub):
+    estimate_widget = types.SimpleNamespace(
+        apply_table_font_size=lambda size: True,
+        apply_breakdown_font_size=lambda size: True,
+        apply_final_calc_font_size=lambda size: True,
+        apply_totals_position=lambda value: True,
+    )
+    dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
+    qtbot.addWidget(dialog)
+    try:
+        assert dialog._rate_display_timer.isActive()
+        dialog.reject()
+        assert not dialog._rate_display_timer.isActive()
+    finally:
+        dialog.deleteLater()
+
+
 def test_settings_apply_persists_print_preferences(
     qtbot, qt_app, monkeypatch, settings_stub
 ):

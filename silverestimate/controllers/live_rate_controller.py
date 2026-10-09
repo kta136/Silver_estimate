@@ -183,16 +183,8 @@ class LiveRateController(QObject):
             return None
 
     def _fallback_refresh(self) -> None:
-        widget = self._widget_getter()
-        if widget and hasattr(widget, "refresh_silver_rate"):
-            try:
-                widget.refresh_silver_rate()
-            except Exception as exc:
-                self._logger.warning("Manual live-rate refresh failed: %s", exc)
-                self._status_callback("Live rate refresh failed", 3000, "warning")
-            finally:
-                self._manual_refresh = False
-            return
+        # Never call back into the entry widget here: its refresh button routes
+        # to this controller, so doing so would recurse until RecursionError.
         self._manual_refresh = False
         self._status_callback("Live rate refresh unavailable", 3000, "warning")
 

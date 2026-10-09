@@ -168,16 +168,18 @@ def test_refresh_now_reuses_service_and_reports_status():
     assert status[-1] == ("Refreshing live rate.", 1500, "info")
 
 
-def test_refresh_falls_back_to_widget_when_service_raises():
+def test_refresh_failure_does_not_call_back_into_widget():
     widget = _WidgetStub()
-    controller, service, _ = _build_controller(
+    controller, service, status = _build_controller(
         settings={"rates/live_enabled": True}, widget=widget
     )
     service.raise_on_refresh = True
 
     controller.refresh_now()
 
-    assert widget.refresh_calls == 1
+    assert widget.refresh_calls == 0
+    assert status[-1] == ("Live rate refresh unavailable", 3000, "warning")
+    assert controller._manual_refresh is False
 
 
 def test_refresh_reports_unavailable_without_service_or_widget_fallback():
@@ -335,9 +337,9 @@ def test_refresh_disabled_and_fallback_error_paths():
     controller._service_factory = lambda **_kwargs: (_ for _ in ()).throw(
         RuntimeError("unavailable")
     )
-    widget.refresh_silver_rate = lambda: (_ for _ in ()).throw(RuntimeError("widget"))
     controller.refresh_now()
-    assert status[-1] == ("Live rate refresh failed", 3000, "warning")
+    assert widget.refresh_calls == 0
+    assert status[-1] == ("Live rate refresh unavailable", 3000, "warning")
     assert controller._manual_refresh is False
 
 

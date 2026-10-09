@@ -68,7 +68,7 @@ class EstimateEntryPersistenceService:
         for idx, row in enumerate(rows):
             if row.is_empty() and not self._has_row_data(row):
                 continue
-            row_number = row.row_index if row.row_index > 0 else idx + 1
+            row_number = idx + 1
             try:
                 save_item = self._row_to_save_item(row, row_number)
             except ValueError as exc:

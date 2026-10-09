@@ -229,6 +229,18 @@ def test_remove_row(model):
     assert model.rowCount() == 1
 
 
+def test_row_numbers_stay_one_based_after_remove_and_replace(model):
+    for _ in range(3):
+        model.add_row()
+
+    model.remove_row(0)
+    assert [row.row_index for row in model.get_all_rows()] == [1, 2]
+
+    rows = model.get_all_rows()
+    model.set_all_rows([rows[1], rows[0], EstimateEntryRowState(row_index=0)])
+    assert [row.row_index for row in model.get_all_rows()] == [1, 2, 3]
+
+
 def test_clear_rows(model):
     """Test clearing all rows."""
     model.add_row()

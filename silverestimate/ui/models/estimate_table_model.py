@@ -409,6 +409,7 @@ class EstimateTableModel(QAbstractTableModel):
             )
         self.beginInsertRows(QModelIndex(), row_idx, row_idx)
         self._rows.append(row_data)
+        self._renumber_rows(row_idx)
         self.endInsertRows()
 
         return row_idx
@@ -429,11 +430,7 @@ class EstimateTableModel(QAbstractTableModel):
         self._rows.pop(row_idx)
         self.endRemoveRows()
 
-        # Update row indices for remaining rows
-        for i in range(row_idx, len(self._rows)):
-            from dataclasses import replace
-
-            self._rows[i] = replace(self._rows[i], row_index=i)
+        self._renumber_rows(row_idx)
 
         return True
 
@@ -519,4 +516,11 @@ class EstimateTableModel(QAbstractTableModel):
         """
         self.beginResetModel()
         self._rows = list(rows)
+        self._renumber_rows()
         self.endResetModel()
+
+    def _renumber_rows(self, start: int = 0) -> None:
+        """Keep each row's 1-based number in step with its position."""
+        for index in range(start, len(self._rows)):
+            if self._rows[index].row_index != index + 1:
+                self._rows[index] = replace(self._rows[index], row_index=index + 1)

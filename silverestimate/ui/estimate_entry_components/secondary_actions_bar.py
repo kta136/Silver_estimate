@@ -7,9 +7,11 @@ from typing import Optional
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
+    QBoxLayout,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QPushButton,
     QSizePolicy,
     QToolButton,
@@ -182,23 +184,11 @@ class SecondaryActionsBar(QWidget):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
 
-        rate_layout = QHBoxLayout(self.live_rate_container)
-        rate_layout.setContentsMargins(6, 3, 6, 3)
-        rate_layout.setSpacing(6)
-
-        rate_text_layout = QVBoxLayout()
-        rate_text_layout.setContentsMargins(0, 0, 0, 0)
-        rate_text_layout.setSpacing(0)
-
         self.live_rate_title_label = QLabel("Live silver rate")
         self.live_rate_title_label.setObjectName("LiveRateTitle")
-        rate_text_layout.addWidget(
-            self.live_rate_title_label, 0, Qt.AlignmentFlag.AlignVCenter
-        )
 
         self.live_rate_value_label = QLabel("Loading…")
         self.live_rate_value_label.setObjectName("LiveRateValue")
-        self.live_rate_value_label.setMinimumWidth(110)
         self.live_rate_value_label.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
@@ -208,14 +198,6 @@ class SecondaryActionsBar(QWidget):
         rate_font = self.live_rate_value_label.font()
         rate_font.setBold(True)
         self.live_rate_value_label.setFont(rate_font)
-        rate_text_layout.addWidget(
-            self.live_rate_value_label, 1, Qt.AlignmentFlag.AlignVCenter
-        )
-        rate_layout.addLayout(rate_text_layout, 1)
-
-        refresh_stack = QVBoxLayout()
-        refresh_stack.setContentsMargins(0, 0, 0, 0)
-        refresh_stack.setSpacing(1)
 
         self.refresh_rate_button = QToolButton()
         self.refresh_rate_button.setObjectName("RefreshRateButton")
@@ -234,9 +216,6 @@ class SecondaryActionsBar(QWidget):
         self.refresh_rate_button.setAutoRaise(True)
         self.refresh_rate_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.refresh_rate_button.setAccessibleName("Refresh Silver Rate")
-        refresh_stack.addWidget(
-            self.refresh_rate_button, 0, Qt.AlignmentFlag.AlignHCenter
-        )
 
         self.live_rate_meta_label = QLabel("Not updated")
         self.live_rate_meta_label.setObjectName("LiveRateMeta")
@@ -247,8 +226,9 @@ class SecondaryActionsBar(QWidget):
         self.live_rate_meta_label.setAlignment(
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
         )
-        refresh_stack.addWidget(self.live_rate_meta_label)
-        rate_layout.addLayout(refresh_stack, 0)
+
+        self._live_rate_compact = False
+        self._apply_live_rate_layout()
 
         self._right_actions_layout.addWidget(self.live_rate_container)
         self.live_rate_divider = self._create_divider()
@@ -273,6 +253,82 @@ class SecondaryActionsBar(QWidget):
         self.delete_estimate_button.setEnabled(False)
         self.delete_estimate_button.setAutoRaise(False)
         self._right_actions_layout.addWidget(self.delete_estimate_button)
+
+    def set_live_rate_compact(self, compact: bool) -> None:
+        """Lay the live-rate card out as one field (side panel) or a card."""
+        compact = bool(compact)
+        if compact == self._live_rate_compact:
+            return
+        self._live_rate_compact = compact
+        self._apply_live_rate_layout()
+
+    def _apply_live_rate_layout(self) -> None:
+        card = self.live_rate_container
+        old_layout = card.layout()
+        if old_layout is not None:
+            self._empty_layout(old_layout)
+            # Re-home the old layout so a new one can be installed on the card.
+            QWidget().setLayout(old_layout)
+
+        card.setProperty("placement", "field" if self._live_rate_compact else "card")
+        title, value = self.live_rate_title_label, self.live_rate_value_label
+        button, meta = self.refresh_rate_button, self.live_rate_meta_label
+        if self._live_rate_compact:
+            # "Live rate   2 min ago" over "128.40  [refresh]", the height of a
+            # labelled form field.
+            title.setText("Live rate")
+            title.setObjectName("VoucherFieldLabel")
+            value.setMinimumWidth(0)
+            meta.setAlignment(
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            )
+            layout: QBoxLayout = QVBoxLayout(card)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(2)
+            top = QHBoxLayout()
+            top.setSpacing(4)
+            top.addWidget(title)
+            top.addWidget(meta, 1)
+            bottom = QHBoxLayout()
+            bottom.setSpacing(4)
+            bottom.addWidget(value, 1)
+            bottom.addWidget(button)
+            layout.addLayout(top)
+            layout.addLayout(bottom)
+        else:
+            title.setText("Live silver rate")
+            title.setObjectName("LiveRateTitle")
+            value.setMinimumWidth(110)
+            meta.setAlignment(
+                Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
+            )
+            layout = QHBoxLayout(card)
+            layout.setContentsMargins(6, 3, 6, 3)
+            layout.setSpacing(6)
+            text_stack = QVBoxLayout()
+            text_stack.setContentsMargins(0, 0, 0, 0)
+            text_stack.setSpacing(0)
+            text_stack.addWidget(title, 0, Qt.AlignmentFlag.AlignVCenter)
+            text_stack.addWidget(value, 1, Qt.AlignmentFlag.AlignVCenter)
+            layout.addLayout(text_stack, 1)
+            refresh_stack = QVBoxLayout()
+            refresh_stack.setContentsMargins(0, 0, 0, 0)
+            refresh_stack.setSpacing(1)
+            refresh_stack.addWidget(button, 0, Qt.AlignmentFlag.AlignHCenter)
+            refresh_stack.addWidget(meta)
+            layout.addLayout(refresh_stack, 0)
+        for widget in (card, title):
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
+        layout.activate()
+
+    @classmethod
+    def _empty_layout(cls, layout: QLayout) -> None:
+        while layout.count():
+            item = layout.takeAt(0)
+            child = item.layout()
+            if child is not None:
+                cls._empty_layout(child)
 
     def show_live_rate_in_header(self, show_divider: bool = True) -> None:
         """Ensure live-rate card is attached in the header action strip."""

@@ -380,15 +380,15 @@ def test_main_window_startup_sets_up_estimate_view(main_window_fixture, qt_app, 
     assert not widget.silver_bars_button.icon().isNull()
     assert not widget.delete_estimate_button.icon().isNull()
 
-    assert widget.save_button.text() == "Save"
+    assert widget.save_button.text() == "Save  Ctrl+S"
     assert widget.print_button.text() == "Print"
     assert widget.clear_button.text() == "New"
     assert widget.delete_row_button.text() == "Delete Row"
     assert widget.return_toggle_button.text() == ""
     assert widget.silver_bar_toggle_button.text() == ""
-    assert widget.history_button.text() == "History"
+    assert widget.history_button.text() == "History  Ctrl+H"
     assert widget.last_balance_button.text() == "Last Balance"
-    assert widget.silver_bars_button.text() == "Manage Silver Bars"
+    assert widget.silver_bars_button.text() == "Silver Bars"
     assert widget.delete_estimate_button.text() == "Delete Estimate"
 
     assert widget.save_button.accessibleName() == "Save"

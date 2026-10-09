@@ -119,12 +119,40 @@ def test_panel_layout_keeps_fields_and_drops_released_badge(toolbar):
         toolbar.date_edit,
         toolbar.silver_rate_spin,
         toolbar.note_edit,
-        toolbar.mode_selector,
     ):
         assert layout.indexOf(widget) >= 0
+    # The side panel places the mode switch outside the voucher card.
+    assert layout.indexOf(toolbar.mode_selector) < 0
     assert toolbar.voucher_label.text() == "Voucher"
 
     toolbar.set_panel_layout(False)
     assert toolbar.property("placement") == "row"
     assert toolbar.layout().indexOf(toolbar.note_edit) >= 0
     assert toolbar.voucher_label.text() == "Voucher:"
+
+
+def test_panel_mode_labels_shorten_to_fit_the_switch(toolbar, qtbot):
+    toolbar.release_unsaved_badge()
+    toolbar.set_panel_layout(True)
+    selector = toolbar.mode_selector
+    toolbar.show()
+    selector.show()
+
+    def texts():
+        return [button.text() for button in toolbar.mode_buttons.buttons()]
+
+    selector.resize(600, 30)
+    qtbot.wait(10)
+    assert texts() == ["Regular", "Return  Ctrl+R", "Bar  Ctrl+B"]
+
+    # Too narrow for the shortcuts: the switch shortens its labels instead of
+    # widening the side panel.
+    hinted = sum(button.sizeHint().width() for button in toolbar.mode_buttons.buttons())
+    selector.resize(hinted - 20, 30)
+    qtbot.wait(10)
+    assert texts()[1] == "Return"
+    assert "Ctrl" not in "".join(texts())
+    assert selector.minimumSizeHint().width() < hinted
+
+    toolbar.set_panel_layout(False)
+    assert texts() == ["Regular", "Return", "Silver Bar"]

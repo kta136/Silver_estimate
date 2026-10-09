@@ -5,11 +5,12 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Optional, cast
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QAbstractButton,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QMenu,
@@ -105,6 +106,7 @@ class EstimateEntryLayoutController:
         strip_layout.setSpacing(6)
         strip_layout.addWidget(self.host.toolbar.release_unsaved_badge())
         strip_layout.addWidget(self.host.primary_actions)
+        self.host.primary_actions.save_button.setText("Save  Ctrl+S")
         self.host.command_strip = strip
         self._command_strip_menu_bar: QMenuBar | None = None
         self._header_layout.addWidget(strip)
@@ -204,9 +206,11 @@ class EstimateEntryLayoutController:
         if not hasattr(self.host, "sidebar_actions"):
             actions = QFrame(self.host)
             actions.setObjectName("EstimateSidebarActions")
-            column = QVBoxLayout(actions)
-            column.setContentsMargins(0, 4, 0, 0)
-            column.setSpacing(6)
+            grid = QGridLayout(actions)
+            grid.setContentsMargins(0, 4, 0, 0)
+            grid.setSpacing(6)
+            grid.setColumnStretch(0, 1)
+            grid.setColumnStretch(1, 1)
 
             more_button = QToolButton(actions)
             more_button.setObjectName("EstimateMoreButton")
@@ -216,42 +220,39 @@ class EstimateEntryLayoutController:
             self.host.estimate_more_button = more_button
 
             actions_bar = self.host.secondary_actions
-            rows: list[list[tuple[QAbstractButton, str]]] = [
-                [
-                    (actions_bar.last_balance_button, "Last Balance"),
-                    (actions_bar.history_button, "History"),
-                ],
-                [
-                    (actions_bar.silver_bars_button, "Manage Silver Bars"),
-                    (more_button, "More"),
-                ],
-                [
-                    (actions_bar.delete_row_button, "Delete Row"),
-                    (actions_bar.delete_estimate_button, "Delete Estimate"),
-                ],
+            specs: list[tuple[QAbstractButton, str]] = [
+                (actions_bar.last_balance_button, "Last Balance"),
+                (actions_bar.history_button, "History  Ctrl+H"),
+                (actions_bar.silver_bars_button, "Silver Bars"),
+                (more_button, "More"),
+                (actions_bar.delete_row_button, "Delete Row"),
+                (actions_bar.delete_estimate_button, "Delete Estimate"),
             ]
-            for pairs in rows:
-                row = QHBoxLayout()
-                row.setSpacing(6)
-                for button, text in pairs:
-                    self._configure_sidebar_button(button, text)
-                    # Share the row by label length so neither label is cut.
-                    row.addWidget(button, len(text) + 4)
-                    button.show()
-                column.addLayout(row)
+            for index, (button, text) in enumerate(specs):
+                self._configure_sidebar_button(button, text)
+                # Text-only, equal-width buttons; the icons stay for the menus.
+                if isinstance(button, QToolButton):
+                    button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+                else:
+                    button.setIconSize(QSize(0, 0))
+                grid.addWidget(button, index // 2, index % 2)
+                button.show()
 
-            status = QLabel(actions)
+            status = QLabel(self.host)
             status.setObjectName("SidebarStatusText")
             status.setWordWrap(True)
-            column.addWidget(status)
             self.host.sidebar_status_label = status
             self.host.sidebar_actions = actions
         panel = self.host.totals_panel
+        status = self.host.sidebar_status_label
         if panel.layout_mode == "sidebar":
             panel.sidebar_actions_layout.addWidget(self.host.sidebar_actions)
+            panel.sidebar_footer_layout.addWidget(status)
             self.host.sidebar_actions.show()
+            status.show()
         else:
             self.host.sidebar_actions.hide()
+            status.hide()
 
     @staticmethod
     def _configure_sidebar_button(button: QAbstractButton, text: str) -> None:
@@ -259,11 +260,9 @@ class EstimateEntryLayoutController:
         button.setText(text)
         button.setMinimumSize(0, 30)
         button.setMaximumSize(16777215, 16777215)
-        # Two buttons share each row; never let them push the side panel
-        # wider than its splitter pane.
+        # Two equal buttons share each row; never let them push the side
+        # panel wider than its splitter pane.
         button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
-        if isinstance(button, QToolButton):
-            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
 
     def show_command_strip(self, visible: bool) -> None:
         """Dock Save/Print/New in the menu bar while the estimate screen shows."""
@@ -417,7 +416,10 @@ class EstimateEntryLayoutController:
         strip.set_right_items(items)
         sidebar_status = getattr(self.host, "sidebar_status_label", None)
         if sidebar_status is not None and isValid(sidebar_status):
-            sidebar_status.setText("  ·  ".join([*items, *_SHORTCUT_HINTS]))
+            sidebar_items = [f"Rows: {rows}", f"Last saved: {last_saved}"]
+            if recovery is not None:
+                sidebar_items.append(f"Recovery: {recovery.status}")
+            sidebar_status.setText(" · ".join([*sidebar_items, "F1 Shortcuts"]))
 
     def refresh_bottom_status(self) -> None:
         self._update_bottom_status_strip()
@@ -446,28 +448,34 @@ class EstimateEntryLayoutController:
         )
         if in_sidebar and panel is not None:
             self._header_layout.removeWidget(toolbar)
-            toolbar.set_panel_layout(True)
-            top_widgets: list[QWidget] = [toolbar]
             if live_rate_card is not None:
+                actions.set_live_rate_compact(True)
+                # The header row fixes the card's width; here it fills its column.
                 live_rate_card.setSizePolicy(
                     QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
                 )
-                top_widgets.append(live_rate_card)
+                toolbar.set_rate_companion(live_rate_card)
+            toolbar.set_panel_layout(True)
             try:
-                panel.set_sidebar_top_widgets(top_widgets)
+                panel.set_sidebar_top_widgets([toolbar, toolbar.mode_selector])
             except (AttributeError, RuntimeError, TypeError) as exc:
                 self.host.logger.debug(
                     "Failed to move voucher fields to sidebar: %s", exc
                 )
             toolbar.show()
+            toolbar.mode_selector.show()
             divider = getattr(actions, "live_rate_divider", None)
             if divider is not None:
                 divider.setVisible(False)
             self.host.bottom_status_strip.hide()
         else:
+            toolbar.set_rate_companion(None)
             toolbar.set_panel_layout(False)
             self._header_layout.insertWidget(0, toolbar, 5)
             toolbar.show()
+            toolbar.mode_selector.show()
+            if live_rate_card is not None:
+                actions.set_live_rate_compact(False)
             if hasattr(actions, "show_live_rate_in_header"):
                 actions.show_live_rate_in_header(show_divider=True)
             self.host.bottom_status_strip.show()
@@ -657,6 +665,7 @@ class EstimateEntryLayoutController:
                 current_panel.set_sidebar_top_widget(None)
                 if hasattr(self.host, "sidebar_actions"):
                     self.host.sidebar_actions.setParent(self.host)
+                    self.host.sidebar_status_label.setParent(self.host)
             current_panel.setParent(None)
             current_panel.deleteLater()
             self.host.totals_panel = self._create_totals_panel(desired_mode)
@@ -745,13 +754,13 @@ class EstimateEntryLayoutController:
             splitter.insertWidget(1, self.host.item_table)
             splitter.setStretchFactor(0, 0)
             splitter.setStretchFactor(1, 1)
-            splitter.setSizes([360, 1020])
+            splitter.setSizes([320, 1060])
         else:
             splitter.insertWidget(0, self.host.item_table)
             splitter.insertWidget(1, panel)
             splitter.setStretchFactor(0, 1)
             splitter.setStretchFactor(1, 0)
-            splitter.setSizes([1020, 360])
+            splitter.setSizes([1060, 320])
 
     def apply_totals_position(self, position: str) -> bool:
         try:

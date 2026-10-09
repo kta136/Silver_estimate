@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QDate, Qt, Signal
+from PySide6.QtCore import QDate, QEvent, QObject, Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QButtonGroup,
@@ -19,6 +19,10 @@ from PySide6.QtWidgets import (
 
 MODE_LABELS = ("Regular", "Return", "Silver Bar")
 MODE_SHORTCUT_HINTS = ("", "Ctrl+R", "Ctrl+B")
+# The side panel has room for the shortcuts but not for "Silver Bar" as well.
+PANEL_MODE_LABELS = ("Regular", "Return  Ctrl+R", "Bar  Ctrl+B")
+# Fallbacks for a narrow side panel or a large font, widest first.
+NARROW_MODE_LABELS = (MODE_LABELS, ("Regular", "Return", "Bar"))
 
 
 class VoucherToolbar(QWidget):
@@ -26,6 +30,8 @@ class VoucherToolbar(QWidget):
 
     The same widgets are laid out as one row (header placement) or as a compact
     grid (side-panel placement); ``set_panel_layout`` switches between them.
+    In the side panel the mode switch is left out so the owner can place it
+    below the card.
     Action buttons are in separate PrimaryActionsBar and SecondaryActionsBar components.
     """
 
@@ -48,6 +54,7 @@ class VoucherToolbar(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._panel_layout = False
         self._owns_unsaved_badge = True
+        self._rate_companion: QWidget | None = None
         self._setup_ui()
         self._connect_signals()
 
@@ -95,6 +102,7 @@ class VoucherToolbar(QWidget):
             self.mode_buttons.addButton(button, index)
             mode_layout.addWidget(button)
         self.mode_buttons.button(0).setChecked(True)
+        self.mode_selector.installEventFilter(self)
 
         self.status_message_label = QLabel("")
         self.status_message_label.setObjectName("EstimateStatusLabel")
@@ -120,7 +128,7 @@ class VoucherToolbar(QWidget):
         self.date_edit.setObjectName("EstimateDateEdit")
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDate(QDate.currentDate())
-        self.date_edit.setDisplayFormat("dd/MM/yyyy")
+        self.date_edit.setDisplayFormat("dd/MM/yyyy  ddd")
         self.date_edit.setToolTip("Estimate date")
 
         self.rate_label = self._field_label("Rate ₹/g")
@@ -174,12 +182,54 @@ class VoucherToolbar(QWidget):
             QWidget().setLayout(old_layout)
 
         self.setProperty("placement", "panel" if self._panel_layout else "row")
+        # In the panel the buttons share whatever width the panel has and the
+        # labels shorten to fit, so the switch never widens the panel.
+        policy = (
+            QSizePolicy.Policy.Ignored
+            if self._panel_layout
+            else QSizePolicy.Policy.Expanding
+        )
+        for button in self.mode_buttons.buttons():
+            button.setSizePolicy(policy, QSizePolicy.Policy.Fixed)
+        self._fit_mode_labels()
         if self._panel_layout:
             self._build_panel_layout()
         else:
             self._build_row_layout()
         self.style().unpolish(self)
         self.style().polish(self)
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if watched is self.mode_selector and event.type() == QEvent.Type.Resize:
+            self._fit_mode_labels()
+        return super().eventFilter(watched, event)
+
+    def _fit_mode_labels(self) -> None:
+        if not self._panel_layout:
+            self._set_mode_labels(MODE_LABELS)
+            return
+        layout = self.mode_selector.layout()
+        margins = layout.contentsMargins()
+        available = (
+            self.mode_selector.width()
+            - margins.left()
+            - margins.right()
+            - layout.spacing() * (len(MODE_LABELS) - 1)
+        )
+        candidates = (PANEL_MODE_LABELS, *NARROW_MODE_LABELS)
+        for labels in candidates:
+            self._set_mode_labels(labels)
+            needed = sum(
+                button.sizeHint().width() for button in self.mode_buttons.buttons()
+            )
+            if needed <= available:
+                return
+
+    def _set_mode_labels(self, labels: tuple[str, ...]) -> None:
+        for index, text in enumerate(labels):
+            button = self.mode_buttons.button(index)
+            if button.text() != text:
+                button.setText(text)
 
     def _build_row_layout(self) -> None:
         layout = QHBoxLayout(self)
@@ -193,7 +243,7 @@ class VoucherToolbar(QWidget):
         ):
             label.setText(text)
         self.voucher_edit.setMaximumWidth(96)
-        self.date_edit.setMaximumWidth(126)
+        self.date_edit.setMaximumWidth(156)
         self.silver_rate_spin.setMaximumWidth(116)
         self.note_edit.setMinimumWidth(160)
 
@@ -239,13 +289,22 @@ class VoucherToolbar(QWidget):
         layout.addLayout(voucher_row, 1, 0)
         layout.addWidget(self.date_edit, 1, 1)
         layout.addWidget(self.rate_label, 2, 0)
-        layout.addWidget(self.note_label, 2, 1)
         layout.addWidget(self.silver_rate_spin, 3, 0)
-        layout.addWidget(self.note_edit, 3, 1)
-        layout.setRowMinimumHeight(4, 6)
-        layout.addWidget(self.mode_selector, 5, 0, 1, 2)
+        if self._rate_companion is not None:
+            layout.addWidget(self._rate_companion, 2, 1, 2, 1)
+            self._rate_companion.show()
+        layout.addWidget(self.note_label, 4, 0, 1, 2)
+        layout.addWidget(self.note_edit, 5, 0, 1, 2)
         layout.setColumnStretch(0, 1)
         layout.setColumnStretch(1, 1)
+
+    def set_rate_companion(self, widget: QWidget | None) -> None:
+        """Show ``widget`` (the live rate) beside the rate field in the panel."""
+        if widget is self._rate_companion:
+            return
+        self._rate_companion = widget
+        if self._panel_layout:
+            self._apply_layout()
 
     def _connect_signals(self) -> None:
         """Connect internal widget signals."""
@@ -280,14 +339,18 @@ class VoucherToolbar(QWidget):
         Args:
             show: True to show, False to hide
         """
-        if show:
-            self.unsaved_badge.setText("● Unsaved")
-            self.unsaved_badge.setProperty("dirty", "true")
-        else:
-            self.unsaved_badge.setText("● Ready")
-            self.unsaved_badge.setProperty("dirty", "false")
-        self.unsaved_badge.setVisible(True)
-        style = self.unsaved_badge.style()
-        style.unpolish(self.unsaved_badge)
-        style.polish(self.unsaved_badge)
-        self.unsaved_badge.update()
+        badge = self.unsaved_badge
+        badge.setProperty("dirty", "true" if show else "false")
+        badge.setVisible(True)
+        style = badge.style()
+        style.unpolish(badge)
+        style.polish(badge)
+        # Hold the width of the longer text so the menu-bar strip beside the
+        # badge never gets squeezed when the state flips.
+        widths = []
+        for text in ("● Ready", "● Unsaved"):
+            badge.setText(text)
+            widths.append(badge.sizeHint().width())
+        badge.setMinimumWidth(max(widths))
+        badge.setText("● Unsaved" if show else "● Ready")
+        badge.update()

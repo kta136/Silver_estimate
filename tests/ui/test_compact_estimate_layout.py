@@ -92,7 +92,7 @@ def test_compact_totals_use_aligned_table_and_independent_grand_total_font_size(
         assert widget.note_edit.width() >= 120
     assert widget.toolbar.parent() is panel._sidebar_top_host
     assert widget.bottom_status_strip.isHidden()
-    assert "Ctrl+S Save" in widget.sidebar_status_label.text()
+    assert "F1 Shortcuts" in widget.sidebar_status_label.text()
     # Without a main-window menu bar only the Save/Print/New strip stays on top.
     toolbar = widget.findChild(ToolbarOverflow)
     assert toolbar.height() <= 48

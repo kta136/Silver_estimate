@@ -5,6 +5,7 @@ from PySide6.QtCore import QDate, QEventLoop, QSize, Qt, QTimer
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
     QDialog,
+    QHBoxLayout,
     QHeaderView,
     QLineEdit,
     QMessageBox,
@@ -706,74 +707,60 @@ def test_live_rate_card_moves_between_sidebar_and_header(
     widget.show()
     qt_app.processEvents()
 
-    sidebar_top_host = widget.totals_panel._sidebar_top_host
+    toolbar = widget.toolbar
     live_rate_card = widget.secondary_actions.live_rate_container
 
-    assert live_rate_card.parent() is sidebar_top_host
-    assert not sidebar_top_host.isHidden()
-    assert (
-        live_rate_card.sizePolicy().horizontalPolicy() == QSizePolicy.Policy.Expanding
-    )
-    assert live_rate_card.width() >= sidebar_top_host.width() - 2
-    assert widget.refresh_rate_button.width() <= 38
-    assert widget.live_rate_value_label.width() > widget.refresh_rate_button.width() * 3
-    assert widget.live_rate_value_label.width() >= (
-        widget.live_rate_value_label.fontMetrics().horizontalAdvance("₹ 75,000.00")
-    )
-    assert widget.live_rate_value_label.font().pointSize() == widget.font().pointSize()
-    assert (
-        widget.live_rate_value_label.geometry().top()
-        > widget.secondary_actions.live_rate_title_label.geometry().bottom()
-    )
-    assert widget.refresh_rate_button.iconSize() == QSize(14, 14)
-    assert widget.live_rate_meta_label.width() <= 125
-    assert (
-        abs(
-            widget.live_rate_meta_label.geometry().center().x()
-            - widget.refresh_rate_button.geometry().center().x()
+    def assert_beside_silver_rate():
+        # Beside the table the live rate is a field next to the silver rate.
+        assert live_rate_card.parent() is toolbar
+        assert toolbar.layout().indexOf(live_rate_card) >= 0
+        assert live_rate_card.property("placement") == "field"
+        assert widget.secondary_actions.live_rate_divider.isHidden()
+        assert widget.secondary_actions.live_rate_title_label.text() == "Live rate"
+        rate_spin = toolbar.silver_rate_spin
+        card_top = live_rate_card.mapTo(toolbar, live_rate_card.rect().topLeft())
+        spin_top = rate_spin.mapTo(toolbar, rate_spin.rect().topLeft())
+        assert card_top.x() > spin_top.x() + rate_spin.width() - 2
+        assert widget.refresh_rate_button.width() <= 38
+        assert widget.live_rate_value_label.width() >= (
+            widget.live_rate_value_label.fontMetrics().horizontalAdvance("₹ 128.40 /g")
         )
-        <= 2
-    )
-    assert (
-        widget.live_rate_meta_label.geometry().top()
-        >= widget.refresh_rate_button.geometry().bottom()
-    )
+        assert (
+            widget.live_rate_value_label.geometry().top()
+            > widget.secondary_actions.live_rate_title_label.geometry().bottom()
+        )
+        assert (
+            abs(
+                widget.live_rate_value_label.geometry().center().y()
+                - widget.refresh_rate_button.geometry().center().y()
+            )
+            <= 2
+        )
+        assert widget.refresh_rate_button.iconSize() == QSize(14, 14)
+        assert (
+            widget.live_rate_value_label.font().pointSize() == widget.font().pointSize()
+        )
+
+    assert_beside_silver_rate()
 
     widget.layout_controller._apply_totals_position("bottom")
     qt_app.processEvents()
 
     assert live_rate_card.parent() is widget.secondary_actions
+    assert live_rate_card.property("placement") == "card"
     assert not widget.secondary_actions.live_rate_divider.isHidden()
     assert live_rate_card.sizePolicy().horizontalPolicy() == QSizePolicy.Policy.Fixed
+    assert widget.secondary_actions.live_rate_title_label.text() == "Live silver rate"
+    card_layout = live_rate_card.layout()
+    assert isinstance(card_layout, QHBoxLayout)
+    # The refresh button sits over its timestamp at the card's right edge.
+    refresh_stack = card_layout.itemAt(1).layout()
+    assert refresh_stack.indexOf(widget.refresh_rate_button) == 0
+    assert refresh_stack.indexOf(widget.live_rate_meta_label) == 1
 
     widget.layout_controller._apply_totals_position("right")
     qt_app.processEvents()
-
-    sidebar_top_host = widget.totals_panel._sidebar_top_host
-    assert live_rate_card.parent() is sidebar_top_host
-    assert widget.secondary_actions.live_rate_divider.isHidden()
-    assert (
-        live_rate_card.sizePolicy().horizontalPolicy() == QSizePolicy.Policy.Expanding
-    )
-    assert live_rate_card.width() >= sidebar_top_host.width() - 2
-    assert widget.refresh_rate_button.width() <= 38
-    assert widget.live_rate_value_label.width() > widget.refresh_rate_button.width() * 3
-    assert widget.live_rate_value_label.width() >= (
-        widget.live_rate_value_label.fontMetrics().horizontalAdvance("₹ 75,000.00")
-    )
-    assert widget.live_rate_value_label.font().pointSize() == widget.font().pointSize()
-    assert widget.live_rate_meta_label.width() <= 125
-    assert (
-        abs(
-            widget.live_rate_meta_label.geometry().center().x()
-            - widget.refresh_rate_button.geometry().center().x()
-        )
-        <= 2
-    )
-    assert (
-        widget.live_rate_meta_label.geometry().top()
-        >= widget.refresh_rate_button.geometry().bottom()
-    )
+    assert_beside_silver_rate()
 
 
 def test_compact_header_preserves_table_viewport_height(
@@ -793,12 +780,10 @@ def test_compact_header_preserves_table_viewport_height(
     assert widget.toolbar.mode_selector.isVisible()
     assert widget.bottom_status_strip.isHidden()
     shortcuts = widget.sidebar_status_label.text()
-    for label in (
-        "Ctrl+S Save",
-        "Ctrl+P Print",
-        "F1 Shortcuts",
-    ):
+    # Save/Print shortcuts show on their buttons; the status line keeps F1.
+    for label in ("Rows:", "Last saved:", "F1 Shortcuts"):
         assert label in shortcuts
+    assert widget.save_button.text() == "Save  Ctrl+S"
     for stale_label in ("F2:", "Ins:", "Del:", "F9:"):
         assert stale_label not in shortcuts
     assert widget.item_table.viewport().height() >= 680

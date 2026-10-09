@@ -576,6 +576,19 @@ QWidget#EstimateCommandStrip QWidget#PrimaryActionStrip QPushButton {
 }
 QWidget#EstimateCommandStrip QLabel#UnsavedBadge { padding: 2px 8px; border-radius: 9px; }
 QLabel#SidebarStatusText { color: __TEXT_MUTED__; font-size: 8pt; padding-top: 4px; }
+QLabel#MetricLabel[categoryKind="return"], QLabel#MetricValue[categoryKind="return"] {
+ background: #f0f8f8; color: #006d77;
+}
+QLabel#MetricLabel[categoryKind="silver_bar"], QLabel#MetricValue[categoryKind="silver_bar"] {
+ background: #fff7ed; color: #9a3412;
+}
+QWidget#LiveRateCard[placement="field"] {
+ background: transparent; border: none; border-radius: 0px; padding: 0px;
+}
+QWidget#LiveRateCard[placement="field"] QLabel#LiveRateMeta { color: __TEXT_MUTED__; font-size: 8pt; }
+QWidget#LiveRateCard[placement="field"] QLabel#VoucherFieldLabel {
+ color: __TEXT_MUTED__; font-size: 8pt; font-weight: 600;
+}
 """)
 
 

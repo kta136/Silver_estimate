@@ -100,6 +100,11 @@ class TotalsPanel(QWidget):
         "silver_bar",
     ]
 
+    _SIDEBAR_TOTAL_CAPTIONS = {
+        "overall_gross_label": "Total gross",
+        "overall_poly_label": "Poly",
+    }
+
     _SECTION_DEFINITIONS = {
         "totals": (
             "Totals",
@@ -437,15 +442,6 @@ class TotalsPanel(QWidget):
         card_layout.setContentsMargins(0, 0, 0, 0)
         card_layout.setSpacing(4)
 
-        overall = self._create_summary_table(len(labels_attrs), 2)
-        overall.horizontalHeader().hide()
-        for row, (caption, attr, default) in enumerate(labels_attrs):
-            self._set_summary_caption(
-                overall, row, caption.rstrip(":").replace("Wt", "(g)")
-            )
-            self._set_summary_value(overall, row, 1, attr, default)
-        card_layout.addWidget(overall)
-
         self._category_keys = [
             key
             for key in self._section_order
@@ -457,6 +453,16 @@ class TotalsPanel(QWidget):
         )
         self._populate_category_table("matrix", preserve=False)
         card_layout.addWidget(self.category_table)
+
+        # Overall gross and poly share one footer line under the categories.
+        overall = self._create_summary_table(1, 2 * len(labels_attrs))
+        overall.horizontalHeader().hide()
+        for index, (caption, attr, default) in enumerate(labels_attrs):
+            self._set_summary_caption(
+                overall, 0, self._SIDEBAR_TOTAL_CAPTIONS.get(attr, caption), 2 * index
+            )
+            self._set_summary_value(overall, 0, 2 * index + 1, attr, default)
+        card_layout.addWidget(overall)
         return card
 
     def _populate_category_table(self, mode: str, *, preserve: bool = True) -> None:
@@ -484,7 +490,7 @@ class TotalsPanel(QWidget):
         for index, key in enumerate(self._category_keys):
             caption, definitions = self._SECTION_DEFINITIONS[key]
             row = index * {"matrix": 1, "groups": 2, "details": 4}[mode]
-            self._set_summary_caption(table, row, caption)
+            self._set_summary_caption(table, row, caption, category=key)
             if mode != "matrix":
                 table.setSpan(row, 0, 1, table.columnCount())
             for metric, (_, attr, _) in enumerate(definitions):
@@ -504,11 +510,14 @@ class TotalsPanel(QWidget):
                 )
                 if mode == "details":
                     self._set_summary_caption(
-                        table, value_row, ("Gross", "Net", "Fine")[metric]
+                        table,
+                        value_row,
+                        ("Gross", "Net", "Fine")[metric],
+                        category=key,
                     )
                 self._set_summary_value(
                     table, value_row, value_column, attr, values[attr]
-                )
+                ).setProperty("categoryKind", key)
         for column in range(table.columnCount()):
             table.horizontalHeaderItem(column).setFont(table.font())
         self._category_layout_mode = mode
@@ -580,20 +589,23 @@ class TotalsPanel(QWidget):
         return super().eventFilter(watched, event)
 
     @staticmethod
-    def _set_summary_caption(table, row, caption):
+    def _set_summary_caption(table, row, caption, column=0, category=""):
         label = QLabel(caption)
         label.setObjectName("MetricLabel")
+        label.setProperty("categoryKind", category)
         label.setFont(table.font())
         label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        table.setCellWidget(row, 0, label)
+        table.setCellWidget(row, column, label)
 
-    def _set_summary_value(self, table, row, column, attr, default):
+    def _set_summary_value(self, table, row, column, attr, default) -> QLabel:
         label = QLabel(default)
         label.setObjectName("MetricValue")
+        label.setProperty("categoryKind", "")
         label.setFont(numeric_table_font(table.font()))
         label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         setattr(self, attr, label)
         table.setCellWidget(row, column, label)
+        return label
 
     def _fit_summary_table(self, table: QTableWidget) -> None:
         widths = []
@@ -644,13 +656,13 @@ class TotalsPanel(QWidget):
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         outer_layout = QVBoxLayout(card)
-        outer_layout.setContentsMargins(0, 0, 0, 10)
-        outer_layout.setSpacing(10)
+        outer_layout.setContentsMargins(0, 0, 0, 6)
+        outer_layout.setSpacing(4)
 
         header = QFrame(card)
         header.setObjectName("FinalCalcHeader")
         header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(10, 10, 10, 10)
+        header_layout.setContentsMargins(10, 6, 10, 6)
         header_layout.setSpacing(8)
 
         final_title = QLabel("Grand Total")
@@ -673,7 +685,7 @@ class TotalsPanel(QWidget):
         final_layout = QFormLayout()
         final_layout.setContentsMargins(10, 0, 10, 0)
         final_layout.setHorizontalSpacing(8)
-        final_layout.setVerticalSpacing(6)
+        final_layout.setVerticalSpacing(2)
         final_layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         final_layout.setFieldGrowthPolicy(
             QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow
@@ -686,7 +698,7 @@ class TotalsPanel(QWidget):
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
         final_layout.addRow(
-            self._create_metric_header("Net Fine Wt:"), self.net_fine_label
+            self._create_metric_header("Net Fine (g)"), self.net_fine_label
         )
 
         self.net_wage_label = QLabel("0.00")
@@ -696,7 +708,7 @@ class TotalsPanel(QWidget):
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
         final_layout.addRow(
-            self._create_metric_header("Net Wage:"), self.net_wage_label
+            self._create_metric_header("Net Wage (₹)"), self.net_wage_label
         )
         outer_layout.addLayout(final_layout)
 
@@ -945,6 +957,10 @@ class TotalsPanel(QWidget):
         self.sidebar_actions_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addWidget(self.sidebar_actions_host)
         main_layout.addStretch(1)
+        self.sidebar_footer_host = QWidget(self)
+        self.sidebar_footer_layout = QVBoxLayout(self.sidebar_footer_host)
+        self.sidebar_footer_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(self.sidebar_footer_host)
         self._rebuild_sidebar_section_cards()
 
     def set_sidebar_top_widget(self, widget: QWidget | None) -> None:

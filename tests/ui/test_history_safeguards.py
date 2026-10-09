@@ -27,6 +27,14 @@ def _view_model_totals(view_model):
     )
 
 
+def _bars_for(db, voucher_no):
+    return [
+        bar
+        for bar in db.get_silver_bars(estimate_voucher_no=voucher_no)
+        if bar["estimate_voucher_no"] == voucher_no
+    ]
+
+
 @pytest.fixture
 def history_db(tmp_path):
     db = DatabaseManager(
@@ -108,7 +116,7 @@ def test_saved_entry_and_history_totals_include_both_balances(
         row = dialog.estimates_model.row_payload(0)
         assert row.grand_total == pytest.approx(expected)
         assert (
-            history_db.get_estimate_history_rows()[0]["last_balance_silver"]
+            history_db.get_estimate_history_page().items[0]["last_balance_silver"]
             == balance_silver
         )
         loaded = widget.presenter.load_estimate("1")
@@ -436,7 +444,7 @@ def test_history_save_failure_keeps_draft_and_rolls_back_header_and_inventory(
     assert widget.has_unsaved_changes()
     assert widget.item_table.get_all_rows() == rows_before
     assert history_db.get_estimate_by_voucher("DRAFT") is None
-    assert history_db.silver_bar_query_repo.get_silver_bars_for_estimate("DRAFT") == []
+    assert _bars_for(history_db, "DRAFT") == []
     assert messages
 
 
@@ -478,7 +486,7 @@ def test_inventory_failure_keeps_normal_save_draft_and_retry_commits_everything(
     assert printed == cleared == [True]
     assert len(successes) == 1
     saved = history_db.get_estimate_by_voucher("DRAFT")
-    bars = history_db.silver_bar_query_repo.get_silver_bars_for_estimate("DRAFT")
+    bars = _bars_for(history_db, "DRAFT")
     assert len(bars) == 1
     assert bars[0]["source_line_key"] == saved["items"][0]["line_key"]
     assert bars[0]["weight"] == saved["items"][0]["net_wt"]

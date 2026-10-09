@@ -8,7 +8,7 @@ from silverestimate.persistence.repository_results import RepositoryFailureKind
 from silverestimate.persistence.silver_bars_snapshot_repository import (
     SilverBarsSnapshotRepository,
 )
-from tests.silver_bar_workspace_support import seed_workspace_db
+from tests.silver_bar_workspace_support import bar_list_count, seed_workspace_db
 
 
 @pytest.fixture
@@ -18,22 +18,25 @@ def db(tmp_path):
     database.close()
 
 
+def search(db, prefix, **kwargs):
+    reader = SilverBarsSnapshotRepository(db.open_read_connection)
+    return reader.search_weight_prefix(prefix, **kwargs)
+
+
 def test_prefix_search_entire_inventory_duplicates_and_decimal_policy(db):
-    page = db.search_silver_bar_weight_prefix("40", limit=2)
+    page = search(db, "40", limit=2)
     assert [bar["weight"] for bar in page.items] == [40, 40]
-    following = db.search_silver_bar_weight_prefix(
-        "40", cursor=page.next_cursor, limit=2
-    )
+    following = search(db, "40", cursor=page.next_cursor, limit=2)
     assert [bar["weight"] for bar in following.items] == [40.25, 402.5]
     assert not following.has_more
-    assert [b["weight"] for b in db.search_silver_bar_weight_prefix("040.").items] == [
+    assert [b["weight"] for b in search(db, "040.").items] == [
         40,
         40,
         40.25,
     ]
     db.conn.execute("UPDATE silver_bars SET weight = 40.005 WHERE bar_id = 1")
     db.conn.commit()
-    assert db.search_silver_bar_weight_prefix("40.01").items[0]["bar_id"] == 1
+    assert search(db, "40.01").items[0]["bar_id"] == 1
 
 
 @pytest.mark.parametrize(
@@ -61,13 +64,12 @@ def test_blank_search_pages_all_available_inventory_in_weight_order(db, text):
     assert rows[0]["purity"] == 125.5
     assert rows[0]["fine_weight"] == 12.55
     assert all(bar["status"] == "In Stock" and bar["list_id"] is None for bar in rows)
-    assert list(db.search_silver_bar_weight_prefix(text).items) == rows
 
 
 @pytest.mark.parametrize("text", ["nan", "inf", "-40", "4e1", "%", "40.001", "40_"])
 def test_invalid_query_does_not_fall_back_to_all_inventory(db, text):
     with pytest.raises(ValueError):
-        db.search_silver_bar_weight_prefix(text)
+        search(db, text)
 
 
 def test_add_autocreates_one_list_reserves_and_removes_without_identity_loss(db):
@@ -75,11 +77,9 @@ def test_add_autocreates_one_list_reserves_and_removes_without_identity_loss(db)
     assert len(snapshot.bars) == 1
     assert snapshot.details["list_note"] == "Morning"
     assert snapshot.bars[0]["status"] == "Assigned"
-    assert 1 not in [
-        b["bar_id"] for b in db.search_silver_bar_weight_prefix("40").items
-    ]
+    assert 1 not in [b["bar_id"] for b in search(db, "40").items]
     assert db.add_bars_to_list([1]).failure.kind == RepositoryFailureKind.CONFLICT
-    assert len(db.get_silver_bar_lists()) == 1
+    assert bar_list_count(db) == 1
     removed = db.remove_list_bars(snapshot.list_id, [1]).unwrap()
     assert not removed.bars
     assert (
@@ -102,7 +102,7 @@ def test_storage_failure_rolls_back_first_add_and_optimizer_batch(db):
     db.conn.commit()
     result = db.add_bars_to_list([1, 2])
     assert result.failure.kind == RepositoryFailureKind.STORAGE
-    assert not db.get_silver_bar_lists()
+    assert bar_list_count(db) == 0
     assert db.conn.execute("SELECT count(*) FROM bar_transfers").fetchone()[0] == 0
     assert (
         db.conn.execute("SELECT status FROM silver_bars WHERE bar_id=1").fetchone()[0]
@@ -175,7 +175,7 @@ def test_delete_and_clear_release_every_bar_and_preserve_history(db):
     assert not db.remove_list_bars(snapshot.list_id).unwrap().bars
     assert db.add_bars_to_list([1, 2], snapshot.list_id).succeeded
     assert db.delete_active_list(snapshot.list_id).succeeded
-    assert not db.get_silver_bar_lists()
+    assert bar_list_count(db) == 0
     assert (
         db.conn.execute(
             "SELECT count(*) FROM silver_bars WHERE status='In Stock'"

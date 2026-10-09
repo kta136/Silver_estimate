@@ -8,7 +8,7 @@ from silverestimate.persistence.items_repository import ItemsRepository
 from silverestimate.persistence.silver_bar_command_repository import (
     SilverBarCommandRepository,
 )
-from tests.factories import estimate_totals, regular_item
+from tests.factories import estimate_totals, insert_silver_bar, regular_item
 from tests.integration.test_repositories import FakeDB
 
 
@@ -227,16 +227,15 @@ def test_estimate_deletion_preserves_allocated_bars_and_transfer_history(
     commands = SilverBarCommandRepository(db)
     if with_command_repository:
         db.silver_bar_command_repo = commands
-    bar = commands.add_silver_bar("1", 5, 99.9)
-    bar_list = commands.create_list("Protected")
-    assert commands.assign_bar_to_list(bar, bar_list)
+    bar = insert_silver_bar(db, "1", 5, 99.9)
+    bar_list = commands.add_bars_to_list([bar], note="Protected").unwrap()
     if state == "Issued":
         db.conn.execute(
             "UPDATE silver_bars SET status = 'Issued' WHERE bar_id = ?", (bar,)
         )
         db.conn.commit()
     elif state == "Returned to stock":
-        assert commands.remove_bar_from_list(bar)
+        commands.remove_list_bars(bar_list.list_id, [bar]).unwrap()
     before = _snapshot(db)
     assert not EstimatesRepository(db).delete_single_estimate("1")
     assert "silver bar" in db.last_error.lower()
@@ -246,6 +245,6 @@ def test_estimate_deletion_preserves_allocated_bars_and_transfer_history(
 
 def test_unused_in_stock_bar_does_not_block_estimate_deletion(db):
     assert _save(db)
-    assert SilverBarCommandRepository(db).add_silver_bar("1", 5, 99.9)
+    assert insert_silver_bar(db, "1", 5, 99.9)
     assert EstimatesRepository(db).delete_single_estimate("1")
     assert not db.conn.execute("SELECT 1 FROM silver_bars").fetchone()

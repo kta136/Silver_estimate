@@ -30,8 +30,8 @@ class _StubEstimateRepo:
         self.calls.append(("save_estimate_with_returns", args))
         return "saved"
 
-    def get_estimate_history_rows(self, **kwargs):
-        self.calls.append(("get_estimate_history_rows", kwargs))
+    def get_estimate_history_page(self, **kwargs):
+        self.calls.append(("get_estimate_history_page", kwargs))
         return [{"voucher_no": "100"}]
 
     def get_first_estimate_date(self):
@@ -43,8 +43,8 @@ class _StubSilverBarCommandRepo:
     def __init__(self):
         self.calls = []
 
-    def create_list(self, note):
-        self.calls.append(("create_list", (note,)))
+    def add_bars_to_list(self, bar_ids, list_id, note):
+        self.calls.append(("add_bars_to_list", (bar_ids, list_id, note)))
         return 17
 
 
@@ -55,11 +55,6 @@ class _StubSilverBarQueryRepo:
     def get_silver_bars(self, **kwargs):
         self.calls.append(("get_silver_bars", kwargs))
         return ["bars"]
-
-
-class _StubSilverBarSynchronizationRepo:
-    def synchronize(self, voucher_no, bars):
-        raise AssertionError("Synchronization is not expected in this test.")
 
 
 class _StubItemCacheController:
@@ -76,7 +71,6 @@ class _FacadeHarness(DatabaseRepositoryFacadeMixin):
         self.estimates_repo = _StubEstimateRepo()
         self.silver_bar_command_repo = _StubSilverBarCommandRepo()
         self.silver_bar_query_repo = _StubSilverBarQueryRepo()
-        self.silver_bar_synchronization_repo = _StubSilverBarSynchronizationRepo()
         self._item_cache_controller = _StubItemCacheController()
         self.open_read_connection = lambda: object()
         self.last_error = "existing"
@@ -135,11 +129,11 @@ def test_estimate_facade_clears_last_error_before_delegating():
     ]
 
 
-def test_estimate_facade_delegates_history_rows_lookup():
+def test_estimate_facade_delegates_history_page_lookup():
     facade = _FacadeHarness()
 
     assert facade.get_first_estimate_date() == "2025-01-01"
-    assert facade.get_estimate_history_rows(
+    assert facade.get_estimate_history_page(
         date_from="2025-01-01",
         date_to="2025-01-31",
         voucher_search="10",
@@ -147,11 +141,13 @@ def test_estimate_facade_delegates_history_rows_lookup():
     assert facade.estimates_repo.calls == [
         ("get_first_estimate_date", ()),
         (
-            "get_estimate_history_rows",
+            "get_estimate_history_page",
             {
                 "date_from": "2025-01-01",
                 "date_to": "2025-01-31",
                 "voucher_search": "10",
+                "cursor": None,
+                "limit": 500,
             },
         ),
     ]
@@ -160,14 +156,16 @@ def test_estimate_facade_delegates_history_rows_lookup():
 def test_silver_bar_facade_delegates_keyword_arguments():
     facade = _FacadeHarness()
 
-    assert facade.create_silver_bar_list("Test List") == 17
+    assert facade.add_bars_to_list([3, 4], note="Test List") == 17
     assert facade.get_silver_bars(
         status="In Stock",
         weight_query="10",
         limit=5,
         offset=2,
     ) == ["bars"]
-    assert facade.silver_bar_command_repo.calls == [("create_list", ("Test List",))]
+    assert facade.silver_bar_command_repo.calls == [
+        ("add_bars_to_list", ([3, 4], None, "Test List"))
+    ]
     assert facade.silver_bar_query_repo.calls == [
         (
             "get_silver_bars",

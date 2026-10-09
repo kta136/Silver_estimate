@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -228,37 +228,6 @@ class SilverBarSynchronizationRepository(_SilverBarRepositoryBase):
             len(plan.updates) + len(plan.links),
             len(plan.removals),
         )
-
-    def synchronize(
-        self, voucher_no: str, bars: Iterable[Mapping[str, Any]]
-    ) -> SilverBarSyncResult:
-        """Compatibility inventory operation; estimate saves use prepare/apply instead."""
-        conn, cursor = self._conn, self._cursor
-        started = False
-        items: list[dict[str, Any]] = []
-        try:
-            items = [dict(bar) for bar in bars]
-            if conn is None or cursor is None or not voucher_no:
-                raise ValueError(
-                    "Cannot synchronize bars without a database connection and voucher."
-                )
-            conn.execute("BEGIN IMMEDIATE")
-            started = True
-            plan = self.prepare(cursor, voucher_no, items)
-            result = self.apply(cursor, voucher_no, plan)
-            conn.commit()
-            started = False
-            self._db.last_error = None
-            return result
-        except Exception as exc:
-            self._db.last_error = str(exc)
-            self._logger.error(
-                "Bar synchronization failed for %s: %s", voucher_no, exc, exc_info=True
-            )
-            return SilverBarSyncResult(0, max(1, len(items)), error_detail=str(exc))
-        finally:
-            if started:
-                conn.rollback()
 
 
 __all__ = ["SilverBarSynchronizationRepository", "SilverBarSyncResult"]

@@ -20,9 +20,6 @@ if TYPE_CHECKING:
     from silverestimate.persistence.silver_bar_query_repository import (
         SilverBarQueryRepository,
     )
-    from silverestimate.persistence.silver_bar_synchronization_repository import (
-        SilverBarSynchronizationRepository,
-    )
 
 
 class DatabaseRepositoryFacadeMixin:
@@ -44,11 +41,6 @@ class DatabaseRepositoryFacadeMixin:
 
         @property
         def silver_bar_command_repo(self) -> SilverBarCommandRepository: ...
-
-        @property
-        def silver_bar_synchronization_repo(
-            self,
-        ) -> SilverBarSynchronizationRepository: ...
 
     def get_item_by_code(self, code):
         return self.items_repo.get_item_by_code(code)
@@ -103,15 +95,6 @@ class DatabaseRepositoryFacadeMixin:
 
     def get_estimate_by_voucher(self, voucher_no):
         return self.estimates_repo.get_estimate_by_voucher(voucher_no)
-
-    def get_estimate_history_rows(
-        self, date_from=None, date_to=None, voucher_search=None
-    ):
-        return self.estimates_repo.get_estimate_history_rows(
-            date_from=date_from,
-            date_to=date_to,
-            voucher_search=voucher_search,
-        )
 
     def get_estimate_history_page(
         self,
@@ -172,9 +155,6 @@ class DatabaseRepositoryFacadeMixin:
     def delete_single_estimate(self, voucher_no):
         return self.estimates_repo.delete_single_estimate(voucher_no)
 
-    def create_silver_bar_list(self, note=None):
-        return self.silver_bar_command_repo.create_list(note)
-
     def add_bars_to_list(self, bar_ids, list_id=None, note=""):
         return self.silver_bar_command_repo.add_bars_to_list(bar_ids, list_id, note)
 
@@ -190,172 +170,11 @@ class DatabaseRepositoryFacadeMixin:
     def issue_printed_list(self, list_id, signature):
         return self.silver_bar_command_repo.issue_printed_list(list_id, signature)
 
-    def search_silver_bar_weight_prefix(self, prefix, *, cursor=None, limit=50):
-        return self.silver_bar_query_repo.search_weight_prefix(
-            prefix, cursor=cursor, limit=limit
-        )
-
     def get_silver_bar_list_snapshot(self, list_id):
         return self.silver_bar_query_repo.get_list_snapshot(list_id)
 
-    def get_silver_bar_lists(self, include_issued=True):
-        return self.silver_bar_query_repo.get_lists(include_issued)
-
-    def get_silver_bar_list_details(self, list_id):
-        return self.silver_bar_query_repo.get_list_details(list_id)
-
-    def get_silver_bar_list_details_result(self, list_id):
-        return self.silver_bar_query_repo.get_list_details_result(list_id)
-
-    def update_silver_bar_list_note(self, list_id, new_note):
-        return self.silver_bar_command_repo.update_list_note(list_id, new_note)
-
-    def delete_silver_bar_list(self, list_id):
-        return self.silver_bar_command_repo.delete_list(list_id)
-
-    def delete_silver_bar_list_result(self, list_id):
-        return self.silver_bar_command_repo.delete_list_result(list_id)
-
-    def assign_bar_to_list(
-        self, bar_id, list_id, note="Assigned to list", perform_commit=True
-    ):
-        return self.silver_bar_command_repo.assign_bar_to_list(
-            bar_id,
-            list_id,
-            note=note,
-            perform_commit=perform_commit,
-        )
-
-    def remove_bar_from_list(
-        self, bar_id, note="Removed from list", perform_commit=True
-    ):
-        return self.silver_bar_command_repo.remove_bar_from_list(
-            bar_id,
-            note=note,
-            perform_commit=perform_commit,
-        )
-
-    def assign_bars_to_list_bulk(self, bar_ids, list_id, note="Assigned to list"):
-        return self.silver_bar_command_repo.assign_bars_to_list_bulk(
-            bar_ids,
-            list_id,
-            note=note,
-        )
-
-    def remove_bars_from_list_bulk(self, bar_ids, note="Removed from list"):
-        return self.silver_bar_command_repo.remove_bars_from_list_bulk(
-            bar_ids,
-            note=note,
-        )
-
-    def get_bars_in_list(self, list_id, limit=None, offset=0):
-        return self.silver_bar_query_repo.get_bars_in_list(
-            list_id,
-            limit=limit,
-            offset=offset,
-        )
-
-    def get_available_silver_bars_page(
-        self,
-        *,
-        weight_query=None,
-        weight_tolerance=0.001,
-        min_purity=None,
-        max_purity=None,
-        date_range=None,
-        limit=None,
-    ):
-        return self.silver_bar_query_repo.get_available_bars_page(
-            weight_query=weight_query,
-            weight_tolerance=weight_tolerance,
-            min_purity=min_purity,
-            max_purity=max_purity,
-            date_range=date_range,
-            limit=limit,
-        )
-
-    def get_available_silver_bars_keyset_page(
-        self,
-        *,
-        weight_query=None,
-        weight_tolerance=0.001,
-        min_purity=None,
-        max_purity=None,
-        date_range=None,
-        cursor=None,
-        limit=1500,
-    ):
-        return self.silver_bar_query_repo.get_available_bars_keyset_page(
-            weight_query=weight_query,
-            weight_tolerance=weight_tolerance,
-            min_purity=min_purity,
-            max_purity=max_purity,
-            date_range=date_range,
-            cursor=cursor,
-            limit=limit,
-        )
-
-    def get_silver_bars_in_list_page(self, list_id, *, limit=None, offset=0):
-        return self.silver_bar_query_repo.get_bars_in_list_page(
-            list_id,
-            limit=limit,
-            offset=offset,
-        )
-
-    def get_silver_bars_in_list_keyset_page(self, list_id, *, cursor=None, limit=1500):
-        return self.silver_bar_query_repo.get_bars_in_list_keyset_page(
-            list_id,
-            cursor=cursor,
-            limit=limit,
-        )
-
-    def search_silver_bar_history(
-        self,
-        *,
-        voucher_term="",
-        weight_text="",
-        status_text="All Statuses",
-        limit=2000,
-    ):
-        return self.silver_bar_query_repo.search_history_bars(
-            voucher_term=voucher_term,
-            weight_text=weight_text,
-            status_text=status_text,
-            limit=limit,
-        )
-
-    def search_silver_bar_history_page(
-        self,
-        *,
-        voucher_term="",
-        weight_text="",
-        status_text="All Statuses",
-        cursor=None,
-        limit=1000,
-    ):
-        return self.silver_bar_query_repo.search_history_bars_page(
-            voucher_term=voucher_term,
-            weight_text=weight_text,
-            status_text=status_text,
-            cursor=cursor,
-            limit=limit,
-        )
-
-    def count_silver_bars_by_list_ids(self, list_ids):
-        return self.silver_bar_query_repo.count_bars_by_list_ids(list_ids)
-
-    def mark_silver_bar_list_as_issued(self, list_id, issued_date=None):
-        return self.silver_bar_command_repo.mark_list_as_issued(
-            list_id,
-            issued_date=issued_date,
-        )
-
     def reactivate_silver_bar_list(self, list_id):
         return self.silver_bar_command_repo.reactivate_list(list_id)
-
-    def sync_silver_bars_for_estimate(self, voucher_no, bars):
-        result = self.silver_bar_synchronization_repo.synchronize(voucher_no, bars)
-        return result.added, result.failed
 
     def get_silver_bars(
         self,

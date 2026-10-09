@@ -63,14 +63,12 @@ def _bars(db):
 
 
 def _protect(db, bar_id, state):
-    commands = db.silver_bar_command_repo
-    list_id = commands.create_list("Lifecycle")
-    assert commands.assign_bar_to_list(bar_id, list_id)
+    snapshot = db.add_bars_to_list([bar_id], note="Lifecycle").unwrap()
     if state in ("issued", "returned"):
-        assert commands.mark_list_as_issued(list_id)
+        db.issue_printed_list(snapshot.list_id, snapshot.signature).unwrap()
     if state == "returned":
-        assert commands.reactivate_list(list_id)
-        assert commands.remove_bar_from_list(bar_id)
+        assert db.reactivate_silver_bar_list(snapshot.list_id)
+        db.remove_list_bars(snapshot.list_id, [bar_id]).unwrap()
 
 
 def test_single_commit_inserts_updates_reorders_and_removes_unused_bars(inventory_db):

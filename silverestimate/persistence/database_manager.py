@@ -54,9 +54,6 @@ if TYPE_CHECKING:
     from silverestimate.persistence.silver_bar_query_repository import (
         SilverBarQueryRepository,
     )
-    from silverestimate.persistence.silver_bar_synchronization_repository import (
-        SilverBarSynchronizationRepository,
-    )
 
 SQLITE_HEADER = b"SQLite format 3\x00"
 BACKUP_FORMAT_VERSION = 2
@@ -83,7 +80,6 @@ class MaintenanceStatus(Enum):
     SUCCESS = auto()
     ROLLED_BACK = auto()
     STAGED_RESTART_REQUIRED = auto()
-    RECOVERY_REQUIRED = auto()
 
 
 @dataclass(frozen=True)
@@ -119,9 +115,6 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         self._estimates_repo: EstimatesRepository | None = None
         self._silver_bar_query_repo: SilverBarQueryRepository | None = None
         self._silver_bar_command_repo: SilverBarCommandRepository | None = None
-        self._silver_bar_synchronization_repo: (
-            SilverBarSynchronizationRepository | None
-        ) = None
         self.database_salt: bytes | None = None
         self._path = Path(self.database_path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -322,18 +315,6 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
 
             self._silver_bar_command_repo = SilverBarCommandRepository(self)
         return self._silver_bar_command_repo
-
-    @property
-    def silver_bar_synchronization_repo(self):
-        if self._silver_bar_synchronization_repo is None:
-            from silverestimate.persistence.silver_bar_synchronization_repository import (
-                SilverBarSynchronizationRepository,
-            )
-
-            self._silver_bar_synchronization_repo = SilverBarSynchronizationRepository(
-                self
-            )
-        return self._silver_bar_synchronization_repo
 
     @property
     def item_cache_controller(self):
@@ -573,13 +554,6 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
                 (table_name,),
             ).fetchone()
             is not None
-        )
-
-    def _column_exists(self, table_name: str, column_name: str) -> bool:
-        assert self.cursor is not None
-        return any(
-            str(row[1]) == column_name
-            for row in self.cursor.execute(f"PRAGMA table_info({table_name})")
         )
 
     def _check_schema_version(self) -> int:

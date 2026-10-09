@@ -1,6 +1,5 @@
 from silverestimate.persistence.silver_bars_queries import (
     build_available_bars_queries,
-    build_bars_in_list_queries,
     build_history_bars_query,
     normalize_row_limit,
 )
@@ -62,23 +61,6 @@ def test_build_available_bars_queries_supports_exact_weight_matching():
     assert statements.count_query.params == (10.0, 10.0)
 
 
-def test_build_bars_in_list_queries_only_adds_offset_when_limited():
-    statements = build_bars_in_list_queries(12, limit=50, offset=25)
-    assert statements.query.query.endswith(
-        "WHERE sb.list_id = ? ORDER BY sb.bar_id LIMIT ? OFFSET ?"
-    )
-    assert statements.query.params == (12, 50, 25)
-    assert (
-        statements.count_query.query
-        == "SELECT COUNT(*) FROM silver_bars WHERE list_id = ?"
-    )
-    assert statements.count_query.params == (12,)
-
-    unlimited = build_bars_in_list_queries(12, offset=25)
-    assert "OFFSET" not in unlimited.query.query
-    assert unlimited.query.params == (12,)
-
-
 def test_build_history_bars_query_applies_filters_and_normalizes_limit():
     statement = build_history_bars_query(
         voucher_term="V001",
@@ -125,10 +107,6 @@ def test_keyset_queries_bind_stable_cursor_values():
         42,
         11,
     )
-
-    listed = build_bars_in_list_queries(9, limit=11, after_bar_id=42)
-    assert "sb.bar_id > ?" in listed.query.query
-    assert listed.query.params == (9, 42, 11)
 
     history = build_history_bars_query(
         limit=11,

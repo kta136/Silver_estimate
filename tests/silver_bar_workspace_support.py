@@ -33,3 +33,11 @@ def seed_workspace_db(tmp_path):
         "1", "2026-10-04", 100, [], items, estimate_totals()
     ).success
     return db
+
+
+def bar_list_count(db, *, include_issued=True):
+    """Count saved silver-bar lists straight from the writer connection."""
+    query = "SELECT COUNT(*) FROM silver_bar_lists"
+    if not include_issued:
+        query += " WHERE issued_date IS NULL"
+    return db.conn.execute(query).fetchone()[0]

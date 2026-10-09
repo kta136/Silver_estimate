@@ -14,7 +14,7 @@ from silverestimate.persistence.repository_results import (
 from silverestimate.ui.print_manager import PrintManager
 from silverestimate.ui.print_preview_output import PrintOutputOutcome, PrintOutputStatus
 from silverestimate.ui.silver_bar_management import SilverBarDialog
-from tests.silver_bar_workspace_support import seed_workspace_db
+from tests.silver_bar_workspace_support import bar_list_count, seed_workspace_db
 
 
 @pytest.fixture
@@ -51,7 +51,7 @@ def test_ctrl_p_prints_issues_and_starts_fresh_without_confirmation(
     assert issued.issued
     assert len(previews[0].document.bars) == 2
     assert previews[0].document.bars[1].purity == 125.5
-    assert len(db.get_silver_bar_lists()) == 1
+    assert bar_list_count(db) == 1
     qtbot.waitUntil(lambda: dialog._load_controller.ready_prefix == "")
     assert dialog.suggestions_panel.isVisible()
     available = {
@@ -182,7 +182,7 @@ def test_optimizer_opens_a_separate_saved_list(workspace):
     assert dialog.current_list_id != old_id
     assert dialog.snapshot.details["list_note"] == "Optimized"
     assert dialog.snapshot.bars[0]["bar_id"] == 2
-    assert len(db.get_silver_bar_lists()) == 2
+    assert bar_list_count(db) == 2
 
 
 def test_modal_child_shortcuts_do_not_change_parent_list(workspace, qtbot):

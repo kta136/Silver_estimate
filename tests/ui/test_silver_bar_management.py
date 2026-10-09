@@ -13,7 +13,8 @@ from silverestimate.persistence.silver_bars_snapshot_repository import (
     SilverBarsSnapshotRepository,
 )
 from silverestimate.ui.silver_bar_management import SilverBarDialog
-from tests.silver_bar_workspace_support import seed_workspace_db
+from tests.factories import insert_silver_bar
+from tests.silver_bar_workspace_support import bar_list_count, seed_workspace_db
 
 
 @pytest.fixture
@@ -60,7 +61,7 @@ def test_opening_shows_available_bars_without_creating_a_list(workspace, qtbot):
     assert dialog.weight_search_edit.text() == ""
     assert dialog.weight_search_edit.hasFocus()
     assert dialog.current_list_id is None
-    assert db.get_silver_bar_lists() == []
+    assert bar_list_count(db) == 0
 
 
 def test_blank_input_supports_repeated_adds_and_clearing_restores_all(workspace, qtbot):
@@ -74,7 +75,7 @@ def test_blank_input_supports_repeated_adds_and_clearing_restores_all(workspace,
     qtbot.keyClick(dialog.weight_search_edit, Qt.Key.Key_Return)
     wait_for_available(qtbot, dialog, [1, 3, 7, 5, 4])
     assert [bar["bar_id"] for bar in dialog.snapshot.bars] == [2, 6]
-    assert len(db.get_silver_bar_lists()) == 1
+    assert bar_list_count(db) == 1
     dialog.weight_search_edit.setText("40")
     qtbot.waitUntil(lambda: dialog._load_controller.ready_prefix == "40")
     assert available_ids(dialog) == [1, 3, 4]
@@ -86,13 +87,13 @@ def test_blank_input_supports_repeated_adds_and_clearing_restores_all(workspace,
 def test_fast_enter_adds_once_autosaves_and_restores_input_focus(workspace, qtbot):
     dialog, db = workspace
     assert dialog.current_list_id is None
-    assert not db.get_silver_bar_lists()
+    assert bar_list_count(db) == 0
     add(qtbot, dialog)
     assert dialog.weight_search_edit.text() == ""
     assert dialog.weight_search_edit.hasFocus()
     assert not dialog.suggestions_panel.isVisible()
     assert dialog.snapshot.bars[0]["bar_id"] == 1
-    assert len(db.get_silver_bar_lists()) == 1
+    assert bar_list_count(db) == 1
     qtbot.keyClick(dialog.weight_search_edit, Qt.Key.Key_Return)
     assert dialog.list_bars_model.rowCount() == 1
     wait_for_available(qtbot, dialog, [6, 2, 3, 7, 5, 4])
@@ -140,7 +141,7 @@ def test_new_list_starts_empty_and_saved_list_reopens(workspace, qtbot):
         dialog.weight_search_edit, Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier
     )
     assert dialog.current_list_id is None
-    assert len(db.get_silver_bar_lists()) == 1
+    assert bar_list_count(db) == 1
     wait_for_available(qtbot, dialog, [1, 2, 3, 7, 5, 4])
     dialog.open_list(list_id)
     qtbot.waitUntil(lambda: dialog.snapshot is not None)
@@ -173,7 +174,7 @@ def test_error_keeps_input_and_does_not_create_list(workspace, qtbot, monkeypatc
     qtbot.waitUntil(lambda: "Disk unavailable" in dialog.status_label.text())
     assert dialog.weight_search_edit.text() == "40"
     assert dialog.current_list_id is None
-    assert not db.get_silver_bar_lists()
+    assert bar_list_count(db) == 0
 
 
 def test_invalid_and_unmatched_input_do_not_add(workspace, qtbot):
@@ -233,7 +234,7 @@ def test_note_edit_saves_and_invalidates_print_confirmation(
 def test_suggestion_paging_works_from_arrow_key(workspace, qtbot, prefix):
     dialog, db = workspace
     for i in range(55):
-        db.silver_bar_command_repo.add_silver_bar("1", 400 + i, 99)
+        insert_silver_bar(db, "1", 400 + i, 99)
     dialog.weight_search_edit.setText(prefix)
     dialog.focus_weight()
     qtbot.waitUntil(lambda: dialog.suggestions_model.rowCount() == 50)

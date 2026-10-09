@@ -122,42 +122,6 @@ def build_available_bars_queries(
     )
 
 
-def build_bars_in_list_queries(
-    list_id: int | None,
-    *,
-    limit: int | None = None,
-    offset: int = 0,
-    after_bar_id: int | None = None,
-) -> PagedSqlStatements:
-    """Build paired queries for bars assigned to a specific list."""
-
-    params: List[Any] = [list_id]
-    query = (
-        "SELECT sb.*, e.note AS estimate_note "
-        "FROM silver_bars sb "
-        "LEFT JOIN estimates e ON sb.estimate_voucher_no = e.voucher_no "
-        "WHERE sb.list_id = ? "
-    )
-    if after_bar_id is not None:
-        query += "AND sb.bar_id > ? "
-        params.append(int(after_bar_id))
-    query += "ORDER BY sb.bar_id"
-    if isinstance(limit, int) and limit > 0:
-        query += " LIMIT ?"
-        params.append(int(limit))
-        if isinstance(offset, int) and offset > 0:
-            query += " OFFSET ?"
-            params.append(int(offset))
-
-    return PagedSqlStatements(
-        query=SqlStatement(query, tuple(params)),
-        count_query=SqlStatement(
-            "SELECT COUNT(*) FROM silver_bars WHERE list_id = ?",
-            (list_id,),
-        ),
-    )
-
-
 def _history_filters(
     voucher_term: str, weight_text: str, status_text: str
 ) -> tuple[list[str], list[Any]]:

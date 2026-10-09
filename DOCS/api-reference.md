@@ -174,8 +174,7 @@ This guide documents the primary controller, service, and persistence APIs expos
 Responsibilities:
 - Open the live SQLCipher database directly through the keyed broker and expose repository compatibility cursors.
 - Expose repository accessors: `items_repo`, `estimates_repo`,
-  `silver_bar_query_repo`, `silver_bar_command_repo`, and
-  `silver_bar_synchronization_repo`.
+  `silver_bar_query_repo`, and `silver_bar_command_repo`.
 - Detect/create current storage, validate the controlled driver and schema, and serialize maintenance operations.
 
 Key Public Methods:
@@ -214,15 +213,17 @@ New integrations should favour the role-specific repositories below instead of a
 
 ### Silver-bar role repositories
 
-- **SilverBarQueryRepository (`silver_bar_query_repository.py`)** – owns list,
-  inventory, history, count, and keyset-page reads. Available/list pages are
-  capped at 1,500 rows and history pages at 1,000.
-- **SilverBarCommandRepository (`silver_bar_command_repository.py`)** – owns
-  list lifecycle, assignment/removal transfer logging, estimate-bar deletion,
-  and explicit commit/rollback behavior.
+- **SilverBarQueryRepository (`silver_bar_query_repository.py`)** – writer-side
+  reads: list snapshots and filtered `get_silver_bars()` lookups. Paged
+  inventory, list, and history reads run on worker connections through
+  `SilverBarsSnapshotRepository`.
+- **SilverBarCommandRepository (`silver_bar_command_repository.py`)** – the
+  atomic list workspace commands (add/remove bars, delete, note, issue,
+  reactivate) plus estimate-bar deletion and empty-list cleanup.
 - **SilverBarSynchronizationRepository
-  (`silver_bar_synchronization_repository.py`)** – reconciles estimate rows
-  with mutable inventory rows and returns `SilverBarSyncResult`.
+  (`silver_bar_synchronization_repository.py`)** – `prepare()`/`apply()`
+  reconcile estimate rows with mutable inventory rows inside the estimate
+  save transaction and return `SilverBarSyncResult`.
 
 ## Supporting Types
 

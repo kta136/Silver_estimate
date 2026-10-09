@@ -33,7 +33,13 @@ from silverestimate.ui.estimate_entry_logic.constants import (
 from silverestimate.ui.login_dialog import LoginDialog
 from silverestimate.ui.main_window import MainWindow
 from silverestimate.ui.print_preview_dialog import PrintPreviewDialog
-from tests.factories import estimate_totals, regular_item, return_item, silver_bar_item
+from tests.factories import (
+    estimate_totals,
+    insert_silver_bar,
+    regular_item,
+    return_item,
+    silver_bar_item,
+)
 
 pytestmark = pytest.mark.smoke
 
@@ -395,32 +401,19 @@ def _seed_smoke_database(db_manager) -> None:
         ),
     )
 
-    available_bar_id = db_manager.silver_bar_command_repo.add_silver_bar(
-        "2", 40.0, 99.9
+    available_bar_id = insert_silver_bar(db_manager, "2", 40.0, 99.9)
+    active_bar_id = insert_silver_bar(db_manager, "2", 35.0, 99.5)
+    issued_bar_id = insert_silver_bar(db_manager, "2", 25.0, 99.0)
+    active_list_id = (
+        db_manager.add_bars_to_list([active_bar_id], note="Smoke active list")
+        .unwrap()
+        .list_id
     )
-    active_bar_id = db_manager.silver_bar_command_repo.add_silver_bar("2", 35.0, 99.5)
-    issued_bar_id = db_manager.silver_bar_command_repo.add_silver_bar("2", 25.0, 99.0)
-    active_list_id = db_manager.create_silver_bar_list("Smoke active list")
-    issued_list_id = db_manager.create_silver_bar_list("Smoke issued list")
-    assert available_bar_id is not None
-    assert active_bar_id is not None
-    assert issued_bar_id is not None
-    assert active_list_id is not None
-    assert issued_list_id is not None
-    assert db_manager.assign_bar_to_list(
-        active_bar_id,
-        active_list_id,
-        note="Smoke active assignment",
-    )
-    assert db_manager.assign_bar_to_list(
-        issued_bar_id,
-        issued_list_id,
-        note="Smoke issued assignment",
-    )
-    assert db_manager.mark_silver_bar_list_as_issued(
-        issued_list_id,
-        issued_date="2026-01-18 09:00:00",
-    )
+    issued_list = db_manager.add_bars_to_list(
+        [issued_bar_id], note="Smoke issued list"
+    ).unwrap()
+    issued_list_id = issued_list.list_id
+    db_manager.issue_printed_list(issued_list_id, issued_list.signature).unwrap()
 
     deterministic_updates = (
         (
@@ -442,6 +435,10 @@ def _seed_smoke_database(db_manager) -> None:
         (
             "UPDATE silver_bar_lists SET creation_date = ? WHERE list_id = ?",
             ("2026-01-17 11:00:00", issued_list_id),
+        ),
+        (
+            "UPDATE silver_bar_lists SET issued_date = ? WHERE list_id = ?",
+            ("2026-01-18 09:00:00", issued_list_id),
         ),
     )
     for statement, params in deterministic_updates:
@@ -497,7 +494,10 @@ def _show_and_capture_dialog(
 
 
 def _populate_silver_bar_management_dialog(dialog, db_manager) -> None:
-    lists = db_manager.get_silver_bar_lists(include_issued=False)
+    lists = db_manager.conn.execute(
+        "SELECT list_id FROM silver_bar_lists WHERE issued_date IS NULL "
+        "ORDER BY creation_date DESC"
+    ).fetchall()
     assert lists
     snapshot = db_manager.get_silver_bar_list_snapshot(lists[0]["list_id"])
     dialog.apply_snapshot(snapshot)

@@ -89,13 +89,13 @@ def test_snapshot_repository_available_page_returns_total_and_rows(tmp_path):
     _seed_snapshot_db(db_path)
 
     repo = SilverBarsSnapshotRepository(_connection_factory(db_path))
-    rows, total_count = repo.get_available_bars_page(limit=1)
+    page = repo.get_available_bars_keyset_page(limit=1)
 
-    assert total_count == 2
-    assert len(rows) == 1
-    assert rows[0]["estimate_voucher_no"] == "V002"
-    assert rows[0]["status"] == "In Stock"
-    assert rows[0]["list_id"] is None
+    assert page.total == 2
+    assert len(page.items) == 1
+    assert page.items[0]["estimate_voucher_no"] == "V002"
+    assert page.items[0]["status"] == "In Stock"
+    assert page.items[0]["list_id"] is None
 
 
 def test_snapshot_repository_available_page_applies_date_range_filter(tmp_path):
@@ -103,26 +103,13 @@ def test_snapshot_repository_available_page_applies_date_range_filter(tmp_path):
     _seed_snapshot_db(db_path)
 
     repo = SilverBarsSnapshotRepository(_connection_factory(db_path))
-    rows, total_count = repo.get_available_bars_page(
+    page = repo.get_available_bars_keyset_page(
         date_range=("2026-02-10 10:30:00", "2026-02-10 11:30:00"),
         limit=100,
     )
 
-    assert total_count == 1
-    assert [row["estimate_voucher_no"] for row in rows] == ["V002"]
-
-
-def test_snapshot_repository_list_page_returns_limited_rows_and_total(tmp_path):
-    db_path = tmp_path / "snapshot.sqlite"
-    _seed_snapshot_db(db_path)
-
-    repo = SilverBarsSnapshotRepository(_connection_factory(db_path))
-    rows, total_count = repo.get_bars_in_list_page(1, limit=1, offset=0)
-
-    assert total_count == 2
-    assert len(rows) == 1
-    assert rows[0]["estimate_voucher_no"] == "V003"
-    assert rows[0]["list_id"] == 1
+    assert page.total == 1
+    assert [row["estimate_voucher_no"] for row in page.items] == ["V002"]
 
 
 def test_snapshot_repository_history_search_filters_by_note_and_status(tmp_path):
@@ -130,15 +117,15 @@ def test_snapshot_repository_history_search_filters_by_note_and_status(tmp_path)
     _seed_snapshot_db(db_path)
 
     repo = SilverBarsSnapshotRepository(_connection_factory(db_path))
-    rows = repo.search_history_bars(
+    page = repo.search_history_bars_page(
         voucher_term="Delta",
         weight_text="13.0",
         status_text="Issued",
-        limit=2000,
     )
 
-    assert [row["estimate_voucher_no"] for row in rows] == ["V004"]
-    assert rows[0]["list_identifier"] == "LIST-002"
+    assert [row["estimate_voucher_no"] for row in page.items] == ["V004"]
+    assert page.items[0]["list_identifier"] == "LIST-002"
+    assert page.total == 1
 
 
 def test_snapshot_repository_closes_connections_after_queries():
@@ -155,6 +142,9 @@ def test_snapshot_repository_closes_connections_after_queries():
             self.closed = False
             self.cursor_obj = _CursorStub()
 
+        def execute(self, query):
+            self.begun = query
+
         def cursor(self):
             return self.cursor_obj
 
@@ -165,9 +155,9 @@ def test_snapshot_repository_closes_connections_after_queries():
     conn = _ConnectionStub()
     repo._connect = lambda: conn  # type: ignore[method-assign]
 
-    rows = repo.search_history_bars(voucher_term="V001")
+    page = repo.search_history_bars_page(voucher_term="V001", include_total=False)
 
-    assert rows == [{"estimate_voucher_no": "V001"}]
+    assert page.items == ({"estimate_voucher_no": "V001"},)
     assert conn.closed is True
 
 

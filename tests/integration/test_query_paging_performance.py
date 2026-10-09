@@ -125,7 +125,9 @@ def test_history_pages_match_independent_filter_and_date_order(paging_db, filter
 )
 def test_available_pages_match_full_filtered_result(paging_db, filters):
     repo = SilverBarsSnapshotRepository(paging_db.open_read_connection)
-    expected, total = repo.get_available_bars_page(**filters)
+    unpaged = repo.get_available_bars_keyset_page(**filters, limit=5000)
+    assert not unpaged.has_more
+    expected, total = list(unpaged.items), unpaged.total
     found, cursor = [], None
     for _ in range(30):
         page = repo.get_available_bars_keyset_page(**filters, cursor=cursor, limit=2)
@@ -173,13 +175,11 @@ def test_append_can_skip_counts_without_reusing_stale_totals(paging_db):
     assert page.total is None
     assert len(page.items) == 2
     assert not any("COUNT(" in sql.upper() for sql in traces)
-    for loader, kwargs in [
-        (repo.get_available_bars_keyset_page, {}),
-        (repo.get_bars_in_list_keyset_page, {"list_id": 1}),
-    ]:
-        traces.clear()
-        assert loader(**kwargs, limit=2, include_total=False).total is None
-        assert not any("COUNT(" in sql.upper() for sql in traces)
+    traces.clear()
+    assert (
+        repo.get_available_bars_keyset_page(limit=2, include_total=False).total is None
+    )
+    assert not any("COUNT(" in sql.upper() for sql in traces)
     paging_db.conn.set_trace_callback(traces.append)
     traces.clear()
     assert (

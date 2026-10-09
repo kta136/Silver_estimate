@@ -35,11 +35,6 @@ class AvailableBarCursor:
 
 
 @dataclass(frozen=True)
-class BarListCursor:
-    bar_id: int
-
-
-@dataclass(frozen=True)
 class EstimateHistoryCursor:
     voucher_no_int: int | None
     voucher_no: str
@@ -53,7 +48,6 @@ class SilverBarHistoryCursor:
 
 __all__ = [
     "AvailableBarCursor",
-    "BarListCursor",
     "EstimateHistoryCursor",
     "ItemCursor",
     "Page",

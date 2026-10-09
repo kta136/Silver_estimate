@@ -12,6 +12,14 @@ from silverestimate.ui.view_models import EstimateEntryRowState
 from tests.factories import estimate_totals, regular_item
 
 
+def _bars_for(db, voucher_no):
+    return [
+        bar
+        for bar in db.get_silver_bars(estimate_voucher_no=voucher_no)
+        if bar["estimate_voucher_no"] == voucher_no
+    ]
+
+
 @pytest.fixture
 def precision_db(tmp_path):
     db = DatabaseManager(
@@ -52,7 +60,7 @@ def test_purity_above_100_survives_calculation_save_inventory_and_print(
     assert saved["items"][0]["fine"] == 12.55
     assert saved["items"][0]["tunch"] == "125.50%"
     if category == EstimateLineCategory.SILVER_BAR:
-        bar = db.silver_bar_query_repo.get_silver_bars_for_estimate("HIGH")[0]
+        bar = _bars_for(db, "HIGH")[0]
         assert bar["purity"] == 125.5
         assert bar["fine_weight"] == 12.55
     document = EstimatePrintDocument.from_mapping(saved, show_tunch=True)
@@ -117,12 +125,12 @@ def test_entry_save_inventory_history_and_print_agree(
     ]
     assert widget.workflow_controller.save_estimate(continue_editing=True)
     saved = db.get_estimate_by_voucher("1")
-    bar = db.silver_bar_query_repo.get_silver_bars_for_estimate("1")[0]
+    bar = _bars_for(db, "1")[0]
     assert bar["fine_weight"] == 9.37
     assert saved["header"]["total_fine"] == 8.87
     from silverestimate.domain.estimate_totals import calculate_grand_total
 
-    history = db.get_estimate_history_rows()[0]
+    history = db.get_estimate_history_page().items[0]
     assert (
         calculate_grand_total(
             net_fine=history["total_fine"],

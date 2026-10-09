@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
+from PySide6.QtWidgets import QWidget
 
 from silverestimate.infrastructure.app_constants import APP_TITLE
 from silverestimate.ui.estimate_entry_logic.constants import (
@@ -86,6 +87,44 @@ def test_sales_report_navigation_reuses_view_and_stops_reader_before_close(
         )
         window.close()
         assert events == [False]
+
+
+def test_estimate_actions_dock_in_menu_bar_only_while_estimate_shows(
+    main_window_fixture, qtbot, tmp_path, monkeypatch
+):
+    from tests.sales_report_support import report_database
+
+    window = main_window_fixture["window"]
+    estimate = window.estimate_widget
+    strip = estimate.command_strip
+    menu_bar = window.menuBar()
+    with report_database(tmp_path) as report_db:
+        monkeypatch.setattr(
+            window.db,
+            "open_read_connection",
+            report_db.open_read_connection,
+            raising=False,
+        )
+        window.show()
+        qtbot.waitUntil(strip.isVisible)
+        assert menu_bar.cornerWidget(Qt.Corner.TopRightCorner) is strip
+        assert estimate.save_button.isVisible()
+        assert estimate.unsaved_badge.parent() is strip
+        # Side-panel layout: nothing is left above the item table.
+        header = estimate.findChild(QWidget, "EstimateHeaderContainer")
+        assert not header.isVisibleTo(estimate)
+        assert estimate.toolbar.isVisible()
+
+        window.show_sales_report()
+        report = window.sales_report_widget
+        qtbot.waitUntil(lambda: not report._loading)
+        assert not strip.isVisible()
+        assert menu_bar.cornerWidget(Qt.Corner.TopRightCorner) is None
+
+        window.show_estimate()
+        qtbot.waitUntil(strip.isVisible)
+        assert menu_bar.cornerWidget(Qt.Corner.TopRightCorner) is strip
+        window.close()
 
 
 def test_estimate_tools_and_shortcut_help_remain_reachable_from_menu(

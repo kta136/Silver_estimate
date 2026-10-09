@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, cast
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
+    QAbstractButton,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
+    QLabel,
     QMenu,
+    QMenuBar,
     QSizePolicy,
     QSplitter,
     QToolButton,
@@ -54,6 +56,8 @@ from .toolbar_overflow import ToolbarOverflow
 if TYPE_CHECKING:
     from .estimate_entry import EstimateEntryWidget
 
+_SHORTCUT_HINTS = ("Ctrl+S Save", "Ctrl+P Print", "F1 Shortcuts")
+
 
 class EstimateEntryLayoutController:
     """Own layout wiring, totals placement, and persisted UI preferences."""
@@ -67,39 +71,48 @@ class EstimateEntryLayoutController:
 
         layout = QVBoxLayout(self.host)
         layout.setSpacing(4)
-        layout.setContentsMargins(10, 4, 10, 0)
+        layout.setContentsMargins(6, 4, 6, 4)
 
         header_container = QWidget()
         header_container.setObjectName("EstimateHeaderContainer")
         header_container.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
-        header_layout = QHBoxLayout(header_container)
-        header_layout.setContentsMargins(10, 6, 10, 6)
-        header_layout.setSpacing(10)
+        self._header_layout = QHBoxLayout(header_container)
+        self._header_layout.setContentsMargins(10, 6, 10, 6)
+        self._header_layout.setSpacing(10)
 
         self.host.toolbar = VoucherToolbar()
-        self.host.toolbar.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
-        header_layout.addWidget(self.host.toolbar, 5)
-
         self.host.primary_actions = PrimaryActionsBar(shortcut_parent=self.host)
         self.host.primary_actions.setSizePolicy(
             QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed
         )
-        header_layout.addWidget(self.host.primary_actions)
 
         self.host.secondary_actions = SecondaryActionsBar(shortcut_parent=self.host)
         self.host.secondary_actions.setVisible(False)
         self.host.secondary_actions.setSizePolicy(
             QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
         )
-        header_layout.addWidget(self.host.secondary_actions)
+        self._header_layout.addWidget(self.host.secondary_actions)
+
+        # Status badge and Save/Print/New. The strip moves into the window's
+        # menu bar while this screen is shown; without one it stays in the header.
+        strip = QWidget()
+        strip.setObjectName("EstimateCommandStrip")
+        strip.setStyleSheet(ESTIMATE_ENTRY_STYLESHEET)
+        strip_layout = QHBoxLayout(strip)
+        strip_layout.setContentsMargins(0, 1, 4, 1)
+        strip_layout.setSpacing(6)
+        strip_layout.addWidget(self.host.toolbar.release_unsaved_badge())
+        strip_layout.addWidget(self.host.primary_actions)
+        self.host.command_strip = strip
+        self._command_strip_menu_bar: QMenuBar | None = None
+        self._header_layout.addWidget(strip)
 
         self.host.estimate_tools_menu = self._build_estimate_tools_menu()
         self.host.estimate_tools_menu.setTitle("Estimate Actions")
-        layout.addWidget(ToolbarOverflow(header_container), 0)
+        self._header_overflow = ToolbarOverflow(header_container)
+        layout.addWidget(self._header_overflow, 0)
 
         self.host._content_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.host._content_splitter.setChildrenCollapsible(False)
@@ -131,13 +144,7 @@ class EstimateEntryLayoutController:
 
         layout.addWidget(self.host._content_splitter, 1)
         self.host.bottom_status_strip = BottomStatusStrip(self.host)
-        self.host.bottom_status_strip.set_left_items(
-            [
-                "Ctrl+S Save",
-                "Ctrl+P Print",
-                "F1 Shortcuts",
-            ]
-        )
+        self.host.bottom_status_strip.set_left_items(list(_SHORTCUT_HINTS))
         layout.addWidget(self.host.bottom_status_strip, 0)
         layout.setStretch(0, 0)
         layout.setStretch(1, 1)
@@ -174,8 +181,8 @@ class EstimateEntryLayoutController:
         )
         self.host.refresh_rate_button = self.host.secondary_actions.refresh_rate_button
 
-        self._sync_live_rate_card_placement(self.host._totals_position)
         self._place_sidebar_actions()
+        self._sync_live_rate_card_placement(self.host._totals_position)
 
         self._bind_totals_panel_labels()
 
@@ -197,31 +204,47 @@ class EstimateEntryLayoutController:
         if not hasattr(self.host, "sidebar_actions"):
             actions = QFrame(self.host)
             actions.setObjectName("EstimateSidebarActions")
-            grid = QGridLayout(actions)
-            grid.setContentsMargins(6, 10, 6, 6)
-            grid.setSpacing(8)
-            specs = [
-                ("last_balance_button", "Last Balance", 0, 0, 1),
-                ("history_button", "History", 0, 1, 1),
-                ("silver_bars_button", "Manage Silver Bars", 1, 0, 2),
-                ("delete_row_button", "Delete Row", 2, 0, 2),
-                ("delete_estimate_button", "Delete Estimate", 3, 0, 2),
+            column = QVBoxLayout(actions)
+            column.setContentsMargins(0, 4, 0, 0)
+            column.setSpacing(6)
+
+            more_button = QToolButton(actions)
+            more_button.setObjectName("EstimateMoreButton")
+            more_button.setToolTip("More estimate actions")
+            more_button.setMenu(self.host.estimate_tools_menu)
+            more_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+            self.host.estimate_more_button = more_button
+
+            actions_bar = self.host.secondary_actions
+            rows: list[list[tuple[QAbstractButton, str]]] = [
+                [
+                    (actions_bar.last_balance_button, "Last Balance"),
+                    (actions_bar.history_button, "History"),
+                ],
+                [
+                    (actions_bar.silver_bars_button, "Manage Silver Bars"),
+                    (more_button, "More"),
+                ],
+                [
+                    (actions_bar.delete_row_button, "Delete Row"),
+                    (actions_bar.delete_estimate_button, "Delete Estimate"),
+                ],
             ]
-            for attr, text, row, col, span in specs:
-                button = getattr(self.host.secondary_actions, attr)
-                button.setProperty("iconOnly", False)
-                button.setText(text)
-                button.setMinimumSize(0, 34)
-                button.setMaximumSize(16777215, 16777215)
-                button.setSizePolicy(
-                    QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-                )
-                if isinstance(button, QToolButton):
-                    button.setToolButtonStyle(
-                        Qt.ToolButtonStyle.ToolButtonTextBesideIcon
-                    )
-                grid.addWidget(button, row, col, 1, span)
-                button.show()
+            for pairs in rows:
+                row = QHBoxLayout()
+                row.setSpacing(6)
+                for button, text in pairs:
+                    self._configure_sidebar_button(button, text)
+                    # Share the row by label length so neither label is cut.
+                    row.addWidget(button, len(text) + 4)
+                    button.show()
+                column.addLayout(row)
+
+            status = QLabel(actions)
+            status.setObjectName("SidebarStatusText")
+            status.setWordWrap(True)
+            column.addWidget(status)
+            self.host.sidebar_status_label = status
             self.host.sidebar_actions = actions
         panel = self.host.totals_panel
         if panel.layout_mode == "sidebar":
@@ -229,6 +252,48 @@ class EstimateEntryLayoutController:
             self.host.sidebar_actions.show()
         else:
             self.host.sidebar_actions.hide()
+
+    @staticmethod
+    def _configure_sidebar_button(button: QAbstractButton, text: str) -> None:
+        button.setProperty("iconOnly", False)
+        button.setText(text)
+        button.setMinimumSize(0, 30)
+        button.setMaximumSize(16777215, 16777215)
+        # Two buttons share each row; never let them push the side panel
+        # wider than its splitter pane.
+        button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        if isinstance(button, QToolButton):
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+
+    def show_command_strip(self, visible: bool) -> None:
+        """Dock Save/Print/New in the menu bar while the estimate screen shows."""
+        strip = getattr(self.host, "command_strip", None)
+        if strip is None or not isValid(strip):
+            return
+        main_window = getattr(self.host, "main_window", None)
+        menu_bar_getter = getattr(main_window, "menuBar", None)
+        menu_bar = menu_bar_getter() if callable(menu_bar_getter) else None
+        if not isinstance(menu_bar, QMenuBar):
+            return
+        if visible:
+            if self._command_strip_menu_bar is None:
+                self._header_layout.removeWidget(strip)
+                self._command_strip_menu_bar = menu_bar
+                self._sync_header_visibility()
+            menu_bar.setCornerWidget(strip, Qt.Corner.TopRightCorner)
+            strip.show()
+        elif self._command_strip_menu_bar is menu_bar:
+            if menu_bar.cornerWidget(Qt.Corner.TopRightCorner) is strip:
+                menu_bar.setCornerWidget(cast(QWidget, None), Qt.Corner.TopRightCorner)
+            strip.hide()
+
+    def _sync_header_visibility(self) -> None:
+        overflow = getattr(self, "_header_overflow", None)
+        if overflow is None:
+            return
+        toolbar_in_header = self._header_layout.indexOf(self.host.toolbar) >= 0
+        strip_in_header = self._command_strip_menu_bar is None
+        overflow.setVisible(toolbar_in_header or strip_in_header)
 
     def _build_estimate_tools_menu(self) -> QMenu:
         menu = QMenu(self.host)
@@ -350,6 +415,9 @@ class EstimateEntryLayoutController:
         if recovery is not None:
             items.append(f"Recovery: {recovery.status}")
         strip.set_right_items(items)
+        sidebar_status = getattr(self.host, "sidebar_status_label", None)
+        if sidebar_status is not None and isValid(sidebar_status):
+            sidebar_status.setText("  ·  ".join([*items, *_SHORTCUT_HINTS]))
 
     def refresh_bottom_status(self) -> None:
         self._update_bottom_status_strip()
@@ -360,40 +428,50 @@ class EstimateEntryLayoutController:
         if callable(opener):
             opener()
 
-    def _move_live_rate_card_to_summary_top(self) -> None:
-        sidebar_panel = getattr(self.host, "totals_panel", None)
-        live_rate_card = getattr(
-            self.host.secondary_actions, "live_rate_container", None
-        )
-        if (
-            sidebar_panel is None
-            or sidebar_panel.layout_mode != "sidebar"
-            or live_rate_card is None
-        ):
-            return
-        live_rate_card.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
-        try:
-            sidebar_panel.set_sidebar_top_widget(live_rate_card)
-        except (AttributeError, RuntimeError, TypeError) as exc:
-            self.host.logger.debug("Failed to move live-rate card to sidebar: %s", exc)
-            return
-
-        live_rate_divider = getattr(
-            self.host.secondary_actions, "live_rate_divider", None
-        )
-        if live_rate_divider is not None:
-            live_rate_divider.setVisible(False)
-
     def _sync_live_rate_card_placement(self, totals_position: str) -> None:
-        normalized = self._normalize_totals_position(totals_position)
-        if normalized == "bottom":
-            if hasattr(self.host.secondary_actions, "show_live_rate_in_header"):
-                self.host.secondary_actions.show_live_rate_in_header(show_divider=True)
-            return
+        """Place the voucher fields and live rate for the totals position.
 
-        self._move_live_rate_card_to_summary_top()
+        Beside the table they go to the top of the side panel and the header
+        row disappears; with totals at the bottom they stay in the header row.
+        """
+        normalized = self._normalize_totals_position(totals_position)
+        toolbar = self.host.toolbar
+        actions = self.host.secondary_actions
+        live_rate_card = getattr(actions, "live_rate_container", None)
+        panel = getattr(self.host, "totals_panel", None)
+        in_sidebar = (
+            normalized != "bottom"
+            and panel is not None
+            and panel.layout_mode == "sidebar"
+        )
+        if in_sidebar and panel is not None:
+            self._header_layout.removeWidget(toolbar)
+            toolbar.set_panel_layout(True)
+            top_widgets: list[QWidget] = [toolbar]
+            if live_rate_card is not None:
+                live_rate_card.setSizePolicy(
+                    QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+                )
+                top_widgets.append(live_rate_card)
+            try:
+                panel.set_sidebar_top_widgets(top_widgets)
+            except (AttributeError, RuntimeError, TypeError) as exc:
+                self.host.logger.debug(
+                    "Failed to move voucher fields to sidebar: %s", exc
+                )
+            toolbar.show()
+            divider = getattr(actions, "live_rate_divider", None)
+            if divider is not None:
+                divider.setVisible(False)
+            self.host.bottom_status_strip.hide()
+        else:
+            toolbar.set_panel_layout(False)
+            self._header_layout.insertWidget(0, toolbar, 5)
+            toolbar.show()
+            if hasattr(actions, "show_live_rate_in_header"):
+                actions.show_live_rate_in_header(show_divider=True)
+            self.host.bottom_status_strip.show()
+        self._sync_header_visibility()
 
     def _setup_table_delegates(self):
         code_delegate = CodeDelegate(parent=self.host.item_table)
@@ -427,22 +505,25 @@ class EstimateEntryLayoutController:
             actions.return_toggle_button.click()
         if actions.silver_bar_toggle_button.isChecked() != (index == 2):
             actions.silver_bar_toggle_button.click()
+        self._sync_mode_selector()
+
+    def _sync_mode_selector(self) -> None:
+        actions = self.host.secondary_actions
+        self.host.toolbar.set_mode_index(
+            1
+            if actions.return_toggle_button.isChecked()
+            else 2
+            if actions.silver_bar_toggle_button.isChecked()
+            else 0
+        )
 
     def _wire_component_signals(self):
-        self.host.toolbar.mode_combo.activated.connect(self._choose_entry_mode)
+        self.host.toolbar.mode_selected.connect(self._choose_entry_mode)
         for button in (
             self.host.return_toggle_button,
             self.host.silver_bar_toggle_button,
         ):
-            button.toggled.connect(
-                lambda *_: self.host.toolbar.mode_combo.setCurrentIndex(
-                    1
-                    if self.host.return_toggle_button.isChecked()
-                    else 2
-                    if self.host.silver_bar_toggle_button.isChecked()
-                    else 0
-                )
-            )
+            button.toggled.connect(lambda *_: self._sync_mode_selector())
         self.host.toolbar.load_clicked.connect(
             self.host.workflow_controller.safe_load_estimate
         )
@@ -664,13 +745,13 @@ class EstimateEntryLayoutController:
             splitter.insertWidget(1, self.host.item_table)
             splitter.setStretchFactor(0, 0)
             splitter.setStretchFactor(1, 1)
-            splitter.setSizes([320, 1060])
+            splitter.setSizes([360, 1020])
         else:
             splitter.insertWidget(0, self.host.item_table)
             splitter.insertWidget(1, panel)
             splitter.setStretchFactor(0, 1)
             splitter.setStretchFactor(1, 0)
-            splitter.setSizes([1060, 320])
+            splitter.setSizes([1020, 360])
 
     def apply_totals_position(self, position: str) -> bool:
         try:

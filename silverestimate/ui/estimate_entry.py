@@ -176,6 +176,9 @@ class EstimateEntryWidget(QWidget):
         return self.workflow_controller.apply_loaded_estimate(loaded)
 
     sidebar_actions: QWidget
+    sidebar_status_label: QLabel
+    command_strip: QWidget
+    estimate_more_button: QToolButton
 
     def __init__(self, db_manager, main_window, repository):
         super().__init__()
@@ -296,6 +299,7 @@ class EstimateEntryWidget(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
+        self.layout_controller.show_command_strip(True)
         if self.draft_recovery is not None:
             self.draft_recovery.schedule_start()
         if self._initial_focus_scheduled:
@@ -397,6 +401,7 @@ class EstimateEntryWidget(QWidget):
         recovery = getattr(self, "draft_recovery", None)
         if recovery is not None:
             recovery.flush()
+        self.layout_controller.show_command_strip(False)
         super().hideEvent(event)
 
     def closeEvent(self, event):

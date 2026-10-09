@@ -949,6 +949,10 @@ class TotalsPanel(QWidget):
 
     def set_sidebar_top_widget(self, widget: QWidget | None) -> None:
         """Attach a widget above the sidebar summary cards."""
+        self.set_sidebar_top_widgets([] if widget is None else [widget])
+
+    def set_sidebar_top_widgets(self, widgets: list[QWidget]) -> None:
+        """Attach widgets, top to bottom, above the sidebar summary cards."""
         if self._layout_mode != "sidebar":
             return
         if not hasattr(self, "_sidebar_top_layout") or not hasattr(
@@ -959,15 +963,12 @@ class TotalsPanel(QWidget):
         while self._sidebar_top_layout.count():
             item = self._sidebar_top_layout.takeAt(0)
             child_widget = item.widget()
-            if child_widget is not None:
+            if child_widget is not None and child_widget not in widgets:
                 child_widget.setParent(cast(QWidget, None))
 
-        if widget is None:
-            self._sidebar_top_host.setVisible(False)
-            return
-
-        self._sidebar_top_layout.addWidget(widget)
-        self._sidebar_top_host.setVisible(True)
+        for widget in widgets:
+            self._sidebar_top_layout.addWidget(widget)
+        self._sidebar_top_host.setVisible(bool(widgets))
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)

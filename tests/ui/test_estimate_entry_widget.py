@@ -787,9 +787,12 @@ def test_compact_header_preserves_table_viewport_height(
     header_container = _find_named_widget(widget, "EstimateHeaderContainer")
     assert header_container is not None
     assert header_container.height() <= 60
-    assert widget.toolbar.mode_combo.isVisible()
-    assert widget.bottom_status_strip is not None
-    shortcuts = widget.bottom_status_strip._left.text()
+    # Beside the table, the voucher fields and mode switch live in the side panel.
+    assert widget.toolbar.parent() is widget.totals_panel._sidebar_top_host
+    assert widget.toolbar.is_panel_layout()
+    assert widget.toolbar.mode_selector.isVisible()
+    assert widget.bottom_status_strip.isHidden()
+    shortcuts = widget.sidebar_status_label.text()
     for label in (
         "Ctrl+S Save",
         "Ctrl+P Print",
@@ -798,7 +801,46 @@ def test_compact_header_preserves_table_viewport_height(
         assert label in shortcuts
     for stale_label in ("F2:", "Ins:", "Del:", "F9:"):
         assert stale_label not in shortcuts
-    assert widget.item_table.viewport().height() >= 660
+    assert widget.item_table.viewport().height() >= 680
+
+    # With totals at the bottom the fields return to a header row.
+    widget.layout_controller._apply_totals_position("bottom")
+    qt_app.processEvents()
+    assert widget.toolbar.parent() is header_container
+    assert not widget.toolbar.is_panel_layout()
+    assert widget.toolbar.isVisible()
+    assert widget.bottom_status_strip.isVisible()
+    assert "Ctrl+S Save" in widget.bottom_status_strip._left.text()
+
+    widget.layout_controller._apply_totals_position("left")
+    qt_app.processEvents()
+    assert widget.toolbar.parent() is widget.totals_panel._sidebar_top_host
+    assert widget.toolbar.isVisible()
+    assert widget.bottom_status_strip.isHidden()
+
+
+def test_mode_buttons_switch_entry_mode_and_follow_shortcuts(
+    make_estimate_widget, qt_app, fake_db
+):
+    widget = make_estimate_widget(fake_db)
+    widget.show()
+    qt_app.processEvents()
+    toolbar = widget.toolbar
+
+    toolbar.mode_buttons.button(1).click()
+    qt_app.processEvents()
+    assert widget.return_toggle_button.isChecked()
+    assert toolbar.mode_index() == 1
+
+    widget.silver_bar_toggle_button.click()
+    qt_app.processEvents()
+    assert not widget.return_toggle_button.isChecked()
+    assert toolbar.mode_index() == 2
+
+    toolbar.mode_buttons.button(0).click()
+    qt_app.processEvents()
+    assert not widget.silver_bar_toggle_button.isChecked()
+    assert toolbar.mode_index() == 0
 
 
 def test_totals_section_order_sync_and_persistence(

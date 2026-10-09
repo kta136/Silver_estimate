@@ -89,15 +89,14 @@ def test_compact_totals_use_aligned_table_and_independent_grand_total_font_size(
     assert panel.width() <= 360
     if width >= 1366:
         assert widget.item_table.horizontalScrollBar().maximum() == 0
-        assert widget.note_edit.width() >= 160
-    assert (
-        widget.findChild(QLabel, "StatusStripText").text()
-        == "Ctrl+S Save  |  Ctrl+P Print  |  F1 Shortcuts"
-    )
-    assert widget.bottom_status_strip.height() <= 28
+        assert widget.note_edit.width() >= 120
+    assert widget.toolbar.parent() is panel._sidebar_top_host
+    assert widget.bottom_status_strip.isHidden()
+    assert "Ctrl+S Save" in widget.sidebar_status_label.text()
+    # Without a main-window menu bar only the Save/Print/New strip stays on top.
     toolbar = widget.findChild(ToolbarOverflow)
-    assert toolbar.height() <= (48 if width >= 1366 else 66)
-    assert widget.item_table.height() >= height - 110
+    assert toolbar.height() <= 48
+    assert widget.item_table.height() >= height - 60
     for button in (
         widget.last_balance_button,
         widget.history_button,

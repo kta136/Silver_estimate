@@ -23,8 +23,10 @@ def test_initial_state(toolbar):
     assert toolbar.unsaved_badge.text() == "● Ready"
     assert toolbar.unsaved_badge.property("dirty") == "false"
     assert toolbar.mode_indicator_label.text() == "Mode: Regular"
-    assert toolbar.mode_combo.currentText() == "Regular"
-    assert toolbar.layout().indexOf(toolbar.mode_combo) >= 0
+    assert toolbar.mode_index() == 0
+    assert toolbar.mode_buttons.checkedButton().text() == "Regular"
+    assert toolbar.layout().indexOf(toolbar.mode_selector) >= 0
+    assert toolbar.layout().indexOf(toolbar.unsaved_badge) >= 0
     assert toolbar.mode_indicator_label.property("modeState") == "regular"
     assert toolbar.status_message_label.text() == ""
 
@@ -91,3 +93,38 @@ def test_note_changed_signal(toolbar):
     toolbar.note_edit.setText("Test")
     assert len(values) > 0
     assert values[-1] == "Test"
+
+
+def test_mode_buttons_emit_selection_and_follow_set_mode_index(toolbar, qtbot):
+    with qtbot.waitSignal(toolbar.mode_selected) as blocker:
+        toolbar.mode_buttons.button(2).click()
+    assert blocker.args == [2]
+
+    received = []
+    toolbar.mode_selected.connect(received.append)
+    toolbar.set_mode_index(1)
+    assert toolbar.mode_index() == 1
+    assert received == []
+
+
+def test_panel_layout_keeps_fields_and_drops_released_badge(toolbar):
+    badge = toolbar.release_unsaved_badge()
+    toolbar.set_panel_layout(True)
+
+    layout = toolbar.layout()
+    assert toolbar.is_panel_layout()
+    assert toolbar.property("placement") == "panel"
+    assert layout.indexOf(badge) < 0
+    for widget in (
+        toolbar.date_edit,
+        toolbar.silver_rate_spin,
+        toolbar.note_edit,
+        toolbar.mode_selector,
+    ):
+        assert layout.indexOf(widget) >= 0
+    assert toolbar.voucher_label.text() == "Voucher"
+
+    toolbar.set_panel_layout(False)
+    assert toolbar.property("placement") == "row"
+    assert toolbar.layout().indexOf(toolbar.note_edit) >= 0
+    assert toolbar.voucher_label.text() == "Voucher:"

@@ -555,6 +555,27 @@ QWidget#PrimaryActionStrip QPushButton#SavePrimaryButton {
 }
 QWidget#PrimaryActionStrip QPushButton#SavePrimaryButton:hover { background: #00696c; }
 QFrame#BottomStatusStrip { background: #f6f7f5; border: none; }
+QWidget#VoucherToolbar[placement="panel"] {
+ background: #ffffff; border: 1px solid #d5dfe0; border-radius: 6px;
+}
+QWidget#VoucherToolbar[placement="panel"] QLabel#VoucherFieldLabel {
+ color: __TEXT_MUTED__; font-size: 8pt; font-weight: 600;
+}
+QWidget#EntryModeSelector {
+ background: #ffffff; border: 1px solid #cfdbdd; border-radius: 5px;
+}
+QPushButton#EntryModeButton {
+ background: transparent; border: none; border-radius: 3px; color: #173744;
+ font-weight: 600; padding: 3px 8px; min-height: 20px;
+}
+QPushButton#EntryModeButton:hover { background: #eaf4f2; }
+QPushButton#EntryModeButton:checked { background: __PRIMARY_BG__; color: #ffffff; }
+QWidget#EstimateCommandStrip { background: transparent; border: none; }
+QWidget#EstimateCommandStrip QWidget#PrimaryActionStrip QPushButton {
+ min-height: 18px; padding: 1px 9px;
+}
+QWidget#EstimateCommandStrip QLabel#UnsavedBadge { padding: 2px 8px; border-radius: 9px; }
+QLabel#SidebarStatusText { color: __TEXT_MUTED__; font-size: 8pt; padding-top: 4px; }
 """)
 
 

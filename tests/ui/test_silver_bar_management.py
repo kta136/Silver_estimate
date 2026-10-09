@@ -1,7 +1,7 @@
 import threading
 
 import pytest
-from PySide6.QtCore import QEvent, Qt
+from PySide6.QtCore import QEvent, QPoint, Qt
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QInputDialog
 
@@ -387,8 +387,13 @@ def test_keyboard_workspace_layout(workspace, qtbot, qt_application_state):
             )
             < dialog.print_list_button.width()
         )
-        assert dialog.list_bars_table.height() >= height * 0.8
+        assert dialog.list_bars_table.height() >= height * 0.4
+        assert dialog.suggestions_table.height() >= height * 0.4
+        available = dialog.suggestions_table.mapTo(dialog, QPoint(0, 0))
+        current = dialog.list_bars_table.mapTo(dialog, QPoint(0, 0))
+        assert available.x() < current.x()
         assert dialog.list_bars_table.horizontalScrollBar().maximum() == 0
+        assert dialog.suggestions_table.horizontalScrollBar().maximum() == 0
         if width == 1080:
             image_path = Path(".pytest_cache/silver-bar-keyboard-suggestions.png")
             assert dialog.grab().save(str(image_path))

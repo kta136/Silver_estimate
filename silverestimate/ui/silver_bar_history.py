@@ -12,12 +12,11 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QDialog,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
-    QLabel,
     QLineEdit,
     QMessageBox,
-    QPushButton,
     QSizePolicy,
     QStackedWidget,
     QTableView,
@@ -34,6 +33,7 @@ from silverestimate.persistence.silver_bars_snapshot_repository import (
     SilverBarsSnapshotRepository,
 )
 
+from .display_formatting import format_display_date
 from .models.silver_bar_entry_model import SilverBarEntryModel
 from .models.silver_bar_history_models import (
     SilverBarHistoryModel,
@@ -42,9 +42,35 @@ from .models.silver_bar_history_models import (
 from .modern_components import install_table_empty_state, polish_dense_table
 from .preview_build_worker import PreviewBuildController
 from .print_manager import PrintManager
+from .screen_widgets import (
+    SCREEN_QSS,
+    KeyHintButton,
+    OptionGroup,
+    StatusPill,
+    StatusPillDelegate,
+    TotalsStrip,
+    card,
+    label,
+)
 from .shared_screen_theme import build_management_screen_stylesheet
-from .themed_controls import ThemedComboBox
 from .window_sizing import resize_to_available_screen
+
+# Below this width the results and the selected list take turns on screen.
+COMPACT_HISTORY_WIDTH = 1000
+DETAIL_PANEL_WIDTH = 480
+
+_PILL_STATES = {
+    "Active": "active",
+    "In active list": "active",
+    "Issued": "issued",
+    "Available": "available",
+}
+
+_HISTORY_QSS = """
+QPushButton#HistoryButton, QPushButton#HistoryPrimary { padding: 5px 12px; min-height: 24px; }
+QLineEdit { min-height: 24px; }
+QLabel[error="true"] { color: __TEXT_STRONG__; background: __DANGER_BG__; }
+"""
 
 
 @dataclass(frozen=True)
@@ -154,63 +180,32 @@ class SilverBarHistoryDialog(QDialog):
                 subtitle_label="HistoryHint",
                 primary_button="HistoryPrimary",
                 secondary_button="HistoryButton",
-                input_selectors=["QLineEdit", "QComboBox"],
+                input_selectors=["QLineEdit"],
                 include_table=True,
-                extra_rules='QPushButton#HistoryButton, QPushButton#HistoryPrimary { padding: 3px 7px; min-height: 24px; } QLabel[error="true"] { color: __TEXT_STRONG__; background: __DANGER_BG__; }',
+                extra_rules=SCREEN_QSS + _HISTORY_QSS,
             )
         )
         root = QVBoxLayout(self)
-        root.setContentsMargins(10, 8, 10, 6)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        root.addWidget(self._build_header())
+        root.addWidget(self._build_filter_bar())
+        body = QHBoxLayout()
+        body.setContentsMargins(16, 10, 16, 12)
+        body.setSpacing(12)
+        body.addWidget(self._build_results(), 1)
+        self.detail_panel = card("Selected list")
+        self.detail_panel.setMinimumWidth(360)
+        self.detail_panel.setMaximumWidth(DETAIL_PANEL_WIDTH)
+        panel_layout = QVBoxLayout(self.detail_panel)
+        panel_layout.setContentsMargins(0, 0, 0, 0)
         self.pages = QStackedWidget()
-        root.addWidget(self.pages)
-        overview = QWidget()
-        layout = self._layout(overview)
-        toolbar = QHBoxLayout()
-        self.view_combo = ThemedComboBox()
-        self.view_combo.addItems(["Lists", "Bars"])
-        self.view_combo.setToolTip("Lists: Ctrl+1 · Bars: Ctrl+2")
-        toolbar.addWidget(self.view_combo)
-        self.filters = QStackedWidget()
-        toolbar.addWidget(self.filters, 1)
-        self._build_filters()
-        toolbar.addWidget(self._button("Clear", self.clear_filters, "Clear filters"))
-        toolbar.addWidget(self._button("Refresh", self.refresh, "Refresh · F5"))
-        self.open_button = self._button(
-            "Open", self.open_selected_list, "Open selected list · Enter"
-        )
-        toolbar.addWidget(self.open_button)
-        layout.addLayout(toolbar)
-        self.tables = QStackedWidget()
-        self.lists_model = SilverBarListsHistoryModel(self)
-        self.bars_model = SilverBarHistoryModel(self)
-        self.lists_table = self._table(
-            self.lists_model,
-            "No lists match your search.",
-            {0: 145, 2: 70, 3: 50, 4: 100, 5: 100, 6: 105, 7: 105},
-            stretch=1,
-        )
-        self.bars_table = self._table(
-            self.bars_model,
-            "No bars match your search.",
-            {0: 55, 2: 95, 3: 85, 4: 95, 5: 125, 6: 145, 7: 110},
-            stretch=1,
-        )
-        for table in (self.lists_table, self.bars_table):
-            self.tables.addWidget(table)
-            table.selectionModel().selectionChanged.connect(self._update_actions)
-            table.doubleClicked.connect(self.open_selected_list)
-        layout.addWidget(self.tables, 1)
-        footer = QHBoxLayout()
-        self.status_label = QLabel()
-        self.status_label.setWordWrap(True)
-        footer.addWidget(self.status_label, 1)
-        self.load_more_button = self._button(
-            "Load more", self.load_more, "Down on the last row also loads more"
-        )
-        footer.addWidget(self.load_more_button)
-        layout.addLayout(footer)
-        self.pages.addWidget(overview)
+        panel_layout.addWidget(self.pages)
+        body.addWidget(self.detail_panel, 1)
+        root.addLayout(body, 1)
+        self.pages.addWidget(self._build_placeholder())
         self._build_details()
+        self.pages.currentChanged.connect(self._arrange_panels)
         self.view_combo.currentIndexChanged.connect(self._switch_view)
         for sequence, callback in (
             ("Ctrl+1", lambda: self._select_view(0)),
@@ -228,44 +223,92 @@ class SilverBarHistoryDialog(QDialog):
             action.setAutoRepeat(False)
             action.triggered.connect(lambda _=False, cb=callback: self._shortcut(cb))
             self.addAction(action)
+        self._arrange_panels()
         self._update_actions()
+
+    def _build_header(self):
+        header = QFrame(self)
+        header.setObjectName("ScreenHeaderBar")
+        row = QHBoxLayout(header)
+        row.setContentsMargins(16, 10, 16, 10)
+        row.setSpacing(14)
+        row.addWidget(label("History", "ScreenTitle"))
+        self.view_combo = OptionGroup("segmented")
+        self.view_combo.addItem("Lists", key_hint="Ctrl+1")
+        self.view_combo.addItem("Bars", key_hint="Ctrl+2")
+        self.view_combo.setAccessibleName("History view")
+        self.view_combo.setToolTip("Lists: Ctrl+1 · Bars: Ctrl+2")
+        row.addWidget(self.view_combo)
+        row.addStretch(1)
+        self.refresh_button = self._button("Refresh", self.refresh, "Refresh", "F5")
+        row.addWidget(self.refresh_button)
+        self.close_button = self._button(
+            "Back to list", self._close_history, "Close history", "Esc"
+        )
+        row.addWidget(self.close_button)
+        return header
+
+    def _build_filter_bar(self):
+        bar = QWidget(self)
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(16, 12, 16, 0)
+        row.setSpacing(10)
+        self.filters = QStackedWidget()
+        row.addWidget(self.filters, 1)
+        self._build_filters()
+        self.clear_button = self._button("Clear filters", self.clear_filters)
+        self.clear_button.setObjectName("LinkButton")
+        row.addWidget(self.clear_button)
+        return bar
 
     def _build_filters(self):
         lists = QWidget()
-        row = QHBoxLayout(lists)
-        row.setContentsMargins(0, 0, 0, 0)
+        row = self._filter_row(lists)
         self.list_search_edit = QLineEdit()
         self.list_search_edit.setPlaceholderText("Search list number or note · Ctrl+F")
         self.list_search_edit.setAccessibleName("Search saved lists")
-        row.addWidget(self.list_search_edit, 1)
-        self.list_state_combo = ThemedComboBox()
+        self.list_search_edit.setMinimumWidth(300)
+        self.list_search_edit.setMaximumWidth(460)
+        row.addWidget(self.list_search_edit, 2)
+        self.list_state_combo = OptionGroup("chips")
         self.list_state_combo.addItems(["All", "Active", "Issued"])
         self.list_state_combo.setAccessibleName("List state")
         row.addWidget(self.list_state_combo)
+        row.addStretch(1)
         self.filters.addWidget(lists)
         bars = QWidget()
-        row = QHBoxLayout(bars)
-        row.setContentsMargins(0, 0, 0, 0)
+        rows = QVBoxLayout(bars)
+        rows.setContentsMargins(0, 0, 0, 0)
+        rows.setSpacing(8)
+        row = QHBoxLayout()
+        row.setSpacing(10)
+        self._status_rows = (row, QHBoxLayout())
+        rows.addLayout(row)
+        rows.addLayout(self._status_rows[1])
+        self._status_rows[1].addStretch(1)
         self.voucher_edit = QLineEdit()
         self.voucher_edit.setPlaceholderText("Voucher or note · Ctrl+F")
         self.voucher_edit.setAccessibleName("Search bar voucher or note")
-        row.addWidget(self.voucher_edit, 1)
+        self.voucher_edit.setMinimumWidth(200)
+        self.voucher_edit.setMaximumWidth(360)
+        row.addWidget(self.voucher_edit, 2)
         self.weight_edit = QLineEdit()
         self.weight_edit.setPlaceholderText("Weight (g)")
         self.weight_edit.setAccessibleName("Filter bar weight in grams")
         self.weight_edit.setMaximumWidth(110)
         row.addWidget(self.weight_edit)
-        self.status_combo = ThemedComboBox()
-        for label, value in (
+        self.status_combo = OptionGroup("chips")
+        for text, value in (
             ("All bars", "All Statuses"),
             ("Available", "In Stock"),
             ("In active list", "Assigned"),
             ("Issued", "Issued"),
             ("Sold", "Sold"),
         ):
-            self.status_combo.addItem(label, value)
+            self.status_combo.addItem(text, value)
         self.status_combo.setAccessibleName("Bar status")
         row.addWidget(self.status_combo)
+        row.addStretch(1)
         self.filters.addWidget(bars)
         for edit in (self.list_search_edit, self.voucher_edit, self.weight_edit):
             edit.textChanged.connect(self._schedule_search)
@@ -273,58 +316,186 @@ class SilverBarHistoryDialog(QDialog):
         self.list_state_combo.currentIndexChanged.connect(self._schedule_search)
         self.status_combo.currentIndexChanged.connect(self._schedule_search)
 
+    @staticmethod
+    def _filter_row(widget):
+        row = QHBoxLayout(widget)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(10)
+        return row
+
+    def _build_results(self):
+        results = card("Results")
+        self.results_card = results
+        layout = self._layout(results)
+        layout.setSpacing(0)
+        self.tables = QStackedWidget()
+        self.lists_model = SilverBarListsHistoryModel(self)
+        self.bars_model = SilverBarHistoryModel(self)
+        self.lists_table = self._table(
+            self.lists_model,
+            "No lists match your search.",
+            {0: 132, 2: 96, 3: 48, 4: 82, 5: 82, 6: 92, 7: 92},
+            stretch=1,
+        )
+        header = self.lists_table.horizontalHeader()
+        header.setResizeContentsPrecision(50)
+        for column in (0, 6, 7):
+            header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
+        self.lists_table.setItemDelegateForColumn(
+            2, StatusPillDelegate(_PILL_STATES, self.lists_table)
+        )
+        self.bars_table = self._table(
+            self.bars_model,
+            "No bars match your search.",
+            {0: 60, 2: 92, 3: 80, 4: 88, 5: 130, 6: 132, 7: 96},
+            stretch=1,
+        )
+        self.bars_table.setItemDelegateForColumn(
+            5, StatusPillDelegate(_PILL_STATES, self.bars_table)
+        )
+        for table in (self.lists_table, self.bars_table):
+            self.tables.addWidget(table)
+            table.selectionModel().selectionChanged.connect(self._update_actions)
+            table.doubleClicked.connect(self.open_selected_list)
+        layout.addWidget(self.tables, 1)
+        footer = QHBoxLayout()
+        footer.setContentsMargins(14, 6, 10, 8)
+        footer.setSpacing(8)
+        self.status_label = label("", "Muted")
+        self.status_label.setWordWrap(True)
+        footer.addWidget(self.status_label, 1)
+        self.load_more_button = self._button(
+            "Load more", self.load_more, "Down on the last row also loads more"
+        )
+        footer.addWidget(self.load_more_button)
+        self.open_button = self._button(
+            "Open", self.open_selected_list, "Open selected list", "Enter"
+        )
+        footer.addWidget(self.open_button)
+        layout.addLayout(footer)
+        return results
+
+    def _build_placeholder(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.addStretch(1)
+        title = label("Pick a list to see it here", "EmptyStateTitle")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title)
+        body = label(
+            "Press Enter on an issued list to see its bars, reprint it, or "
+            "reopen it. Active lists open in the workspace for editing.",
+            "EmptyStateBody",
+        )
+        body.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        body.setWordWrap(True)
+        layout.addWidget(body)
+        layout.addStretch(1)
+        return page
+
     def _build_details(self):
         detail = QWidget()
         layout = self._layout(detail)
-        toolbar = QHBoxLayout()
-        toolbar.addWidget(
-            self._button(
-                "Back", self.back_to_results, "Back to results · Esc / Alt+Left"
-            )
+        layout.setSpacing(0)
+        head = QVBoxLayout()
+        head.setContentsMargins(16, 12, 12, 12)
+        head.setSpacing(4)
+        title_row = QHBoxLayout()
+        title_row.setSpacing(10)
+        self.detail_title = label("", "CardTitle")
+        title_row.addWidget(self.detail_title)
+        self.detail_pill = StatusPill(detail)
+        title_row.addWidget(self.detail_pill)
+        title_row.addStretch(1)
+        self.back_button = self._button(
+            "Close", self.back_to_results, "Back to results · Esc / Alt+Left", "Esc"
         )
-        self.detail_title = QLabel()
-        toolbar.addWidget(self.detail_title)
-        self.detail_note = QLabel()
+        self.back_button.setObjectName("LinkButton")
+        title_row.addWidget(self.back_button)
+        head.addLayout(title_row)
+        self.detail_note = label()
         self.detail_note.setSizePolicy(
             QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
         )
-        toolbar.addWidget(self.detail_note, 1)
-        self.reprint_button = self._button(
-            "Reprint", self.print_list, "Reprint · Ctrl+P"
+        head.addWidget(self.detail_note)
+        self.detail_dates = label("", "Muted")
+        head.addWidget(self.detail_dates)
+        layout.addLayout(head)
+        self.list_totals_label = TotalsStrip(
+            ("Bars", "Weight", "Fine"), accent_last=False
         )
+        self.list_totals_label.setProperty("flat", True)
+        layout.addWidget(self.list_totals_label)
+        self.list_bars_model = SilverBarEntryModel(self)
+        self.list_bars_table = self._table(
+            self.list_bars_model,
+            "Loading list…",
+            {0: 88, 1: 76, 2: 80, 4: 52},
+            stretch=3,
+        )
+        layout.addWidget(self.list_bars_table, 1)
+        status_row = QHBoxLayout()
+        status_row.setContentsMargins(16, 6, 12, 0)
+        self.detail_status = label("", "Muted")
+        self.detail_status.setWordWrap(True)
+        status_row.addWidget(self.detail_status, 1)
+        self.detail_more_button = self._button("Load more", self.load_more_details)
+        status_row.addWidget(self.detail_more_button)
+        layout.addLayout(status_row)
+        actions = QHBoxLayout()
+        actions.setContentsMargins(16, 8, 12, 12)
+        actions.setSpacing(8)
+        self.reprint_button = self._button(
+            "Reprint", self.print_list, "Reprint", "Ctrl+P"
+        )
+        self.reprint_button.setObjectName("HistoryPrimary")
         self.preview_button = self._button(
             "Preview",
             lambda: self.print_list(preview=True),
             "Preview / PDF / printer settings · Ctrl+Shift+P",
         )
         self.reactivate_button = self._button(
-            "Reopen", self.reactivate_list, "Reopen list for editing · Ctrl+R"
+            "Reopen for editing", self.reactivate_list, "Reopen list", "Ctrl+R"
         )
-        for button in (
-            self.reprint_button,
-            self.preview_button,
-            self.reactivate_button,
-        ):
-            toolbar.addWidget(button)
-        layout.addLayout(toolbar)
-        self.list_bars_model = SilverBarEntryModel(self)
-        self.list_bars_table = self._table(
-            self.list_bars_model,
-            "Loading list…",
-            {0: 140, 1: 110, 2: 140, 4: 85},
-            stretch=3,
-        )
-        layout.addWidget(self.list_bars_table, 1)
-        footer = QHBoxLayout()
-        self.detail_status = QLabel()
-        self.detail_status.setWordWrap(True)
-        footer.addWidget(self.detail_status, 1)
-        self.detail_more_button = self._button("Load more", self.load_more_details)
-        footer.addWidget(self.detail_more_button)
-        self.list_totals_label = QLabel()
-        footer.addWidget(self.list_totals_label)
-        layout.addLayout(footer)
+        actions.addWidget(self.reprint_button)
+        actions.addWidget(self.preview_button)
+        actions.addStretch(1)
+        actions.addWidget(self.reactivate_button)
+        layout.addLayout(actions)
         self.pages.addWidget(detail)
+
+    def _arrange_panels(self, *_):
+        wide = self.width() >= COMPACT_HISTORY_WIDTH
+        # Narrow windows give the bar status chips a row of their own.
+        target, source = self._status_rows if wide else self._status_rows[::-1]
+        if target.indexOf(self.status_combo) < 0:
+            source.removeWidget(self.status_combo)
+            target.insertWidget(2 if wide else 0, self.status_combo)
+        for page in range(self.filters.count()):
+            shown = page == self.filters.currentIndex()
+            policy = (
+                QSizePolicy.Policy.Preferred if shown else QSizePolicy.Policy.Ignored
+            )
+            self.filters.widget(page).setSizePolicy(policy, policy)
+        self.filters.updateGeometry()
+        showing_detail = self.pages.currentIndex() == 1
+        self.detail_panel.setVisible(
+            showing_detail or (wide and self.view_combo.currentIndex() == 0)
+        )
+        self.results_card.setVisible(wide or not showing_detail)
+        # Beside the panel, weight and created date give way to the note.
+        crowded = self.detail_panel.isVisibleTo(self) and self.width() < 1400
+        for column in (4, 6):
+            self.lists_table.setColumnHidden(column, crowded)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._arrange_panels()
+
+    def _close_history(self):
+        if not self._busy:
+            self.done(QDialog.DialogCode.Rejected)
 
     @staticmethod
     def _layout(widget):
@@ -333,8 +504,8 @@ class SilverBarHistoryDialog(QDialog):
         layout.setSpacing(6)
         return layout
 
-    def _button(self, text, callback, tooltip=""):
-        button = QPushButton(text, self)
+    def _button(self, text, callback, tooltip="", key_hint=""):
+        button = KeyHintButton(text, key_hint, self)
         button.setObjectName("HistoryButton")
         button.setAutoDefault(False)
         button.setToolTip(tooltip)
@@ -343,6 +514,8 @@ class SilverBarHistoryDialog(QDialog):
 
     def _table(self, model, empty, widths, *, stretch):
         table = QTableView(self)
+        table.setObjectName("ScreenTable")
+        table.setFrameShape(QFrame.Shape.NoFrame)
         table.setModel(model)
         table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -360,8 +533,8 @@ class SilverBarHistoryDialog(QDialog):
         table.installEventFilter(self)
         polish_dense_table(
             table,
-            row_height=28,
-            header_height=30,
+            row_height=32,
+            header_height=32,
             show_grid=False,
             hide_vertical_header=True,
         )
@@ -390,6 +563,7 @@ class SilverBarHistoryDialog(QDialog):
         self.back_to_results()
         self.filters.setCurrentIndex(index)
         self.tables.setCurrentIndex(index)
+        self._arrange_panels()
         self.refresh()
         self.focus_search()
 
@@ -479,7 +653,7 @@ class SilverBarHistoryDialog(QDialog):
         if index == self.view_combo.currentIndex():
             noun = "lists" if index == 0 else "bars"
             self._message(
-                f"{state.loaded} of {state.total} {noun} · Enter Open · Ctrl+P Reprint · Ctrl+F Search"
+                f"{state.loaded} of {state.total} {noun} · Enter open · Ctrl+P reprint"
                 + (" · Narrow filters to see more" if state.limit_reached else "")
             )
         self._update_actions()
@@ -537,7 +711,7 @@ class SilverBarHistoryDialog(QDialog):
         loaded = self.snapshot is not None and not self._busy
         self.reactivate_button.setEnabled(loaded)
         issued = bool(self.snapshot and self.snapshot.issued)
-        self.reactivate_button.setText("Reopen" if issued else "Edit list")
+        self.reactivate_button.setText("Reopen for editing" if issued else "Edit list")
         self.reprint_button.setEnabled(
             loaded and issued and bool(self.snapshot.bars if self.snapshot else ())
         )
@@ -560,9 +734,11 @@ class SilverBarHistoryDialog(QDialog):
         self._detail_intent = intent
         self.snapshot = None
         self.list_bars_model.clear_rows()
-        self.detail_title.setText("Loading list…")
+        self.detail_title.setText("Opening list…")
+        self.detail_pill.hide()
         self.detail_note.clear()
-        self.list_totals_label.clear()
+        self.detail_dates.clear()
+        self.list_totals_label.set_values(("", "", ""), empty=True)
         self.pages.setCurrentIndex(1)
         self._message("Loading all list contents…")
         self._update_actions()
@@ -574,18 +750,15 @@ class SilverBarHistoryDialog(QDialog):
             self._choose_for_editing(snapshot.list_id)
             return
         self.snapshot = snapshot
-        self.detail_title.setText(
-            str(snapshot.details["list_identifier"])
-            + (" · Issued" if snapshot.issued else " · Active")
-        )
-        note = str(snapshot.details.get("list_note") or "No note")
-        self.detail_note.setText(note)
-        self.detail_note.setToolTip(note)
+        self._show_snapshot_header(snapshot)
         self.list_bars_model.set_rows(
             list(snapshot.bars[:1500]), total_count=len(snapshot.bars)
         )
-        self.list_totals_label.setText(
-            f"{len(snapshot.bars)} bars   Weight {fixed_decimal(snapshot.weight, 2)} g   Fine {fixed_decimal(snapshot.fine_weight, 2)} g"
+        weight = f"{fixed_decimal(snapshot.weight, 2)} g"
+        fine = f"{fixed_decimal(snapshot.fine_weight, 2)} g"
+        self.list_totals_label.set_values(
+            (str(len(snapshot.bars)), weight, fine),
+            summary=f"{len(snapshot.bars)} bars · Weight {weight} · Fine {fine}",
         )
         self._message(
             "Read only · Ctrl+P Reprint · Ctrl+R Reopen"
@@ -598,6 +771,24 @@ class SilverBarHistoryDialog(QDialog):
             self.list_bars_table.selectRow(0)
         if self._detail_intent in ("print", "preview"):
             self.print_list(preview=self._detail_intent == "preview")
+
+    def _show_snapshot_header(self, snapshot: BarListSnapshot):
+        details = snapshot.details
+        self.detail_title.setText(str(details["list_identifier"]))
+        self.detail_pill.set_state(
+            "issued" if snapshot.issued else "active",
+            "Issued" if snapshot.issued else "Active",
+        )
+        self.detail_pill.show()
+        note = str(details.get("list_note") or "No note")
+        self.detail_note.setText(note)
+        self.detail_note.setToolTip(note)
+        dates = []
+        if created := format_display_date(details.get("creation_date")):
+            dates.append(f"Created {created}")
+        if issued := format_display_date(details.get("issued_date")):
+            dates.append(f"Issued {issued}")
+        self.detail_dates.setText(" · ".join(dates))
 
     def _details_error(self, _, error):
         self._message(

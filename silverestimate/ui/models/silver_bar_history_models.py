@@ -13,7 +13,20 @@ from .silver_bar_table_models import (
 
 
 class SilverBarHistoryModel(HistorySilverBarsTableModel):
-    HEADERS = HistorySilverBarsTableModel.HEADERS[:-1]
+    HEADERS = [
+        "Bar #",
+        "Voucher / note",
+        "Weight (g)",
+        "Purity %",
+        "Fine (g)",
+        "Status",
+        "List",
+        "Added",
+    ]
+
+    def background_brush(self, row: int):
+        # The status column draws a coloured label, so rows stay plain.
+        return None
 
     def display_value(self, row: int, column: int) -> str:
         payload = self.row_payload(row)

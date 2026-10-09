@@ -75,6 +75,12 @@ class SilverBarLoadController:
         self.advance_on_page = False
         self.dismissed = dismiss
         self.host.suggestions_panel.hide()
+        self.host.set_available_count("")
+        if dismiss:
+            self.host.set_available_message(
+                "Available bars hidden",
+                "Press Ctrl+F or click the weight box to show them again.",
+            )
 
     def schedule_search(self, text: str, *, announce: bool = True) -> None:
         self.cancel_search()
@@ -89,6 +95,11 @@ class SilverBarLoadController:
             return
         self.dismissed = False
         self.announce_results = announce
+        self.host.set_available_message(
+            f"Finding bars that start with {self.prefix}…"
+            if self.prefix
+            else "Loading available bars…"
+        )
         if announce:
             self.host.set_status(
                 "Finding matching bars…" if self.prefix else "Loading available bars…"
@@ -152,10 +163,29 @@ class SilverBarLoadController:
         self.host.position_suggestions()
         self.host.suggestions_panel.setVisible(count > 0)
         noun = "matching" if request.prefix else "available"
+        shown = f"{count}{'+' if page.has_more else ''}"
+        if request.prefix:
+            counted = f"{shown} {'match' if count == 1 else 'matches'}"
+        else:
+            counted = f"{shown} available"
+        self.host.set_available_count(counted if count else "")
         self.host.suggestions_hint.setText(
-            f"  {count}{'+' if page.has_more else ''} {noun} bars · ↑ ↓ Choose · Enter Add · Esc Dismiss"
-            + ("     ↓ at end: more matches" if page.has_more else "")
+            "↑ ↓ choose    Enter add to list    Esc clear"
+            + ("    ↓ at the end loads more" if page.has_more else "")
         )
+        if not count and request.prefix:
+            self.host.set_available_message(
+                f"No available bar starts with {request.prefix}",
+                "Bars already in a list or issued are not shown here. "
+                "Look them up in History if you need them.",
+                actions=True,
+            )
+        elif not count:
+            self.host.set_available_message(
+                "No available bars",
+                "Every bar is in a list or has been issued. New bars appear here "
+                "when estimates with silver bars are saved.",
+            )
         if count:
             self.host.suggestions_table.selectRow(min(target, count - 1))
             self.host.suggestions_table.scrollTo(
@@ -163,7 +193,8 @@ class SilverBarLoadController:
             )
             if self.announce_results:
                 self.host.set_status(
-                    f"{count}{'+' if page.has_more else ''} {noun} bars · Enter adds the highlighted bar."
+                    f"{shown} {noun} {'bar' if count == 1 else 'bars'} · "
+                    "Enter adds the highlighted bar."
                 )
         elif self.announce_results or not self.host.status_label.property("error"):
             self.host.set_status(
@@ -182,6 +213,9 @@ class SilverBarLoadController:
             self.pending_add = False
             self.ready_prefix = None
             self.host.suggestions_panel.hide()
+            self.host.set_available_message(
+                "Could not load available bars", f"{error}. Ctrl+F retries."
+            )
             self.host.set_status(
                 f"Could not find bars: {error}. Ctrl+F retries.", error=True
             )
@@ -216,7 +250,7 @@ class SilverBarLoadController:
             self.host.set_status(
                 "List opened. Changes save automatically."
                 if not snapshot.issued
-                else "Issued list · Read only. Reprint or reactivate from history."
+                else "Issued list · Read only. Ctrl+R reopens it for editing."
             )
 
     def _list_failed(self, generation: int, error: Any) -> None:

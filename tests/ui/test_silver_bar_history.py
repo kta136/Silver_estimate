@@ -247,7 +247,8 @@ def test_unified_history_screenshots(history, qtbot, qt_application_state):
     apply_light_application_theme(QApplication.instance())
     dialog.resize(1120, 760)
     QApplication.processEvents()
-    assert dialog.lists_table.height() > 640
+    # Header and filter rows sit above the table in the redesigned window.
+    assert dialog.lists_table.height() > 560
     assert dialog.grab().save(str(Path(".pytest_cache/silver-bar-history-lists.png")))
     open_issued(qtbot, dialog, issued)
     assert dialog.grab().save(str(Path(".pytest_cache/silver-bar-history-issued.png")))
@@ -258,4 +259,5 @@ def test_unified_history_screenshots(history, qtbot, qt_application_state):
     dialog.resize(760, 520)
     QApplication.processEvents()
     assert dialog.height() == 520
-    assert dialog.bars_table.height() > 400
+    # Narrow windows move the status chips to their own row.
+    assert dialog.bars_table.height() > 280

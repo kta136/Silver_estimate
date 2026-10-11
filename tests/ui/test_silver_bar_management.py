@@ -358,8 +358,7 @@ def test_failure_can_retry_with_same_input_and_no_mouse(workspace, qtbot, monkey
     assert dialog.snapshot.bars[0]["weight"] == 40
 
 
-def test_keyboard_workspace_layout(workspace, qtbot, qt_application_state):
-    from pathlib import Path
+def test_keyboard_workspace_layout(workspace, qtbot, qt_application_state, tmp_path):
 
     from PySide6.QtWidgets import QApplication
 
@@ -395,13 +394,13 @@ def test_keyboard_workspace_layout(workspace, qtbot, qt_application_state):
         assert dialog.list_bars_table.horizontalScrollBar().maximum() == 0
         assert dialog.suggestions_table.horizontalScrollBar().maximum() == 0
         if width == 1080:
-            image_path = Path(".pytest_cache/silver-bar-keyboard-suggestions.png")
+            image_path = tmp_path / "silver-bar-keyboard-suggestions.png"
             assert dialog.grab().save(str(image_path))
     dialog.resize(1080, 760)
     dialog.weight_search_edit.clear()
     dialog.set_status("Enter Add · Tab List · Delete Remove · F1 Help")
     QApplication.processEvents()
-    assert dialog.grab().save(str(Path(".pytest_cache/silver-bar-keyboard.png")))
+    assert dialog.grab().save(str(tmp_path / "silver-bar-keyboard.png"))
     wait_for_available(qtbot, dialog, [1, 2, 3, 4])
     assert dialog.suggestions_panel.isVisible()
-    assert dialog.grab().save(str(Path(".pytest_cache/silver-bar-default-bars.png")))
+    assert dialog.grab().save(str(tmp_path / "silver-bar-default-bars.png"))

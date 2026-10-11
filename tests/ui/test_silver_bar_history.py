@@ -1,7 +1,5 @@
 """Unified list/bar browsing, keyboard actions, full totals, and lifecycle."""
 
-from pathlib import Path
-
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QDialog
@@ -240,7 +238,7 @@ def test_view_shortcut_during_print_does_not_desynchronize_filters(history, qtbo
     dialog._busy = False
 
 
-def test_unified_history_screenshots(history, qtbot, qt_application_state):
+def test_unified_history_screenshots(history, qtbot, qt_application_state, tmp_path):
     from silverestimate.ui.application_theme import apply_light_application_theme
 
     dialog, _, _, issued = history
@@ -249,13 +247,13 @@ def test_unified_history_screenshots(history, qtbot, qt_application_state):
     QApplication.processEvents()
     # Header and filter rows sit above the table in the redesigned window.
     assert dialog.lists_table.height() > 560
-    assert dialog.grab().save(str(Path(".pytest_cache/silver-bar-history-lists.png")))
+    assert dialog.grab().save(str(tmp_path / "silver-bar-history-lists.png"))
     open_issued(qtbot, dialog, issued)
-    assert dialog.grab().save(str(Path(".pytest_cache/silver-bar-history-issued.png")))
+    assert dialog.grab().save(str(tmp_path / "silver-bar-history-issued.png"))
     dialog.back_to_results()
     dialog.view_combo.setCurrentIndex(1)
     qtbot.waitUntil(lambda: dialog.bars_model.rowCount() == 7)
-    assert dialog.grab().save(str(Path(".pytest_cache/silver-bar-history-bars.png")))
+    assert dialog.grab().save(str(tmp_path / "silver-bar-history-bars.png"))
     dialog.resize(760, 520)
     QApplication.processEvents()
     assert dialog.height() == 520

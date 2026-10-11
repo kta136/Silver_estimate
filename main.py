@@ -179,6 +179,7 @@ def _run_artifact_smoke() -> int:
     from pathlib import Path
 
     from PySide6.QtGui import QIcon, QImageReader
+    from PySide6.QtNetwork import QSslSocket
 
     from silverestimate.infrastructure.app_constants import APP_VERSION
     from silverestimate.infrastructure.paths import (
@@ -245,14 +246,17 @@ def _run_artifact_smoke() -> int:
                 "credential_kinds": list(credential_store.SUPPORTED_CREDENTIAL_KINDS),
                 "crypto_provider": identity.crypto_provider,
                 "icon_available": icon_available,
-                "keyring_available": credential_status.available,
-                "keyring_backend": credential_status.backend_name,
+                "credential_store_available": credential_status.available,
+                "credential_store_backend": credential_status.backend_name,
                 "password_hashing": password_hashing,
                 "pdf_bytes": pdf_bytes,
                 "qt_platform": app.platformName(),
                 "runtime_root": str(get_runtime_root()),
                 "sqlite_version": identity.sqlite_version,
                 "svg_image_format": "svg" in image_formats,
+                "tls_backend": (
+                    QSslSocket.activeBackend() if QSslSocket.supportsSsl() else ""
+                ),
                 "ui_fonts": ui_fonts,
             },
             sort_keys=True,

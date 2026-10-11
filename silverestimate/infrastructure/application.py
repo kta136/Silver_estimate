@@ -19,7 +19,8 @@ from PySide6.QtWidgets import QApplication, QMessageBox, QWidget
 from silverestimate.infrastructure import qt_bootstrap
 from silverestimate.infrastructure.app_constants import APP_TITLE, DB_PATH
 from silverestimate.infrastructure.logger import (
-    LogCleanupScheduler,
+    backup_days_for,
+    cleanup_old_logs,
     get_log_config,
     qt_message_handler,
     setup_logging,
@@ -48,7 +49,6 @@ class ApplicationContext:
 
     app: Optional[QApplication] = None
     logger: Optional[logging.Logger] = None
-    cleanup_scheduler: Optional[LogCleanupScheduler] = None
     db_manager: Optional["DatabaseManager"] = None
     main_window: Optional["QMainWindow"] = None
     dialog_parent: Optional[QWidget] = None
@@ -59,12 +59,6 @@ class ApplicationContext:
 
     def shutdown(self) -> None:
         """Release resources created during startup."""
-        if self.cleanup_scheduler:
-            try:
-                self.cleanup_scheduler.stop()
-            except Exception as exc:
-                if self.logger:
-                    self.logger.debug("Failed to stop cleanup scheduler: %s", exc)
         main_window_db = getattr(self.main_window, "db", None)
         if self.main_window and main_window_db:
             try:
@@ -292,23 +286,12 @@ class ApplicationBuilder:
         logger.debug("Logging configuration: %s", log_config)
 
         if log_config.get("auto_cleanup"):
+            # The handlers prune at each midnight rollover; this also clears
+            # files they do not own, such as logs from before daily rotation.
             try:
-                cleanup_scheduler = LogCleanupScheduler(
-                    log_dir=log_config["log_dir"],
-                    cleanup_days=log_config["cleanup_days"],
-                )
-                cleanup_scheduler.start()
-                logger.info(
-                    "Log cleanup scheduler initialized with %s days retention",
-                    log_config["cleanup_days"],
-                )
-                context.cleanup_scheduler = cleanup_scheduler
+                cleanup_old_logs(log_config["log_dir"], log_config["cleanup_days"])
             except Exception as exc:
-                logger.error(
-                    "Failed to initialize log cleanup scheduler: %s",
-                    exc,
-                    exc_info=True,
-                )
+                logger.error("Startup log cleanup failed: %s", exc, exc_info=True)
 
     def _setup_configured_logging(self, log_config: dict[str, Any]) -> logging.Logger:
         return self._logging_setup(
@@ -318,6 +301,7 @@ class ApplicationBuilder:
             enable_info=log_config["enable_info"],
             enable_error=log_config["enable_error"],
             enable_debug=log_config["enable_debug"],
+            backup_days=backup_days_for(log_config),
         )
 
     def _configure_qt(self, context: ApplicationContext) -> None:

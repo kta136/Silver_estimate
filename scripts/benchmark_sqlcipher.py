@@ -216,7 +216,7 @@ def run_benchmark(
             result["database_bytes"] = path.stat().st_size
             assert db.conn is not None
             result["counts"] = {
-                table: db.conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]  # nosec B608 -- fixed table names
+                table: db.conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
                 for table in ("estimates", "estimate_items", "silver_bars", "items")
             }
             result["queries"] = {

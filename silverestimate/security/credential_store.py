@@ -1,4 +1,4 @@
-"""Secure OS-backed storage for password hashes and device-binding material."""
+"""Windows Credential Manager storage for password hashes and device binding."""
 
 from __future__ import annotations
 
@@ -6,43 +6,28 @@ import base64
 import logging
 import secrets
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Optional
 
-keyring: Any | None
-KeyringError: type[Exception]
-PasswordDeleteError: type[Exception]
+from silverestimate.security.windows_vault import (
+    LOCAL_MACHINE,
+    ROAMING,
+    Vault,
+    VaultEntry,
+    load_vault,
+)
 
-try:
-    import keyring as _keyring
-    from keyring.errors import (
-        KeyringError as _ImportedKeyringError,
-    )
-    from keyring.errors import (
-        PasswordDeleteError as _ImportedPasswordDeleteError,
-    )
-except Exception:  # pragma: no cover - keyring missing at runtime
-    keyring = None
-
-    class _FallbackKeyringError(Exception):
-        """Fallback KeyringError when keyring package is unavailable."""
-
-    class _FallbackPasswordDeleteError(_FallbackKeyringError):
-        """Fallback PasswordDeleteError when keyring package is unavailable."""
-
-    KeyringError = _FallbackKeyringError
-    PasswordDeleteError = _FallbackPasswordDeleteError
-else:
-    keyring = _keyring
-    KeyringError = _ImportedKeyringError
-    PasswordDeleteError = _ImportedPasswordDeleteError
-
+vault: Vault | None = load_vault()
+# The vault and service name whose entries this process has already checked.
+_checked: tuple[Vault, str] | None = None
 
 SERVICE_NAME = "SilverEstimateApp"
+BACKEND_NAME = "Windows Credential Manager"
 DEVICE_BINDING_BYTES = 32
 DEVICE_BINDING_VERSION = "v1"
-_WINDOWS_KEYRING_PREFIX = "keyring.backends.windows."
-_backend_status_cache: Optional["CredentialBackendStatus"] = None
-_backend_status_cache_keyring_id: Optional[int] = None
+
+_TIDY_ATTEMPTS = 6
+# Recorded in the vault once its entries are known to be stored one way only.
+_LAYOUT = "2"
 
 
 class CredentialStoreError(RuntimeError):
@@ -51,7 +36,7 @@ class CredentialStoreError(RuntimeError):
 
 @dataclass(frozen=True)
 class CredentialBackendStatus:
-    """Runtime status of the configured keyring backend."""
+    """Runtime status of the credential vault."""
 
     available: bool
     backend_name: str
@@ -80,57 +65,22 @@ _ENTRIES = {
 
 
 def get_backend_status() -> CredentialBackendStatus:
-    """Report whether a secure keyring backend is usable."""
-    global _backend_status_cache, _backend_status_cache_keyring_id
-    current_keyring_id = id(keyring)
-    if (
-        _backend_status_cache is not None
-        and _backend_status_cache_keyring_id == current_keyring_id
-    ):
-        return _backend_status_cache
-
-    if keyring is None:
-        status = CredentialBackendStatus(
+    """Report whether Windows Credential Manager is usable."""
+    if vault is None:
+        return CredentialBackendStatus(
             available=False,
             backend_name="missing",
-            reason="Python keyring package is not installed.",
+            reason="Windows Credential Manager is not available on this system.",
         )
-        _backend_status_cache = status
-        _backend_status_cache_keyring_id = current_keyring_id
-        return status
     try:
-        backend = keyring.get_keyring()
-    except Exception as exc:  # pragma: no cover - backend init differs by platform
-        status = CredentialBackendStatus(
+        vault.read(SERVICE_NAME)
+    except OSError as exc:
+        return CredentialBackendStatus(
             available=False,
-            backend_name="unknown",
-            reason=f"Could not initialize keyring backend: {exc}",
+            backend_name=BACKEND_NAME,
+            reason=f"Windows Credential Manager did not respond: {exc}",
         )
-        _backend_status_cache = status
-        _backend_status_cache_keyring_id = current_keyring_id
-        return status
-    backend_type = type(backend)
-    backend_name = f"{backend_type.__module__}.{backend_type.__name__}"
-    normalized = backend_name.lower()
-    if "null" in normalized or "fail" in normalized:
-        status = CredentialBackendStatus(
-            available=False,
-            backend_name=backend_name,
-            reason=(
-                "Keyring backend is not secure (null/fail backend active). "
-                "Install and configure an OS-backed credential vault."
-            ),
-        )
-        _backend_status_cache = status
-        _backend_status_cache_keyring_id = current_keyring_id
-        return status
-    status = CredentialBackendStatus(
-        available=True,
-        backend_name=backend_name,
-    )
-    _backend_status_cache = status
-    _backend_status_cache_keyring_id = current_keyring_id
-    return status
+    return CredentialBackendStatus(available=True, backend_name=BACKEND_NAME)
 
 
 def _get_secure_id(kind: str) -> str:
@@ -140,47 +90,180 @@ def _get_secure_id(kind: str) -> str:
         raise ValueError(f"Unknown credential kind: {kind}") from exc
 
 
-def _ensure_keyring() -> Any:
-    status = get_backend_status()
-    if not status.available:
-        raise CredentialStoreError(
-            f"Secure keyring backend unavailable ({status.backend_name}). {status.reason}"
-        )
-    return keyring
+# Every entry is one local-machine credential named "<entry>@<service>". The
+# keyring package used those names too, so its versions of the app still read
+# them, but it also kept the entry written last under the bare service name and
+# wrote hashes to the roaming store. `_tidy` undoes that.
+def _entry_target(entry: str) -> str:
+    return f"{entry}@{SERVICE_NAME}"
 
 
-def _require_windows_device_backend(kr: Any) -> Any:
-    """Return the Windows vault backend required for non-roaming device secrets."""
-    try:
-        backend = kr.get_keyring()
-    except Exception as exc:
+def _open_vault() -> Vault:
+    """Return the vault with every entry stored once under its own name."""
+    if vault is None:
+        status = get_backend_status()
         raise CredentialStoreError(
-            f"Could not initialize Windows Credential Manager: {exc}"
-        ) from exc
-    backend_type = type(backend)
-    backend_name = f"{backend_type.__module__}.{backend_type.__name__}"
-    if not backend_name.lower().startswith(_WINDOWS_KEYRING_PREFIX):
-        raise CredentialStoreError(
-            "Device binding requires the Windows Credential Manager backend; "
-            f"active backend is {backend_name}."
+            f"Secure credential storage unavailable ({status.backend_name}). "
+            f"{status.reason}"
         )
-    return backend
+    global _checked
+    if _checked != (vault, SERVICE_NAME):
+        # Checking every copy takes about a fifth of a second, so it is done
+        # once per installation and recorded.
+        layout = vault.read(_entry_target("layout"))
+        if layout is None or layout.secret != _LAYOUT:
+            _tidy(vault)
+            vault.write(_entry_target("layout"), "layout", _LAYOUT, LOCAL_MACHINE)
+        _checked = (vault, SERVICE_NAME)
+    # An older version of the app that ran since always leaves this name.
+    if vault.read(SERVICE_NAME) is not None:
+        _tidy(vault)
+    return vault
+
+
+def _stored_in(store: Vault, persist: int, targets: list[str]) -> dict[str, VaultEntry]:
+    """Return the copies of ``targets`` held in one of Windows' two stores."""
+    check = _entry_target("layout-check")
+    for _attempt in range(_TIDY_ATTEMPTS):
+        # Any write brings that store's copies into view for every name.
+        store.write(check, "", "", persist)
+        found = {target: store.read(target) for target in targets}
+        seen = store.read(check)
+        # Another program writing to the other store would have switched the view.
+        if seen is not None and seen.persist == persist:
+            return {
+                target: entry
+                for target, entry in found.items()
+                if entry is not None and entry.persist == persist
+            }
+    raise CredentialStoreError(
+        "Windows Credential Manager kept changing while it was being read."
+    )
+
+
+def _all_copies(
+    store: Vault, targets: list[str]
+) -> tuple[dict[str, VaultEntry], dict[str, VaultEntry]]:
+    """Return the local-machine and roaming copies, read twice and found equal."""
+    for _attempt in range(_TIDY_ATTEMPTS):
+        readings = [
+            (
+                _stored_in(store, LOCAL_MACHINE, targets),
+                _stored_in(store, ROAMING, targets),
+            )
+            for _reading in range(2)
+        ]
+        if readings[0] == readings[1]:
+            return readings[0]
+    raise CredentialStoreError(
+        "Windows Credential Manager kept changing while it was being read."
+    )
+
+
+def _drop(store: Vault, target: str, persist: int, user: str, secret: str) -> None:
+    """Remove one store's copy of ``target``; a delete takes the copy written last."""
+    store.write(target, user, secret, persist)
+    store.delete(target)
+
+
+def _tidy(store: Vault) -> None:
+    """Leave one local-machine copy of each entry and nothing under the bare name.
+
+    Windows shows whichever copy of a name sits in the store written to last
+    by any program, so the older layout could return a superseded hash, and a
+    delete could leave a copy behind. Nothing is removed until every current
+    value has been read back from its own local-machine entry, and only copies
+    that were read are replaced or removed.
+    """
+    check = _entry_target("layout-check")
+    targets = [SERVICE_NAME, *(_entry_target(entry) for entry in _ENTRIES.values())]
+    # The check entry needs a copy in both stores to reveal a switched view.
+    store.write(check, "", "", ROAMING)
+    for _attempt in range(_TIDY_ATTEMPTS):
+        local, roaming = _all_copies(store, targets)
+        current = _newest_values(local, roaming)
+        entries_tidy = all(
+            _entry_target(entry) not in roaming
+            and current.get(entry) == _secret(local, entry)
+            for entry in _ENTRIES.values()
+        )
+        if entries_tidy:
+            # A third pass clears the check entry even if another program
+            # wrote between one of these writes and its delete.
+            for persist in (LOCAL_MACHINE, ROAMING, LOCAL_MACHINE):
+                _drop(store, check, persist, "", "")
+            # Last, so an interrupted tidy still finds this name and resumes.
+            if SERVICE_NAME in roaming:
+                _drop(store, SERVICE_NAME, ROAMING, "", "")
+            if SERVICE_NAME in local:
+                _drop(store, SERVICE_NAME, LOCAL_MACHINE, "", "")
+            return
+        for entry in _ENTRIES.values():
+            _keep_one_local_copy(store, entry, current.get(entry), local, roaming)
+    raise CredentialStoreError(
+        "Stored credentials could not be tidied; nothing still needed was removed."
+    )
+
+
+def _secret(copies: dict[str, VaultEntry], entry: str) -> str | None:
+    copy = copies.get(_entry_target(entry))
+    return copy.secret if copy is not None and copy.user_name == entry else None
+
+
+def _newest_values(*stores: dict[str, VaultEntry]) -> dict[str, str]:
+    """Return each entry's most recently written value across every copy."""
+    newest: dict[str, VaultEntry] = {}
+    for copies in stores:
+        for target, copy in copies.items():
+            entry = copy.user_name
+            if entry not in _ENTRIES.values():
+                continue
+            if target not in (SERVICE_NAME, _entry_target(entry)):
+                continue
+            if entry not in newest or copy.last_written > newest[entry].last_written:
+                newest[entry] = copy
+    return {entry: copy.secret for entry, copy in newest.items()}
+
+
+def _keep_one_local_copy(
+    store: Vault,
+    entry: str,
+    secret: str | None,
+    local: dict[str, VaultEntry],
+    roaming: dict[str, VaultEntry],
+) -> None:
+    target = _entry_target(entry)
+    # The current value goes into the local store before anything is removed.
+    # A copy that already holds it is left alone, so only a value known to be
+    # the newest ever gets a fresh write time.
+    if secret is not None and _secret(local, entry) != secret:
+        store.write(target, entry, secret, LOCAL_MACHINE)
+    if target in roaming:
+        if secret is None:
+            _drop(store, target, ROAMING, "", "")
+            return
+        _drop(store, target, ROAMING, entry, secret)
+        store.write(target, entry, secret, LOCAL_MACHINE)
 
 
 def get_password_hash(kind: str) -> Optional[str]:
     """Retrieve a credential value for ``kind`` from the secure store."""
     secure_id = _get_secure_id(kind)
-    kr = _ensure_keyring()
-    if kind == "device_binding":
-        _require_windows_device_backend(kr)
     try:
-        value = kr.get_password(SERVICE_NAME, secure_id)
-    except KeyringError as exc:
+        store = _open_vault()
+        entry = store.read(_entry_target(secure_id))
+        if entry is not None and entry.persist != LOCAL_MACHINE:
+            # A roaming copy is in view, so an older layout left its mark.
+            _tidy(store)
+            entry = store.read(_entry_target(secure_id))
+    except (OSError, UnicodeDecodeError) as exc:
         raise CredentialStoreError(
             f"Failed to read credential '{kind}': {exc}"
         ) from exc
 
-    return str(value) if value else None
+    if entry is None or entry.user_name != secure_id:
+        return None
+    return entry.secret or None
 
 
 def set_password_hash(
@@ -191,22 +274,12 @@ def set_password_hash(
 ) -> None:
     """Persist ``value`` for ``kind`` in the secure store."""
     secure_id = _get_secure_id(kind)
-    kr = _ensure_keyring()
-    backend = None
-    original_persist: Any = None
     try:
-        if kind == "device_binding":
-            backend = _require_windows_device_backend(kr)
-            original_persist = getattr(backend, "persist", None)
-            backend.persist = "local machine"
-        kr.set_password(SERVICE_NAME, secure_id, value)
-    except (KeyringError, AttributeError, TypeError, ValueError) as exc:
+        _open_vault().write(_entry_target(secure_id), secure_id, value, LOCAL_MACHINE)
+    except (OSError, UnicodeDecodeError, TypeError, ValueError) as exc:
         raise CredentialStoreError(
             f"Failed to store credential '{kind}': {exc}"
         ) from exc
-    finally:
-        if backend is not None:
-            backend.persist = original_persist
 
     if logger:
         logger.debug("Stored credential '%s' in secure store", kind)
@@ -219,23 +292,21 @@ def delete_password_hash(
 ) -> None:
     """Remove ``kind`` from the secure store."""
     secure_id = _get_secure_id(kind)
-    if keyring is None:
-        if logger:
-            logger.debug("Keyring unavailable while deleting credential '%s'", kind)
-        return
-
-    if kind == "device_binding":
-        kr = _ensure_keyring()
-        _require_windows_device_backend(kr)
-
-    try:
-        keyring.delete_password(SERVICE_NAME, secure_id)
-    except PasswordDeleteError:
+    if vault is None:
         if logger:
             logger.debug(
-                "Credential '%s' not present in secure store during delete", kind
+                "Credential vault unavailable while deleting credential '%s'", kind
             )
-    except KeyringError as exc:
+        return
+
+    try:
+        store = _open_vault()
+        target = _entry_target(secure_id)
+        deleted = store.read(target) is not None
+        # Clear both stores, so no copy from an older layout can come back.
+        _drop(store, target, ROAMING, "", "")
+        _drop(store, target, LOCAL_MACHINE, "", "")
+    except (OSError, UnicodeDecodeError) as exc:
         if logger:
             logger.warning(
                 "Failed to delete credential '%s' from secure store: %s",
@@ -246,6 +317,9 @@ def delete_password_hash(
         raise CredentialStoreError(
             f"Failed to delete credential '{kind}': {exc}"
         ) from exc
+
+    if not deleted and logger:
+        logger.debug("Credential '%s' not present in secure store during delete", kind)
 
 
 def get_device_binding_secret() -> bytes | None:

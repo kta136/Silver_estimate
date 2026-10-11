@@ -57,7 +57,7 @@ def fetch_estimate_history_page(
     where_sql = " AND ".join(conditions)
     total = None
     if include_total:
-        cursor.execute(f"SELECT COUNT(*) FROM estimates WHERE {where_sql}", params)  # nosec B608
+        cursor.execute(f"SELECT COUNT(*) FROM estimates WHERE {where_sql}", params)  # noqa: S608
         count_row = cursor.fetchone()
         total = int(count_row[0]) if count_row else 0
 
@@ -95,7 +95,7 @@ def fetch_estimate_history_page(
         WHERE {where_sql}{keyset_sql}
         ORDER BY COALESCE(voucher_no_int, -1) DESC, voucher_no DESC
         LIMIT ?
-        """,  # nosec B608
+        """,  # noqa: S608
         query_params,
     )
     fetched = [dict(row) for row in cursor.fetchall()]
@@ -478,7 +478,7 @@ class EstimatesRepository:
             chunk = codes[start : start + 900]
             placeholders = ",".join("?" for _ in chunk)
             cursor.execute(
-                f"SELECT code, tunch FROM items WHERE UPPER(code) IN ({placeholders})",  # nosec B608
+                f"SELECT code, tunch FROM items WHERE UPPER(code) IN ({placeholders})",  # noqa: S608
                 chunk,
             )
             catalog.update(
@@ -595,7 +595,7 @@ class EstimatesRepository:
                 WHERE bars.estimate_voucher_no = ?
                   AND {PROTECTED_BAR_SQL}
                 LIMIT 1
-                """,  # nosec B608 - fixed shared protection predicate
+                """,  # noqa: S608 - fixed shared protection predicate
                 (voucher_no,),
             )
             if cursor.fetchone():
@@ -689,7 +689,7 @@ class EstimatesRepository:
         try:
             # Placeholder count is generated locally; values remain parameterized.
             cursor.execute(
-                f"SELECT code FROM items WHERE UPPER(code) IN ({placeholders})",  # nosec B608
+                f"SELECT code FROM items WHERE UPPER(code) IN ({placeholders})",  # noqa: S608
                 [normalized_map[code] for code in unique_codes],
             )
             rows = cursor.fetchall()

@@ -46,7 +46,7 @@ Sources and licenses:
 <https://github.com/Nuitka/Nuitka/blob/develop/LICENSE-RUNTIME.txt>, and
 <https://github.com/indygreg/python-zstandard/blob/main/LICENSE>.
 
-## Python, cryptography, argon2-cffi, keyring, and other packages
+## Python, argon2-cffi, and other packages
 
 These components retain their respective upstream licenses and notices. Exact
 versions and license identifiers are recorded in the release CycloneDX SBOM.

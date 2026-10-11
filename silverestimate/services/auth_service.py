@@ -173,8 +173,8 @@ def run_authentication(
             "Secure credential storage is unavailable.\n\n"
             f"Backend: {backend_status.backend_name}\n"
             f"Details: {backend_status.reason}\n\n"
-            "Configure an OS keyring backend (Windows Credential Manager, macOS Keychain, "
-            "or SecretService/libsecret on Linux), then restart the application.",
+            "Check that Windows Credential Manager is working, then restart the "
+            "application.",
         )
         return None
     try:
@@ -189,7 +189,8 @@ def run_authentication(
             "Authentication Error",
             "Secure credential storage is not available on this system.\n\n"
             f"Details: {exc}\n\n"
-            "Install/configure an OS keyring backend and restart the application.",
+            "Check that Windows Credential Manager is working, then restart the "
+            "application.",
         )
         return None
 

@@ -13,13 +13,14 @@ def _valid_payload(artifact: Path) -> dict[str, object]:
         "cipher_version": "4.17.0 community",
         "crypto_provider": "openssl",
         "icon_available": True,
-        "keyring_available": True,
-        "keyring_backend": "keyring.backends.Windows.WinVaultKeyring",
+        "credential_store_available": True,
+        "credential_store_backend": "Windows Credential Manager",
         "password_hashing": True,
         "pdf_bytes": 2_000,
         "qt_platform": "windows",
         "runtime_root": str(artifact.parent),
         "svg_image_format": True,
+        "tls_backend": "schannel",
         "ui_fonts": {
             "button": 11,
             "menu": 11,
@@ -43,6 +44,25 @@ def test_validate_payload_rejects_stale_interface_fonts(tmp_path: Path) -> None:
     payload = _valid_payload(artifact)
     payload["ui_fonts"]["button"] = 14
     with pytest.raises(ValueError, match="interface fonts"):
+        _validate_payload(payload, artifact)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("credential_store_available", False, "Credential Manager"),
+        ("credential_store_backend", "missing", "Credential Manager"),
+        ("tls_backend", "", "TLS backend"),
+        ("tls_backend", "openssl", "TLS backend"),
+    ],
+)
+def test_validate_payload_requires_windows_vault_and_tls(
+    tmp_path: Path, field: str, value: object, message: str
+) -> None:
+    artifact = tmp_path / "SilverEstimate.exe"
+    payload = _valid_payload(artifact)
+    payload[field] = value
+    with pytest.raises(ValueError, match=message):
         _validate_payload(payload, artifact)
 
 

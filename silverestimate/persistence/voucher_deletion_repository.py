@@ -34,7 +34,7 @@ def fetch_voucher_deletion_preview(
     if criteria.mode == "date":
         where = "date >= ? AND date <= ?"
         params = (criteria.start, criteria.end)
-    cursor.execute(f"SELECT * FROM estimates WHERE {where} ORDER BY voucher_no", params)  # nosec B608
+    cursor.execute(f"SELECT * FROM estimates WHERE {where} ORDER BY voucher_no", params)  # noqa: S608
     headers = [dict(row) for row in cursor.fetchall()]
     if criteria.mode == "voucher":
         low, high = (
@@ -59,7 +59,7 @@ def fetch_voucher_deletion_preview(
                        MAX(CASE WHEN {PROTECTED_BAR_SQL} THEN 1 ELSE 0 END) AS protected
                 FROM silver_bars AS bars
                 WHERE bars.estimate_voucher_no IN ({placeholders})
-                GROUP BY bars.estimate_voucher_no""",  # nosec B608
+                GROUP BY bars.estimate_voucher_no""",  # noqa: S608
             vouchers,
         )
         inventory = {row[0]: (row[1], row[2]) for row in cursor.fetchall()}
@@ -76,9 +76,9 @@ def fetch_voucher_deletion_preview(
         # Include line and inventory content, so edits with unchanged totals still
         # invalidate the reviewed snapshot. Only fixed table names enter SQL.
         queries = (
-            f"SELECT * FROM estimate_items WHERE voucher_no IN ({placeholders}) ORDER BY id",
-            f"SELECT * FROM silver_bars WHERE estimate_voucher_no IN ({placeholders}) ORDER BY bar_id",
-            f"SELECT * FROM bar_transfers WHERE silver_bar_id IN (SELECT bar_id FROM silver_bars WHERE estimate_voucher_no IN ({placeholders})) ORDER BY id",
+            f"SELECT * FROM estimate_items WHERE voucher_no IN ({placeholders}) ORDER BY id",  # noqa: S608
+            f"SELECT * FROM silver_bars WHERE estimate_voucher_no IN ({placeholders}) ORDER BY bar_id",  # noqa: S608
+            f"SELECT * FROM bar_transfers WHERE silver_bar_id IN (SELECT bar_id FROM silver_bars WHERE estimate_voucher_no IN ({placeholders})) ORDER BY id",  # noqa: S608
         )
         for query in queries:
             cursor.execute(query, vouchers)
@@ -138,8 +138,8 @@ class VoucherDeletionRepository:
                     ("estimates", "voucher_no"),
                 ):
                     cursor.execute(
-                        f"DELETE FROM {table} WHERE {column} IN ({placeholders})",
-                        batch,  # nosec B608
+                        f"DELETE FROM {table} WHERE {column} IN ({placeholders})",  # noqa: S608
+                        batch,
                     )
             conn.commit()
             self._db.logger.info(

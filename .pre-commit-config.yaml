@@ -5,7 +5,7 @@
 # Formatting policy: Ruff linting and formatting run via pre-commit locally.
 
 repos:
-  # Fast linting and import sorting with Ruff
+  # Fast linting, import sorting and security rules with Ruff
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.6
     hooks:
@@ -22,7 +22,6 @@ repos:
         pass_filenames: false
         additional_dependencies:
           - PySide6>=6.11.2,<6.12
-          - cryptography>=42.0.0
           - argon2-cffi>=25.1.0,<26
 
   # General pre-commit hooks
@@ -70,15 +69,6 @@ repos:
 
       # Check for debugger imports
       - id: debug-statements
-
-  # Security checks with bandit
-  - repo: https://github.com/PyCQA/bandit
-    rev: 1.9.4
-    hooks:
-      - id: bandit
-        args: [-c, pyproject.toml, -r, silverestimate, -ll, -ii]
-        pass_filenames: false
-        additional_dependencies: ["bandit[toml]"]
 
 # Configuration for pre-commit ci (if using pre-commit.ci service)
 ci:

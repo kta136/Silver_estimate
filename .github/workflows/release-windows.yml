@@ -48,8 +48,6 @@ jobs:
         run: uv run nox -s ruff
       - name: Mypy
         run: uv run nox -s mypy
-      - name: Blocking Bandit medium/high gate
-        run: uv run nox -s bandit
       - name: Blocking dependency advisory and lock policy
         run: uv run nox -s dependency_policy
       - name: Complete tests and performance gates

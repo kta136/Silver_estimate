@@ -6,11 +6,16 @@ import pytest
 from silverestimate.services.dda_rate_fetcher import (
     DDA_AGRA_MOHAR_ITEM_ID,
     DDA_CURRENT_RATES_URL,
+    MAX_CURRENT_RATES_BYTES,
     DdaCurrentRatesClient,
     DdaRateContractError,
+    DdaRateTransportError,
     DdaSnapshotStore,
     parse_current_rates,
 )
+from tests.rate_server_support import RateServer, direct_manager
+
+WAIT_MS = 5000
 
 
 def _payload(**overrides):
@@ -42,20 +47,33 @@ def _payload(**overrides):
     return payload
 
 
-class _Response:
-    status = 200
+@pytest.fixture()
+def server():
+    rate_server = RateServer()
+    yield rate_server
+    rate_server.close()
 
-    def __init__(self, body):
-        self.body = body
 
-    def read(self, amount=-1):
-        return self.body[:amount]
+class _Fetch:
+    """A client pointed at the loopback server, recording its one outcome."""
 
-    def __enter__(self):
+    def __init__(self, server, qtbot, **options):
+        self.qtbot = qtbot
+        self.manager = direct_manager()
+        self.client = DdaCurrentRatesClient(
+            endpoint=server.current_url, manager=self.manager, **options
+        )
+        self.snapshots = []
+        self.failures = []
+        self.client.snapshot_received.connect(self.snapshots.append)
+        self.client.failed.connect(self.failures.append)
+
+    def run(self):
+        self.client.fetch()
+        self.qtbot.waitUntil(
+            lambda: bool(self.snapshots or self.failures), timeout=WAIT_MS
+        )
         return self
-
-    def __exit__(self, *_args):
-        return False
 
 
 class _Settings:
@@ -99,25 +117,91 @@ def test_parse_selects_exact_item_id_and_uses_final_rate_not_base_rate():
     assert snapshot.market_state["code"] == "open_live"
 
 
-def test_client_is_anonymous_and_uses_only_public_https_endpoint():
-    captured = {}
+def test_client_is_anonymous_and_uses_only_public_https_endpoint(qt_app):
+    class _Captured(Exception):
+        pass
 
-    def opener(request, timeout):
-        captured["url"] = request.full_url
-        captured["headers"] = {
-            key.lower(): value for key, value in request.header_items()
-        }
-        captured["timeout"] = timeout
-        return _Response(json.dumps(_payload()).encode())
+    class _Manager:
+        def get(self, request):
+            self.request = request
+            raise _Captured
 
-    snapshot = DdaCurrentRatesClient(opener=opener, timeout=3).fetch_current()
+    manager = _Manager()
 
-    assert snapshot.final_rate == 123456.5
-    assert captured["url"] == DDA_CURRENT_RATES_URL
-    assert captured["timeout"] == 3
-    assert "authorization" not in captured["headers"]
-    assert "x-api-key" not in captured["headers"]
-    assert "api-key" not in captured["headers"]
+    with pytest.raises(_Captured):
+        DdaCurrentRatesClient(manager=manager, timeout=3).fetch()
+
+    request = manager.request
+    headers = {name.data().decode().lower() for name in request.rawHeaderList()}
+    assert request.url().toString() == DDA_CURRENT_RATES_URL
+    assert DDA_CURRENT_RATES_URL.startswith("https://")
+    assert request.transferTimeout() == 3000
+    assert headers == {"accept", "user-agent"}
+
+
+def test_client_delivers_the_verified_snapshot(server, qtbot):
+    server.queue_current(_payload())
+
+    fetch = _Fetch(server, qtbot).run()
+
+    assert fetch.failures == []
+    assert fetch.snapshots[0].final_rate == 123456.5
+    assert fetch.snapshots[0].transport == "https"
+    sent = {name.lower() for name in server.requests[0][1]}
+    assert not sent & {"authorization", "x-api-key", "api-key", "cookie"}
+
+
+def test_client_reports_an_http_error_status(server, qtbot):
+    server.queue_current({"error": "down"}, status=502)
+
+    fetch = _Fetch(server, qtbot).run()
+
+    assert fetch.snapshots == []
+    assert isinstance(fetch.failures[0], DdaRateTransportError)
+    assert "HTTP 502" in str(fetch.failures[0])
+
+
+def test_client_gives_up_when_the_server_never_answers(server, qtbot):
+    fetch = _Fetch(server, qtbot, timeout=0.2).run()
+
+    assert isinstance(fetch.failures[0], DdaRateTransportError)
+    assert "no response within 0.2 seconds" in str(fetch.failures[0])
+
+
+def test_client_rejects_an_oversized_response(server, qtbot):
+    server.queue_current(b" " * (MAX_CURRENT_RATES_BYTES + 1))
+
+    fetch = _Fetch(server, qtbot).run()
+
+    assert isinstance(fetch.failures[0], DdaRateContractError)
+    assert "too large" in str(fetch.failures[0])
+
+
+def test_client_rejects_a_response_that_breaks_the_contract(server, qtbot):
+    server.queue_current(_payload(schemaVersion=2))
+
+    fetch = _Fetch(server, qtbot).run()
+
+    assert isinstance(fetch.failures[0], DdaRateContractError)
+
+
+def test_a_cancelled_or_replaced_request_reports_nothing(server, qtbot):
+    fetch = _Fetch(server, qtbot)
+    fetch.client.fetch()
+    qtbot.waitUntil(lambda: bool(server.requests), timeout=WAIT_MS)
+
+    fetch.client.cancel()
+    qtbot.wait(100)
+    assert fetch.snapshots == fetch.failures == []
+
+    fetch.client.fetch()
+    for _abandoned_or_live in range(3):
+        server.queue_current(_payload())
+    fetch.run()
+    qtbot.wait(100)
+
+    assert len(fetch.snapshots) == 1
+    assert fetch.failures == []
 
 
 @pytest.mark.parametrize(

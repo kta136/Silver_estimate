@@ -73,7 +73,6 @@ def _run_step(tmp_path: Path, step: dict, **environment: str):
     [
         ("release-windows.yml", "nox -s ruff"),
         ("release-windows.yml", "nox -s mypy"),
-        ("release-windows.yml", "nox -s bandit"),
         ("release-windows.yml", "nox -s dependency_policy"),
         ("release-windows.yml", "--wheel vendor/sqlcipher/"),
         ("pr-validation.yml", "--wheel vendor/sqlcipher/"),

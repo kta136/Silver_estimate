@@ -20,10 +20,10 @@
     }
   ],
   "lock_review": {
-    "rationale": "Reviewed 12 package version updates: Qt/PySide6/Shiboken6 6.11.2, Nuitka 4.2.1 and selected direct development tools. No package additions/removals or transitive major upgrades. Python build pin updated to 3.14.7; controlled SQLCipher wheel unchanged.",
-    "reviewed_by": "Codex (automated dependency review)",
-    "reviewed_on": "2026-09-08",
-    "sha256": "03f0e9d50cd7a34ab297250f55a9662e5569d972e826f311ade2089d01e513f1"
+    "rationale": "Reviewed 11 package removals and no additions or version changes: keyring and its dependencies (jaraco-classes, jaraco-context, jaraco-functools, more-itertools, jeepney, secretstorage, cryptography, pywin32-ctypes) after moving to direct Windows Credential Manager calls through the standard library's ctypes; and bandit with stevedore after moving the source security gate to Ruff's S rules. Controlled SQLCipher wheel unchanged.",
+    "reviewed_by": "Claude (automated dependency review)",
+    "reviewed_on": "2026-10-11",
+    "sha256": "b273d54492ea552004f68665a5d8605b972ba7a4c39c3e44eac915c8c4e7b524"
   },
   "native_provenance": {
     "path": "vendor/sqlcipher/PROVENANCE.json",

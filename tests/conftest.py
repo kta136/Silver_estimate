@@ -126,6 +126,15 @@ def _load_offscreen_preview_fonts(app):
 
 
 @pytest.fixture(autouse=True)
+def isolate_credential_vault(monkeypatch):
+    """Keep every test away from this PC's Windows Credential Manager entries."""
+    from silverestimate.security import credential_store
+    from tests.vault_support import TwinVault
+
+    monkeypatch.setattr(credential_store, "vault", TwinVault())
+
+
+@pytest.fixture(autouse=True)
 def keep_test_console_attached(monkeypatch):
     """Stop the app hiding and detaching the console of the test run itself.
 

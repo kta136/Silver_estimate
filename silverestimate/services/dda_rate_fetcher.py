@@ -5,11 +5,19 @@ from __future__ import annotations
 import json
 import logging
 import math
-import urllib.request
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from typing import Any, Literal, Protocol, cast
+from functools import partial
+from typing import Any, Literal, cast
+
+from PySide6.QtCore import QObject, QUrl, Signal
+from PySide6.QtNetwork import (
+    QNetworkAccessManager,
+    QNetworkReply,
+    QNetworkRequest,
+    QSslSocket,
+)
 
 from silverestimate.infrastructure.settings import (
     SettingsKey,
@@ -53,21 +61,35 @@ class DdaRateSnapshot:
     transport: RateTransport
 
 
-class _HttpResponse(Protocol):
-    status: int
-
-    def read(self, amount: int = -1) -> bytes: ...
-
-    def __enter__(self) -> _HttpResponse: ...
-
-    def __exit__(self, *args: object) -> object: ...
-
-
-HttpOpen = Callable[..., _HttpResponse]
-
-
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def network_manager(parent: QObject) -> QNetworkAccessManager:
+    """Create a manager that uses Windows' own TLS, the backend the app ships."""
+    if "schannel" in QSslSocket.availableBackends():
+        QSslSocket.setActiveBackend("schannel")
+    return QNetworkAccessManager(parent)
+
+
+def rate_request(url: QUrl | str, accept: str) -> QNetworkRequest:
+    """Build an anonymous request that always reaches the network."""
+    request = QNetworkRequest(QUrl(url))
+    request.setRawHeader(b"Accept", accept.encode("ascii"))
+    request.setRawHeader(b"User-Agent", b"SilverEstimate/2.0")
+    request.setAttribute(
+        QNetworkRequest.Attribute.CacheLoadControlAttribute,
+        QNetworkRequest.CacheLoadControl.AlwaysNetwork,
+    )
+    return request
+
+
+def http_status(reply: QNetworkReply) -> int | None:
+    """Return the final HTTP status once the response headers have arrived."""
+    status = reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
+    if status is None or 300 <= int(status) < 400:
+        return None
+    return int(status)
 
 
 def _parse_datetime(value: object, field: str) -> datetime:
@@ -167,46 +189,84 @@ def parse_current_rates(
     )
 
 
-class DdaCurrentRatesClient:
+class DdaCurrentRatesClient(QObject):
     """Anonymous HTTPS hydration and sequence-reconciliation client."""
+
+    snapshot_received = Signal(object)
+    failed = Signal(object)
 
     def __init__(
         self,
         *,
         endpoint: str = DDA_CURRENT_RATES_URL,
         timeout: float = 7.0,
-        opener: HttpOpen = urllib.request.urlopen,
+        manager: QNetworkAccessManager | None = None,
         now: Callable[[], datetime] = utc_now,
+        parent: QObject | None = None,
     ) -> None:
+        super().__init__(parent)
         self._endpoint = endpoint
         self._timeout = timeout
-        self._opener = opener
+        self._manager = manager or network_manager(self)
         self._now = now
+        self._reply: QNetworkReply | None = None
+        self._oversized = False
 
-    def fetch_current(self) -> DdaRateSnapshot:
-        """Fetch the public snapshot without API-key or authorization headers."""
-        request = urllib.request.Request(
-            self._endpoint,
-            headers={
-                "Accept": "application/json",
-                "User-Agent": "SilverEstimate/2.0",
-            },
-            method="GET",
-        )
+    def fetch(self) -> None:
+        """Request the public snapshot, replacing any request still in flight."""
+        self.cancel()
+        request = rate_request(self._endpoint, "application/json")
+        request.setTransferTimeout(int(self._timeout * 1000))
+        reply = self._manager.get(request)
+        self._reply = reply
+        self._oversized = False
+        reply.downloadProgress.connect(partial(self._limit_size, reply))
+        reply.finished.connect(partial(self._finish, reply))
+
+    def cancel(self) -> None:
+        """Abandon the request in flight without reporting a result."""
+        reply, self._reply = self._reply, None
+        if reply is not None:
+            reply.abort()
+            reply.deleteLater()
+
+    def _limit_size(self, reply: QNetworkReply, received: int, _total: int) -> None:
+        if reply is self._reply and received > MAX_CURRENT_RATES_BYTES:
+            self._oversized = True
+            reply.abort()
+
+    def _finish(self, reply: QNetworkReply) -> None:
+        if reply is not self._reply:
+            return
+        self._reply = None
+        reply.deleteLater()
         try:
-            with self._opener(request, timeout=self._timeout) as response:
-                status = int(getattr(response, "status", 200))
-                if status != 200:
-                    raise DdaRateTransportError(
-                        f"DDA current-rates returned HTTP {status}."
-                    )
-                body = response.read(MAX_CURRENT_RATES_BYTES + 1)
-        except DdaRateError:
-            raise
-        except Exception as exc:
+            snapshot = self._read(reply)
+        except DdaRateError as exc:
+            self.failed.emit(exc)
+            return
+        self.snapshot_received.emit(snapshot)
+
+    def _read(self, reply: QNetworkReply) -> DdaRateSnapshot:
+        if self._oversized:
+            raise DdaRateContractError("DDA current-rates response is too large.")
+        status = http_status(reply)
+        if status is not None and status != 200:
+            raise DdaRateTransportError(f"DDA current-rates returned HTTP {status}.")
+        error = reply.error()
+        if error in (
+            QNetworkReply.NetworkError.OperationCanceledError,
+            QNetworkReply.NetworkError.TimeoutError,
+        ):
             raise DdaRateTransportError(
-                f"DDA current-rates request failed: {exc}"
-            ) from exc
+                "DDA current-rates request failed: no response within "
+                f"{self._timeout:g} seconds."
+            )
+        if error != QNetworkReply.NetworkError.NoError:
+            raise DdaRateTransportError(
+                f"DDA current-rates request failed: {reply.errorString()}"
+            )
+        body = bytes(reply.readAll().data())
         if len(body) > MAX_CURRENT_RATES_BYTES:
             raise DdaRateContractError("DDA current-rates response is too large.")
         return parse_current_rates(body, received_at=self._now())
@@ -291,5 +351,8 @@ __all__ = [
     "DdaRateSnapshot",
     "DdaRateTransportError",
     "DdaSnapshotStore",
+    "http_status",
+    "network_manager",
     "parse_current_rates",
+    "rate_request",
 ]

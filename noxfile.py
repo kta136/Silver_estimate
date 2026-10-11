@@ -267,21 +267,6 @@ def smoke_ui(session: nox.Session) -> None:
 
 
 @nox.session(python=False)
-def bandit(session: nox.Session) -> None:
-    session.run(
-        "python",
-        "-m",
-        "bandit",
-        "-c",
-        "pyproject.toml",
-        "-r",
-        "silverestimate",
-        "-ll",
-        "-ii",
-    )
-
-
-@nox.session(python=False)
 def dependency_policy(session: nox.Session) -> None:
     artifact_dir = PROJECT_ROOT / "artifacts" / "dependency-policy"
     requirements = artifact_dir / "runtime-requirements.txt"
@@ -407,5 +392,5 @@ def ci(session: nox.Session) -> None:
 
 @nox.session(python=False, name="advisory")
 def advisory(session: nox.Session) -> None:
-    for session_name in ("bandit", "dependency_policy"):
+    for session_name in ("ruff", "dependency_policy"):
         session.notify(session_name)

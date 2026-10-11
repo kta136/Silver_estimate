@@ -24,8 +24,6 @@ jobs:
       - run: uv sync --frozen --extra dev
       - run: uv run nox -s ruff
       - run: uv run nox -s mypy
-      - name: Blocking Bandit medium/high gate
-        run: uv run nox -s bandit
       - name: Blocking dependency advisory and lock policy
         run: uv run nox -s dependency_policy
 

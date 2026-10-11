@@ -23,7 +23,6 @@ from PySide6.QtWidgets import (
 
 from silverestimate.domain.estimate_entry import EstimateEntryRowState, LoadedEstimate
 from silverestimate.domain.numeric_policy import MONEY_PLACES, WEIGHT_PLACES
-from silverestimate.infrastructure.latest_request_runner import LatestRequestRunner
 from silverestimate.services.dda_rate_fetcher import DdaCurrentRatesClient
 from silverestimate.services.estimate_entry_persistence import (
     EstimateEntryPersistenceService,
@@ -791,29 +790,17 @@ class EstimateEntryWorkflowController:
                 button.setEnabled(True)
             return
 
-        runner = getattr(self.host, "_live_rate_runner", None)
-        if runner is None:
-            client = DdaCurrentRatesClient(timeout=7.0)
-
-            def fetch_rate(_request, cancel_event):
-                if cancel_event.is_set():
-                    return None
-                snapshot = client.fetch_current()
-                return None if cancel_event.is_set() else snapshot.final_rate
-
-            runner = LatestRequestRunner(
-                fetch_rate,
-                parent=self.host,
-                name="estimate-live-rate",
+        client = getattr(self.host, "_live_rate_client", None)
+        if client is None:
+            client = DdaCurrentRatesClient(timeout=7.0, parent=self.host)
+            client.snapshot_received.connect(
+                lambda snapshot: self.host.live_rate_fetched.emit(snapshot.final_rate)
             )
-            runner.result.connect(
-                lambda _generation, rate: self.host.live_rate_fetched.emit(rate)
-            )
-            runner.failed.connect(self._handle_live_rate_failure)
-            self.host._live_rate_runner = runner
-        runner.submit(None)
+            client.failed.connect(self._handle_live_rate_failure)
+            self.host._live_rate_client = client
+        client.fetch()
 
-    def _handle_live_rate_failure(self, _generation: int, error: object) -> None:
+    def _handle_live_rate_failure(self, error: object) -> None:
         self.host.logger.warning("Live silver rate refresh failed: %s", error)
         self.host.live_rate_fetched.emit(None)
 

@@ -13,6 +13,7 @@ from silverestimate.infrastructure.application import (
     ApplicationContext,
     StartupError,
 )
+from silverestimate.infrastructure.logger import DEFAULT_BACKUP_DAYS
 
 
 class StubLogger:
@@ -115,7 +116,14 @@ def stub_qt(monkeypatch):
     return StubQApplication, StubMessageBox
 
 
-def _make_builder(startup_result, main_window_factory, tmp_path):
+def _make_builder(
+    startup_result,
+    main_window_factory,
+    tmp_path,
+    *,
+    auto_cleanup=False,
+    logging_setup=None,
+):
     log_config = {
         "log_dir": str(tmp_path / "logs"),
         "debug_mode": False,
@@ -123,7 +131,7 @@ def _make_builder(startup_result, main_window_factory, tmp_path):
         "enable_error": True,
         "enable_debug": False,
         "cleanup_days": 7,
-        "auto_cleanup": False,
+        "auto_cleanup": auto_cleanup,
     }
 
     def startup_controller_factory(logger=None):
@@ -133,7 +141,7 @@ def _make_builder(startup_result, main_window_factory, tmp_path):
         main_window_factory=main_window_factory,
         startup_controller_factory=startup_controller_factory,
         log_config_getter=lambda: log_config,
-        logging_setup=lambda **kwargs: StubLogger(),
+        logging_setup=logging_setup or (lambda **kwargs: StubLogger()),
         asset_resolver=lambda *parts: Path(tmp_path / "missing.ico"),
         icon_factory=lambda path: f"icon:{path}",
         qt_handler=lambda *args, **kwargs: None,
@@ -161,6 +169,42 @@ def test_run_returns_zero_when_auth_cancelled(tmp_path, stub_qt):
     assert factory_called["value"] is False
     assert stub_app.instance_ref.exec_calls == 0
     assert message_box.last_call is None
+
+
+@pytest.mark.parametrize(
+    ("auto_cleanup", "backup_days", "cleanups"),
+    [
+        (True, 7, [(7,)]),
+        (False, DEFAULT_BACKUP_DAYS, []),
+    ],
+)
+def test_log_retention_follows_the_automatic_cleanup_setting(
+    tmp_path, stub_qt, monkeypatch, auto_cleanup, backup_days, cleanups
+):
+    setups = []
+    cleaned = []
+
+    def logging_setup(**kwargs):
+        setups.append(kwargs)
+        return StubLogger()
+
+    monkeypatch.setattr(
+        application_module,
+        "cleanup_old_logs",
+        lambda log_dir, days: cleaned.append((days,)),
+    )
+    builder = _make_builder(
+        StartupResult(status=StartupStatus.CANCELLED),
+        lambda **_kwargs: object(),
+        tmp_path,
+        auto_cleanup=auto_cleanup,
+        logging_setup=logging_setup,
+    )
+
+    builder.run()
+
+    assert setups[0]["backup_days"] == backup_days
+    assert cleaned == cleanups
 
 
 def test_run_returns_zero_when_data_wiped(tmp_path, stub_qt):

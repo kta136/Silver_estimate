@@ -33,16 +33,16 @@ def fetch_sales_report(
         JOIN estimate_items ei ON ei.voucher_no = e.voucher_no
         WHERE e.date >= ? AND e.date <= ?
           AND COALESCE(ei.is_silver_bar, 0) = 0
-    """  # nosec B608 - the only interpolation is the constant column expression
+    """  # noqa: S608 - the only interpolation is the constant column expression
     params: list[object] = [query.date_from, query.date_to]
     if query.item_search.strip():
-        sql += f" AND INSTR({code_sql}, ?) > 0"  # nosec B608
+        sql += f" AND INSTR({code_sql}, ?) > 0"  # noqa: S608
         params.append(query.item_search.strip().upper())
     if query.period is not None:
         sql += " AND SUBSTR(e.date, 1, ?) = ?"
         params.extend([7 if query.grouping == "month" else 10, query.period])
     if query.item_code is not None:
-        sql += f" AND {code_sql} = ?"  # nosec B608
+        sql += f" AND {code_sql} = ?"  # noqa: S608
         params.append(query.item_code.strip().upper())
     cursor.execute(sql, params)
 

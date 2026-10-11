@@ -78,7 +78,8 @@ class SilverBarsSnapshotRepository:
             if include_total:
                 total = int(
                     conn.execute(
-                        f"SELECT COUNT(*) FROM silver_bar_lists l WHERE {where}", params
+                        f"SELECT COUNT(*) FROM silver_bar_lists l WHERE {where}",  # noqa: S608
+                        params,
                     ).fetchone()[0]
                 )
             if cursor is not None:
@@ -92,7 +93,7 @@ class SilverBarsSnapshotRepository:
                            COALESCE(SUM(sb.fine_weight), 0) AS fine_weight
                     FROM silver_bar_lists l
                     LEFT JOIN silver_bars sb ON sb.list_id = l.list_id
-                    WHERE {where} GROUP BY l.list_id ORDER BY l.list_id DESC LIMIT ?""",
+                    WHERE {where} GROUP BY l.list_id ORDER BY l.list_id DESC LIMIT ?""",  # noqa: S608
                     [*params, size + 1],
                 ).fetchall()
             ]

@@ -25,7 +25,6 @@ graph.
 ```powershell
 uv run nox -s ruff
 uv run nox -s mypy
-uv run nox -s bandit
 uv run nox -s dependency_policy
 uv run nox -s tests_full
 $env:QT_QPA_PLATFORM = "offscreen"
@@ -114,8 +113,9 @@ protected directory such as `Program Files` unless its data directory has
 explicitly been made writable.
 
 The canonical configuration is `pysidedeploy.spec`. It selects the Windows
-platform, icon/SVG/image, widget, and print-support components; embeds required
-assets and notices; forces the dynamic keyring and SQLCipher imports; includes
+platform, icon/SVG/image, widget, print-support, network, and Windows TLS
+components; embeds required assets and notices; forces the dynamic SQLCipher
+imports; requires the Windows Credential Manager binding; includes
 the direct `argon2-cffi` password service; rejects Passlib from the compilation
 report; and excludes unused Qt/QML/media plugins. The committed compiler
 selection lets Nuitka use its supported Windows toolchain with the same command
@@ -131,8 +131,7 @@ the one-file extraction directory.
 
 PR validation runs:
 
-- Ruff formatting/lint and mypy;
-- blocking Bandit medium/high findings;
+- Ruff formatting/lint, including its security rules, and mypy;
 - blocking locked-runtime `pip-audit`, lock-review, notice, and native-provenance policy;
 - the complete non-smoke test suite on Windows;
 - 75% global coverage and 90% changed-line coverage;
@@ -150,7 +149,7 @@ Main repeats frozen quality/security gates and complete Windows validation. Cove
 `.github/workflows/release-windows.yml` runs for `v*` tags. Before any publish step it:
 
 1. verifies the tag equals `v<APP_VERSION>`;
-2. runs Ruff, mypy, blocking Bandit, locked dependency policy, complete tests, coverage, performance, and offscreen smoke;
+2. runs Ruff with its security rules, mypy, locked dependency policy, complete tests, coverage, performance, and offscreen smoke;
 3. builds and inspects the standalone artifact before creating the one-file executable;
 4. builds with the canonical `pysidedeploy.spec` through `nox -s build_clean`;
 5. optionally signs the executable when certificate secrets exist;

@@ -27,16 +27,17 @@ def _validate_payload(payload: dict[str, Any], artifact: Path) -> None:
         )
     if payload.get("icon_available") is not True:
         raise ValueError("Bundled application icon is unavailable")
-    if payload.get("keyring_available") is not True:
-        raise ValueError("Windows keyring backend is unavailable")
-    if not str(payload.get("keyring_backend", "")).startswith(
-        "keyring.backends.Windows."
+    if (
+        payload.get("credential_store_available") is not True
+        or payload.get("credential_store_backend") != "Windows Credential Manager"
     ):
-        raise ValueError("Artifact did not load the Windows keyring backend")
+        raise ValueError("Artifact did not load Windows Credential Manager")
     if payload.get("qt_platform") != "windows":
         raise ValueError("Artifact did not initialize the Windows Qt platform plugin")
     if payload.get("svg_image_format") is not True:
         raise ValueError("Artifact did not initialize SVG image support")
+    if payload.get("tls_backend") != "schannel":
+        raise ValueError("Artifact did not load the Windows TLS backend for live rates")
     expected_fonts = dict.fromkeys(
         ("button", "menu", "table", "header", "totals_header", "totals"), 11
     )

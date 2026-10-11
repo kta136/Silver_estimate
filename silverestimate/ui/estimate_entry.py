@@ -38,7 +38,7 @@ if TYPE_CHECKING:
         QToolButton,
     )
 
-    from silverestimate.infrastructure.latest_request_runner import LatestRequestRunner
+    from silverestimate.services.dda_rate_fetcher import DdaCurrentRatesClient
 
     from .adapters import EstimateTableAdapter
     from .estimate_entry_components import (
@@ -57,7 +57,7 @@ class EstimateEntryWidget(QWidget):
     _code_focus_timer: QTimer
     _content_splitter: QSplitter
     _last_saved_status: str
-    _live_rate_runner: LatestRequestRunner
+    _live_rate_client: DdaCurrentRatesClient
     _pending_focus_row: int
     bar_fine_label: QLabel
     bar_gross_label: QLabel
@@ -419,9 +419,9 @@ class EstimateEntryWidget(QWidget):
         self.workflow_controller.shutdown_print_previews()
         if self.draft_recovery is not None:
             self.draft_recovery.stop()
-        live_rate_runner = getattr(self, "_live_rate_runner", None)
-        if live_rate_runner is not None:
-            live_rate_runner.shutdown()
+        live_rate_client = getattr(self, "_live_rate_client", None)
+        if live_rate_client is not None:
+            live_rate_client.cancel()
 
     def keyPressEvent(self, event):
         key = event.key()

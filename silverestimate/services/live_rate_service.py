@@ -1,4 +1,4 @@
-"""Qt lifecycle wrapper for the DDA HTTPS/SSE live-rate worker."""
+"""Qt lifecycle wrapper for the DDA HTTPS/SSE live-rate stream."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import contextlib
 import logging
 from collections.abc import Callable
 
-from PySide6.QtCore import QObject, QThread, Signal
+from PySide6.QtCore import QObject, Signal
 
 from silverestimate.infrastructure.settings import (
     SettingsKey,
@@ -14,11 +14,11 @@ from silverestimate.infrastructure.settings import (
     as_settings_reader,
     get_app_settings,
 )
-from silverestimate.services.dda_rate_stream import DdaRateStreamWorker
+from silverestimate.services.dda_rate_stream import DdaRateStream
 
 
 class LiveRateService(QObject):
-    """Own exactly one cooperative DDA stream worker and its Qt thread."""
+    """Own exactly one DDA rate stream on the caller's thread."""
 
     rate_updated = Signal(object)
     feed_status_updated = Signal(object)
@@ -30,65 +30,53 @@ class LiveRateService(QObject):
         parent: QObject | None = None,
         logger: logging.Logger | None = None,
         settings_provider: Callable[[], SettingsReader] = get_app_settings,
-        worker_factory: Callable[..., DdaRateStreamWorker] = DdaRateStreamWorker,
-        thread_factory: Callable[..., QThread] = QThread,
+        stream_factory: Callable[..., DdaRateStream] = DdaRateStream,
     ) -> None:
         super().__init__(parent)
         self._logger = logger or logging.getLogger(__name__)
         self._settings_provider = settings_provider
-        self._worker_factory = worker_factory
-        self._thread_factory = thread_factory
-        self._worker: DdaRateStreamWorker | None = None
-        self._thread: QThread | None = None
+        self._stream_factory = stream_factory
+        self._stream: DdaRateStream | None = None
 
     def start(self) -> None:
         settings = as_settings_reader(self._settings_provider())
         if not settings.get_bool(SettingsKey.RATES_LIVE_ENABLED, True):
             return
-        if self._thread is not None and self._thread.isRunning():
+        if self._stream is not None:
             return
 
-        worker = self._worker_factory(logger=self._logger)
-        thread = self._thread_factory(self)
-        worker.moveToThread(thread)
-        thread.started.connect(worker.run)
-        worker.rate_received.connect(self.rate_updated.emit)
-        worker.feed_status_received.connect(self.feed_status_updated.emit)
-        worker.connection_state_changed.connect(self.connection_state_changed.emit)
-        worker.stream_error.connect(self.stream_error.emit)
-        self._worker = worker
-        self._thread = thread
-        thread.start()
+        stream = self._stream_factory(logger=self._logger, parent=self)
+        stream.rate_received.connect(self.rate_updated.emit)
+        stream.feed_status_received.connect(self.feed_status_updated.emit)
+        stream.connection_state_changed.connect(self.connection_state_changed.emit)
+        stream.stream_error.connect(self.stream_error.emit)
+        self._stream = stream
+        stream.start()
 
     def stop(self) -> None:
-        worker = self._worker
-        thread = self._thread
-        if worker is not None:
-            worker.stop()
-        if thread is not None:
-            thread.quit()
-            if thread.isRunning() and not thread.wait(6000):
-                self._logger.warning("DDA SSE worker did not stop within 6 seconds.")
-        if worker is not None:
-            for signal in (
-                worker.rate_received,
-                worker.feed_status_received,
-                worker.connection_state_changed,
-                worker.stream_error,
-            ):
-                with contextlib.suppress(TypeError):
-                    signal.disconnect()
-        self._worker = None
-        self._thread = None
+        stream, self._stream = self._stream, None
+        if stream is None:
+            return
+        stream.stop()
+        for signal in (
+            stream.rate_received,
+            stream.feed_status_received,
+            stream.connection_state_changed,
+            stream.stream_error,
+        ):
+            with contextlib.suppress(TypeError, RuntimeError):
+                signal.disconnect()
+        stream.deleteLater()
 
     def refresh_now(self) -> None:
         settings = as_settings_reader(self._settings_provider())
         if not settings.get_bool(SettingsKey.RATES_LIVE_ENABLED, True):
             return
-        was_running = self._thread is not None and self._thread.isRunning()
-        self.start()
-        if was_running and self._worker is not None:
-            self._worker.request_refresh()
+        stream = self._stream
+        if stream is None:
+            self.start()
+        else:
+            stream.request_refresh()
 
 
 __all__ = ["LiveRateService"]

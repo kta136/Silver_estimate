@@ -1,8 +1,7 @@
 import logging
-import threading
 from datetime import datetime, timezone
 
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QObject, Signal
 
 from silverestimate.services.dda_rate_fetcher import (
     DDA_AGRA_MOHAR_ITEM_ID,
@@ -34,129 +33,127 @@ def _snapshot():
     )
 
 
-class _Worker(QObject):
+class _Stream(QObject):
     rate_received = Signal(object)
     feed_status_received = Signal(object)
     connection_state_changed = Signal(str)
     stream_error = Signal(str)
 
-    def __init__(self):
-        super().__init__()
-        self.run_calls = 0
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.start_calls = 0
         self.stop_calls = 0
         self.refresh_calls = 0
 
-    def run(self):
-        self.run_calls += 1
+    def start(self):
+        self.start_calls += 1
         self.rate_received.emit(_snapshot())
         self.connection_state_changed.emit("connected")
 
     def stop(self):
         self.stop_calls += 1
+        self.connection_state_changed.emit("stopped")
 
     def request_refresh(self):
         self.refresh_calls += 1
 
 
-def test_service_starts_one_qthread_worker_and_forwards_signals(qtbot):
-    workers = []
+def _service(streams, enabled=True):
+    def factory(**kwargs):
+        streams.append(_Stream(parent=kwargs["parent"]))
+        return streams[-1]
 
-    def factory(**_kwargs):
-        worker = _Worker()
-        workers.append(worker)
-        return worker
-
-    service = LiveRateService(
+    return LiveRateService(
         logger=logging.getLogger("test.live_rate"),
-        settings_provider=lambda: _SettingsStub({"rates/live_enabled": True}),
-        worker_factory=factory,
+        settings_provider=lambda: _SettingsStub({"rates/live_enabled": enabled}),
+        stream_factory=factory,
     )
+
+
+def test_service_starts_one_stream_and_forwards_signals(qt_app):
+    streams = []
+    service = _service(streams)
     received = []
     states = []
     service.rate_updated.connect(received.append)
     service.connection_state_changed.connect(states.append)
 
     service.start()
-    qtbot.waitUntil(lambda: bool(received), timeout=1000)
     service.start()
 
-    assert len(workers) == 1
+    assert len(streams) == 1
+    assert streams[0].parent() is service
     assert received[-1].final_rate == 100000
-    assert states[-1] == "connected"
+    assert states == ["connected"]
     service.stop()
-    assert workers[0].stop_calls == 1
+    assert streams[0].stop_calls == 1
 
 
-def test_manual_refresh_reuses_running_worker(qtbot):
-    worker = _Worker()
-    service = LiveRateService(
-        settings_provider=lambda: _SettingsStub({"rates/live_enabled": True}),
-        worker_factory=lambda **_kwargs: worker,
-    )
+def test_stop_takes_effect_before_it_returns(qt_app):
+    streams = []
+    service = _service(streams)
+    states = []
+    received = []
+    service.connection_state_changed.connect(states.append)
+    service.rate_updated.connect(received.append)
     service.start()
-    qtbot.waitUntil(lambda: worker.run_calls == 1, timeout=1000)
+
+    service.stop()
+    streams[0].rate_received.emit(_snapshot())
+    streams[0].connection_state_changed.emit("connected")
+
+    assert states == ["connected", "stopped"]
+    assert len(received) == 1
+
+
+def test_a_stopped_service_starts_a_fresh_stream(qt_app):
+    streams = []
+    service = _service(streams)
+    service.start()
+    service.stop()
+
+    service.start()
+
+    assert len(streams) == 2
+    assert streams[1].start_calls == 1
+    service.stop()
+
+
+def test_manual_refresh_reuses_the_running_stream(qt_app):
+    streams = []
+    service = _service(streams)
+    service.start()
 
     service.refresh_now()
 
-    assert worker.refresh_calls == 1
+    assert len(streams) == 1
+    assert streams[0].refresh_calls == 1
     service.stop()
 
 
-def test_manual_refresh_starts_worker_when_not_running(qtbot):
-    worker = _Worker()
-    service = LiveRateService(
-        settings_provider=lambda: _SettingsStub({"rates/live_enabled": True}),
-        worker_factory=lambda **_kwargs: worker,
-    )
+def test_manual_refresh_starts_a_stream_when_none_is_running(qt_app):
+    streams = []
+    service = _service(streams)
 
     service.refresh_now()
-    qtbot.waitUntil(lambda: worker.run_calls == 1, timeout=1000)
 
-    assert worker.refresh_calls == 0
+    assert streams[0].start_calls == 1
+    assert streams[0].refresh_calls == 0
     service.stop()
 
 
-def test_disabled_setting_prevents_worker_creation():
-    calls = []
-    service = LiveRateService(
-        settings_provider=lambda: _SettingsStub({"rates/live_enabled": False}),
-        worker_factory=lambda **kwargs: calls.append(kwargs),
-    )
+def test_disabled_setting_prevents_stream_creation(qt_app):
+    streams = []
+    service = _service(streams, enabled=False)
 
     service.start()
     service.refresh_now()
 
-    assert calls == []
+    assert streams == []
 
 
-def test_stop_is_idempotent_without_worker():
-    service = LiveRateService(
-        settings_provider=lambda: _SettingsStub({"rates/live_enabled": True})
-    )
+def test_stop_is_idempotent_without_a_stream(qt_app):
+    service = _service([])
 
     service.stop()
-    service.stop()
-
-
-def test_worker_rate_is_delivered_to_qobject_receiver_on_gui_thread(qtbot):
-    gui_thread_id = threading.get_ident()
-    handled_on = []
-
-    class _Receiver(QObject):
-        @Slot(object)
-        def handle(self, _snapshot):
-            handled_on.append(threading.get_ident())
-
-    receiver = _Receiver()
-    worker = _Worker()
-    service = LiveRateService(
-        settings_provider=lambda: _SettingsStub({"rates/live_enabled": True}),
-        worker_factory=lambda **_kwargs: worker,
-    )
-    service.rate_updated.connect(receiver.handle)
-
-    service.start()
-    qtbot.waitUntil(lambda: bool(handled_on), timeout=1000)
-
-    assert handled_on == [gui_thread_id]
     service.stop()

@@ -20,8 +20,8 @@ fully pinned export with `pip-audit`, writes deterministic JSON evidence under
 `artifacts/dependency-policy/`, and applies the repository policy. PR, main,
 and release workflows treat the result as blocking.
 
-Safety is retired. Bandit remains a separate source-analysis gate, while Ruff,
-mypy, pytest/pytest-qt, coverage, Hypothesis, Nox, pre-commit, frozen-artifact
+Safety and Bandit are retired; Ruff's security rules (`S`) are the
+source-analysis gate for the application package. Ruff, mypy, pytest/pytest-qt, coverage, Hypothesis, Nox, pre-commit, frozen-artifact
 smokes, and performance budgets retain their existing responsibilities.
 
 ## Advisory exceptions

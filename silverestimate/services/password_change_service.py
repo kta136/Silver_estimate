@@ -121,8 +121,8 @@ class PasswordChangeService:
             )
             return PasswordChangeResult(
                 PasswordChangeStatus.CREDENTIAL_STORE_UNAVAILABLE,
-                "Secure credential storage is not available. Install and configure "
-                "the system keyring, then try again.",
+                "Secure credential storage is not available. Check that Windows "
+                "Credential Manager is working, then try again.",
             )
         except Exception as exc:
             LOGGER.error(

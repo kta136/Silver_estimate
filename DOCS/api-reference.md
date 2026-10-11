@@ -76,8 +76,8 @@ This guide documents the primary controller, service, and persistence APIs expos
 - **PasswordHashService.verify_password(stored_hash: str, provided_password: str) -> PasswordVerification** - distinguishes mismatch from malformed storage.
 
 ### Credential Store (silverestimate/security/credential_store.py)
-- **get_backend_status() -> CredentialBackendStatus** - reports whether the active operating-system keyring backend is trusted and usable.
-- **get_password_hash(kind: str) -> Optional[str] / set_password_hash(kind, value, *, logger=None) / delete_password_hash(kind, *, logger=None)** - read, write, or remove the `main` and `backup` Argon2 hashes in the OS keyring. Credential hashes are not read from or written to QSettings.
+- **get_backend_status() -> CredentialBackendStatus** - reports whether Windows Credential Manager is usable.
+- **get_password_hash(kind: str) -> Optional[str] / set_password_hash(kind, value, *, logger=None) / delete_password_hash(kind, *, logger=None)** - read, write, or remove the `main` and `backup` Argon2 hashes in Windows Credential Manager. Each is a single local-machine entry; a delete clears both of Windows' stores. Credential hashes are not read from or written to QSettings.
 - **get_device_binding_secret() / create_device_binding_secret() / delete_device_binding_secret()** - manage the random 256-bit secret in local-machine Windows Credential Manager storage that prevents a copied database from opening on another PC.
 
 ### SettingsService (silverestimate/services/settings_service.py)
@@ -161,9 +161,9 @@ This guide documents the primary controller, service, and persistence APIs expos
     LiveRateService(parent: Optional[QObject] = None, logger: Optional[logging.Logger] = None)
 
 - Source policy: public DDA HTTPS/SSE, exact item ID `cmomws5tw000004i5k5t6yrnw`, `PER_KG`, and `finalRate` only. No API key is sent.
-- **DdaCurrentRatesClient.fetch_current() -> DdaRateSnapshot** – hydrate/reconcile from `/api/v1/rates/current`.
-- **DdaRateStreamWorker** – class-level PySide6 `Signal` delivery for rate, feed status, connection state, and errors; consumes `/sse/rates`, sequence-checks events, and polls current-rates every 10 seconds only while disconnected.
-- **start() / stop()** – start the stream thread or cooperatively close the active response and exit.
+- **DdaCurrentRatesClient.fetch() / cancel()** – request a hydrate/reconcile snapshot from `/api/v1/rates/current` without blocking; the result arrives through `snapshot_received(DdaRateSnapshot)` or `failed(DdaRateError)`.
+- **DdaRateStream** – class-level PySide6 `Signal` delivery for rate, feed status, connection state, and errors; consumes `/sse/rates`, sequence-checks events, and polls current-rates every 10 seconds only while disconnected.
+- **start() / stop()** – start the stream on the caller's thread, or abort its requests and timers at once.
 - **refresh_now()** – request an anonymous current-rates reconciliation.
 
 ## Persistence Layer
@@ -231,7 +231,7 @@ New integrations should favour the role-specific repositories below instead of a
 - **SqlCipherConnectionBroker (silverestimate/persistence/database_driver.py)** - owns the raw database key, verifies the controlled SQLCipher runtime, configures direct live and worker connections, and serializes maintenance operations.
 - **KdfMetadata and maintenance journals (silverestimate/persistence/storage_metadata.py)** - legacy two-file migration metadata plus binding, backup, rekey, and restore records with canonical JSON and atomic publication.
 - **InlineStatusController (silverestimate/ui/inline_status.py)** - helper used across UI widgets to surface status messages without tight UI coupling.
-- **CredentialStore (silverestimate/security/credential_store.py)** - OS keyring abstraction for hashed credentials and machine-binding material.
+- **CredentialStore (silverestimate/security/credential_store.py)** - Windows Credential Manager storage for hashed credentials and machine-binding material.
 - **Display formatting (silverestimate/ui/display_formatting.py)** - `format_display_date()` and `format_rupees()` provide consistent user-facing dates and Indian-number currency grouping.
 
 ## UI Facades

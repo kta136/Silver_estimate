@@ -177,7 +177,7 @@ Password verification is separate from Qt widgets and database-key derivation.
 Argon2id policy.
 `AuthService` owns login-time verification and the distinction between
 credential mismatch and malformed credential data. `CredentialStore` remains
-the only keyring boundary.
+the only Windows Credential Manager boundary.
 
 The `SILVDB01` importer and its AES-GCM dependency have been retired. An
 authenticated local two-file SQLCipher database is migrated once to the
@@ -191,9 +191,9 @@ after successful validation.
 
 ## DDA live-rate path
 
-`DdaCurrentRatesClient` hydrates anonymously from `https://ddajewels.com/api/v1/rates/current`. `DdaRateStreamWorker` then consumes `https://ddajewels.com/sse/rates`.
+`DdaCurrentRatesClient` hydrates anonymously from `https://ddajewels.com/api/v1/rates/current`. `DdaRateStream` then consumes `https://ddajewels.com/sse/rates`. Both use Qt's network stack on the GUI thread, driven by reply and timer signals, so stopping aborts requests at once and no worker thread is involved.
 
-Only item ID `cmomws5tw000004i5k5t6yrnw` is accepted. The customer-facing `finalRate` and `PER_KG` unit are mandatory; `baseRate` and item names are ignored. The worker validates schema version 1, timestamps, sequence order, values, and event shapes.
+Only item ID `cmomws5tw000004i5k5t6yrnw` is accepted. The customer-facing `finalRate` and `PER_KG` unit are mandatory; `baseRate` and item names are ignored. The stream validates schema version 1, timestamps, sequence order, values, and event shapes.
 
 SSE is primary. A disconnected stream polls current-rates every 10 seconds, sequence gaps trigger one reconciliation, and no activity for 45 seconds marks the socket stale. Reconnect delays are jittered around 1, 2, 4, 8, and 10 seconds. A verified cached snapshot supplies the offline/stale state.
 

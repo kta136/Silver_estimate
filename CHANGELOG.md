@@ -64,6 +64,34 @@
 - Fit `Landscape` in the print preview's orientation box and show the Print
   button's icon in white.
 - Say `1 silver bar created`, not `1 silver bar(s) created`.
+- Keep one copy of each stored credential. Windows holds a roaming and a
+  local copy under one name and shows whichever store any program wrote to
+  last, so the old layout could check a password against a superseded hash,
+  and a wipe could leave a copy that came back later. Each entry is now a
+  single local-machine credential under its own name, a delete clears both
+  stores, and the first start after updating moves an existing installation
+  over, keeping the value written last. Earlier versions of the app can still
+  read the entries.
+- Accept the live-rate server's `feed-status` events, whose `status` is a
+  word such as `stale`. They were being rejected with a warning on every
+  connection, so market-open and market-closed updates never arrived.
+
+### Dependencies and tooling
+
+- Store password hashes and the device secret through Windows Credential
+  Manager directly, using the standard library. The `keyring` package and the
+  eight packages installed with it are gone.
+- Fetch live rates with Qt's network stack instead of `urllib` on a worker
+  thread. Closing the app or switching live rates off no longer waits for a
+  request in flight. The packaged app now ships Qt Network and the Windows TLS
+  plugin, and its startup check requires that TLS backend.
+- Start a new log file each midnight with the standard
+  `TimedRotatingFileHandler` in place of the custom cleanup scheduler. With
+  `Delete old logs automatically` on, logs older than the chosen days are
+  also cleared at startup, which the scheduler missed when the app was closed
+  overnight; with it off, the last 30 daily files are kept. Logs are no longer
+  capped by size.
+- Replace Bandit with Ruff's security rules (`S`) in lint, pre-commit and CI.
 
 ## [4.06] - 2026-10-10
 

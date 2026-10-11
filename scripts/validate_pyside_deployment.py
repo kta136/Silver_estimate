@@ -38,6 +38,7 @@ REQUIRED_FILES = (
     "pyside6/qt-plugins/imageformats/qsvg.dll",
     "pyside6/qt-plugins/platforms/qwindows.dll",
     "pyside6/qt-plugins/styles/qmodernwindowsstyle.dll",
+    "pyside6/qt-plugins/tls/qschannelbackend.dll",
 )
 
 FORBIDDEN_PATH_FRAGMENTS = (
@@ -56,7 +57,6 @@ FORBIDDEN_PATH_FRAGMENTS = (
     "/qoffscreen.dll",
     "/qopensslbackend.dll",
     "/qpdf.dll",
-    "/qschannelbackend.dll",
     "/qtga.dll",
     "/qtiff.dll",
     "/qwbmp.dll",
@@ -69,10 +69,9 @@ FORBIDDEN_EXACT_PATHS = (
 )
 
 REQUIRED_REPORT_MODULES = (
+    "PySide6.QtNetwork",
     "argon2._password_hasher",
-    "keyring.backends.Windows",
-    "keyring.backends.fail",
-    "keyring.backends.null",
+    "silverestimate.security.windows_vault",
     "sqlcipher3._sqlite3",
     "sqlcipher3.dbapi2",
 )
@@ -80,6 +79,7 @@ REQUIRED_REPORT_MODULES = (
 FORBIDDEN_REPORT_MODULE_PREFIXES = (
     "_sqlite3",
     "PyQt6",
+    "keyring",
     "passlib",
     "sqlite3",
 )

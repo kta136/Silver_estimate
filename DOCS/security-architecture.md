@@ -7,6 +7,16 @@ password triggers the deliberate data-wipe workflow. Password hashes are Argon2
 records stored only in the operating-system keyring. First-run hashes are
 committed only after the new encrypted database opens, creates its current
 schema, and validates.
+
+Each record is one local-machine Windows Credential Manager entry named
+`<entry>@SilverEstimateApp`. Windows keeps a roaming and a local copy under one
+name and shows whichever store any program wrote to last, so an entry is never
+written to both. Versions built on the `keyring` package also kept the entry
+written last under the bare `SilverEstimateApp` name and wrote hashes to the
+roaming store; `credential_store` moves such an installation over on first use,
+keeping the value written last, and records that it has done so in the
+`layout@SilverEstimateApp` entry. It repeats the move whenever the bare name
+reappears, which an older version leaves each time it runs.
 Password rotation uses pending and recovery keyring records so interruption can
 be resolved without losing access to the retained old database.
 
@@ -98,10 +108,12 @@ keyring hashes; rollback files are removed after successful validation.
   readers before storage mutation.
 - Data wipe removes the live database, WAL/SHM/journals, legacy KDF and operation
   journals, staged/retained databases, in-application encrypted backups, and
-  related keyring entries including the device-binding secret.
+  related credential entries including the device-binding secret. Each
+  credential delete clears both of Windows' stores.
 - Logs must not contain passwords, raw keys, complete database rows, or
   credential values.
-- Bandit medium/high findings block pull requests, main, and release workflows.
+- Ruff's security rules (`S`) cover the application package and block pull
+  requests, main, and release workflows.
 
 ## Network security
 

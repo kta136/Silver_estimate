@@ -1122,7 +1122,7 @@ required application and dependency metadata.
 - Hypothesis;
 - Nox;
 - pre-commit;
-- Bandit, at least until Ruff security-rule parity is deliberately evaluated;
+- Ruff's security rules, which replaced Bandit on 11 October 2026;
 - the frozen-artifact smoke suite;
 - deterministic performance budgets.
 

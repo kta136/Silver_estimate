@@ -15,7 +15,6 @@ returns, and print-ready outputs.
 [![Formatter: Ruff](https://img.shields.io/badge/formatter-ruff-%23D7FF64)](https://docs.astral.sh/ruff/)
 [![Lint: Ruff](https://img.shields.io/badge/lint-ruff-%23D7FF64)](https://docs.astral.sh/ruff/)
 [![Type checking: mypy](https://img.shields.io/badge/type%20checking-mypy-blue.svg)](https://mypy-lang.org/)
-[![Security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
 [![Pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 [![Platform](https://img.shields.io/badge/packaged%20platform-Windows-lightgrey.svg)](https://github.com/kta136/Silver_estimate)
 
@@ -70,7 +69,7 @@ The app helps silver shops to:
 - **Controllers**: Startup, navigation, and live-rate controllers bootstrap the app, wire menus/toolbars, and manage background refresh cadence.
 - **Services**: `MainCommands`, `SettingsService`, `LiveRateService`, and `AuthService` encapsulate reusable logic; authentication relies on the secure credential store.
 - **Persistence**: `DatabaseManager`, `SqlCipherConnectionBroker`, and role-specific repositories manage direct encrypted connections, schema-v10 creation, v8/v9 upgrades and validation, keyset pages, encrypted WAL/journals, maintenance draining, and staged recovery.
-- **Security & infrastructure**: OS keyring-backed credential storage (`silverestimate/security/credential_store.py`), Qt6 startup bootstrap (`silverestimate/infrastructure/qt_bootstrap.py`), structured logging with optional cleanup scheduler, and QSettings helpers maintain app state safely.
+- **Security & infrastructure**: Windows Credential Manager credential storage (`silverestimate/security/credential_store.py`), Qt6 startup bootstrap (`silverestimate/infrastructure/qt_bootstrap.py`), structured logging with daily rotation and optional cleanup, and QSettings helpers maintain app state safely.
 
 ### DDA Agra Mohar Live Rate
 
@@ -82,7 +81,7 @@ The app helps silver shops to:
 
 ### Key Design Principles
 - Separation of concerns: UI, presenter, services, and persistence remain loosely coupled.
-- Security-first: Encrypted database, keyring-backed credentials, safe defaults for settings.
+- Security-first: Encrypted database, credentials in Windows Credential Manager, safe defaults for settings.
 - Modular: Focused modules for UI, calculations, repositories, and infrastructure.
 - Responsive: Signal/slot updates, debounced tasks, async flush handling.
 - Integrity: Strong validation, transaction boundaries, and repository abstractions.
@@ -100,7 +99,7 @@ See also: `DOCS/project-architecture.md`.
 ### Security
 - Encrypted database: machine-bound SQLCipher 4.17.x with a raw key derived from the password, the in-file salt, and a 256-bit device secret held in local-machine Windows Credential Manager
 - Machine-bound `.sedbbackup` full-database backup and restart-activated restore; `.seitems.json` catalog exports remain plaintext by request
-- Password hashing: Argon2 with hashes stored in the OS keyring (Python `keyring`)
+- Password hashing: Argon2 with hashes stored in Windows Credential Manager
 - Secure settings store: non-sensitive preferences via QSettings
 
 ### Printing & Reporting
@@ -162,12 +161,12 @@ First run notes:
 - You will be prompted to create a password.
 - The password encrypts the local database file at `<EXE folder>/database/estimation.db` (or the repository root during source runs).
 - Keep this password and Windows installation safe: encrypted data cannot be recovered without both the password and this PC's device-binding secret.
-- Hashed credentials are stored in the system keyring. The random device-binding secret is forced into local-machine Windows Credential Manager storage so it cannot roam to another PC.
+- Hashed credentials are stored in Windows Credential Manager. The random device-binding secret is forced into local-machine Windows Credential Manager storage so it cannot roam to another PC.
 
 ## Security
 
 - Encryption: bundled and hash-verified SQLCipher 4.17.x for CPython 3.14 x64, machine-bound Argon2id raw keys, and encrypted database/WAL/journal pages
-- Passwords: direct Argon2id hashing with `argon2-cffi`; current PHC hashes are persisted in the OS keyring (Python `keyring`)
+- Passwords: direct Argon2id hashing with `argon2-cffi`; current PHC hashes are persisted in Windows Credential Manager
 - Files: one permanent encrypted DB at `<EXE folder>/database/estimation.db` (ignored in Git); WAL/SHM and recovery journals can exist temporarily
 - Device binding: copying the DB or a new `.sedbbackup` to another PC does not make it openable, even with the correct password
 - Logs: Written to `logs/` (ignored); avoid logging sensitive data
@@ -205,7 +204,7 @@ Key areas of the codebase:
 - `silverestimate/ui/silver_bar_print_document.py`, `silver_bar_print_layout.py`, and `silver_bar_print_renderer.py` – typed silver-bar report data, semantic layouts, pagination, and direct `QPainter` output.
 - `silverestimate/services/` – auth, settings, live-rate, main commands, and repository adapters.
 - `silverestimate/persistence/` – `DatabaseManager`, current schema definition, SQLCipher broker, and repositories.
-- `silverestimate/security/` – Argon2id password policy and keyring-backed credential storage.
+- `silverestimate/security/` – Argon2id password policy and Windows Credential Manager credential storage.
 - `silverestimate/infrastructure/` – logging, settings helpers, and app constants.
 - `DOCS/` – indexed deep-dive documentation for architecture, deployment, security, data relationships, APIs, and business workflows.
 
@@ -233,7 +232,7 @@ uv run pre-commit run --all-files
 - Shared validation entrypoints:
   - `uv run nox -s pr` for the required PR gate set
   - `uv run nox -s ci` for the required main-branch gate set
-  - `uv run nox -s advisory` for blocking Bandit and locked `pip-audit` policy
+  - `uv run nox -s advisory` for Ruff, including its security rules, and the locked `pip-audit` policy
 - CI requires 75% global coverage and 90% changed-line coverage on pull requests.
 - CI builds the deterministic scale dataset and requires all seven p95 performance metrics with 20 hot-path or five encrypted-flush samples.
 - To iterate quickly on the application builder branch, run `pytest tests/unit/test_application_builder.py`.

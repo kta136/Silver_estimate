@@ -68,7 +68,7 @@ def fetch_item_catalog_page(
 
     total = None
     if include_total:
-        cursor.execute(f"SELECT COUNT(*) FROM items WHERE {where_sql}", where_params)  # nosec B608
+        cursor.execute(f"SELECT COUNT(*) FROM items WHERE {where_sql}", where_params)  # noqa: S608
         count_row = cursor.fetchone()
         total = int(count_row[0]) if count_row else 0
 
@@ -93,7 +93,7 @@ def fetch_item_catalog_page(
         WHERE {where_sql}{keyset_sql}
         ORDER BY UPPER(code), code COLLATE BINARY
         LIMIT ?
-        """,  # nosec B608
+        """,  # noqa: S608
         params,
     )
     fetched = [dict(row) for row in cursor.fetchall()]
@@ -296,7 +296,7 @@ class ItemsRepository:
             placeholders = ",".join("?" for _ in chunk)
             try:
                 cursor.execute(
-                    f"SELECT {ITEM_CATALOG_COLUMNS} FROM items WHERE UPPER(code) IN ({placeholders})",  # nosec B608
+                    f"SELECT {ITEM_CATALOG_COLUMNS} FROM items WHERE UPPER(code) IN ({placeholders})",  # noqa: S608
                     chunk,
                 )
                 for row in cursor.fetchall():
@@ -500,7 +500,7 @@ class ItemsRepository:
             if transaction_started:
                 conn.rollback()
 
-        cursor.execute(f"SELECT {ITEM_CATALOG_COLUMNS} FROM items")  # nosec B608
+        cursor.execute(f"SELECT {ITEM_CATALOG_COLUMNS} FROM items")  # noqa: S608
         catalog_rows = [dict(row) for row in cursor.fetchall()]
         cache_controller = self._cache_controller
         if cache_controller and hasattr(cache_controller, "replace_all"):
@@ -553,7 +553,7 @@ class ItemsRepository:
             chunk = normalized[start : start + 900]
             placeholders = ",".join("?" for _ in chunk)
             cursor.execute(
-                f"SELECT code FROM items WHERE UPPER(code) IN ({placeholders}) "  # nosec B608
+                f"SELECT code FROM items WHERE UPPER(code) IN ({placeholders}) "  # noqa: S608
                 "AND EXISTS (SELECT 1 FROM estimate_items WHERE item_code = items.code "
                 "AND (item_code_snapshot IS NULL OR snapshot_version < 1))",
                 chunk,
@@ -609,7 +609,7 @@ class ItemsRepository:
             code_chunk = normalized_codes[start : start + chunk]
             placeholders = ",".join("?" for _ in code_chunk)
             cursor.execute(
-                f"DELETE FROM items WHERE UPPER(code) IN ({placeholders})",  # nosec B608
+                f"DELETE FROM items WHERE UPPER(code) IN ({placeholders})",  # noqa: S608
                 code_chunk,
             )
             deleted += max(cursor.rowcount, 0)

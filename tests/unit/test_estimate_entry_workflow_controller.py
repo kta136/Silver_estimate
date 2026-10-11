@@ -929,7 +929,7 @@ def test_last_balance_dialog_updates_totals_and_marks_unsaved(
 def test_refresh_silver_rate_emits_none_on_failure(workflow_host, monkeypatch):
     host, controller = workflow_host
 
-    class _RunnerSignal:
+    class _ClientSignal:
         def __init__(self):
             self.callback = None
 
@@ -940,15 +940,15 @@ def test_refresh_silver_rate_emits_none_on_failure(workflow_host, monkeypatch):
             if self.callback:
                 self.callback(*args)
 
-    class _Runner:
+    class _Client:
         def __init__(self, *_args, **_kwargs):
-            self.result = _RunnerSignal()
-            self.failed = _RunnerSignal()
+            self.snapshot_received = _ClientSignal()
+            self.failed = _ClientSignal()
 
-        def submit(self, _request):
-            self.failed.emit(1, RuntimeError("offline"))
+        def fetch(self):
+            self.failed.emit(RuntimeError("offline"))
 
-    monkeypatch.setattr(workflow_module, "LatestRequestRunner", _Runner)
+    monkeypatch.setattr(workflow_module, "DdaCurrentRatesClient", _Client)
 
     controller.refresh_silver_rate()
 

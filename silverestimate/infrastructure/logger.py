@@ -5,14 +5,13 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import PySide6.QtCore as QtCore
 from PySide6.QtCore import QtMsgType
 
 from silverestimate.infrastructure.paths import get_runtime_root
 from silverestimate.infrastructure.settings import SettingsKey, get_app_settings
 
-# Global variable to store the cleanup scheduler instance
-_cleanup_scheduler: "LogCleanupScheduler | None" = None
+# Daily files kept per log when automatic deletion is off, so logs stay bounded.
+DEFAULT_BACKUP_DAYS = 30
 
 
 def _read_error_logging_enabled(settings):
@@ -29,6 +28,7 @@ def setup_logging(
     enable_info=True,
     enable_error=True,
     enable_debug=True,
+    backup_days=DEFAULT_BACKUP_DAYS,
 ):
     """
     Configure the logging system for the Silver Estimation App.
@@ -40,6 +40,7 @@ def setup_logging(
         enable_info (bool): Whether to enable INFO level logs
         enable_error (bool): Whether to enable ERROR and CRITICAL level logs
         enable_debug (bool): Whether to enable DEBUG level logs (only when debug_mode is True)
+        backup_days (int): Daily log files kept after each midnight rollover
 
     Returns:
         logging.Logger: Configured root logger
@@ -54,9 +55,10 @@ def setup_logging(
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.DEBUG if debug_mode else logging.INFO)
 
-    # Clear any existing handlers
+    # Clear any existing handlers, releasing their files so they can roll over
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
+        handler.close()
 
     # Common log format
     log_format = logging.Formatter(
@@ -65,10 +67,10 @@ def setup_logging(
 
     # Main log file (INFO and above) - only if enabled
     if enable_info:
-        main_handler = logging.handlers.RotatingFileHandler(
+        main_handler = logging.handlers.TimedRotatingFileHandler(
             log_path / f"{app_name}.log",
-            maxBytes=5 * 1024 * 1024,  # 5MB
-            backupCount=10,
+            when="midnight",
+            backupCount=backup_days,
             encoding="utf-8",
         )
         main_handler.setLevel(logging.INFO)
@@ -77,10 +79,10 @@ def setup_logging(
 
     # Error log file (ERROR and CRITICAL only) - only if enabled
     if enable_error:
-        error_handler = logging.handlers.RotatingFileHandler(
+        error_handler = logging.handlers.TimedRotatingFileHandler(
             log_path / f"{app_name}_error.log",
-            maxBytes=5 * 1024 * 1024,  # 5MB
-            backupCount=10,
+            when="midnight",
+            backupCount=backup_days,
             encoding="utf-8",
         )
         error_handler.setLevel(logging.ERROR)
@@ -89,10 +91,10 @@ def setup_logging(
 
     # Debug log file (all levels, only when debug_mode is True and enabled)
     if debug_mode and enable_debug:
-        debug_handler = logging.handlers.RotatingFileHandler(
+        debug_handler = logging.handlers.TimedRotatingFileHandler(
             log_path / f"{app_name}_debug.log",
-            maxBytes=10 * 1024 * 1024,  # 10MB
-            backupCount=5,
+            when="midnight",
+            backupCount=backup_days,
             encoding="utf-8",
         )
         debug_handler.setLevel(logging.DEBUG)
@@ -173,10 +175,16 @@ def cleanup_old_logs(log_dir="logs", max_age_days=1):
 
     cutoff = datetime.now() - timedelta(days=max_age_days)
     removed_count = 0
+    # Windows cannot delete a file the running handlers still hold open.
+    active_files = {
+        Path(handler.baseFilename).resolve()
+        for handler in logging.getLogger().handlers
+        if isinstance(handler, logging.FileHandler)
+    }
 
     # Process all log files in the main directory
     for file_path in log_path.glob("*.log*"):
-        if file_path.is_file():
+        if file_path.is_file() and file_path.resolve() not in active_files:
             file_time = datetime.fromtimestamp(file_path.stat().st_mtime)
             if file_time < cutoff:
                 try:
@@ -206,113 +214,6 @@ def cleanup_old_logs(log_dir="logs", max_age_days=1):
         f"Log cleanup completed: removed {removed_count} files older than {max_age_days} days"
     )
     return removed_count
-
-
-class LogCleanupScheduler:
-    """Scheduler for automatic log cleanup."""
-
-    def __init__(self, log_dir="logs", cleanup_days=1):
-        """
-        Initialize the log cleanup scheduler.
-
-        Args:
-            log_dir (str): Directory containing log files
-            cleanup_days (int): Maximum age of log files in days
-        """
-        self.log_dir = log_dir
-        self.cleanup_days = max(1, min(cleanup_days, 365))  # Ensure valid range
-        self.timer = None
-        self.midnight_timer = None
-        self.logger = logging.getLogger(__name__)
-        self.is_running = False
-
-    def start(self):
-        """Start the scheduled cleanup."""
-        if self.is_running:
-            self.stop()
-
-        # Calculate time until midnight
-        now = datetime.now()
-        midnight = (now + timedelta(days=1)).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
-        seconds_until_midnight = (midnight - now).total_seconds()
-
-        # Create a QTimer that fires at midnight
-        self.timer = QtCore.QTimer()
-        self.timer.timeout.connect(self._run_cleanup)
-        self.timer.setSingleShot(False)
-        self.timer.start(24 * 60 * 60 * 1000)  # 24 hours in milliseconds
-
-        # Also run an initial cleanup after a short delay
-        self.midnight_timer = QtCore.QTimer()
-        self.midnight_timer.timeout.connect(self._run_cleanup)
-        self.midnight_timer.setSingleShot(True)
-        self.midnight_timer.start(int(seconds_until_midnight * 1000))
-
-        self.is_running = True
-        next_cleanup_time = midnight.strftime("%Y-%m-%d %H:%M:%S")
-        self.logger.info(
-            f"Log cleanup scheduler started. Next cleanup at {next_cleanup_time} (in {seconds_until_midnight / 3600:.1f} hours)"
-        )
-
-    def stop(self):
-        """Stop the scheduled cleanup."""
-        if self.timer is not None:
-            self.timer.stop()
-            self.timer = None
-
-        if self.midnight_timer is not None:
-            self.midnight_timer.stop()
-            self.midnight_timer = None
-
-        self.is_running = False
-        self.logger.info("Log cleanup scheduler stopped")
-
-    def update_settings(self, log_dir=None, cleanup_days=None):
-        """
-        Update scheduler settings without restarting.
-
-        Args:
-            log_dir (str, optional): New log directory path
-            cleanup_days (int, optional): New cleanup days value
-        """
-        restart_needed = False
-
-        if log_dir is not None and log_dir != self.log_dir:
-            self.log_dir = log_dir
-            restart_needed = True
-
-        if cleanup_days is not None and cleanup_days != self.cleanup_days:
-            self.cleanup_days = max(1, min(cleanup_days, 365))  # Ensure valid range
-            restart_needed = True
-
-        if restart_needed and self.is_running:
-            self.logger.debug("Restarting scheduler with new settings")
-            self.stop()
-            self.start()
-
-    def _run_cleanup(self):
-        """Run the cleanup operation."""
-        try:
-            self.logger.debug(
-                f"Running scheduled cleanup for logs older than {self.cleanup_days} days"
-            )
-            removed_count = cleanup_old_logs(self.log_dir, self.cleanup_days)
-            self.logger.info(
-                f"Automatic log cleanup completed. Removed {removed_count} old log files"
-            )
-
-            # Calculate next run time for logging
-            next_cleanup = datetime.now().replace(
-                hour=0, minute=0, second=0, microsecond=0
-            ) + timedelta(days=1)
-            self.logger.debug(
-                f"Next scheduled cleanup: {next_cleanup.strftime('%Y-%m-%d %H:%M:%S')}"
-            )
-
-        except Exception as e:
-            self.logger.error(f"Error during automatic log cleanup: {e}", exc_info=True)
 
 
 def get_log_config():
@@ -367,6 +268,13 @@ def get_log_config():
     }
 
 
+def backup_days_for(config):
+    """Return how many daily log files the handlers keep for ``config``."""
+    if config.get("auto_cleanup"):
+        return config["cleanup_days"]
+    return DEFAULT_BACKUP_DAYS
+
+
 def reconfigure_logging():
     """
     Reconfigure the logging system based on current settings.
@@ -384,28 +292,8 @@ def reconfigure_logging():
         enable_info=config["enable_info"],
         enable_error=config["enable_error"],
         enable_debug=config["enable_debug"],
+        backup_days=backup_days_for(config),
     )
-
-    # Configure cleanup scheduler if enabled
-    global _cleanup_scheduler
-
-    if config["auto_cleanup"]:
-        if _cleanup_scheduler is None:
-            # Create new scheduler if it doesn't exist
-            _cleanup_scheduler = LogCleanupScheduler(
-                log_dir=config["log_dir"], cleanup_days=config["cleanup_days"]
-            )
-            _cleanup_scheduler.start()
-        else:
-            # Update existing scheduler with new settings
-            _cleanup_scheduler.update_settings(
-                log_dir=config["log_dir"], cleanup_days=config["cleanup_days"]
-            )
-    else:
-        # Stop and remove scheduler if auto-cleanup is disabled
-        if _cleanup_scheduler is not None:
-            _cleanup_scheduler.stop()
-            _cleanup_scheduler = None
 
     # Log the reconfiguration
     root_logger.info("Logging system reconfigured with new settings")

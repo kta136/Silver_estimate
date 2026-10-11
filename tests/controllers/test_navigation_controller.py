@@ -4,7 +4,16 @@ import types
 
 from PySide6.QtWidgets import QDialog
 
-from silverestimate.services.navigation_service import NavigationService
+from silverestimate.controllers.navigation_controller import NavigationController
+
+
+def _navigation(main_window, stack, logger_name):
+    main_window.stack = stack
+    return NavigationController(
+        main_window=main_window,
+        commands=None,
+        logger=logging.getLogger(logger_name),
+    )
 
 
 class _ActionStub:
@@ -41,7 +50,7 @@ class _MessageBoxRecorder:
 def test_show_estimate_switches_widget(monkeypatch):
     message_box = _MessageBoxRecorder()
     monkeypatch.setattr(
-        "silverestimate.services.navigation_service.QMessageBox",
+        "silverestimate.controllers.navigation_controller.QMessageBox",
         message_box,
     )
 
@@ -54,9 +63,7 @@ def test_show_estimate_switches_widget(monkeypatch):
         _view_estimate_action=_ActionStub(),
     )
 
-    service = NavigationService(
-        main_window, stack, logger=logging.getLogger("test-nav")
-    )
+    service = _navigation(main_window, stack, "test-nav")
     service.show_estimate()
 
     assert stack.current is estimate_widget
@@ -70,7 +77,7 @@ def test_show_item_master_lazy_creation(monkeypatch):
     stack = _StackStub()
     message_box = _MessageBoxRecorder()
     monkeypatch.setattr(
-        "silverestimate.services.navigation_service.QMessageBox",
+        "silverestimate.controllers.navigation_controller.QMessageBox",
         message_box,
     )
 
@@ -94,9 +101,7 @@ def test_show_item_master_lazy_creation(monkeypatch):
         _view_item_master_action=_ActionStub(),
     )
 
-    service = NavigationService(
-        main_window, stack, logger=logging.getLogger("test-nav-item")
-    )
+    service = _navigation(main_window, stack, "test-nav-item")
     service.show_item_master()
 
     widget = main_window.item_master_widget
@@ -113,7 +118,7 @@ def test_show_item_master_failure_shows_message(monkeypatch):
     stack = _StackStub()
     message_box = _MessageBoxRecorder()
     monkeypatch.setattr(
-        "silverestimate.services.navigation_service.QMessageBox",
+        "silverestimate.controllers.navigation_controller.QMessageBox",
         message_box,
     )
 
@@ -134,9 +139,7 @@ def test_show_item_master_failure_shows_message(monkeypatch):
         _view_item_master_action=_ActionStub(),
     )
 
-    service = NavigationService(
-        main_window, stack, logger=logging.getLogger("test-nav-item-fail")
-    )
+    service = _navigation(main_window, stack, "test-nav-item-fail")
     service.show_item_master()
 
     assert message_box.calls
@@ -148,7 +151,7 @@ def test_show_silver_bars_lazy_creation(monkeypatch):
     stack = _StackStub()
     message_box = _MessageBoxRecorder()
     monkeypatch.setattr(
-        "silverestimate.services.navigation_service.QMessageBox",
+        "silverestimate.controllers.navigation_controller.QMessageBox",
         message_box,
     )
 
@@ -177,9 +180,7 @@ def test_show_silver_bars_lazy_creation(monkeypatch):
         _view_silver_bars_action=_ActionStub(),
     )
 
-    service = NavigationService(
-        main_window, stack, logger=logging.getLogger("test-silver")
-    )
+    service = _navigation(main_window, stack, "test-silver")
     service.show_silver_bars()
 
     assert not hasattr(main_window, "silver_bar_widget")
@@ -194,7 +195,7 @@ def test_show_silver_bars_requires_database(monkeypatch):
     stack = _StackStub()
     message_box = _MessageBoxRecorder()
     monkeypatch.setattr(
-        "silverestimate.services.navigation_service.QMessageBox",
+        "silverestimate.controllers.navigation_controller.QMessageBox",
         message_box,
     )
 
@@ -204,10 +205,8 @@ def test_show_silver_bars_requires_database(monkeypatch):
         _view_silver_bars_action=_ActionStub(),
     )
 
-    service = NavigationService(
-        main_window, stack, logger=logging.getLogger("test-silver-db")
-    )
-    service.db = None
+    service = _navigation(main_window, stack, "test-silver-db")
+    service._db = None
 
     service.show_silver_bars()
 
@@ -218,7 +217,7 @@ def test_show_estimate_history_loads_selected_voucher(monkeypatch):
     stack = _StackStub()
     message_box = _MessageBoxRecorder()
     monkeypatch.setattr(
-        "silverestimate.services.navigation_service.QMessageBox",
+        "silverestimate.controllers.navigation_controller.QMessageBox",
         message_box,
     )
 
@@ -235,9 +234,7 @@ def test_show_estimate_history_loads_selected_voucher(monkeypatch):
         estimate_widget=estimate_widget,
     )
 
-    service = NavigationService(
-        main_window, stack, logger=logging.getLogger("test-history")
-    )
+    service = _navigation(main_window, stack, "test-history")
     show_calls = []
     service.show_estimate = lambda: show_calls.append("show")
 

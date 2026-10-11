@@ -11,18 +11,18 @@ from PySide6.QtPrintSupport import QPrinter
 from .modern_print_primitives import (
     ALTERNATE_ROW_BG,
     COLUMN_HEADER_BG,
-    MUTED_TEXT,
     SECTION_BG,
     TEXT,
     TOTAL_BG,
     WHITE,
     ModernPrintStyle,
-    build_modern_print_style,
+    draw_report_header,
     draw_table_row,
     draw_text,
     minimize_bottom_page_margin,
+    paint_report,
+    report_header_height,
 )
-from .print_format_spec import MODERN_ESTIMATE_FORMAT_SPEC
 from .silver_bar_print_document import SilverBarPrintDocument
 from .silver_bar_print_layout import (
     SilverBarPrintLayout,
@@ -56,46 +56,17 @@ class SilverBarPrintRenderer:
         print_font: QFont | None = None,
     ) -> SilverBarPrintLayout:
         layout = self.build_layout(document)
-        base_font = self._resolve_font(print_font)
         minimize_bottom_page_margin(printer)
-        painter = QPainter()
-        if not painter.begin(printer):
-            raise RuntimeError("Could not initialize the silver-bar print painter.")
-
-        try:
-            painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
-            page_rect = printer.pageRect(QPrinter.Unit.DevicePixel)
-            page_width = max(1.0, float(page_rect.width()))
-            page_height = max(1.0, float(page_rect.height()))
-            style = build_modern_print_style(base_font, printer)
-            pages = _paginate(layout, style, page_height)
-
-            for page_index, page in enumerate(pages, start=1):
-                if page_index > 1 and not printer.newPage():
-                    raise RuntimeError("Could not create another print page.")
-                _paint_page(
-                    painter,
-                    layout,
-                    page,
-                    style,
-                    page_width=page_width,
-                )
-        finally:
-            painter.end()
-
-        return layout
-
-    @staticmethod
-    def _resolve_font(print_font: QFont | None) -> QFont:
-        spec = MODERN_ESTIMATE_FORMAT_SPEC
-        font = QFont(print_font) if print_font is not None else QFont(spec.font_family)
-        point_size = (
-            print_font.pointSizeF() if print_font is not None else spec.font_size
+        paint_report(
+            printer,
+            print_font,
+            what="silver-bar",
+            paginate=lambda style, page_height: _paginate(layout, style, page_height),
+            paint_page=lambda painter, page, style, page_width: _paint_page(
+                painter, layout, page, style, page_width=page_width
+            ),
         )
-        if point_size <= 0:
-            point_size = spec.font_size
-        font.setPointSizeF(max(1.0, point_size))
-        return font
+        return layout
 
 
 def _paginate(
@@ -103,7 +74,7 @@ def _paginate(
     style: ModernPrintStyle,
     page_height: float,
 ) -> tuple[_PrintPage, ...]:
-    capacity = page_height - _header_height(layout, style)
+    capacity = page_height - report_header_height(style, has_note=bool(layout.note))
     capacity -= style.section_header_height + style.column_header_height
     if capacity <= 0:
         raise ValueError("The printable page height is too small for this report.")
@@ -143,14 +114,6 @@ def _paginate(
     return tuple(pages)
 
 
-def _header_height(
-    layout: SilverBarPrintLayout,
-    style: ModernPrintStyle,
-) -> float:
-    note_height = style.note_height if layout.note else 0.0
-    return style.title_height + style.metadata_height + note_height + style.header_gap
-
-
 def _paint_page(
     painter: QPainter,
     layout: SilverBarPrintLayout,
@@ -159,7 +122,16 @@ def _paint_page(
     *,
     page_width: float,
 ) -> None:
-    y = _draw_header(painter, layout, style, page_width)
+    y = draw_report_header(
+        painter,
+        style,
+        page_width,
+        title=layout.title,
+        title_alignment="center",
+        left=layout.left_metadata,
+        right=layout.right_metadata,
+        note=layout.note,
+    )
     y = _draw_table_header(
         painter,
         layout,
@@ -210,65 +182,7 @@ def _paint_page(
         )
 
 
-def _draw_header(
-    painter: QPainter,
-    layout: SilverBarPrintLayout,
-    style: ModernPrintStyle,
-    page_width: float,
-) -> float:
-    y = 0.0
-    title_rect = QRectF(0.0, y, page_width, style.title_height)
-    draw_text(
-        painter,
-        title_rect,
-        layout.title,
-        font=style.title_font,
-        metrics=style.title_metrics,
-        alignment="center",
-        padding=style.padding,
-    )
-    y += style.title_height
-
-    metadata_width = page_width / 2.0
-    draw_text(
-        painter,
-        QRectF(0.0, y, metadata_width, style.metadata_height),
-        layout.left_metadata,
-        font=style.bold_font,
-        metrics=style.bold_metrics,
-        alignment="left",
-        padding=style.padding,
-    )
-    draw_text(
-        painter,
-        QRectF(metadata_width, y, page_width - metadata_width, style.metadata_height),
-        layout.right_metadata,
-        font=style.bold_font,
-        metrics=style.bold_metrics,
-        alignment="right",
-        padding=style.padding,
-    )
-    y += style.metadata_height
-
-    if layout.note:
-        draw_text(
-            painter,
-            QRectF(0.0, y, page_width, style.note_height),
-            f"Note: {layout.note}",
-            font=style.base_font,
-            metrics=style.base_metrics,
-            alignment="left",
-            padding=style.padding,
-            color=MUTED_TEXT,
-        )
-        y += style.note_height
-
-    painter.setPen(style.strong_pen)
-    painter.drawLine(0, int(y), int(page_width), int(y))
-    return y + style.header_gap
-
-
-def _draw_table_header(  # noqa: PLR0913 - explicit page painting inputs
+def _draw_table_header(
     painter: QPainter,
     layout: SilverBarPrintLayout,
     page: _PrintPage,

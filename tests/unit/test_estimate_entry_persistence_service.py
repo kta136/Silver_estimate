@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import pytest
 
+from silverestimate.domain.estimate_entry import (
+    EstimateEntryRowState,
+    EstimateEntrySnapshot,
+)
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.presenter import SaveItem, SaveOutcome
 from silverestimate.services.estimate_entry_persistence import (
     EstimateEntryPersistenceService,
 )
-from silverestimate.ui.view_models import EstimateEntryRowState, EstimateEntryViewModel
 
 
 def _row(
@@ -50,49 +53,48 @@ class _PresenterStub:
 
 
 def test_prepare_save_payload_aggregates_rows():
-    view_model = EstimateEntryViewModel()
-    view_model.set_rows(
-        [
-            _row(
-                "REG001",
-                EstimateLineCategory.REGULAR,
-                gross=10.0,
-                poly=1.0,
-                net=9.0,
-                fine=8.325,
-                wage=90.0,
-                purity=92.5,
-                wage_rate=10.0,
-            ),
-            _row(
-                "RET001",
-                EstimateLineCategory.RETURN,
-                gross=2.0,
-                poly=0.2,
-                net=1.8,
-                fine=1.35,
-                wage=0.0,
-                purity=75.0,
-            ),
-            _row(
-                "BAR001",
-                EstimateLineCategory.SILVER_BAR,
-                gross=3.0,
-                poly=0.0,
-                net=3.0,
-                fine=2.997,
-                wage=0.0,
-                purity=99.9,
-            ),
-        ]
-    )
-    view_model.set_totals_inputs(
+    rows = [
+        _row(
+            "REG001",
+            EstimateLineCategory.REGULAR,
+            gross=10.0,
+            poly=1.0,
+            net=9.0,
+            fine=8.325,
+            wage=90.0,
+            purity=92.5,
+            wage_rate=10.0,
+        ),
+        _row(
+            "RET001",
+            EstimateLineCategory.RETURN,
+            gross=2.0,
+            poly=0.2,
+            net=1.8,
+            fine=1.35,
+            wage=0.0,
+            purity=75.0,
+        ),
+        _row(
+            "BAR001",
+            EstimateLineCategory.SILVER_BAR,
+            gross=3.0,
+            poly=0.0,
+            net=3.0,
+            fine=2.997,
+            wage=0.0,
+            purity=99.9,
+        ),
+    ]
+    totals_inputs = dict(
         silver_rate=75.0,
         last_balance_silver=0.5,
         last_balance_amount=50.0,
     )
 
-    service = EstimateEntryPersistenceService(view_model.as_save_snapshot())
+    service = EstimateEntryPersistenceService(
+        EstimateEntrySnapshot.capture(rows, **totals_inputs)
+    )
     prep = service.prepare_save_payload(
         voucher_no="ABC123",
         date="2025-10-17",
@@ -117,33 +119,32 @@ def test_prepare_save_payload_aggregates_rows():
 
 
 def test_prepare_save_payload_skips_invalid_rows():
-    view_model = EstimateEntryViewModel()
-    view_model.set_rows(
-        [
-            _row(
-                "GOOD",
-                EstimateLineCategory.REGULAR,
-                gross=5.0,
-                poly=0.5,
-                net=4.5,
-                fine=4.1625,
-                wage=45.0,
-                wage_rate=10.0,
-                purity=92.5,
-            ),
-            _row(
-                "BAD",
-                EstimateLineCategory.RETURN,
-                gross=1.0,
-                poly=0.1,
-                net=-0.2,
-                fine=0.5,
-                wage=0.0,
-            ),
-        ]
-    )
+    rows = [
+        _row(
+            "GOOD",
+            EstimateLineCategory.REGULAR,
+            gross=5.0,
+            poly=0.5,
+            net=4.5,
+            fine=4.1625,
+            wage=45.0,
+            wage_rate=10.0,
+            purity=92.5,
+        ),
+        _row(
+            "BAD",
+            EstimateLineCategory.RETURN,
+            gross=1.0,
+            poly=0.1,
+            net=-0.2,
+            fine=0.5,
+            wage=0.0,
+        ),
+    ]
 
-    service = EstimateEntryPersistenceService(view_model.as_save_snapshot())
+    service = EstimateEntryPersistenceService(
+        EstimateEntrySnapshot.capture(rows, silver_rate=0.0)
+    )
     prep = service.prepare_save_payload(
         voucher_no="SKIP",
         date="2025-10-17",
@@ -157,12 +158,12 @@ def test_prepare_save_payload_skips_invalid_rows():
     assert prep.payload.totals["net_fine"] == pytest.approx(4.1625)
     presenter = _PresenterStub()
     outcome, _ = service.execute_save(
-        voucher_no="SKIP", date="2025-10-17", note="note", presenter=presenter
+        voucher_no="SKIP", date="2025-10-17", note="note", save=presenter.save_estimate
     )
     assert not outcome.success
     assert "Row 2" in outcome.error_detail
     assert presenter.last_payload is None
-    assert len(view_model.rows()) == 2
+    assert len(rows) == 2
 
 
 @pytest.mark.parametrize(
@@ -182,15 +183,16 @@ def test_prepare_save_payload_skips_invalid_rows():
 def test_execute_save_rejects_invalid_row_numbers(field, value):
     from dataclasses import replace
 
-    view_model = EstimateEntryViewModel()
     good = _row(
         "GOOD", EstimateLineCategory.REGULAR, gross=10, poly=0, net=10, fine=9, wage=10
     )
-    view_model.set_rows([good, replace(good, code="BAD", **{field: value})])
+    rows = [good, replace(good, code="BAD", **{field: value})]
     presenter = _PresenterStub()
     outcome, prep = EstimateEntryPersistenceService(
-        view_model.as_save_snapshot()
-    ).execute_save(voucher_no="1", date="2026-09-05", note="draft", presenter=presenter)
+        EstimateEntrySnapshot.capture(rows, silver_rate=0.0)
+    ).execute_save(
+        voucher_no="1", date="2026-09-05", note="draft", save=presenter.save_estimate
+    )
     assert not outcome.success
     assert prep.skipped_rows == [2]
     assert "Row 2" in outcome.error_detail
@@ -198,26 +200,25 @@ def test_execute_save_rejects_invalid_row_numbers(field, value):
 
 
 def test_populated_row_without_code_cannot_be_silently_dropped():
-    view_model = EstimateEntryViewModel()
-    view_model.set_rows(
-        [
-            _row(
-                "GOOD",
-                EstimateLineCategory.REGULAR,
-                gross=10,
-                poly=0,
-                net=10,
-                fine=9,
-                wage=10,
-            ),
-            EstimateEntryRowState(gross=2),
-            EstimateEntryRowState(),
-        ]
-    )
+    rows = [
+        _row(
+            "GOOD",
+            EstimateLineCategory.REGULAR,
+            gross=10,
+            poly=0,
+            net=10,
+            fine=9,
+            wage=10,
+        ),
+        EstimateEntryRowState(gross=2),
+        EstimateEntryRowState(),
+    ]
     presenter = _PresenterStub()
     outcome, prep = EstimateEntryPersistenceService(
-        view_model.as_save_snapshot()
-    ).execute_save(voucher_no="1", date="2026-09-05", note="", presenter=presenter)
+        EstimateEntrySnapshot.capture(rows, silver_rate=0.0)
+    ).execute_save(
+        voucher_no="1", date="2026-09-05", note="", save=presenter.save_estimate
+    )
     assert not outcome.success
     assert prep.skipped_rows == [2]
     assert "code" in prep.row_errors[2].lower()
@@ -225,22 +226,21 @@ def test_populated_row_without_code_cannot_be_silently_dropped():
 
 
 def test_prepare_save_payload_raises_when_no_valid_rows():
-    view_model = EstimateEntryViewModel()
-    view_model.set_rows(
-        [
-            _row(
-                "NEG",
-                EstimateLineCategory.REGULAR,
-                gross=1.0,
-                poly=0.0,
-                net=-1.0,
-                fine=-0.5,
-                wage=-10.0,
-            )
-        ]
-    )
+    rows = [
+        _row(
+            "NEG",
+            EstimateLineCategory.REGULAR,
+            gross=1.0,
+            poly=0.0,
+            net=-1.0,
+            fine=-0.5,
+            wage=-10.0,
+        )
+    ]
 
-    service = EstimateEntryPersistenceService(view_model.as_save_snapshot())
+    service = EstimateEntryPersistenceService(
+        EstimateEntrySnapshot.capture(rows, silver_rate=0.0)
+    )
 
     with pytest.raises(ValueError):
         service.prepare_save_payload(
@@ -251,29 +251,28 @@ def test_prepare_save_payload_raises_when_no_valid_rows():
 
 
 def test_execute_save_invokes_presenter():
-    view_model = EstimateEntryViewModel()
-    view_model.set_rows(
-        [
-            _row(
-                "SAVE",
-                EstimateLineCategory.REGULAR,
-                gross=4.0,
-                poly=0.5,
-                net=3.5,
-                fine=3.2375,
-                wage=35.0,
-            )
-        ]
-    )
+    rows = [
+        _row(
+            "SAVE",
+            EstimateLineCategory.REGULAR,
+            gross=4.0,
+            poly=0.5,
+            net=3.5,
+            fine=3.2375,
+            wage=35.0,
+        )
+    ]
 
     presenter = _PresenterStub()
-    service = EstimateEntryPersistenceService(view_model.as_save_snapshot())
+    service = EstimateEntryPersistenceService(
+        EstimateEntrySnapshot.capture(rows, silver_rate=0.0)
+    )
 
     outcome, prep = service.execute_save(
         voucher_no="DOIT",
         date="2025-10-17",
         note="",
-        presenter=presenter,
+        save=presenter.save_estimate,
     )
 
     assert outcome.success is True

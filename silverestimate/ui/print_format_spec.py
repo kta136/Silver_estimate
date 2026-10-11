@@ -1,8 +1,7 @@
-"""Specifications for Modern estimate printing."""
+"""Typography for Modern estimate and silver-bar printing."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 
 
@@ -20,24 +19,5 @@ MODERN_ESTIMATE_FORMAT_SPEC = PrintFormatSpec(
     8.0,
     1.0,
 )
-ESTIMATE_FORMAT_SPECS: Mapping[str, PrintFormatSpec] = {
-    "modern": MODERN_ESTIMATE_FORMAT_SPEC,
-}
-DEFAULT_ESTIMATE_FORMAT = "modern"
 
-
-def normalize_estimate_format(value: object) -> str:
-    """Return a supported estimate format, defaulting invalid values to Modern."""
-    normalized = str(value or "").strip().lower()
-    return (
-        normalized if normalized in ESTIMATE_FORMAT_SPECS else DEFAULT_ESTIMATE_FORMAT
-    )
-
-
-__all__ = [
-    "DEFAULT_ESTIMATE_FORMAT",
-    "ESTIMATE_FORMAT_SPECS",
-    "MODERN_ESTIMATE_FORMAT_SPEC",
-    "PrintFormatSpec",
-    "normalize_estimate_format",
-]
+__all__ = ["MODERN_ESTIMATE_FORMAT_SPEC", "PrintFormatSpec"]

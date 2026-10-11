@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import os
-import time
 from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
@@ -13,7 +12,6 @@ from typing import TYPE_CHECKING, Optional, cast
 from PySide6.QtWidgets import QMessageBox, QWidget
 
 from silverestimate.infrastructure.app_constants import DB_PATH
-from silverestimate.persistence.database_protocols import StartupDatabase
 from silverestimate.security import credential_store
 from silverestimate.security.credential_store import CredentialStoreError
 from silverestimate.services.auth_service import (
@@ -71,11 +69,6 @@ class StartupController:
 
     def authenticate_and_prepare(self) -> StartupResult:
         """Authenticate the operator and return a initialized database manager."""
-        startup_t0 = time.perf_counter()
-        self._logger.debug(
-            "[perf] startup.auth_flow_start t_unix=%.6f",
-            time.time(),
-        )
         try:
             auth_result = run_authentication(
                 self._logger,
@@ -127,11 +120,6 @@ class StartupController:
                 "Authentication cancelled or failed; exiting startup sequence"
             )
             return StartupResult(status=StartupStatus.CANCELLED)
-        self._logger.debug(
-            "[perf] startup.auth_accepted_ms=%.2f t_unix=%.6f",
-            (time.perf_counter() - startup_t0) * 1000.0,
-            time.time(),
-        )
 
         if not self._protect_pending_credentials(auth_result):
             return StartupResult(status=StartupStatus.FAILED)
@@ -232,13 +220,11 @@ class StartupController:
         return True
 
     def _prepare_device_binding(self) -> bytes:
-        """Load the local secret, creating it only for new or legacy-local data."""
+        """Load the local secret, creating it only when there is no database yet."""
         secret = credential_store.get_device_binding_secret()
         if secret is not None:
             return credential_store.create_device_binding_secret(logger=self._logger)
-        database = Path(DB_PATH).resolve()
-        legacy_metadata = database.with_name(f"{database.stem}.kdf.json")
-        if database.is_file() and not legacy_metadata.is_file():
+        if Path(DB_PATH).resolve().is_file():
             raise CredentialStoreError(
                 "the required device-binding secret is missing; copied databases "
                 "cannot be registered to a different PC"
@@ -251,7 +237,6 @@ class StartupController:
         device_secret: bytes,
     ) -> DbManager | None:
         """Prepare encrypted storage off-thread, then attach the UI writer."""
-        db_t0 = time.perf_counter()
         db_cls = _resolve_database_manager()
         try:
             os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -282,24 +267,9 @@ class StartupController:
                 db_manager = cast("DbManager", progress.run_operation())
             finally:
                 progress.deleteLater()
-            attach_t0 = time.perf_counter()
             db_manager.attach_prepared_connection()
-            self._logger.debug(
-                "[perf] startup.ui_writer_attach_ms=%.2f",
-                (time.perf_counter() - attach_t0) * 1000.0,
-            )
             self._start_background_preload(db_manager)
             self._logger.info("Database connection established")
-            self._logger.debug(
-                "[perf] startup.db_ready_ms=%.2f t_unix=%.6f",
-                (time.perf_counter() - db_t0) * 1000.0,
-                time.time(),
-            )
-            self._logger.info(
-                '[telemetry] {"metric":"startup.database_initialize_ms",'
-                '"duration_ms":%.3f}',
-                (time.perf_counter() - db_t0) * 1000.0,
-            )
             return db_manager
         except Exception as exc:
             self._logger.critical(
@@ -316,7 +286,7 @@ class StartupController:
             QMessageBox.critical(self._parent, "Database Error", error_details)
             return None
 
-    def _start_background_preload(self, db_manager: StartupDatabase) -> None:
+    def _start_background_preload(self, db_manager: DbManager) -> None:
         """Warm caches during startup so MainWindow stays UI-focused."""
         try:
             db_manager.start_preload_item_cache()

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from silverestimate.persistence.silver_bars_snapshot_repository import (
+from silverestimate.persistence.silver_bar_query_repository import (
     SilverBarsSnapshotRepository,
 )
 
@@ -82,34 +82,6 @@ def _connection_factory(path: Path):
         return connection
 
     return open_connection
-
-
-def test_snapshot_repository_available_page_returns_total_and_rows(tmp_path):
-    db_path = tmp_path / "snapshot.sqlite"
-    _seed_snapshot_db(db_path)
-
-    repo = SilverBarsSnapshotRepository(_connection_factory(db_path))
-    page = repo.get_available_bars_keyset_page(limit=1)
-
-    assert page.total == 2
-    assert len(page.items) == 1
-    assert page.items[0]["estimate_voucher_no"] == "V002"
-    assert page.items[0]["status"] == "In Stock"
-    assert page.items[0]["list_id"] is None
-
-
-def test_snapshot_repository_available_page_applies_date_range_filter(tmp_path):
-    db_path = tmp_path / "snapshot.sqlite"
-    _seed_snapshot_db(db_path)
-
-    repo = SilverBarsSnapshotRepository(_connection_factory(db_path))
-    page = repo.get_available_bars_keyset_page(
-        date_range=("2026-02-10 10:30:00", "2026-02-10 11:30:00"),
-        limit=100,
-    )
-
-    assert page.total == 1
-    assert [row["estimate_voucher_no"] for row in page.items] == ["V002"]
 
 
 def test_snapshot_repository_history_search_filters_by_note_and_status(tmp_path):

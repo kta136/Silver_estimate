@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from typing import TYPE_CHECKING
 
 from silverestimate.domain.voucher_deletion import (
     VoucherDeletionPreview,
@@ -13,7 +14,9 @@ from silverestimate.domain.voucher_deletion import (
     numeric_voucher_key,
 )
 from silverestimate.persistence.database_driver import Cursor
-from silverestimate.persistence.database_protocols import RepositoryDatabase
+
+if TYPE_CHECKING:
+    from silverestimate.persistence.database_manager import DatabaseManager
 
 # Shared with single-voucher deletion. The query must alias silver_bars as bars.
 PROTECTED_BAR_SQL = """(
@@ -96,7 +99,7 @@ def _in_numeric_range(value: str, low: tuple[int, str], high: tuple[int, str]) -
 
 
 class VoucherDeletionRepository:
-    def __init__(self, database: RepositoryDatabase) -> None:
+    def __init__(self, database: DatabaseManager) -> None:
         self._db = database
 
     def preview(self, criteria: VoucherDeletionRange) -> VoucherDeletionPreview:

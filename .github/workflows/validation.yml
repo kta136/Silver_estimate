@@ -1,0 +1,42 @@
+name: Validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Lint, types and tests
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv python install 3.14
+      - name: Sync frozen development environment
+        run: uv sync --frozen --extra dev
+      - name: Verify committed SQLCipher wheel
+        shell: pwsh
+        run: uv run python scripts/verify_sqlcipher_runtime.py --wheel vendor/sqlcipher/sqlcipher3-0.6.2+silverestimate.4.17.0.1-cp314-cp314-win_amd64.whl --provenance vendor/sqlcipher/PROVENANCE.json
+      - name: Verify installed SQLCipher runtime
+        run: uv run python scripts/verify_sqlcipher_runtime.py --provenance vendor/sqlcipher/PROVENANCE.json
+      - name: Ruff
+        run: uv run nox -s ruff
+      - name: Mypy
+        run: uv run nox -s mypy
+      - name: Tests
+        run: uv run nox -s tests
+      - name: Dependency advisories (report only)
+        run: uv run nox -s audit
+        continue-on-error: true

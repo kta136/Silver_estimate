@@ -52,7 +52,7 @@ def find_max_bars_combination(bars, min_target: float, max_target: float):
 
 def _within_range(bars, min_target: float, max_target: float) -> bool:
     total = sum(bar["fine_weight"] for bar in bars)
-    return min_target - _EPSILON <= total <= max_target + _EPSILON
+    return bool(min_target - _EPSILON <= total <= max_target + _EPSILON)
 
 
 def dp_combination_range(bars, min_target: float, max_target: float):

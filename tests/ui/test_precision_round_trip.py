@@ -4,11 +4,11 @@ from dataclasses import replace
 
 import pytest
 
+from silverestimate.domain.estimate_entry import EstimateEntryRowState
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.persistence.database_manager import DatabaseManager
 from silverestimate.ui.estimate_print_document import EstimatePrintDocument
 from silverestimate.ui.estimate_print_layout import build_modern_estimate_layout
-from silverestimate.ui.view_models import EstimateEntryRowState
 from tests.factories import estimate_totals, regular_item
 
 
@@ -167,14 +167,14 @@ def test_loading_printing_and_note_only_save_preserve_legacy_line_amounts(
     line = regular_item(
         gross=10.125, net_wt=10.125, fine=9.365625, wage=10.125, line_key="legacy"
     )
-    assert db.save_estimate_with_returns(
+    assert db.save_estimate_atomic(
         "old",
         "2026-09-05",
         12.34,
         [line],
         [],
         estimate_totals(net_fine=9.365625, net_wage=10.125),
-    )
+    ).success
     before = db.get_estimate_by_voucher("old")
     widget = make_estimate_widget(db)
     assert widget.workflow_controller.apply_loaded_estimate(

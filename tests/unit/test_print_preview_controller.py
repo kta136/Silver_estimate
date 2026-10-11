@@ -46,11 +46,7 @@ class _PreviewWidgetStub:
         self.zoom_factor = zoom_factor
 
 
-def _estimate_document(
-    format_key: str = "modern",
-    *,
-    show_tunch: bool = False,
-) -> EstimatePrintDocument:
+def _estimate_document(*, show_tunch: bool = False) -> EstimatePrintDocument:
     return EstimatePrintDocument.from_mapping(
         {
             "header": {
@@ -60,7 +56,6 @@ def _estimate_document(
             },
             "items": [],
         },
-        format_key=format_key,
         show_tunch=show_tunch,
     )
 
@@ -72,11 +67,10 @@ def _report_document() -> SilverBarListPrintDocument:
     )
 
 
-def _estimate_payload(format_key: str = "modern") -> PrintPreviewPayload:
+def _estimate_payload() -> PrintPreviewPayload:
     payload = PrintPayloadBuilder().build_estimate_preview_payload(
         "V-001",
         fetch_estimate=lambda _voucher: asdict(_estimate_document()),
-        format_key=format_key,
     )
     assert payload is not None
     return payload
@@ -498,12 +492,10 @@ def test_preview_defaults_persist_updated_print_preferences(
     qt_app, monkeypatch, settings_stub
 ):
     del qt_app, settings_stub
-    persisted_formats = []
     persisted_tunch = []
     controller = PrintPreviewController(
         printer=QPrinter(),
         render_document=lambda *args: None,
-        persist_estimate_format=persisted_formats.append,
         persist_tunch_visibility=persisted_tunch.append,
     )
     monkeypatch.setattr(controller._printer, "printerName", lambda: "Warehouse Printer")
@@ -522,7 +514,7 @@ def test_preview_defaults_persist_updated_print_preferences(
             actual_margins.bottom(),
         )
     )
-    payload = _estimate_payload("classic")
+    payload = _estimate_payload()
 
     controller._preferences.save_preview_defaults(controller._printer, payload)
 
@@ -534,41 +526,21 @@ def test_preview_defaults_persist_updated_print_preferences(
     assert settings.value("print/page_width_mm") == 215.9
     assert settings.value("print/page_height_mm") == 355.6
     assert settings.value("print/margins") == expected_margins_str
-    assert settings.value("print/estimate_layout") == "modern"
     assert settings.value("print/show_tunch", type=bool) is False
-    assert persisted_formats == ["modern"]
     assert persisted_tunch == [False]
 
 
-def test_preview_format_request_falls_back_to_modern(qtbot) -> None:
+def test_preview_tunch_toggle_refreshes(qtbot) -> None:
     controller = PrintPreviewController(
         printer=QPrinter(),
         render_document=lambda *args: None,
     )
     preview = PrintPreviewDialog(controller._printer)
     qtbot.addWidget(preview)
-    session = _preview_session(preview, _estimate_payload("modern"))
-
-    session.switch_format("classic")
-
-    assert session.payload.format_key == "modern"
-    assert session.payload.document.format_key == "modern"
-
-
-def test_preview_tunch_toggle_refreshes_and_survives_format_switch(qtbot) -> None:
-    controller = PrintPreviewController(
-        printer=QPrinter(),
-        render_document=lambda *args: None,
-    )
-    preview = PrintPreviewDialog(controller._printer)
-    qtbot.addWidget(preview)
-    session = _preview_session(preview, _estimate_payload("modern"))
+    session = _preview_session(preview, _estimate_payload())
 
     session.switch_tunch_visibility(True)
 
-    assert session.payload.show_tunch is True
-    session.switch_format("classic")
-    assert session.payload.format_key == "modern"
     assert session.payload.show_tunch is True
 
 

@@ -197,7 +197,7 @@ def build_modern_estimate_layout(
     return _complete_layout(document.header, sections, totals_by_key)
 
 
-def _build_section(  # noqa: PLR0913 - explicit semantic section inputs
+def _build_section(
     key: str,
     title: str,
     items: tuple[EstimatePrintItem, ...],

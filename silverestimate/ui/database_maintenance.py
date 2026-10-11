@@ -13,7 +13,6 @@ from silverestimate.ui.maintenance_progress import MaintenanceProgressDialog
 
 if TYPE_CHECKING:
     from silverestimate.persistence.database_manager import DatabaseManager
-    from silverestimate.persistence.database_protocols import MainCommandsDatabase
 
 ResultT = TypeVar("ResultT")
 
@@ -46,7 +45,7 @@ class _OwnerRelease(QObject):
 
 
 def run_database_maintenance(
-    database: MainCommandsDatabase,
+    database: DatabaseManager,
     operation: Callable[[DatabaseManager], ResultT],
     title: str,
     parent: QWidget | None = None,

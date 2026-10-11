@@ -1,4 +1,4 @@
-"""Controller responsible for building menus and navigation actions."""
+"""Build the main window's menus and switch between its screens."""
 
 from __future__ import annotations
 
@@ -7,49 +7,227 @@ from typing import Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence
-from PySide6.QtWidgets import QMenuBar
+from PySide6.QtWidgets import QMenuBar, QMessageBox
 
 from silverestimate.ui.icons import get_icon
+from silverestimate.ui.message_dialogs import with_details
 
 
 class NavigationController:
-    """Encapsulate MainWindow menu wiring."""
+    """Own the menus, lazy screen creation and screen switching."""
 
     def __init__(
         self,
         *,
         main_window,
-        navigation_service,
         commands,
         logger: Optional[logging.Logger] = None,
     ) -> None:
         self._main_window = main_window
-        self._navigation_service = navigation_service
+        self._stack = getattr(main_window, "stack", None)
+        self._db = getattr(main_window, "db", None)
         self._commands = commands
         self._logger = logger or logging.getLogger(__name__)
 
     def initialize(self) -> None:
         self._build_menu_bar()
 
-    # --- Slots exposed to the window ----------------------------------
+    # --- Screens and dialogs -------------------------------------------
+    def show_estimate(self) -> None:
+        widget = getattr(self._main_window, "estimate_widget", None)
+        if widget is None:
+            self._logger.error("Cannot show estimate: estimate_widget is not available")
+            QMessageBox.critical(
+                self._main_window,
+                "Estimate Entry Unavailable",
+                "Estimate entry is not available. Please restart the application.",
+            )
+            return
+        if not self._switch_widget(widget):
+            return
+        self._sync_actions(
+            nav=getattr(self._main_window, "nav_estimate_action", None),
+            menu=getattr(self._main_window, "_menu_estimate_action", None),
+            view=getattr(self._main_window, "_view_estimate_action", None),
+        )
 
-    def show_estimate(self):
-        return self._navigation_service.show_estimate()
+    def show_item_master(self) -> None:
+        widget = getattr(self._main_window, "item_master_widget", None)
+        if widget is None:
+            try:
+                from silverestimate.ui.item_master import ItemMasterWidget
 
-    def show_item_master(self):
-        return self._navigation_service.show_item_master()
+                self._logger.info("Creating ItemMasterWidget on demand...")
+                widget = ItemMasterWidget(self._db, self._main_window)
+                self._main_window.item_master_widget = widget
+                if self._stack:
+                    self._stack.addWidget(widget)
+            except Exception as exc:
+                self._logger.error(
+                    "Failed to create ItemMasterWidget: %s", exc, exc_info=True
+                )
+                QMessageBox.critical(
+                    self._main_window,
+                    "Item Master Unavailable",
+                    with_details("Item Master could not be opened.", exc),
+                )
+                return
+        if not self._switch_widget(widget):
+            return
+        self._sync_actions(
+            nav=getattr(self._main_window, "nav_item_master_action", None),
+            menu=getattr(self._main_window, "_menu_item_master_action", None),
+            view=getattr(self._main_window, "_view_item_master_action", None),
+        )
 
-    def show_silver_bars(self):
-        return self._navigation_service.show_silver_bars()
+    def show_silver_bars(self) -> None:
+        if not self._ensure_db():
+            return
+        try:
+            from silverestimate.ui.silver_bar_management import SilverBarDialog
 
-    def show_silver_bar_history(self):
-        return self._navigation_service.show_silver_bar_history()
+            self._logger.info("Opening Silver Bar Management dialog")
+            dialog = SilverBarDialog(self._db, self._main_window)
+            try:
+                dialog.exec()
+            finally:
+                dialog.deleteLater()
+        except Exception as exc:
+            self._logger.error(
+                "Failed to open Silver Bar Management: %s", exc, exc_info=True
+            )
+            QMessageBox.critical(
+                self._main_window,
+                "Silver Bars Unavailable",
+                with_details("Silver Bars could not be opened.", exc),
+            )
 
-    def show_estimate_history(self):
-        return self._navigation_service.show_estimate_history()
+    def show_sales_report(self) -> None:
+        if not self._ensure_db():
+            return
+        widget = getattr(self._main_window, "sales_report_widget", None)
+        if widget is None:
+            try:
+                from silverestimate.ui.sales_report import SalesReportWidget
 
-    def show_sales_report(self):
-        return self._navigation_service.show_sales_report()
+                widget = SalesReportWidget(self._db, self._main_window)
+                widget.voucher_requested.connect(self.open_sales_voucher)
+                self._main_window.sales_report_widget = widget
+                if self._stack:
+                    self._stack.addWidget(widget)
+            except Exception as exc:
+                self._logger.error(
+                    "Could not open sales report: %s", exc, exc_info=True
+                )
+                QMessageBox.critical(
+                    self._main_window,
+                    "Sales Reports Unavailable",
+                    with_details("Sales Reports could not be opened.", exc),
+                )
+                return
+        already_current = self._stack and self._stack.currentWidget() is widget
+        if not self._switch_widget(widget):
+            return
+        if already_current:
+            widget.refresh()
+        self._sync_actions(
+            view=getattr(self._main_window, "_view_sales_report_action", None)
+        )
+
+    def open_sales_voucher(self, voucher_no: str) -> None:
+        widget = getattr(self._main_window, "estimate_widget", None)
+        if widget is not None and widget.open_saved_estimate(voucher_no):
+            self.show_estimate()
+
+    def show_silver_bar_history(self) -> None:
+        if not self._ensure_db():
+            return
+        try:
+            from silverestimate.ui.silver_bar_history import SilverBarHistoryDialog
+
+            self._logger.info("Opening Silver Bar History dialog")
+            dialog = SilverBarHistoryDialog(self._db, self._main_window)
+            dialog.exec()
+            selected_list_id = dialog.selected_list_id
+            dialog.deleteLater()
+            if selected_list_id is not None:
+                from silverestimate.ui.silver_bar_management import SilverBarDialog
+
+                workspace = SilverBarDialog(self._db, self._main_window)
+                workspace.open_list(selected_list_id)
+                workspace.exec()
+                workspace.deleteLater()
+        except Exception as exc:
+            self._logger.error(
+                "Error opening Silver Bar History: %s", exc, exc_info=True
+            )
+            QMessageBox.critical(
+                self._main_window,
+                "Silver Bar History Unavailable",
+                with_details("Silver Bar History could not be opened.", exc),
+            )
+
+    def show_estimate_history(self) -> None:
+        widget = getattr(self._main_window, "estimate_widget", None)
+        if widget is None:
+            self._logger.error(
+                "Cannot show estimate history: estimate_widget is not available"
+            )
+            QMessageBox.critical(
+                self._main_window,
+                "Estimate Entry Unavailable",
+                "Estimate entry is not available. Please restart the application.",
+            )
+            return
+        try:
+            show_history = getattr(widget, "show_history", None)
+            if not callable(show_history):
+                QMessageBox.critical(
+                    self._main_window,
+                    "Estimate History Unavailable",
+                    "Estimate history cannot be opened from this view.",
+                )
+                return
+            show_history()
+            self.show_estimate()
+        except Exception as exc:
+            self._logger.error("Error opening estimate history: %s", exc, exc_info=True)
+            QMessageBox.critical(
+                self._main_window,
+                "Estimate History Unavailable",
+                with_details("Estimate history could not be opened.", exc),
+            )
+
+    # --- Screen-switching helpers --------------------------------------
+    def _switch_widget(self, widget) -> bool:
+        if self._stack:
+            current = self._stack.currentWidget()
+            guard = getattr(current, "confirm_discard_edits", None)
+            if current is not widget and callable(guard) and not guard():
+                return False
+            self._stack.setCurrentWidget(widget)
+        return True
+
+    def _sync_actions(self, *, nav=None, menu=None, view=None) -> None:
+        for action in (nav, menu, view):
+            try:
+                if action is not None:
+                    action.setChecked(True)
+            except Exception as exc:
+                self._logger.debug("Failed to sync navigation action state: %s", exc)
+
+    def _ensure_db(self) -> bool:
+        if not self._db:
+            self._logger.error("Database connection is not available")
+            QMessageBox.critical(
+                self._main_window,
+                "Database Unavailable",
+                "The database is not available. Please restart the application.",
+            )
+            return False
+        return True
+
+    # --- Menu commands -------------------------------------------------
 
     def show_about(self):
         from silverestimate.ui.about_dialog import AboutDialog
@@ -218,7 +396,7 @@ class NavigationController:
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
 
-        # Handles NavigationService uses to mark the open screen.
+        # Handles used to mark the open screen.
         window._menu_estimate_action = view_estimate_action
         window._menu_item_master_action = view_item_master_action
         window._menu_silver_action = silver_bars_action

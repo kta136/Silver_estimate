@@ -29,19 +29,17 @@ LOGGER = logging.getLogger(__name__)
 class PrintPreviewController:
     """Compose and run a print-preview session."""
 
-    def __init__(  # noqa: PLR0913 - stable PrintManager construction API
+    def __init__(
         self,
         *,
         printer: QPrinter,
         render_document: Callable[[QPrinter, PrintDocument], None],
-        persist_estimate_format: Callable[[str], None] | None = None,
         persist_tunch_visibility: Callable[[bool], None] | None = None,
         get_print_font: Callable[[], QFont] | None = None,
         persist_print_font: Callable[[QFont], None] | None = None,
     ) -> None:
         self._printer = printer
         self._preferences = PrintPreviewPreferences(
-            persist_estimate_format=persist_estimate_format,
             persist_tunch_visibility=persist_tunch_visibility,
         )
         self._navigation = PrintPreviewNavigationController()

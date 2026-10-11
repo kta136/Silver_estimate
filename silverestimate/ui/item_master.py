@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import logging
 import threading
-import time
 from dataclasses import dataclass
 from typing import Any, Callable, cast
 
@@ -54,7 +53,6 @@ class _ItemLoadRequest:
     search_term: str
     cursor: ItemCursor | None
     append: bool
-    started_at: float
 
 
 def _load_item_page(
@@ -587,7 +585,6 @@ class ItemMasterWidget(QWidget):
         elif not self._item_page_state.has_more:
             return
 
-        started_at = time.perf_counter()
         connection_factory = getattr(self.db_manager, "open_read_connection", None)
         if callable(connection_factory):
             request = _ItemLoadRequest(
@@ -595,7 +592,6 @@ class ItemMasterWidget(QWidget):
                 normalized_term,
                 self._item_page_state.cursor,
                 append,
-                started_at,
             )
             self.load_more_button.setEnabled(False)
             self._load_runner.submit(request)
@@ -616,7 +612,6 @@ class ItemMasterWidget(QWidget):
         self._apply_loaded_items(
             page,
             search_term=normalized_term,
-            started_at=started_at,
             append=append,
         )
 
@@ -661,7 +656,6 @@ class ItemMasterWidget(QWidget):
         self._apply_loaded_items(
             page,
             search_term=request.search_term,
-            started_at=request.started_at,
             append=request.append,
         )
 
@@ -681,7 +675,6 @@ class ItemMasterWidget(QWidget):
         page: Page[dict[str, Any], ItemCursor],
         *,
         search_term: str,
-        started_at: float,
         append: bool,
     ) -> None:
         self._item_page_state.apply(page, append=append)
@@ -724,13 +717,6 @@ class ItemMasterWidget(QWidget):
         self.show_status(
             summary,
             2000,
-        )
-        elapsed_ms = (time.perf_counter() - started_at) * 1000.0
-        self.logger.debug(
-            "[perf] item_master.load_items=%.2fms search_term=%r rows=%s",
-            elapsed_ms,
-            search_term,
-            self._item_page_state.loaded,
         )
 
     def _cancel_active_loads(self) -> None:

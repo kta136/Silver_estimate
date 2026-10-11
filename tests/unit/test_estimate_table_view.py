@@ -6,6 +6,7 @@ from PySide6.QtGui import QPalette
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QMenu
 
+from silverestimate.domain.estimate_entry import EstimateEntryRowState
 from silverestimate.ui.estimate_entry_components import (
     estimate_table_view as view_module,
 )
@@ -13,9 +14,6 @@ from silverestimate.ui.estimate_entry_components.estimate_table_view import (
     EstimateTableView,
 )
 from silverestimate.ui.estimate_entry_logic.constants import COL_GROSS
-from silverestimate.ui.view_models.estimate_entry_view_model import (
-    EstimateEntryRowState,
-)
 
 
 @pytest.fixture

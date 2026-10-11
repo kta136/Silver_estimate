@@ -301,7 +301,7 @@ class EstimateEntryLayoutController:
             self.host.workflow_controller.undo_row_deletion
         )
         menu.addAction(self.host.command_undo_row_action)
-        recovery = getattr(self.host, "draft_recovery", None)
+        recovery = self.host.draft_recovery
         if recovery is not None:
             recover_action = QAction("Recover Unfinished Estimate...", menu)
             recover_action.triggered.connect(recovery.offer_recovery)
@@ -380,8 +380,8 @@ class EstimateEntryLayoutController:
             rows = self.host.item_table.rowCount()
         except Exception:
             rows = 0
-        last_saved = getattr(self.host, "_last_saved_status", "-")
-        recovery = getattr(self.host, "draft_recovery", None)
+        last_saved = self.host._last_saved_status
+        recovery = self.host.draft_recovery
         recovery_status = str(recovery.status) if recovery is not None else ""
         # Routine auto-recovery states stay in the tooltips; only a state the
         # user has to act on takes room in the side panel.
@@ -512,9 +512,7 @@ class EstimateEntryLayoutController:
             self.host.workflow_controller.show_history
         )
         # The right-click menu offers the same undo as the More menu.
-        self.host.item_table.undo_row_action = getattr(
-            self.host, "command_undo_row_action", None
-        )
+        self.host.item_table.undo_row_action = self.host.command_undo_row_action
 
     def _bind_totals_panel_labels(self) -> None:
         self.host.mode_indicator_label = self.host.toolbar.mode_indicator_label
@@ -586,10 +584,8 @@ class EstimateEntryLayoutController:
             self.host.workflow_controller._handle_silver_rate_changed
         )
 
-        if hasattr(self.host, "note_edit"):
-            self.host.note_edit.textEdited.connect(self.host._mark_unsaved)
-        if hasattr(self.host, "date_edit"):
-            self.host.date_edit.dateChanged.connect(self.host._mark_unsaved)
+        self.host.note_edit.textEdited.connect(self.host._mark_unsaved)
+        self.host.date_edit.dateChanged.connect(self.host._mark_unsaved)
 
         self.host.item_table.cellClicked.connect(
             self.host.table_controller.cell_clicked

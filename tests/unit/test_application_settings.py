@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from silverestimate.infrastructure.settings import (
     SETTINGS_SCHEMA_VERSION,
     ApplicationSettings,
@@ -44,8 +46,8 @@ def test_typed_settings_normalize_values_and_enforce_ranges() -> None:
             str(SettingsKey.RATES_LIVE_ENABLED): "yes",
             str(SettingsKey.LOGGING_CLEANUP_DAYS): "999",
             str(SettingsKey.PRINT_PREVIEW_ZOOM): "0.05",
-            str(SettingsKey.PRINT_ESTIMATE_LAYOUT): 42,
-            str(SettingsKey.UI_SILVER_BARS_AVAILABLE_COLUMNS): (90, 120),
+            str(SettingsKey.PRINT_DEFAULT_PRINTER): 42,
+            str(SettingsKey.UI_ESTIMATE_TABLE_COLUMN_WIDTHS): (90, 120),
         }
     )
     settings = ApplicationSettings(backend, migrate=False)
@@ -69,25 +71,8 @@ def test_typed_settings_normalize_values_and_enforce_ranges() -> None:
         )
         == 0.25
     )
-    assert settings.get_text(SettingsKey.PRINT_ESTIMATE_LAYOUT) == "42"
-    assert settings.get_list(SettingsKey.UI_SILVER_BARS_AVAILABLE_COLUMNS) == [90, 120]
-
-
-def test_v1_migration_normalizes_alias_and_removes_retired_key() -> None:
-    backend = MemorySettingsBackend(
-        {
-            str(SettingsKey.PRINT_PAGE_SIZE): "Letter / ANSI A",
-            "rates/refresh_interval_sec": 15,
-        }
-    )
-
-    version = migrate_settings(backend)
-
-    assert version == SETTINGS_SCHEMA_VERSION == 2
-    assert backend.values[str(SettingsKey.SCHEMA_VERSION)] == 2
-    assert backend.values[str(SettingsKey.PRINT_PAGE_SIZE)] == "Letter"
-    assert "rates/refresh_interval_sec" not in backend.values
-    assert backend.sync_count == 1
+    assert settings.get_text(SettingsKey.PRINT_DEFAULT_PRINTER) == "42"
+    assert settings.get_list(SettingsKey.UI_ESTIMATE_TABLE_COLUMN_WIDTHS) == [90, 120]
 
 
 def test_future_settings_schema_is_left_untouched() -> None:
@@ -125,24 +110,30 @@ def test_application_settings_only_accepts_declared_keys_for_typed_writes() -> N
     assert not backend.values
 
 
-def test_approved_defaults_migrate_once_and_preserve_print_preferences():
+@pytest.mark.parametrize(
+    ("stored", "level"),
+    [
+        ({"logging/debug_mode": "true"}, "detailed"),
+        ({"logging/enable_info": False}, "errors"),
+        ({"logging/enable_critical": False, "logging/enable_debug": True}, "normal"),
+        ({}, None),
+    ],
+)
+def test_v3_migration_turns_the_four_logging_switches_into_one_level(stored, level):
     backend = MemorySettingsBackend(
-        {
-            str(SettingsKey.SCHEMA_VERSION): 1,
-            str(SettingsKey.UI_TABLE_FONT_SIZE): 9,
-            str(SettingsKey.FONT_FAMILY): "Courier New",
-            str(SettingsKey.PRINT_PAGE_SIZE): "A5",
-            str(SettingsKey.PRINT_SHOW_TUNCH): True,
-        }
+        {str(SettingsKey.SCHEMA_VERSION): 2, "logging/cleanup_days": 7, **stored}
     )
-    migrate_settings(backend)
-    assert backend.values[str(SettingsKey.UI_TABLE_FONT_SIZE)] == 11
-    assert backend.values[str(SettingsKey.UI_FINAL_CALC_FONT_SIZE)] == 16
-    assert backend.values[str(SettingsKey.FONT_FAMILY)] == "Courier New"
-    assert backend.values[str(SettingsKey.PRINT_PAGE_SIZE)] == "A5"
-    assert backend.values[str(SettingsKey.PRINT_SHOW_TUNCH)] is True
-    backend.setValue(str(SettingsKey.UI_TABLE_FONT_SIZE), 14)
-    backend.setValue(str(SettingsKey.UI_ROW_DENSITY), "comfortable")
-    snapshot = dict(backend.values)
-    migrate_settings(backend)
-    assert backend.values == snapshot
+
+    assert migrate_settings(backend) == SETTINGS_SCHEMA_VERSION == 3
+
+    assert backend.values.get("logging/level") == level
+    assert backend.values["logging/cleanup_days"] == 7
+    assert not any(
+        key in backend.values
+        for key in (
+            "logging/debug_mode",
+            "logging/enable_info",
+            "logging/enable_critical",
+            "logging/enable_debug",
+        )
+    )

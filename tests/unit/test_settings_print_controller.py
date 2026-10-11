@@ -20,16 +20,6 @@ def test_default_print_settings_state_is_valid() -> None:
     SettingsPrintController.validate_state(PrintSettingsState())
 
 
-def test_removed_classic_preference_is_normalized_to_modern(settings_stub) -> None:
-    settings = get_app_settings()
-    settings.setValue("print/estimate_layout", "classic")
-
-    state = SettingsPrintController(settings).load_state()
-
-    assert state.estimate_format == "modern"
-    assert settings.value("print/estimate_layout") == "modern"
-
-
 def test_removed_thermal_page_size_falls_back_to_a4(settings_stub) -> None:
     settings = get_app_settings()
     settings.setValue("print/page_size", "Thermal 80mm")
@@ -82,7 +72,6 @@ def test_thermal_page_state_cannot_be_persisted(settings_stub) -> None:
         ({"preview_zoom": 8.0}, "zoom"),
         ({"page_size": ""}, "page size"),
         ({"orientation": "Sideways"}, "orientation"),
-        ({"estimate_format": "future"}, "format"),
     ],
 )
 def test_invalid_print_settings_are_rejected_before_persistence(

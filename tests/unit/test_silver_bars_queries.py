@@ -1,5 +1,4 @@
-from silverestimate.persistence.silver_bars_queries import (
-    build_available_bars_queries,
+from silverestimate.persistence.silver_bar_query_repository import (
     build_history_bars_query,
     normalize_row_limit,
 )
@@ -9,56 +8,6 @@ def test_normalize_row_limit_uses_default_for_invalid_values():
     assert normalize_row_limit("not-a-number", default=2000) == 2000
     assert normalize_row_limit(None, default=1500) == 1500
     assert normalize_row_limit(50, default=1500) == 100
-
-
-def test_build_available_bars_queries_applies_filters_and_limit():
-    statements = build_available_bars_queries(
-        weight_query="10",
-        weight_tolerance=0.5,
-        min_purity=90.0,
-        max_purity=99.5,
-        date_range=("2026-02-01", "2026-02-28"),
-        limit=250,
-    )
-
-    assert "sb.status = 'In Stock' AND sb.list_id IS NULL" in statements.query.query
-    assert "sb.weight BETWEEN ? AND ?" in statements.query.query
-    assert "sb.purity >= ?" in statements.query.query
-    assert "sb.purity <= ?" in statements.query.query
-    assert "sb.date_added >= ?" in statements.query.query
-    assert "sb.date_added <= ?" in statements.query.query
-    assert statements.query.query.endswith(
-        "ORDER BY COALESCE(sb.date_added, '') DESC, sb.bar_id DESC LIMIT ?"
-    )
-    assert statements.query.params == (
-        9.5,
-        10.5,
-        90.0,
-        99.5,
-        "2026-02-01",
-        "2026-02-28",
-        250,
-    )
-    assert statements.count_query.params == (
-        9.5,
-        10.5,
-        90.0,
-        99.5,
-        "2026-02-01",
-        "2026-02-28",
-    )
-
-
-def test_build_available_bars_queries_supports_exact_weight_matching():
-    statements = build_available_bars_queries(
-        weight_query="10",
-        weight_tolerance=0.0,
-        limit=250,
-    )
-
-    assert "sb.weight BETWEEN ? AND ?" in statements.query.query
-    assert statements.query.params == (10.0, 10.0, 250)
-    assert statements.count_query.params == (10.0, 10.0)
 
 
 def test_build_history_bars_query_applies_filters_and_normalizes_limit():
@@ -95,19 +44,6 @@ def test_build_history_bars_query_ignores_invalid_weight_filter():
 
 
 def test_keyset_queries_bind_stable_cursor_values():
-    available = build_available_bars_queries(
-        limit=11,
-        after_date_added="2026-07-15T01:00:00",
-        after_bar_id=42,
-    )
-    assert "COALESCE(sb.date_added, '') < ?" in available.query.query
-    assert available.query.params[-4:] == (
-        "2026-07-15T01:00:00",
-        "2026-07-15T01:00:00",
-        42,
-        11,
-    )
-
     history = build_history_bars_query(
         limit=11,
         after_date_added="2026-07-15T01:00:00",

@@ -1,7 +1,7 @@
 # Silver Estimate Documentation
 
 This directory contains the maintained technical and operational documentation
-for the v4.07 source tree. Packaged releases support Windows 10/11; macOS and
+for the current source tree. Packaged releases support Windows 10/11; macOS and
 Linux are untested development environments.
 
 ## Start here
@@ -12,23 +12,18 @@ Linux are untested development environments.
 | [Workflow and business logic](workflow-business-logic.md) | Estimate, item, silver-bar, authentication, backup, and UI workflows |
 | [Data model and relationships](data-model-relationships.md) | Schema v10 tables, foreign keys, indexes, and version history |
 | [Security architecture](security-architecture.md) | Authentication, SQLCipher/keyring boundaries, recovery, and threat limitations |
-| [API reference](api-reference.md) | Primary controllers, services, repositories, helpers, and UI entry points |
-| [Deployment guide](deployment-guide.md) | Frozen environment, validation, Windows builds, tags, signing, and releases |
-| [Dependency update review](dependency-upgrade-review-2026-09-08.md) | September 2026 pins, verified updates, major/minor candidates, and native upgrade order |
-| [Performance baselines](performance-baseline-thresholds.md) | Deterministic datasets, p95 budgets, and CI enforcement |
-| [Visual references](visual-references.md) | Curated historical print samples, current golden fixtures, and regeneration commands |
+| [Deployment guide](deployment-guide.md) | Locked environment, validation, CI, and local Windows builds |
 
 ## Project status
 
-- Source version: `4.07`
+- Source version: `APP_VERSION` in `silverestimate/infrastructure/app_constants.py`
 - Runtime: Python 3.14, PySide6/Shiboken6 6.11, and Qt 6.11
 - Packaged platform: Windows 10/11
-- Stable downloads: [GitHub Releases](https://github.com/kta136/Silver_estimate/releases/latest)
 - Change history: [CHANGELOG.md](../CHANGELOG.md)
 
-The source tree can be newer than the latest packaged release. Release tags are
-validated against `APP_VERSION` and pass the Windows validation/build pipeline
-before publication.
+The source tree can be newer than the latest packaged release. Windows builds
+are made locally with `scripts\build_windows_local.cmd`; see the deployment
+guide.
 
 ## Security note
 

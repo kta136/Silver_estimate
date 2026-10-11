@@ -73,9 +73,7 @@ def test_failed_save_blocks_new_and_exit(
     assert widget.has_unsaved_changes()
 
 
-def test_preview_state_survives_format_and_tunch_changes(
-    history_db, make_estimate_widget
-):
+def test_preview_state_survives_tunch_changes(history_db, make_estimate_widget):
     widget = make_estimate_widget(history_db)
     _draft(widget)
     workflow = widget.workflow_controller
@@ -85,7 +83,6 @@ def test_preview_state_survives_format_and_tunch_changes(
             "DRAFT", fetch_estimate=lambda _: None, estimate_data=data
         )
         assert expected in payload.title
-        assert expected in payload.format_factory("classic").title
         assert expected in payload.tunch_visibility_factory(True).title
         assert workflow.save_estimate(continue_editing=True)
 
@@ -245,9 +242,9 @@ def test_a_loaded_note_shows_its_first_words_and_all_of_it_on_hover(
     history_db, make_estimate_widget
 ):
     note = "Delhi refinery - urgent, deliver by Friday evening without fail"
-    assert history_db.save_estimate_with_returns(
+    assert history_db.save_estimate_atomic(
         "LONG", "2026-09-05", 75, [], [], {"note": note}
-    )
+    ).success
     widget = make_estimate_widget(history_db)
 
     widget.voucher_edit.setText("LONG")

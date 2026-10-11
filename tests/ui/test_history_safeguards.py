@@ -9,21 +9,22 @@ from PySide6.QtCore import QCoreApplication, QEvent, Qt, QTimer
 from PySide6.QtWidgets import QDialog, QMessageBox
 from shiboken6 import isValid
 
+from silverestimate.domain.estimate_entry import EstimateEntryRowState
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.persistence.database_manager import DatabaseManager
 from silverestimate.ui.estimate_entry_totals_controller import (
     EstimateEntryTotalsController,
 )
 from silverestimate.ui.estimate_history import EstimateHistoryDialog
-from silverestimate.ui.view_models import EstimateEntryRowState
 
 
-def _view_model_totals(view_model):
+def _snapshot_totals(widget):
+    snapshot = widget.workflow_controller._capture_snapshot()
     return EstimateEntryTotalsController.build_totals(
-        view_model.rows(),
-        silver_rate=view_model.silver_rate,
-        last_balance_silver=view_model.last_balance_silver,
-        last_balance_amount=view_model.last_balance_amount,
+        snapshot.rows,
+        silver_rate=snapshot.silver_rate,
+        last_balance_silver=snapshot.last_balance_silver,
+        last_balance_amount=snapshot.last_balance_amount,
     )
 
 
@@ -103,10 +104,14 @@ def test_saved_entry_and_history_totals_include_both_balances(
     widget.last_balance_silver = balance_silver
     widget.last_balance_amount = balance_amount
     widget.silver_rate_spin.setValue(rate)
-    widget.workflow_controller._update_view_model_snapshot()
-    service = EstimateEntryPersistenceService(widget.view_model.as_save_snapshot())
+    service = EstimateEntryPersistenceService(
+        widget.workflow_controller._capture_snapshot()
+    )
     outcome, _ = service.execute_save(
-        voucher_no="1", date="2026-09-05", note="Balances", presenter=widget.presenter
+        voucher_no="1",
+        date="2026-09-05",
+        note="Balances",
+        save=widget.presenter.save_estimate,
     )
     assert outcome.success
     expected = ((6 + balance_silver) * rate if rate > 0 else 0) + 80 + balance_amount
@@ -121,10 +126,7 @@ def test_saved_entry_and_history_totals_include_both_balances(
         )
         loaded = widget.presenter.load_estimate("1")
         assert widget.apply_loaded_estimate(loaded)
-        widget.workflow_controller._update_view_model_snapshot()
-        assert _view_model_totals(widget.view_model).grand_total == pytest.approx(
-            expected
-        )
+        assert _snapshot_totals(widget).grand_total == pytest.approx(expected)
     finally:
         dialog.close()
         dialog.deleteLater()
@@ -143,9 +145,9 @@ def test_history_choice_preserves_or_saves_draft_before_replacing(
         row = widget.item_table.get_all_rows()[0]
         widget.item_table.replace_all_rows([replace(row, poly=20)])
     before = widget.item_table.get_all_rows()
-    assert history_db.save_estimate_with_returns(
+    assert history_db.save_estimate_atomic(
         "TARGET", "2026-09-05", 75, [], [], {"note": "Target"}
-    )
+    ).success
     monkeypatch.setattr(
         EstimateHistoryDialog,
         "exec",
@@ -190,7 +192,7 @@ def test_fifty_history_cycles_release_dialogs_and_workers(
     qtbot, history_db, make_estimate_widget, completion
 ):
     widget = make_estimate_widget(history_db)
-    assert history_db.save_estimate_with_returns("1", "2026-09-05", 75, [], [], {})
+    assert history_db.save_estimate_atomic("1", "2026-09-05", 75, [], [], {}).success
     seen = []
     timed_out = []
     deadline = 0.0
@@ -253,9 +255,9 @@ def test_sort_then_action_uses_the_originally_selected_voucher(
     from silverestimate.ui import estimate_history as history_module
 
     for voucher in ("1", "2", "10"):
-        assert history_db.save_estimate_with_returns(
+        assert history_db.save_estimate_atomic(
             voucher, "2026-09-05", 75, [], [], {"note": voucher}
-        )
+        ).success
     dialog = EstimateHistoryDialog(history_db, None)
     monkeypatch.setattr(history_module, "confirm_estimate_deletion", lambda *_: True)
     printed = []

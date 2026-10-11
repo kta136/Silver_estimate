@@ -107,13 +107,13 @@ def _parse_datetime(value: object, field: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
-def _nonnegative_int(value: object, field: str) -> int:
+def nonnegative_int(value: object, field: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise DdaRateContractError(f"{field} must be a non-negative integer.")
     return value
 
 
-def _positive_finite_number(value: object, field: str) -> float:
+def positive_finite_number(value: object, field: str) -> float:
     if isinstance(value, bool) or not isinstance(value, int | float):
         raise DdaRateContractError(f"{field} must be a finite positive number.")
     number = float(value)
@@ -122,26 +122,34 @@ def _positive_finite_number(value: object, field: str) -> float:
     return number
 
 
-def _validate_schema_and_view(payload: Mapping[str, Any]) -> None:
+def validate_schema(
+    payload: Mapping[str, Any], *, label: str = "DDA", require_view: bool = True
+) -> None:
+    """Check the schema version and, where the message carries one, the view."""
     if payload.get("schemaVersion") != DDA_SCHEMA_VERSION:
-        raise DdaRateContractError("Unsupported DDA schemaVersion; expected 1.")
-    if payload.get("view") not in {"default", "tv"}:
-        raise DdaRateContractError("DDA view must be 'default' or 'tv'.")
+        raise DdaRateContractError(f"Unsupported {label} schemaVersion; expected 1.")
+    if require_view and payload.get("view") not in {"default", "tv"}:
+        raise DdaRateContractError(f"{label} view must be 'default' or 'tv'.")
 
 
-def _matching_item(items: object, *, require_unit: bool) -> Mapping[str, Any]:
+def agra_mohar_items(items: object, *, label: str = "DDA") -> list[Mapping[str, Any]]:
+    """Return the entries of ``items`` that carry the configured item ID."""
     if not isinstance(items, list):
-        raise DdaRateContractError("DDA items must be an array.")
-    matches = [
-        item
+        raise DdaRateContractError(f"{label} items must be an array.")
+    return [
+        cast(Mapping[str, Any], item)
         for item in items
         if isinstance(item, Mapping) and item.get("itemId") == DDA_AGRA_MOHAR_ITEM_ID
     ]
+
+
+def _matching_item(items: object, *, require_unit: bool) -> Mapping[str, Any]:
+    matches = agra_mohar_items(items)
     if len(matches) != 1:
         raise DdaRateContractError(
             "DDA response must contain exactly one configured Agra Mohar item ID."
         )
-    item = cast(Mapping[str, Any], matches[0])
+    item = matches[0]
     if require_unit and item.get("unit") != DDA_RATE_UNIT:
         raise DdaRateContractError("Agra Mohar rate unit must be PER_KG.")
     return item
@@ -162,11 +170,11 @@ def parse_current_rates(
         decoded = payload
     if not isinstance(decoded, Mapping):
         raise DdaRateContractError("DDA response must be a JSON object.")
-    _validate_schema_and_view(decoded)
-    sequence = _nonnegative_int(decoded.get("sequence"), "sequence")
+    validate_schema(decoded)
+    sequence = nonnegative_int(decoded.get("sequence"), "sequence")
     server_time = _parse_datetime(decoded.get("serverTime"), "serverTime")
     item = _matching_item(decoded.get("items"), require_unit=True)
-    final_rate = _positive_finite_number(item.get("finalRate"), "finalRate")
+    final_rate = positive_finite_number(item.get("finalRate"), "finalRate")
     feed_status = decoded.get("feedStatus")
     market_state: Mapping[str, Any] | None = None
     if feed_status is not None:
@@ -319,11 +327,11 @@ class DdaSnapshotStore:
                 raise DdaRateContractError("Cached DDA market state is invalid.")
             return DdaRateSnapshot(
                 item_id=DDA_AGRA_MOHAR_ITEM_ID,
-                final_rate=_positive_finite_number(
+                final_rate=positive_finite_number(
                     decoded.get("final_rate"), "cached final_rate"
                 ),
                 unit=DDA_RATE_UNIT,
-                sequence=_nonnegative_int(decoded.get("sequence"), "cached sequence"),
+                sequence=nonnegative_int(decoded.get("sequence"), "cached sequence"),
                 received_at=_parse_datetime(
                     decoded.get("received_at"), "cached received_at"
                 ),
@@ -351,8 +359,12 @@ __all__ = [
     "DdaRateSnapshot",
     "DdaRateTransportError",
     "DdaSnapshotStore",
+    "agra_mohar_items",
     "http_status",
     "network_manager",
+    "nonnegative_int",
     "parse_current_rates",
+    "positive_finite_number",
     "rate_request",
+    "validate_schema",
 ]

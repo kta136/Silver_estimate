@@ -17,18 +17,12 @@ def open_database(path):
     return DatabaseManager(str(path), PASSWORD, device_secret=SECRET)
 
 
-@pytest.mark.parametrize("version", [None, 8, 9, 10])
+@pytest.mark.parametrize("version", [None, 10])
 def test_worker_prepares_and_ui_owns_fresh_current_writer(tmp_path, version):
     path = tmp_path / "startup.db"
     if version is not None:
         initial = open_database(path)
         initial.conn.execute("INSERT INTO items(code,name) VALUES('A','Retained')")
-        if version < 10:
-            initial.conn.execute("DROP TABLE estimate_draft")
-            initial.conn.execute("UPDATE schema_version SET version = ?", (version,))
-        if version == 8:
-            for column in ("item_code_snapshot", "tunch", "snapshot_version"):
-                initial.conn.execute(f"ALTER TABLE estimate_items DROP COLUMN {column}")
         initial.close()
     with ThreadPoolExecutor(max_workers=1) as pool:
         prepared = pool.submit(

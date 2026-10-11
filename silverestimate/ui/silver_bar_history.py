@@ -28,7 +28,7 @@ from silverestimate.domain.pagination import Page, SilverBarHistoryCursor
 from silverestimate.domain.silver_bar_workspace import BarListSnapshot
 from silverestimate.infrastructure.latest_request_runner import LatestRequestRunner
 from silverestimate.infrastructure.paged_load_state import PagedLoadState
-from silverestimate.persistence.silver_bars_snapshot_repository import (
+from silverestimate.persistence.silver_bar_query_repository import (
     SilverBarsSnapshotRepository,
 )
 

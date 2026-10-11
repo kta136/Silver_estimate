@@ -7,7 +7,6 @@ from silverestimate.services.item_catalog_transfer import (
     ITEM_CATALOG_VERSION,
     ItemCatalogTransferError,
     ensure_catalog_file_suffix,
-    export_item_catalog,
     export_item_catalog_rows,
     import_item_catalog,
     load_item_catalog_file,
@@ -49,7 +48,7 @@ def test_export_item_catalog_writes_native_backup_file(tmp_path):
     )
     path = tmp_path / "catalog.seitems.json"
 
-    count = export_item_catalog(db, str(path))
+    count = export_item_catalog_rows(db.get_all_items(), str(path))
 
     assert count == 1
     payload = json.loads(path.read_text(encoding="utf-8"))

@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 from PySide6.QtCore import QDate, QObject, Signal
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QDateEdit,
     QDialog,
@@ -16,12 +17,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from silverestimate.domain.estimate_entry import (
+    EstimateEntryRowState,
+    EstimateEntrySnapshot,
+)
 from silverestimate.presenter import LoadedEstimate, SaveItem, SaveOutcome
 from silverestimate.ui import estimate_entry_workflow_controller as workflow_module
 from silverestimate.ui.estimate_entry_workflow_controller import (
     EstimateEntryWorkflowController,
 )
-from silverestimate.ui.view_models import EstimateEntryRowState, EstimateEntryViewModel
 
 
 class _MessageBoxStub:
@@ -121,14 +125,6 @@ class _AdapterStub:
         self.focus_calls.append(update_visuals)
 
 
-class _SignalStub:
-    def __init__(self) -> None:
-        self.emitted: list[Any] = []
-
-    def emit(self, value) -> None:
-        self.emitted.append(value)
-
-
 class _ReturnSignalStub:
     def __init__(self) -> None:
         self.connected: list[Any] = []
@@ -168,7 +164,6 @@ class _Host(QWidget):
         self.presenter = None
         self.main_window = types.SimpleNamespace(print_font=None)
         self.db_manager = object()
-        self.view_model = EstimateEntryViewModel()
         self.initializing = False
         self._loading_estimate = False
         self._estimate_loaded = False
@@ -193,10 +188,13 @@ class _Host(QWidget):
         self.silver_bar_toggle_button.setCheckable(True)
         self.mode_indicator_label = QLabel()
         self.live_rate_value_label = QLabel()
+        self.live_rate_meta_label = QLabel()
+        self.grand_total_label = QLabel()
+        self.command_undo_row_action = QAction(self)
+        self.draft_recovery = None
         self.refresh_rate_button = QPushButton()
         self.refresh_rate_button.setEnabled(True)
         self.item_table = _ItemTableStub()
-        self.live_rate_fetched = _SignalStub()
 
         self._adapter = _AdapterStub()
         self.status_calls: list[tuple[str, int]] = []
@@ -208,7 +206,6 @@ class _Host(QWidget):
         self.clear_rows_calls = 0
         self.add_row_calls = 0
         self.calculate_totals_calls = 0
-        self.log_perf_calls: list[tuple[str, int]] = []
         self.notifications: list[str] = []
         self.notification_levels: list[str] = []
         self.layout_controller = self
@@ -222,6 +219,9 @@ class _Host(QWidget):
         self.status_calls.append((message, timeout))
         self.notifications.append(message)
         self.notification_levels.append(level)
+
+    def refresh_status_line(self) -> None:
+        pass
 
     def has_unsaved_changes(self) -> bool:
         return self._unsaved_changes
@@ -276,9 +276,6 @@ class _Host(QWidget):
 
     def set_voucher_number(self, voucher_no: str) -> None:
         self.voucher_edit.setText(voucher_no)
-
-    def _log_perf_metric(self, name: str, _start: float, **kwargs) -> None:
-        self.log_perf_calls.append((name, int(kwargs.get("rows", 0))))
 
 
 @pytest.fixture
@@ -423,12 +420,12 @@ def test_save_estimate_returns_when_presenter_missing(workflow_host):
 def test_save_estimate_handles_exception(workflow_host, monkeypatch):
     host, controller = workflow_host
     host.voucher_edit.setText("S004")
-    controller._update_view_model_snapshot = lambda: None
-    host.presenter = object()
+    controller._capture_snapshot = lambda: EstimateEntrySnapshot((), 0.0)
+    host.presenter = types.SimpleNamespace(save_estimate=lambda payload: None)
 
     class _ServiceStub:
-        def __init__(self, view_model):
-            self.view_model = view_model
+        def __init__(self, snapshot):
+            self.snapshot = snapshot
 
         def execute_save(self, **kwargs):
             del kwargs
@@ -451,12 +448,12 @@ def test_save_estimate_handles_exception(workflow_host, monkeypatch):
 def test_save_estimate_failure_shows_critical(workflow_host, monkeypatch):
     host, controller = workflow_host
     host.voucher_edit.setText("S002")
-    controller._update_view_model_snapshot = lambda: None
-    host.presenter = object()
+    controller._capture_snapshot = lambda: EstimateEntrySnapshot((), 0.0)
+    host.presenter = types.SimpleNamespace(save_estimate=lambda payload: None)
 
     class _ServiceStub:
-        def __init__(self, view_model):
-            self.view_model = view_model
+        def __init__(self, snapshot):
+            self.snapshot = snapshot
 
         def execute_save(self, **kwargs):
             del kwargs
@@ -598,17 +595,15 @@ def test_show_history_calls_presenter(workflow_host):
     assert calls == ["history"]
 
 
-def test_toggle_modes_updates_view_model_and_indicator(workflow_host):
+def test_toggle_modes_updates_indicator(workflow_host):
     host, controller = workflow_host
 
     controller.toggle_return_mode()
     assert host.return_mode is True
-    assert host.view_model.return_mode is True
     assert host.mode_indicator_label.text() == "Mode: Return Items"
 
     controller.toggle_silver_bar_mode()
     assert host.return_mode is False
-    assert host.view_model.silver_bar_mode is True
     assert host.mode_indicator_label.text() == "Mode: Silver Bars"
     assert host._adapter.refreshed == 2
     assert host._adapter.focus_calls == [True, True]
@@ -803,19 +798,6 @@ def test_apply_loaded_estimate_returns_false_on_error(workflow_host):
     assert controller.apply_loaded_estimate(loaded) is False
 
 
-def test_apply_refreshed_live_rate_updates_label_and_status(workflow_host):
-    host, controller = workflow_host
-
-    controller._apply_refreshed_live_rate(92500)
-    assert host.refresh_rate_button.isEnabled() is True
-    assert host.live_rate_value_label.text() == "₹ 92.50 /g"
-    assert host.status_calls[-1] == ("Live rate refreshed.", 2000)
-
-    controller._apply_refreshed_live_rate("not-a-number")
-    assert host.live_rate_value_label.text() == "Unavailable"
-    assert host.status_calls[-1] == ("Live rate unavailable.", 3000)
-
-
 def test_handle_silver_rate_changed_schedules_totals_and_unsaved(workflow_host):
     host, controller = workflow_host
 
@@ -825,7 +807,7 @@ def test_handle_silver_rate_changed_schedules_totals_and_unsaved(workflow_host):
     assert host.mark_unsaved_calls == 1
 
 
-def test_update_view_model_snapshot_copies_widget_state(workflow_host):
+def test_capture_snapshot_copies_widget_state(workflow_host):
     host, controller = workflow_host
     host.item_table.get_all_rows = lambda: (
         EstimateEntryRowState(code="A1", row_index=1),
@@ -838,13 +820,12 @@ def test_update_view_model_snapshot_copies_widget_state(workflow_host):
     host.last_balance_amount = 70.0
     host.return_mode = True
 
-    controller._update_view_model_snapshot()
+    snapshot = controller._capture_snapshot()
 
-    assert [row.code for row in host.view_model.rows()] == ["A1", "B2"]
-    assert host.view_model.get_voucher_metadata()["voucher_number"] == "VM001"
-    assert host.view_model.silver_rate == pytest.approx(95.5)
-    assert host.view_model.last_balance_silver == pytest.approx(1.25)
-    assert host.view_model.return_mode is True
+    assert [row.code for row in snapshot.rows] == ["A1", "B2"]
+    assert snapshot.silver_rate == pytest.approx(95.5)
+    assert snapshot.last_balance_silver == pytest.approx(1.25)
+    assert snapshot.last_balance_amount == pytest.approx(70.0)
 
 
 def test_build_current_estimate_preview_data_reports_skipped_rows(
@@ -856,12 +837,10 @@ def test_build_current_estimate_preview_data_reports_skipped_rows(
             "REG001": {"code": "REG001", "tunch": "91 + loss"}
         }
     )
-    host.view_model.set_voucher_metadata(
-        voucher_number="PX01",
-        voucher_date="2026-03-20",
-        voucher_note="preview note",
-    )
-    controller._update_view_model_snapshot = lambda: None
+    host.voucher_edit.setText("PX01")
+    host.date_edit.setDate(QDate(2026, 3, 20))
+    host.note_edit.setText("preview note")
+    controller._capture_snapshot = lambda: EstimateEntrySnapshot((), 0.0)
 
     class _Preparation:
         skipped_rows = [2, 4]
@@ -892,8 +871,8 @@ def test_build_current_estimate_preview_data_reports_skipped_rows(
         )
 
     class _ServiceStub:
-        def __init__(self, view_model):
-            self.view_model = view_model
+        def __init__(self, snapshot):
+            self.snapshot = snapshot
 
         def prepare_save_payload(self, **kwargs):
             del kwargs
@@ -926,32 +905,29 @@ def test_last_balance_dialog_updates_totals_and_marks_unsaved(
     assert host.mark_unsaved_calls == 1
 
 
-def test_refresh_silver_rate_emits_none_on_failure(workflow_host, monkeypatch):
+def test_refresh_silver_rate_asks_the_live_rate_controller(workflow_host):
     host, controller = workflow_host
-
-    class _ClientSignal:
-        def __init__(self):
-            self.callback = None
-
-        def connect(self, callback):
-            self.callback = callback
-
-        def emit(self, *args):
-            if self.callback:
-                self.callback(*args)
-
-    class _Client:
-        def __init__(self, *_args, **_kwargs):
-            self.snapshot_received = _ClientSignal()
-            self.failed = _ClientSignal()
-
-        def fetch(self):
-            self.failed.emit(RuntimeError("offline"))
-
-    monkeypatch.setattr(workflow_module, "DdaCurrentRatesClient", _Client)
+    calls: list[str] = []
+    host.main_window = types.SimpleNamespace(
+        live_rate_controller=types.SimpleNamespace(
+            refresh_now=lambda: calls.append(host.live_rate_meta_label.text())
+        )
+    )
 
     controller.refresh_silver_rate()
 
-    assert host.refresh_rate_button.isEnabled() is False
+    assert calls == ["Updating"]
+    assert host.live_rate_value_label.text() == "Refreshing…"
+    assert host.refresh_rate_button.isEnabled() is True
     assert host.status_calls[0] == ("Refreshing live silver rate...", 2000)
-    assert host.live_rate_fetched.emitted == [None]
+
+
+def test_refresh_silver_rate_does_nothing_without_a_live_rate_controller(
+    workflow_host,
+):
+    host, controller = workflow_host
+
+    controller.refresh_silver_rate()
+
+    assert host.live_rate_value_label.text() == ""
+    assert host.status_calls == []

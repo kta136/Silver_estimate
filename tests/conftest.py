@@ -11,12 +11,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-_SLOW_PATH_SUFFIXES = {
-    "tests/ui/test_estimate_entry_integration.py",
-    "tests/ui/test_main_window_interactions.py",
-    "tests/ui/test_mode_toggle_buttons.py",
-}
-
 
 def _coerce_bool(value, default):
     if isinstance(value, bool):
@@ -269,11 +263,6 @@ def settings_stub(monkeypatch):
         "silverestimate.services.auth_service.QSettings", _SettingsStub, raising=False
     )
     monkeypatch.setattr(
-        "silverestimate.services.live_rate_service.QSettings",
-        _SettingsStub,
-        raising=False,
-    )
-    monkeypatch.setattr(
         "silverestimate.ui.estimate_entry.QSettings", _SettingsStub, raising=False
     )
     monkeypatch.setattr(
@@ -316,12 +305,6 @@ def pytest_collection_modifyitems(items):
         path = item.path.as_posix()
         if "/tests/smoke/" in path:
             item.add_marker(pytest.mark.smoke)
-        if "/tests/integration/" in path:
-            item.add_marker(pytest.mark.integration)
-        elif "/tests/smoke/" not in path:
-            item.add_marker(pytest.mark.unit)
-        if any(path.endswith(suffix) for suffix in _SLOW_PATH_SUFFIXES):
-            item.add_marker(pytest.mark.slow)
         if item.get_closest_marker("smoke") and not run_smoke:
             item.add_marker(skip_smoke)
 

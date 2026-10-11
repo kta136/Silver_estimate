@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import logging
 import threading
-import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, cast
@@ -67,7 +66,6 @@ class _HistoryLoadRequest:
     voucher_search: str
     cursor: EstimateHistoryCursor | None
     append: bool
-    started_at: float
 
 
 def _load_history_page(
@@ -459,7 +457,6 @@ class EstimateHistoryDialog(QDialog):
             return
         self.results_summary_label.setText("Loading estimates...")
         self._loading = True
-        started_at = time.perf_counter()
 
         # Start threaded load and return early to keep UI responsive
         try:
@@ -478,7 +475,7 @@ class EstimateHistoryDialog(QDialog):
         if not callable(connection_factory):
             try:
                 rows = self._load_estimates_sync()
-                self._populate_table(rows, started_at=started_at, append=append)
+                self._populate_table(rows, append=append)
             except Exception as exc:
                 self._handle_load_error(0, exc)
             finally:
@@ -492,7 +489,6 @@ class EstimateHistoryDialog(QDialog):
             self.voucher_search.text().strip(),
             self._history_page_state.cursor,
             append,
-            started_at,
         )
         self._load_runner.submit(request)
 
@@ -523,7 +519,7 @@ class EstimateHistoryDialog(QDialog):
             ],
             value,
         )
-        self._populate_table(page, started_at=request.started_at, append=request.append)
+        self._populate_table(page, append=request.append)
 
     def _handle_load_error(self, _generation: int, error: object) -> None:
         if self._closing or _generation != self._load_runner.generation:
@@ -538,7 +534,6 @@ class EstimateHistoryDialog(QDialog):
         self,
         page: Page[dict[str, Any], EstimateHistoryCursor],
         *,
-        started_at: float | None = None,
         append: bool = False,
     ) -> None:
         selected_voucher = self.get_selected_voucher()
@@ -605,14 +600,6 @@ class EstimateHistoryDialog(QDialog):
             table.blockSignals(False)
             table.setUpdatesEnabled(True)
             table.viewport().update()
-        if started_at is not None:
-            elapsed_ms = (time.perf_counter() - started_at) * 1000.0
-            if elapsed_ms >= 20.0:
-                self.logger.debug(
-                    "[perf] estimate_history.load_estimates=%.2fms rows=%s",
-                    elapsed_ms,
-                    len(rows),
-                )
 
     def _loading_done(self, _generation: int) -> None:
         if self._closing or _generation != self._load_runner.generation:

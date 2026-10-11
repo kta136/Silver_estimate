@@ -2,8 +2,8 @@
 
 Silver Estimate is distributed under GPL-3.0-only. The complete corresponding
 source for each release is published with that release. This notice summarizes
-the principal redistributed runtime components; the release SBOM is the complete
-machine-readable inventory.
+the principal redistributed runtime components; `uv.lock` is the complete
+machine-readable inventory of the Python packages.
 
 ## SQLCipher Community Edition 4.17.0
 
@@ -49,5 +49,5 @@ Sources and licenses:
 ## Python, argon2-cffi, and other packages
 
 These components retain their respective upstream licenses and notices. Exact
-versions and license identifiers are recorded in the release CycloneDX SBOM.
+versions are recorded in `uv.lock`.
 Qt/PySide redistribution must continue to satisfy the selected GPL/LGPL terms.

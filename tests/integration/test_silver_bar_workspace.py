@@ -5,7 +5,7 @@ import pytest
 from silverestimate.domain.numeric_policy import fixed_decimal
 from silverestimate.domain.silver_bar_workspace import normalize_weight_prefix
 from silverestimate.persistence.repository_results import RepositoryFailureKind
-from silverestimate.persistence.silver_bars_snapshot_repository import (
+from silverestimate.persistence.silver_bar_query_repository import (
     SilverBarsSnapshotRepository,
 )
 from tests.silver_bar_workspace_support import bar_list_count, seed_workspace_db

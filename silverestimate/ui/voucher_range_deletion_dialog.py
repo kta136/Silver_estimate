@@ -82,9 +82,7 @@ class _PreviewModel(QAbstractTableModel):
 
 
 class VoucherRangeDeletionDialog(QDialog):
-    def __init__(  # noqa: PLR0915 - declarative dialog layout
-        self, controller: VoucherDeletionController, parent=None
-    ):
+    def __init__(self, controller: VoucherDeletionController, parent=None):
         super().__init__(parent)
         self.controller = controller
         self._preview: VoucherDeletionPreview | None = None

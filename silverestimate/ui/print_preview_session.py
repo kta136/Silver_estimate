@@ -48,15 +48,6 @@ class PrintPreviewSession:
         self.preview.setWindowTitle(payload.title)
         self.refresh()
 
-    def switch_format(self, format_key: object) -> bool:
-        if not format_key or self.payload.format_factory is None:
-            return False
-        next_payload = self.payload.format_factory(str(format_key))
-        if next_payload is None:
-            return False
-        self.replace_payload(next_payload)
-        return True
-
     def switch_tunch_visibility(self, visible: bool) -> bool:
         if self.payload.tunch_visibility_factory is None:
             return False

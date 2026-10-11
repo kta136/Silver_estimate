@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Mapping, Optional
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication, QWidget
 
 from silverestimate.domain.estimate_entry import LoadedEstimate
@@ -23,7 +23,6 @@ from .estimate_entry_table_controller import EstimateEntryTableController
 from .estimate_entry_totals_controller import EstimateEntryTotalsController
 from .estimate_entry_workflow_controller import EstimateEntryWorkflowController
 from .inline_status import InlineStatusController
-from .view_models import EstimateEntryViewModel
 
 if TYPE_CHECKING:
     from PySide6.QtGui import QAction
@@ -37,8 +36,6 @@ if TYPE_CHECKING:
         QSplitter,
         QToolButton,
     )
-
-    from silverestimate.services.dda_rate_fetcher import DdaCurrentRatesClient
 
     from .adapters import EstimateTableAdapter
     from .estimate_entry_components import (
@@ -56,8 +53,6 @@ class EstimateEntryWidget(QWidget):
     # Controller-managed controls and state; no dynamic attribute fallback.
     _code_focus_timer: QTimer
     _content_splitter: QSplitter
-    _last_saved_status: str
-    _live_rate_client: DdaCurrentRatesClient
     _pending_focus_row: int
     bar_fine_label: QLabel
     bar_gross_label: QLabel
@@ -103,8 +98,6 @@ class EstimateEntryWidget(QWidget):
     totals_panel: TotalsPanel
     unsaved_badge: QLabel
     voucher_edit: QLineEdit
-
-    live_rate_fetched = Signal(object)
 
     @staticmethod
     def _normalize_wage_type(value: object) -> str:
@@ -172,7 +165,7 @@ class EstimateEntryWidget(QWidget):
     command_strip: QWidget
     estimate_more_button: QToolButton
 
-    def __init__(self, db_manager, main_window, repository):
+    def __init__(self, db_manager, main_window, estimate_source=None):
         super().__init__()
 
         self.logger = logging.getLogger(__name__)
@@ -183,11 +176,9 @@ class EstimateEntryWidget(QWidget):
 
         self.db_manager = db_manager
         self.main_window = main_window
+        # Tests pass a stand-in for the estimate calls; the app uses the database.
         self.presenter: EstimateEntryPresenter | None = EstimateEntryPresenter(
-            self, repository
-        )
-        self.live_rate_fetched.connect(
-            self.workflow_controller._apply_refreshed_live_rate
+            self, db_manager if estimate_source is None else estimate_source
         )
 
         draft_repository = getattr(db_manager, "draft_repository", None)
@@ -200,6 +191,7 @@ class EstimateEntryWidget(QWidget):
         self._loading_estimate = False
         self._load_estimate_connected = False
         self._estimate_loaded = False
+        self._last_saved_status = "-"
         self._unsaved_changes = False
         self._unsaved_block = 0
         self._enforcing_code_nav = False
@@ -217,11 +209,6 @@ class EstimateEntryWidget(QWidget):
 
         self.return_mode = False
         self.silver_bar_mode = False
-        self.view_model = EstimateEntryViewModel()
-        self.view_model.set_modes(
-            return_mode=self.return_mode,
-            silver_bar_mode=self.silver_bar_mode,
-        )
 
         self._programmatic_resizing = False
         self._column_autofit_mode = (
@@ -305,9 +292,7 @@ class EstimateEntryWidget(QWidget):
         self._status_helper.show(message, timeout=timeout, level=level)
 
     def refresh_status_line(self) -> None:
-        refresher = getattr(self._layout_controller, "refresh_status_line", None)
-        if callable(refresher):
-            refresher()
+        self._layout_controller.refresh_status_line()
 
     def _status(self, message, timeout=3000):
         self.show_status(message, timeout)
@@ -324,23 +309,23 @@ class EstimateEntryWidget(QWidget):
             show_toast(message, timeout=timeout, level=level)
 
     def has_unsaved_changes(self) -> bool:
-        return bool(getattr(self, "_unsaved_changes", False))
+        return bool(self._unsaved_changes)
 
     def _push_unsaved_block(self) -> None:
-        self._unsaved_block = getattr(self, "_unsaved_block", 0) + 1
+        self._unsaved_block = self._unsaved_block + 1
 
     def _pop_unsaved_block(self) -> None:
-        if getattr(self, "_unsaved_block", 0) > 0:
+        if self._unsaved_block > 0:
             self._unsaved_block -= 1
 
     def _set_unsaved(self, dirty: bool, *, force: bool = False) -> None:
-        if not force and dirty and getattr(self, "_unsaved_block", 0) > 0:
+        if not force and dirty and self._unsaved_block > 0:
             return
-        previous = getattr(self, "_unsaved_changes", False)
-        if dirty and not previous and not getattr(self, "_estimate_loaded", False):
+        previous = self._unsaved_changes
+        if dirty and not previous and not self._estimate_loaded:
             self._active_voucher_no = self.voucher_edit.text().strip()
         self._unsaved_changes = dirty
-        recovery = getattr(self, "draft_recovery", None)
+        recovery = self.draft_recovery
         if recovery is not None:
             if dirty:
                 recovery.mark_changed()
@@ -400,9 +385,8 @@ class EstimateEntryWidget(QWidget):
         super().resizeEvent(event)
 
     def hideEvent(self, event):
-        recovery = getattr(self, "draft_recovery", None)
-        if recovery is not None:
-            recovery.flush()
+        if self.draft_recovery is not None:
+            self.draft_recovery.flush()
         self.layout_controller.show_command_strip(False)
         super().hideEvent(event)
 
@@ -419,9 +403,6 @@ class EstimateEntryWidget(QWidget):
         self.workflow_controller.shutdown_print_previews()
         if self.draft_recovery is not None:
             self.draft_recovery.stop()
-        live_rate_client = getattr(self, "_live_rate_client", None)
-        if live_rate_client is not None:
-            live_rate_client.cancel()
 
     def keyPressEvent(self, event):
         key = event.key()

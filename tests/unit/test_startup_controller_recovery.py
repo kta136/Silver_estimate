@@ -66,21 +66,3 @@ def test_device_binding_refuses_existing_bound_database_without_local_secret(
 
     with pytest.raises(CredentialStoreError, match="copied databases"):
         controller._prepare_device_binding()
-
-
-def test_device_binding_is_created_for_authenticated_legacy_database(
-    tmp_path, monkeypatch, settings_stub
-):
-    path = tmp_path / "estimation.db"
-    path.write_bytes(b"legacy-database")
-    path.with_name("estimation.kdf.json").write_text("{}")
-    monkeypatch.setattr(startup_module, "DB_PATH", str(path))
-
-    controller = StartupController(
-        logger=logging.getLogger("test-legacy-device-binding")
-    )
-    first = controller._prepare_device_binding()
-    second = controller._prepare_device_binding()
-
-    assert first == second
-    assert len(first) == 32

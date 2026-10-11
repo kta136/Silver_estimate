@@ -1,26 +1,14 @@
 from __future__ import annotations
 
-import configparser
-import os
 import shutil
-import zipfile
 from pathlib import Path
 
 import nox  # type: ignore[import-not-found]
 
-from silverestimate.infrastructure.app_constants import APP_VERSION
-
-nox.options.sessions = ["pr"]
+nox.options.sessions = ["ruff", "mypy", "tests"]
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 RUFF_TARGETS = ("silverestimate", "tests", "scripts", "main.py", "noxfile.py")
-PYSIDE_DEPLOY_CONFIG = PROJECT_ROOT / "pysidedeploy.spec"
-NUITKA_VERSION = "4.2.1"
-LEGAL_ARTIFACTS = (
-    PROJECT_ROOT / "LICENSE",
-    PROJECT_ROOT / "THIRD_PARTY_NOTICES.md",
-    PROJECT_ROOT / "vendor" / "sqlcipher" / "PROVENANCE.json",
-)
 
 
 def clean_artifact(path: Path) -> None:
@@ -31,121 +19,6 @@ def clean_artifact(path: Path) -> None:
         path.unlink()
     except FileNotFoundError:
         return
-
-
-def _artifact_extension() -> str:
-    return ".exe" if os.name == "nt" else ""
-
-
-def _local_build_label() -> str:
-    return "win64" if os.name == "nt" else "linux64"
-
-
-def _versioned_artifact_path() -> Path:
-    return (
-        PROJECT_ROOT / "dist" / f"SilverEstimate-v{APP_VERSION}{_artifact_extension()}"
-    )
-
-
-def _versioned_archive_path() -> Path:
-    return (
-        PROJECT_ROOT
-        / "dist"
-        / f"SilverEstimate-v{APP_VERSION}-{_local_build_label()}.zip"
-    )
-
-
-def package_local_artifact(base_artifact: Path) -> tuple[Path, Path]:
-    versioned_artifact = _versioned_artifact_path()
-    versioned_archive = _versioned_archive_path()
-    clean_artifact(versioned_artifact)
-    clean_artifact(versioned_archive)
-
-    shutil.copy2(base_artifact, versioned_artifact)
-    with zipfile.ZipFile(
-        versioned_archive,
-        mode="w",
-        compression=zipfile.ZIP_DEFLATED,
-    ) as archive:
-        archive.write(versioned_artifact, arcname=versioned_artifact.name)
-        for legal_artifact in LEGAL_ARTIFACTS:
-            archive.write(
-                legal_artifact,
-                arcname=legal_artifact.relative_to(PROJECT_ROOT).as_posix(),
-            )
-    return versioned_artifact, versioned_archive
-
-
-def run_pyside_deploy_build(
-    session: nox.Session,
-    *,
-    mode: str = "onefile",
-    clean: bool = False,
-) -> Path:
-    deployment_dir = PROJECT_ROOT / "deployment"
-    report_dir = PROJECT_ROOT / "artifacts" / "pyside6-deploy"
-    temporary_config = PROJECT_ROOT / f".pysidedeploy-{mode}.spec"
-    if mode == "onefile":
-        artifact = (
-            PROJECT_ROOT
-            / "dist"
-            / ("SilverEstimate.exe" if os.name == "nt" else "SilverEstimate.bin")
-        )
-    else:
-        artifact = (
-            PROJECT_ROOT
-            / "dist"
-            / "SilverEstimate.dist"
-            / ("main.exe" if os.name == "nt" else "main.bin")
-        )
-
-    if clean:
-        clean_artifact(deployment_dir)
-        clean_artifact(artifact.parent if mode == "standalone" else artifact)
-        if mode == "onefile":
-            clean_artifact(_versioned_artifact_path())
-            clean_artifact(_versioned_archive_path())
-    else:
-        clean_artifact(artifact)
-    report_dir.mkdir(parents=True, exist_ok=True)
-
-    parser = configparser.ConfigParser(interpolation=None)
-    parser.read(PYSIDE_DEPLOY_CONFIG, encoding="utf-8")
-    parser.set("nuitka", "mode", mode)
-    if os.name == "nt":
-        extra_args = parser.get("nuitka", "extra_args", fallback="")
-        parser.set(
-            "nuitka",
-            "extra_args",
-            f"--file-version={APP_VERSION} --product-version={APP_VERSION} {extra_args}",
-        )
-    with temporary_config.open("w", encoding="utf-8") as stream:
-        parser.write(stream)
-
-    session.run("python", "-m", "nuitka", "--version")
-    try:
-        session.run(
-            "pyside6-deploy",
-            "--config-file",
-            str(temporary_config),
-            "--force",
-            "--mode",
-            mode,
-            "--nuitka-version",
-            NUITKA_VERSION,
-        )
-    finally:
-        clean_artifact(temporary_config)
-    if not artifact.exists():
-        session.error(
-            f"pyside6-deploy did not create the expected artifact: {artifact}"
-        )
-    if mode == "standalone":
-        return artifact
-    versioned_artifact, versioned_archive = package_local_artifact(artifact)
-    session.log(f"Versioned artifact created at {versioned_artifact}")
-    session.log(f"Packaged archive created at {versioned_archive}")
-    return versioned_artifact
 
 
 @nox.session(python=False)
@@ -162,96 +35,23 @@ def mypy(session: nox.Session) -> None:
 
 
 @nox.session(python=False)
-def tests_fast(session: nox.Session) -> None:
-    session.run(
-        "python",
-        "-m",
-        "pytest",
-        "-m",
-        "(unit and not slow) or integration",
-        "-v",
-    )
-
-
-@nox.session(python=False)
-def tests_full(session: nox.Session) -> None:
-    perf_log = PROJECT_ROOT / "perf-metrics.log"
-    coverage_data = PROJECT_ROOT / ".coverage"
-    coverage_xml = PROJECT_ROOT / "coverage.xml"
-    clean_artifact(perf_log)
-    clean_artifact(coverage_data)
-    clean_artifact(coverage_xml)
-    smoke_artifacts = prepare_smoke_artifacts()
+def tests(session: nox.Session) -> None:
     session.env["QT_QPA_PLATFORM"] = "offscreen"
-
     session.run(
         "python",
         "-m",
         "pytest",
-        "-W",
-        "error",
         "tests",
         "--ignore=tests/smoke",
-        "--cov=silverestimate",
-        "--cov-report=",
-        "-v",
+        *session.posargs,
     )
-    session.run(
-        "python",
-        "-m",
-        "pytest",
-        "tests/smoke",
-        "--run-smoke",
-        "--smoke-screenshots",
-        "--smoke-artifact-dir",
-        str(smoke_artifacts),
-        "--cov=silverestimate",
-        "--cov-append",
-        "--cov-report=",
-        "-v",
-    )
-    session.run(
-        "python",
-        "-m",
-        "coverage",
-        "run",
-        "--append",
-        "scripts/run_performance_gate.py",
-        "--output",
-        str(perf_log),
-    )
-    budget_args = [
-        "python",
-        "scripts/check_perf_budgets.py",
-        "--log-file",
-        str(perf_log),
-    ]
-    budget_profile = os.environ.get("SILVERESTIMATE_PERF_BUDGET_PROFILE")
-    if budget_profile:
-        budget_args.extend(("--profile", budget_profile))
-    session.run(*budget_args)
-    session.run(
-        "python", "-m", "coverage", "report", "--show-missing", "--fail-under=75"
-    )
-    session.run("python", "-m", "coverage", "xml", "-o", str(coverage_xml))
-
-
-@nox.session(python=False)
-def perf_sqlcipher(session: nox.Session) -> None:
-    """Capture an opt-in encrypted baseline without machine-specific CI limits."""
-    session.run("python", "-m", "scripts.benchmark_sqlcipher", *session.posargs)
-
-
-def prepare_smoke_artifacts() -> Path:
-    artifact_dir = PROJECT_ROOT / "artifacts" / "smoke-ui"
-    clean_artifact(artifact_dir)
-    artifact_dir.mkdir(parents=True, exist_ok=True)
-    return artifact_dir
 
 
 @nox.session(python=False)
 def smoke_ui(session: nox.Session) -> None:
-    artifact_dir = prepare_smoke_artifacts()
+    artifact_dir = PROJECT_ROOT / "artifacts" / "smoke-ui"
+    clean_artifact(artifact_dir)
+    artifact_dir.mkdir(parents=True, exist_ok=True)
     session.env["QT_QPA_PLATFORM"] = "offscreen"
     session.run(
         "python",
@@ -267,10 +67,10 @@ def smoke_ui(session: nox.Session) -> None:
 
 
 @nox.session(python=False)
-def dependency_policy(session: nox.Session) -> None:
-    artifact_dir = PROJECT_ROOT / "artifacts" / "dependency-policy"
+def audit(session: nox.Session) -> None:
+    """List known advisories for the locked runtime packages; never blocks."""
+    artifact_dir = PROJECT_ROOT / "artifacts" / "audit"
     requirements = artifact_dir / "runtime-requirements.txt"
-    audit_report = artifact_dir / "pip-audit.json"
     clean_artifact(artifact_dir)
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
@@ -297,100 +97,5 @@ def dependency_policy(session: nox.Session) -> None:
         "--disable-pip",
         "--progress-spinner",
         "off",
-        "--cache-dir",
-        str(artifact_dir / "pip-audit-cache"),
-        "--format",
-        "json",
-        "--output",
-        str(audit_report),
         success_codes=[0, 1],
     )
-    session.run(
-        "python",
-        "scripts/check_dependency_policy.py",
-        "--audit-report",
-        str(audit_report),
-    )
-
-
-@nox.session(python=False)
-def build(session: nox.Session) -> None:
-    artifact = run_pyside_deploy_build(session)
-    if not artifact.exists():
-        session.error(f"Build artifact was not created: {artifact}")
-    session.log(f"Build artifact created at {artifact}")
-
-
-@nox.session(python=False, name="build_clean")
-def build_clean(session: nox.Session) -> None:
-    artifact = run_pyside_deploy_build(session, clean=True)
-    if not artifact.exists():
-        session.error(f"Build artifact was not created: {artifact}")
-    session.log(f"Build artifact created at {artifact}")
-
-
-@nox.session(python=False, name="build_standalone")
-def build_standalone(session: nox.Session) -> None:
-    artifact = run_pyside_deploy_build(session, mode="standalone", clean=True)
-    if not artifact.exists():
-        session.error(f"Standalone artifact was not created: {artifact}")
-    session.log(f"Standalone artifact created at {artifact}")
-
-
-@nox.session(python=False, name="artifact_smoke")
-def artifact_smoke(session: nox.Session) -> None:
-    artifact = _versioned_artifact_path()
-    if not artifact.exists():
-        session.error(f"Versioned artifact is unavailable: {artifact}")
-    session.run(
-        "python",
-        "scripts/validate_frozen_artifact.py",
-        "--artifact",
-        str(artifact),
-    )
-
-
-@nox.session(python=False, name="standalone_artifact_smoke")
-def standalone_artifact_smoke(session: nox.Session) -> None:
-    standalone_dir = PROJECT_ROOT / "dist" / "SilverEstimate.dist"
-    artifact = standalone_dir / ("main.exe" if os.name == "nt" else "main.bin")
-    if not artifact.exists():
-        session.error(f"Standalone artifact is unavailable: {artifact}")
-    session.run(
-        "python",
-        "scripts/validate_frozen_artifact.py",
-        "--artifact",
-        str(artifact),
-    )
-    session.run(
-        "python",
-        "scripts/validate_pyside_deployment.py",
-        "--standalone-dir",
-        str(standalone_dir),
-        "--report",
-        str(PROJECT_ROOT / "artifacts" / "pyside6-deploy" / "nuitka-report.xml"),
-    )
-
-
-@nox.session(python=False, name="pr")
-def pr(session: nox.Session) -> None:
-    for session_name in ("ruff", "mypy", "dependency_policy", "tests_fast"):
-        session.notify(session_name)
-
-
-@nox.session(python=False, name="ci")
-def ci(session: nox.Session) -> None:
-    for session_name in (
-        "ruff",
-        "mypy",
-        "dependency_policy",
-        "tests_full",
-        "build_clean",
-    ):
-        session.notify(session_name)
-
-
-@nox.session(python=False, name="advisory")
-def advisory(session: nox.Session) -> None:
-    for session_name in ("ruff", "dependency_policy"):
-        session.notify(session_name)

@@ -5,15 +5,12 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Optional, cast
+from typing import TYPE_CHECKING, Optional, cast
 
 from PySide6.QtCore import QObject, QThread, Signal
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
-from silverestimate.persistence.database_protocols import (
-    MainCommandsDatabase,
-    ReadConnectionFactory,
-)
+from silverestimate.persistence.database_driver import ReadConnectionFactory
 from silverestimate.ui.database_maintenance import run_database_maintenance
 from silverestimate.ui.message_dialogs import (
     ask_with_option,
@@ -21,6 +18,9 @@ from silverestimate.ui.message_dialogs import (
     confirm_destructive,
     with_details,
 )
+
+if TYPE_CHECKING:
+    from silverestimate.persistence.database_manager import DatabaseManager
 
 
 class MainCommandStatus(Enum):
@@ -81,7 +81,7 @@ class MainCommands:
     def __init__(
         self,
         main_window,
-        db_manager: MainCommandsDatabase,
+        db_manager: DatabaseManager,
         logger: Optional[logging.Logger] = None,
     ) -> None:
         self.main_window = main_window

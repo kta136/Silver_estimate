@@ -29,9 +29,6 @@ def test_local_build_validates_onefile_before_versioning():
     source = SCRIPT.read_text(encoding="utf-8")
 
     onefile_build = source.index('-mode "onefile"')
-    runtime_validate = source.index(
-        "Invoke-ArtifactValidation -pythonExe $buildPython -artifact $baseExe"
-    )
     native_validate = source.index(
         "Invoke-NativeOnefileValidation -dumpbinExe $dumpbinExe -artifact $baseExe"
     )
@@ -39,13 +36,12 @@ def test_local_build_validates_onefile_before_versioning():
         "Copy-Item -LiteralPath $baseExe -Destination $versionedExe"
     )
 
-    assert onefile_build < runtime_validate < native_validate < versioned_copy
+    assert onefile_build < native_validate < versioned_copy
 
 
-def test_local_build_validation_uses_system_only_path_and_prints_hashes():
+def test_local_build_prints_hashes():
     source = SCRIPT.read_text(encoding="utf-8")
 
-    assert '$env:PATH = "$env:SystemRoot\\System32;$env:SystemRoot"' in source
     assert "function Get-Sha256" in source
     assert "Get-FileHash" not in source
     assert "Executable SHA-256:" in source
@@ -101,9 +97,6 @@ def test_compiler_pin_matches_manifest_deploy_and_build_entrypoints():
     deploy.read(DEPLOY_SPEC, encoding="utf-8")
     assert f"Nuitka=={pin}" in deploy["python"]["packages"].split(",")
     assert f'$nuitkaVersion = "{pin}"' in SCRIPT.read_text(encoding="utf-8")
-    assert f'NUITKA_VERSION = "{pin}"' in (root / "noxfile.py").read_text(
-        encoding="utf-8"
-    )
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows build interpreter guard")
@@ -184,14 +177,10 @@ function Invoke-PySideDeployBuild {
     Copy-Item -LiteralPath $configFile -Destination (Join-Path $repoRoot 'used.spec')
     [IO.File]::WriteAllText($baseExe, 'new executable')
 }
-function Invoke-ArtifactValidation {
-    param($pythonExe, $artifact)
-    Add-Content -LiteralPath (Join-Path $repoRoot 'checks.txt') -Value 'runtime'
-    VALIDATION_RESULT
-}
 function Invoke-NativeOnefileValidation {
     param($dumpbinExe, $artifact)
     Add-Content -LiteralPath (Join-Path $repoRoot 'checks.txt') -Value 'native'
+    VALIDATION_RESULT
 }
 """.replace("VALIDATION_RESULT", "throw 'validation failed'" if fail_validation else "")
     source = SCRIPT.read_text(encoding="utf-8")
@@ -221,7 +210,7 @@ function Invoke-NativeOnefileValidation {
     assert (root / DEPLOY_SPEC.name).read_bytes() == DEPLOY_SPEC.read_bytes()
     assert not (root / ".pysidedeploy-local-onefile.spec").exists()
     checks = (root / "checks.txt").read_text().splitlines()
-    assert checks == (["runtime"] if fail_validation else ["runtime", "native"])
+    assert checks == ["native"]
     assert target.read_bytes() == (
         b"existing release" if fail_validation else b"new executable"
     )

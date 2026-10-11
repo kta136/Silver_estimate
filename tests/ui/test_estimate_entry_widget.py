@@ -468,7 +468,7 @@ def test_invalid_save_keeps_draft_and_focuses_problem_row(
     widget = make_estimate_widget(fake_db)
     calls = []
     messages = []
-    fake_db.save_estimate_with_returns = lambda *args: calls.append("save") or True
+    fake_db.save_estimate_atomic = lambda *args: calls.append("save") or True
     widget.workflow_controller.print_estimate = lambda: calls.append("print")
     widget.workflow_controller.clear_form = lambda **kwargs: calls.append("clear")
     for method in ("warning", "critical", "information"):

@@ -5,7 +5,15 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any
 
-from PySide6.QtCore import QEvent, QModelIndex, QRect, QSize, Qt, Signal
+from PySide6.QtCore import (
+    QEvent,
+    QModelIndex,
+    QPersistentModelIndex,
+    QRect,
+    QSize,
+    Qt,
+    Signal,
+)
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -41,10 +49,7 @@ from .theme_tokens import (
 )
 
 # Colours used only by these screens.
-SALE_TEXT = INFO_TEXT
-RETURN_TEXT = WARNING_TEXT
 ZERO_TEXT = "#94a3b8"
-DATA_BAR = "#7cc3c8"
 # Pale enough to sit behind dark figures without hurting their contrast.
 DATA_BAR_FILL = "#cfe9eb"
 
@@ -92,7 +97,7 @@ QLabel#StatusPill {
     font-weight: 600;
     font-size: 8pt;
 }
-QLabel#StatusPill[pillState="new"] { background: #f1f3f5; color: #475569; border: 1px solid __CARD_BORDER__; }
+QLabel#StatusPill[pillState="new"] { background: #f1f3f5; color: __FIELD_TEXT__; border: 1px solid __CARD_BORDER__; }
 QLabel#StatusPill[pillState="active"] { background: __INFO_BG__; color: __INFO_TEXT__; border: 1px solid __INFO_BORDER__; }
 QLabel#StatusPill[pillState="issued"] { background: __WARNING_BG__; color: __WARNING_TEXT__; border: 1px solid __WARNING_BORDER__; }
 QLabel#StatusPill[pillState="available"] { background: __SUCCESS_BG__; color: __SUCCESS_TEXT__; border: 1px solid __SUCCESS_BORDER__; }
@@ -105,7 +110,7 @@ QPushButton#SegmentButton {
     background: transparent;
     border: none;
     border-radius: 6px;
-    color: #475569;
+    color: __FIELD_TEXT__;
     font-weight: 600;
     padding: 4px 14px;
     min-height: 22px;
@@ -121,7 +126,7 @@ QPushButton#ChipButton, QToolButton#ChipButton {
     background: __SURFACE_BG__;
     border: 1px solid __INPUT_BORDER__;
     border-radius: 14px;
-    color: #334155;
+    color: __HEADER_TEXT__;
     font-weight: 600;
     padding: 4px 14px;
     min-height: 20px;
@@ -142,7 +147,7 @@ QPushButton#ChipButton:disabled, QToolButton#ChipButton:disabled {
 QPushButton#ChipButton:checked {
     background: __PRIMARY_BG__;
     border-color: __PRIMARY_BG__;
-    color: #ffffff;
+    color: __SURFACE_BG__;
 }
 QPushButton#LinkButton {
     background: transparent;
@@ -191,11 +196,6 @@ class KeyHintButton(QPushButton):
 
     def key_hint(self) -> str:
         return self._key_hint
-
-    def set_key_hint(self, key_hint: str) -> None:
-        self._key_hint = key_hint
-        self.updateGeometry()
-        self.update()
 
     def _chip_font(self):
         font = self.font()
@@ -590,7 +590,10 @@ class WeightBarDelegate(QStyledItemDelegate):
         self._maximum = max(0.0, float(maximum))
 
     def paint(
-        self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex
+        self,
+        painter: QPainter,
+        option: QStyleOptionViewItem,
+        index: QModelIndex | QPersistentModelIndex,
     ) -> None:
         item = QStyleOptionViewItem(option)
         self.initStyleOption(item, index)
@@ -614,7 +617,10 @@ class WeightBarDelegate(QStyledItemDelegate):
         painter.restore()
 
     def _paint_bar(
-        self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex
+        self,
+        painter: QPainter,
+        option: QStyleOptionViewItem,
+        index: QModelIndex | QPersistentModelIndex,
     ) -> None:
         if self._value_at is None or self._maximum <= 0:
             return
@@ -655,7 +661,10 @@ class StatusPillDelegate(QStyledItemDelegate):
         self._states = states
 
     def paint(
-        self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex
+        self,
+        painter: QPainter,
+        option: QStyleOptionViewItem,
+        index: QModelIndex | QPersistentModelIndex,
     ) -> None:
         text = str(index.data() or "")
         item = QStyleOptionViewItem(option)

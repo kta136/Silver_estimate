@@ -38,9 +38,6 @@ _ICON_SIZES: Final[tuple[int, ...]] = (16, 20, 24, 32)
 _ICON_CACHE: dict[tuple[str, str, str, str], QIcon] = {}
 
 _ICON_SPECS: Final[dict[str, IconSpec]] = {
-    "estimate_entry": IconSpec("calculator"),
-    "item_master": IconSpec("clipboard"),
-    "tools": IconSpec("toolbox"),
     "save": IconSpec("save"),
     "search": IconSpec("search"),
     "open": IconSpec("folder_open"),
@@ -49,11 +46,6 @@ _ICON_SPECS: Final[dict[str, IconSpec]] = {
     "delete": IconSpec("trash"),
     "delete_row": IconSpec("delete_row"),
     "delete_estimate": IconSpec("trash"),
-    "clear_filters": IconSpec("clear_filter"),
-    "edit_note": IconSpec("edit_note"),
-    "mark_issued": IconSpec("check_box"),
-    "export_csv": IconSpec("export_file"),
-    "generate_optimal": IconSpec("magic"),
     "close": IconSpec("close"),
     "refresh": IconSpec("refresh"),
     "save_pdf": IconSpec("pdf"),
@@ -82,17 +74,12 @@ _ICON_SPECS: Final[dict[str, IconSpec]] = {
     "history": IconSpec("history"),
     "return_mode": IconSpec("return"),
     "bar_mode": IconSpec("weight"),
-    "move_right": IconSpec("arrow_right"),
-    "move_left": IconSpec("arrow_left"),
-    "move_all_right": IconSpec("page_last"),
-    "move_all_left": IconSpec("page_first"),
     "reset_layout": IconSpec("columns"),
     "user_interface": IconSpec("monitor"),
     "live_rates": IconSpec("chart"),
     "printing": IconSpec("printer"),
     "data_management": IconSpec("database"),
     "security": IconSpec("shield"),
-    "import_export": IconSpec("import_export"),
     "logging": IconSpec("clipboard_text"),
 }
 
@@ -155,9 +142,7 @@ def _paint_pixmap(symbol: str, size: int, color: str) -> QPixmap:
     return pixmap
 
 
-def _draw_symbol(  # noqa: C901, PLR0911, PLR0912, PLR0915
-    painter: QPainter, symbol: str
-) -> None:
+def _draw_symbol(painter: QPainter, symbol: str) -> None:
     if symbol == "more_horizontal":
         for x in (6, 12, 18):
             painter.drawEllipse(QPointF(x, 12), 1.2, 1.2)
@@ -167,28 +152,11 @@ def _draw_symbol(  # noqa: C901, PLR0911, PLR0912, PLR0915
         painter.drawLine(QPointF(12, 4), QPointF(19, 20))
         painter.drawLine(QPointF(8, 14), QPointF(16, 14))
         return
-    if symbol == "calculator":
-        painter.drawRoundedRect(QRectF(4, 2, 16, 20), 2, 2)
-        painter.drawRect(QRectF(7, 5, 10, 4))
-        for y in (13, 17):
-            for x in (8, 12, 16):
-                painter.drawPoint(QPointF(x, y))
-        return
-    if symbol in {"clipboard", "clipboard_text"}:
+    if symbol == "clipboard_text":
         painter.drawRoundedRect(QRectF(5, 4, 14, 18), 1.5, 1.5)
         painter.drawRoundedRect(QRectF(9, 2, 6, 5), 1.5, 1.5)
-        if symbol == "clipboard_text":
-            for y in (10, 14, 18):
-                painter.drawLine(QPointF(8, y), QPointF(16, y))
-        else:
-            for y in (11, 15):
-                painter.drawLine(QPointF(8, y), QPointF(16, y))
-        return
-    if symbol == "toolbox":
-        painter.drawRoundedRect(QRectF(3, 8, 18, 12), 2, 2)
-        painter.drawRoundedRect(QRectF(8, 4, 8, 5), 1.5, 1.5)
-        painter.drawLine(QPointF(3, 13), QPointF(21, 13))
-        painter.drawLine(QPointF(10, 11.5), QPointF(14, 11.5))
+        for y in (10, 14, 18):
+            painter.drawLine(QPointF(8, y), QPointF(16, y))
         return
     if symbol == "save":
         painter.drawRoundedRect(QRectF(4, 3, 16, 18), 1.5, 1.5)
@@ -222,37 +190,6 @@ def _draw_symbol(  # noqa: C901, PLR0911, PLR0912, PLR0915
             _draw_close(painter, 14, 9, 0.72)
         else:
             _draw_trash(painter)
-        return
-    if symbol == "clear_filter":
-        path = QPainterPath(QPointF(3, 4))
-        path.lineTo(21, 4)
-        path.lineTo(14, 12)
-        path.lineTo(14, 20)
-        path.lineTo(10, 18)
-        path.lineTo(10, 12)
-        path.closeSubpath()
-        painter.drawPath(path)
-        _draw_close(painter, 16.5, 15.5, 0.5)
-        return
-    if symbol == "edit_note":
-        _draw_page(painter, QRectF(4, 2, 14, 20))
-        painter.drawLine(QPointF(9, 17), QPointF(19, 7))
-        painter.drawLine(QPointF(8, 20), QPointF(9, 17))
-        painter.drawLine(QPointF(19, 7), QPointF(21, 9))
-        return
-    if symbol == "check_box":
-        painter.drawRoundedRect(QRectF(3, 3, 18, 18), 2, 2)
-        _draw_check(painter, 6, 8, 1.0)
-        return
-    if symbol == "export_file":
-        _draw_page(painter, QRectF(3, 2, 13, 20))
-        _draw_arrow(painter, QPointF(11, 15), QPointF(22, 15))
-        return
-    if symbol == "magic":
-        painter.drawLine(QPointF(5, 20), QPointF(18, 7))
-        painter.drawLine(QPointF(15.5, 5), QPointF(20, 9.5))
-        _draw_spark(painter, 7, 7, 2.5)
-        _draw_spark(painter, 18.5, 17.5, 2)
         return
     if symbol == "close":
         _draw_close(painter, 12, 12, 1.0)
@@ -366,12 +303,6 @@ def _draw_symbol(  # noqa: C901, PLR0911, PLR0912, PLR0915
         path.closeSubpath()
         painter.drawPath(path)
         return
-    if symbol in {"arrow_right", "arrow_left"}:
-        if symbol == "arrow_right":
-            _draw_arrow(painter, QPointF(3, 12), QPointF(21, 12))
-        else:
-            _draw_arrow(painter, QPointF(21, 12), QPointF(3, 12))
-        return
     if symbol == "columns":
         painter.drawRect(QRectF(3, 5, 5, 14))
         painter.drawRect(QRectF(10, 5, 4, 14))
@@ -415,10 +346,6 @@ def _draw_symbol(  # noqa: C901, PLR0911, PLR0912, PLR0915
         painter.drawPath(path)
         painter.drawRoundedRect(QRectF(9, 11, 6, 6), 1, 1)
         painter.drawArc(QRectF(10, 7, 4, 7), 0, 180 * 16)
-        return
-    if symbol == "import_export":
-        _draw_arrow(painter, QPointF(3, 8), QPointF(18, 8))
-        _draw_arrow(painter, QPointF(21, 16), QPointF(6, 16))
         return
 
     _draw_page(painter, QRectF(5, 2, 14, 20))
@@ -534,11 +461,6 @@ def _draw_refresh(painter: QPainter) -> None:
     painter.drawLine(QPointF(18.5, 4.5), QPointF(14, 4.5))
     painter.drawLine(QPointF(5.5, 19.5), QPointF(5.5, 15))
     painter.drawLine(QPointF(5.5, 19.5), QPointF(10, 19.5))
-
-
-def _draw_spark(painter: QPainter, x: float, y: float, radius: float) -> None:
-    painter.drawLine(QPointF(x - radius, y), QPointF(x + radius, y))
-    painter.drawLine(QPointF(x, y - radius), QPointF(x, y + radius))
 
 
 def _draw_page_navigation(painter: QPainter, symbol: str) -> None:

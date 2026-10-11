@@ -706,7 +706,8 @@ class SalesReportWidget(QWidget):
             delegate = None
             if index >= offset:
                 delegate = self._bars if index == offset + 1 else self._weights
-            self.table.setItemDelegateForColumn(index, delegate)
+            # None hands the column back to the table's own delegate.
+            self.table.setItemDelegateForColumn(index, delegate)  # type: ignore[arg-type]
         self._bars.set_maximum(
             max(
                 (self.model.weight_at(row, 1) for row in range(self.model.rowCount())),

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 
-from PySide6.QtCore import QRectF
-from PySide6.QtGui import QColor, QFont, QPainter
+from PySide6.QtCore import QRectF, Qt
+from PySide6.QtGui import QColor, QFont, QImage, QPageLayout, QPainter
 from PySide6.QtPrintSupport import QPrinter
 
 from .estimate_print_document import EstimatePrintDocument
@@ -35,10 +35,10 @@ from .modern_print_primitives import (
     ModernPrintStyle as _PaintStyle,
 )
 from .modern_print_primitives import (
-    PrintAlignment,
+    build_modern_print_style as _build_style,
 )
 from .modern_print_primitives import (
-    build_modern_print_style as _build_style,
+    draw_report_header as _draw_report_header,
 )
 from .modern_print_primitives import (
     draw_table_row as _draw_table_row,
@@ -46,7 +46,15 @@ from .modern_print_primitives import (
 from .modern_print_primitives import (
     draw_text as _draw_text,
 )
-from .print_format_spec import MODERN_ESTIMATE_FORMAT_SPEC
+from .modern_print_primitives import (
+    paint_report as _paint_report,
+)
+from .modern_print_primitives import (
+    report_header_height as _report_header_height,
+)
+from .modern_print_primitives import (
+    resolve_print_font as _resolve_print_font,
+)
 
 _TOTAL_BG = QColor("#e0f2f3")
 _COLUMN_HEADER_BG = QColor("#f4f5f6")
@@ -92,45 +100,60 @@ class EstimatePrintRenderer:
     ) -> ModernEstimateLayout:
         """Paint the selected estimate format onto preview, PDF, or printer devices."""
         layout = self.build_modern_layout(document)
-        base_font = self._resolve_font(print_font)
-        painter = QPainter()
-        if not painter.begin(printer):
-            raise RuntimeError("Could not initialize the estimate print painter.")
-
-        try:
-            painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
-            page_rect = printer.pageRect(QPrinter.Unit.DevicePixel)
-            page_width = max(1.0, float(page_rect.width()))
-            page_height = max(1.0, float(page_rect.height()))
-            style = _build_style(base_font, printer)
-            pages = _paginate(layout, style, page_height)
-
-            for page_index, page in enumerate(pages, start=1):
-                if page_index > 1 and not printer.newPage():
-                    raise RuntimeError("Could not create another print page.")
-                _paint_page(
-                    painter,
-                    layout,
-                    page,
-                    style,
-                    page_width=page_width,
-                )
-        finally:
-            painter.end()
-
+        _paint_report(
+            printer,
+            print_font,
+            what="estimate",
+            paginate=lambda style, page_height: _paginate(layout, style, page_height),
+            paint_page=lambda painter, page, style, page_width: _paint_page(
+                painter, layout, page, style, page_width=page_width
+            ),
+        )
         return layout
 
-    @staticmethod
-    def _resolve_font(print_font: QFont | None) -> QFont:
-        spec = MODERN_ESTIMATE_FORMAT_SPEC
-        font = QFont(print_font) if print_font is not None else QFont(spec.font_family)
-        point_size = (
-            print_font.pointSizeF() if print_font is not None else spec.font_size
+    def paint_first_page_image(
+        self,
+        document: EstimatePrintDocument,
+        page_layout: QPageLayout,
+        *,
+        print_font: QFont | None = None,
+        longest_side: int = 1200,
+    ) -> QImage:
+        """Paint the first page straight onto an image, for on-screen samples."""
+        layout = self.build_modern_layout(document)
+        base_font = _resolve_print_font(print_font)
+        page_points = page_layout.fullRectPoints()
+        resolution = max(
+            72,
+            round(longest_side * 72 / max(page_points.width(), page_points.height())),
         )
-        if point_size <= 0:
-            point_size = spec.font_size
-        font.setPointSizeF(max(1.0, point_size))
-        return font
+        paint_rect = page_layout.paintRectPixels(resolution)
+        image = QImage(
+            page_layout.fullRectPixels(resolution).size(),
+            QImage.Format.Format_ARGB32_Premultiplied,
+        )
+        dots_per_metre = round(resolution / 0.0254)
+        image.setDotsPerMeterX(dots_per_metre)
+        image.setDotsPerMeterY(dots_per_metre)
+        image.fill(Qt.GlobalColor.white)
+        painter = QPainter()
+        if not painter.begin(image):
+            raise RuntimeError("Could not initialize the estimate sample painter.")
+        try:
+            painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+            painter.translate(paint_rect.topLeft())
+            style = _build_style(base_font, image, resolution)
+            pages = _paginate(layout, style, max(1.0, float(paint_rect.height())))
+            _paint_page(
+                painter,
+                layout,
+                pages[0],
+                style,
+                page_width=max(1.0, float(paint_rect.width())),
+            )
+        finally:
+            painter.end()
+        return image
 
 
 def _paginate(
@@ -138,7 +161,7 @@ def _paginate(
     style: _PaintStyle,
     page_height: float,
 ) -> tuple[_PrintPage, ...]:
-    capacity = page_height - _header_height(layout, style)
+    capacity = page_height - _report_header_height(style, has_note=bool(layout.note))
     if capacity <= 0:
         raise ValueError("The printable page height is too small for an estimate.")
 
@@ -299,11 +322,6 @@ def _move_last_rows_to_summary_page(
     summary_page.used_height += fixed_height + move_count * style.row_height
 
 
-def _header_height(layout: ModernEstimateLayout, style: _PaintStyle) -> float:
-    note_height = style.note_height if layout.note else 0.0
-    return style.title_height + style.metadata_height + note_height + style.header_gap
-
-
 def _summary_height(layout: ModernEstimateLayout, style: _PaintStyle) -> float:
     height = style.summary_gap + style.metric_title_height + style.metric_row_height
     if layout.last_balance_metrics:
@@ -319,7 +337,16 @@ def _paint_page(
     *,
     page_width: float,
 ) -> None:
-    y = _draw_header(painter, layout, style, page_width)
+    y = _draw_report_header(
+        painter,
+        style,
+        page_width,
+        title="ESTIMATE SLIP",
+        title_alignment="left",
+        left=f"Voucher: {layout.voucher_no}",
+        right=f"Silver Rate: {layout.silver_rate}",
+        note=layout.note,
+    )
     for fragment in page.fragments:
         y = _draw_section_fragment(
             painter,
@@ -330,64 +357,6 @@ def _paint_page(
         )
     if page.include_summary:
         _draw_summary(painter, layout, style, page_width=page_width, y=y)
-
-
-def _draw_header(
-    painter: QPainter,
-    layout: ModernEstimateLayout,
-    style: _PaintStyle,
-    page_width: float,
-) -> float:
-    y = 0.0
-    title_rect = QRectF(0.0, y, page_width, style.title_height)
-    _draw_text(
-        painter,
-        title_rect,
-        "ESTIMATE SLIP",
-        font=style.title_font,
-        metrics=style.title_metrics,
-        alignment="left",
-        padding=style.padding,
-    )
-    y += style.title_height
-
-    widths = (0.50, 0.50)
-    labels = (
-        f"Voucher: {layout.voucher_no}",
-        f"Silver Rate: {layout.silver_rate}",
-    )
-    alignments: tuple[PrintAlignment, ...] = ("left", "right")
-    x = 0.0
-    for ratio, label, alignment in zip(widths, labels, alignments, strict=True):
-        width = page_width * ratio
-        _draw_text(
-            painter,
-            QRectF(x, y, width, style.metadata_height),
-            label,
-            font=style.bold_font,
-            metrics=style.bold_metrics,
-            alignment=alignment,
-            padding=style.padding,
-        )
-        x += width
-    y += style.metadata_height
-
-    if layout.note:
-        _draw_text(
-            painter,
-            QRectF(0.0, y, page_width, style.note_height),
-            f"Note: {layout.note}",
-            font=style.base_font,
-            metrics=style.base_metrics,
-            alignment="left",
-            padding=style.padding,
-            color=_MUTED_TEXT,
-        )
-        y += style.note_height
-
-    painter.setPen(style.strong_pen)
-    painter.drawLine(0, int(y), int(page_width), int(y))
-    return y + style.header_gap
 
 
 def _draw_section_fragment(

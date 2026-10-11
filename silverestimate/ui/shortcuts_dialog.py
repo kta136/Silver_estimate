@@ -69,12 +69,12 @@ QLabel#ShortcutKey {
     border: 1px solid __CARD_BORDER__;
     border-bottom: 2px solid __CARD_BORDER__;
     border-radius: 4px;
-    color: #334155;
+    color: __HEADER_TEXT__;
     font-weight: 600;
     padding: 1px 6px;
 }
 QPushButton#ShortcutsClose {
-    background: __PRIMARY_BG__; border: 1px solid __PRIMARY_BG__; color: #ffffff;
+    background: __PRIMARY_BG__; border: 1px solid __PRIMARY_BG__; color: __SURFACE_BG__;
     border-radius: 6px; font-weight: 600; padding: 6px 16px;
 }
 """

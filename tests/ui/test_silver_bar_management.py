@@ -8,7 +8,7 @@ from silverestimate.persistence.repository_results import (
     RepositoryFailureKind,
     RepositoryResult,
 )
-from silverestimate.persistence.silver_bars_snapshot_repository import (
+from silverestimate.persistence.silver_bar_query_repository import (
     SilverBarsSnapshotRepository,
 )
 from silverestimate.ui.silver_bar_management import SilverBarDialog

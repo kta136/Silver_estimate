@@ -7,11 +7,6 @@ from dataclasses import dataclass, replace
 from typing import Callable
 
 from .estimate_print_document import EstimatePrintDocument
-from .print_format_spec import (
-    DEFAULT_ESTIMATE_FORMAT,
-    ESTIMATE_FORMAT_SPECS,
-    normalize_estimate_format,
-)
 from .silver_bar_print_document import SilverBarListPrintDocument
 
 
@@ -33,9 +28,6 @@ class PrintPreviewPayload:
     document_kind: str = "document"
     identifier: str = ""
     suggested_filename: str = "document.pdf"
-    format_key: str = ""
-    available_formats: tuple[str, ...] = ()
-    format_factory: Callable[[str], PrintPreviewPayload | None] | None = None
     show_tunch: bool = False
     tunch_visibility_factory: Callable[[bool], PrintPreviewPayload | None] | None = None
 
@@ -48,7 +40,6 @@ class PrintPayloadBuilder:
         voucher_no,
         *,
         fetch_estimate: Callable[[object], object],
-        format_key: str = DEFAULT_ESTIMATE_FORMAT,
         estimate_data=None,
         show_tunch: bool = False,
     ) -> PrintPreviewPayload | None:
@@ -66,37 +57,20 @@ class PrintPayloadBuilder:
             else ""
         )
 
-        def build_payload(
-            selected_format: str,
-            tunch_visible: bool,
-        ) -> PrintPreviewPayload:
-            normalized_format = normalize_estimate_format(selected_format)
+        def build_payload(tunch_visible: bool) -> PrintPreviewPayload:
             return PrintPreviewPayload(
-                document=replace(
-                    base_document,
-                    format_key=normalized_format,
-                    show_tunch=bool(tunch_visible),
-                ),
+                document=replace(base_document, show_tunch=bool(tunch_visible)),
                 title=f"Print Preview - Estimate {voucher_no}{state_suffix}",
                 document_kind="estimate",
                 identifier=str(voucher_no or ""),
                 suggested_filename=(
                     f"{_sanitize_filename_stem(f'Estimate-{voucher_no}')}.pdf"
                 ),
-                format_key=normalized_format,
-                available_formats=tuple(ESTIMATE_FORMAT_SPECS),
-                format_factory=lambda next_format: build_payload(
-                    next_format,
-                    tunch_visible,
-                ),
                 show_tunch=bool(tunch_visible),
-                tunch_visibility_factory=lambda visible: build_payload(
-                    normalized_format,
-                    visible,
-                ),
+                tunch_visibility_factory=build_payload,
             )
 
-        return build_payload(format_key, show_tunch)
+        return build_payload(show_tunch)
 
     def build_silver_bar_list_preview_payload(
         self,

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Callable
 
 from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtGui import QCursor, QDesktopServices
@@ -39,81 +38,25 @@ LOGGER = logging.getLogger(__name__)
 class LoggingSettingsState:
     """Validated logging preferences."""
 
-    debug_mode: bool = False
-    enable_info: bool = True
-    enable_critical: bool = True
-    enable_debug: bool = True
+    level: str = application_logger.DEFAULT_LOG_LEVEL
     auto_cleanup: bool = False
     cleanup_days: int = 1
-
-
-@dataclass(frozen=True)
-class LogCleanupResult:
-    """Explicit result returned by manual log cleanup."""
-
-    succeeded: bool
-    removed_count: int = 0
-    message: str = ""
-
-
-@dataclass(frozen=True)
-class DiagnosticsActionResult:
-    """Explicit result for a diagnostics utility action."""
-
-    succeeded: bool
-    message: str = ""
-
-
-@dataclass(frozen=True)
-class LoggingSettingsActions:
-    """Infrastructure actions used by the logging settings controller."""
-
-    reconfigure: Callable[[], object]
-    cleanup: Callable[[int], int]
-    open_logs_folder: Callable[[], bool]
-
-
-def default_logging_settings_actions() -> LoggingSettingsActions:
-    """Create production actions while keeping them injectable in tests."""
-
-    return LoggingSettingsActions(
-        reconfigure=lambda: application_logger.reconfigure_logging(),
-        cleanup=lambda days: application_logger.cleanup_old_logs(
-            max_age_days=days,
-        ),
-        open_logs_folder=_open_logs_folder,
-    )
 
 
 class SettingsLoggingController:
     """Load, validate, persist, and apply logging preferences."""
 
-    def __init__(
-        self,
-        settings: SettingsStore,
-        actions: LoggingSettingsActions,
-    ) -> None:
+    def __init__(self, settings: SettingsStore) -> None:
         self._settings = as_settings_store(settings)
-        self._actions = actions
 
     def load_state(self) -> LoggingSettingsState:
+        level = self._settings.get_text(
+            SettingsKey.LOGGING_LEVEL, application_logger.DEFAULT_LOG_LEVEL
+        )
+        if level not in application_logger.LOG_LEVEL_SWITCHES:
+            level = application_logger.DEFAULT_LOG_LEVEL
         return LoggingSettingsState(
-            debug_mode=self._settings.get_bool(
-                SettingsKey.LOGGING_DEBUG_MODE,
-                False,
-            ),
-            enable_info=self._settings.get_bool(
-                SettingsKey.LOGGING_ENABLE_INFO,
-                True,
-            ),
-            enable_critical=self._settings.get_bool(
-                SettingsKey.LOGGING_ENABLE_CRITICAL,
-                True,
-            ),
-            enable_debug=self._settings.get_bool(
-                SettingsKey.LOGGING_ENABLE_DEBUG,
-                True,
-            ),
+            level=level,
             auto_cleanup=self._settings.get_bool(
                 SettingsKey.LOGGING_AUTO_CLEANUP,
                 False,
@@ -131,65 +74,47 @@ class SettingsLoggingController:
         previous_state = self.load_state()
         self._write_state(state)
         try:
-            result = self._actions.reconfigure()
+            result = application_logger.reconfigure_logging()
             if result is False:
                 raise RuntimeError("Logging runtime rejected the new configuration.")
         except Exception:
             self._write_state(previous_state)
             try:
-                self._actions.reconfigure()
+                application_logger.reconfigure_logging()
             except Exception:
                 LOGGER.exception(
                     "Failed to restore the prior logging runtime configuration."
                 )
             raise
 
-    def cleanup_logs(self, days: int) -> LogCleanupResult:
+    def cleanup_logs(self, days: int) -> tuple[bool, str]:
+        """Delete old log files; return whether it worked and what to tell the user."""
         if not 1 <= days <= 365:
-            return LogCleanupResult(
-                succeeded=False,
-                message="Cleanup retention must be between 1 and 365 days.",
-            )
+            return False, "Cleanup retention must be between 1 and 365 days."
         try:
             LOGGER.info(
                 "Manual log cleanup initiated for files older than %s days",
                 days,
             )
-            removed_count = self._actions.cleanup(days)
+            removed_count = application_logger.cleanup_old_logs(max_age_days=days)
             LOGGER.info(
                 "Manual log cleanup completed: removed %s files",
                 removed_count,
             )
-            return LogCleanupResult(
-                succeeded=True,
-                removed_count=removed_count,
-                message=(
-                    f"Removed {count_label(removed_count, 'old log file')}."
-                    if removed_count
-                    else "There were no old log files to remove."
-                ),
-            )
+            if removed_count:
+                return True, f"Removed {count_label(removed_count, 'old log file')}."
+            return True, "There were no old log files to remove."
         except Exception as exc:
             LOGGER.error("Manual log cleanup failed: %s", exc, exc_info=True)
-            return LogCleanupResult(
-                succeeded=False,
-                message=f"The old log files could not be removed. Details: {exc}",
-            )
+            return False, f"The old log files could not be removed. Details: {exc}"
 
-    def open_logs_folder(self) -> DiagnosticsActionResult:
+    def open_logs_folder(self) -> str:
+        """Open the logs folder; return a message only when that failed."""
         try:
-            opened = self._actions.open_logs_folder()
+            opened = _open_logs_folder()
         except Exception as exc:
-            return DiagnosticsActionResult(
-                succeeded=False,
-                message=f"Could not open the logs folder: {exc}",
-            )
-        if not opened:
-            return DiagnosticsActionResult(
-                succeeded=False,
-                message="The operating system could not open the logs folder.",
-            )
-        return DiagnosticsActionResult(succeeded=True)
+            return f"Could not open the logs folder: {exc}"
+        return "" if opened else "The operating system could not open the logs folder."
 
     @staticmethod
     def default_state() -> LoggingSettingsState:
@@ -197,70 +122,31 @@ class SettingsLoggingController:
 
     @staticmethod
     def validate_state(state: LoggingSettingsState) -> None:
+        if state.level not in application_logger.LOG_LEVEL_SWITCHES:
+            raise ValueError("Choose a log detail level.")
         if not 1 <= state.cleanup_days <= 365:
             raise ValueError("Cleanup retention must be between 1 and 365 days.")
 
     def _write_state(self, state: LoggingSettingsState) -> None:
-        self._settings.set(SettingsKey.LOGGING_DEBUG_MODE, state.debug_mode)
-        self._settings.set(SettingsKey.LOGGING_ENABLE_INFO, state.enable_info)
-        self._settings.set(
-            SettingsKey.LOGGING_ENABLE_CRITICAL,
-            state.enable_critical,
-        )
-        self._settings.set(SettingsKey.LOGGING_ENABLE_DEBUG, state.enable_debug)
+        self._settings.set(SettingsKey.LOGGING_LEVEL, state.level)
         self._settings.set(SettingsKey.LOGGING_AUTO_CLEANUP, state.auto_cleanup)
         self._settings.set(SettingsKey.LOGGING_CLEANUP_DAYS, state.cleanup_days)
 
 
-# The four stored flags as three levels a person can choose between.
-LOG_LEVEL_PRESETS: tuple[tuple[str, str, str, dict[str, bool]], ...] = (
-    (
-        "errors",
-        "Errors only",
-        "Records problems only. Smallest log files.",
-        {
-            "debug_mode": False,
-            "enable_info": False,
-            "enable_critical": True,
-            "enable_debug": False,
-        },
-    ),
+# The levels a person can choose between: key, label, what it records.
+LOG_LEVELS: tuple[tuple[str, str, str], ...] = (
+    ("errors", "Errors only", "Records problems only. Smallest log files."),
     (
         "normal",
         "Normal (recommended)",
         "Records problems and the main actions, such as saves and backups.",
-        {
-            "debug_mode": False,
-            "enable_info": True,
-            "enable_critical": True,
-            "enable_debug": True,
-        },
     ),
     (
         "detailed",
         "Detailed, for troubleshooting",
         "Records every step. Use while chasing a problem; files grow quickly.",
-        {
-            "debug_mode": True,
-            "enable_info": True,
-            "enable_critical": True,
-            "enable_debug": True,
-        },
     ),
 )
-_CUSTOM_LEVEL = "custom"
-
-
-def log_level_for(state: LoggingSettingsState) -> str:
-    """Return the preset matching ``state``, or ``custom`` when none does."""
-    for key, _label, _description, flags in LOG_LEVEL_PRESETS:
-        if all(getattr(state, name) == value for name, value in flags.items()):
-            return key
-    # Without debug mode the debug-detail flag has no effect, so it does not
-    # decide the level.
-    if not state.debug_mode and state.enable_critical:
-        return "normal" if state.enable_info else "errors"
-    return _CUSTOM_LEVEL
 
 
 class LoggingSettingsPage(QWidget):
@@ -275,15 +161,13 @@ class LoggingSettingsPage(QWidget):
     ) -> None:
         super().__init__(parent)
         self._controller = controller
-        self._custom_flags: dict[str, bool] = {}
         self._build_ui(controller.load_state())
 
     def state(self) -> LoggingSettingsState:
-        flags = self._flags_for(str(self.level_combo.currentData()))
         return LoggingSettingsState(
+            level=str(self.level_combo.currentData()),
             auto_cleanup=self.auto_cleanup_checkbox.isChecked(),
             cleanup_days=self.cleanup_days_spin.value(),
-            **flags,
         )
 
     def apply(self) -> LoggingSettingsState:
@@ -303,12 +187,6 @@ class LoggingSettingsPage(QWidget):
         index = self.level_combo.findData(key)
         if index >= 0:
             self.level_combo.setCurrentIndex(index)
-
-    def _flags_for(self, key: str) -> dict[str, bool]:
-        for preset, _label, _description, flags in LOG_LEVEL_PRESETS:
-            if preset == key:
-                return dict(flags)
-        return dict(self._custom_flags)
 
     def _build_ui(self, state: LoggingSettingsState) -> None:
         layout = QVBoxLayout(self)
@@ -348,7 +226,7 @@ class LoggingSettingsPage(QWidget):
         row.addWidget(level_label)
         self.level_combo = ThemedComboBox()
         self.level_combo.setAccessibleName("Log detail level")
-        for key, label, _description, _flags in LOG_LEVEL_PRESETS:
+        for key, label, _description in LOG_LEVELS:
             self.level_combo.addItem(label, key)
         self._polish_field(self.level_combo, width=280)
         level_label.setBuddy(self.level_combo)
@@ -413,21 +291,7 @@ class LoggingSettingsPage(QWidget):
         return group
 
     def _load_to_ui(self, state: LoggingSettingsState) -> None:
-        key = log_level_for(state)
-        custom_index = self.level_combo.findData(_CUSTOM_LEVEL)
-        if key == _CUSTOM_LEVEL:
-            # Keep a hand-edited combination until the user picks a level.
-            self._custom_flags = {
-                "debug_mode": state.debug_mode,
-                "enable_info": state.enable_info,
-                "enable_critical": state.enable_critical,
-                "enable_debug": state.enable_debug,
-            }
-            if custom_index < 0:
-                self.level_combo.addItem("Custom (keep current)", _CUSTOM_LEVEL)
-        elif custom_index >= 0:
-            self.level_combo.removeItem(custom_index)
-        self.set_level(key)
+        self.set_level(state.level)
         self._sync_level_description()
         self.auto_cleanup_checkbox.setChecked(state.auto_cleanup)
         self.cleanup_days_spin.setValue(state.cleanup_days)
@@ -441,12 +305,8 @@ class LoggingSettingsPage(QWidget):
     def _sync_level_description(self) -> None:
         key = str(self.level_combo.currentData())
         text = next(
-            (
-                description
-                for preset, _label, description, _flags in LOG_LEVEL_PRESETS
-                if preset == key
-            ),
-            "Keeps the combination already saved for this PC.",
+            (description for level, _label, description in LOG_LEVELS if level == key),
+            "",
         )
         self.level_description.setText(text)
 
@@ -468,30 +328,18 @@ class LoggingSettingsPage(QWidget):
 
         self.setCursor(QCursor(Qt.CursorShape.WaitCursor))
         try:
-            result = self._controller.cleanup_logs(days)
+            succeeded, message = self._controller.cleanup_logs(days)
         finally:
             self.unsetCursor()
-        if result.succeeded:
-            QMessageBox.information(
-                self,
-                "Old Logs Deleted",
-                result.message,
-            )
+        if succeeded:
+            QMessageBox.information(self, "Old Logs Deleted", message)
         else:
-            QMessageBox.critical(
-                self,
-                "Logs Not Deleted",
-                result.message,
-            )
+            QMessageBox.critical(self, "Logs Not Deleted", message)
 
     def _open_logs_folder(self) -> None:
-        result = self._controller.open_logs_folder()
-        if not result.succeeded:
-            QMessageBox.critical(
-                self,
-                "Logs Folder Not Opened",
-                result.message,
-            )
+        message = self._controller.open_logs_folder()
+        if message:
+            QMessageBox.critical(self, "Logs Folder Not Opened", message)
 
     def _emit_changed(self, *_args: object) -> None:
         self.changed.emit()
@@ -514,13 +362,8 @@ def _open_logs_folder() -> bool:
 
 
 __all__ = [
-    "DiagnosticsActionResult",
-    "LogCleanupResult",
-    "LOG_LEVEL_PRESETS",
-    "LoggingSettingsActions",
+    "LOG_LEVELS",
     "LoggingSettingsPage",
     "LoggingSettingsState",
     "SettingsLoggingController",
-    "default_logging_settings_actions",
-    "log_level_for",
 ]

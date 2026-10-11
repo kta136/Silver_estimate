@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from typing import Dict, Iterable, List, Protocol
+from typing import Dict, Iterable, List
 
 from silverestimate.domain.estimate_entry import (
     EstimateEntryRowState,
@@ -34,12 +35,6 @@ class SaveValidationError(ValueError):
         self.row_errors = row_errors
         detail = "\n".join(f"Row {row}: {error}" for row, error in row_errors.items())
         super().__init__(f"Correct the invalid rows before saving.\n{detail}")
-
-
-class EstimateSaveExecutor(Protocol):
-    """Only the save command is required by the application save workflow."""
-
-    def save_estimate(self, payload: SavePayload) -> SaveOutcome: ...
 
 
 class EstimateEntryPersistenceService:
@@ -140,9 +135,9 @@ class EstimateEntryPersistenceService:
         voucher_no: str,
         date: str,
         note: str,
-        presenter: EstimateSaveExecutor,
+        save: Callable[[SavePayload], SaveOutcome],
     ) -> tuple[SaveOutcome, SavePreparation]:
-        """Run save using the presenter and return the outcome plus preparation info."""
+        """Validate the snapshot, call ``save`` once, and return what happened."""
         preparation = self.prepare_save_payload(
             voucher_no=voucher_no,
             date=date,
@@ -157,7 +152,7 @@ class EstimateEntryPersistenceService:
                     for row, error in preparation.row_errors.items()
                 ),
             ), preparation
-        outcome = presenter.save_estimate(preparation.payload)
+        outcome = save(preparation.payload)
         return outcome, preparation
 
     # ------------------------------------------------------------------ #

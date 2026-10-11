@@ -153,7 +153,7 @@ silver_bars (1) ----< (M) bar_transfers
 5. **Wage Types**: PC (per piece) or WT (per weight)
 6. **Status Values**: `In Stock`, `Assigned`, `Issued`, and `Sold`
 7. **Stable Line Identity**: `estimate_items.line_key` links a source line to `silver_bars.source_line_key`
-8. **Tunch**: Optional free-text catalog value with no percentage cap; estimates print the line snapshot captured at save or v8 upgrade. This text field is distinct from numeric `purity`, which drives calculations.
+8. **Tunch**: Optional free-text catalog value with no percentage cap; estimates print the line snapshot captured at save. This text field is distinct from numeric `purity`, which drives calculations.
 
 ## Historical Schema Versions
 
@@ -194,8 +194,12 @@ upgrade paths in this release.
   unknown; their lines stay visible, printable and saveable.
 - Catalog removal clears only the optional master reference, preserving snapshots.
 
-Fresh schema creation or the v8 upgrade, mandatory indexes, validation, and the schema-version
+Fresh schema creation, mandatory indexes, validation, and the schema-version
 write run in one transaction. Any failure rolls the full setup back.
+
+The version notes in this section are history. This release creates version 10
+and opens version 10 only; the 8 → 9 and 9 → 10 upgrade steps shipped up to
+v4.07, so an older database must be opened once with v4.04 to v4.07 first.
 
 ## Performance-Critical Indexes
 
@@ -211,5 +215,4 @@ has `slot` (primary key, constrained to 1), ownership `token`, `voucher_no`, JSO
 `payload` and `updated_utc`, all required. It has no foreign key to estimates: a
 new draft may have no saved voucher. The payload is encrypted by SQLCipher along
 with the rest of the database and contains no separate plaintext sidecar.
-Schema creation, version staging and validation share one transaction. Version 8
-first receives the snapshot migration, then this table, before committing v10.
+Schema creation, version staging and validation share one transaction.

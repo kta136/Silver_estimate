@@ -26,7 +26,7 @@ class ItemValidationError(ValueError):
     """Raised when item domain constraints are violated."""
 
 
-def validate_item(  # noqa: PLR0913 - stable public field-by-field validation API
+def validate_item(
     *,
     code: str,
     name: str,

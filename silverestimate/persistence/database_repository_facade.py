@@ -119,19 +119,6 @@ class DatabaseRepositoryFacadeMixin:
     def generate_voucher_no(self):
         return self.estimates_repo.generate_voucher_no()
 
-    def save_estimate_with_returns(
-        self, voucher_no, date, silver_rate, regular_items, return_items, totals
-    ):
-        self.last_error = None
-        return self.estimates_repo.save_estimate_with_returns(
-            voucher_no,
-            date,
-            silver_rate,
-            regular_items,
-            return_items,
-            totals,
-        )
-
     def delete_all_estimates(self):
         return self.estimates_repo.delete_all_estimates()
 

@@ -4,6 +4,7 @@ import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QTableView
 
+from silverestimate.domain.estimate_entry import EstimateEntryRowState
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.ui.estimate_entry_logic.column_specs import (
     EDITOR_CODE,
@@ -30,9 +31,6 @@ from silverestimate.ui.estimate_entry_logic.constants import (
 )
 from silverestimate.ui.models.estimate_table_model import EstimateTableModel
 from silverestimate.ui.numeric_font import numeric_table_font
-from silverestimate.ui.view_models.estimate_entry_view_model import (
-    EstimateEntryRowState,
-)
 
 
 @pytest.fixture

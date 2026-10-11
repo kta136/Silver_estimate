@@ -230,21 +230,10 @@ def test_build_estimate_preview_payload_uses_modern_layout(qt_app, settings_stub
     assert payload is not None
     assert isinstance(payload.document, EstimatePrintDocument)
     assert payload.document.header.voucher_no == "V-002"
-    assert payload.document.format_key == "modern"
     assert payload.title == "Print Preview - Estimate V-002"
     assert payload.document_kind == "estimate"
     assert payload.identifier == "V-002"
     assert payload.suggested_filename == "Estimate-V-002.pdf"
-    assert payload.format_key == "modern"
-    assert payload.available_formats == ("modern",)
-    assert payload.format_factory is not None
-
-    fallback_payload = payload.format_factory("classic")
-
-    assert fallback_payload is not None
-    assert isinstance(fallback_payload.document, EstimatePrintDocument)
-    assert fallback_payload.document.format_key == "modern"
-    assert fallback_payload.format_key == "modern"
 
 
 def test_estimate_payload_uses_remembered_tunch_visibility(qt_app, settings_stub):
@@ -273,11 +262,6 @@ def test_estimate_payload_uses_remembered_tunch_visibility(qt_app, settings_stub
     assert hidden_payload is not None
     assert hidden_payload.show_tunch is False
     assert hidden_payload.document.show_tunch is False
-    assert hidden_payload.format_factory is not None
-    hidden_fallback = hidden_payload.format_factory("classic")
-    assert hidden_fallback is not None
-    assert hidden_fallback.show_tunch is False
-    assert hidden_fallback.document.show_tunch is False
 
 
 def test_show_preview_delegates_to_preview_dialog(qt_app, settings_stub):
@@ -469,7 +453,7 @@ def test_preview_print_font_change_updates_manager_and_persists(
     assert settings.value("font/bold") is True
 
 
-def test_saved_classic_preference_prints_modern_pdf(
+def test_leftover_layout_preference_still_prints_modern_pdf(
     qt_app,
     settings_stub,
     tmp_path,

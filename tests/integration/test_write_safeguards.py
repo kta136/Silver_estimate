@@ -23,13 +23,17 @@ def db():
 
 
 def _save(db, voucher="1", **item_changes):
-    return EstimatesRepository(db).save_estimate_with_returns(
-        voucher,
-        "2026-09-05",
-        75,
-        [regular_item(**item_changes)],
-        [],
-        estimate_totals(note="Original"),
+    return (
+        EstimatesRepository(db)
+        .save_estimate_atomic(
+            voucher,
+            "2026-09-05",
+            75,
+            [regular_item(**item_changes)],
+            [],
+            estimate_totals(note="Original"),
+        )
+        .success
     )
 
 
@@ -107,13 +111,17 @@ def test_commit_failure_rolls_back_completed_update(db):
 def test_nonfinite_header_does_not_change_saved_estimate(db, field):
     assert _save(db)
     before = _snapshot(db)
-    assert not EstimatesRepository(db).save_estimate_with_returns(
-        "1",
-        "2026-09-05",
-        75,
-        [regular_item()],
-        [],
-        estimate_totals(**{field: float("nan")}),
+    assert (
+        not EstimatesRepository(db)
+        .save_estimate_atomic(
+            "1",
+            "2026-09-05",
+            75,
+            [regular_item()],
+            [],
+            estimate_totals(**{field: float("nan")}),
+        )
+        .success
     )
     assert "finite" in db.last_error
     assert not db.conn.in_transaction

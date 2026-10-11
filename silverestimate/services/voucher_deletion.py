@@ -4,22 +4,25 @@ from __future__ import annotations
 
 import logging
 from dataclasses import replace
+from typing import TYPE_CHECKING
 
 from silverestimate.domain.voucher_deletion import (
     VoucherDeletionPreview,
     VoucherDeletionRange,
     VoucherDeletionResult,
 )
-from silverestimate.persistence.database_protocols import MainCommandsDatabase
 from silverestimate.persistence.voucher_deletion_repository import (
     fetch_voucher_deletion_preview,
 )
 from silverestimate.ui.database_maintenance import run_database_maintenance
 from silverestimate.ui.maintenance_progress import MaintenanceProgressDialog
 
+if TYPE_CHECKING:
+    from silverestimate.persistence.database_manager import DatabaseManager
+
 
 class VoucherDeletionController:
-    def __init__(self, database: MainCommandsDatabase, main_window) -> None:
+    def __init__(self, database: DatabaseManager, main_window) -> None:
         self.database = database
         self.main_window = main_window
 

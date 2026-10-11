@@ -1,11 +1,10 @@
-"""End-to-end save invariants using the production encrypted database and adapter."""
+"""End-to-end save invariants using the production encrypted database."""
 
 from copy import deepcopy
 
 import pytest
 
 from silverestimate.persistence.database_manager import DatabaseManager
-from silverestimate.services.estimate_repository import DatabaseEstimateRepository
 from tests.factories import estimate_totals, regular_item, return_item, silver_bar_item
 
 
@@ -32,7 +31,7 @@ def _bar(key="bar-a", weight=5, purity=99):
 
 
 def _save(db, bars, *, voucher="1", note="Original", regular=None):
-    return DatabaseEstimateRepository(db).save_estimate(
+    return db.save_estimate_atomic(
         voucher,
         "2026-09-05",
         75,

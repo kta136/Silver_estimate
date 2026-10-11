@@ -8,41 +8,38 @@ from pathlib import Path
 
 import pytest
 
-from silverestimate.domain.estimate_entry import EstimateEntryRowState
+from silverestimate.domain.estimate_entry import (
+    EstimateEntryRowState,
+    EstimateEntrySnapshot,
+)
 from silverestimate.services.estimate_entry_persistence import (
     EstimateEntryPersistenceService,
 )
-from silverestimate.ui.view_models import EstimateEntryViewModel
 
 
 def test_save_snapshot_retains_original_rows_rates_and_line_identity():
-    model = EstimateEntryViewModel()
-    model.set_rows(
-        [
-            EstimateEntryRowState(
-                code="REG",
-                name="Original",
-                gross=10,
-                net_weight=10,
-                fine_weight=9,
-                purity=90,
-                wage_amount=100,
-                wage_rate=10,
-            )
-        ]
+    rows = [
+        EstimateEntryRowState(
+            code="REG",
+            name="Original",
+            gross=10,
+            net_weight=10,
+            fine_weight=9,
+            purity=90,
+            wage_amount=100,
+            wage_rate=10,
+        )
+    ]
+    snapshot = EstimateEntrySnapshot.capture(
+        rows, silver_rate=100, last_balance_silver=2, last_balance_amount=50
     )
-    model.set_totals_inputs(
-        silver_rate=100, last_balance_silver=2, last_balance_amount=50
-    )
-    snapshot = model.as_save_snapshot()
     key = snapshot.rows[0].line_key
     assert key
-    assert model.as_save_snapshot().rows[0].line_key == key
-    model.set_rows([replace(snapshot.rows[0], name="Later edit", gross=20)])
-    model.set_totals_inputs(
-        silver_rate=999, last_balance_silver=9, last_balance_amount=999
-    )
-    model.set_rows([])
+    # A line that already has an identity keeps it when captured again.
+    again = EstimateEntrySnapshot.capture(snapshot.rows, silver_rate=999)
+    assert again.rows[0].line_key == key
+    rows[0] = replace(snapshot.rows[0], name="Later edit", gross=20)
+    rows.clear()
     prepared = EstimateEntryPersistenceService(snapshot).prepare_save_payload(
         voucher_no="1", date="2026-09-06", note="Captured"
     )
@@ -56,6 +53,23 @@ def test_save_snapshot_retains_original_rows_rates_and_line_identity():
         snapshot.silver_rate = 200
     with pytest.raises(FrozenInstanceError):
         snapshot.rows[0].gross = 20
+
+
+def test_capture_numbers_rows_and_leaves_empty_rows_without_identity():
+    snapshot = EstimateEntrySnapshot.capture(
+        [
+            EstimateEntryRowState(code="A", gross=1),
+            EstimateEntryRowState(code="B", gross=1, row_index=7),
+            EstimateEntryRowState(),
+        ],
+        silver_rate=75,
+    )
+    assert [row.row_index for row in snapshot.rows] == [1, 7, 3]
+    assert snapshot.rows[0].line_key and snapshot.rows[1].line_key
+    assert snapshot.rows[0].line_key != snapshot.rows[1].line_key
+    assert snapshot.rows[2].line_key == ""
+    with pytest.raises(TypeError):
+        EstimateEntrySnapshot.capture([{"code": "A"}], silver_rate=75)
 
 
 def test_save_service_runs_with_ui_and_presenter_imports_blocked():
@@ -78,7 +92,7 @@ class Saver:
         return SaveOutcome(True, 'saved')
 saver = Saver()
 service = EstimateEntryPersistenceService(EstimateEntrySnapshot((row,), 100))
-outcome, prepared = service.execute_save(voucher_no='1', date='2026-09-06', note='', presenter=saver)
+outcome, prepared = service.execute_save(voucher_no='1', date='2026-09-06', note='', save=saver.save_estimate)
 assert outcome.success
 assert saver.calls == [prepared.payload]
 assert prepared.payload.totals['net_fine'] == 9

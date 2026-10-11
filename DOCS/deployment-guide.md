@@ -3,9 +3,8 @@
 ## Supported platform
 
 Packaged releases support Windows 10/11 x64 only. The executable is produced
-with Qt's `pyside6-deploy` wrapper and Nuitka, then verified on
-`windows-latest`. macOS and Linux are untested development environments and
-are not release targets.
+locally with Qt's `pyside6-deploy` wrapper and Nuitka. macOS and Linux are
+untested development environments and are not release targets.
 
 ## Reproducible environment
 
@@ -15,37 +14,24 @@ Python 3.14 and the committed `uv.lock` are required:
 uv sync --frozen --extra dev
 ```
 
-Do not install an ad-hoc release dependency set. PR, main, and tag workflows
-all run the same frozen development sync so tests, security tools, SBOM
-generation, `pyside6-deploy`, Nuitka 4.2.1, and zstandard 0.25.0 use the locked
-graph.
+Do not install an ad-hoc release dependency set. CI and the local build both
+start from the locked development sync, so tests, lint tools, `pyside6-deploy`,
+Nuitka 4.2.1, and zstandard 0.25.0 use the locked graph.
 
 ## Local validation
 
 ```powershell
-uv run nox -s ruff
-uv run nox -s mypy
-uv run nox -s dependency_policy
-uv run nox -s tests_full
+uv run nox
 $env:QT_QPA_PLATFORM = "offscreen"
 uv run nox -s smoke_ui
-uv run nox -s build_standalone
-uv run nox -s standalone_artifact_smoke
-uv run nox -s build_clean
-uv run nox -s artifact_smoke
-uv run python scripts/check_startup_budgets.py --artifact dist\SilverEstimate-v4.07.exe --samples 5 --p95-budget-ms 3000
+uv run nox -s audit
 ```
 
-The standalone build is a diagnostic artifact at
-`dist/SilverEstimate.dist/main.exe`. Its smoke gate inspects the unpacked
-PySide6/Shiboken6, SQLCipher, Qt plugin, icon, license, notice, and provenance
-inventory before the one-file build is accepted.
-
-The clean one-file build produces:
-
-- `dist/SilverEstimate.exe`;
-- `dist/SilverEstimate-v<APP_VERSION>.exe`;
-- `dist/SilverEstimate-v<APP_VERSION>-win64.zip`.
+`uv run nox` runs Ruff (lint, format check and security rules), mypy and the
+complete non-smoke test suite. `smoke_ui` starts the whole application
+offscreen and saves screenshots under `artifacts/smoke-ui/`. `audit` lists
+known advisories for the locked runtime packages with `pip-audit`; it reports
+and never blocks.
 
 For a local release build, run `scripts\build_windows_local.cmd`. The launcher
 quotes the PowerShell script path so repositories stored in workspace paths
@@ -53,9 +39,9 @@ containing spaces are supported. The PowerShell script
 reads the exact Python patch version from `.python-version` (currently 3.14.7),
 uses `uv` to find or download that interpreter, verifies the synchronized
 environment matches it, and removes the stale
-unversioned artifact before compilation, builds the one-file loader with MSVC,
-and runs the frozen artifact under a system-only `PATH`. It also inspects the
-outer PE import table and rejects the build if it requires anything beyond
+unversioned artifact before compilation, and builds the one-file loader with
+MSVC. It inspects the outer PE import table and rejects the build if it
+requires anything beyond
 `KERNEL32.dll` and `SHELL32.dll`. This prevents accidental dependencies on a
 developer machine's Universal CRT installation. The script rejects copy
 mismatches and prints the deliverable's SHA-256 hash.
@@ -69,11 +55,11 @@ scripts\build_windows_local.cmd -Fast
 This builds `dist/SilverEstimate-v<APP_VERSION>-fast.exe` with `--lto=no`,
 skipping whole-program link-time optimization while retaining normal C
 optimization, one-file compression, locked dependency synchronization, and
-every frozen-runtime/native-dependency validation. An explicit
+the native-dependency validation. An explicit
 `-ArtifactSuffix my-test` overrides the default `fast` suffix. Use the default
 command without `-Fast` for release builds; the fast profile may produce a
 larger executable and different runtime performance. The committed deployment
-specification and CI/release configuration are unchanged.
+specification is unchanged.
 
 Both profiles print dependency, compilation/packaging, validation, and total
 durations. They write a success/failure report to
@@ -107,7 +93,7 @@ one-file executable attaches to an existing console without creating one for
 normal Explorer launches; run it from Command Prompt to capture loader output.
 
 The application executable can be moved, but an initialized encrypted database
-is bound to the Windows PC that created or migrated it. Place the executable in
+is bound to the Windows PC that created it. Place the executable in
 a user-writable directory. Do not run it directly from inside the zip or from a
 protected directory such as `Program Files` unless its data directory has
 explicitly been made writable.
@@ -115,70 +101,25 @@ explicitly been made writable.
 The canonical configuration is `pysidedeploy.spec`. It selects the Windows
 platform, icon/SVG/image, widget, print-support, network, and Windows TLS
 components; embeds required assets and notices; forces the dynamic SQLCipher
-imports; requires the Windows Credential Manager binding; includes
-the direct `argon2-cffi` password service; rejects Passlib from the compilation
-report; and excludes unused Qt/QML/media plugins. The committed compiler
-selection lets Nuitka use its supported Windows toolchain with the same command
-locally and on hosted runners.
+imports; includes the direct `argon2-cffi` password service; and excludes
+unused Qt/QML/media plugins. The committed compiler selection lets Nuitka use
+its supported Windows toolchain.
 
-`--artifact-smoke` initializes the Windows Qt platform, icon and SVG support,
-Windows Credential Manager backend, PDF renderer, and encrypted SQLCipher
-runtime, then exits without authentication or customer data. It also verifies
-that writable data resolves beside the release executable rather than inside
-the one-file extraction directory.
+## Continuous integration
 
-## Pull requests
+`.github/workflows/validation.yml` runs on every push to `main` and on pull
+requests. On `windows-latest` it syncs the locked environment, verifies the
+committed SQLCipher wheel and the installed runtime, and runs Ruff, mypy and
+the complete non-smoke test suite. A last `pip-audit` step lists advisories
+for the locked runtime packages without failing the run.
 
-PR validation runs:
-
-- Ruff formatting/lint, including its security rules, and mypy;
-- blocking locked-runtime `pip-audit`, lock-review, notice, and native-provenance policy;
-- the complete non-smoke test suite on Windows;
-- 75% global coverage and 90% changed-line coverage;
-- deterministic performance gates;
-- offscreen Qt full-startup smoke;
-- curated standalone inventory and artifact startup;
-- clean `pyside6-deploy` one-file build and artifact startup.
-
-## Main branch
-
-Main repeats frozen quality/security gates and complete Windows validation. Coverage, performance telemetry, smoke screenshots, executable, and zip are uploaded as workflow artifacts.
-
-## Release tags
-
-`.github/workflows/release-windows.yml` runs for `v*` tags. Before any publish step it:
-
-1. verifies the tag equals `v<APP_VERSION>`;
-2. runs Ruff with its security rules, mypy, locked dependency policy, complete tests, coverage, performance, and offscreen smoke;
-3. builds and inspects the standalone artifact before creating the one-file executable;
-4. builds with the canonical `pysidedeploy.spec` through `nox -s build_clean`;
-5. optionally signs the executable when certificate secrets exist;
-6. starts the frozen executable in artifact-smoke mode;
-7. creates and policy-validates the Windows zip, CycloneDX JSON SBOM, and SHA-256 checksums;
-8. publishes only after every required gate succeeds.
-
-The release SBOM starts from the frozen build environment and is then augmented
-and validated by `scripts/augment_release_sbom.py`. Its root component preserves
-the application version, and explicit CPython and native Qt components record
-the interpreter and framework embedded in the Windows executable. Controlled
-SQLCipher and OpenSSL source identities are added from committed provenance.
-PySide6, PySide6 Addons/Essentials, and Shiboken6 wheel versions must match that
-native Qt version. Every audited runtime and required native component must
-have an allowed license, required notices must remain present, and the lockfile
-must match its recorded dependency review or the release stops. See
-[`dependency-security-policy.md`](dependency-security-policy.md).
-
-The `main` source version may be newer than the latest published package. The
-[GitHub Releases page](https://github.com/kta136/Silver_estimate/releases/latest)
-is authoritative for supported downloads; a release is not current until its
-matching tag workflow completes successfully.
-
-Signing is skipped when `WINDOWS_SIGNING_CERTIFICATE_BASE64` is absent. When a certificate is configured, `WINDOWS_SIGNING_CERTIFICATE_PASSWORD` must match it and any signing failure stops the release. Validate the timestamp and certificate chain before promoting a signed executable.
+CI does not build, sign or publish the executable. Builds are made locally
+with `scripts\build_windows_local.cmd`. Start the built executable once and
+sign in before copying it to the shop PC; the build no longer does this.
 
 Nuitka 4.2.1 is pinned for the current toolchain; the 4.2 series officially
-supports Python 3.14. The executable must not be promoted until the hosted Windows build,
-artifact smoke, complete tests, and startup budget all pass with the locked
-Python 3.14 patch release.
+supports Python 3.14. The executable must not be promoted until the local
+build and the complete tests pass with the locked Python 3.14 patch release.
 
 The selected `pyside6-deploy` artifact is evaluated against current PySide6
 release requirements. It is not compared with the retired M0 PyQt6 executable.

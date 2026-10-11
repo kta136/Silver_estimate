@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import contextlib
 import hashlib
 import json
@@ -10,7 +9,7 @@ import os
 import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, ClassVar, Self
+from typing import Any
 
 
 class StorageMetadataError(ValueError):
@@ -51,78 +50,10 @@ def read_json(path: str | Path) -> dict[str, Any]:
     return value
 
 
-@dataclass(frozen=True)
-class KdfMetadata:
-    """Exact version-1 password-to-database-key policy."""
-
-    version: int
-    algorithm: str
-    salt_b64: str
-    time_cost: int
-    memory_cost_kib: int
-    parallelism: int
-    output_bytes: int
-
-    VERSION: ClassVar[int] = 1
-    ALGORITHM: ClassVar[str] = "argon2id"
-    TIME_COST: ClassVar[int] = 3
-    MEMORY_COST_KIB: ClassVar[int] = 65_536
-    PARALLELISM: ClassVar[int] = 4
-    OUTPUT_BYTES: ClassVar[int] = 32
-    SALT_BYTES: ClassVar[int] = 16
-
-    @classmethod
-    def create(cls) -> Self:
-        return cls(
-            version=cls.VERSION,
-            algorithm=cls.ALGORITHM,
-            salt_b64=base64.b64encode(os.urandom(cls.SALT_BYTES)).decode("ascii"),
-            time_cost=cls.TIME_COST,
-            memory_cost_kib=cls.MEMORY_COST_KIB,
-            parallelism=cls.PARALLELISM,
-            output_bytes=cls.OUTPUT_BYTES,
-        )
-
-    @classmethod
-    def from_dict(cls, value: dict[str, Any]) -> Self:
-        expected = {
-            "version",
-            "algorithm",
-            "salt_b64",
-            "time_cost",
-            "memory_cost_kib",
-            "parallelism",
-            "output_bytes",
-        }
-        if set(value) != expected:
-            raise StorageMetadataError("KDF metadata has missing or unknown fields")
-        try:
-            result = cls(**value)
-            salt = base64.b64decode(result.salt_b64, validate=True)
-        except (TypeError, ValueError) as exc:
-            raise StorageMetadataError("Malformed KDF metadata") from exc
-        if (
-            result.version != cls.VERSION
-            or result.algorithm != cls.ALGORITHM
-            or result.time_cost != cls.TIME_COST
-            or result.memory_cost_kib != cls.MEMORY_COST_KIB
-            or result.parallelism != cls.PARALLELISM
-            or result.output_bytes != cls.OUTPUT_BYTES
-            or len(salt) != cls.SALT_BYTES
-        ):
-            raise StorageMetadataError("Unsupported or weakened KDF policy")
-        return result
-
-    @classmethod
-    def read(cls, path: str | Path) -> Self:
-        return cls.from_dict(read_json(path))
-
-    @property
-    def salt(self) -> bytes:
-        return base64.b64decode(self.salt_b64, validate=True)
-
-    def write(self, path: str | Path) -> None:
-        atomic_write_json(path, asdict(self))
+# Argon2id policy for the device-bound database key.
+KDF_TIME_COST = 3
+KDF_MEMORY_COST_KIB = 65_536
+KDF_PARALLELISM = 4
 
 
 @dataclass(frozen=True)
@@ -133,7 +64,6 @@ class BackupManifest:
     schema_version: int
     sqlcipher_version: str
     device_binding_fingerprint: str | None = None
-    kdf_sha256: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -146,19 +76,6 @@ class RekeyJournal:
     old_database_sha256: str
     target_path: str
     retained_path: str
-    old_metadata_sha256: str | None = None
-    retained_metadata_path: str | None = None
-
-
-@dataclass(frozen=True)
-class BindingMigrationJournal:
-    version: int
-    phase: str
-    old_database_sha256: str
-    target_sha256: str
-    target_path: str
-    retained_path: str
-    retained_metadata_path: str
 
 
 @dataclass(frozen=True)
@@ -180,15 +97,16 @@ def sha256_file(path: str | Path) -> str:
 
 def write_journal(
     path: str | Path,
-    journal: BindingMigrationJournal | RekeyJournal | RestoreJournal,
+    journal: RekeyJournal | RestoreJournal,
 ) -> None:
     atomic_write_json(path, asdict(journal))
 
 
 __all__ = [
     "BackupManifest",
-    "BindingMigrationJournal",
-    "KdfMetadata",
+    "KDF_MEMORY_COST_KIB",
+    "KDF_PARALLELISM",
+    "KDF_TIME_COST",
     "RekeyJournal",
     "RestoreJournal",
     "StorageMetadataError",

@@ -1,6 +1,5 @@
 """Load-more updates exercise the real dialog/widget integration."""
 
-import time
 from types import SimpleNamespace
 
 from PySide6.QtCore import QPersistentModelIndex
@@ -74,7 +73,6 @@ def test_item_append_preserves_selected_item_without_reset(qtbot):
                 ItemCursor("ITM003", "ITM003"),
             ),
             search_term="",
-            started_at=time.perf_counter(),
             append=True,
         )
         assert not reset

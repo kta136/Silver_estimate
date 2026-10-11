@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import sys
 import threading
-import time
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
@@ -52,8 +51,6 @@ class ApplicationContext:
     db_manager: Optional["DatabaseManager"] = None
     main_window: Optional["QMainWindow"] = None
     dialog_parent: Optional[QWidget] = None
-    startup_t0_perf: float = 0.0
-    startup_t0_unix: float = 0.0
     instance_lock: Optional[QLockFile] = None
     startup_preload_thread: Optional[threading.Thread] = None
 
@@ -95,8 +92,6 @@ class ApplicationBuilder:
         ] = qt_bootstrap.available_application_attributes(),
         user_model_id: str = "com.silverestimate.app",
         app_name: str = "silver_app",
-        startup_t0_perf: float | None = None,
-        startup_t0_unix: float | None = None,
         startup_preloader: Callable[[], None] | None = None,
     ) -> None:
         self._main_window_factory = main_window_factory
@@ -109,8 +104,6 @@ class ApplicationBuilder:
         self._qt_attributes = qt_attributes
         self._user_model_id = user_model_id
         self._app_name = app_name
-        self._startup_t0_perf = startup_t0_perf
-        self._startup_t0_unix = startup_t0_unix
         self._startup_preloader = startup_preloader
 
     def run(self) -> int:
@@ -138,41 +131,18 @@ class ApplicationBuilder:
 
     def _run(self, context: ApplicationContext) -> int:
         """Internal orchestration for startup."""
-        context.startup_t0_perf = (
-            self._startup_t0_perf
-            if self._startup_t0_perf is not None
-            else time.perf_counter()
-        )
-        context.startup_t0_unix = (
-            self._startup_t0_unix if self._startup_t0_unix is not None else time.time()
-        )
         self._configure_logging(context)
-        if context.logger:
-            context.logger.debug(
-                "[perf] startup.app_bootstrap_start t_unix=%.6f",
-                context.startup_t0_unix,
-            )
         self._configure_qt(context)
         if not self._acquire_instance_lock(context):
             return 0
-        if context.logger:
-            qt_ready_ms = (time.perf_counter() - context.startup_t0_perf) * 1000.0
-            context.logger.debug(
-                "[perf] startup.qt_ready_ms=%.2f t_unix=%.6f",
-                qt_ready_ms,
-                time.time(),
-            )
-            self._log_startup_telemetry(context, "startup.qt_ready_ms", qt_ready_ms)
         self._schedule_startup_preload(context)
         db_manager, early_exit = self._authenticate(context)
-        self._log_startup_telemetry(context, "startup.authentication_complete_ms")
         if early_exit is not None:
             return early_exit
         context.main_window = self._main_window_factory(
             db_manager=db_manager,
             logger=context.logger,
         )
-        self._log_startup_telemetry(context, "startup.main_window_created_ms")
         return self._enter_event_loop(context)
 
     def _acquire_instance_lock(self, context: ApplicationContext) -> bool:
@@ -201,25 +171,6 @@ class ApplicationBuilder:
         context.instance_lock = lock
         return True
 
-    def _log_startup_telemetry(
-        self,
-        context: ApplicationContext,
-        metric: str,
-        duration_ms: float | None = None,
-    ) -> None:
-        if context.logger is None:
-            return
-        elapsed_ms = (
-            duration_ms
-            if duration_ms is not None
-            else (time.perf_counter() - context.startup_t0_perf) * 1000.0
-        )
-        context.logger.info(
-            '[telemetry] {"metric":"%s","duration_ms":%.3f}',
-            metric,
-            elapsed_ms,
-        )
-
     def _schedule_startup_preload(self, context: ApplicationContext) -> None:
         """Warm safe post-login imports in the background once a dialog event loop runs."""
         startup_preloader = self._startup_preloader
@@ -227,7 +178,6 @@ class ApplicationBuilder:
             return
 
         def run_preloader() -> None:
-            started_at = time.perf_counter()
             try:
                 startup_preloader()
             except Exception as exc:
@@ -236,14 +186,6 @@ class ApplicationBuilder:
                         "Post-login runtime preload failed: %s",
                         exc,
                         exc_info=True,
-                    )
-            finally:
-                if context.logger:
-                    duration_ms = (time.perf_counter() - started_at) * 1000.0
-                    context.logger.info(
-                        '[telemetry] {"metric":"startup.login_preload_ms",'
-                        '"duration_ms":%.3f}',
-                        duration_ms,
                     )
 
         def start_preloader() -> None:
@@ -433,13 +375,7 @@ class ApplicationBuilder:
             return 1
         if context.logger:
             context.logger.info("Showing main application window")
-            context.logger.debug(
-                "[perf] startup.main_window_show_ms=%.2f t_unix=%.6f",
-                (time.perf_counter() - context.startup_t0_perf) * 1000.0,
-                time.time(),
-            )
         context.main_window.show()
-        self._log_startup_telemetry(context, "startup.main_window_show_called_ms")
         if context.logger:
             context.logger.debug("Entering Qt main event loop")
         exit_code = context.app.exec()

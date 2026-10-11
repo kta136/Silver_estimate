@@ -31,28 +31,34 @@ def fake_db():
     return Database()
 
 
-class _EstimateRepository:
+class _EstimateSource:
+    """The estimate calls the presenter makes, tolerant of minimal test databases."""
+
     def __init__(self, db):
         self.db = db
+
+    @property
+    def last_error(self):
+        return getattr(self.db, "last_error", None)
 
     def generate_voucher_no(self):
         return self.db.generate_voucher_no()
 
-    def load_estimate(self, voucher_no):
+    def get_estimate_by_voucher(self, voucher_no):
         loader = getattr(self.db, "get_estimate_by_voucher", None)
         return loader(voucher_no) if callable(loader) else None
 
-    def fetch_item(self, code):
+    def get_item_by_code(self, code):
         return self.db.get_item_by_code(code)
 
-    def fetch_items_by_codes(self, codes):
+    def get_items_by_codes(self, codes):
         return {
             str(code or "").strip().upper(): item
             for code in codes
-            if (item := self.fetch_item(code)) is not None
+            if (item := self.get_item_by_code(code)) is not None
         }
 
-    def save_estimate(
+    def save_estimate_atomic(
         self, voucher_no, date, silver_rate, regular_items, return_items, totals
     ):
         saver = getattr(self.db, "save_estimate_atomic", None)
@@ -67,10 +73,7 @@ class _EstimateRepository:
             )
         return EstimateSaveResult(True)
 
-    def last_error(self):
-        return getattr(self.db, "last_error", None)
-
-    def delete_estimate(self, voucher_no):
+    def delete_single_estimate(self, voucher_no):
         deleter = getattr(self.db, "delete_single_estimate", None)
         return bool(deleter(voucher_no)) if callable(deleter) else True
 
@@ -84,7 +87,7 @@ def make_estimate_widget(qtbot, settings_stub):
             show_inline_status=lambda *args, **kwargs: None,
             show_silver_bars=lambda: None,
         )
-        widget = EstimateEntryWidget(db_manager, host, _EstimateRepository(db_manager))
+        widget = EstimateEntryWidget(db_manager, host, _EstimateSource(db_manager))
         if widget.draft_recovery is not None and not enable_draft_recovery:
             # Autosave scheduling belongs to recovery tests, not unrelated widget tests.
             widget.draft_recovery._started = True

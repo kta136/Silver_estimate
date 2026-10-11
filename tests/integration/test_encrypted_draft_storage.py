@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from silverestimate.persistence import schema
 from silverestimate.persistence.database_manager import DatabaseManager
 from tests.factories import estimate_totals, regular_item
 
@@ -135,28 +134,3 @@ def test_deliberate_purge_removes_recovery(db, operation):
     if operation == "drop_tables":
         db.setup_database()
     assert db.draft_repository.load() is None
-
-
-@pytest.mark.parametrize("fail", [False, True])
-def test_v9_upgrade_is_transactional(db, monkeypatch, fail):
-    db.conn.execute("DROP TABLE estimate_draft")
-    db.conn.execute("DELETE FROM schema_version")
-    db.conn.execute(
-        "INSERT INTO schema_version(version,applied_date) VALUES(9,'2026-09-06')"
-    )
-    db.conn.commit()
-    if fail:
-        with monkeypatch.context() as patch:
-
-            def reject(_db):
-                raise RuntimeError("Injected schema validation failure")
-
-            patch.setattr(schema, "_validate_schema", reject)
-            with pytest.raises(RuntimeError, match="Injected"):
-                db.setup_database()
-        assert db._check_schema_version() == 9
-        assert not db._table_exists("estimate_draft")
-    db.setup_database()
-    assert db._check_schema_version() == 10
-    assert db.draft_repository.load() is None
-    assert db.get_item_by_code("REG001")["name"] == "Regular"

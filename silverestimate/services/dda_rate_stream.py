@@ -9,7 +9,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import replace
 from datetime import datetime, timezone
 from functools import partial
-from typing import Any, cast
+from typing import Any
 
 from PySide6.QtCore import QObject, QTimer, QUrl, QUrlQuery, Signal
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
@@ -17,15 +17,18 @@ from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequ
 from silverestimate.services.dda_rate_fetcher import (
     DDA_AGRA_MOHAR_ITEM_ID,
     DDA_RATE_UNIT,
-    DDA_SCHEMA_VERSION,
     DdaCurrentRatesClient,
     DdaRateContractError,
     DdaRateSnapshot,
     DdaSnapshotStore,
+    agra_mohar_items,
     http_status,
     network_manager,
+    nonnegative_int,
+    positive_finite_number,
     rate_request,
     utc_now,
+    validate_schema,
 )
 
 DDA_RATE_STREAM_URL = "https://ddajewels.com/sse/rates"
@@ -45,44 +48,13 @@ def _utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
-def _sequence(payload: Mapping[str, Any]) -> int:
-    value = payload.get("sequence")
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise DdaRateContractError("SSE sequence must be a non-negative integer.")
-    return value
-
-
-def _schema(payload: Mapping[str, Any], *, require_view: bool = False) -> None:
-    if payload.get("schemaVersion") != DDA_SCHEMA_VERSION:
-        raise DdaRateContractError("Unsupported DDA SSE schemaVersion; expected 1.")
-    if require_view and payload.get("view") not in {"default", "tv"}:
-        raise DdaRateContractError("DDA SSE view must be 'default' or 'tv'.")
-
-
-def _finite_positive(value: object) -> float:
-    from math import isfinite
-
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        raise DdaRateContractError("SSE finalRate must be a finite positive number.")
-    result = float(value)
-    if not isfinite(result) or result <= 0:
-        raise DdaRateContractError("SSE finalRate must be a finite positive number.")
-    return result
-
-
 def _target_item(items: object, *, unit_required: bool) -> Mapping[str, Any] | None:
-    if not isinstance(items, list):
-        raise DdaRateContractError("SSE items must be an array.")
-    matches = [
-        item
-        for item in items
-        if isinstance(item, Mapping) and item.get("itemId") == DDA_AGRA_MOHAR_ITEM_ID
-    ]
+    matches = agra_mohar_items(items, label="SSE")
     if len(matches) > 1:
         raise DdaRateContractError("SSE payload duplicated the Agra Mohar item ID.")
     if not matches:
         return None
-    item = cast(Mapping[str, Any], matches[0])
+    item = matches[0]
     if unit_required and item.get("unit") != DDA_RATE_UNIT:
         raise DdaRateContractError("SSE Agra Mohar unit must be PER_KG.")
     return item
@@ -95,16 +67,16 @@ def parse_sse_snapshot(
     market_state: Mapping[str, Any] | None = None,
 ) -> DdaRateSnapshot:
     """Validate an authoritative snapshot and select only the stable item ID."""
-    _schema(payload, require_view=True)
+    validate_schema(payload, label="DDA SSE", require_view=True)
     item = _target_item(payload.get("items"), unit_required=True)
     if item is None:
         raise DdaRateContractError("SSE snapshot omitted the Agra Mohar item ID.")
     timestamp = _utc(received_at)
     return DdaRateSnapshot(
         item_id=DDA_AGRA_MOHAR_ITEM_ID,
-        final_rate=_finite_positive(item.get("finalRate")),
+        final_rate=positive_finite_number(item.get("finalRate"), "SSE finalRate"),
         unit=DDA_RATE_UNIT,
-        sequence=_sequence(payload),
+        sequence=nonnegative_int(payload.get("sequence"), "SSE sequence"),
         received_at=timestamp,
         server_time=timestamp,
         market_state=(dict(market_state) if market_state is not None else None),
@@ -120,8 +92,8 @@ def apply_sse_rate_event(
     market_state: Mapping[str, Any] | None = None,
 ) -> tuple[int, DdaRateSnapshot | None]:
     """Validate a rate delta and apply it only when its item ID matches."""
-    _schema(payload, require_view=True)
-    sequence = _sequence(payload)
+    validate_schema(payload, label="DDA SSE", require_view=True)
+    sequence = nonnegative_int(payload.get("sequence"), "SSE sequence")
     item = _target_item(payload.get("items"), unit_required=False)
     if item is None:
         return sequence, None
@@ -130,7 +102,7 @@ def apply_sse_rate_event(
     timestamp = _utc(received_at)
     return sequence, replace(
         previous,
-        final_rate=_finite_positive(item.get("finalRate")),
+        final_rate=positive_finite_number(item.get("finalRate"), "SSE finalRate"),
         sequence=sequence,
         received_at=timestamp,
         server_time=timestamp,
@@ -465,9 +437,9 @@ class DdaRateStream(QObject):
             elif event_name == "feed-status":
                 self._handle_feed_status(payload)
             elif event_name == "heartbeat":
-                _schema(payload)
+                validate_schema(payload, label="DDA SSE", require_view=False)
             elif event_name == "stream-reset":
-                _schema(payload)
+                validate_schema(payload, label="DDA SSE", require_view=False)
                 if payload.get("reason") != "max_age":
                     raise DdaRateContractError("Unknown DDA stream-reset reason.")
                 return True
@@ -486,8 +458,8 @@ class DdaRateStream(QObject):
         self._accept_snapshot(snapshot, persist=True, authoritative=True)
 
     def _handle_rate(self, payload: Mapping[str, Any]) -> None:
-        _schema(payload, require_view=True)
-        sequence = _sequence(payload)
+        validate_schema(payload, label="DDA SSE", require_view=True)
+        sequence = nonnegative_int(payload.get("sequence"), "SSE sequence")
         if self._last_sequence is not None and sequence <= self._last_sequence:
             return
         if self._last_sequence is None or sequence != self._last_sequence + 1:
@@ -504,7 +476,7 @@ class DdaRateStream(QObject):
             self._accept_snapshot(snapshot, persist=True, authoritative=False)
 
     def _handle_feed_status(self, payload: Mapping[str, Any]) -> None:
-        _schema(payload)
+        validate_schema(payload, label="DDA SSE", require_view=False)
         # The server sends a word such as "stale"; only marketState is used.
         status = payload.get("status")
         if status is not None and not isinstance(status, str | Mapping):

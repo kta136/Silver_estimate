@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Mapping, Optional, Sequence
+from dataclasses import dataclass, replace
+from typing import Iterable, Mapping, Optional, Sequence
+from uuid import uuid4
 
 from silverestimate.domain.estimate_models import EstimateLine, EstimateLineCategory
 
@@ -114,9 +115,35 @@ class LoadedEstimate:
 
 @dataclass(frozen=True)
 class EstimateEntrySnapshot:
-    """Stable save input captured at the UI boundary, without a mutable view model."""
+    """Stable save input captured at the UI boundary."""
 
     rows: tuple[EstimateEntryRowState, ...]
     silver_rate: float
     last_balance_silver: float = 0.0
     last_balance_amount: float = 0.0
+
+    @classmethod
+    def capture(
+        cls,
+        rows: Iterable[EstimateEntryRowState],
+        *,
+        silver_rate: float,
+        last_balance_silver: float = 0.0,
+        last_balance_amount: float = 0.0,
+    ) -> EstimateEntrySnapshot:
+        """Number the rows and give each unsaved line an identity."""
+        captured: list[EstimateEntryRowState] = []
+        for index, row in enumerate(rows):
+            if not isinstance(row, EstimateEntryRowState):
+                raise TypeError(f"Unsupported row type: {type(row)!r}")
+            if row.row_index <= 0:
+                row = replace(row, row_index=index + 1)
+            if not row.is_empty() and not str(row.line_key or "").strip():
+                row = replace(row, line_key=uuid4().hex)
+            captured.append(row)
+        return cls(
+            rows=tuple(captured),
+            silver_rate=float(silver_rate),
+            last_balance_silver=float(last_balance_silver),
+            last_balance_amount=float(last_balance_amount),
+        )

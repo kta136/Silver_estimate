@@ -36,9 +36,7 @@ class LiveRatesSettingsPage(QWidget):
     changed = Signal()
     refresh_requested = Signal()
 
-    def __init__(  # noqa: PLR0915 - declarative page layout
-        self, settings: SettingsStore, parent: QWidget | None = None
-    ) -> None:
+    def __init__(self, settings: SettingsStore, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._settings = as_settings_store(settings)
         layout = QVBoxLayout(self)

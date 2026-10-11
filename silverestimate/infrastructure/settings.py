@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from enum import StrEnum
 from typing import Any, Protocol, cast
 
@@ -9,10 +10,7 @@ from PySide6.QtCore import QSettings
 
 from .app_constants import SETTINGS_APP, SETTINGS_ORG
 
-# Marked crash snapshots can be offered for recovery on the next startup.
-ENABLE_TEMP_DB_RECOVERY = True
-
-SETTINGS_SCHEMA_VERSION = 2
+SETTINGS_SCHEMA_VERSION = 3
 
 
 class SettingsKey(StrEnum):
@@ -38,19 +36,6 @@ class SettingsKey(StrEnum):
     UI_ESTIMATE_TABLE_AUTOFIT_MODE = "ui/estimate_table_autofit_mode"
     UI_ESTIMATE_TABLE_COLUMN_WIDTHS = "ui/estimate_table_column_widths"
 
-    UI_SILVER_BARS_GEOMETRY = "ui/silver_bars/geometry"
-    UI_SILVER_BARS_SPLITTER = "ui/silver_bars/splitter_h"
-    UI_SILVER_BARS_AVAILABLE_COLUMNS = "ui/silver_bars/available_cols"
-    UI_SILVER_BARS_LIST_COLUMNS = "ui/silver_bars/list_cols"
-    UI_SILVER_BARS_WEIGHT_QUERY = "ui/silver_bars/weight_query"
-    UI_SILVER_BARS_CURRENT_LIST_ID = "ui/silver_bars/current_list_id"
-    UI_SILVER_BARS_DATE_RANGE = "ui/silver_bars/date_range"
-    UI_SILVER_BARS_AVAILABLE_SORT_COLUMN = "ui/silver_bars/available_sort_col"
-    UI_SILVER_BARS_AVAILABLE_SORT_ORDER = "ui/silver_bars/available_sort_order"
-    UI_SILVER_BARS_LIST_SORT_COLUMN = "ui/silver_bars/list_sort_col"
-    UI_SILVER_BARS_LIST_SORT_ORDER = "ui/silver_bars/list_sort_order"
-    SILVER_BAR_HISTORY_MAX_ROWS = "silver_bar/history_max_rows"
-
     PRINT_MARGINS = "print/margins"
     PRINT_DEFAULT_PRINTER = "print/default_printer"
     PRINT_PAGE_SIZE = "print/page_size"
@@ -59,7 +44,6 @@ class SettingsKey(StrEnum):
     PRINT_PAGE_HEIGHT_MM = "print/page_height_mm"
     PRINT_ORIENTATION = "print/orientation"
     PRINT_PREVIEW_ZOOM = "print/preview_zoom"
-    PRINT_ESTIMATE_LAYOUT = "print/estimate_layout"
     PRINT_SHOW_TUNCH = "print/show_tunch"
     PRINT_LAST_EXPORT_DIR = "print/last_export_dir"
 
@@ -67,10 +51,7 @@ class SettingsKey(StrEnum):
     RATES_AUTO_REFRESH_ENABLED = "rates/auto_refresh_enabled"
     RATES_VERIFIED_SNAPSHOT = "rates/dda_last_verified_snapshot"
 
-    LOGGING_DEBUG_MODE = "logging/debug_mode"
-    LOGGING_ENABLE_INFO = "logging/enable_info"
-    LOGGING_ENABLE_CRITICAL = "logging/enable_critical"
-    LOGGING_ENABLE_DEBUG = "logging/enable_debug"
+    LOGGING_LEVEL = "logging/level"
     LOGGING_AUTO_CLEANUP = "logging/auto_cleanup"
     LOGGING_CLEANUP_DAYS = "logging/cleanup_days"
 
@@ -310,21 +291,51 @@ def as_settings_reader(
     )
 
 
+def _stored_flag(backend: RawSettingsBackend, key: str, default: bool) -> bool:
+    value = backend.value(key, default)
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on", "enabled"}
+    return bool(value)
+
+
+def _migrate_to_v3(backend: RawSettingsBackend) -> None:
+    """Replace the four logging switches of v4.07 and earlier with one level."""
+    old_keys = {
+        "logging/debug_mode": False,
+        "logging/enable_info": True,
+        "logging/enable_critical": True,
+        "logging/enable_debug": True,
+    }
+    missing = object()
+    if any(backend.value(key, missing) is not missing for key in old_keys):
+        if _stored_flag(backend, "logging/debug_mode", False):
+            level = "detailed"
+        elif _stored_flag(backend, "logging/enable_info", True):
+            level = "normal"
+        else:
+            level = "errors"
+        backend.setValue(str(SettingsKey.LOGGING_LEVEL), level)
+    for key in old_keys:
+        backend.remove(key)
+
+
+# Versions 1 and 2 are stamped only: every install already ran them, and a
+# new install starts from the same defaults the code uses.
+_MIGRATIONS: dict[int, Callable[[RawSettingsBackend], None]] = {3: _migrate_to_v3}
+
+
 def migrate_settings(backend: RawSettingsBackend) -> int:
     """Apply ordered forward-only settings migrations and return the version."""
     version = _read_schema_version(backend)
-    if version > SETTINGS_SCHEMA_VERSION:
+    if version >= SETTINGS_SCHEMA_VERSION:
         return version
-    original_version = version
-    migrations = {1: _migrate_to_v1, 2: _migrate_to_v2}
-    while version < SETTINGS_SCHEMA_VERSION:
-        next_version = version + 1
-        migrations[next_version](backend)
-        backend.setValue(str(SettingsKey.SCHEMA_VERSION), next_version)
-        version = next_version
-    if version != original_version:
-        backend.sync()
-    return version
+    for next_version in range(version + 1, SETTINGS_SCHEMA_VERSION + 1):
+        migration = _MIGRATIONS.get(next_version)
+        if migration is not None:
+            migration(backend)
+    backend.setValue(str(SettingsKey.SCHEMA_VERSION), SETTINGS_SCHEMA_VERSION)
+    backend.sync()
+    return SETTINGS_SCHEMA_VERSION
 
 
 def _read_schema_version(backend: RawSettingsBackend) -> int:
@@ -335,14 +346,6 @@ def _read_schema_version(backend: RawSettingsBackend) -> int:
         return 0
 
 
-def _migrate_to_v1(backend: RawSettingsBackend) -> None:
-    """Normalize the final pre-schema aliases still accepted by v3.11."""
-    page_size = str(backend.value(str(SettingsKey.PRINT_PAGE_SIZE), "") or "").strip()
-    if page_size == "Letter / ANSI A":
-        backend.setValue(str(SettingsKey.PRINT_PAGE_SIZE), "Letter")
-    backend.remove("rates/refresh_interval_sec")
-
-
 def get_app_settings() -> ApplicationSettings:
     """Return the canonical typed application settings store."""
     return ApplicationSettings()
@@ -350,7 +353,6 @@ def get_app_settings() -> ApplicationSettings:
 
 __all__ = [
     "ApplicationSettings",
-    "ENABLE_TEMP_DB_RECOVERY",
     "QSettings",
     "RawSettingsBackend",
     "SETTINGS_SCHEMA_VERSION",
@@ -362,19 +364,3 @@ __all__ = [
     "get_app_settings",
     "migrate_settings",
 ]
-
-
-def _migrate_to_v2(backend: RawSettingsBackend) -> None:
-    """Adopt the approved appearance once, without resetting print preferences."""
-    defaults = {
-        SettingsKey.UI_FONT_FAMILY: "Segoe UI",
-        SettingsKey.UI_TABLE_FONT_SIZE: 11,
-        SettingsKey.UI_BREAKDOWN_FONT_SIZE: 11,
-        SettingsKey.UI_FINAL_CALC_FONT_SIZE: 16,
-        SettingsKey.UI_ROW_DENSITY: "compact",
-        SettingsKey.UI_ALTERNATING_ROWS: True,
-    }
-    for key, value in defaults.items():
-        backend.setValue(str(key), value)
-    backend.remove(str(SettingsKey.UI_ESTIMATE_TABLE_COLUMN_WIDTHS))
-    backend.remove(str(SettingsKey.UI_ESTIMATE_TOTALS_SECTION_ORDER))

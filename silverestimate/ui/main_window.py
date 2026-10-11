@@ -5,8 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
-import time
-from typing import TYPE_CHECKING, Any, Callable, Optional, Protocol
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont, QIcon
@@ -28,6 +27,7 @@ from silverestimate.infrastructure.main_window_runtime import (
 
 if TYPE_CHECKING:
     from silverestimate.controllers.live_rate_controller import LiveRateController
+    from silverestimate.persistence.database_manager import DatabaseManager
     from silverestimate.services.settings_service import SettingsService
     from silverestimate.ui.sales_report import SalesReportWidget
 
@@ -36,25 +36,12 @@ else:
     MainWindowRuntimeBuilder = Callable[..., Any]
 
 
-class MainWindowDatabase(Protocol):
-    """Narrow database surface used by the main window shell."""
-
-    def close(self) -> None: ...
-
-    def set_flush_status_callbacks(
-        self,
-        *,
-        on_queued: Optional[Callable[[], None]] = None,
-        on_done: Optional[Callable[[], None]] = None,
-    ) -> None: ...
-
-
 class MainWindow(QMainWindow):
     """Main application window for the SilverEstimate app."""
 
     def __init__(
         self,
-        db_manager: MainWindowDatabase,
+        db_manager: DatabaseManager,
         logger=None,
         *,
         settings_service: Optional["SettingsService"] = None,
@@ -72,14 +59,8 @@ class MainWindow(QMainWindow):
 
         self.logger = logger or logging.getLogger(__name__)
         self.logger.info("Initializing MainWindow")
-        self._startup_started_at = time.perf_counter()
-        self._startup_started_unix = time.time()
-        self.logger.debug(
-            "[perf] startup.main_window_init_start t_unix=%.6f",
-            self._startup_started_unix,
-        )
 
-        self.db: MainWindowDatabase = db_manager
+        self.db: DatabaseManager = db_manager
         self.settings_service = settings_service
         self._runtime_builder = runtime_builder
         self._defer_runtime = bool(defer_runtime)
@@ -88,7 +69,6 @@ class MainWindow(QMainWindow):
         self._runtime_initialization_failed = False
         self._runtime_services_initialized = False
         self._runtime_services_initialization_scheduled = False
-        self._shell_shown_logged = False
         self._closing = False
         self._taskbar_icon_handle: int | None = None
         self._menu_in_title_bar = False
@@ -102,12 +82,6 @@ class MainWindow(QMainWindow):
         self._configure_window_shell()
         self._apply_initial_window_state()
 
-        shell_ready_ms = (time.perf_counter() - self._startup_started_at) * 1000.0
-        self.logger.info(
-            '[telemetry] {"metric":"startup.main_window_shell_ready_ms",'
-            '"duration_ms":%.3f}',
-            shell_ready_ms,
-        )
         if not self._defer_runtime:
             self._initialize_runtime()
 
@@ -130,18 +104,6 @@ class MainWindow(QMainWindow):
             self._initialize_estimate_widget()
             self._remove_loading_page()
             self._runtime_initialized = True
-            ready_ms = (time.perf_counter() - self._startup_started_at) * 1000.0
-            self.logger.debug(
-                "[perf] startup.main_window_ready_ms=%.2f t_unix=%.6f",
-                ready_ms,
-                time.time(),
-            )
-            self.logger.info(
-                '[telemetry] {"metric":"startup.main_window_ready_ms",'
-                '"duration_ms":%.3f}',
-                ready_ms,
-            )
-            QTimer.singleShot(0, self._log_first_idle_tick)
             if self._defer_runtime:
                 self._runtime_services_initialization_scheduled = True
                 QTimer.singleShot(100, self._initialize_runtime_services)
@@ -177,12 +139,6 @@ class MainWindow(QMainWindow):
         self._initialize_live_rate()
         self._deliver_pending_status_message()
         self._runtime_services_initialized = True
-        services_ready_ms = (time.perf_counter() - self._startup_started_at) * 1000.0
-        self.logger.info(
-            '[telemetry] {"metric":"startup.main_window_services_ready_ms",'
-            '"duration_ms":%.3f}',
-            services_ready_ms,
-        )
 
     def _merge_menus_into_title_bar(self) -> None:
         """Put the menus in the title bar where Windows and Qt allow it."""
@@ -322,15 +278,6 @@ class MainWindow(QMainWindow):
     def showEvent(self, event) -> None:
         super().showEvent(event)
         self._sync_native_caption()
-        if self._shell_shown_logged:
-            return
-        self._shell_shown_logged = True
-        shown_ms = (time.perf_counter() - self._startup_started_at) * 1000.0
-        self.logger.info(
-            '[telemetry] {"metric":"startup.main_window_shell_shown_ms",'
-            '"duration_ms":%.3f}',
-            shown_ms,
-        )
 
     def paintEvent(self, event) -> None:
         super().paintEvent(event)
@@ -346,7 +293,6 @@ class MainWindow(QMainWindow):
 
     def _attach_runtime(self, runtime: MainWindowRuntime) -> None:
         self.settings_service = runtime.settings_service
-        self.navigation_service = runtime.navigation_service
         self.commands = runtime.commands
         self.navigation_controller = runtime.navigation_controller
         self.live_rate_controller = runtime.live_rate_controller
@@ -360,20 +306,7 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.estimate_widget)
         self.stack.setCurrentWidget(self.estimate_widget)
 
-        try:
-            self.db.set_flush_status_callbacks(
-                on_queued=self._handle_flush_queued,
-                on_done=self._handle_flush_done,
-            )
-        except Exception as callback_error:
-            self.logger.debug("Could not hook flush callbacks: %s", callback_error)
-
         self.logger.info("Widgets initialized successfully")
-        self.logger.debug(
-            "[perf] startup.main_window_widgets_ready_ms=%.2f t_unix=%.6f",
-            (time.perf_counter() - self._startup_started_at) * 1000.0,
-            time.time(),
-        )
         try:
             self.show_status_message("Ready", 2000, level="info")
         except Exception as exc:
@@ -417,31 +350,6 @@ class MainWindow(QMainWindow):
                 exc,
                 exc_info=True,
             )
-
-    def _log_first_idle_tick(self) -> None:
-        try:
-            first_idle_ms = (time.perf_counter() - self._startup_started_at) * 1000.0
-            self.logger.debug(
-                "[perf] startup.main_window_first_idle_ms=%.2f t_unix=%.6f",
-                first_idle_ms,
-                time.time(),
-            )
-            self.logger.info(
-                '[telemetry] {"metric":"startup.main_window_first_idle_ms",'
-                '"duration_ms":%.3f}',
-                first_idle_ms,
-            )
-        except Exception as exc:
-            self.logger.debug("Failed to record first idle tick metric: %s", exc)
-
-    def _handle_flush_queued(self) -> None:
-        QTimer.singleShot(
-            0,
-            lambda: self.estimate_widget.show_inline_status("Saving.", 1000, "info"),
-        )
-
-    def _handle_flush_done(self) -> None:
-        QTimer.singleShot(0, lambda: self.estimate_widget.show_inline_status("", 0))
 
     def show_toast(
         self, message: str, timeout: int = 3000, level: str = "info"

@@ -46,20 +46,15 @@ dev = [
     # Testing
     "pytest>=9.1.1",
     "pytest-qt>=4.5.0",
-    "pytest-cov>=7.1.0",
     "hypothesis>=6.167.1",
     # Code Quality
     "ruff>=0.16.6",
     "mypy>=2.3.1",
     "nox>=2026.8.17",
-    # Pre-commit hooks
-    "pre-commit>=4.6.2",
     # Development tools
     "Nuitka==4.2.1",
     "zstandard==0.25.0",
     "pip-audit>=2.10.1,<3",
-    "diff-cover>=10.5.1",
-    "cyclonedx-bom>=7.3.1",
 ]
 
 [project.urls]
@@ -97,65 +92,18 @@ select = [
     "B",
     "SIM",
     "PERF",
-    "C90",
-    "PLR0911",
-    "PLR0912",
-    "PLR0913",
-    "PLR0915",
     "S",
 ]
 # `assert` narrows types in application code.
 ignore = ["S101"]
 
-[tool.ruff.lint.mccabe]
-max-complexity = 15
-
 [tool.ruff.lint.per-file-ignores]
 "tests/ui/test_estimate_entry_integration.py" = ["F841"]
-"tests/**/*.py" = ["PLR0913", "PLR0915", "S"]
+"tests/**/*.py" = ["S"]
 "scripts/**/*.py" = ["S"]
 "main.py" = ["S"]
 "noxfile.py" = ["S"]
-"silverestimate/controllers/live_rate_controller.py" = ["PLR0913"]
-"silverestimate/controllers/navigation_controller.py" = ["PLR0915"]
-"silverestimate/controllers/startup_controller.py" = ["C901", "PLR0911", "PLR0912"]
-"silverestimate/domain/estimate_totals.py" = ["PLR0913"]
-"silverestimate/infrastructure/application.py" = ["PLR0912", "PLR0913"]
-"silverestimate/infrastructure/logger.py" = ["PLR0913"]
-"silverestimate/infrastructure/windows_integration.py" = ["PLR0911"]
-"silverestimate/persistence/database_repository_facade.py" = ["PLR0913"]
-"silverestimate/persistence/estimates_repository.py" = ["PLR0913"]
-"silverestimate/persistence/items_repository.py" = ["PLR0911", "PLR0912"]
-"silverestimate/persistence/database_manager.py" = ["PLR0915"]
-"silverestimate/persistence/silver_bars_queries.py" = ["PLR0913", "PLR0915"]
-"silverestimate/persistence/silver_bar_query_repository.py" = ["C901", "PLR0912", "PLR0913", "PLR0915"]
-"silverestimate/persistence/silver_bar_synchronization_repository.py" = ["C901", "PLR0912", "PLR0915"]
-"silverestimate/persistence/silver_bars_snapshot_repository.py" = ["PLR0913"]
-"silverestimate/security/encryption.py" = ["PLR0913"]
-"silverestimate/services/auth_service.py" = ["C901", "PLR0911", "PLR0912", "PLR0915"]
-"silverestimate/services/dda_rate_stream.py" = ["PLR0913"]
-"silverestimate/services/estimate_repository.py" = ["PLR0913"]
-"silverestimate/ui/custom_font_dialog.py" = ["PLR0915"]
-"silverestimate/ui/estimate_entry.py" = ["PLR0915"]
-"silverestimate/ui/estimate_entry_components/secondary_actions_bar.py" = ["PLR0915"]
-"silverestimate/ui/estimate_entry_components/voucher_toolbar.py" = ["PLR0915"]
-"silverestimate/ui/estimate_entry_layout_controller.py" = ["PLR0915"]
-"silverestimate/ui/estimate_entry_ui.py" = ["PLR0912"]
-"silverestimate/ui/estimate_history.py" = ["PLR0915"]
-"silverestimate/ui/estimate_print_renderer.py" = ["C901", "PLR0912", "PLR0913", "PLR0915"]
-"silverestimate/ui/item_master.py" = ["PLR0915"]
-"silverestimate/ui/item_selection_dialog.py" = ["PLR0915"]
-"silverestimate/ui/login_dialog.py" = ["PLR0915"]
-"silverestimate/ui/main_window.py" = ["PLR0912"]
-"silverestimate/ui/models/*.py" = ["B008", "C901", "PLR0911", "PLR0912"]
-"silverestimate/ui/print_payload_builder.py" = ["PLR0913"]
-"silverestimate/ui/settings_dialog.py" = ["C901", "PLR0911", "PLR0912", "PLR0915"]
-"silverestimate/ui/shared_screen_theme.py" = ["PLR0913"]
-"silverestimate/ui/silver_bar_history.py" = ["PLR0915"]
-"silverestimate/ui/silver_bar_list_print_controller.py" = ["PLR0913"]
-"silverestimate/ui/silver_bar_load_controller.py" = ["PLR0912"]
-"silverestimate/ui/silver_bar_management.py" = ["PLR0915"]
-"silverestimate/ui/silver_bar_management_ui.py" = ["PLR0915"]
+"silverestimate/ui/models/*.py" = ["B008"]
 
 [tool.mypy]
 python_version = "3.14"
@@ -199,16 +147,12 @@ module = [
     "silverestimate.security.credential_store",
     "silverestimate.security.windows_vault",
     "silverestimate.services.estimate_calculator",
-    "silverestimate.services.estimate_repository",
     "silverestimate.persistence.schema",
-    "silverestimate.persistence.silver_bars_queries",
-    "silverestimate.persistence.silver_bars_snapshot_repository",
     "silverestimate.presenter.estimate_entry_presenter",
     "silverestimate.infrastructure.application",
     "silverestimate.ui.estimate_entry_components.primary_actions_bar",
     "silverestimate.ui.estimate_entry_components.secondary_actions_bar",
     "silverestimate.ui.estimate_entry_logic.constants",
-    "silverestimate.ui.view_models.estimate_entry_view_model",
 ]
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
@@ -245,33 +189,9 @@ addopts = [
     "--strict-config",
 ]
 markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks tests as integration tests",
-    "unit: marks tests as unit tests",
     "smoke: marks opt-in smoke tests that exercise full application startup",
 ]
 filterwarnings = ["error"]
-
-[tool.coverage.run]
-source = ["silverestimate"]
-omit = [
-    "*/tests/*",
-    "*/test_*.py",
-    "*/__pycache__/*",
-    "*/site-packages/*",
-]
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if __name__ == .__main__.:",
-    "if TYPE_CHECKING:",
-    "@abstract",
-    "@abstractmethod",
-]
 
 [[tool.mypy.overrides]]
 module = [

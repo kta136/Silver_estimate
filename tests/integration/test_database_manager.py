@@ -5,7 +5,7 @@ from silverestimate.persistence.database_manager import (
     MaintenanceStatus,
 )
 from silverestimate.services.item_catalog_transfer import (
-    export_item_catalog,
+    export_item_catalog_rows,
     import_item_catalog,
 )
 from tests.factories import estimate_totals, regular_item, return_item, silver_bar_item
@@ -96,14 +96,14 @@ def test_database_manager_persists_estimates(tmp_path, settings_stub):
         net_wage=162.0,
         note="Persist test",
     )
-    saved = manager.estimates_repo.save_estimate_with_returns(
+    saved = manager.estimates_repo.save_estimate_atomic(
         voucher_no=voucher,
         date="2025-04-01",
         silver_rate=70000.0,
         regular_items=[regular_payload],
         return_items=[return_payload, bar_payload],
         totals=totals,
-    )
+    ).success
     assert saved
     manager.close()
 
@@ -170,7 +170,7 @@ def test_database_manager_item_catalog_backup_roundtrip(tmp_path, settings_stub)
             "ITM001", "Original", 92.5, "WT", 10.0, tunch="91.25 + loss"
         )
         assert source.items_repo.add_item("ITM002", "Second", 80.0, "P", 5.0)
-        exported = export_item_catalog(source, str(backup_path))
+        exported = export_item_catalog_rows(source.get_all_items(), str(backup_path))
         assert exported == 2
     finally:
         source.close()
@@ -227,7 +227,7 @@ def test_database_manager_item_catalog_restore_can_replace_existing_catalog(
             "ITM001", "Original", 92.5, "WT", 10.0, tunch="91.25 + loss"
         )
         assert source.items_repo.add_item("ITM002", "Second", 80.0, "P", 5.0)
-        assert export_item_catalog(source, str(backup_path)) == 2
+        assert export_item_catalog_rows(source.get_all_items(), str(backup_path)) == 2
     finally:
         source.close()
 

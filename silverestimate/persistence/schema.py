@@ -27,10 +27,11 @@ def run_schema_setup(db: "DatabaseManager") -> None:
     try:
         current_version = db._check_schema_version()
         logger.info("Current database schema version: %s", current_version)
-        if current_version not in (0, 8, 9, CURRENT_SCHEMA_VERSION):
+        if current_version not in (0, CURRENT_SCHEMA_VERSION):
             raise RuntimeError(
                 f"Unsupported database schema version {current_version}; "
-                f"this release accepts versions 8, 9 or {CURRENT_SCHEMA_VERSION}."
+                f"this release accepts version {CURRENT_SCHEMA_VERSION} only. "
+                "Open the database with v4.04 to v4.07 first."
             )
 
         conn.execute("BEGIN IMMEDIATE")
@@ -53,13 +54,8 @@ def run_schema_setup(db: "DatabaseManager") -> None:
                     "open it with an older release before using this version."
                 )
             _create_current_schema(db)
-            _stage_schema_version(db, CURRENT_SCHEMA_VERSION)
-        if current_version == 8:
-            _upgrade_v8_snapshots(db)
-        if current_version in (0, 8, 9):
             _create_draft_schema(db)
-            if current_version:
-                _stage_schema_version(db, CURRENT_SCHEMA_VERSION)
+            _stage_schema_version(db, CURRENT_SCHEMA_VERSION)
         _ensure_indexes(db)
         _validate_schema(db)
 
@@ -182,31 +178,6 @@ def _create_draft_schema(db: "DatabaseManager") -> None:
             updated_utc TEXT NOT NULL
         )
     """)
-
-
-def _upgrade_v8_snapshots(db: "DatabaseManager") -> None:
-    """Freeze metadata available at upgrade; original lost metadata is unknowable."""
-    cursor = db.cursor
-    assert cursor is not None
-    cursor.execute("ALTER TABLE estimate_items ADD COLUMN item_code_snapshot TEXT")
-    cursor.execute("ALTER TABLE estimate_items ADD COLUMN tunch TEXT")
-    cursor.execute(
-        "ALTER TABLE estimate_items ADD COLUMN snapshot_version INTEGER NOT NULL DEFAULT 1"
-    )
-    cursor.execute("""
-        UPDATE estimate_items SET
-            item_code_snapshot = item_code,
-            tunch = (SELECT items.tunch FROM items
-                     WHERE items.code = estimate_items.item_code COLLATE NOCASE),
-            wage_type = CASE
-                WHEN UPPER(TRIM(COALESCE(wage_type, ''))) IN ('WT', 'PC') THEN wage_type
-                ELSE COALESCE((SELECT CASE WHEN UPPER(items.wage_type) = 'PC'
-                              THEN 'PC' ELSE 'WT' END FROM items
-                              WHERE items.code = estimate_items.item_code COLLATE NOCASE), 'WT')
-                END,
-            line_key = CASE WHEN TRIM(COALESCE(line_key, '')) = ''
-                       THEN LOWER(HEX(RANDOMBLOB(16))) ELSE line_key END
-        """)
 
 
 def _stage_schema_version(db: "DatabaseManager", version: int) -> None:

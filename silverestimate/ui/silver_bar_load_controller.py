@@ -13,7 +13,7 @@ from silverestimate.domain.silver_bar_workspace import (
     normalize_weight_prefix,
 )
 from silverestimate.infrastructure.latest_request_runner import LatestRequestRunner
-from silverestimate.persistence.silver_bars_snapshot_repository import (
+from silverestimate.persistence.silver_bar_query_repository import (
     SilverBarsSnapshotRepository,
 )
 

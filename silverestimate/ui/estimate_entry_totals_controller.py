@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from dataclasses import replace
 from typing import TYPE_CHECKING, Iterable
 
@@ -62,7 +61,6 @@ class EstimateEntryTotalsController:
         return "WT"
 
     def _recompute_row_derived_values(self, row: int, *, schedule_totals: bool = True):
-        started_at = time.perf_counter()
         if row is None or row < 0:
             return
         if row >= self.host.item_table.rowCount():
@@ -88,7 +86,7 @@ class EstimateEntryTotalsController:
             self.host.item_table.set_cell_value(row, COL_WAGE_AMT, wage)
 
             if schedule_totals:
-                self.calculate_totals(start=started_at)
+                self.calculate_totals()
         except (AttributeError, TypeError, ValueError) as exc:
             self.host.logger.warning(
                 "Failed to recompute row %s derived values: %s", row, exc, exc_info=True
@@ -108,26 +106,9 @@ class EstimateEntryTotalsController:
             self.host.logger.debug("Failed to schedule totals recalculation: %s", exc)
             self.calculate_totals()
 
-    def _log_perf_metric(
-        self,
-        name: str,
-        start_time: float,
-        *,
-        threshold_ms: float = 0.0,
-        **metadata,
-    ) -> None:
-        elapsed_ms = (time.perf_counter() - start_time) * 1000.0
-        if elapsed_ms < max(0.0, float(threshold_ms)):
-            return
-        details = " ".join(f"{key}={value}" for key, value in metadata.items())
-        if details:
-            self.host.logger.debug("[perf] %s=%.2fms %s", name, elapsed_ms, details)
-        else:
-            self.host.logger.debug("[perf] %s=%.2fms", name, elapsed_ms)
-
     @staticmethod
     def _row_category(row_state: EstimateEntryRowState) -> EstimateLineCategory:
-        category = row_state.category
+        category: object = row_state.category
         if isinstance(category, EstimateLineCategory):
             return category
         return EstimateLineCategory.from_label(str(category))
@@ -154,9 +135,8 @@ class EstimateEntryTotalsController:
             last_balance_amount=last_balance_amount,
         )
 
-    def calculate_totals(self, *, start: float | None = None) -> None:
+    def calculate_totals(self) -> None:
         """Recompute totals from every row and show them."""
-        started_at = time.perf_counter() if start is None else start
         if not self.host.table_controller._is_table_valid():
             return
         try:
@@ -172,8 +152,3 @@ class EstimateEntryTotalsController:
                 "Failed to recalculate estimate totals: %s", exc, exc_info=True
             )
             return
-        self._log_perf_metric(
-            "estimate_entry.totals_apply",
-            started_at,
-            threshold_ms=15.0,
-        )

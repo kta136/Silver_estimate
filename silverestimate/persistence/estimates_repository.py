@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Iterable, List, Optional
+from typing import TYPE_CHECKING, Any, Iterable, List, Optional
 
 from silverestimate.domain.estimate_save import EstimateSaveResult
 from silverestimate.domain.estimate_validation import (
@@ -18,7 +18,6 @@ from silverestimate.domain.voucher_deletion import (
     VoucherDeletionResult,
 )
 from silverestimate.persistence.database_driver import dbapi as sqlite3
-from silverestimate.persistence.database_protocols import RepositoryDatabase
 from silverestimate.persistence.silver_bar_synchronization_repository import (
     BarReconciliationPlan,
     SilverBarSynchronizationRepository,
@@ -27,6 +26,9 @@ from silverestimate.persistence.voucher_deletion_repository import (
     PROTECTED_BAR_SQL,
     VoucherDeletionRepository,
 )
+
+if TYPE_CHECKING:
+    from silverestimate.persistence.database_manager import DatabaseManager
 
 
 def fetch_estimate_history_page(
@@ -115,7 +117,7 @@ def fetch_estimate_history_page(
 class EstimatesRepository:
     """Encapsulate estimate header/item persistence logic."""
 
-    def __init__(self, db_manager: RepositoryDatabase) -> None:
+    def __init__(self, db_manager: DatabaseManager) -> None:
         self._db = db_manager
         self._logger = getattr(db_manager, "logger", logging.getLogger(__name__))
 
@@ -241,20 +243,6 @@ class EstimatesRepository:
                 "DB Error getting first estimate date: %s", exc, exc_info=True
             )
             return None
-
-    def save_estimate_with_returns(
-        self,
-        voucher_no: str,
-        date: str,
-        silver_rate: float,
-        regular_items: Iterable[dict],
-        return_items: Iterable[dict],
-        totals: dict,
-    ) -> bool:
-        """Compatibility boolean API; inventory participates in the same save."""
-        return self.save_estimate_atomic(
-            voucher_no, date, silver_rate, regular_items, return_items, totals
-        ).success
 
     def save_estimate_atomic(
         self,

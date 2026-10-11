@@ -20,13 +20,13 @@ _HORIZONTAL_PADDING = 2 * 14 + 8
 _STYLE = apply_theme_tokens(
     """
 QLabel#StatusToast {
-    background-color: #0f172a;
+    background-color: __TEXT_STRONG__;
     border-radius: 6px;
-    color: #ffffff;
+    color: __SURFACE_BG__;
     font-weight: 600;
     padding: 8px 14px;
 }
-QLabel#StatusToast[statusLevel="warning"] { background-color: #9a3412; }
+QLabel#StatusToast[statusLevel="warning"] { background-color: __WARNING_TEXT__; }
 QLabel#StatusToast[statusLevel="error"] { background-color: #991b1b; }
 """
 )

@@ -2,25 +2,9 @@
 
 import pytest
 
-from silverestimate.persistence import schema
 from silverestimate.persistence.database_manager import DatabaseManager
-from silverestimate.persistence.estimates_repository import EstimatesRepository
-from silverestimate.persistence.items_repository import ItemsRepository
 from silverestimate.ui.estimate_print_document import EstimatePrintDocument
 from tests.factories import estimate_totals, regular_item
-from tests.integration.test_repositories import FakeDB
-
-
-def downgrade_to_v8(db):
-    # Remove exactly the three columns introduced by v9 to model a deployed v8 file.
-    for column in ("item_code_snapshot", "tunch", "snapshot_version"):
-        db.conn.execute(f"ALTER TABLE estimate_items DROP COLUMN {column}")
-    db.conn.execute("DROP TABLE IF EXISTS estimate_draft")
-    db.conn.execute("DELETE FROM schema_version WHERE version > 8")
-    db.conn.execute(
-        "INSERT INTO schema_version(version, applied_date) VALUES (8, '2026-09-05')"
-    )
-    db.conn.commit()
 
 
 def _database_state(db):
@@ -133,90 +117,6 @@ def test_null_tunch_is_a_snapshot_and_does_not_fall_back(snapshot_db):
     ).success
     assert db.update_item("EMPTY", "Updated", 50, "PC", 1, tunch="Added later")
     assert db.get_estimate_by_voucher("2")["items"][0]["tunch"] is None
-
-
-def test_v8_upgrade_freezes_available_metadata_and_preserves_orphans(snapshot_db):
-    db = snapshot_db
-    downgrade_to_v8(db)
-    db.conn.execute("UPDATE estimate_items SET line_key = '', wage_type = NULL")
-    db.conn.execute(
-        "INSERT INTO estimate_items(voucher_no, item_name, gross, net_wt, fine, wage) VALUES ('1', 'Lost code', 2.123, 2.123, 1.234567, 8.125)"
-    )
-    db.conn.commit()
-    before = [
-        tuple(row)
-        for row in db.conn.execute(
-            "SELECT id, item_name, gross, net_wt, fine, wage FROM estimate_items"
-        )
-    ]
-    schema.run_schema_setup(db)
-    assert db._check_schema_version() == schema.CURRENT_SCHEMA_VERSION
-    assert before == [
-        tuple(row)
-        for row in db.conn.execute(
-            "SELECT id, item_name, gross, net_wt, fine, wage FROM estimate_items"
-        )
-    ]
-    rows = db.get_estimate_by_voucher("1")["items"]
-    assert rows[0]["tunch"] == "91 + loss"
-    assert rows[0]["wage_type"] == "WT"
-    assert rows[1]["item_code"] is None
-    assert all(row["line_key"] for row in rows)
-    assert db.update_item("REG001", "Updated", 50, "PC", 1, tunch="Later")
-    schema.run_schema_setup(db)
-    assert db.get_estimate_by_voucher("1")["items"][0]["tunch"] == "91 + loss"
-
-
-@pytest.mark.parametrize("failure", ["version", "validation"])
-def test_v8_upgrade_failure_rolls_back_columns_metadata_and_version(
-    monkeypatch, failure
-):
-    db = FakeDB()
-    try:
-        schema.run_schema_setup(db)
-        assert ItemsRepository(db).add_item("REG001", "Original", 92.5, "WT", 1)
-        assert EstimatesRepository(db).save_estimate_with_returns(
-            "1", "2026-09-05", 75, [regular_item()], [], estimate_totals()
-        )
-        downgrade_to_v8(db)
-        before = _database_state(db)
-
-        def fail(*args):
-            raise RuntimeError("injected upgrade failure")
-
-        with monkeypatch.context() as patch:
-            patch.setattr(
-                db, "_update_schema_version", fail
-            ) if failure == "version" else patch.setattr(
-                schema, "_validate_schema", fail
-            )
-            with pytest.raises(RuntimeError, match="injected"):
-                schema.run_schema_setup(db)
-        assert not db.conn.in_transaction
-        assert _database_state(db) == before
-        schema.run_schema_setup(db)
-        assert db._check_schema_version() == schema.CURRENT_SCHEMA_VERSION
-    finally:
-        db.conn.close()
-
-
-def test_encrypted_v8_backup_restores_and_upgrades_on_restart(snapshot_db, tmp_path):
-    db = snapshot_db
-    downgrade_to_v8(db)
-    backup = db.create_encrypted_backup(tmp_path / "v8.sedbbackup")
-    schema.run_schema_setup(db)
-    assert db.update_item("REG001", "Current", 50, "PC", 1, tunch="Current")
-    db.stage_encrypted_restore(backup.path, "password")
-    db.close()
-    reopened = DatabaseManager(
-        str(tmp_path / "snapshots.db"), "password", device_secret=b"S" * 32
-    )
-    try:
-        assert reopened._check_schema_version() == schema.CURRENT_SCHEMA_VERSION
-        assert reopened.get_estimate_by_voucher("1")["items"][0]["tunch"] == "91 + loss"
-        assert list(reopened.conn.execute("PRAGMA foreign_key_check")) == []
-    finally:
-        reopened.close()
 
 
 @pytest.mark.parametrize("mutation", ["key", "code", "blank"])

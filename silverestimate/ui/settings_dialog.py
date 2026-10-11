@@ -37,7 +37,6 @@ from .settings_live_rates_page import LiveRatesSettingsPage
 from .settings_logging_page import (
     LoggingSettingsPage,
     SettingsLoggingController,
-    default_logging_settings_actions,
 )
 from .settings_print_controller import SettingsPrintController
 from .settings_print_page import PrintSettingsPage
@@ -149,14 +148,6 @@ class SettingsDialog(QDialog):
                 QLabel {{
                     color: {FIELD_TEXT};
                 }}
-                QLabel#SettingsWarningLabel {{
-                    background-color: {DANGER_BG};
-                    border: 1px solid {DANGER_BORDER};
-                    border-radius: 8px;
-                    color: #991b1b;
-                    font-weight: 600;
-                    padding: 8px 10px;
-                }}
                 QLabel#SettingsMutedDescription {{
                     color: {TEXT_MUTED};
 
@@ -243,10 +234,7 @@ class SettingsDialog(QDialog):
             self.settings,
             self._appearance_settings_actions(),
         )
-        self._logging_settings_controller = SettingsLoggingController(
-            self.settings,
-            default_logging_settings_actions(),
-        )
+        self._logging_settings_controller = SettingsLoggingController(self.settings)
         self._data_settings_controller = SettingsDataController(
             database_provider=lambda: getattr(self.main_window, "db", None),
             actions=DataManagementActions(

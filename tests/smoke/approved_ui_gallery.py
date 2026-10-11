@@ -196,7 +196,7 @@ def capture_approved_gallery(
         printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
         printer.setPageOrientation(QPageLayout.Orientation.Landscape)
         printer.setOutputFileName(str(output / (name + ".pdf")))
-        document = EstimatePrintDocument.from_mapping(sample, format_key="modern")
+        document = EstimatePrintDocument.from_mapping(sample)
         EstimatePrintRenderer().paint(
             printer, document, print_font=QFont("Segoe UI", 8)
         )
@@ -220,7 +220,6 @@ def capture_approved_gallery(
         del pdf
         manifest.append(dict(screen=name, rate=rate))
     manager = PrintManager(window.db, print_font=QFont("Segoe UI", 8))
-    manager._set_estimate_format("modern")
     payload = manager.build_estimate_preview_payload("100", estimate_data=sample)
     capture_modal("print-preview-controls")
     manager.show_preview(payload, parent_widget=window)

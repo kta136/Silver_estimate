@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -16,7 +17,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from silverestimate.persistence.database_protocols import MainCommandsDatabase
 from silverestimate.services.password_change_service import (
     PasswordChangeRequest,
     PasswordChangeResult,
@@ -27,13 +27,14 @@ from silverestimate.services.password_change_service import (
 )
 from silverestimate.ui.database_maintenance import run_database_maintenance
 
+if TYPE_CHECKING:
+    from silverestimate.persistence.database_manager import DatabaseManager
+
 
 class SettingsSecurityController:
     """Expose the password-change service to the security page."""
 
-    def __init__(
-        self, database_provider: Callable[[], MainCommandsDatabase | None]
-    ) -> None:
+    def __init__(self, database_provider: Callable[[], DatabaseManager | None]) -> None:
         self._database_provider = database_provider
 
     def change_passwords(

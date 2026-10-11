@@ -57,10 +57,6 @@ class LoginDialog(QDialog):
                 QLabel#LoginSubtitleLabel {
 
                 }
-                QLabel#LoginHelpLabel {
-                    color: __TEXT_MUTED__;
-
-                }
                 QLabel#LoginAppLabel {
                     color: __TEXT_MUTED__;
                     font-weight: 600;

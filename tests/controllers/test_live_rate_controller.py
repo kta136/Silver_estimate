@@ -23,17 +23,21 @@ class _Signal:
         for callback in list(self._callbacks):
             callback(*args)
 
+    def disconnect(self):
+        self._callbacks.clear()
 
-class _ServiceStub:
+
+class _StreamStub:
     def __init__(self):
-        self.rate_updated = _Signal()
-        self.feed_status_updated = _Signal()
+        self.rate_received = _Signal()
+        self.feed_status_received = _Signal()
         self.connection_state_changed = _Signal()
         self.stream_error = _Signal()
         self.start_calls = 0
         self.stop_calls = 0
         self.refresh_calls = 0
         self.raise_on_refresh = False
+        self.deleted = False
 
     def start(self):
         self.start_calls += 1
@@ -41,10 +45,13 @@ class _ServiceStub:
     def stop(self):
         self.stop_calls += 1
 
-    def refresh_now(self):
+    def request_refresh(self):
         self.refresh_calls += 1
         if self.raise_on_refresh:
             raise RuntimeError("refresh boom")
+
+    def deleteLater(self):
+        self.deleted = True
 
 
 class _LabelStub:
@@ -100,9 +107,9 @@ def _snapshot(*, transport="sse", final_rate=125000):
 
 
 def _build_controller(
-    *, settings, service=None, widget=None, status=None, single_shot=None
+    *, settings, stream=None, widget=None, status=None, single_shot=None
 ):
-    service = service or _ServiceStub()
+    stream = stream or _StreamStub()
     status = status if status is not None else []
 
     controller = LiveRateController(
@@ -110,11 +117,11 @@ def _build_controller(
         widget_getter=lambda: widget,
         status_callback=lambda *args: status.append(args),
         logger=logging.getLogger("test.live_rate_controller"),
-        service_factory=lambda **_kwargs: service,
+        stream_factory=lambda **_kwargs: stream,
         settings_provider=lambda: _SettingsStub(settings),
         single_shot=single_shot or (lambda _delay, callback: callback()),
     )
-    return controller, service, status
+    return controller, stream, status
 
 
 def test_apply_visibility_settings_hides_rate_widgets_when_disabled():
@@ -133,7 +140,7 @@ def test_apply_visibility_settings_hides_rate_widgets_when_disabled():
 
 def test_initialize_starts_stream_and_schedules_hydration_refresh():
     scheduled = []
-    controller, service, _ = _build_controller(
+    controller, stream, _ = _build_controller(
         settings={"rates/live_enabled": True, "rates/auto_refresh_enabled": True},
         widget=_WidgetStub(),
         single_shot=lambda delay, callback: scheduled.append((delay, callback)),
@@ -141,39 +148,100 @@ def test_initialize_starts_stream_and_schedules_hydration_refresh():
 
     controller.initialize(initial_refresh_delay_ms=123)
 
-    assert service.start_calls == 1
+    assert stream.start_calls == 1
     assert scheduled[0][0] == 123
 
 
-def test_auto_updates_disabled_stops_service():
-    controller, service, _ = _build_controller(
+def test_auto_updates_disabled_stops_the_running_stream():
+    controller, stream, _ = _build_controller(
         settings={"rates/live_enabled": True, "rates/auto_refresh_enabled": False},
         widget=_WidgetStub(),
     )
+    controller._stream = stream
 
     controller.apply_timer_settings()
 
-    assert service.stop_calls == 1
-    assert service.start_calls == 0
+    assert stream.stop_calls == 1
+    assert stream.start_calls == 0
+    assert stream.deleted is True
+    assert controller._stream is None
 
 
-def test_refresh_now_reuses_service_and_reports_status():
-    controller, service, status = _build_controller(
+def test_refresh_now_reuses_the_running_stream_and_reports_status():
+    controller, stream, status = _build_controller(
+        settings={"rates/live_enabled": True}, widget=_WidgetStub()
+    )
+    controller._stream = stream
+
+    controller.refresh_now()
+
+    assert stream.refresh_calls == 1
+    assert stream.start_calls == 0
+    assert status[-1] == ("Refreshing live rate.", 1500, "info")
+
+
+def test_refresh_now_starts_a_stream_when_none_is_running():
+    controller, stream, status = _build_controller(
         settings={"rates/live_enabled": True}, widget=_WidgetStub()
     )
 
     controller.refresh_now()
 
-    assert service.refresh_calls == 1
+    assert stream.start_calls == 1
+    assert stream.refresh_calls == 0
+    assert controller._stream is stream
     assert status[-1] == ("Refreshing live rate.", 1500, "info")
+
+
+def test_disabled_setting_prevents_stream_creation():
+    created = []
+    controller, _, _ = _build_controller(
+        settings={"rates/live_enabled": False}, widget=_WidgetStub()
+    )
+    controller._stream_factory = lambda **_kwargs: created.append(1)
+
+    controller._start_stream()
+
+    assert created == []
+    assert controller._stream is None
+
+
+def test_a_stopped_stream_is_replaced_by_a_fresh_one():
+    created = []
+    controller, _, _ = _build_controller(
+        settings={"rates/live_enabled": True}, widget=_WidgetStub()
+    )
+
+    def factory(**_kwargs):
+        created.append(_StreamStub())
+        return created[-1]
+
+    controller._stream_factory = factory
+    controller._start_stream()
+    controller._start_stream()
+    created[0].connection_state_changed.emit("connected")
+    assert controller._connection_state == "connected"
+
+    controller._stop_stream()
+    controller._stop_stream()
+    created[0].connection_state_changed.emit("reconnecting")
+    controller._start_stream()
+
+    assert len(created) == 2
+    assert (created[0].start_calls, created[0].stop_calls) == (1, 1)
+    assert created[0].deleted is True
+    # The discarded stream can no longer reach the controller.
+    assert controller._connection_state == "connected"
+    assert controller._stream is created[1]
 
 
 def test_refresh_failure_does_not_call_back_into_widget():
     widget = _WidgetStub()
-    controller, service, status = _build_controller(
+    controller, stream, status = _build_controller(
         settings={"rates/live_enabled": True}, widget=widget
     )
-    service.raise_on_refresh = True
+    controller._stream = stream
+    stream.raise_on_refresh = True
 
     controller.refresh_now()
 
@@ -182,12 +250,12 @@ def test_refresh_failure_does_not_call_back_into_widget():
     assert controller._manual_refresh is False
 
 
-def test_refresh_reports_unavailable_without_service_or_widget_fallback():
+def test_refresh_reports_unavailable_without_stream_or_widget_fallback():
     controller, _, status = _build_controller(
         settings={"rates/live_enabled": True},
         widget=types.SimpleNamespace(),
     )
-    controller._service_factory = lambda **_kwargs: (_ for _ in ()).throw(
+    controller._stream_factory = lambda **_kwargs: (_ for _ in ()).throw(
         RuntimeError("unavailable")
     )
 
@@ -258,16 +326,16 @@ def test_manual_success_reports_updated_status():
     assert status[-1] == ("Live rate updated", 2000, "info")
 
 
-def test_shutdown_calls_service_stop_and_clears_reference():
-    controller, service, _ = _build_controller(
+def test_shutdown_stops_the_stream_and_clears_reference():
+    controller, stream, _ = _build_controller(
         settings={"rates/live_enabled": True}, widget=_WidgetStub()
     )
-    controller._service = service
+    controller._stream = stream
 
     controller.shutdown()
 
-    assert service.stop_calls == 1
-    assert controller._service is None
+    assert stream.stop_calls == 1
+    assert controller._stream is None
 
 
 def test_visibility_and_initialize_handle_missing_or_faulty_widgets():
@@ -298,43 +366,47 @@ def test_visibility_and_initialize_handle_missing_or_faulty_widgets():
     assert controller.apply_visibility_settings() is True
 
 
-def test_service_start_stop_and_shutdown_failures_are_contained():
-    service = _ServiceStub()
+def test_stream_start_stop_and_shutdown_failures_are_contained():
+    stream = _StreamStub()
     controller, _, _ = _build_controller(
         settings={"rates/live_enabled": True, "rates/auto_refresh_enabled": True},
-        service=service,
+        stream=stream,
         widget=_WidgetStub(),
     )
-    service.stop = lambda: (_ for _ in ()).throw(RuntimeError("stop"))
-    service.start = lambda: (_ for _ in ()).throw(RuntimeError("start"))
+    stream.stop = lambda: (_ for _ in ()).throw(RuntimeError("stop"))
+    stream.start = lambda: (_ for _ in ()).throw(RuntimeError("start"))
     controller.apply_timer_settings()
 
-    controller._service = service
+    controller._stream = stream
     controller.shutdown()
-    assert controller._service is None
+    assert controller._stream is None
     controller.shutdown()
 
     unavailable, _, _ = _build_controller(
-        settings={"rates/live_enabled": False, "rates/auto_refresh_enabled": False},
+        settings={"rates/live_enabled": True, "rates/auto_refresh_enabled": True},
         widget=_WidgetStub(),
     )
-    unavailable._service_factory = lambda **_kwargs: (_ for _ in ()).throw(
+    unavailable._stream_factory = lambda **_kwargs: (_ for _ in ()).throw(
         RuntimeError("factory")
     )
-    unavailable.apply_timer_settings(force_show_ui=True)
+    unavailable.apply_timer_settings()
+    assert unavailable._stream is None
 
 
 def test_refresh_disabled_and_fallback_error_paths():
     widget = _WidgetStub()
-    controller, service, status = _build_controller(
+    controller, stream, status = _build_controller(
         settings={"rates/live_enabled": False}, widget=widget
     )
     controller.apply_visibility_settings()
     controller.refresh_now()
-    assert service.refresh_calls == 0
+    assert stream.refresh_calls == 0
+    assert stream.start_calls == 0
 
-    controller._ui_enabled = True
-    controller._service_factory = lambda **_kwargs: (_ for _ in ()).throw(
+    controller, _, status = _build_controller(
+        settings={"rates/live_enabled": True}, widget=widget
+    )
+    controller._stream_factory = lambda **_kwargs: (_ for _ in ()).throw(
         RuntimeError("unavailable")
     )
     controller.refresh_now()

@@ -22,8 +22,8 @@ RANGE_ERROR = "The first weight must be lower than the second."
 _DIALOG_QSS = """
 QLabel#OptimalListFieldLabel { color: __TEXT_MUTED__; font-weight: 600; }
 QLabel#OptimalListRangeSummary { color: __TEXT_MUTED__; }
-QLabel#OptimalListRangeSummary[invalid="true"] { color: #b91c1c; font-weight: 600; }
-QLabel#OptimalListError { color: #b91c1c; font-weight: 600; }
+QLabel#OptimalListRangeSummary[invalid="true"] { color: __DANGER_TEXT__; font-weight: 600; }
+QLabel#OptimalListError { color: __DANGER_TEXT__; font-weight: 600; }
 QFrame#OptimalListButtons {
     background-color: __HEADER_BG__;
     border: none;
@@ -64,7 +64,7 @@ class OptimalListDialog(QDialog):
         self.max_target = 0.0
         self._init_ui()
 
-    def _init_ui(self):  # noqa: PLR0915 - declarative dialog layout
+    def _init_ui(self):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)

@@ -6,12 +6,9 @@ from silverestimate.persistence import schema
 from silverestimate.persistence.database_manager import DatabaseManager
 from silverestimate.persistence.estimates_repository import fetch_estimate_history_page
 from silverestimate.persistence.items_repository import fetch_item_catalog_page
-from silverestimate.persistence.silver_bars_queries import (
-    build_available_bars_queries,
-    build_history_bars_query,
-)
-from silverestimate.persistence.silver_bars_snapshot_repository import (
+from silverestimate.persistence.silver_bar_query_repository import (
     SilverBarsSnapshotRepository,
+    build_history_bars_query,
 )
 
 
@@ -114,31 +111,6 @@ def test_history_pages_match_independent_filter_and_date_order(paging_db, filter
     assert len(found) == len(set(found))
 
 
-@pytest.mark.parametrize(
-    "filters",
-    [
-        {},
-        {"weight_query": 10},
-        {"min_purity": 91},
-        {"date_range": ("2026-01-01", "2026-02-01")},
-    ],
-)
-def test_available_pages_match_full_filtered_result(paging_db, filters):
-    repo = SilverBarsSnapshotRepository(paging_db.open_read_connection)
-    unpaged = repo.get_available_bars_keyset_page(**filters, limit=5000)
-    assert not unpaged.has_more
-    expected, total = list(unpaged.items), unpaged.total
-    found, cursor = [], None
-    for _ in range(30):
-        page = repo.get_available_bars_keyset_page(**filters, cursor=cursor, limit=2)
-        assert page.total == total
-        found.extend(page.items)
-        if not page.has_more:
-            break
-        cursor = page.next_cursor
-    assert found == expected
-
-
 def test_mixed_voucher_pages_preserve_numeric_null_and_tie_order(paging_db):
     expected = [
         row[0]
@@ -175,11 +147,6 @@ def test_append_can_skip_counts_without_reusing_stale_totals(paging_db):
     assert page.total is None
     assert len(page.items) == 2
     assert not any("COUNT(" in sql.upper() for sql in traces)
-    traces.clear()
-    assert (
-        repo.get_available_bars_keyset_page(limit=2, include_total=False).total is None
-    )
-    assert not any("COUNT(" in sql.upper() for sql in traces)
     paging_db.conn.set_trace_callback(traces.append)
     traces.clear()
     assert (
@@ -209,7 +176,7 @@ def test_unfiltered_and_status_counts_do_not_join_display_tables(paging_db):
         assert len(counts) == 1 and "JOIN" not in counts[0].upper()
 
 
-def test_order_indexes_upgrade_existing_v9_without_changing_records(paging_db):
+def test_missing_order_indexes_are_recreated_without_changing_records(paging_db):
     db = paging_db
     names = [
         "idx_estimates_history_order",
@@ -229,7 +196,6 @@ def test_order_indexes_upgrade_existing_v9_without_changing_records(paging_db):
     statements = [
         build_history_bars_query(),
         build_history_bars_query(status_text="In Stock"),
-        build_available_bars_queries(limit=2).query,
     ]
     for statement in statements:
         plan = " ".join(

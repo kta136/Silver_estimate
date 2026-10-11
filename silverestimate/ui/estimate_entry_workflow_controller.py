@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from dataclasses import replace
 from datetime import datetime
 from typing import TYPE_CHECKING, Dict, Optional, cast
@@ -21,9 +20,12 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from silverestimate.domain.estimate_entry import EstimateEntryRowState, LoadedEstimate
+from silverestimate.domain.estimate_entry import (
+    EstimateEntryRowState,
+    EstimateEntrySnapshot,
+    LoadedEstimate,
+)
 from silverestimate.domain.numeric_policy import MONEY_PLACES, WEIGHT_PLACES
-from silverestimate.services.dda_rate_fetcher import DdaCurrentRatesClient
 from silverestimate.services.estimate_entry_persistence import (
     EstimateEntryPersistenceService,
     SaveValidationError,
@@ -74,9 +76,7 @@ class EstimateEntryWorkflowController:
         return True
 
     def _update_row_undo_action(self) -> None:
-        action = getattr(self.host, "command_undo_row_action", None)
-        if action is not None:
-            action.setEnabled(bool(self._deleted_rows))
+        self.host.command_undo_row_action.setEnabled(bool(self._deleted_rows))
 
     def _clear_row_undo(self) -> None:
         self._deleted_rows.clear()
@@ -109,8 +109,7 @@ class EstimateEntryWorkflowController:
     def generate_voucher(self):
         if self.host.presenter:
             self.host.presenter.generate_voucher()
-        if hasattr(self.host, "delete_estimate_button"):
-            self.host.delete_estimate_button.setEnabled(False)
+        self.host.delete_estimate_button.setEnabled(False)
         self.host._estimate_loaded = False
 
     def load_estimate(self):
@@ -202,39 +201,32 @@ class EstimateEntryWorkflowController:
         if not self.host.presenter:
             return False
 
-        self._update_view_model_snapshot()
-        if not self._confirm_rows_without_weight():
+        snapshot = self._capture_snapshot()
+        if not self._confirm_rows_without_weight(snapshot.rows):
             return False
         self.host._status(f"Saving estimate {voucher_no}...", 2000)
 
-        service = EstimateEntryPersistenceService(
-            self.host.view_model.as_save_snapshot()
-        )
+        service = EstimateEntryPersistenceService(snapshot)
         try:
             outcome, preparation = service.execute_save(
                 voucher_no=voucher_no,
                 date=self.host.date_edit.date().toString("yyyy-MM-dd"),
-                note=self.host.note_edit.text().strip()
-                if hasattr(self.host, "note_edit")
-                else "",
-                presenter=self.host.presenter,
+                note=self.host.note_edit.text().strip(),
+                save=self.host.presenter.save_estimate,
             )
 
             if outcome.success:
-                self._refresh_saved_line_metadata(voucher_no)
+                self._refresh_saved_line_metadata(voucher_no, snapshot.rows)
                 self.host._last_saved_status = datetime.now().strftime(
                     "%d/%m/%Y %I:%M %p"
                 )
-                if hasattr(self.host, "refresh_status_line"):
-                    self.host.refresh_status_line()
+                self.host.refresh_status_line()
                 self.host._status(outcome.message, 5000)
                 self._clear_row_undo()
                 self.host._active_voucher_no = voucher_no
                 self.host._estimate_loaded = True
-                if continue_editing:
-                    self.host._set_unsaved(False, force=True)
-                else:
-                    self.host._set_unsaved(False, force=True)
+                self.host._set_unsaved(False, force=True)
+                if not continue_editing:
                     self.print_estimate()
                     self.clear_form(confirm=False)
                     # No message box: a brief toast names the saved voucher
@@ -249,7 +241,7 @@ class EstimateEntryWorkflowController:
                     self._parent_widget(), "Estimate Not Saved", message
                 )
                 self.host._status(outcome.message, 5000)
-                self._focus_invalid_row(getattr(preparation, "row_errors", {}))
+                self._focus_invalid_row(preparation.row_errors)
         except SaveValidationError as exc:
             QMessageBox.warning(
                 self._parent_widget(), "Check the Estimate Rows", str(exc)
@@ -266,19 +258,21 @@ class EstimateEntryWorkflowController:
             )
         return False
 
-    def _confirm_rows_without_weight(self) -> bool:
+    def _confirm_rows_without_weight(
+        self, rows: tuple[EstimateEntryRowState, ...]
+    ) -> bool:
         """Ask before saving item rows whose gross weight was left at zero."""
-        rows = [
+        unweighed = [
             index + 1
-            for index, row in enumerate(self.host.view_model.rows())
+            for index, row in enumerate(rows)
             if not row.is_empty() and row.gross <= 0
         ]
-        if not rows:
+        if not unweighed:
             return True
-        listed = ", ".join(str(number) for number in rows[:8])
-        if len(rows) > 8:
-            listed += f" and {len(rows) - 8} more"
-        subject = f"Row {listed} has" if len(rows) == 1 else f"Rows {listed} have"
+        listed = ", ".join(str(number) for number in unweighed[:8])
+        if len(unweighed) > 8:
+            listed += f" and {len(unweighed) - 8} more"
+        subject = f"Row {listed} has" if len(unweighed) == 1 else f"Rows {listed} have"
         if ask(
             self._parent_widget(),
             title="Rows Without Weight",
@@ -289,7 +283,7 @@ class EstimateEntryWorkflowController:
             default_to_cancel=True,
         ):
             return True
-        self.host.item_table.setCurrentCell(rows[0] - 1, COL_GROSS)
+        self.host.item_table.setCurrentCell(unweighed[0] - 1, COL_GROSS)
         self.host.item_table.setFocus()
         return False
 
@@ -305,7 +299,7 @@ class EstimateEntryWorkflowController:
             detail="It has changes that are not saved yet.",
         )
         if reply == "discard":
-            recovery = getattr(self.host, "draft_recovery", None)
+            recovery = self.host.draft_recovery
             if recovery is not None and not recovery.discard_current():
                 self.host._notify(
                     "The recovery copy could not be discarded. Try again.",
@@ -320,7 +314,9 @@ class EstimateEntryWorkflowController:
             self.host.set_voucher_number(save_voucher)
         return self.save_estimate(continue_editing=True)
 
-    def _refresh_saved_line_metadata(self, voucher_no: str) -> None:
+    def _refresh_saved_line_metadata(
+        self, voucher_no: str, saved_rows: tuple[EstimateEntryRowState, ...]
+    ) -> None:
         """Keep a continuing draft's snapshots aligned with the committed save."""
         presenter = self.host.presenter
         if presenter is None:
@@ -338,10 +334,9 @@ class EstimateEntryWorkflowController:
                 )
                 if row.line_key in saved
                 else row
-                for row in self.host.view_model.rows()
+                for row in saved_rows
             ]
             self.host.item_table.replace_all_rows(rows)
-            self.host.view_model.set_rows(rows)
         except Exception as exc:
             self.host.logger.warning(
                 "Estimate saved, but refreshing line metadata failed: %s", exc
@@ -354,13 +349,10 @@ class EstimateEntryWorkflowController:
 
     def _estimate_summary(self) -> str:
         """Date and total of the open estimate, for confirmations."""
-        parts = []
-        date_edit = getattr(self.host, "date_edit", None)
-        if date_edit is not None:
-            parts.append(date_edit.date().toString("dd/MM/yyyy"))
-        total = getattr(self.host, "grand_total_label", None)
-        if total is not None and total.text().strip():
-            parts.append(f"Grand total {total.text().strip()}")
+        parts = [self.host.date_edit.date().toString("dd/MM/yyyy")]
+        total = self.host.grand_total_label.text().strip()
+        if total:
+            parts.append(f"Grand total {total}")
         return " · ".join(parts)
 
     def delete_current_estimate(self):
@@ -467,8 +459,7 @@ class EstimateEntryWorkflowController:
                 self.host.presenter.generate_voucher()
             self.host.date_edit.setDate(QDate.currentDate())
             self.host.silver_rate_spin.setValue(0)
-            if hasattr(self.host, "note_edit"):
-                self.host.note_edit.clear()
+            self.host.note_edit.clear()
 
             self.host.last_balance_silver = 0.0
             self.host.last_balance_amount = 0.0
@@ -483,8 +474,7 @@ class EstimateEntryWorkflowController:
             self.host.totals_controller.calculate_totals()
 
             self.host._estimate_loaded = False
-            if hasattr(self.host, "delete_estimate_button"):
-                self.host.delete_estimate_button.setEnabled(False)
+            self.host.delete_estimate_button.setEnabled(False)
         finally:
             self.host.processing_cell = False
             self.host.item_table.blockSignals(False)
@@ -541,10 +531,6 @@ class EstimateEntryWorkflowController:
         self.host.table_controller._get_table_adapter().refresh_empty_row_type()
         self.host.layout_controller.grow_columns_to_content()
         self.host.focus_on_empty_row(update_visuals=True)
-        self.host.view_model.set_modes(
-            return_mode=self.host.return_mode,
-            silver_bar_mode=self.host.silver_bar_mode,
-        )
         self.host._update_mode_tooltip()
 
     def delete_current_row(self):
@@ -656,14 +642,12 @@ class EstimateEntryWorkflowController:
         self.host.set_voucher_number(voucher)
         self.host.date_edit.setDate(date)
         self.host.silver_rate_spin.setValue(rate)
-        if hasattr(self.host, "note_edit"):
-            self.host.note_edit.setText(note)
-            self.host.note_edit.setCursorPosition(0)
+        self.host.note_edit.setText(note)
+        self.host.note_edit.setCursorPosition(0)
         self.host.last_balance_silver = silver
         self.host.last_balance_amount = amount
         self.host._estimate_loaded = was_loaded
-        if hasattr(self.host, "delete_estimate_button"):
-            self.host.delete_estimate_button.setEnabled(was_loaded)
+        self.host.delete_estimate_button.setEnabled(was_loaded)
         self.host.totals_controller.calculate_totals()
 
     def _prepare_loaded_rows(self, loaded: LoadedEstimate):
@@ -673,9 +657,7 @@ class EstimateEntryWorkflowController:
         prepared_rows = []
         for index, row_state in enumerate(row_states):
             code = (row_state.code or "").strip()
-            wage_type = self.host._normalize_wage_type(
-                getattr(row_state, "wage_type", "WT")
-            )
+            wage_type = self.host._normalize_wage_type(row_state.wage_type)
             normalized_pieces = int(row_state.pieces)
 
             prepared_rows.append(
@@ -691,7 +673,6 @@ class EstimateEntryWorkflowController:
         return row_states, prepared_rows
 
     def apply_loaded_estimate(self, loaded: LoadedEstimate) -> bool:
-        start = time.perf_counter()
         # Build and normalize the loaded rows before touching the current draft.
         try:
             row_states, prepared_rows = self._prepare_loaded_rows(loaded)
@@ -704,7 +685,7 @@ class EstimateEntryWorkflowController:
             getattr(self.host, "_active_voucher_no", self.host.voucher_edit.text()),
             self.host.date_edit.date(),
             self.host.silver_rate_spin.value(),
-            self.host.note_edit.text() if hasattr(self.host, "note_edit") else "",
+            self.host.note_edit.text(),
             self.host.last_balance_silver,
             self.host.last_balance_amount,
             self.host._estimate_loaded,
@@ -730,9 +711,8 @@ class EstimateEntryWorkflowController:
                 self.host.date_edit.setDate(QDate.currentDate())
 
             self.host.silver_rate_spin.setValue(loaded.silver_rate)
-            if hasattr(self.host, "note_edit"):
-                self.host.note_edit.setText(loaded.note or "")
-                self.host.note_edit.setCursorPosition(0)
+            self.host.note_edit.setText(loaded.note or "")
+            self.host.note_edit.setCursorPosition(0)
 
             self.host.last_balance_silver = loaded.last_balance_silver
             self.host.last_balance_amount = loaded.last_balance_amount
@@ -744,17 +724,10 @@ class EstimateEntryWorkflowController:
             self.host.layout_controller._schedule_columns_autofit(force=True)
             self.host._estimate_loaded = True
 
-            if hasattr(self.host, "delete_estimate_button"):
-                self.host.delete_estimate_button.setEnabled(True)
+            self.host.delete_estimate_button.setEnabled(True)
 
             self.host.set_voucher_number(loaded.voucher_no)
             self._clear_row_undo()
-            self.host.totals_controller._log_perf_metric(
-                "estimate_entry.apply_loaded_estimate",
-                start,
-                threshold_ms=25.0,
-                rows=len(row_states),
-            )
             applied = True
             return True
         except Exception as exc:
@@ -773,108 +746,42 @@ class EstimateEntryWorkflowController:
             self.host._set_unsaved(False if applied else previous_dirty, force=True)
 
     def refresh_silver_rate(self):
-        button = getattr(self.host, "refresh_rate_button", None)
-        if button is not None:
-            button.setEnabled(False)
-        if hasattr(self.host, "live_rate_value_label"):
-            self.host.live_rate_value_label.setText("Refreshing…")
-        if hasattr(self.host, "live_rate_meta_label"):
-            self.host.live_rate_meta_label.setText("Updating")
-        self.host._status("Refreshing live silver rate...", 2000)
+        """Ask the live-rate controller, which owns the feed, for a fresh rate."""
         live_rate_controller = getattr(
             self.host.main_window, "live_rate_controller", None
         )
-        if live_rate_controller is not None:
-            live_rate_controller.refresh_now()
-            if button is not None:
-                button.setEnabled(True)
+        if live_rate_controller is None:
             return
-
-        client = getattr(self.host, "_live_rate_client", None)
-        if client is None:
-            client = DdaCurrentRatesClient(timeout=7.0, parent=self.host)
-            client.snapshot_received.connect(
-                lambda snapshot: self.host.live_rate_fetched.emit(snapshot.final_rate)
-            )
-            client.failed.connect(self._handle_live_rate_failure)
-            self.host._live_rate_client = client
-        client.fetch()
-
-    def _handle_live_rate_failure(self, error: object) -> None:
-        self.host.logger.warning("Live silver rate refresh failed: %s", error)
-        self.host.live_rate_fetched.emit(None)
-
-    def _apply_refreshed_live_rate(self, rate) -> None:
-        button = getattr(self.host, "refresh_rate_button", None)
-        if button is not None:
-            button.setEnabled(True)
-        if rate:
-            try:
-                gram_rate = float(rate) / 1000.0
-            except TypeError, ValueError:
-                gram_rate = None
-            if gram_rate is None:
-                if hasattr(self.host, "live_rate_value_label"):
-                    self.host.live_rate_value_label.setText("Unavailable")
-                if hasattr(self.host, "live_rate_meta_label"):
-                    self.host.live_rate_meta_label.setText("Retry")
-                self.host._status("Live rate unavailable.", 3000)
-                return
-            if hasattr(self.host, "live_rate_value_label"):
-                self.host.live_rate_value_label.setText(f"₹ {gram_rate:.2f} /g")
-            if hasattr(self.host, "live_rate_meta_label"):
-                self.host.live_rate_meta_label.setText("Updated")
-            self.host._status("Live rate refreshed.", 2000)
-            return
-        if hasattr(self.host, "live_rate_value_label"):
-            self.host.live_rate_value_label.setText("Unavailable")
-        if hasattr(self.host, "live_rate_meta_label"):
-            self.host.live_rate_meta_label.setText("Retry")
-        self.host._status("Live rate unavailable.", 3000)
+        self.host.refresh_rate_button.setEnabled(False)
+        self.host.live_rate_value_label.setText("Refreshing…")
+        self.host.live_rate_meta_label.setText("Updating")
+        self.host._status("Refreshing live silver rate...", 2000)
+        live_rate_controller.refresh_now()
+        self.host.refresh_rate_button.setEnabled(True)
 
     def _handle_silver_rate_changed(self, *_):
         self.host.totals_controller._schedule_totals_recalc()
         self.host._mark_unsaved()
 
-    def _update_view_model_snapshot(self):
-        start = time.perf_counter()
-        rows = list(self.host.item_table.get_all_rows())
-
-        self.host.view_model.set_rows(rows)
-        self.host.view_model.set_voucher_metadata(
-            voucher_number=self.host.voucher_edit.text().strip(),
-            voucher_date=self.host.date_edit.date().toString("yyyy-MM-dd"),
-            voucher_note=(
-                self.host.note_edit.text().strip()
-                if hasattr(self.host, "note_edit")
-                else ""
-            ),
-        )
-        self.host.view_model.set_totals_inputs(
+    def _capture_snapshot(self) -> EstimateEntrySnapshot:
+        """Detach the rows and totals inputs on screen as the save input."""
+        return EstimateEntrySnapshot.capture(
+            self.host.item_table.get_all_rows(),
             silver_rate=self.host.silver_rate_spin.value(),
             last_balance_silver=self.host.last_balance_silver,
             last_balance_amount=self.host.last_balance_amount,
         )
-        self.host.view_model.set_modes(
-            return_mode=self.host.return_mode, silver_bar_mode=self.host.silver_bar_mode
-        )
-        self.host.totals_controller._log_perf_metric(
-            "estimate_entry.sync_view_model",
-            start,
-            threshold_ms=15.0,
-            rows=len(rows),
-        )
 
     def _build_current_estimate_preview_data(self, voucher_no: str) -> Dict:
-        self._update_view_model_snapshot()
-        metadata = self.host.view_model.get_voucher_metadata()
-        service = EstimateEntryPersistenceService(
-            self.host.view_model.as_save_snapshot()
-        )
+        snapshot = self._capture_snapshot()
+        shown_voucher = self.host.voucher_edit.text().strip()
+        voucher_date = self.host.date_edit.date().toString("yyyy-MM-dd")
+        voucher_note = self.host.note_edit.text().strip()
+        service = EstimateEntryPersistenceService(snapshot)
         preparation = service.prepare_save_payload(
             voucher_no=voucher_no,
-            date=metadata.get("voucher_date", ""),
-            note=metadata.get("voucher_note", ""),
+            date=voucher_date,
+            note=voucher_note,
         )
         if preparation.skipped_rows:
             skipped = ", ".join(str(row) for row in preparation.skipped_rows)
@@ -933,13 +840,12 @@ class EstimateEntryWorkflowController:
         return {
             "_preview_state": (
                 "Unsaved draft"
-                if self.host.has_unsaved_changes()
-                or not getattr(self.host, "_estimate_loaded", False)
+                if self.host.has_unsaved_changes() or not self.host._estimate_loaded
                 else "Saved estimate"
             ),
             "header": {
-                "voucher_no": metadata.get("voucher_number", voucher_no) or voucher_no,
-                "date": metadata.get("voucher_date", ""),
+                "voucher_no": shown_voucher or voucher_no,
+                "date": voucher_date,
                 "silver_rate": preparation.payload.silver_rate,
                 "note": preparation.payload.note,
                 "last_balance_silver": preparation.payload.last_balance_silver,

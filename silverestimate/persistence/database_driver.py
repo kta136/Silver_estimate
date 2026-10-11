@@ -9,10 +9,11 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator, Protocol, TypeAlias
+from typing import Any, Iterator, TypeAlias
 
 try:
     from sqlcipher3 import dbapi2 as dbapi
@@ -40,10 +41,6 @@ class DatabaseAuthenticationError(RuntimeError):
 
 class MaintenanceBusyError(RuntimeError):
     """A maintenance operation could not drain active readers."""
-
-
-class CancelFlag(Protocol):
-    def is_set(self) -> bool: ...
 
 
 Connection: TypeAlias = Any
@@ -184,6 +181,7 @@ class _ManagedReadConnection:
 
 
 ReadConnection: TypeAlias = _ManagedReadConnection
+ReadConnectionFactory: TypeAlias = Callable[[], ReadConnection]
 
 
 class SqlCipherConnectionBroker:
@@ -252,7 +250,7 @@ class SqlCipherConnectionBroker:
             raise
 
     def open_read_connection(
-        self, cancel_event: CancelFlag | None = None
+        self, cancel_event: threading.Event | None = None
     ) -> ReadConnection:
         with self._condition:
             if self._maintenance:
@@ -362,6 +360,7 @@ __all__ = [
     "MaintenanceBusyError",
     "OperationalError",
     "ReadConnection",
+    "ReadConnectionFactory",
     "Row",
     "SQLCIPHER_SALT_BYTES",
     "SqlCipherConnectionBroker",

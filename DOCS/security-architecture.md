@@ -34,10 +34,10 @@ storage. The final 32-byte value is supplied to SQLCipher as a raw key and is
 never persisted. A password and copied database are therefore insufficient
 without the originating PC's secret.
 
-An already-authenticated local `estimation.db` plus `estimation.kdf.json` is
-copy-switched once into the machine-bound single-file format. Startup refuses to
-adopt any existing database when local password credentials are absent, and a
-bound database with a missing device secret fails closed.
+Startup refuses to adopt any existing database when local password credentials
+are absent, and a database with a missing device secret fails closed. The
+earlier two-file format (`estimation.db` plus `estimation.kdf.json`) is no
+longer converted; v4.04 to v4.07 perform that one-time switch.
 
 ## Live SQLCipher boundary
 
@@ -50,17 +50,13 @@ cache policy. Background work receives a keyed connection factory and a
 cancellation event; UI objects never receive raw key bytes.
 
 Windows installs resolve the committed CPython 3.14 x64 wheel. CI verifies its
-recorded SHA-256 and native inventory plus the installed and frozen runtime;
+recorded SHA-256 and native inventory plus the installed runtime;
 native recompilation is a manual dependency-update operation, not a per-build
 security requirement.
 
 SQLCipher encrypts database-page content and page content written to WAL,
 rollback, and statement journals. WAL/journal headers and SHM coordination
-metadata can still exist, but must not contain application records. The frozen
-artifact smoke test creates and opens an encrypted database and verifies the
-native driver identity rather than merely importing it. It also verifies that
-the packaged credential-store map contains the main, backup, pending, recovery,
-and device-binding identifiers required by startup and copy-and-switch recovery.
+metadata can still exist, but must not contain application records.
 
 Startup's background preparation still performs every schema, quick-check,
 cipher-integrity and foreign-key validation, including existing journal recovery
@@ -70,7 +66,7 @@ same broker. A one-use file-stat signature checks the database, WAL and recovery
 metadata across the closed-connection gap; it detects ordinary external changes,
 but is not a cryptographic guarantee against concurrent tampering. Changed files
 fail startup and must undergo full validation again. No passwords or raw keys
-are added to progress messages or telemetry.
+are added to progress messages or logs.
 
 Live password changes reserve the original connection broker and drain its
 readers before the GUI writer is released. A distinct worker-owned writer uses
@@ -106,14 +102,14 @@ keyring hashes; rollback files are removed after successful validation.
   demonstrably stale lock.
 - Maintenance mode blocks new worker connections and cooperatively drains active
   readers before storage mutation.
-- Data wipe removes the live database, WAL/SHM/journals, legacy KDF and operation
+- Data wipe removes the live database, WAL/SHM/journals, operation
   journals, staged/retained databases, in-application encrypted backups, and
   related credential entries including the device-binding secret. Each
   credential delete clears both of Windows' stores.
 - Logs must not contain passwords, raw keys, complete database rows, or
   credential values.
-- Ruff's security rules (`S`) cover the application package and block pull
-  requests, main, and release workflows.
+- Ruff's security rules (`S`) cover the application package and fail the
+  validation workflow on pushes and pull requests.
 
 ## Network security
 

@@ -11,10 +11,6 @@ from silverestimate.infrastructure.settings import (
     SettingsStore,
     as_settings_store,
 )
-from silverestimate.ui.print_format_spec import (
-    DEFAULT_ESTIMATE_FORMAT,
-    normalize_estimate_format,
-)
 from silverestimate.ui.print_page_settings import (
     DEFAULT_ORIENTATION,
     DEFAULT_PAGE_SIZE,
@@ -43,7 +39,6 @@ class PrintSettingsState:
     page_width_mm: float = 0.0
     page_height_mm: float = 0.0
     orientation: str = DEFAULT_ORIENTATION
-    estimate_format: str = DEFAULT_ESTIMATE_FORMAT
 
 
 @dataclass(frozen=True)
@@ -67,13 +62,6 @@ class SettingsPrintController:
     def load_state(self) -> PrintSettingsState:
         page_settings = load_print_page_settings(self._settings)
         preview_zoom = self._load_preview_zoom()
-        raw_estimate_format = self._settings.get_text(
-            SettingsKey.PRINT_ESTIMATE_LAYOUT,
-            DEFAULT_ESTIMATE_FORMAT,
-        )
-        estimate_format = normalize_estimate_format(raw_estimate_format)
-        if str(raw_estimate_format or "").strip().lower() != estimate_format:
-            self._settings.set(SettingsKey.PRINT_ESTIMATE_LAYOUT, estimate_format)
         return PrintSettingsState(
             margins=page_settings.margins,
             preview_zoom=preview_zoom,
@@ -83,7 +71,6 @@ class SettingsPrintController:
             page_width_mm=page_settings.page_width_mm,
             page_height_mm=page_settings.page_height_mm,
             orientation=page_settings.orientation,
-            estimate_format=estimate_format,
         )
 
     def load_to_ui(self, widgets: PrintSettingsWidgets) -> PrintSettingsState:
@@ -158,7 +145,6 @@ class SettingsPrintController:
             page_width_mm=page_width_mm,
             page_height_mm=page_height_mm,
             orientation=widgets.orientation_combo.currentText() or DEFAULT_ORIENTATION,
-            estimate_format=DEFAULT_ESTIMATE_FORMAT,
         )
         self.validate_state(state)
         return state
@@ -178,7 +164,6 @@ class SettingsPrintController:
             ),
         )
         self._settings.set(SettingsKey.PRINT_PREVIEW_ZOOM, float(state.preview_zoom))
-        self._settings.set(SettingsKey.PRINT_ESTIMATE_LAYOUT, state.estimate_format)
 
     @staticmethod
     def validate_state(state: PrintSettingsState) -> None:
@@ -192,8 +177,6 @@ class SettingsPrintController:
             raise ValueError("Print page size cannot be empty.")
         if state.orientation not in SUPPORTED_ORIENTATIONS:
             raise ValueError("Print orientation is invalid.")
-        if normalize_estimate_format(state.estimate_format) != state.estimate_format:
-            raise ValueError("Estimate print format is invalid.")
 
     def apply_defaults_to_ui(self, widgets: PrintSettingsWidgets) -> PrintSettingsState:
         state = PrintSettingsState()

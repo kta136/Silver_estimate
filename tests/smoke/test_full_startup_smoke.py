@@ -235,7 +235,7 @@ def smoke_environment(monkeypatch, settings_stub, tmp_path, qt_application_state
         "silverestimate.ui.message_dialogs._run_dialog", _answer_confirmation
     )
     monkeypatch.setattr(
-        "silverestimate.services.navigation_service.QMessageBox",
+        "silverestimate.controllers.navigation_controller.QMessageBox",
         _MessageBoxStub,
     )
     monkeypatch.setattr(
@@ -352,7 +352,7 @@ def _seed_smoke_database(db_manager) -> None:
         fine=2.775,
         wage_type="PC",
     )
-    assert db_manager.estimates_repo.save_estimate_with_returns(
+    assert db_manager.estimates_repo.save_estimate_atomic(
         voucher_no="1",
         date="2026-01-15",
         silver_rate=75000.0,
@@ -365,7 +365,7 @@ def _seed_smoke_database(db_manager) -> None:
             net_wage=2705.0,
             note="Smoke estimate one",
         ),
-    )
+    ).success
 
     estimate_two_regular = regular_item(
         code="NECK001",
@@ -391,7 +391,7 @@ def _seed_smoke_database(db_manager) -> None:
         wage=0.0,
         fine=4.995,
     )
-    assert db_manager.estimates_repo.save_estimate_with_returns(
+    assert db_manager.estimates_repo.save_estimate_atomic(
         voucher_no="2",
         date="2026-01-16",
         silver_rate=75250.0,
@@ -404,7 +404,7 @@ def _seed_smoke_database(db_manager) -> None:
             net_wage=6094.0,
             note="Smoke estimate two",
         ),
-    )
+    ).success
 
     available_bar_id = insert_silver_bar(db_manager, "2", 40.0, 99.9)
     active_bar_id = insert_silver_bar(db_manager, "2", 35.0, 99.5)

@@ -4,7 +4,7 @@
 x64 database driver. The matching wheel is committed beside it and resolved
 directly through `pyproject.toml` and `uv.lock`. Normal CI verifies its SHA-256,
 native extension inventory, SQLCipher version, crypto provider, required compile
-options, encrypted canary database, and frozen executable runtime.
+options, and encrypted canary database.
 
 `.github/workflows/build-sqlcipher-wheel.yml` is a manually dispatched candidate
 builder. It checks the pinned source identities, generates the SQLCipher

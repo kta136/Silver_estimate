@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from collections.abc import Callable
 from dataclasses import replace
@@ -15,7 +16,7 @@ from silverestimate.infrastructure.settings import (
     get_app_settings,
 )
 from silverestimate.services.dda_rate_fetcher import DdaRateSnapshot
-from silverestimate.services.live_rate_service import LiveRateService
+from silverestimate.services.dda_rate_stream import DdaRateStream
 
 LiveRateWidgetGetter = Callable[[], object | None]
 StatusCallback = Callable[[str, int, str], None]
@@ -31,7 +32,7 @@ class LiveRateController(QObject):
         widget_getter: LiveRateWidgetGetter,
         status_callback: StatusCallback | None,
         logger: logging.Logger | None = None,
-        service_factory: Callable[..., LiveRateService] = LiveRateService,
+        stream_factory: Callable[..., DdaRateStream] = DdaRateStream,
         settings_provider: Callable[[], SettingsReader] = get_app_settings,
         single_shot: Callable[[int, Callable[[], None]], None] = QTimer.singleShot,
     ) -> None:
@@ -40,10 +41,10 @@ class LiveRateController(QObject):
         self._widget_getter = widget_getter
         self._status_callback = status_callback or (lambda *_: None)
         self._logger = logger or logging.getLogger(__name__)
-        self._service_factory = service_factory
+        self._stream_factory = stream_factory
         self._settings_provider = settings_provider
         self._single_shot = single_shot
-        self._service: LiveRateService | None = None
+        self._stream: DdaRateStream | None = None
         self._last_snapshot: DdaRateSnapshot | None = None
         self._last_refresh_at: QDateTime | None = None
         self._last_source: str | None = None
@@ -76,14 +77,10 @@ class LiveRateController(QObject):
             self._single_shot(initial_refresh_delay_ms, self.refresh_now)
 
     def shutdown(self) -> None:
-        if self._service is None:
-            return
         try:
-            self._service.stop()
+            self._stop_stream()
         except Exception as exc:
-            self._logger.debug("Failed to stop live-rate service: %s", exc)
-        finally:
-            self._service = None
+            self._logger.debug("Failed to stop live-rate stream: %s", exc)
 
     def apply_visibility_settings(self) -> bool:
         show_ui, _, _ = self._read_settings()
@@ -129,16 +126,13 @@ class LiveRateController(QObject):
         show_ui, auto_refresh, _ = self._read_settings()
         if force_show_ui is not None:
             show_ui = force_show_ui
-        service = self._ensure_service() if (show_ui or auto_refresh) else self._service
-        if service is None:
-            return
         try:
-            service.stop()
+            self._stop_stream()
         except Exception as exc:
-            self._logger.debug("Failed to stop live-rate service: %s", exc)
+            self._logger.debug("Failed to stop live-rate stream: %s", exc)
         if auto_refresh and show_ui:
             try:
-                service.start()
+                self._start_stream()
             except Exception as exc:
                 self._logger.warning(
                     "Unable to start DDA live-rate stream: %s", exc, exc_info=True
@@ -154,33 +148,44 @@ class LiveRateController(QObject):
         if not self._ui_enabled:
             return
         self._manual_refresh = True
-        service = self._ensure_service()
-        if service is not None:
-            try:
-                service.refresh_now()
-                self._status_callback("Refreshing live rate.", 1500, "info")
-                return
-            except Exception as exc:
-                self._logger.warning(
-                    "DDA live-rate refresh failed: %s", exc, exc_info=True
-                )
+        try:
+            if self._stream is None:
+                self._start_stream()
+            elif self._read_settings()[0]:
+                self._stream.request_refresh()
+            self._status_callback("Refreshing live rate.", 1500, "info")
+            return
+        except Exception as exc:
+            self._logger.warning("DDA live-rate refresh failed: %s", exc, exc_info=True)
         self._fallback_refresh()
 
-    def _ensure_service(self) -> LiveRateService | None:
-        if self._service is not None:
-            return self._service
-        try:
-            service = self._service_factory(parent=self._parent, logger=self._logger)
-            service.rate_updated.connect(self._handle_rate_updated)
-            service.feed_status_updated.connect(self._handle_feed_status)
-            service.connection_state_changed.connect(self._handle_connection_state)
-            service.stream_error.connect(self._handle_stream_error)
-            self._service = service
-            return service
-        except Exception as exc:
-            self._logger.warning("DDA live-rate service unavailable: %s", exc)
-            self._service = None
-            return None
+    def _start_stream(self) -> None:
+        """Open a fresh DDA stream unless live rates are off or one is open."""
+        if self._stream is not None or not self._read_settings()[0]:
+            return
+        stream = self._stream_factory(logger=self._logger, parent=self)
+        stream.rate_received.connect(self._handle_rate_updated)
+        stream.feed_status_received.connect(self._handle_feed_status)
+        stream.connection_state_changed.connect(self._handle_connection_state)
+        stream.stream_error.connect(self._handle_stream_error)
+        self._stream = stream
+        stream.start()
+
+    def _stop_stream(self) -> None:
+        """Stop and discard the stream; a later start gets a new one."""
+        stream, self._stream = self._stream, None
+        if stream is None:
+            return
+        stream.stop()
+        for signal in (
+            stream.rate_received,
+            stream.feed_status_received,
+            stream.connection_state_changed,
+            stream.stream_error,
+        ):
+            with contextlib.suppress(TypeError, RuntimeError):
+                signal.disconnect()
+        stream.deleteLater()
 
     def _fallback_refresh(self) -> None:
         # Never call back into the entry widget here: its refresh button routes
@@ -190,7 +195,7 @@ class LiveRateController(QObject):
 
     def _handle_rate_updated(self, snapshot: object) -> None:
         if not isinstance(snapshot, DdaRateSnapshot):
-            self._handle_stream_error("DDA worker emitted an invalid snapshot.")
+            self._handle_stream_error("DDA stream emitted an invalid snapshot.")
             return
         self._single_shot(0, lambda: self._update_display(snapshot))
 

@@ -20,17 +20,18 @@ class FakeRepository:
         self.fetch_item_map: Dict[str, Dict] = {}
         self.fetch_items_calls: List[List[str]] = []
         self.deleted_vouchers: List[str] = []
+        self.last_error = None
 
     def generate_voucher_no(self) -> str:
         return self.generated_voucher
 
-    def load_estimate(self, voucher_no: str) -> Optional[Dict]:
+    def get_estimate_by_voucher(self, voucher_no: str) -> Optional[Dict]:
         return self.load_estimate_response
 
-    def fetch_item(self, code: str) -> Optional[Dict]:
+    def get_item_by_code(self, code: str) -> Optional[Dict]:
         return self.fetch_item_map.get(code)
 
-    def fetch_items_by_codes(self, codes: Iterable[str]) -> Dict[str, Dict]:
+    def get_items_by_codes(self, codes: Iterable[str]) -> Dict[str, Dict]:
         requested = [str(code) for code in codes]
         self.fetch_items_calls.append(requested)
         return {
@@ -39,7 +40,7 @@ class FakeRepository:
             if code in self.fetch_item_map
         }
 
-    def save_estimate(
+    def save_estimate_atomic(
         self,
         voucher_no: str,
         date: str,
@@ -60,7 +61,7 @@ class FakeRepository:
         )
         return self.save_result
 
-    def delete_estimate(self, voucher_no: str) -> bool:
+    def delete_single_estimate(self, voucher_no: str) -> bool:
         self.deleted_vouchers.append(voucher_no)
         return True
 
@@ -305,14 +306,14 @@ def test_save_estimate_failure_returns_error(presenter_fixtures):
     assert "Failed to save" in outcome.message
 
 
-def test_delete_estimate_delegates_to_repository(presenter_fixtures):
+def test_delete_estimate_asks_the_database(presenter_fixtures):
     presenter, view, repo = presenter_fixtures
 
     assert presenter.delete_estimate("V500")
     assert repo.deleted_vouchers == ["V500"]
 
 
-def test_load_estimate_transforms_repository_response(presenter_fixtures):
+def test_load_estimate_transforms_database_response(presenter_fixtures):
     presenter, view, repo = presenter_fixtures
     repo.load_estimate_response = {
         "header": {

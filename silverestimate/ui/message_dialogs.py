@@ -100,7 +100,7 @@ QPushButton:focus {
 QPushButton[dialogRole="primary"] {
     background-color: __PRIMARY_BG__;
     border-color: __PRIMARY_BG__;
-    color: #ffffff;
+    color: __SURFACE_BG__;
 }
 QPushButton[dialogRole="primary"]:hover {
     background-color: __PRIMARY_BG_HOVER__;
@@ -112,7 +112,7 @@ QPushButton[dialogRole="primary"]:focus {
 QPushButton[dialogRole="danger"] {
     background-color: #c72735;
     border-color: #c72735;
-    color: #ffffff;
+    color: __SURFACE_BG__;
 }
 QPushButton[dialogRole="danger"]:hover {
     background-color: #a91e2c;
@@ -123,16 +123,16 @@ QPushButton[dialogRole="danger"]:focus {
 }
 QPushButton[dialogRole="danger-outline"] {
     border-color: #dc2638;
-    color: #b91c1c;
+    color: __DANGER_TEXT__;
 }
 QPushButton[dialogRole="danger-outline"]:hover {
     background-color: __DANGER_BG__;
-    border-color: #b91c1c;
+    border-color: __DANGER_TEXT__;
 }
 QPushButton:disabled {
     background-color: __CARD_BORDER_SOFT__;
     border-color: __CARD_BORDER__;
-    color: #8a94a3;
+    color: __DISABLED_TEXT__;
 }
 """
 
@@ -192,7 +192,7 @@ def _message_box(
     return dialog
 
 
-def _confirm(  # noqa: PLR0913 - one keyword per visible part of the dialog
+def _confirm(
     dialog: QMessageBox,
     *,
     action_label: str,
@@ -220,7 +220,7 @@ def _confirm(  # noqa: PLR0913 - one keyword per visible part of the dialog
         dialog.deleteLater()
 
 
-def ask(  # noqa: PLR0913 - one keyword per visible part of the dialog
+def ask(
     parent: QWidget | None,
     *,
     title: str,
@@ -242,7 +242,7 @@ def ask(  # noqa: PLR0913 - one keyword per visible part of the dialog
     )
 
 
-def confirm_destructive(  # noqa: PLR0913 - mirrors ``ask``
+def confirm_destructive(
     parent: QWidget | None,
     *,
     title: str,
@@ -263,7 +263,7 @@ def confirm_destructive(  # noqa: PLR0913 - mirrors ``ask``
     )
 
 
-def ask_with_option(  # noqa: PLR0913 - one keyword per visible part of the dialog
+def ask_with_option(
     parent: QWidget | None,
     *,
     title: str,
@@ -291,7 +291,7 @@ def ask_with_option(  # noqa: PLR0913 - one keyword per visible part of the dial
     return confirmed, confirmed and option.isChecked()
 
 
-def ask_save_discard(  # noqa: PLR0913 - one keyword per visible part of the dialog
+def ask_save_discard(
     parent: QWidget | None,
     *,
     title: str,
@@ -336,7 +336,7 @@ def ask_save_discard(  # noqa: PLR0913 - one keyword per visible part of the dia
 class TextPromptDialog(QDialog):
     """Ask for one line of text, in the same style as the confirmations."""
 
-    def __init__(  # noqa: PLR0913 - one keyword per visible part of the dialog
+    def __init__(
         self,
         parent: QWidget | None,
         *,
@@ -425,7 +425,7 @@ class TextPromptDialog(QDialog):
             super().accept()
 
 
-def ask_text(  # noqa: PLR0913 - one keyword per visible part of the dialog
+def ask_text(
     parent: QWidget | None,
     *,
     title: str,
@@ -465,7 +465,7 @@ def ask_text(  # noqa: PLR0913 - one keyword per visible part of the dialog
         dialog.deleteLater()
 
 
-def confirm_by_typing(  # noqa: PLR0913 - mirrors ``ask_text``
+def confirm_by_typing(
     parent: QWidget | None,
     *,
     title: str,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Callable, Protocol
+from typing import TYPE_CHECKING, Callable
 
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -24,6 +24,9 @@ from silverestimate.ui.display_formatting import format_local_timestamp
 from silverestimate.ui.maintenance_progress import MaintenanceProgressDialog
 from silverestimate.ui.message_dialogs import ask_text
 
+if TYPE_CHECKING:
+    from silverestimate.persistence.database_manager import DatabaseManager
+
 LOGGER = logging.getLogger(__name__)
 DATABASE_BACKUP_FILTER = "Silver Estimate Encrypted Backup (*.sedbbackup)"
 ACTION_BUTTON_WIDTH = 240
@@ -39,18 +42,6 @@ def with_restart_note(message: str) -> str:
     note = "The backup was checked. Restart the app to load its data."
     message = (message or "").strip()
     return f"{note}\n\n{message}" if message and note not in message else note
-
-
-class DatabaseMaintenanceGateway(Protocol):
-    """Database operations exposed to the settings data controller."""
-
-    def create_encrypted_backup(self, destination: str) -> object: ...
-
-    def stage_encrypted_restore(
-        self,
-        archive_path: str,
-        archive_password: str,
-    ) -> object: ...
 
 
 @dataclass(frozen=True)
@@ -79,7 +70,7 @@ class SettingsDataController:
 
     def __init__(
         self,
-        database_provider: Callable[[], DatabaseMaintenanceGateway | None],
+        database_provider: Callable[[], DatabaseManager | None],
         actions: DataManagementActions,
     ) -> None:
         self._database_provider = database_provider
@@ -527,6 +518,5 @@ __all__ = [
     "DataActionResult",
     "DataManagementActions",
     "DataManagementPage",
-    "DatabaseMaintenanceGateway",
     "SettingsDataController",
 ]

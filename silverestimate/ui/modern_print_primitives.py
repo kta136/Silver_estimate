@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Literal, Protocol, Sequence
+from typing import Literal, Protocol, Sequence, cast
 
 from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen
+from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPaintDevice, QPainter, QPen
 from PySide6.QtPrintSupport import QPrinter
+
+from .print_format_spec import MODERN_ESTIMATE_FORMAT_SPEC
 
 PrintAlignment = Literal["left", "center", "right"]
 
@@ -17,7 +20,6 @@ BORDER = QColor("#6b7280")
 GRID = QColor("#cbd5e1")
 COLUMN_HEADER_BG = QColor("#e5e7eb")
 SECTION_BG = QColor("#dbeafe")
-RETURN_SECTION_BG = QColor("#fee2e2")
 TOTAL_BG = QColor("#f3f4f6")
 ALTERNATE_ROW_BG = QColor("#f8fafc")
 FINAL_BG = QColor("#1f2937")
@@ -79,9 +81,13 @@ def minimize_bottom_page_margin(printer: QPrinter) -> None:
 
 def build_modern_print_style(
     base_font: QFont,
-    printer: QPrinter,
+    printer: QPaintDevice,
+    resolution: int | None = None,
 ) -> ModernPrintStyle:
-    """Build device-aware fonts, measurements, and pens for a report."""
+    """Build device-aware fonts, measurements, and pens for a report.
+
+    ``resolution`` is needed only for a device that is not a printer.
+    """
 
     bold_font = _font_variant(base_font, bold=True)
     title_font = _font_variant(base_font, point_delta=2.0, bold=True)
@@ -94,7 +100,9 @@ def build_modern_print_style(
     summary_metrics = QFontMetricsF(summary_font, printer)
     base_height = max(1.0, base_metrics.height())
     row_height = base_height * 1.55
-    resolution = max(72, int(printer.resolution()))
+    if resolution is None:
+        resolution = int(cast(QPrinter, printer).resolution())
+    resolution = max(72, resolution)
     return ModernPrintStyle(
         base_font=base_font,
         bold_font=bold_font,
@@ -125,7 +133,119 @@ def build_modern_print_style(
     )
 
 
-def draw_table_row(  # noqa: PLR0913 - explicit painter geometry inputs
+def resolve_print_font(print_font: QFont | None) -> QFont:
+    """Return the chosen print font, or the Modern format's own when unset."""
+    spec = MODERN_ESTIMATE_FORMAT_SPEC
+    font = QFont(print_font) if print_font is not None else QFont(spec.font_family)
+    point_size = print_font.pointSizeF() if print_font is not None else spec.font_size
+    if point_size <= 0:
+        point_size = spec.font_size
+    font.setPointSizeF(max(1.0, point_size))
+    return font
+
+
+def paint_report[PageT](
+    printer: QPrinter,
+    print_font: QFont | None,
+    *,
+    what: str,
+    paginate: Callable[[ModernPrintStyle, float], Sequence[PageT]],
+    paint_page: Callable[[QPainter, PageT, ModernPrintStyle, float], None],
+) -> None:
+    """Paint a report onto a preview, PDF, or printer device, page by page.
+
+    ``paginate`` receives the style and the page height; ``paint_page``
+    receives the painter, one page, the style and the page width.
+    """
+    base_font = resolve_print_font(print_font)
+    painter = QPainter()
+    if not painter.begin(printer):
+        raise RuntimeError(f"Could not initialize the {what} print painter.")
+
+    try:
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+        page_rect = printer.pageRect(QPrinter.Unit.DevicePixel)
+        page_width = max(1.0, float(page_rect.width()))
+        page_height = max(1.0, float(page_rect.height()))
+        style = build_modern_print_style(base_font, printer)
+        for page_index, page in enumerate(paginate(style, page_height), start=1):
+            if page_index > 1 and not printer.newPage():
+                raise RuntimeError("Could not create another print page.")
+            paint_page(painter, page, style, page_width)
+    finally:
+        painter.end()
+
+
+def report_header_height(style: ModernPrintStyle, *, has_note: bool) -> float:
+    """Height of the title, the metadata line, the optional note and the gap."""
+    note_height = style.note_height if has_note else 0.0
+    return style.title_height + style.metadata_height + note_height + style.header_gap
+
+
+def draw_report_header(
+    painter: QPainter,
+    style: ModernPrintStyle,
+    page_width: float,
+    *,
+    title: str,
+    title_alignment: PrintAlignment,
+    left: str,
+    right: str,
+    note: str,
+) -> float:
+    """Draw the title, the two metadata halves and the note; return the next y."""
+    y = 0.0
+    draw_text(
+        painter,
+        QRectF(0.0, y, page_width, style.title_height),
+        title,
+        font=style.title_font,
+        metrics=style.title_metrics,
+        alignment=title_alignment,
+        padding=style.padding,
+    )
+    y += style.title_height
+
+    metadata_width = page_width / 2.0
+    draw_text(
+        painter,
+        QRectF(0.0, y, metadata_width, style.metadata_height),
+        left,
+        font=style.bold_font,
+        metrics=style.bold_metrics,
+        alignment="left",
+        padding=style.padding,
+    )
+    draw_text(
+        painter,
+        QRectF(metadata_width, y, page_width - metadata_width, style.metadata_height),
+        right,
+        font=style.bold_font,
+        metrics=style.bold_metrics,
+        alignment="right",
+        padding=style.padding,
+    )
+    y += style.metadata_height
+
+    if note:
+        draw_text(
+            painter,
+            QRectF(0.0, y, page_width, style.note_height),
+            f"Note: {note}",
+            font=style.base_font,
+            metrics=style.base_metrics,
+            alignment="left",
+            padding=style.padding,
+            color=MUTED_TEXT,
+        )
+        y += style.note_height
+
+    painter.setPen(style.strong_pen)
+    painter.drawLine(0, int(y), int(page_width), int(y))
+    return y + style.header_gap
+
+
+def draw_table_row(
     painter: QPainter,
     columns: Sequence[PrintColumn],
     values: Sequence[str],
@@ -191,7 +311,7 @@ def column_divider_positions(
     return tuple(page_width * ratio for ratio in sorted(ratios))
 
 
-def draw_text(  # noqa: PLR0913 - explicit painter typography inputs
+def draw_text(
     painter: QPainter,
     rect: QRectF,
     text: str,
@@ -312,14 +432,17 @@ __all__ = [
     "ModernPrintStyle",
     "PrintAlignment",
     "PrintColumn",
-    "RETURN_SECTION_BG",
     "SECTION_BG",
     "TEXT",
     "TOTAL_BG",
     "WHITE",
     "build_modern_print_style",
     "column_divider_positions",
+    "draw_report_header",
     "draw_table_row",
     "draw_text",
     "minimize_bottom_page_margin",
+    "paint_report",
+    "report_header_height",
+    "resolve_print_font",
 ]

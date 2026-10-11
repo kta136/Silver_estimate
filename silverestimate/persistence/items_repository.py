@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Iterable, Optional, cast
+from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
 
 from silverestimate.domain.item_validation import ItemValidationError, validate_item
 from silverestimate.domain.pagination import ItemCursor, Page
+from silverestimate.infrastructure.item_cache import ItemCacheController
 from silverestimate.persistence.database_driver import dbapi as sqlite3
-from silverestimate.persistence.database_protocols import (
-    ItemCacheBoundary,
-    RepositoryDatabase,
-)
+
+if TYPE_CHECKING:
+    from silverestimate.persistence.database_manager import DatabaseManager
 
 ITEM_CATALOG_COLUMNS = "code, name, tunch, purity, wage_type, wage_rate"
 
@@ -109,7 +109,7 @@ def fetch_item_catalog_page(
 class ItemsRepository:
     """Encapsulate item-related database operations."""
 
-    def __init__(self, db_manager: RepositoryDatabase) -> None:
+    def __init__(self, db_manager: DatabaseManager) -> None:
         self._db = db_manager
         self._logger = getattr(db_manager, "logger", logging.getLogger(__name__))
         self._fallback_cache: dict[str, dict[str, Any]] = {}
@@ -119,9 +119,9 @@ class ItemsRepository:
         return getattr(self._db, "conn", None)
 
     @property
-    def _cache_controller(self) -> ItemCacheBoundary | None:
+    def _cache_controller(self) -> ItemCacheController | None:
         return cast(
-            ItemCacheBoundary | None,
+            ItemCacheController | None,
             getattr(self._db, "item_cache_controller", None),
         )
 
@@ -321,7 +321,7 @@ class ItemsRepository:
             self._fallback_cache.update(rows_by_code)
         return rows_by_code
 
-    def add_item(  # noqa: PLR0913 - stable repository API
+    def add_item(
         self,
         code: str,
         name: str,
@@ -366,7 +366,7 @@ class ItemsRepository:
             conn.rollback()
             return False
 
-    def update_item(  # noqa: PLR0913 - stable repository API
+    def update_item(
         self,
         code: str,
         name: str,

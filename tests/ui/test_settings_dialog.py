@@ -178,7 +178,6 @@ def test_settings_apply_persists_print_preferences(
         assert settings.value("print/default_printer") == "Warehouse Printer"
         assert settings.value("print/page_size") == "Legal"
         assert settings.value("print/orientation") == "Landscape"
-        assert settings.value("print/estimate_layout") == "modern"
     finally:
         dialog.deleteLater()
 
@@ -192,7 +191,6 @@ def test_settings_dialog_uses_defaults_for_invalid_print_settings(
     settings.setValue("print/preview_zoom", "not-a-number")
     settings.setValue("print/page_size", "Tabloid")
     settings.setValue("print/orientation", "Sideways")
-    settings.setValue("print/estimate_layout", "future")
     settings.setValue("print/default_printer", "Missing Printer")
 
     monkeypatch.setattr(
@@ -215,7 +213,6 @@ def test_settings_dialog_uses_defaults_for_invalid_print_settings(
         assert dialog.print_page.preview_zoom_spin.value() == 1.25
         assert dialog.print_page.page_size_combo.currentText() == "A4"
         assert dialog.print_page.orientation_combo.currentText() == "Landscape"
-        assert settings.value("print/estimate_layout") == "modern"
         assert dialog.print_page.printer_combo.currentData() == ""
     finally:
         dialog.deleteLater()
@@ -432,10 +429,7 @@ def test_settings_apply_persists_logging_preferences(
         assert page.cleanup_days_spin.suffix() == " days"
 
         assert dialog.apply_settings() is True
-        assert settings.value("logging/debug_mode") is True
-        assert settings.value("logging/enable_info") is True
-        assert settings.value("logging/enable_critical") is True
-        assert settings.value("logging/enable_debug") is True
+        assert settings.value("logging/level") == "detailed"
         assert settings.value("logging/auto_cleanup") is True
         assert settings.value("logging/cleanup_days") == 30
         assert reconfigure_calls == [True]
@@ -614,54 +608,6 @@ def test_password_change_uses_auth_service_and_preserves_keyring_names(
         assert not _MessageBoxStub.warning_calls
     finally:
         dialog.deleteLater()
-
-
-def test_logging_level_presets_round_trip_the_stored_flags():
-    from silverestimate.ui.settings_logging_page import (
-        LOG_LEVEL_PRESETS,
-        LoggingSettingsState,
-        log_level_for,
-    )
-
-    for key, _label, _description, flags in LOG_LEVEL_PRESETS:
-        assert log_level_for(LoggingSettingsState(**flags)) == key
-    assert log_level_for(LoggingSettingsState()) == "normal"
-    # The debug-detail flag does nothing without debug mode.
-    assert (
-        log_level_for(LoggingSettingsState(enable_info=False, enable_debug=True))
-        == "errors"
-    )
-    # Errors switched off cannot be offered as a level, so it is kept as is.
-    assert log_level_for(LoggingSettingsState(enable_critical=False)) == "custom"
-
-
-def test_logging_page_keeps_a_custom_combination_until_a_level_is_chosen(
-    qtbot, settings_stub
-):
-    del settings_stub
-    from silverestimate.ui.settings_logging_page import (
-        LoggingSettingsActions,
-        LoggingSettingsPage,
-        SettingsLoggingController,
-    )
-
-    settings = get_app_settings()
-    settings.setValue("logging/enable_critical", False)
-    settings.setValue("logging/cleanup_days", 1)
-    controller = SettingsLoggingController(
-        settings,
-        LoggingSettingsActions(
-            reconfigure=lambda: True, cleanup=lambda days: 0, open_logs_folder=bool
-        ),
-    )
-    page = LoggingSettingsPage(controller)
-    qtbot.addWidget(page)
-
-    assert page.level_combo.currentData() == "custom"
-    assert page.state().enable_critical is False
-    assert page.cleanup_days_spin.suffix() == " day"
-    page.set_level("normal")
-    assert page.state().enable_critical is True
 
 
 def test_each_settings_page_needs_only_its_own_width(qtbot, qt_app, settings_stub):

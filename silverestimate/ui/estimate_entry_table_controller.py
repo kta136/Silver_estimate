@@ -84,19 +84,11 @@ class EstimateEntryTableController:
         self.host.layout_controller._schedule_columns_autofit()
 
     def _on_table_cell_edited(self, row: int, column: int):
-        start = time.perf_counter()
         if self.host.layout_controller._is_continuous_column_autofit_enabled():
             self.host.layout_controller._schedule_columns_autofit(columns=[column])
         else:
             self.host.layout_controller._ensure_column_can_fit_content(column)
         self.handle_cell_changed(row, column)
-        self.host.totals_controller._log_perf_metric(
-            "estimate_entry.cell_edit",
-            start,
-            threshold_ms=25.0,
-            row=row,
-            column=column,
-        )
 
     def _on_table_row_delete_requested(self, row: int):
         if row < 0 or row >= self.host.item_table.rowCount():

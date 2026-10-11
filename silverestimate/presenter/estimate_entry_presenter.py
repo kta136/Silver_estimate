@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Dict, Mapping, Optional, Protocol, Sequence
+from collections.abc import Mapping as MappingABC
+from typing import TYPE_CHECKING, Dict, Iterable, Mapping, Optional, Protocol, Sequence
 
 from silverestimate.domain.estimate_entry import (
     LoadedEstimate as LoadedEstimate,
@@ -16,7 +17,9 @@ from silverestimate.domain.estimate_entry import (
 from silverestimate.domain.estimate_entry import (
     SavePayload as SavePayload,
 )
-from silverestimate.services.estimate_repository import EstimateRepository
+
+if TYPE_CHECKING:
+    from silverestimate.persistence.database_manager import DatabaseManager
 
 
 class EstimateEntryView(Protocol):
@@ -49,18 +52,13 @@ class EstimateEntryView(Protocol):
 class EstimateEntryPresenter:
     """Orchestrates estimate-entry workflows independent of the Qt widget."""
 
-    def __init__(self, view: EstimateEntryView, repository: EstimateRepository) -> None:
+    def __init__(self, view: EstimateEntryView, database: DatabaseManager) -> None:
         self._view = view
-        self._repository = repository
-
-    @property
-    def repository(self) -> EstimateRepository:
-        """Expose the underlying repository (useful for testing)."""
-        return self._repository
+        self._db = database
 
     def generate_voucher(self, *, silent: bool = False) -> str:
-        """Generate a voucher number via the repository and push it to the view."""
-        voucher_no = self._repository.generate_voucher_no()
+        """Take the next voucher number from the database and show it."""
+        voucher_no: str = self._db.generate_voucher_no()
         self._view.set_voucher_number(voucher_no)
         if not silent:
             self._view.show_status(f"Generated new voucher: {voucher_no}", 2500)
@@ -68,7 +66,7 @@ class EstimateEntryPresenter:
 
     def load_estimate(self, voucher_no: str) -> Optional[LoadedEstimate]:
         """Retrieve an estimate and convert it into presenter-friendly objects."""
-        data = self._repository.load_estimate(voucher_no)
+        data = self._db.get_estimate_by_voucher(voucher_no)
         if not data:
             return None
 
@@ -150,7 +148,7 @@ class EstimateEntryPresenter:
             self._view.show_status("Enter item code first", 1500)
             return False
 
-        item = self._repository.fetch_item(normalized)
+        item = self._fetch_item(normalized)
         if item:
             self._view.populate_row(row_index, item)
             self._view.focus_after_item_lookup(row_index)
@@ -171,15 +169,19 @@ class EstimateEntryPresenter:
     def save_estimate(self, payload: SavePayload) -> SaveOutcome:
         """Persist the estimate and synchronize related silver bar metadata."""
         try:
-            regular_dicts = [self._item_to_dict(item) for item in payload.regular_items]
-            return_dicts = [self._item_to_dict(item) for item in payload.return_items]
-            result = self._repository.save_estimate(
+            regular_dicts: list[Mapping[str, object]] = [
+                self._item_to_dict(item) for item in payload.regular_items
+            ]
+            return_dicts: list[Mapping[str, object]] = [
+                self._item_to_dict(item) for item in payload.return_items
+            ]
+            result = self._db.save_estimate_atomic(
                 payload.voucher_no,
                 payload.date,
                 payload.silver_rate,
                 regular_dicts,
                 return_dicts,
-                payload.totals,
+                dict(payload.totals or {}),
             )
             if not result.success:
                 return SaveOutcome(
@@ -250,7 +252,7 @@ class EstimateEntryPresenter:
         ]
         if not unresolved_codes:
             return {}
-        rows = self._repository.fetch_items_by_codes(unresolved_codes)
+        rows = self._fetch_items_by_codes(unresolved_codes)
         resolved: dict[str, str] = {}
         for code, row in dict(rows or {}).items():
             normalized_code = str(code or "").strip().upper()
@@ -283,4 +285,24 @@ class EstimateEntryPresenter:
 
     def delete_estimate(self, voucher_no: str) -> bool:
         """Delete an estimate by voucher number."""
-        return self._repository.delete_estimate(voucher_no)
+        try:
+            return bool(self._db.delete_single_estimate(voucher_no))
+        except Exception:
+            return False
+
+    def _fetch_item(self, code: str) -> Optional[Mapping[str, object]]:
+        """Look up one catalog item; a failed lookup counts as not found."""
+        try:
+            item: Optional[Mapping[str, object]] = self._db.get_item_by_code(code)
+        except Exception:
+            return None
+        return item
+
+    def _fetch_items_by_codes(
+        self, codes: Iterable[str]
+    ) -> Mapping[str, Mapping[str, object]]:
+        try:
+            rows = self._db.get_items_by_codes(codes)
+        except Exception:
+            return {}
+        return rows if isinstance(rows, MappingABC) else {}

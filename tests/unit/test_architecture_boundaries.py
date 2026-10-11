@@ -7,16 +7,9 @@ from typing import get_args
 
 import pytest
 
-from silverestimate.controllers.startup_controller import StartupController
 from silverestimate.infrastructure.settings import (
     SETTINGS_SCHEMA_VERSION,
     SettingsKey,
-)
-from silverestimate.persistence.database_protocols import (
-    ItemCatalogDatabase,
-    MainCommandsDatabase,
-    RepositoryDatabase,
-    StartupDatabase,
 )
 from silverestimate.persistence.estimates_repository import EstimatesRepository
 from silverestimate.persistence.items_repository import ItemsRepository
@@ -35,17 +28,8 @@ from silverestimate.persistence.silver_bar_synchronization_repository import (
     SilverBarSynchronizationRepository,
     SilverBarSyncResult,
 )
-from silverestimate.services.item_catalog_transfer import (
-    export_item_catalog,
-    import_item_catalog,
-)
-from silverestimate.services.main_commands import MainCommands
 from silverestimate.services.settings_service import SettingsService
 from silverestimate.ui.estimate_print_document import EstimatePrintDocument
-from silverestimate.ui.print_format_spec import (
-    ESTIMATE_FORMAT_SPECS,
-    MODERN_ESTIMATE_FORMAT_SPEC,
-)
 from silverestimate.ui.print_payload_builder import PrintDocument
 from silverestimate.ui.settings_appearance_page import (
     AppearanceSettingsPage,
@@ -114,22 +98,7 @@ def test_repository_failures_are_typed_and_distinguishable() -> None:
         raise AssertionError("A failed result must not unwrap.")
 
 
-def test_database_consumers_use_narrow_structural_contracts() -> None:
-    expected_parameters = (
-        (ItemsRepository, "db_manager", RepositoryDatabase),
-        (EstimatesRepository, "db_manager", RepositoryDatabase),
-        (MainCommands, "db_manager", MainCommandsDatabase),
-        (export_item_catalog, "db_manager", ItemCatalogDatabase),
-        (import_item_catalog, "db_manager", ItemCatalogDatabase),
-        (StartupController._start_background_preload, "db_manager", StartupDatabase),
-    )
-    for callable_object, parameter_name, expected_type in expected_parameters:
-        annotation = (
-            inspect.signature(callable_object).parameters[parameter_name].annotation
-        )
-        assert expected_type.__name__ in str(annotation)
-        assert "Any" not in str(annotation)
-
+def test_database_parameters_are_typed_and_repositories_own_their_sql() -> None:
     root = Path(__file__).resolve().parents[2]
     production_sources = sorted((root / "silverestimate").rglob("*.py"))
     assert not {
@@ -167,12 +136,6 @@ def test_settings_boundary_is_typed_versioned_and_centralized() -> None:
     assert not raw_key_references
     assert not {"get", "set", "raw"} & vars(SettingsService).keys()
     assert "QSettings" not in inspect.getsource(SettingsService)
-
-
-def test_modern_is_the_only_estimate_format() -> None:
-    assert tuple(ESTIMATE_FORMAT_SPECS) == ("modern",)
-    assert ESTIMATE_FORMAT_SPECS["modern"] is MODERN_ESTIMATE_FORMAT_SPEC
-    assert MODERN_ESTIMATE_FORMAT_SPEC.key == "modern"
 
 
 def test_print_pipeline_uses_typed_direct_documents_and_custom_preview() -> None:

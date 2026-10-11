@@ -1,10 +1,13 @@
 import pytest
 
+from silverestimate.domain.estimate_entry import (
+    EstimateEntryRowState,
+    EstimateEntrySnapshot,
+)
 from silverestimate.domain.estimate_models import EstimateLineCategory
 from silverestimate.ui.estimate_entry_totals_controller import (
     EstimateEntryTotalsController,
 )
-from silverestimate.ui.view_models import EstimateEntryRowState, EstimateEntryViewModel
 
 
 def _make_row(
@@ -37,9 +40,8 @@ def _make_row(
     )
 
 
-def test_rows_and_totals_inputs_feed_totals_and_save_snapshot():
-    view_model = EstimateEntryViewModel()
-    view_model.set_rows(
+def test_captured_rows_and_totals_inputs_feed_totals():
+    snapshot = EstimateEntrySnapshot.capture(
         [
             _make_row(
                 code="REG001",
@@ -63,19 +65,17 @@ def test_rows_and_totals_inputs_feed_totals_and_save_snapshot():
                 purity=75.0,
                 wage_rate=0.0,
             ),
-        ]
-    )
-    view_model.set_totals_inputs(
+        ],
         silver_rate=75.0,
         last_balance_silver=0.5,
         last_balance_amount=100.0,
     )
 
     totals = EstimateEntryTotalsController.build_totals(
-        view_model.rows(),
-        silver_rate=view_model.silver_rate,
-        last_balance_silver=view_model.last_balance_silver,
-        last_balance_amount=view_model.last_balance_amount,
+        snapshot.rows,
+        silver_rate=snapshot.silver_rate,
+        last_balance_silver=snapshot.last_balance_silver,
+        last_balance_amount=snapshot.last_balance_amount,
     )
 
     assert totals.overall_gross == pytest.approx(12.0)
@@ -88,18 +88,5 @@ def test_rows_and_totals_inputs_feed_totals_and_save_snapshot():
     assert totals.net_wage == pytest.approx(190.0)
     assert totals.grand_total == pytest.approx(750.63)
 
-    state = view_model.as_save_snapshot()
-    assert len(state.rows) == 2
-    assert state.silver_rate == pytest.approx(75.0)
-    assert state.last_balance_silver == pytest.approx(0.5)
-    assert state.last_balance_amount == pytest.approx(100.0)
-
-
-def test_set_modes_updates_only_given_flags():
-    view_model = EstimateEntryViewModel()
-    view_model.set_modes(return_mode=True)
-    assert view_model.return_mode is True
-    assert view_model.silver_bar_mode is False
-
-    view_model.set_modes(silver_bar_mode=True)
-    assert view_model.silver_bar_mode is True
+    assert [row.row_index for row in snapshot.rows] == [1, 2]
+    assert all(row.line_key for row in snapshot.rows)

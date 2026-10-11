@@ -318,10 +318,6 @@ def test_startup_preloader_runs_once_in_background(tmp_path, stub_qt):
     assert context.startup_preload_thread is not None
     context.startup_preload_thread.join(timeout=2)
     assert calls == ["preloaded"]
-    assert any(
-        record[0] == "info" and "startup.login_preload_ms" in record[1]
-        for record in logger.records
-    )
 
 
 def test_run_handles_startup_error_from_main_window(tmp_path, stub_qt):

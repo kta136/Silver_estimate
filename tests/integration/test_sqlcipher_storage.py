@@ -8,7 +8,6 @@ from silverestimate.persistence.database_driver import (
     DatabaseAuthenticationError,
     DriverUnavailableError,
     MaintenanceBusyError,
-    export_database,
 )
 from silverestimate.persistence.database_manager import (
     DatabaseManager,
@@ -17,15 +16,12 @@ from silverestimate.persistence.database_manager import (
     StorageFormat,
 )
 from silverestimate.persistence.storage_metadata import (
-    BindingMigrationJournal,
-    KdfMetadata,
     RekeyJournal,
     RestoreJournal,
     StorageMetadataError,
     sha256_file,
     write_journal,
 )
-from silverestimate.security import encryption
 
 DEVICE_SECRET = b"S" * 32
 FOREIGN_DEVICE_SECRET = b"F" * 32
@@ -83,129 +79,6 @@ def test_wrong_password_foreign_device_and_plaintext_database_fail_closed(tmp_pa
             "password",
             device_secret=DEVICE_SECRET,
         )
-
-
-def test_legacy_two_file_database_migrates_to_one_machine_bound_file(tmp_path):
-    password = "legacy-password"
-    source_path = tmp_path / "source.db"
-    source = DatabaseManager(
-        str(source_path),
-        password,
-        device_secret=DEVICE_SECRET,
-    )
-    source.conn.execute("INSERT INTO items(code,name) VALUES('M1','Migrated')")
-    source.conn.commit()
-
-    legacy_path = tmp_path / "estimation.db"
-    metadata = KdfMetadata.create()
-    legacy_key = encryption.derive_key(
-        password,
-        metadata.salt,
-        time_cost=metadata.time_cost,
-        memory_cost_kib=metadata.memory_cost_kib,
-        parallelism=metadata.parallelism,
-    )
-    export_database(source.conn, legacy_path, legacy_key)
-    source.close()
-    metadata_path = tmp_path / "estimation.kdf.json"
-    metadata.write(metadata_path)
-
-    migrated = DatabaseManager(
-        str(legacy_path),
-        password,
-        device_secret=DEVICE_SECRET,
-    )
-    try:
-        assert migrated.open_status is DatabaseOpenStatus.MIGRATED_TO_DEVICE_BOUND
-        assert (
-            migrated.conn.execute("SELECT name FROM items WHERE code='M1'").fetchone()[
-                0
-            ]
-            == "Migrated"
-        )
-    finally:
-        migrated.close()
-
-    assert legacy_path.exists()
-    assert not metadata_path.exists()
-    assert not legacy_path.with_suffix(".pre-binding.sqlcipher").exists()
-    with pytest.raises(DatabaseAuthenticationError):
-        DatabaseManager(
-            str(legacy_path),
-            password,
-            device_secret=FOREIGN_DEVICE_SECRET,
-        )
-
-
-def test_interrupted_binding_switch_finalizes_only_after_bound_db_validates(tmp_path):
-    password = "migration-password"
-    live = tmp_path / "estimation.db"
-    retained = live.with_suffix(".pre-binding.sqlcipher")
-    target = live.with_suffix(".binding.target")
-    metadata_path = tmp_path / "estimation.kdf.json"
-    retained_metadata = metadata_path.with_suffix(".pre-binding.json")
-
-    legacy_source = DatabaseManager(
-        str(tmp_path / "legacy-source.db"),
-        password,
-        device_secret=DEVICE_SECRET,
-    )
-    metadata = KdfMetadata.create()
-    legacy_key = encryption.derive_key(
-        password,
-        metadata.salt,
-        time_cost=metadata.time_cost,
-        memory_cost_kib=metadata.memory_cost_kib,
-        parallelism=metadata.parallelism,
-    )
-    export_database(legacy_source.conn, retained, legacy_key)
-    legacy_source.close()
-    metadata.write(metadata_path)
-    metadata.write(retained_metadata)
-
-    bound_target = DatabaseManager(
-        str(target),
-        password,
-        device_secret=DEVICE_SECRET,
-    )
-    bound_target.conn.execute("INSERT INTO items(code,name) VALUES('RECOVER','Bound')")
-    bound_target.conn.commit()
-    bound_target.close()
-    target.replace(live)
-
-    write_journal(
-        live.with_suffix(".binding.json"),
-        BindingMigrationJournal(
-            version=1,
-            phase="ready",
-            old_database_sha256=sha256_file(retained),
-            target_sha256=sha256_file(live),
-            target_path=str(target),
-            retained_path=str(retained),
-            retained_metadata_path=str(retained_metadata),
-        ),
-    )
-
-    recovered = DatabaseManager(
-        str(live),
-        password,
-        device_secret=DEVICE_SECRET,
-    )
-    try:
-        assert recovered.open_status is DatabaseOpenStatus.MIGRATED_TO_DEVICE_BOUND
-        assert (
-            recovered.conn.execute(
-                "SELECT name FROM items WHERE code='RECOVER'"
-            ).fetchone()[0]
-            == "Bound"
-        )
-    finally:
-        recovered.close()
-
-    assert not metadata_path.exists()
-    assert not retained.exists()
-    assert not retained_metadata.exists()
-    assert not live.with_suffix(".binding.json").exists()
 
 
 def test_encrypted_backup_historical_password_restore_and_rekey(tmp_path):
@@ -275,23 +148,6 @@ def test_maintenance_blocks_new_readers_until_existing_reader_drains(tmp_path):
     finally:
         reader.close()
         manager.close()
-
-
-def test_kdf_metadata_requires_exact_version_one_policy():
-    metadata = KdfMetadata.create()
-    assert len(metadata.salt) == 16
-    assert metadata.output_bytes == 32
-    value = {
-        "version": 2,
-        "algorithm": "argon2id",
-        "salt_b64": metadata.salt_b64,
-        "time_cost": 3,
-        "memory_cost_kib": 65_536,
-        "parallelism": 4,
-        "output_bytes": 32,
-    }
-    with pytest.raises(StorageMetadataError):
-        KdfMetadata.from_dict(value)
 
 
 def test_invalid_pending_restore_rolls_back_to_original_database(tmp_path):

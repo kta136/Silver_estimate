@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import shutil
-import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Optional
@@ -112,25 +111,6 @@ def verify_password(
     ).verified
 
 
-def _verify_credential_password(
-    stored_hash: str,
-    provided_password: str,
-    *,
-    logger: logging.Logger,
-) -> PasswordVerification:
-    started_at = time.perf_counter()
-    verification = _verify_password_hash(
-        stored_hash,
-        provided_password,
-        logger=logger,
-    )
-    logger.info(
-        '[telemetry] {"metric":"startup.password_hash_verify_ms","duration_ms":%.3f}',
-        (time.perf_counter() - started_at) * 1000.0,
-    )
-    return verification
-
-
 @dataclass(frozen=True)
 class AuthenticationResult:
     """Outcome of the authentication flow."""
@@ -155,9 +135,7 @@ def run_authentication(
 ) -> Optional[AuthenticationResult]:
     """Handle authentication flow using the LoginDialog."""
     logger = logger or logging.getLogger(__name__)
-    flow_started_at = time.perf_counter()
     logger.info("Starting authentication process")
-    logger.debug("[perf] startup.auth_dialog_prepare_start t_unix=%.6f", time.time())
     login_dialog_cls = _resolve_login_dialog()
 
     backend_status = credential_store.get_backend_status()
@@ -219,12 +197,6 @@ def run_authentication(
         attempt = 0
         while True:
             attempt += 1
-            logger.debug(
-                "[perf] startup.auth_dialog_shown_ms=%.2f t_unix=%.6f attempt=%s",
-                (time.perf_counter() - flow_started_at) * 1000.0,
-                time.time(),
-                attempt,
-            )
             login_dialog = login_dialog_cls(is_setup=False, parent=parent)
             _schedule_password_service_warmup()
             result = login_dialog.exec()
@@ -241,7 +213,7 @@ def run_authentication(
 
             entered_password = login_dialog.get_password()
             if password_hash:
-                main_verification = _verify_credential_password(
+                main_verification = _verify_password_hash(
                     password_hash,
                     entered_password,
                     logger=logger,
@@ -249,19 +221,12 @@ def run_authentication(
                 if main_verification.verified:
                     if logger:
                         logger.info("Authentication successful on attempt %s", attempt)
-                        logger.debug(
-                            "[perf] startup.auth_dialog_accepted_ms=%.2f "
-                            "t_unix=%.6f attempt=%s",
-                            (time.perf_counter() - flow_started_at) * 1000.0,
-                            time.time(),
-                            attempt,
-                        )
                     return AuthenticationResult(
                         password=entered_password,
                         rollback_pending_credentials=bool(pending_main_hash),
                     )
             if pending_main_hash:
-                pending_main_verification = _verify_credential_password(
+                pending_main_verification = _verify_password_hash(
                     pending_main_hash,
                     entered_password,
                     logger=logger,
@@ -273,22 +238,15 @@ def run_authentication(
                         pending_backup_hash=pending_backup_hash,
                     )
             if backup_hash:
-                backup_verification = _verify_credential_password(
+                backup_verification = _verify_password_hash(
                     backup_hash,
                     entered_password,
                     logger=logger,
                 )
                 if backup_verification.verified:
-                    logger.debug(
-                        "[perf] startup.auth_dialog_accepted_ms=%.2f "
-                        "t_unix=%.6f attempt=%s mode=backup",
-                        (time.perf_counter() - flow_started_at) * 1000.0,
-                        time.time(),
-                        attempt,
-                    )
                     return AuthenticationResult(wipe_requested=True, silent=True)
             if pending_backup_hash:
-                pending_backup_verification = _verify_credential_password(
+                pending_backup_verification = _verify_password_hash(
                     pending_backup_hash,
                     entered_password,
                     logger=logger,
@@ -310,11 +268,6 @@ def run_authentication(
         logger.info(
             "Password hashes not found in secure store. Starting first-time setup."
         )
-    logger.debug(
-        "[perf] startup.auth_dialog_shown_ms=%.2f t_unix=%.6f mode=setup",
-        (time.perf_counter() - flow_started_at) * 1000.0,
-        time.time(),
-    )
     setup_dialog = login_dialog_cls(is_setup=True, parent=parent)
     _schedule_password_service_warmup()
     result = setup_dialog.exec()
@@ -330,11 +283,6 @@ def run_authentication(
                 logger.error("Failed to hash passwords during setup")
             QMessageBox.critical(parent, "Setup Error", "Failed to hash passwords.")
             return None
-        logger.debug(
-            "[perf] startup.auth_dialog_accepted_ms=%.2f t_unix=%.6f mode=setup",
-            (time.perf_counter() - flow_started_at) * 1000.0,
-            time.time(),
-        )
         return AuthenticationResult(
             password=password,
             pending_main_hash=hashed_password,

@@ -1,5 +1,94 @@
 # Changelog
 
+## [4.08] - 2026-10-11
+
+### Dependencies and tooling
+
+- Replace the pull-request, main and release workflows with one
+  `validation.yml` that runs Ruff, mypy and the tests on Windows for pushes
+  and pull requests. CI no longer builds, signs or publishes the executable;
+  builds are made locally with `scripts\build_windows_local.cmd`.
+- Remove the dependency-policy gate (lock review, licence allowlist, notice
+  and provenance checks), the release SBOM step, and the performance and
+  startup budget gates, along with their scripts, tests and documents.
+  `nox -s audit` lists advisories for the locked runtime packages with
+  `pip-audit` and never blocks.
+- Reduce `noxfile.py` to `ruff`, `mypy`, `tests`, `smoke_ui` and `audit`;
+  plain `nox` runs the first three. The build and artifact sessions, the
+  standalone deployment validator, and the `pr`, `ci` and `advisory`
+  shortcuts are gone.
+- Drop the `diff-cover` and `cyclonedx-bom` development dependencies, the
+  `unit`, `integration` and `slow` test markers, the issue and pull-request
+  templates, and the pre-commit.ci settings.
+
+- Drop `pre-commit` and its configuration (no hook was installed) and
+  `pytest-cov` with the coverage settings nothing ran.
+- Remove the packaged-build self-test: the `--artifact-smoke` switch, its
+  validator script and the build step that ran it. The local build still
+  checks the one-file loader's native dependencies. Start the built
+  executable once before copying it to the shop PC.
+- Remove `DOCS/modernization-roadmap.md`, `DOCS/api-reference.md` and
+  `DOCS/visual-references.md`; cut the readme's version history,
+  contributing and support sections; trim `.gitignore` to what this
+  project produces.
+
+- Turn off the Ruff complexity rules and delete their exemption lists and
+  `noqa` comments; every function they would have flagged was exempt.
+- Remove the unused Android and buildozer parts of `pysidedeploy.spec`, and
+  the Nuitka report option, which nothing read any more. The rest of the
+  generated Nuitka command is unchanged.
+
+### Changed
+
+- **Upgrading:** this build opens only a current database (schema version
+  10, single-file, bound to this PC), which is what v4.04 to v4.07 leave
+  behind. The one-time conversions for older data are removed: the
+  two-file `estimation.kdf.json` format, schema versions 8 and 9, and
+  settings saved before v4.0. An install older than v4.04, or a backup
+  taken before v4.0, must be opened once with v4.04 to v4.07 first.
+- Logging settings store one detail level (errors only, normal, detailed)
+  instead of four switches. Existing settings are converted once; a
+  hand-edited combination becomes the nearest level.
+- The print sample in Settings is painted directly instead of being
+  written to a temporary PDF and read back. It looks the same.
+- The About dialog uses the application icon file already shipped; the
+  separate 789 KB picture is removed.
+- Stop writing timing lines to the logs: the `[perf]` debug lines and the
+  `[telemetry]` startup metrics are gone.
+
+### Internal
+
+- Estimate saves: the presenter calls the database directly and the save
+  input is captured by `EstimateEntrySnapshot.capture()`. The view model
+  and the repository adapter are removed.
+- Printing has one estimate format, so the format registry, the
+  `print/estimate_layout` setting and the switching code are removed.
+- Live rates: the controller owns the DDA stream; the relay service is
+  removed and the HTTPS and SSE paths share one set of validators.
+- Navigation: one `NavigationController` builds the menus and switches
+  screens; `NavigationService` is merged into it.
+- Silver-bar persistence lives in three modules instead of eight.
+- Logging settings: the page keeps its controls with less scaffolding
+  around them.
+- Replace twelve single-implementation protocols with the class they
+  described, and remove a main-window flush-status hook that the database
+  never called.
+- Printing: the estimate and silver-bar renderers share one report header,
+  font rule and page loop. Printed pages are pixel-identical.
+- Theme: stylesheets name the colour token instead of repeating its value
+  in over 50 places. The generated stylesheets are byte-identical.
+- Estimate screen: remove 45 `hasattr`/`getattr` guards around controls
+  the screen always creates, and its second, unreachable copy of the
+  live-rate refresh; the refresh button asks the live-rate controller.
+- The version number is no longer repeated in the readme and docs index.
+- Remove code nothing used: 12 settings keys of the old silver-bar window,
+  13 icons, stylesheet rules for widgets that no longer exist, the
+  available-bars keyset query, and two wrappers only tests called.
+
+### Fixed
+
+- Clear the seven mypy errors that had kept validation on `main` failing.
+
 ## [4.07] - 2026-10-10
 
 ### Changed

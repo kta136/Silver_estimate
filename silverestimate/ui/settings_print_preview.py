@@ -1,17 +1,12 @@
 """Render the actual estimate painter using staged printing preferences."""
 
-from dataclasses import replace
-from tempfile import TemporaryDirectory
-
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QFont, QPainter, QPixmap
-from PySide6.QtPdf import QPdfDocument
-from PySide6.QtPrintSupport import QPrinter
+from PySide6.QtCore import QMarginsF, QSize, Qt
+from PySide6.QtGui import QFont, QPageLayout, QPixmap
 from PySide6.QtWidgets import QLabel, QSizePolicy
 
 from .estimate_print_document import EstimatePrintDocument
 from .estimate_print_renderer import EstimatePrintRenderer
-from .print_page_settings import PrintPageSettings, apply_print_page_settings_to_printer
+from .print_page_settings import PrintPageSettings, qt_orientation
 
 ZOOM_FACTOR = 2
 
@@ -58,7 +53,6 @@ class SettingsPrintPreview(QLabel):
                 ],
             }
         )
-        document = replace(document, format_key=state.estimate_format)
         page = PrintPageSettings(
             margins=state.margins,
             page_size=state.page_size,
@@ -67,35 +61,18 @@ class SettingsPrintPreview(QLabel):
             page_height_mm=state.page_height_mm,
             page_size_name=state.page_size_name,
         )
+        page_layout = QPageLayout(
+            page.to_qpage_size(),
+            qt_orientation(page.orientation),
+            QMarginsF(*[float(value) for value in page.margins]),
+            QPageLayout.Unit.Millimeter,
+        )
         try:
-            with TemporaryDirectory(prefix="silverestimate-preview-") as directory:
-                path = directory + "/sample.pdf"
-                printer = QPrinter(QPrinter.PrinterMode.HighResolution)
-                printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
-                printer.setOutputFileName(path)
-                apply_print_page_settings_to_printer(
-                    printer, page, include_default_printer=False
+            self._image = QPixmap.fromImage(
+                EstimatePrintRenderer().paint_first_page_image(
+                    document, page_layout, print_font=font
                 )
-                EstimatePrintRenderer().paint(printer, document, print_font=font)
-                del printer
-                pdf = QPdfDocument()
-                try:
-                    pdf.load(path)
-                    size = pdf.pagePointSize(0).toSize()
-                    rendered = pdf.render(
-                        0,
-                        size.scaled(
-                            QSize(1200, 1200), Qt.AspectRatioMode.KeepAspectRatio
-                        ),
-                    )
-                    self._image = QPixmap(rendered.size())
-                    self._image.fill(Qt.GlobalColor.white)
-                    painter = QPainter(self._image)
-                    painter.drawImage(0, 0, rendered)
-                    painter.end()
-                finally:
-                    pdf.close()
-                    del pdf
+            )
             self._fit()
         except (RuntimeError, ValueError) as exc:
             self.setText(str(exc))
@@ -103,9 +80,6 @@ class SettingsPrintPreview(QLabel):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._fit()
-
-    def is_zoomed(self) -> bool:
-        return self._zoomed
 
     def set_zoomed(self, zoomed: bool) -> None:
         self._zoomed = bool(zoomed)

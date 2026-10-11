@@ -70,9 +70,9 @@ outcome is uncertain. Duplicate page/command submissions are rejected.
 - `EstimateEntryWidget` is a `QWidget` that explicitly owns workflow, layout, table, and totals controllers. Application commands are explicit and the widget satisfies `EstimateEntryView` without a cast. Entry layout/table/totals/workflow controllers and recovery use a checked `EstimateEntryWidget` host; layout-created controls have concrete Qt types, and the former catch-all `__getattr__` is removed. Cross-controller calls name the target controller. Optional-member checks (`union-attr`) are enabled for this area.
 - `SilverBarDialog` provides a keyboard list workspace with immediate atomic membership changes and focused load, optimization, print, and UI controllers. Ctrl+P submits a full immutable list snapshot for printing, atomically issues that same snapshot, and resets to fresh weight entry. `SilverBarHistoryDialog` unifies active/issued lists and individual bars, using separate latest-request runners for paged list search, bar search, and full list details. Issued contents, reprinting, and reopening share one detail page. Print payload building and worker shutdown use `PreviewBuildController`; the old assignment/transfer UI and controller facade are removed.
 - `LatestRequestRunner[RequestT, ResultT]` owns one persistent worker, a monotonically increasing generation, cooperative cancellation, and at most one pending replacement request. Only the latest generation may deliver a result.
-- `PagedLoadState[RowT, CursorT]` owns only mutable page accumulation: replace/append, loaded and total counts, cursor advancement, reset, and has-more state. Item Master, Estimate History, Silver-Bar History, and Silver-Bar Management retain their own queries, cursor types, row conversion, selection, feedback, and telemetry.
+- `PagedLoadState[RowT, CursorT]` owns only mutable page accumulation: replace/append, loaded and total counts, cursor advancement, reset, and has-more state. Item Master, Estimate History, Silver-Bar History, and Silver-Bar Management retain their own queries, cursor types, row conversion, selection and feedback.
 - SQLite background work uses a connection owned by its worker thread and a progress handler bound to the cancellation event.
-- Estimate printing uses Modern over the typed `EstimatePrintDocument`: a full-width semantic table with shared column anchors, repeated headers, and kept totals. Preview, export, and physical print paths use direct `QPainter` rendering and intentionally omit a footer. Saved unsupported format preferences resolve to Modern; Settings and Preview have no format selector.
+- Estimate printing uses Modern over the typed `EstimatePrintDocument`: a full-width semantic table with shared column anchors, repeated headers, and kept totals. Preview, export, and physical print paths use direct `QPainter` rendering and intentionally omit a footer. Modern is the only format, so Settings and Preview have no format selector.
 - Silver-bar list printing uses typed `SilverBarListPrintDocument` values with the same neutral Modern typography, color, table, elision, and printable-margin primitives as the estimate renderer. Its direct painter repeats report metadata, section titles, and column headings across pages, labels continued sections, avoids split rows, and keeps the total with the final rows. Estimate and silver-bar previews expose the same persistent print-font family, size, and weight control with immediate refresh. Silver-bar reports intentionally have one Modern format and no footer or page numbers.
 - `PrintPreviewDialog` is an application-owned `QDialog` containing one explicit toolbar and an embedded `QPrintPreviewWidget`. `PrintPreviewController` is only the composition root: `PrintPreviewSession` owns the current immutable payload, the toolbar/navigation and page-setup collaborators own UI mechanics, `PrintPreviewPreferences` owns persisted state, and `PrintOutputService` returns typed outcomes for atomic PDF export and physical printing. `PrintPreviewOutputController` translates those outcomes into user feedback once. Preview refreshes, export, and physical printing invoke the same typed direct painters.
 - `SettingsDialog` is a navigation, dirty-state, validation, apply/defaults, and accept/reject coordinator over independent appearance, live-rate, printing, data-management, logging/diagnostics, and security pages. Pages do not depend on `MainWindow`: typed controllers use narrow callbacks and database protocols, `PasswordChangeService` owns credential staging and SQLCipher rekey orchestration, and maintenance/diagnostics commands return explicit success/cancel/failure outcomes.
@@ -85,18 +85,17 @@ Views cancel work, disconnect delivery, and let workers exit normally during shu
 ## Estimate application data
 
 `domain/estimate_entry.py` owns the frozen row, calculation-state, save/load and
-save-outcome data classes. Existing presenter and view-model import paths re-export
-the same classes for compatibility; application code imports from the domain.
-The mutable `EstimateEntryViewModel` remains in the UI layer.
+save-outcome data classes. The presenter re-exports the save and load classes;
+application code imports from the domain.
 
-Before save or current-entry preview, the workflow synchronizes the active model
-and calls `as_save_snapshot()`. The UI assigns stable line keys, then captures a
-tuple of frozen rows and numeric inputs in `EstimateEntrySnapshot`. Subsequent
+Before save or current-entry preview, the workflow passes the rows on screen to
+`EstimateEntrySnapshot.capture()`. It numbers the rows, assigns stable line keys,
+and captures a tuple of frozen rows and numeric inputs. Subsequent
 screen edits cannot change that request. `EstimateEntryPersistenceService` consumes
-only this snapshot and the narrow `EstimateSaveExecutor.save_estimate(payload)`
-protocol; it imports no UI or presenter modules. It validates rows and totals before
-calling the executor once. The existing presenter/repository path still owns its
-save outcome and atomic database transaction.
+only this snapshot and a `save` function taking the payload; it imports no UI or
+presenter modules. It validates rows and totals before calling `save` once. The
+workflow passes the presenter's `save_estimate`; the presenter calls the database
+directly and owns the save outcome; the database owns the atomic transaction.
 
 This is an incremental contract improvement. Native entry controllers remain
 coupled to their Qt widget, while the application save input is independent of Qt.
@@ -128,9 +127,9 @@ Existing Save/preview/new-estimate behavior and all output layouts are unchanged
 
 ## Persistence
 
-Fresh schema-v10 creation, the v8 snapshot upgrade or the v9 draft-table upgrade, mandatory indexes, validation,
-and the schema-version write run in a single transaction. Versions older than v8
-and unversioned schemas fail closed. The silver-bar availability index is:
+Fresh schema-v10 creation, mandatory indexes, validation,
+and the schema-version write run in a single transaction. Any other schema
+version, and unversioned schemas, fail closed. The silver-bar availability index is:
 
 ```sql
 (status, list_id, weight, date_added DESC, bar_id DESC)
@@ -149,13 +148,10 @@ History reads stored header totals. Estimate line items are loaded only when a r
 
 Silver-bar persistence is owned directly by `SilverBarQueryRepository`, `SilverBarCommandRepository`, and `SilverBarSynchronizationRepository`. `DatabaseManager` lazily exposes each role and adapts synchronization results only at its established application API; the former private backend and broad `SilverBarsRepository` facade are removed. Synchronization returns `SilverBarSyncResult`, preserving success/failure information.
 
-Database consumers declare structural contracts from `database_protocols.py`.
-Concrete repositories receive `RepositoryDatabase`; item-catalog transfer,
-main-window commands, estimate adapters, and startup lifecycle code each receive
-their narrower protocol. The composition root alone uses the combined
-`ApplicationDatabase` contract. Repositories use their transaction connection
-directly and do not depend on private prepared cursors owned by
-`DatabaseManager`.
+Database consumers are typed with `DatabaseManager` itself; the per-consumer
+protocols were removed because each had this one implementation. Repositories
+use their transaction connection directly and do not depend on private
+prepared cursors owned by `DatabaseManager`.
 
 ## Encrypted database lifecycle
 
@@ -179,10 +175,10 @@ Argon2id policy.
 credential mismatch and malformed credential data. `CredentialStore` remains
 the only Windows Credential Manager boundary.
 
-The `SILVDB01` importer and its AES-GCM dependency have been retired. An
-authenticated local two-file SQLCipher database is migrated once to the
-machine-bound single-file format. Existing files without the local device secret,
-plaintext files, unversioned files, and schemas older than v8 fail closed.
+The `SILVDB01` importer, its AES-GCM dependency, the two-file SQLCipher
+migration and the v8/v9 schema upgrades have been retired. Existing files
+without the local device secret, plaintext files, unversioned files, and any
+schema other than v10 fail closed.
 
 Encrypted `.sedbbackup` archives contain a machine-bound SQLCipher database and a
 digested non-secret manifest. Restore and password change use staged
@@ -191,7 +187,7 @@ after successful validation.
 
 ## DDA live-rate path
 
-`DdaCurrentRatesClient` hydrates anonymously from `https://ddajewels.com/api/v1/rates/current`. `DdaRateStream` then consumes `https://ddajewels.com/sse/rates`. Both use Qt's network stack on the GUI thread, driven by reply and timer signals, so stopping aborts requests at once and no worker thread is involved.
+`DdaCurrentRatesClient` hydrates anonymously from `https://ddajewels.com/api/v1/rates/current`. `DdaRateStream` then consumes `https://ddajewels.com/sse/rates`. Both use Qt's network stack on the GUI thread, driven by reply and timer signals, so stopping aborts requests at once and no worker thread is involved. `LiveRateController` owns the stream; the estimate screen's refresh button asks the controller and has no fetch of its own.
 
 Only item ID `cmomws5tw000004i5k5t6yrnw` is accepted. The customer-facing `finalRate` and `PER_KG` unit are mandatory; `baseRate` and item names are ignored. The stream validates schema version 1, timestamps, sequence order, values, and event shapes.
 
@@ -199,11 +195,10 @@ SSE is primary. A disconnected stream polls current-rates every 10 seconds, sequ
 
 ## Quality boundaries
 
-- Ruff enables Bugbear, Simplify, Performance, McCabe complexity, and the selected Pylint complexity rules. Complexity is capped at 15; explicit file-level exceptions document complex hotspots.
+- Ruff enables Bugbear, Simplify, Performance and the Bandit security rules. The complexity rules are off: every large function was exempted, so they checked nothing.
 - Mypy fully checks all modules and applies strict-definition/generic/call rules to domain pagination, async runners, encryption, DDA transports, new repository roles, facades, settings pages, and print specifications.
-- The Windows CI gate enforces 75% global coverage, 90% changed-line coverage,
-  deterministic p95 budgets, offscreen Qt smoke, curated `pyside6-deploy`
-  standalone/one-file builds, and frozen-artifact startup.
+- Windows CI runs Ruff, mypy and the complete non-smoke test suite on every
+  push and pull request.
 
 ## Extension rules
 

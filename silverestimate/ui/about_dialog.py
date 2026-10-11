@@ -44,7 +44,7 @@ class AboutDialog(QDialog):
 
         top = QHBoxLayout()
         top.setSpacing(16)
-        icon_path = get_asset_path("assets", "icons", "silverestimate.png")
+        icon_path = get_asset_path("assets", "icons", "silverestimate.ico")
         if icon_path.exists():
             icon = QLabel(self)
             icon.setPixmap(QIcon(str(icon_path)).pixmap(56, 56))

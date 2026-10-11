@@ -66,10 +66,6 @@ class ItemSelectionDialog(QDialog):
                 input_selectors=["QLineEdit"],
                 include_table=True,
                 extra_rules="""
-                QLabel#ItemSelectionBodyLabel {
-                    color: __FIELD_TEXT__;
-
-                }
                 QLabel#ItemSelectionMutedLabel {
                     color: __TEXT_MUTED__;
 

@@ -1,10 +1,8 @@
 import sqlite3
-import time
 import types
 
 from PySide6.QtCore import QItemSelectionModel, Qt
 
-from silverestimate.domain.pagination import Page
 from silverestimate.ui.item_master import ItemMasterWidget
 
 
@@ -193,31 +191,6 @@ def test_item_master_async_snapshot_load_populates_rows(qtbot, tmp_path):
         }
     finally:
         widget.close()
-        widget.deleteLater()
-
-
-def test_item_master_logs_perf_metric_even_for_fast_loads(qtbot, monkeypatch):
-    db = _StubDbManager()
-    widget = ItemMasterWidget(db)
-    qtbot.addWidget(widget)
-    debug_calls = []
-    monkeypatch.setattr(
-        widget.logger,
-        "debug",
-        lambda message, *args: debug_calls.append((message, args)),
-    )
-    try:
-        widget._apply_loaded_items(
-            Page(tuple(db.get_all_items()), 2, None),
-            search_term="",
-            started_at=time.perf_counter(),
-            append=False,
-        )
-        assert any(
-            str(message).startswith("[perf] item_master.load_items=")
-            for message, _args in debug_calls
-        )
-    finally:
         widget.deleteLater()
 
 

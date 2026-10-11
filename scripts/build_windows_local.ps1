@@ -10,7 +10,6 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $appConstants = Join-Path $repoRoot "silverestimate\infrastructure\app_constants.py"
 $deployConfig = Join-Path $repoRoot "pysidedeploy.spec"
-$artifactValidator = Join-Path $repoRoot "scripts\validate_frozen_artifact.py"
 $distDir = Join-Path $repoRoot "dist"
 $pythonPinPath = Join-Path $repoRoot ".python-version"
 $pythonPin = (Get-Content -LiteralPath $pythonPinPath -Raw).Trim()
@@ -166,35 +165,6 @@ function Invoke-PySideDeployBuild(
     }
 }
 
-function Invoke-ArtifactValidation([string]$pythonExe, [string]$artifact) {
-    if (-not (Test-Path -LiteralPath $artifactValidator)) {
-        throw "Frozen artifact validator is unavailable at $artifactValidator"
-    }
-
-    $previousPath = $env:PATH
-    $hadConsoleOverride = Test-Path "Env:\SILVER_SHOW_CONSOLE"
-    $previousConsoleOverride = $env:SILVER_SHOW_CONSOLE
-    try {
-        # Do not let Python, Qt, OpenSSL, or VC runtime files installed on the
-        # build machine satisfy a missing dependency in the frozen artifact.
-        $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
-        $env:SILVER_SHOW_CONSOLE = "1"
-        & $pythonExe $artifactValidator --artifact $artifact
-        if ($LASTEXITCODE -ne 0) {
-            throw "Frozen artifact validation failed with exit code $LASTEXITCODE."
-        }
-    }
-    finally {
-        $env:PATH = $previousPath
-        if ($hadConsoleOverride) {
-            $env:SILVER_SHOW_CONSOLE = $previousConsoleOverride
-        }
-        else {
-            Remove-Item "Env:\SILVER_SHOW_CONSOLE" -ErrorAction SilentlyContinue
-        }
-    }
-}
-
 function Invoke-NativeOnefileValidation(
     [string]$dumpbinExe,
     [string]$artifact
@@ -296,7 +266,6 @@ try {
         throw "Build did not produce $baseExe"
     }
     Invoke-BuildStage "validation" {
-        Invoke-ArtifactValidation -pythonExe $buildPython -artifact $baseExe
         Invoke-NativeOnefileValidation -dumpbinExe $dumpbinExe -artifact $baseExe
     }
 

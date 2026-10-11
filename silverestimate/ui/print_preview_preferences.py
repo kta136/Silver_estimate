@@ -11,7 +11,6 @@ from PySide6.QtPrintSupport import QPrinter, QPrintPreviewWidget
 
 from silverestimate.infrastructure.settings import SettingsKey, get_app_settings
 
-from .print_format_spec import normalize_estimate_format
 from .print_page_settings import save_printer_page_settings
 from .print_payload_builder import PrintPreviewPayload
 
@@ -32,10 +31,8 @@ class PrintPreviewPreferences:
     def __init__(
         self,
         *,
-        persist_estimate_format: Callable[[str], None] | None = None,
         persist_tunch_visibility: Callable[[bool], None] | None = None,
     ) -> None:
-        self._persist_estimate_format = persist_estimate_format
         self._persist_tunch_visibility = persist_tunch_visibility
 
     def load_zoom(self) -> PreviewZoomPreference:
@@ -126,11 +123,6 @@ class PrintPreviewPreferences:
     ) -> None:
         if payload.document_kind != "estimate":
             return
-        if payload.format_key:
-            format_key = normalize_estimate_format(payload.format_key)
-            settings.set(SettingsKey.PRINT_ESTIMATE_LAYOUT, format_key)
-            if self._persist_estimate_format is not None:
-                self._persist_estimate_format(format_key)
         settings.set(SettingsKey.PRINT_SHOW_TUNCH, bool(payload.show_tunch))
         if self._persist_tunch_visibility is not None:
             self._persist_tunch_visibility(bool(payload.show_tunch))

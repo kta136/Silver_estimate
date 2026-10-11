@@ -6,7 +6,6 @@ import time
 import pytest
 
 from silverestimate.infrastructure import logger as app_logger
-from silverestimate.infrastructure.logger import get_log_config
 from silverestimate.infrastructure.settings import get_app_settings
 
 DAY = 24 * 60 * 60
@@ -35,13 +34,26 @@ def _age(path, days):
     os.utime(path, (stamp, stamp))
 
 
-def test_get_log_config_reads_enable_critical_setting(settings_stub):
-    settings = get_app_settings()
-    settings.setValue("logging/enable_critical", False)
+@pytest.mark.parametrize(
+    ("level", "debug_mode", "enable_info"),
+    [
+        ("errors", False, False),
+        ("normal", False, True),
+        ("detailed", True, True),
+        ("something-else", False, True),
+    ],
+)
+def test_get_log_config_derives_the_switches_from_the_stored_level(
+    settings_stub, monkeypatch, level, debug_mode, enable_info
+):
+    monkeypatch.delenv("SILVER_APP_DEBUG", raising=False)
+    get_app_settings().setValue("logging/level", level)
 
-    config = get_log_config()
+    config = app_logger.get_log_config()
 
-    assert config["enable_error"] is False
+    assert config["debug_mode"] is debug_mode
+    assert config["enable_info"] is enable_info
+    assert config["enable_error"] is True
 
 
 def test_backup_days_follow_the_retention_setting_only_when_enabled():

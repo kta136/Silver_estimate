@@ -12,13 +12,28 @@ from silverestimate.infrastructure.settings import SettingsKey, get_app_settings
 
 # Daily files kept per log when automatic deletion is off, so logs stay bounded.
 DEFAULT_BACKUP_DAYS = 30
-
-
-def _read_error_logging_enabled(settings):
-    return settings.get_bool(
-        SettingsKey.LOGGING_ENABLE_CRITICAL,
-        True,
-    )
+DEFAULT_LOG_LEVEL = "normal"
+# What each level a person can choose records.
+LOG_LEVEL_SWITCHES: dict[str, dict[str, bool]] = {
+    "errors": {
+        "debug_mode": False,
+        "enable_info": False,
+        "enable_error": True,
+        "enable_debug": False,
+    },
+    "normal": {
+        "debug_mode": False,
+        "enable_info": True,
+        "enable_error": True,
+        "enable_debug": True,
+    },
+    "detailed": {
+        "debug_mode": True,
+        "enable_info": True,
+        "enable_error": True,
+        "enable_debug": True,
+    },
+}
 
 
 def setup_logging(
@@ -225,25 +240,19 @@ def get_log_config():
     """
     settings = get_app_settings()
 
+    level = settings.get_text(SettingsKey.LOGGING_LEVEL, DEFAULT_LOG_LEVEL)
+    switches = LOG_LEVEL_SWITCHES.get(level, LOG_LEVEL_SWITCHES[DEFAULT_LOG_LEVEL])
+
     # Environment variables take precedence
     debug_mode = os.environ.get("SILVER_APP_DEBUG", "").lower() in ("true", "1", "yes")
     if "SILVER_APP_DEBUG" not in os.environ:
-        debug_mode = settings.get_bool(
-            SettingsKey.LOGGING_DEBUG_MODE,
-            False,
-        )
+        debug_mode = switches["debug_mode"]
 
     log_dir = os.environ.get("SILVER_APP_LOG_DIR") or str(get_runtime_root() / "logs")
 
-    enable_info = settings.get_bool(
-        SettingsKey.LOGGING_ENABLE_INFO,
-        True,
-    )
-    enable_error = _read_error_logging_enabled(settings)
-    enable_debug = settings.get_bool(
-        SettingsKey.LOGGING_ENABLE_DEBUG,
-        True,
-    )
+    enable_info = switches["enable_info"]
+    enable_error = switches["enable_error"]
+    enable_debug = switches["enable_debug"]
 
     # Get auto-cleanup settings
     auto_cleanup = settings.get_bool(

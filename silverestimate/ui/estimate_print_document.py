@@ -6,8 +6,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import Any, cast
 
-from .print_format_spec import DEFAULT_ESTIMATE_FORMAT, normalize_estimate_format
-
 
 def _mapping(value: object, *, field: str) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
@@ -124,7 +122,6 @@ class EstimatePrintItem:
 class EstimatePrintDocument:
     header: EstimatePrintHeader
     items: tuple[EstimatePrintItem, ...]
-    format_key: str = DEFAULT_ESTIMATE_FORMAT
     show_tunch: bool = False
 
     @classmethod
@@ -132,20 +129,12 @@ class EstimatePrintDocument:
         cls,
         value: object,
         *,
-        format_key: str = DEFAULT_ESTIMATE_FORMAT,
         show_tunch: bool = False,
     ) -> EstimatePrintDocument:
-        normalized_format = normalize_estimate_format(format_key)
         if isinstance(value, cls):
-            if value.format_key == normalized_format and value.show_tunch == bool(
-                show_tunch
-            ):
+            if value.show_tunch == bool(show_tunch):
                 return value
-            return replace(
-                value,
-                format_key=normalized_format,
-                show_tunch=bool(show_tunch),
-            )
+            return replace(value, show_tunch=bool(show_tunch))
         source = _mapping(value, field="estimate print document")
         raw_items = source.get("items") or ()
         if isinstance(raw_items, str | bytes) or not hasattr(raw_items, "__iter__"):
@@ -156,7 +145,6 @@ class EstimatePrintDocument:
                 EstimatePrintItem.from_mapping(item, index=index)
                 for index, item in enumerate(raw_items)
             ),
-            format_key=normalized_format,
             show_tunch=bool(show_tunch),
         )
 

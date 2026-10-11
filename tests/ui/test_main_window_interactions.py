@@ -204,11 +204,8 @@ class FakeDbManager:
         }
     )
     generate_calls: int = 0
-    saved_estimates: List[Dict[str, Any]] = field(default_factory=list)
     preload_started: bool = False
     closed: bool = False
-    flush_on_queued: Optional[Any] = None
-    flush_on_done: Optional[Any] = None
 
     def __post_init__(self) -> None:
         self.item_cache_controller = None
@@ -216,18 +213,6 @@ class FakeDbManager:
     # --- Lifecycle -------------------------------------------------
     def start_preload_item_cache(self) -> None:
         self.preload_started = True
-
-    def set_flush_status_callbacks(self, *, on_queued=None, on_done=None) -> None:
-        self.flush_on_queued = on_queued
-        self.flush_on_done = on_done
-
-    def emit_flush_queued(self) -> None:
-        if self.flush_on_queued:
-            self.flush_on_queued()
-
-    def emit_flush_done(self) -> None:
-        if self.flush_on_done:
-            self.flush_on_done()
 
     def close(self) -> None:
         self.closed = True
@@ -242,27 +227,6 @@ class FakeDbManager:
 
     def get_estimate_by_voucher(self, voucher_no: str) -> Optional[Dict[str, Any]]:
         return None
-
-    def save_estimate_with_returns(
-        self,
-        voucher_no: str,
-        date: str,
-        silver_rate: float,
-        regular_items,
-        return_items,
-        totals,
-    ) -> bool:
-        self.saved_estimates.append(
-            {
-                "voucher_no": voucher_no,
-                "date": date,
-                "silver_rate": silver_rate,
-                "regular": list(regular_items or []),
-                "returns": list(return_items or []),
-                "totals": dict(totals or {}),
-            }
-        )
-        return True
 
     def delete_single_estimate(self, voucher_no: str) -> bool:
         return True
@@ -514,20 +478,6 @@ def test_main_window_startup_sets_up_estimate_view(main_window_fixture, qt_app, 
     window.reconfigure_rate_timer_from_settings()
     assert live_rate.timer_calls == 1
 
-    status_calls = []
-    original_show_inline_status = widget.show_inline_status
-
-    def _capture_status(message, timeout=3000, level="info"):
-        status_calls.append((message, timeout, level))
-        return original_show_inline_status(message, timeout=timeout, level=level)
-
-    widget.show_inline_status = _capture_status
-    db.emit_flush_queued()
-    qtbot.waitUntil(lambda: status_calls != [], timeout=1000)
-    assert status_calls[-1] == ("Saving.", 1000, "info")
-    db.emit_flush_done()
-    qtbot.waitUntil(lambda: status_calls[-1] == ("", 0, "info"), timeout=1000)
-
     # Closing should invoke live-rate shutdown and database close.
     window.close()
     qtbot.waitUntil(lambda: live_rate.shutdown_called is True, timeout=1000)
@@ -567,7 +517,7 @@ def test_deferred_runtime_starts_after_lightweight_shell_paints(
         qt_app.processEvents()
 
 
-def test_user_entry_updates_totals_and_view_model(main_window_fixture, qtbot):
+def test_user_entry_updates_totals_and_save_snapshot(main_window_fixture, qtbot):
     context = main_window_fixture
     window = context["window"]
     db = context["db"]
@@ -611,9 +561,9 @@ def test_user_entry_updates_totals_and_view_model(main_window_fixture, qtbot):
     assert float(widget.total_fine_label.text()) == pytest.approx(8.79, rel=1e-3)
     assert float(widget.net_fine_label.text()) == pytest.approx(8.79, rel=1e-3)
 
-    # View-model captures the active row for downstream workflows.
-    widget.workflow_controller._update_view_model_snapshot()
-    active_rows = [row for row in widget.view_model.rows() if not row.is_empty()]
+    # The save snapshot captures the active row for downstream workflows.
+    snapshot = widget.workflow_controller._capture_snapshot()
+    active_rows = [row for row in snapshot.rows if not row.is_empty()]
     assert len(active_rows) == 1
     row_state = active_rows[0]
     assert row_state.code == "RING001"

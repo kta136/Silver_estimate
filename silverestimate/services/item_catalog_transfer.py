@@ -8,13 +8,13 @@ import tempfile
 from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping, cast
+from typing import TYPE_CHECKING, Any, Mapping, cast
 
 from silverestimate.domain.item_validation import validate_item
-from silverestimate.persistence.database_protocols import (
-    ItemCatalogDatabase,
-    ReadConnectionFactory,
-)
+from silverestimate.persistence.database_driver import ReadConnectionFactory
+
+if TYPE_CHECKING:
+    from silverestimate.persistence.database_manager import DatabaseManager
 
 ITEM_CATALOG_FORMAT = "silverestimate.item_catalog"
 ITEM_CATALOG_VERSION = 2
@@ -27,18 +27,6 @@ ITEM_CATALOG_FILE_SUFFIX = ".seitems.json"
 
 class ItemCatalogTransferError(ValueError):
     """Raised when a catalog backup file cannot be imported or exported safely."""
-
-
-def export_item_catalog(
-    db_manager: ItemCatalogDatabase,
-    file_path: str,
-) -> int:
-    """Write the current item catalog to a native Silver Estimate backup file."""
-    if not db_manager:
-        raise ItemCatalogTransferError("Database connection not available.")
-
-    raw_items = db_manager.get_all_items()
-    return export_item_catalog_rows(raw_items, file_path)
 
 
 def export_item_catalog_rows(
@@ -107,7 +95,7 @@ def load_item_catalog_rows_from_connection_factory(
 
 
 def import_item_catalog(
-    db_manager: ItemCatalogDatabase,
+    db_manager: DatabaseManager,
     file_path: str,
     *,
     replace_existing: bool = False,

@@ -9,7 +9,6 @@ from silverestimate.services.settings_service import SettingsService
 
 from .estimate_print_document import EstimatePrintDocument
 from .estimate_print_renderer import EstimatePrintRenderer
-from .print_format_spec import DEFAULT_ESTIMATE_FORMAT, normalize_estimate_format
 from .print_page_settings import (
     PrintPageSettings,
     apply_print_page_settings_to_printer,
@@ -49,17 +48,6 @@ class PrintManager:
         apply_print_page_settings_to_printer(self.printer, page_settings)
 
         try:
-            self.estimate_format = normalize_estimate_format(
-                settings.get_text(
-                    SettingsKey.PRINT_ESTIMATE_LAYOUT,
-                    DEFAULT_ESTIMATE_FORMAT,
-                )
-            )
-        except Exception as exc:
-            LOGGER.debug("Failed to load estimate format preference: %s", exc)
-            self.estimate_format = DEFAULT_ESTIMATE_FORMAT
-
-        try:
             self.show_tunch = settings.get_bool(
                 SettingsKey.PRINT_SHOW_TUNCH,
                 False,
@@ -73,7 +61,6 @@ class PrintManager:
         self._preview_controller = PrintPreviewController(
             printer=self.printer,
             render_document=self._render_document,
-            persist_estimate_format=self._set_estimate_format,
             persist_tunch_visibility=self._set_tunch_visibility,
             get_print_font=lambda: self.print_font,
             persist_print_font=self._set_print_font,
@@ -92,13 +79,9 @@ class PrintManager:
             fetch_estimate=lambda current_voucher: (
                 self.db_manager.get_estimate_by_voucher(current_voucher)
             ),
-            format_key=self.estimate_format,
             estimate_data=estimate_data,
             show_tunch=self.show_tunch,
         )
-
-    def _set_estimate_format(self, format_key: str) -> None:
-        self.estimate_format = normalize_estimate_format(format_key)
 
     def _set_tunch_visibility(self, visible: bool) -> None:
         self.show_tunch = bool(visible)

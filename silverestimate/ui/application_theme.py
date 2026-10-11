@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Protocol
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFont, QPalette
@@ -25,15 +25,8 @@ from .theme_tokens import (
     TEXT_STRONG,
 )
 
-
-class ApplicationThemeTarget(Protocol):
-    """Subset of QApplication used by the theme helper."""
-
-    def setStyle(self, style: str) -> object: ...
-
-    def setPalette(self, palette: QPalette) -> object: ...
-
-    def setStyleSheet(self, stylesheet: str) -> object: ...
+if TYPE_CHECKING:
+    from PySide6.QtWidgets import QApplication
 
 
 _ENABLED_GROUPS = (
@@ -701,7 +694,7 @@ QMessageBox QPushButton:disabled {{
 LIGHT_APPLICATION_STYLESHEET = build_light_application_stylesheet()
 
 
-def apply_application_font(app: ApplicationThemeTarget, font: QFont) -> None:
+def apply_application_font(app: QApplication, font: QFont) -> None:
     """Use the interface font for Windows' separate menu and header defaults."""
     set_font = getattr(app, "setFont", None)
     if not callable(set_font):
@@ -712,7 +705,7 @@ def apply_application_font(app: ApplicationThemeTarget, font: QFont) -> None:
 
 
 def force_light_color_scheme(
-    app: ApplicationThemeTarget, logger: logging.Logger | None = None
+    app: QApplication, logger: logging.Logger | None = None
 ) -> None:
     """Keep what Qt draws for the window frame dark-on-light, like the theme.
 
@@ -731,7 +724,7 @@ def force_light_color_scheme(
 
 
 def apply_light_application_theme(
-    app: ApplicationThemeTarget,
+    app: QApplication,
     logger: logging.Logger | None = None,
     *,
     force_fusion: bool = True,

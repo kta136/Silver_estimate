@@ -88,9 +88,9 @@ def test_estimate_lookup_keeps_saved_tunch(fake_db):
     items_repo = ItemsRepository(fake_db)
     estimates_repo = EstimatesRepository(fake_db)
     assert items_repo.add_item("REG001", "Original", 92.5, "WT", 10, tunch="91.25%")
-    assert estimates_repo.save_estimate_with_returns(
+    assert estimates_repo.save_estimate_atomic(
         "T-1", "2026-07-19", 75, [regular_item()], [], estimate_totals()
-    )
+    ).success
     assert items_repo.update_item("REG001", "Changed", 80, "PC", 20, tunch="Market")
     assert (
         estimates_repo.get_estimate_by_voucher("T-1")["items"][0]["tunch"] == "91.25%"
@@ -173,7 +173,7 @@ def test_estimate_history_keyset_page_reads_header_totals(fake_db):
     assert [row["voucher_no"] for row in second.items] == ["1"]
 
 
-def test_schema_setup_creates_current_v9_schema(fake_db):
+def test_schema_setup_creates_current_schema(fake_db):
     fake_db.cursor.execute("SELECT MAX(version) AS v FROM schema_version")
     row = fake_db.cursor.fetchone()
     assert row["v"] == schema.CURRENT_SCHEMA_VERSION
@@ -298,7 +298,7 @@ def test_items_repository_selection_search_ranking_and_limit(fake_db):
 def test_estimates_repository_save_and_fetch(fake_db):
     repo = EstimatesRepository(fake_db)
     ItemsRepository(fake_db).add_item("ITM001", "Sample Item", 92.5, "WT", 10.0)
-    saved = repo.save_estimate_with_returns(
+    saved = repo.save_estimate_atomic(
         voucher_no="100",
         date="2025-01-01",
         silver_rate=75000.0,
@@ -324,7 +324,7 @@ def test_estimates_repository_save_and_fetch(fake_db):
             net_wage=100.0,
             note="Test estimate",
         ),
-    )
+    ).success
     assert saved
     data = repo.get_estimate_by_voucher("100")
     assert data["header"]["voucher_no"] == "100"
@@ -336,7 +336,7 @@ def test_estimates_repository_returns_first_estimate_date(fake_db):
     repo = EstimatesRepository(fake_db)
     assert repo.get_first_estimate_date() is None
 
-    repo.save_estimate_with_returns(
+    repo.save_estimate_atomic(
         voucher_no="901",
         date="2025-03-10",
         silver_rate=71000.0,
@@ -346,7 +346,7 @@ def test_estimates_repository_returns_first_estimate_date(fake_db):
             total_gross=0.0, total_net=0.0, net_fine=0.0, net_wage=0.0
         ),
     )
-    repo.save_estimate_with_returns(
+    repo.save_estimate_atomic(
         voucher_no="902",
         date="2025-01-12",
         silver_rate=71000.0,
@@ -356,7 +356,7 @@ def test_estimates_repository_returns_first_estimate_date(fake_db):
             total_gross=0.0, total_net=0.0, net_fine=0.0, net_wage=0.0
         ),
     )
-    repo.save_estimate_with_returns(
+    repo.save_estimate_atomic(
         voucher_no="903",
         date="2025-02-05",
         silver_rate=71000.0,
@@ -373,7 +373,7 @@ def test_estimates_repository_returns_first_estimate_date(fake_db):
 def test_estimates_repository_numeric_voucher_order_and_next_value(fake_db):
     repo = EstimatesRepository(fake_db)
     for voucher in ("2", "10", "A1"):
-        assert repo.save_estimate_with_returns(
+        assert repo.save_estimate_atomic(
             voucher_no=voucher,
             date="2025-03-10",
             silver_rate=71000.0,
@@ -382,7 +382,7 @@ def test_estimates_repository_numeric_voucher_order_and_next_value(fake_db):
             totals=estimate_totals(
                 total_gross=0.0, total_net=0.0, net_fine=0.0, net_wage=0.0
             ),
-        )
+        ).success
 
     headers = repo.get_estimate_history_page(limit=10).items
     ordered = [row["voucher_no"] for row in headers]
@@ -396,7 +396,7 @@ def test_estimates_repository_generate_voucher_falls_back_when_only_non_numeric(
 ):
     repo = EstimatesRepository(fake_db)
     for voucher in ("A-10", "B-20"):
-        assert repo.save_estimate_with_returns(
+        assert repo.save_estimate_atomic(
             voucher_no=voucher,
             date="2025-03-10",
             silver_rate=71000.0,
@@ -405,7 +405,7 @@ def test_estimates_repository_generate_voucher_falls_back_when_only_non_numeric(
             totals=estimate_totals(
                 total_gross=0.0, total_net=0.0, net_fine=0.0, net_wage=0.0
             ),
-        )
+        ).success
     assert repo.generate_voucher_no() == "1"
 
 
@@ -424,14 +424,14 @@ def test_save_estimate_reports_missing_item_code(fake_db):
         fine=0.9,
     )
     totals = estimate_totals(total_gross=1.0, total_net=1.0, net_fine=0.9, net_wage=0.0)
-    saved = repo.save_estimate_with_returns(
+    saved = repo.save_estimate_atomic(
         voucher_no="404",
         date="2025-01-05",
         silver_rate=71000.0,
         regular_items=[missing_item],
         return_items=[],
         totals=totals,
-    )
+    ).success
     assert not saved
     assert fake_db.last_error is not None
     assert "MISSING001" in fake_db.last_error
@@ -441,7 +441,7 @@ def test_estimate_delete_preserves_assigned_silver_bars(fake_db):
     est_repo = EstimatesRepository(fake_db)
     silver_commands = SilverBarCommandRepository(fake_db)
     silver_queries = SilverBarQueryRepository(fake_db)
-    est_repo.save_estimate_with_returns(
+    est_repo.save_estimate_atomic(
         voucher_no="200",
         date="2025-01-02",
         silver_rate=76000.0,
@@ -574,14 +574,14 @@ def test_estimate_repository_load_preserves_item_types(fake_db):
         note="Test persistence",
     )
 
-    saved = repo.save_estimate_with_returns(
+    saved = repo.save_estimate_atomic(
         voucher_no=voucher,
         date="2025-03-01",
         silver_rate=68000.0,
         regular_items=[regular_payload],
         return_items=[return_payload, bar_payload],
         totals=totals,
-    )
+    ).success
     assert saved
 
     loaded = repo.get_estimate_by_voucher(voucher)
@@ -625,14 +625,14 @@ def test_save_estimate_accepts_mixed_case_item_codes(fake_db):
         total_gross=10.0, total_net=10.0, net_fine=9.25, net_wage=100.0
     )
 
-    saved = repo.save_estimate_with_returns(
+    saved = repo.save_estimate_atomic(
         voucher_no="405",
         date="2025-01-06",
         silver_rate=72000.0,
         regular_items=[payload],
         return_items=[],
         totals=totals,
-    )
+    ).success
 
     assert saved
     assert fake_db.last_error is None

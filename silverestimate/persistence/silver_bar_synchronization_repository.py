@@ -11,8 +11,8 @@ from uuid import uuid4
 from silverestimate.domain.estimate_validation import finite_number
 from silverestimate.domain.numeric_policy import fine_weight
 from silverestimate.persistence.database_driver import Cursor
-from silverestimate.persistence.silver_bar_repository_base import (
-    _SilverBarRepositoryBase,
+from silverestimate.persistence.silver_bar_query_repository import (
+    SilverBarRepositoryBase,
 )
 
 
@@ -37,7 +37,7 @@ class BarReconciliationPlan:
     links: list[tuple[int, str]]
 
 
-class SilverBarSynchronizationRepository(_SilverBarRepositoryBase):
+class SilverBarSynchronizationRepository(SilverBarRepositoryBase):
     """Preserve bar identity and reject edits to inventory with a lifecycle history."""
 
     @staticmethod

@@ -26,10 +26,6 @@ class _StubEstimateRepo:
     def __init__(self):
         self.calls = []
 
-    def save_estimate_with_returns(self, *args):
-        self.calls.append(("save_estimate_with_returns", args))
-        return "saved"
-
     def get_estimate_history_page(self, **kwargs):
         self.calls.append(("get_estimate_history_page", kwargs))
         return [{"voucher_no": "100"}]
@@ -98,35 +94,6 @@ def test_item_facade_delegates_and_preload_uses_keyed_connection_factory():
         ("get_items_by_codes", ("ITM001", "ITM002")),
     ]
     assert facade._item_cache_controller.calls == [facade.open_read_connection]
-
-
-def test_estimate_facade_clears_last_error_before_delegating():
-    facade = _FacadeHarness()
-
-    result = facade.save_estimate_with_returns(
-        "100",
-        "2025-01-01",
-        70000.0,
-        [{"code": "REG001"}],
-        [{"code": "RET001"}],
-        {"total_net": 1.0},
-    )
-
-    assert result == "saved"
-    assert facade.last_error is None
-    assert facade.estimates_repo.calls == [
-        (
-            "save_estimate_with_returns",
-            (
-                "100",
-                "2025-01-01",
-                70000.0,
-                [{"code": "REG001"}],
-                [{"code": "RET001"}],
-                {"total_net": 1.0},
-            ),
-        )
-    ]
 
 
 def test_estimate_facade_delegates_history_page_lookup():

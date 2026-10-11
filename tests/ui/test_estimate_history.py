@@ -40,6 +40,14 @@ def _build_harness():
     harness.print_button = _ButtonStub(enabled=False)
     harness.delete_button = _ButtonStub(enabled=False)
     harness.load_more_button = _ButtonStub(enabled=False)
+    harness._loading = True
+    harness.selected = [object()]
+    harness.estimates_table = SimpleNamespace(
+        selectionModel=lambda: SimpleNamespace(selectedRows=lambda: harness.selected)
+    )
+    harness._sync_action_buttons = lambda: EstimateHistoryDialog._sync_action_buttons(
+        harness
+    )
     return harness
 
 
@@ -52,6 +60,17 @@ def test_loading_done_re_enables_buttons_in_finally_path():
     assert harness.print_button.enabled is True
     assert harness.delete_button.enabled is True
     assert harness.load_more_button.enabled is True
+
+
+def test_row_actions_stay_disabled_until_an_estimate_is_selected():
+    harness = _build_harness()
+    harness.selected = []
+    EstimateHistoryDialog._loading_done(harness, 2)
+
+    assert harness.search_button.enabled is True
+    assert harness.open_button.enabled is False
+    assert harness.print_button.enabled is False
+    assert harness.delete_button.enabled is False
 
 
 def test_populate_table_uses_model_rows_and_selection_lookup(qtbot, monkeypatch):
@@ -94,10 +113,7 @@ def test_populate_table_uses_model_rows_and_selection_lookup(qtbot, monkeypatch)
         )
 
         assert dialog.estimates_model.rowCount() == 2
-        assert (
-            dialog.results_summary_label.text()
-            == "2 of 2 estimates in current date range"
-        )
+        assert dialog.results_summary_label.text() == "2 estimates in these dates"
         assert dialog.results_summary_label.minimumWidth() >= (
             dialog.results_summary_label.fontMetrics().horizontalAdvance(
                 dialog.results_summary_label.text()
@@ -151,6 +167,37 @@ def test_estimate_history_uses_compact_top_controls(qtbot, monkeypatch):
         assert filter_card.height() <= 56
         # Native Windows metrics can differ from the offscreen plugin by one pixel.
         assert dialog.estimates_table.viewport().height() >= 546
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+
+
+def test_filter_row_keeps_search_in_view_and_says_nothing_twice(qtbot, monkeypatch):
+    monkeypatch.setattr(EstimateHistoryDialog, "load_estimates", lambda self: None)
+    dialog = EstimateHistoryDialog(_DialogDbStub(), main_window_ref=None)
+    qtbot.addWidget(dialog)
+    try:
+        dialog.resize(1280, 700)
+        dialog.show()
+        qtbot.waitUntil(lambda: dialog.isVisible(), timeout=1000)
+        assert dialog._filter_title.isVisible()
+
+        # Narrow: the heading, which repeats the window title, makes room.
+        dialog.resize(dialog.minimumWidth(), 600)
+        qtbot.waitUntil(lambda: not dialog._filter_title.isVisible(), timeout=1000)
+        assert dialog.search_button.isVisible()
+
+        # An empty result is explained in the table, not a second time here.
+        dialog._update_results_summary(0)
+        assert dialog.results_summary_label.text() == ""
+        assert [
+            button.text()
+            for button in (
+                dialog.open_button,
+                dialog.print_button,
+                dialog.delete_button,
+            )
+        ] == ["Open Estimate", "Print Estimate", "Delete Estimate"]
     finally:
         dialog.close()
         dialog.deleteLater()

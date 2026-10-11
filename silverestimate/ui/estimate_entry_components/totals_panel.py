@@ -100,17 +100,12 @@ class TotalsPanel(QWidget):
         "silver_bar",
     ]
 
-    _SIDEBAR_TOTAL_CAPTIONS = {
-        "overall_gross_label": "Total gross",
-        "overall_poly_label": "Poly",
-    }
-
     _SECTION_DEFINITIONS = {
         "totals": (
             "Totals",
             [
-                ("Total Gross Wt:", "overall_gross_label", "0.00"),
-                ("Total Poly Wt:", "overall_poly_label", "0.00"),
+                ("Total gross", "overall_gross_label", "0.00"),
+                ("Poly", "overall_poly_label", "0.00"),
             ],
         ),
         "regular": (
@@ -166,15 +161,8 @@ class TotalsPanel(QWidget):
                 deduped.append(key)
         return deduped
 
-    def __init__(self, parent=None, *, layout_mode: str = "horizontal"):
-        """Initialize the totals panel.
-
-        Args:
-            parent: Optional parent widget
-            layout_mode: "horizontal" (bottom panel) or "sidebar" (right panel)
-        """
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self._layout_mode = (layout_mode or "horizontal").strip().lower()
         self._section_order = list(self._DEFAULT_SECTION_ORDER)
         self._category_visibility = {
             "return": False,
@@ -188,12 +176,6 @@ class TotalsPanel(QWidget):
         self._summary_tables: list[QTableWidget] = []
         self._setup_ui()
 
-    @property
-    def layout_mode(self) -> str:
-        """Return the immutable layout mode used to build this panel."""
-
-        return self._layout_mode
-
     def _normalize_section_order(self, order) -> list[str]:
         return self.normalize_section_order(order)
 
@@ -205,10 +187,7 @@ class TotalsPanel(QWidget):
         if normalized == self._section_order:
             return
         self._section_order = normalized
-        if self._layout_mode == "sidebar":
-            self._rebuild_sidebar_section_cards()
-        else:
-            self._build_horizontal_sections()
+        self._rebuild_sidebar_section_cards()
 
     def _breakdown_value_attr_names(self) -> list[str]:
         attrs: list[str] = []
@@ -268,169 +247,15 @@ class TotalsPanel(QWidget):
         if isinstance(final_size, int) and final_size > 0:
             self.set_final_calc_font_size(int(final_size))
 
-    def _clear_layout(self, layout) -> None:
-        while layout.count():
-            item = layout.takeAt(0)
-            child_widget = item.widget()
-            child_layout = item.layout()
-            if child_widget is not None:
-                child_widget.deleteLater()
-            elif child_layout is not None:
-                self._clear_layout(child_layout)
-
-    def _setup_ui(self) -> None:
-        """Set up the user interface."""
-        if self._layout_mode == "sidebar":
-            self._setup_sidebar_ui()
-            return
-        self._setup_horizontal_ui()
-
-    def _create_breakdown_form(self, title, labels_attrs, section_key: str = "regular"):
-        form = QFormLayout()
-        form.setSpacing(2)
-        form.setHorizontalSpacing(6)
-        form.setVerticalSpacing(2)
-
-        title_label = QLabel(f"{title}")
-        title_label.setObjectName("SectionTitle")
-        title_label.setProperty("sectionKind", section_key)
-        title_font = title_label.font()
-        title_font.setBold(True)
-        title_font.setUnderline(True)
-        title_label.setFont(title_font)
-        form.addRow(title_label)
-
-        for label_text, attr_name, default_value in labels_attrs:
-            row_label = QLabel(label_text)
-            row_label.setObjectName("MetricLabel")
-            row_label.setProperty("sectionKind", section_key)
-
-            value_label = QLabel(default_value)
-            value_label.setObjectName("MetricValue")
-            value_label.setProperty("sectionKind", section_key)
-            value_label.setAlignment(
-                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-            )
-            setattr(self, attr_name, value_label)
-            form.addRow(row_label, value_label)
-        return form
-
-    def _create_separator(self):
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.VLine)
-        sep.setFrameShadow(QFrame.Shadow.Sunken)
-        return sep
-
     @staticmethod
-    def _create_metric_header(
-        text: str, *, object_name: str = "FinalMetricLabel"
-    ) -> QLabel:
+    def _create_metric_header(text: str) -> QLabel:
         label = QLabel(text)
-        label.setObjectName(object_name)
+        label.setObjectName("FinalMetricLabel")
         label.setProperty("sectionKind", TotalsPanel._FINAL_SECTION_KEY)
         header_font = label.font()
         header_font.setBold(True)
         label.setFont(header_font)
         return label
-
-    def _setup_horizontal_ui(self) -> None:
-        self.setObjectName("TotalsContainer")
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
-
-        self._horizontal_main_layout = QHBoxLayout(self)
-        self._horizontal_main_layout.setSpacing(8)
-        self._horizontal_main_layout.setContentsMargins(8, 3, 12, 6)
-        self._build_horizontal_sections()
-
-    def _create_horizontal_final_calc_form(self):
-        final_calc_form = QFormLayout()
-        final_calc_form.setSpacing(4)
-        final_calc_form.setHorizontalSpacing(8)
-        final_calc_form.setVerticalSpacing(2)
-        final_calc_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
-        final_calc_form.setFieldGrowthPolicy(
-            QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
-        )
-
-        final_title_label = QLabel("Final Calculation")
-        final_title_label.setObjectName("SectionTitle")
-        final_title_label.setProperty("sectionKind", self._FINAL_SECTION_KEY)
-        final_title_font = final_title_label.font()
-        final_title_font.setBold(True)
-        final_title_font.setUnderline(True)
-        final_title_label.setFont(final_title_font)
-        final_calc_form.addRow(final_title_label)
-
-        self.net_fine_label = QLabel("0.00")
-        self.net_fine_label.setObjectName("MetricValue")
-        self.net_fine_label.setProperty("sectionKind", self._FINAL_SECTION_KEY)
-        self.net_fine_label.setAlignment(
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-        )
-        self.net_fine_label.setSizePolicy(
-            QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Preferred
-        )
-        self.net_fine_label.setMinimumWidth(84)
-        net_fine_header = self._create_metric_header("Net Fine Wt:")
-        final_calc_form.addRow(net_fine_header, self.net_fine_label)
-
-        self.net_wage_label = QLabel("0.00")
-        self.net_wage_label.setObjectName("MetricValue")
-        self.net_wage_label.setProperty("sectionKind", self._FINAL_SECTION_KEY)
-        self.net_wage_label.setAlignment(
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-        )
-        self.net_wage_label.setSizePolicy(
-            QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Preferred
-        )
-        self.net_wage_label.setMinimumWidth(84)
-        net_wage_header = self._create_metric_header("Net Wage:")
-        final_calc_form.addRow(net_wage_header, self.net_wage_label)
-
-        line_before_grand = QFrame()
-        line_before_grand.setFrameShape(QFrame.Shape.HLine)
-        line_before_grand.setFrameShadow(QFrame.Shadow.Sunken)
-        final_calc_form.addRow(line_before_grand)
-
-        self.grand_total_label = QLabel(self._format_currency(0))
-        self.grand_total_label.setObjectName("GrandTotalValue")
-        self.grand_total_label.setProperty("sectionKind", self._FINAL_SECTION_KEY)
-        self.grand_total_label.setAlignment(
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-        )
-        self.grand_total_label.setSizePolicy(
-            QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Preferred
-        )
-        self.grand_total_label.setMinimumWidth(96)
-        grand_total_header = self._create_metric_header(
-            "Grand Total:", object_name="GrandTotalLabel"
-        )
-        final_calc_form.addRow(grand_total_header, self.grand_total_label)
-
-        return final_calc_form
-
-    def _build_horizontal_sections(self) -> None:
-        snapshot = self._snapshot_display_state()
-        self._clear_layout(self._horizontal_main_layout)
-
-        breakdown_order = [
-            key for key in self._section_order if key in self._SECTION_DEFINITIONS
-        ]
-
-        for idx, section_key in enumerate(breakdown_order):
-            title, labels_attrs = self._SECTION_DEFINITIONS[section_key]
-            self._horizontal_main_layout.addLayout(
-                self._create_breakdown_form(title, labels_attrs, section_key)
-            )
-            if idx < len(breakdown_order) - 1:
-                self._horizontal_main_layout.addWidget(self._create_separator())
-
-        self._horizontal_main_layout.addStretch(1)
-        self._horizontal_main_layout.addWidget(self._create_separator())
-        self._horizontal_main_layout.addLayout(
-            self._create_horizontal_final_calc_form()
-        )
-        self._restore_display_state(snapshot)
 
     def _create_sidebar_section_card(
         self, title, labels_attrs, section_key: str = "regular"
@@ -458,9 +283,7 @@ class TotalsPanel(QWidget):
         overall = self._create_summary_table(1, 2 * len(labels_attrs))
         overall.horizontalHeader().hide()
         for index, (caption, attr, default) in enumerate(labels_attrs):
-            self._set_summary_caption(
-                overall, 0, self._SIDEBAR_TOTAL_CAPTIONS.get(attr, caption), 2 * index
-            )
+            self._set_summary_caption(overall, 0, caption, 2 * index)
             self._set_summary_value(overall, 0, 2 * index + 1, attr, default)
         card_layout.addWidget(overall)
         return card
@@ -708,15 +531,13 @@ class TotalsPanel(QWidget):
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
         final_layout.addRow(
-            self._create_metric_header("Net Wage (₹)"), self.net_wage_label
+            self._create_metric_header("Net Labour (₹)"), self.net_wage_label
         )
         outer_layout.addLayout(final_layout)
 
         return card
 
     def _sidebar_section_order_from_list(self) -> list[str]:
-        if not hasattr(self, "_summary_sections_list"):
-            return list(self._section_order)
         valid_keys = set(self._SECTION_DEFINITIONS)
         valid_keys.add(self._FINAL_SECTION_KEY)
         order: list[str] = []
@@ -775,19 +596,11 @@ class TotalsPanel(QWidget):
         self.section_order_changed.emit(list(self._section_order))
 
     def _schedule_sidebar_item_size_sync(self) -> None:
-        if self._layout_mode != "sidebar":
-            return
-        if not hasattr(self, "_summary_sections_list"):
-            return
         if self._sidebar_size_sync_timer.isActive():
             self._sidebar_size_sync_timer.stop()
         self._sidebar_size_sync_timer.start()
 
     def _sync_sidebar_item_sizes(self) -> None:
-        if self._layout_mode != "sidebar":
-            return
-        if not hasattr(self, "_summary_sections_list"):
-            return
         viewport = self._summary_sections_list.viewport()
         target_width = max(0, viewport.width() - 8)
         for idx in range(self._summary_sections_list.count()):
@@ -842,8 +655,6 @@ class TotalsPanel(QWidget):
         )
 
     def _rebuild_sidebar_section_cards(self) -> None:
-        if not hasattr(self, "_summary_sections_list"):
-            return
         snapshot = self._snapshot_display_state()
         self._suspend_section_order_signals = True
         try:
@@ -862,6 +673,10 @@ class TotalsPanel(QWidget):
                 item_flags = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
                 if section_key != self._FINAL_SECTION_KEY:
                     card.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+                    card.setToolTip(
+                        "Right-click to change the order of the Regular, "
+                        "Return and Silver Bar rows"
+                    )
                 card.customContextMenuRequested.connect(
                     lambda pos, widget=card: self._show_category_menu(widget, pos)
                 )
@@ -876,11 +691,22 @@ class TotalsPanel(QWidget):
         self._schedule_sidebar_item_size_sync()
 
     def _show_category_menu(self, card, pos):
+        """Offer to reorder the Regular, Return and Silver Bar rows."""
         menu = QMenu(card)
-        for key in ("regular", "return", "silver_bar"):
-            sub = menu.addMenu(self._SECTION_DEFINITIONS[key][0])
-            for delta, caption in ((-1, "Move up"), (1, "Move down")):
-                action = sub.addAction(caption)
+        heading = menu.addAction("Order of These Rows")
+        heading.setEnabled(False)
+        order = [
+            key
+            for key in self._section_order
+            if key in {"regular", "return", "silver_bar"}
+        ]
+        for index, key in enumerate(order):
+            menu.addSeparator()
+            title = self._SECTION_DEFINITIONS[key][0]
+            for delta, direction in ((-1, "Up"), (1, "Down")):
+                action = menu.addAction(f"Move {title} {direction}")
+                # The first row cannot go up, nor the last one down.
+                action.setEnabled(0 <= index + delta < len(order))
                 action.triggered.connect(
                     lambda checked=False, category=key, step=delta: self.move_category(
                         category, step
@@ -902,7 +728,7 @@ class TotalsPanel(QWidget):
                 self._section_order.index(categories[destination]),
             )
 
-    def _setup_sidebar_ui(self) -> None:
+    def _setup_ui(self) -> None:
         self.setObjectName("TotalsSidebar")
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
 
@@ -917,12 +743,14 @@ class TotalsPanel(QWidget):
         outer.addWidget(scroll)
         main_layout = QVBoxLayout(contents)
         main_layout.setContentsMargins(4, 4, 4, 4)
-        main_layout.setSpacing(8)
+        # Tight enough that the whole panel fits the smallest window (680 px
+        # high) with no scrollbar.
+        main_layout.setSpacing(6)
 
         self._sidebar_top_host = QWidget()
         self._sidebar_top_layout = QVBoxLayout(self._sidebar_top_host)
         self._sidebar_top_layout.setContentsMargins(0, 0, 0, 0)
-        self._sidebar_top_layout.setSpacing(6)
+        self._sidebar_top_layout.setSpacing(4)
         self._sidebar_top_host.setVisible(False)
         main_layout.addWidget(self._sidebar_top_host)
 
@@ -963,19 +791,8 @@ class TotalsPanel(QWidget):
         main_layout.addWidget(self.sidebar_footer_host)
         self._rebuild_sidebar_section_cards()
 
-    def set_sidebar_top_widget(self, widget: QWidget | None) -> None:
-        """Attach a widget above the sidebar summary cards."""
-        self.set_sidebar_top_widgets([] if widget is None else [widget])
-
     def set_sidebar_top_widgets(self, widgets: list[QWidget]) -> None:
         """Attach widgets, top to bottom, above the sidebar summary cards."""
-        if self._layout_mode != "sidebar":
-            return
-        if not hasattr(self, "_sidebar_top_layout") or not hasattr(
-            self, "_sidebar_top_host"
-        ):
-            return
-
         while self._sidebar_top_layout.count():
             item = self._sidebar_top_layout.takeAt(0)
             child_widget = item.widget()
@@ -996,10 +813,6 @@ class TotalsPanel(QWidget):
         if section_key not in self._category_visibility:
             return
         self._category_visibility[section_key] = bool(visible)
-        if self._layout_mode != "sidebar" or not hasattr(
-            self, "_summary_sections_list"
-        ):
-            return
         for index in range(self._summary_sections_list.count()):
             item = self._summary_sections_list.item(index)
             if item.data(Qt.ItemDataRole.UserRole) == section_key:
@@ -1090,7 +903,6 @@ class TotalsPanel(QWidget):
                 "MetricValue",
                 "SectionTitle",
                 "FinalMetricLabel",
-                "GrandTotalLabel",
             }:
                 continue
             font = label.font()

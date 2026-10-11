@@ -48,28 +48,20 @@ if TYPE_CHECKING:
         TotalsPanel,
         VoucherToolbar,
     )
-    from .modern_components import BottomStatusStrip
 
 
 class EstimateEntryWidget(QWidget):
     """Widget for silver estimate entry and management."""
 
     # Controller-managed controls and state; no dynamic attribute fallback.
-    _breakdown_font_size: int
     _code_focus_timer: QTimer
     _content_splitter: QSplitter
-    _final_calc_font_size: int
     _last_saved_status: str
     _live_rate_runner: LatestRequestRunner
     _pending_focus_row: int
-    _totals_panel_bottom: TotalsPanel | None
-    _totals_panel_sidebar: TotalsPanel | None
-    _totals_position: str
-    _totals_section_order: list[str]
     bar_fine_label: QLabel
     bar_gross_label: QLabel
     bar_net_label: QLabel
-    bottom_status_strip: BottomStatusStrip
     clear_button: QPushButton
     command_history_action: QAction
     command_settings_action: QAction
@@ -246,7 +238,6 @@ class EstimateEntryWidget(QWidget):
 
         self.layout_controller._setup_ui()
         self.layout_controller._load_totals_section_order_setting()
-        self.layout_controller._load_totals_position_setting()
         self.layout_controller._setup_table_delegates()
 
         self._column_save_timer = QTimer(self)
@@ -313,13 +304,24 @@ class EstimateEntryWidget(QWidget):
     def show_inline_status(self, message, timeout=3000, level="info"):
         self._status_helper.show(message, timeout=timeout, level=level)
 
-    def refresh_bottom_status(self) -> None:
-        refresher = getattr(self._layout_controller, "refresh_bottom_status", None)
+    def refresh_status_line(self) -> None:
+        refresher = getattr(self._layout_controller, "refresh_status_line", None)
         if callable(refresher):
             refresher()
 
     def _status(self, message, timeout=3000):
         self.show_status(message, timeout)
+
+    def _notify(self, message, timeout=3000, level="info"):
+        """Report an outcome the user should see, as a brief toast.
+
+        Routine progress stays in ``_status``; this is for results that
+        would otherwise need a message box, such as a save or a deletion.
+        """
+        self._status(message, timeout)
+        show_toast = getattr(self.main_window, "show_toast", None)
+        if callable(show_toast):
+            show_toast(message, timeout=timeout, level=level)
 
     def has_unsaved_changes(self) -> bool:
         return bool(getattr(self, "_unsaved_changes", False))
@@ -353,7 +355,7 @@ class EstimateEntryWidget(QWidget):
     def _on_unsaved_state_changed(self, dirty: bool) -> None:
         self.toolbar.show_unsaved_badge(dirty)
         try:
-            self.refresh_bottom_status()
+            self.refresh_status_line()
         except Exception as exc:
             self.logger.debug("Could not refresh estimate status strip: %s", exc)
         if self.main_window and hasattr(self.main_window, "setWindowModified"):

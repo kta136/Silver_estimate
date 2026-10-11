@@ -157,6 +157,9 @@ class _VoucherEditStub(QObject):
     def clear(self) -> None:
         self._text = ""
 
+    def setFocus(self) -> None:
+        self.focused = True
+
 
 class _Host(QWidget):
     def __init__(self) -> None:
@@ -206,12 +209,19 @@ class _Host(QWidget):
         self.add_row_calls = 0
         self.calculate_totals_calls = 0
         self.log_perf_calls: list[tuple[str, int]] = []
+        self.notifications: list[str] = []
+        self.notification_levels: list[str] = []
         self.layout_controller = self
         self.table_controller = self
         self.totals_controller = self
 
     def _status(self, message: str, timeout: int = 3000) -> None:
         self.status_calls.append((message, timeout))
+
+    def _notify(self, message: str, timeout: int = 3000, level: str = "info") -> None:
+        self.status_calls.append((message, timeout))
+        self.notifications.append(message)
+        self.notification_levels.append(level)
 
     def has_unsaved_changes(self) -> bool:
         return self._unsaved_changes
@@ -257,6 +267,9 @@ class _Host(QWidget):
 
     def _schedule_columns_autofit(self, *, force: bool = False) -> None:
         self.schedule_columns_calls.append(force)
+
+    def grow_columns_to_content(self) -> None:
+        pass
 
     def _normalize_wage_type(self, value: object) -> str:
         return "PC" if str(value or "").strip().upper() == "PC" else "WT"
@@ -332,10 +345,9 @@ def test_load_estimate_not_found_preserves_current_entry(workflow_host):
     assert host._estimate_loaded is False
     assert host.delete_estimate_button.isEnabled() is True
     assert host.focus_calls == []
-    assert host.status_calls[-1] == (
-        "Estimate MISS1 not found. Current entry kept.",
-        4000,
-    )
+    # Shown to the user, not only written to a status line nobody sees.
+    assert host.notifications[-1] == "No estimate MISS1. Your current entry was kept."
+    assert host.notification_levels[-1] == "warning"
 
 
 def test_load_estimate_reports_error_status(workflow_host):
@@ -349,14 +361,17 @@ def test_load_estimate_reports_error_status(workflow_host):
 
     controller.load_estimate()
 
-    assert host.status_calls[-1] == ("Error loading estimate: load boom", 4000)
+    assert host.notifications[-1] == "Estimate ERR1 could not be opened: load boom"
+    assert host.notification_levels[-1] == "error"
 
 
-def test_safe_load_estimate_respects_unsaved_cancel(workflow_host, monkeypatch):
+def test_safe_load_estimate_respects_unsaved_cancel(
+    workflow_host, monkeypatch, confirmations
+):
     host, controller = workflow_host
     host.voucher_edit.setText("V202")
     host._unsaved_changes = True
-    _MessageBoxStub.question_return = _MessageBoxStub.No
+    confirmations.always("Cancel")
     calls = []
     monkeypatch.setattr(
         workflow_module.EstimateEntryWorkflowController,
@@ -385,11 +400,15 @@ def test_safe_load_estimate_ignores_empty_voucher(workflow_host, monkeypatch):
 
 
 def test_save_estimate_requires_voucher_number(workflow_host):
-    _host, controller = workflow_host
+    host, controller = workflow_host
 
     controller.save_estimate()
 
-    assert any(args[1] == "Input Error" for args in _MessageBoxStub.warning_calls)
+    assert any(
+        args[1] == "Voucher Number Needed" for args in _MessageBoxStub.warning_calls
+    )
+    # The cursor goes to the field that has to be filled in.
+    assert host.voucher_edit.focused is True
 
 
 def test_save_estimate_returns_when_presenter_missing(workflow_host):
@@ -421,8 +440,10 @@ def test_save_estimate_handles_exception(workflow_host, monkeypatch):
 
     controller.save_estimate()
 
+    # A plain sentence first; the technical reason follows as a detail.
     assert any(
-        args[1] == "Save Error" and args[2] == "save blew up"
+        args[1] == "Estimate Not Saved"
+        and args[2] == "The estimate could not be saved.\n\nDetails: save blew up"
         for args in _MessageBoxStub.critical_calls
     )
 
@@ -450,7 +471,9 @@ def test_save_estimate_failure_shows_critical(workflow_host, monkeypatch):
     controller.save_estimate()
 
     assert ("No good", 5000) in host.status_calls
-    assert any(args[1] == "Save Error" for args in _MessageBoxStub.critical_calls)
+    assert any(
+        args[1] == "Estimate Not Saved" for args in _MessageBoxStub.critical_calls
+    )
     assert any(
         "Database is locked" in args[2] for args in _MessageBoxStub.critical_calls
     )
@@ -487,7 +510,9 @@ def test_delete_current_estimate_failure_shows_warning(workflow_host, monkeypatc
 
     controller.delete_current_estimate()
 
-    assert any(args[1] == "Error" for args in _MessageBoxStub.warning_calls)
+    assert any(
+        args[1] == "Estimate Not Deleted" for args in _MessageBoxStub.warning_calls
+    )
     assert any(
         "issued silver bars" in args[2] for args in _MessageBoxStub.warning_calls
     )
@@ -550,15 +575,17 @@ def test_clear_form_resets_modes_and_focuses_first_row(workflow_host, monkeypatc
     assert host._unsaved_changes is False
 
 
-def test_confirm_exit_respects_unsaved_state(workflow_host):
+def test_confirm_exit_respects_unsaved_state(workflow_host, confirmations):
     host, controller = workflow_host
     assert controller.confirm_exit() is True
+    assert confirmations.shown == []
 
     host._unsaved_changes = True
-    _MessageBoxStub.question_return = _MessageBoxStub.No
+    confirmations.always("Cancel")
     assert controller.confirm_exit() is False
-    _MessageBoxStub.question_return = _MessageBoxStub.Discard
+    confirmations.always("Discard")
     assert controller.confirm_exit() is True
+    assert confirmations.shown[-1].startswith("Unsaved Estimate")
 
 
 def test_show_history_calls_presenter(workflow_host):
@@ -602,17 +629,41 @@ def test_delete_current_row_updates_totals_and_focus(workflow_host, monkeypatch)
     assert host.item_table.current_cells[-1] == (1, workflow_module.COL_CODE)
 
 
-def test_delete_current_row_rejects_only_row(workflow_host):
+def test_delete_current_row_clears_the_only_row_without_asking(
+    workflow_host, monkeypatch
+):
     host, controller = workflow_host
+    only = EstimateEntryRowState(code="RING001", gross=5.0)
     host.item_table._current_row = 0
     host.item_table._row_count = 1
+    host.item_table.get_all_rows = lambda: (only,)
+    monkeypatch.setattr(workflow_module.QTimer, "singleShot", lambda _ms, fn: fn())
+    questions_before = len(_MessageBoxStub.question_calls)
+    warnings_before = len(_MessageBoxStub.warning_calls)
 
     controller.delete_current_row()
 
-    assert any(
-        "Cannot delete the only row." in args[2]
-        for args in _MessageBoxStub.warning_calls
-    )
+    # The row is removed and a fresh entry row takes its place; nothing asks.
+    assert host.item_table.deleted_rows == [0]
+    assert host.add_row_calls == 1
+    assert host.item_table.rowCount() == 1
+    assert len(_MessageBoxStub.question_calls) == questions_before
+    assert len(_MessageBoxStub.warning_calls) == warnings_before
+    assert controller._deleted_rows[-1] == (0, only)
+    # The undo hint is shown to the user, not only written to the status.
+    assert workflow_module.ROW_UNDO_SHORTCUT in host.notifications[-1]
+
+
+def test_delete_current_row_leaves_an_empty_only_row_alone(workflow_host):
+    host, controller = workflow_host
+    host.item_table._current_row = 0
+    host.item_table._row_count = 1
+    host.item_table.get_all_rows = lambda: (EstimateEntryRowState(),)
+
+    controller.delete_current_row()
+
+    assert host.item_table.deleted_rows == []
+    assert host.status_calls[-1][0] == "This row is already empty."
 
 
 def test_prompt_item_selection_and_open_history_dialog(workflow_host, monkeypatch):
@@ -854,7 +905,8 @@ def test_build_current_estimate_preview_data_reports_skipped_rows(
 
     preview = controller._build_current_estimate_preview_data("PX01")
 
-    assert host.status_calls[-1] == ("Preview skipped invalid rows: 2, 4", 5000)
+    assert host.notifications[-1] == "Left out of the preview, rows with errors: 2, 4"
+    assert host.notification_levels[-1] == "warning"
     assert preview["header"]["voucher_no"] == "PX01"
     assert preview["header"]["note"] == "preview note"
     assert preview["items"][0]["item_code"] == "REG001"

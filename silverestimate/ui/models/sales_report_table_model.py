@@ -47,12 +47,17 @@ class SalesReportTableModel(QAbstractTableModel):
         self.level: ReportLevel = "period"
         self._headers: tuple[str, ...] = ("Date", *self.WEIGHT_HEADERS)
 
-    def set_report(self, level: ReportLevel, rows: tuple[SalesReportRow, ...]) -> None:
+    def set_report(
+        self,
+        level: ReportLevel,
+        rows: tuple[SalesReportRow, ...],
+        grouping: str = "day",
+    ) -> None:
         self.beginResetModel()
         self.level = level
         self.rows = list(rows)
         labels = {
-            "period": ("Date / month",),
+            "period": ("Month" if grouping == "month" else "Date",),
             "item": ("Item code", "Item name"),
             "voucher": ("Voucher", "Date"),
         }
@@ -79,9 +84,25 @@ class SalesReportTableModel(QAbstractTableModel):
         if role == Qt.ItemDataRole.ForegroundRole and section >= self.weight_offset:
             sale = section - self.weight_offset < 2
             return QColor(INFO_TEXT if sale else WARNING_TEXT)
-        if role == Qt.ItemDataRole.TextAlignmentRole and section >= self.weight_offset:
-            return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        if role == Qt.ItemDataRole.TextAlignmentRole:
+            # Each heading sits over its data: figures right, labels left.
+            side = (
+                Qt.AlignmentFlag.AlignRight
+                if section >= self.weight_offset
+                else Qt.AlignmentFlag.AlignLeft
+            )
+            return side | Qt.AlignmentFlag.AlignVCenter
         return None
+
+    def export_rows(self) -> list[list[str]]:
+        """Return the table as shown, heading row first, for a CSV file."""
+        columns = range(len(self._headers))
+        table = [[header.replace("\n", " ") for header in self._headers]]
+        table.extend(
+            [str(self.data(self.index(row, column)) or "") for column in columns]
+            for row in range(len(self.rows))
+        )
+        return table
 
     def weight_at(self, row: int, slot: int) -> float:
         """Return one of a row's four weights as a float, for drawing."""

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QEvent, QObject, QSize, Qt
 from PySide6.QtGui import QAction, QFont
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -32,6 +32,7 @@ from .theme_tokens import (
     SURFACE_BG,
     TEXT_STRONG,
 )
+from .window_sizing import set_usable_minimum_size
 
 TOOLBAR_STYLE = f"""
     QToolBar#PrintPreviewToolbar {{
@@ -76,8 +77,6 @@ TOOLBAR_STYLE = f"""
         color: {FIELD_TEXT};
     }}
     QComboBox#PreviewOrientationCombo {{
-        min-width: 88px;
-        max-width: 94px;
         min-height: 28px;
     }}
     QSpinBox#PreviewPageSpin {{
@@ -86,6 +85,72 @@ TOOLBAR_STYLE = f"""
         min-height: 28px;
     }}
     """
+
+
+# Buttons whose icon says enough once the window is too narrow for
+# every caption. Print and More always keep theirs.
+COMPACTABLE_ACTIONS = ("Export PDF", "Fit Width", "Fit Page", "Close")
+
+
+class ToolbarCompactor(QObject):
+    """Drop some captions rather than push More and Close out of view.
+
+    The toolbar scrolls sideways when it does not fit, which hides its
+    last buttons. Showing a few buttons as icons keeps all of them on
+    screen down to about two thirds of the full width.
+    """
+
+    def __init__(self, preview: QWidget, toolbar: QToolBar) -> None:
+        super().__init__(preview)
+        self._preview = preview
+        self._toolbar = toolbar
+        self._buttons = [
+            button
+            for action in toolbar.actions()
+            if action.text() in COMPACTABLE_ACTIONS
+            and isinstance(button := toolbar.widgetForAction(action), QToolButton)
+        ]
+        self._full_width = toolbar.sizeHint().width()
+        self.compact = False
+        # The window may not be made narrower than the compact toolbar,
+        # unless the screen itself is.
+        self._apply(True)
+        self.compact_width = toolbar.sizeHint().width()
+        self._apply(False)
+        set_usable_minimum_size(
+            preview,
+            width=max(preview.minimumWidth(), self.compact_width),
+            height=preview.minimumHeight(),
+        )
+        preview.installEventFilter(self)
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if watched is self._preview and event.type() in (
+            QEvent.Type.Resize,
+            QEvent.Type.Show,
+        ):
+            self.sync(self._preview.width())
+        return False
+
+    def sync(self, available_width: int) -> None:
+        compact = available_width < self._full_width
+        if compact != self.compact:
+            self._apply(compact)
+
+    def _apply(self, compact: bool) -> None:
+        self.compact = compact
+        style = (
+            Qt.ToolButtonStyle.ToolButtonIconOnly
+            if compact
+            else Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
+        for button in self._buttons:
+            button.setToolButtonStyle(style)
+        self._toolbar.setMinimumWidth(0)
+        layout = self._toolbar.layout()
+        if layout is not None:
+            layout.invalidate()
+        self._toolbar.setMinimumWidth(self._toolbar.sizeHint().width())
 
 
 class PrintPreviewToolbarBuilder:
@@ -119,14 +184,14 @@ class PrintPreviewToolbarBuilder:
 
         more_menu = QMenu("More preview actions", preview)
         more_menu.setObjectName("PreviewMoreMenu")
+        # Printer, page and font setup are chosen rarely; they sit in More
+        # with their names instead of as unlabelled icons on the toolbar.
         self._page_setup.add_menu_actions(more_menu, preview)
+        self._add_print_font_action(more_menu, preview)
 
         self._add_output_actions(toolbar, session, parent_widget)
-        for action in more_menu.actions():
-            add_icon_only_action(toolbar, action)
         toolbar.addWidget(self._page_setup.build_orientation_combo(preview))
         self._add_report_controls(toolbar, session)
-        self._add_print_font_action(toolbar, preview)
         toolbar.addSeparator()
 
         more_menu.addSeparator()
@@ -152,6 +217,7 @@ class PrintPreviewToolbarBuilder:
         self._add_close_action(more_menu, preview)
         add_icon_only_action(toolbar, more_menu.actions()[-1])
         toolbar.setMinimumWidth(toolbar.sizeHint().width())
+        preview.toolbar_compactor = ToolbarCompactor(preview, toolbar)
 
     @staticmethod
     def _configure_toolbar(toolbar: QToolBar) -> None:
@@ -170,7 +236,10 @@ class PrintPreviewToolbarBuilder:
         parent_widget: QWidget | None,
     ) -> None:
         preview = session.preview
-        print_action = QAction(get_icon("print", widget=preview), "Print", preview)
+        # A white icon: the default dark one disappears on the teal button.
+        print_action = QAction(
+            get_icon("print", widget=preview, color="#ffffff"), "Print", preview
+        )
         print_action.setToolTip("Send directly to the selected printer (Ctrl+P)")
         print_action.setShortcut("Ctrl+P")
         print_action.setShortcutContext(Qt.ShortcutContext.WindowShortcut)
@@ -226,7 +295,7 @@ class PrintPreviewToolbarBuilder:
 
     def _add_print_font_action(
         self,
-        toolbar: QToolBar,
+        menu: QMenu,
         preview,
     ) -> None:
         if self._get_print_font is None or self._persist_print_font is None:
@@ -240,7 +309,7 @@ class PrintPreviewToolbarBuilder:
             "Choose the print font family, size, and weight for this report"
         )
         font_action.triggered.connect(lambda: self.choose_print_font(preview))
-        add_icon_only_action(toolbar, font_action)
+        menu.addAction(font_action)
 
     def choose_print_font(self, preview) -> bool:
         if self._get_print_font is None or self._persist_print_font is None:
@@ -267,7 +336,9 @@ class PrintPreviewToolbarBuilder:
         more_button.setObjectName("PreviewMoreButton")
         more_button.setText("More")
         more_button.setIcon(get_icon("more", widget=preview))
-        more_button.setToolTip("Printer, page view, navigation, and close actions")
+        more_button.setToolTip(
+            "Printer, page and font setup, page view, navigation, and close"
+        )
         more_button.setAccessibleName("More preview actions")
         more_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         more_button.setMenu(more_menu)
@@ -296,4 +367,9 @@ def add_icon_only_action(toolbar: QToolBar, action: QAction) -> None:
         button.setAccessibleName(action.text())
 
 
-__all__ = ["PrintPreviewToolbarBuilder", "add_icon_only_action"]
+__all__ = [
+    "COMPACTABLE_ACTIONS",
+    "PrintPreviewToolbarBuilder",
+    "ToolbarCompactor",
+    "add_icon_only_action",
+]

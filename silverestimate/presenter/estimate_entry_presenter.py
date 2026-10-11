@@ -188,14 +188,17 @@ class EstimateEntryPresenter:
                     error_detail=result.error_detail,
                 )
 
+            def bars(count: int, kind: str = "silver bar") -> str:
+                return f"{count} {kind}" if count == 1 else f"{count} {kind}s"
+
             message_parts = [f"Estimate '{payload.voucher_no}' saved successfully."]
             if result.bars_added:
-                message_parts.append(f"{result.bars_added} silver bar(s) created.")
+                message_parts.append(f"{bars(result.bars_added)} created.")
             if result.bars_updated:
-                message_parts.append(f"{result.bars_updated} silver bar(s) updated.")
+                message_parts.append(f"{bars(result.bars_updated)} updated.")
             if result.bars_removed:
                 message_parts.append(
-                    f"{result.bars_removed} unused silver bar(s) removed."
+                    f"{bars(result.bars_removed, 'unused silver bar')} removed."
                 )
             message = " ".join(message_parts)
 

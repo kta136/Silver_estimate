@@ -9,7 +9,6 @@ from PySide6.QtWidgets import QLabel, QTableWidget
 
 from silverestimate.ui.application_theme import apply_light_application_theme
 from silverestimate.ui.estimate_entry_logic.constants import COL_WAGE_AMT
-from silverestimate.ui.toolbar_overflow import ToolbarOverflow
 from tests.factories import regular_item, return_item, silver_bar_item
 from tests.smoke.test_full_startup_smoke import _configure_smoke_font
 from tests.ui.test_estimate_entry_widget import _set_row
@@ -91,11 +90,10 @@ def test_compact_totals_use_aligned_table_and_independent_grand_total_font_size(
         assert widget.item_table.horizontalScrollBar().maximum() == 0
         assert widget.note_edit.width() >= 120
     assert widget.toolbar.parent() is panel._sidebar_top_host
-    assert widget.bottom_status_strip.isHidden()
     assert "F1 Shortcuts" in widget.sidebar_status_label.text()
     # Without a main-window menu bar only the Save/Print/New strip stays on top.
-    toolbar = widget.findChild(ToolbarOverflow)
-    assert toolbar.height() <= 48
+    assert widget.command_strip.isVisible()
+    assert widget.command_strip.height() <= 48
     assert widget.item_table.height() >= height - 60
     for button in (
         widget.last_balance_button,

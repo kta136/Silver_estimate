@@ -19,7 +19,14 @@ from silverestimate.persistence.draft_repository import (
     DraftRecord,
     DraftRepository,
 )
-from silverestimate.ui.confirmation_layout import polish_confirmation
+from silverestimate.ui.display_formatting import format_local_timestamp
+from silverestimate.ui.message_dialogs import (
+    ROLE_DANGER_OUTLINE,
+    ROLE_NEUTRAL,
+    ROLE_PRIMARY,
+    set_button_role,
+    style_message_box,
+)
 
 if TYPE_CHECKING:
     from .estimate_entry import EstimateEntryWidget
@@ -96,24 +103,29 @@ def choose_recovery(parent: Any, record: DraftRecord) -> str:
     dialog = QMessageBox(parent)
     dialog.setWindowTitle("Recover Unfinished Estimate")
     dialog.setText("Continue your unfinished estimate?")
+    kept_at = format_local_timestamp(record.updated_utc)
     dialog.setInformativeText(
-        f"Voucher {record.voucher_no} · Last preserved {record.updated_utc} (UTC)\n\n"
-        "Restore the recovery copy to continue editing.\n"
-        "Restoring does not save the estimate or change inventory.\n\n"
-        "Only the recovery copy is discarded. This does not delete any saved estimate."
+        f"Voucher {record.voucher_no}"
+        + (f" · last kept {kept_at}" if kept_at else "")
+        + "\n\n"
+        "Restoring brings back what you were typing. It does not save the "
+        "estimate or change stock.\n\n"
+        "Discarding removes only this recovery copy. Saved estimates are not "
+        "affected."
     )
-    restore = dialog.addButton("Restore && continue", QMessageBox.ButtonRole.AcceptRole)
+    restore = dialog.addButton("Restore && Continue", QMessageBox.ButtonRole.AcceptRole)
     discard = dialog.addButton(
-        "Discard recovery copy", QMessageBox.ButtonRole.DestructiveRole
-    )
-    restore.setStyleSheet("background: #007f89; color: white; padding: 8px 14px;")
-    discard.setStyleSheet(
-        "border: 1px solid #dc2638; color: #dc2638; padding: 8px 14px;"
+        "Discard Recovery Copy", QMessageBox.ButtonRole.DestructiveRole
     )
     cancel = dialog.addButton(QMessageBox.StandardButton.Cancel)
+    # Cancel keeps the copy for later; the label says so.
+    cancel.setText("Decide Later")
+    set_button_role(restore, ROLE_PRIMARY)
+    set_button_role(discard, ROLE_DANGER_OUTLINE)
+    set_button_role(cancel, ROLE_NEUTRAL)
     dialog.setDefaultButton(restore)
     dialog.setEscapeButton(cancel)
-    polish_confirmation(dialog)
+    style_message_box(dialog)
     try:
         dialog.exec()
         clicked = dialog.clickedButton()
@@ -181,7 +193,7 @@ class EstimateDraftRecovery:
 
     def _set_status(self, status: str) -> None:
         self.status = status
-        self.host.refresh_bottom_status()
+        self.host.refresh_status_line()
 
     def start(self) -> None:
         if self._started:

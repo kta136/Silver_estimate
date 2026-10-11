@@ -71,6 +71,7 @@ class EstimateEntryTableController:
         if not self._table_runtime_available():
             return
         self.host.layout_controller._schedule_columns_autofit()
+        self.host.layout_controller.grow_columns_to_content()
 
     def clear_all_rows(self):
         self.host.item_table.blockSignals(True)

@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import os
 from typing import TYPE_CHECKING, Optional, cast
 
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QAction
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractButton,
     QFrame,
@@ -29,7 +28,7 @@ from silverestimate.infrastructure.settings import (
     get_app_settings,
 )
 
-from .appearance import set_table_font
+from .appearance import header_height, set_table_font
 from .estimate_entry_components import (
     EstimateTableView,
     PrimaryActionsBar,
@@ -50,18 +49,25 @@ from .estimate_entry_ui import (
     CodeDelegate,
     NumericDelegate,
 )
+from .estimate_entry_workflow_controller import ROW_UNDO_SHORTCUT
 from .icons import get_icon
-from .modern_components import BottomStatusStrip, polish_dense_table
-from .toolbar_overflow import ToolbarOverflow
+from .modern_components import polish_dense_table
+from .title_bar import TitleMenuBar
 
 if TYPE_CHECKING:
     from .estimate_entry import EstimateEntryWidget
 
-_SHORTCUT_HINTS = ("Ctrl+S Save", "Ctrl+P Print", "F1 Shortcuts")
+# Auto-recovery states the user has to act on, in plain words.
+_RECOVERY_NOTICES = {
+    "Available": "Unfinished estimate can be recovered (More)",
+    "Update failed": "Auto-recovery copy not updated",
+    "Removal failed": "Auto-recovery copy not removed",
+    "Recovery needs attention": "Auto-recovery needs attention",
+}
 
 
 class EstimateEntryLayoutController:
-    """Own layout wiring, totals placement, and persisted UI preferences."""
+    """Own layout wiring, the side panel, and persisted UI preferences."""
 
     def __init__(self, host: EstimateEntryWidget) -> None:
         self.host = host
@@ -74,47 +80,36 @@ class EstimateEntryLayoutController:
         layout.setSpacing(4)
         layout.setContentsMargins(6, 4, 6, 4)
 
-        header_container = QWidget()
-        header_container.setObjectName("EstimateHeaderContainer")
-        header_container.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
-        self._header_layout = QHBoxLayout(header_container)
-        self._header_layout.setContentsMargins(10, 6, 10, 6)
-        self._header_layout.setSpacing(10)
-
         self.host.toolbar = VoucherToolbar()
         self.host.primary_actions = PrimaryActionsBar(shortcut_parent=self.host)
         self.host.primary_actions.setSizePolicy(
             QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed
         )
 
-        self.host.secondary_actions = SecondaryActionsBar(shortcut_parent=self.host)
-        self.host.secondary_actions.setVisible(False)
-        self.host.secondary_actions.setSizePolicy(
-            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
+        # Never shown itself: the side panel shows its buttons.
+        self.host.secondary_actions = SecondaryActionsBar(
+            self.host, shortcut_parent=self.host
         )
-        self._header_layout.addWidget(self.host.secondary_actions)
+        self.host.secondary_actions.hide()
 
         # Status badge and Save/Print/New. The strip moves into the window's
-        # menu bar while this screen is shown; without one it stays in the header.
+        # menu bar while this screen is shown; without one it stays above the
+        # table.
         strip = QWidget()
         strip.setObjectName("EstimateCommandStrip")
         strip.setStyleSheet(ESTIMATE_ENTRY_STYLESHEET)
         strip_layout = QHBoxLayout(strip)
         strip_layout.setContentsMargins(0, 1, 4, 1)
         strip_layout.setSpacing(6)
-        strip_layout.addWidget(self.host.toolbar.release_unsaved_badge())
+        strip_layout.addWidget(self.host.toolbar.unsaved_badge)
         strip_layout.addWidget(self.host.primary_actions)
         self.host.primary_actions.save_button.setText("Save  Ctrl+S")
         self.host.command_strip = strip
         self._command_strip_menu_bar: QMenuBar | None = None
-        self._header_layout.addWidget(strip)
+        layout.addWidget(strip, 0, Qt.AlignmentFlag.AlignRight)
 
         self.host.estimate_tools_menu = self._build_estimate_tools_menu()
         self.host.estimate_tools_menu.setTitle("Estimate Actions")
-        self._header_overflow = ToolbarOverflow(header_container)
-        layout.addWidget(self._header_overflow, 0)
 
         self.host._content_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.host._content_splitter.setChildrenCollapsible(False)
@@ -135,22 +130,14 @@ class EstimateEntryLayoutController:
         )
         self.host._content_splitter.addWidget(self.host.item_table)
 
-        self.host._totals_position = self._read_totals_position_setting()
-        layout_mode = (
-            "horizontal" if self.host._totals_position == "bottom" else "sidebar"
-        )
-        self.host.totals_panel = self._create_totals_panel(layout_mode)
-        self._place_totals_panel(
-            self.host._content_splitter, self.host._totals_position
-        )
+        # The side panel: voucher fields, totals and actions, right of the table.
+        self.host.totals_panel = self._create_totals_panel()
+        self.host._content_splitter.addWidget(self.host.totals_panel)
+        self.host._content_splitter.setStretchFactor(0, 1)
+        self.host._content_splitter.setStretchFactor(1, 0)
+        self.host._content_splitter.setSizes([1060, 320])
 
         layout.addWidget(self.host._content_splitter, 1)
-        self.host.bottom_status_strip = BottomStatusStrip(self.host)
-        self.host.bottom_status_strip.set_left_items(list(_SHORTCUT_HINTS))
-        layout.addWidget(self.host.bottom_status_strip, 0)
-        layout.setStretch(0, 0)
-        layout.setStretch(1, 1)
-        layout.setStretch(2, 0)
 
         self.host.voucher_edit = self.host.toolbar.voucher_edit
         self.host.date_edit = self.host.toolbar.date_edit
@@ -184,85 +171,71 @@ class EstimateEntryLayoutController:
         self.host.refresh_rate_button = self.host.secondary_actions.refresh_rate_button
 
         self._place_sidebar_actions()
-        self._sync_live_rate_card_placement(self.host._totals_position)
+        self._place_voucher_fields()
 
         self._bind_totals_panel_labels()
 
         self.host.unsaved_badge = self.host.toolbar.unsaved_badge
         self.host.status_message_label = self.host.toolbar.status_message_label
-        self._update_bottom_status_strip()
+        self._update_status_line()
 
         try:
             model = self.host.item_table.model()
-            model.rowsInserted.connect(lambda *_: self._update_bottom_status_strip())
-            model.rowsRemoved.connect(lambda *_: self._update_bottom_status_strip())
-            model.modelReset.connect(lambda *_: self._update_bottom_status_strip())
+            model.rowsInserted.connect(lambda *_: self._update_status_line())
+            model.rowsRemoved.connect(lambda *_: self._update_status_line())
+            model.modelReset.connect(lambda *_: self._update_status_line())
         except (AttributeError, RuntimeError, TypeError) as exc:
-            self.host.logger.debug(
-                "Failed to bind bottom status strip table updates: %s", exc
-            )
+            self.host.logger.debug("Failed to bind status line table updates: %s", exc)
 
     def _place_sidebar_actions(self) -> None:
-        if not hasattr(self.host, "sidebar_actions"):
-            actions = QFrame(self.host)
-            actions.setObjectName("EstimateSidebarActions")
-            grid = QGridLayout(actions)
-            grid.setContentsMargins(0, 4, 0, 0)
-            grid.setSpacing(6)
-            grid.setColumnStretch(0, 1)
-            grid.setColumnStretch(1, 1)
+        actions = QFrame(self.host)
+        actions.setObjectName("EstimateSidebarActions")
+        grid = QGridLayout(actions)
+        grid.setContentsMargins(0, 2, 0, 0)
+        grid.setSpacing(6)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
 
-            more_button = QToolButton(actions)
-            more_button.setObjectName("EstimateMoreButton")
-            more_button.setToolTip("More estimate actions")
-            more_button.setMenu(self.host.estimate_tools_menu)
-            more_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-            self.host.estimate_more_button = more_button
+        more_button = QToolButton(actions)
+        more_button.setObjectName("EstimateMoreButton")
+        more_button.setText("More")
+        more_button.setToolTip("More estimate actions")
+        more_button.setMenu(self.host.estimate_tools_menu)
+        more_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        SecondaryActionsBar.fit_panel_button(more_button)
+        self.host.estimate_more_button = more_button
 
-            actions_bar = self.host.secondary_actions
-            specs: list[tuple[QAbstractButton, str]] = [
-                (actions_bar.last_balance_button, "Last Balance"),
-                (actions_bar.history_button, "History  Ctrl+H"),
-                (actions_bar.silver_bars_button, "Silver Bars"),
-                (more_button, "More"),
-                (actions_bar.delete_row_button, "Delete Row"),
-                (actions_bar.delete_estimate_button, "Delete Estimate"),
-            ]
-            for index, (button, text) in enumerate(specs):
-                self._configure_sidebar_button(button, text)
-                # Text-only, equal-width buttons; the icons stay for the menus.
-                if isinstance(button, QToolButton):
-                    button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
-                else:
-                    button.setIconSize(QSize(0, 0))
-                grid.addWidget(button, index // 2, index % 2)
-                button.show()
+        actions_bar = self.host.secondary_actions
+        buttons: tuple[QAbstractButton, ...] = (
+            actions_bar.last_balance_button,
+            actions_bar.history_button,
+            actions_bar.silver_bars_button,
+            more_button,
+            actions_bar.delete_row_button,
+            actions_bar.delete_estimate_button,
+        )
+        for index, button in enumerate(buttons):
+            grid.addWidget(button, index // 2, index % 2)
+            button.show()
 
-            status = QLabel(self.host)
-            status.setObjectName("SidebarStatusText")
-            status.setWordWrap(True)
-            self.host.sidebar_status_label = status
-            self.host.sidebar_actions = actions
+        status = QLabel(self.host)
+        status.setObjectName("SidebarStatusText")
+        status.setWordWrap(True)
+        self.host.sidebar_status_label = status
+        self.host.sidebar_actions = actions
         panel = self.host.totals_panel
-        status = self.host.sidebar_status_label
-        if panel.layout_mode == "sidebar":
-            panel.sidebar_actions_layout.addWidget(self.host.sidebar_actions)
-            panel.sidebar_footer_layout.addWidget(status)
-            self.host.sidebar_actions.show()
-            status.show()
-        else:
-            self.host.sidebar_actions.hide()
-            status.hide()
+        panel.sidebar_actions_layout.addWidget(actions)
+        panel.sidebar_footer_layout.addWidget(status)
+        actions.show()
+        status.show()
 
-    @staticmethod
-    def _configure_sidebar_button(button: QAbstractButton, text: str) -> None:
-        button.setProperty("iconOnly", False)
-        button.setText(text)
-        button.setMinimumSize(0, 30)
-        button.setMaximumSize(16777215, 16777215)
-        # Two equal buttons share each row; never let them push the side
-        # panel wider than its splitter pane.
-        button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+    def _place_voucher_fields(self) -> None:
+        """Put the voucher fields, live rate and mode switch atop the side panel."""
+        toolbar = self.host.toolbar
+        toolbar.set_rate_companion(self.host.secondary_actions.live_rate_container)
+        self.host.totals_panel.set_sidebar_top_widgets([toolbar, toolbar.mode_selector])
+        toolbar.show()
+        toolbar.mode_selector.show()
 
     def show_command_strip(self, visible: bool) -> None:
         """Dock Save/Print/New in the menu bar while the estimate screen shows."""
@@ -276,9 +249,17 @@ class EstimateEntryLayoutController:
             return
         if visible:
             if self._command_strip_menu_bar is None:
-                self._header_layout.removeWidget(strip)
+                root_layout = self.host.layout()
+                if root_layout is not None:
+                    root_layout.removeWidget(strip)
                 self._command_strip_menu_bar = menu_bar
-                self._sync_header_visibility()
+            strip_layout = strip.layout()
+            if isinstance(menu_bar, TitleMenuBar) and strip_layout is not None:
+                # In the title bar the menu bar ends under the window's own
+                # buttons, and it is taller than the strip.
+                clear = menu_bar.caption_buttons_width()
+                strip_layout.setContentsMargins(0, 1, 4 + clear, 1)
+                strip.setMinimumHeight(menu_bar.row_height())
             menu_bar.setCornerWidget(strip, Qt.Corner.TopRightCorner)
             strip.show()
         elif self._command_strip_menu_bar is menu_bar:
@@ -286,31 +267,23 @@ class EstimateEntryLayoutController:
                 menu_bar.setCornerWidget(cast(QWidget, None), Qt.Corner.TopRightCorner)
             strip.hide()
 
-    def _sync_header_visibility(self) -> None:
-        overflow = getattr(self, "_header_overflow", None)
-        if overflow is None:
-            return
-        toolbar_in_header = self._header_layout.indexOf(self.host.toolbar) >= 0
-        strip_in_header = self._command_strip_menu_bar is None
-        overflow.setVisible(toolbar_in_header or strip_in_header)
-
     def _build_estimate_tools_menu(self) -> QMenu:
         menu = QMenu(self.host)
 
         self.host.command_history_action = QAction(
-            get_icon("history", widget=self.host), "Estimate History", menu
+            get_icon("history", widget=self.host), "Estimate History...\tCtrl+H", menu
         )
         menu.addAction(self.host.command_history_action)
 
         self.host.command_settings_action = QAction(
-            get_icon("settings", widget=self.host), "Application Settings", menu
+            get_icon("settings", widget=self.host), "Settings...", menu
         )
         menu.addAction(self.host.command_settings_action)
         menu.addSeparator()
 
         delete_row = QAction(
             get_icon("delete_row", widget=self.host, color="#dc2626"),
-            "Delete Current Row",
+            "Delete Current Row\tCtrl+D",
             menu,
         )
         delete_row.triggered.connect(
@@ -318,6 +291,11 @@ class EstimateEntryLayoutController:
         )
         menu.addAction(delete_row)
         self.host.command_undo_row_action = QAction("Undo Last Row Deletion", menu)
+        self.host.command_undo_row_action.setShortcut(QKeySequence(ROW_UNDO_SHORTCUT))
+        self.host.command_undo_row_action.setShortcutContext(
+            Qt.ShortcutContext.WidgetWithChildrenShortcut
+        )
+        self.host.addAction(self.host.command_undo_row_action)
         self.host.command_undo_row_action.setEnabled(False)
         self.host.command_undo_row_action.triggered.connect(
             self.host.workflow_controller.undo_row_deletion
@@ -332,7 +310,7 @@ class EstimateEntryLayoutController:
 
         return_mode = QAction(
             get_icon("return_mode", widget=self.host, color="#007f89"),
-            "Return Mode",
+            "Return Mode\tCtrl+R",
             menu,
         )
         return_mode.setCheckable(True)
@@ -343,7 +321,7 @@ class EstimateEntryLayoutController:
 
         silver_bar_mode = QAction(
             get_icon("bar_mode", widget=self.host, color="#007f89"),
-            "Silver Bar Mode",
+            "Silver Bar Mode\tCtrl+B",
             menu,
         )
         silver_bar_mode.setCheckable(True)
@@ -354,13 +332,13 @@ class EstimateEntryLayoutController:
         menu.addSeparator()
 
         balance = QAction(
-            get_icon("balance", widget=self.host), "Add Last Balance", menu
+            get_icon("balance", widget=self.host), "Last Balance...", menu
         )
         balance.triggered.connect(self.host.secondary_actions.last_balance_clicked.emit)
         menu.addAction(balance)
 
         bars = QAction(
-            get_icon("silver_bars", widget=self.host), "Silver Bar Manager", menu
+            get_icon("silver_bars", widget=self.host), "Silver Bars...", menu
         )
         bars.triggered.connect(self.host.secondary_actions.silver_bars_clicked.emit)
         menu.addAction(bars)
@@ -376,7 +354,7 @@ class EstimateEntryLayoutController:
 
         delete_estimate = QAction(
             get_icon("delete_estimate", widget=self.host, color="#dc2626"),
-            "Delete Current Estimate",
+            "Delete Estimate...",
             menu,
         )
         delete_estimate.triggered.connect(
@@ -396,90 +374,40 @@ class EstimateEntryLayoutController:
         menu.aboutToShow.connect(sync_menu_state)
         return menu
 
-    def _update_bottom_status_strip(self) -> None:
-        strip = getattr(self.host, "bottom_status_strip", None)
-        if strip is None:
-            return
+    def _update_status_line(self) -> None:
+        """Show the row count, last save and any recovery notice in the side panel."""
         try:
             rows = self.host.item_table.rowCount()
         except Exception:
             rows = 0
-        try:
-            user = os.environ.get("USERNAME") or os.environ.get("USER") or "-"
-        except Exception:
-            user = "-"
         last_saved = getattr(self.host, "_last_saved_status", "-")
-        items = [f"Rows: {rows}", f"Last Saved: {last_saved}", f"User: {user}"]
         recovery = getattr(self.host, "draft_recovery", None)
-        if recovery is not None:
-            items.append(f"Recovery: {recovery.status}")
-        strip.set_right_items(items)
+        recovery_status = str(recovery.status) if recovery is not None else ""
+        # Routine auto-recovery states stay in the tooltips; only a state the
+        # user has to act on takes room in the side panel.
+        notice = _RECOVERY_NOTICES.get(recovery_status)
+        tooltip = "Current estimate status"
+        if recovery_status:
+            tooltip += f"\nAuto-recovery copy: {recovery_status}"
+        badge = getattr(self.host, "unsaved_badge", None)
+        if badge is not None and isValid(badge):
+            badge.setToolTip(tooltip)
         sidebar_status = getattr(self.host, "sidebar_status_label", None)
         if sidebar_status is not None and isValid(sidebar_status):
             sidebar_items = [f"Rows: {rows}", f"Last saved: {last_saved}"]
-            if recovery is not None:
-                sidebar_items.append(f"Recovery: {recovery.status}")
+            if notice:
+                sidebar_items.append(notice)
             sidebar_status.setText(" · ".join([*sidebar_items, "F1 Shortcuts"]))
+            sidebar_status.setToolTip(tooltip)
 
-    def refresh_bottom_status(self) -> None:
-        self._update_bottom_status_strip()
+    def refresh_status_line(self) -> None:
+        self._update_status_line()
 
     def _show_settings_from_command_bar(self) -> None:
         main_window = getattr(self.host, "main_window", None)
         opener = getattr(main_window, "show_settings_dialog", None)
         if callable(opener):
             opener()
-
-    def _sync_live_rate_card_placement(self, totals_position: str) -> None:
-        """Place the voucher fields and live rate for the totals position.
-
-        Beside the table they go to the top of the side panel and the header
-        row disappears; with totals at the bottom they stay in the header row.
-        """
-        normalized = self._normalize_totals_position(totals_position)
-        toolbar = self.host.toolbar
-        actions = self.host.secondary_actions
-        live_rate_card = getattr(actions, "live_rate_container", None)
-        panel = getattr(self.host, "totals_panel", None)
-        in_sidebar = (
-            normalized != "bottom"
-            and panel is not None
-            and panel.layout_mode == "sidebar"
-        )
-        if in_sidebar and panel is not None:
-            self._header_layout.removeWidget(toolbar)
-            if live_rate_card is not None:
-                actions.set_live_rate_compact(True)
-                # The header row fixes the card's width; here it fills its column.
-                live_rate_card.setSizePolicy(
-                    QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-                )
-                toolbar.set_rate_companion(live_rate_card)
-            toolbar.set_panel_layout(True)
-            try:
-                panel.set_sidebar_top_widgets([toolbar, toolbar.mode_selector])
-            except (AttributeError, RuntimeError, TypeError) as exc:
-                self.host.logger.debug(
-                    "Failed to move voucher fields to sidebar: %s", exc
-                )
-            toolbar.show()
-            toolbar.mode_selector.show()
-            divider = getattr(actions, "live_rate_divider", None)
-            if divider is not None:
-                divider.setVisible(False)
-            self.host.bottom_status_strip.hide()
-        else:
-            toolbar.set_rate_companion(None)
-            toolbar.set_panel_layout(False)
-            self._header_layout.insertWidget(0, toolbar, 5)
-            toolbar.show()
-            toolbar.mode_selector.show()
-            if live_rate_card is not None:
-                actions.set_live_rate_compact(False)
-            if hasattr(actions, "show_live_rate_in_header"):
-                actions.show_live_rate_in_header(show_divider=True)
-            self.host.bottom_status_strip.show()
-        self._sync_header_visibility()
 
     def _setup_table_delegates(self):
         code_delegate = CodeDelegate(parent=self.host.item_table)
@@ -583,6 +511,10 @@ class EstimateEntryLayoutController:
         self.host.item_table.history_requested.connect(
             self.host.workflow_controller.show_history
         )
+        # The right-click menu offers the same undo as the More menu.
+        self.host.item_table.undo_row_action = getattr(
+            self.host, "command_undo_row_action", None
+        )
 
     def _bind_totals_panel_labels(self) -> None:
         self.host.mode_indicator_label = self.host.toolbar.mode_indicator_label
@@ -602,25 +534,13 @@ class EstimateEntryLayoutController:
         self.host.net_wage_label = self.host.totals_panel.net_wage_label
         self.host.grand_total_label = self.host.totals_panel.grand_total_label
 
-    def _normalize_totals_position(self, position: str) -> str:
-        value = (position or "").strip().lower()
-        if value in {"left", "right", "bottom"}:
-            return value
-        return "right"
-
     def _normalize_totals_section_order(self, order) -> list[str]:
         return TotalsPanel.normalize_section_order(order)
 
-    def _apply_totals_section_order(
-        self, order, *, persist: bool = True, source_panel: TotalsPanel | None = None
-    ) -> None:
+    def _apply_totals_section_order(self, order, *, persist: bool = True) -> None:
         normalized = self._normalize_totals_section_order(order)
-        panel = getattr(self.host, "totals_panel", None)
-        if panel is not None and isValid(panel):
-            current_order = panel.section_order()
-            if panel is not source_panel or current_order != normalized:
-                panel.set_section_order(normalized)
-        self.host._totals_section_order = list(normalized)
+        self.host.totals_panel.set_section_order(normalized)
+        # A reordered panel rebuilds its cards, and so its value labels.
         self._bind_totals_panel_labels()
 
         if persist:
@@ -646,129 +566,15 @@ class EstimateEntryLayoutController:
         self._apply_totals_section_order(saved, persist=False)
 
     def _on_totals_section_order_changed(self, order) -> None:
-        sender = self.host.sender()
-        source_panel = sender if isinstance(sender, TotalsPanel) else None
-        self._apply_totals_section_order(order, persist=True, source_panel=source_panel)
+        self._apply_totals_section_order(order, persist=True)
 
-    def _apply_totals_position(self, position: str, *, persist: bool = True) -> None:
-        normalized = self._normalize_totals_position(position)
-        splitter_obj = getattr(self.host, "_content_splitter", None)
-        if splitter_obj is None or not isValid(splitter_obj):
-            return
-        splitter = splitter_obj
-
-        desired_mode = "horizontal" if normalized == "bottom" else "sidebar"
-        current_panel = self.host.totals_panel
-        if current_panel.layout_mode != desired_mode:
-            section_order = current_panel.section_order()
-            if current_panel.layout_mode == "sidebar":
-                current_panel.set_sidebar_top_widget(None)
-                if hasattr(self.host, "sidebar_actions"):
-                    self.host.sidebar_actions.setParent(self.host)
-                    self.host.sidebar_status_label.setParent(self.host)
-            current_panel.setParent(None)
-            current_panel.deleteLater()
-            self.host.totals_panel = self._create_totals_panel(desired_mode)
-            self.host.totals_panel.set_section_order(section_order)
-
-        self._place_totals_panel(splitter, normalized)
-
-        self._sync_live_rate_card_placement(normalized)
-        self._place_sidebar_actions()
-        self._bind_totals_panel_labels()
-        self.host.totals_controller.calculate_totals()
-        self.host._totals_position = normalized
-
-        if persist:
-            try:
-                self._settings().set(
-                    SettingsKey.UI_ESTIMATE_TOTALS_POSITION,
-                    normalized,
-                )
-            except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
-                self.host.logger.debug(
-                    "Failed to save totals position setting: %s", exc
-                )
-
-    def _load_totals_position_setting(self) -> None:
-        self._apply_totals_position(self._read_totals_position_setting(), persist=False)
-
-    def _read_totals_position_setting(self) -> str:
-        try:
-            saved = self._settings().get_text(
-                SettingsKey.UI_ESTIMATE_TOTALS_POSITION,
-                "right",
-            )
-        except AttributeError, RuntimeError, TypeError, ValueError:
-            saved = "right"
-        return self._normalize_totals_position(saved)
-
-    def _create_totals_panel(self, layout_mode: str) -> TotalsPanel:
-        panel = TotalsPanel(layout_mode=layout_mode)
-        if layout_mode == "sidebar":
-            panel.setSizePolicy(
-                QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding
-            )
-            panel.setMinimumWidth(280)
-            panel.setMaximumWidth(440)
-            self.host._totals_panel_sidebar = panel
-            self.host._totals_panel_bottom = None
-        else:
-            panel.setSizePolicy(
-                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum
-            )
-            panel.setMinimumWidth(0)
-            panel.setMaximumWidth(16777215)
-            panel.setMaximumHeight(280)
-            self.host._totals_panel_sidebar = None
-            self.host._totals_panel_bottom = panel
-
-        section_order = getattr(self.host, "_totals_section_order", None)
-        if section_order:
-            panel.set_section_order(section_order)
-        breakdown_size = getattr(self.host, "_breakdown_font_size", None)
-        if breakdown_size is not None:
-            panel.set_breakdown_font_size(breakdown_size)
-        final_size = getattr(self.host, "_final_calc_font_size", None)
-        if final_size is not None:
-            panel.set_final_calc_font_size(final_size)
+    def _create_totals_panel(self) -> TotalsPanel:
+        panel = TotalsPanel()
+        panel.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        panel.setMinimumWidth(280)
+        panel.setMaximumWidth(440)
         panel.section_order_changed.connect(self._on_totals_section_order_changed)
         return panel
-
-    def _place_totals_panel(
-        self, splitter: QSplitter, normalized_position: str
-    ) -> None:
-        panel = self.host.totals_panel
-        if normalized_position == "bottom":
-            splitter.setOrientation(Qt.Orientation.Vertical)
-            splitter.insertWidget(0, self.host.item_table)
-            splitter.insertWidget(1, panel)
-            splitter.setStretchFactor(0, 1)
-            splitter.setStretchFactor(1, 0)
-            splitter.setSizes([860, 200])
-            return
-
-        splitter.setOrientation(Qt.Orientation.Horizontal)
-        if normalized_position == "left":
-            splitter.insertWidget(0, panel)
-            splitter.insertWidget(1, self.host.item_table)
-            splitter.setStretchFactor(0, 0)
-            splitter.setStretchFactor(1, 1)
-            splitter.setSizes([320, 1060])
-        else:
-            splitter.insertWidget(0, self.host.item_table)
-            splitter.insertWidget(1, panel)
-            splitter.setStretchFactor(0, 1)
-            splitter.setStretchFactor(1, 0)
-            splitter.setSizes([1060, 320])
-
-    def apply_totals_position(self, position: str) -> bool:
-        try:
-            self._apply_totals_position(position, persist=True)
-            return True
-        except Exception as exc:
-            self.host.logger.warning("Failed to apply totals position: %s", exc)
-            return False
 
     def connect_signals(self, skip_load_estimate: bool = False):
         if not skip_load_estimate:
@@ -915,6 +721,18 @@ class EstimateEntryLayoutController:
             )
         finally:
             self.host._programmatic_resizing = False
+
+    def grow_columns_to_content(self) -> None:
+        """Widen any column whose text no longer fits; never shrink one.
+
+        Cell edits already do this for the edited column. Rows filled in by
+        code (an item lookup, the row type, a restored draft) need it too.
+        """
+        table = getattr(self.host, "item_table", None)
+        if table is None or not isValid(table):
+            return
+        for column in range(table.columnCount()):
+            self._ensure_column_can_fit_content(column)
 
     def _schedule_columns_autofit(
         self,
@@ -1134,7 +952,7 @@ class EstimateEntryLayoutController:
                 max(22, row_height - 2)
             )
             self.host.item_table.horizontalHeader().setFixedHeight(
-                max(26, min(34, row_height + 2))
+                max(row_height + 2, header_height(self.host.item_table, 26))
             )
             self._schedule_columns_autofit(delay_ms=0, force=True)
             self.host.item_table.viewport().update()
@@ -1151,7 +969,6 @@ class EstimateEntryLayoutController:
             return False
         size_i = max(7, min(16, size_i))
         try:
-            self.host._breakdown_font_size = size_i
             self.host.totals_panel.set_breakdown_font_size(size_i)
             return True
         except Exception as exc:
@@ -1168,7 +985,6 @@ class EstimateEntryLayoutController:
             return False
         size_i = max(8, min(20, size_i))
         try:
-            self.host._final_calc_font_size = size_i
             self.host.totals_panel.set_final_calc_font_size(size_i)
             return True
         except Exception as exc:

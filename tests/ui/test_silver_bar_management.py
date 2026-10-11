@@ -3,7 +3,6 @@ import threading
 import pytest
 from PySide6.QtCore import QEvent, QPoint, Qt
 from PySide6.QtGui import QKeyEvent
-from PySide6.QtWidgets import QInputDialog
 
 from silverestimate.persistence.repository_results import (
     RepositoryFailureKind,
@@ -219,15 +218,16 @@ def test_escape_dismisses_then_clears_then_closes(workspace, qtbot):
 
 
 def test_note_edit_saves_and_invalidates_print_confirmation(
-    workspace, qtbot, monkeypatch
+    workspace, qtbot, confirmations
 ):
     dialog, _ = workspace
     add(qtbot, dialog)
     dialog._list_print_controller.printed = dialog.snapshot
-    monkeypatch.setattr(QInputDialog, "getText", lambda *a: ("Dispatch A", True))
+    confirmations.type_text("Dispatch A")
     dialog.edit_list_note()
     assert dialog.snapshot.details["list_note"] == "Dispatch A"
     assert dialog._list_print_controller.printed is None
+    assert confirmations.prompts == ["List Note: Note for this list"]
 
 
 @pytest.mark.parametrize("prefix", ["", "4"])

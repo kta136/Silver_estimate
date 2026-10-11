@@ -1,5 +1,6 @@
 """On-screen sales reports with period, item and voucher drill-down."""
 
+import csv
 from collections.abc import Callable
 from dataclasses import dataclass
 from html import escape
@@ -11,14 +12,17 @@ from PySide6.QtGui import QAction, QKeyEvent, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QButtonGroup,
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
+    QMenu,
     QPushButton,
     QSizePolicy,
     QTableView,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -32,7 +36,7 @@ from silverestimate.domain.sales_report import (
 from silverestimate.infrastructure.latest_request_runner import LatestRequestRunner
 from silverestimate.infrastructure.sqlite_worker import cancellable_sqlite_connection
 from silverestimate.persistence.sales_report_repository import fetch_sales_report
-from silverestimate.ui.display_formatting import format_display_date
+from silverestimate.ui.display_formatting import count_label, format_display_date
 from silverestimate.ui.estimate_table_formatting import format_indian_number
 from silverestimate.ui.models.sales_report_table_model import (
     SalesReportTableModel,
@@ -56,6 +60,12 @@ _UNLIMITED_HEIGHT = 16777215  # Qt's QWIDGETSIZE_MAX
 
 # Below this width the filter bar uses two rows.
 COMPACT_FILTER_WIDTH = 1150
+# Item view: the code and the four figures keep a fixed width, so the
+# item's name gets all the room that is left.
+ITEM_CODE_WIDTH = 170
+WEIGHT_WIDTH = 160
+# Height of the row that holds each filter's control.
+FILTER_ROW_HEIGHT = 38
 
 _SALES_QSS = """
 QLabel#SalesFieldLabel { color: __TEXT_MUTED__; font-weight: 600; font-size: 9pt; }
@@ -133,6 +143,11 @@ class SalesReportWidget(QWidget):
         refresh.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         refresh.triggered.connect(self.refresh)
         self.addAction(refresh)
+        export = QAction(self)
+        export.setShortcut(QKeySequence("Ctrl+E"))
+        export.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        export.triggered.connect(self.export_csv)
+        self.addAction(export)
         self._update_actions()
 
     def _build_filters(self):
@@ -143,7 +158,7 @@ class SalesReportWidget(QWidget):
         layout.setSpacing(6)
         title_row = QHBoxLayout()
         title_row.setSpacing(14)
-        title_row.addWidget(label("Sales reports", "ScreenTitle"))
+        title_row.addWidget(label("Sales Reports", "ScreenTitle"))
         subtitle = label(
             "Every saved estimate · returns shown separately, not subtracted · "
             "weights in grams",
@@ -171,7 +186,7 @@ class SalesReportWidget(QWidget):
         self._item_field = self._field("Item code", self.item_search, self.item_search)
         fields.addWidget(self._item_field)
         fields.addStretch(1)
-        self.refresh_button = KeyHintButton("View report", "F5")
+        self.refresh_button = KeyHintButton("View Report", "F5")
         self.refresh_button.setObjectName("SalesPrimary")
         self.refresh_button.setAutoDefault(False)
         fields.addWidget(self.refresh_button, 0, Qt.AlignmentFlag.AlignBottom)
@@ -189,7 +204,7 @@ class SalesReportWidget(QWidget):
         self.item_search.returnPressed.connect(self.refresh)
         self.date_from.dateChanged.connect(self._filters_changed)
         self.date_to.dateChanged.connect(self._filters_changed)
-        self.grouping.currentIndexChanged.connect(self._filters_changed)
+        self.grouping.currentIndexChanged.connect(self._grouping_changed)
         self.item_search.textChanged.connect(self._filters_changed)
 
     def _build_dates(self):
@@ -201,9 +216,29 @@ class SalesReportWidget(QWidget):
         dates.addWidget(label("to", "Muted"))
         dates.addWidget(self.date_to)
         self.today_button = self._chip("Today")
-        self.month_button = self._chip("This month")
+        self.month_button = self._chip("This Month")
         dates.addWidget(self.today_button)
         dates.addWidget(self.month_button)
+        self.more_ranges_button = QToolButton()
+        self.more_ranges_button.setObjectName("ChipButton")
+        self.more_ranges_button.setText("More Ranges")
+        self.more_ranges_button.setToolTip("More date ranges")
+        self.more_ranges_button.setAccessibleName("More date ranges")
+        self.more_ranges_button.setPopupMode(
+            QToolButton.ToolButtonPopupMode.InstantPopup
+        )
+        ranges = QMenu(self.more_ranges_button)
+        for text, key in (
+            ("Last 7 Days", "last_7_days"),
+            ("Last Month", "last_month"),
+            ("This Financial Year", "this_fy"),
+            ("Last Financial Year", "last_fy"),
+        ):
+            ranges.addAction(text).triggered.connect(
+                lambda _checked=False, name=key: self.show_preset_range(name)
+            )
+        self.more_ranges_button.setMenu(ranges)
+        dates.addWidget(self.more_ranges_button)
         return dates
 
     def resizeEvent(self, event):
@@ -236,10 +271,17 @@ class SalesReportWidget(QWidget):
         if buddy is not None:
             caption_label.setBuddy(buddy)
         field.addWidget(caption_label)
+        # Every control sits centred in a row of the same height, so the
+        # captions line up although the controls differ in height.
+        holder = QWidget(widget)
+        holder.setFixedHeight(FILTER_ROW_HEIGHT)
+        row = QHBoxLayout(holder)
+        row.setContentsMargins(0, 0, 0, 0)
         if isinstance(control, QHBoxLayout):
-            field.addLayout(control)
+            row.addLayout(control)
         else:
-            field.addWidget(control, 0, Qt.AlignmentFlag.AlignLeft)
+            row.addWidget(control, 0, Qt.AlignmentFlag.AlignVCenter)
+        field.addWidget(holder, 0, Qt.AlignmentFlag.AlignLeft)
         return widget
 
     @staticmethod
@@ -323,10 +365,10 @@ class SalesReportWidget(QWidget):
             self.table, "", "No sales or returns in this selection."
         )
         self._clear_code_button = self._empty_state.add_action(
-            "Clear item code", self._clear_item_code
+            "Clear Item Code", self._clear_item_code
         )
         self._month_action = self._empty_state.add_action(
-            "This month", lambda: self._set_range(True)
+            "This Month", lambda: self._set_range(True)
         )
         self._empty_state.set_actions_visible(False)
         self.table.doubleClicked.connect(self._activate_selected)
@@ -344,7 +386,7 @@ class SalesReportWidget(QWidget):
         self._table_spacer = layout.count() - 1
         hint = QHBoxLayout()
         hint.setContentsMargins(16, 5, 16, 6)
-        self.status_label = label("Select a period to view its items.", "Muted")
+        self.status_label = label("", "Muted")
         self.status_label.setWordWrap(True)
         hint.addWidget(self.status_label, 1)
         layout.addLayout(hint)
@@ -379,11 +421,17 @@ class SalesReportWidget(QWidget):
         )
         layout.addWidget(self.breadcrumb, 1)
         self.back_button = KeyHintButton("Back", "Backspace")
-        self.open_button = KeyHintButton("View items", "Enter")
+        self.export_button = QPushButton("Export CSV")
+        self.export_button.setObjectName("SalesSecondary")
+        self.export_button.setToolTip(
+            "Save the table shown here as a CSV file for Excel (Ctrl+E)"
+        )
+        self.open_button = KeyHintButton("View Items", "Enter")
         self.open_button.setObjectName("SalesPrimary")
-        for button in (self.back_button, self.open_button):
+        for button in (self.back_button, self.export_button, self.open_button):
             button.setAutoDefault(False)
             layout.addWidget(button)
+        self.export_button.clicked.connect(self.export_csv)
         self.back_button.clicked.connect(self._go_back)
         self.by_period_button.clicked.connect(self._by_period)
         self.all_items_button.clicked.connect(self._all_items)
@@ -404,17 +452,47 @@ class SalesReportWidget(QWidget):
         self._filters_changed()
         self.refresh()
 
+    @staticmethod
+    def preset_range(name: str, today: QDate) -> tuple[QDate, QDate]:
+        """Return the first and last day of a named range ending by ``today``."""
+        if name == "last_7_days":
+            return today.addDays(-6), today
+        if name == "last_month":
+            first = QDate(today.year(), today.month(), 1).addMonths(-1)
+            return first, QDate(first.year(), first.month(), first.daysInMonth())
+        # The Indian financial year runs from 1 April to 31 March.
+        start_year = today.year() if today.month() >= 4 else today.year() - 1
+        if name == "last_fy":
+            return QDate(start_year - 1, 4, 1), QDate(start_year, 3, 31)
+        if name == "this_fy":
+            return QDate(start_year, 4, 1), today
+        raise ValueError(f"Unknown date range: {name}")
+
+    def show_preset_range(self, name: str) -> None:
+        start, end = self.preset_range(name, QDate.currentDate())
+        with QSignalBlocker(self.date_from), QSignalBlocker(self.date_to):
+            self.date_from.setDate(start)
+            self.date_to.setDate(end)
+        self._filters_changed()
+        self.refresh()
+
+    def _grouping_changed(self, *_):
+        """Regroup the report straight away: there is nothing to type."""
+        self._filters_changed()
+        if self.isVisible():
+            self.refresh()
+
     def _filters_changed(self, *_):
         self._load_runner.cancel()
         self._loading = False
         self._level, self._period, self._item_code = "period", None, None
         self._clear_result()
         self.scope_label.setText("")
+        self.scope_label.setToolTip("")
         self.breadcrumb.setText("")
-        self.status_label.setText(
-            "Filters changed. Select View report (F5) to update the results."
-        )
-        self._show_empty("Filters changed", "Select View report (F5) to apply them.")
+        # Said once, in the middle of the empty table.
+        self.status_label.setText("")
+        self._show_empty("Filters changed", "Select View Report (F5) to apply them.")
         self._update_actions()
 
     def _query(self):
@@ -442,16 +520,17 @@ class SalesReportWidget(QWidget):
             self._load_runner.submit(
                 _ReportRequest(self.db_manager.open_read_connection, query)
             )
-            self.status_label.setText("Loading sales report…")
+            self.status_label.setText("")
             self._show_empty("", "Loading sales report…")
         except Exception as exc:
             self._loading = False
-            self.status_label.setText(str(exc))
+            self.status_label.setText("")
             self._show_empty("Check the dates", str(exc))
         self._update_actions()
 
     def _clear_result(self):
-        self.model.set_report(self._level, ())
+        self.model.set_report(self._level, (), self.grouping.currentData())
+        self._fit_columns()
         self._set_totals(None)
         self.totals_footer.clear()
         self._fit_table()
@@ -467,12 +546,17 @@ class SalesReportWidget(QWidget):
             f"{format_display_date(query.date_from)} to "
             f"{format_display_date(query.date_to)}"
         )
-        scope = (
-            f"item code contains {query.item_search}"
-            if query.item_search
-            else "all items"
-        )
-        self.scope_label.setText(f"{dates} · {scope}")
+        if self._item_code is not None:
+            scope = f"item {self._item_code or '(no item code)'}"
+        elif query.item_search:
+            scope = f"item code contains {query.item_search}"
+        else:
+            scope = "all items"
+        # The figures beside this caption are for the opened day or month,
+        # so the caption names it rather than the whole date range.
+        where = format_period(self._period) if self._period else dates
+        self.scope_label.setText(f"{where} · {scope}")
+        self.scope_label.setToolTip(f"Report dates: {dates}")
         root = (
             f"{self.grouping.currentText()}-wise totals"
             if self._level == "period" or self._period
@@ -511,7 +595,8 @@ class SalesReportWidget(QWidget):
         if self._closed or generation != self._load_runner.generation:
             return
         self._loading = False
-        self.model.set_report(self._level, result.rows)
+        self.model.set_report(self._level, result.rows, self.grouping.currentData())
+        self._fit_columns()
         column = 1 if self._level == "voucher" else 0
         order = (
             Qt.SortOrder.AscendingOrder
@@ -532,19 +617,18 @@ class SalesReportWidget(QWidget):
             "Enter opens the estimate, asking first about unsaved changes.",
         }
         count = len(result.rows)
-        nouns = {"period": "periods", "item": "items", "voucher": "vouchers"}
+        nouns = {"item": "item", "voucher": "voucher"}
         if self._level == "period":
-            noun = "days" if self.grouping.currentData() == "day" else "months"
+            noun = "day" if self.grouping.currentData() == "day" else "month"
         else:
             noun = nouns[self._level]
         self._render_breadcrumb(
-            f"{count} {noun} with sales or returns" if count else "no matches"
-        )
-        self.status_label.setText(
-            instructions[self._level]
+            f"{count_label(count, noun)} with sales or returns"
             if count
-            else "No sales or returns match the selected dates and item code."
+            else "no matches"
         )
+        # With no rows the empty table explains itself.
+        self.status_label.setText(instructions[self._level] if count else "")
         if count:
             self.table.selectRow(0)
         self._update_actions()
@@ -567,6 +651,20 @@ class SalesReportWidget(QWidget):
                 "No sales or returns",
                 f"No saved estimates between {dates}. Try a wider date range.",
                 actions=True,
+            )
+
+    def _fit_columns(self) -> None:
+        """Share the width; in the item view the name takes what is spare."""
+        header = self.table.horizontalHeader()
+        offset = self.model.weight_offset
+        item_view = self.model.level == "item"
+        for column in range(self.model.columnCount()):
+            if not item_view or column == 1:
+                header.setSectionResizeMode(column, QHeaderView.ResizeMode.Stretch)
+                continue
+            header.setSectionResizeMode(column, QHeaderView.ResizeMode.Fixed)
+            self.table.setColumnWidth(
+                column, ITEM_CODE_WIDTH if column < offset else WEIGHT_WIDTH
             )
 
     def _fit_table(self):
@@ -621,10 +719,11 @@ class SalesReportWidget(QWidget):
             return
         self._loading = False
         self._clear_result()
-        self.status_label.setText(
-            f"Could not load sales report: {error}. Select View report to retry."
+        self.status_label.setText("")
+        self._show_empty(
+            "Report unavailable",
+            f"Select View Report (F5) to try again. Details: {error}",
         )
-        self._show_empty("Report unavailable", "Select View report (F5) to retry.")
         self._update_actions()
 
     def _set_totals(self, totals: SalesWeights | None):
@@ -641,15 +740,59 @@ class SalesReportWidget(QWidget):
         )
         self.open_button.setText(
             {
-                "period": "View items",
-                "item": "View vouchers",
-                "voucher": "Open estimate",
+                "period": "View Items",
+                "item": "View Vouchers",
+                "voucher": "Open Estimate",
             }[self._level]
         )
         all_items = self._level != "period" and self._period is None
         (self.all_items_button if all_items else self.by_period_button).setChecked(True)
         selected = bool(self.table.selectionModel().selectedRows())
         self.open_button.setEnabled(not self._loading and selected)
+        self.export_button.setEnabled(not self._loading and self.model.rowCount() > 0)
+
+    def _export_name(self) -> str:
+        start = self.date_from.date().toString("yyyy-MM-dd")
+        end = self.date_to.date().toString("yyyy-MM-dd")
+        return f"sales-{self._level}-{start}-to-{end}.csv"
+
+    def export_rows(self) -> list[list[str]]:
+        """The table on screen plus its totals row, as text for a CSV file."""
+        rows = self.model.export_rows()
+        totals = self.totals_footer.values()
+        if len(rows) > 1 and totals:
+            width = len(rows[0])
+            line = ["Total"] + [""] * (width - 1)
+            for column, text in totals.items():
+                if 0 < column < width:
+                    line[column] = text
+            rows.append(line)
+        return rows
+
+    def export_csv(self) -> None:
+        if self._loading or not self.model.rowCount():
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export sales report", self._export_name(), "CSV (*.csv)"
+        )
+        if not path:
+            return
+        try:
+            with open(path, "w", newline="", encoding="utf-8-sig") as output:
+                writer = csv.writer(output)
+                for row in self.export_rows():
+                    # Keep a spreadsheet from running a cell as a formula.
+                    writer.writerow(
+                        [
+                            "'" + cell
+                            if cell.startswith(("=", "+", "-", "@", "\t", "\r"))
+                            else cell
+                            for cell in row
+                        ]
+                    )
+            self.status_label.setText(f"Report exported to {path}")
+        except OSError as exc:
+            self.status_label.setText(f"Could not export the report: {exc}")
 
     def _activate_selected(self, *_):
         selected = self.table.selectionModel().selectedRows()

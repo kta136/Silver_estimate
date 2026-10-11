@@ -268,10 +268,11 @@ def test_catalog_command_runs_import_on_worker_and_refreshes_on_ui(
     )
 
     def confirm(box):
+        # Tick or clear the full-replace box, then choose Restore Catalog.
         box.checkBox().setChecked(replace)
-        return QMessageBox.StandardButton.Yes
+        box.button(QMessageBox.StandardButton.Yes).click()
 
-    monkeypatch.setattr(QMessageBox, "exec", confirm)
+    monkeypatch.setattr("silverestimate.ui.message_dialogs._run_dialog", confirm)
     messages = []
     for method in ("information", "critical"):
         monkeypatch.setattr(

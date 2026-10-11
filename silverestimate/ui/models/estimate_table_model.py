@@ -23,6 +23,7 @@ from silverestimate.ui.estimate_entry_logic.column_specs import (
     header_for_column,
     is_editable_column,
     precision_for_column,
+    tooltip_for_column,
 )
 from silverestimate.ui.estimate_entry_logic.constants import (
     COL_CODE,
@@ -333,6 +334,11 @@ class EstimateTableModel(QAbstractTableModel):
         Returns:
             The header data, or None if not available
         """
+        if (
+            role == Qt.ItemDataRole.ToolTipRole
+            and orientation == Qt.Orientation.Horizontal
+        ):
+            return tooltip_for_column(section)
         if role != Qt.ItemDataRole.DisplayRole:
             return None
 

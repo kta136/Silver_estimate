@@ -1,6 +1,154 @@
 # Changelog
 
-## Unreleased
+## [4.07] - 2026-10-10
+
+### Changed
+
+- Set the application and Windows executable version to 4.07.
+- Put the menus in the title bar, beside the window's own
+  minimise, maximise and close buttons. The bar no longer repeats the
+  application's name; the taskbar and Alt+Tab still show it, and the version
+  is in Help > About. The empty part of the bar drags the window and a
+  double-click maximises it. `SILVER_CLASSIC_TITLE_BAR=true` keeps the
+  ordinary title bar.
+- Keep the estimate side panel on the right of the table. Settings no longer
+  offers `Totals position`; anyone who had chosen Left Side or Bottom gets
+  the right-hand panel. The bottom layout's totals strip, header row and
+  status line are removed.
+- Show estimate-screen failures in the toast instead of a hidden status line:
+  a voucher number that does not exist, a save or preview stopped by an
+  unfinished cell, and rows left out of a preview.
+- Give every confirmation one look from every screen: the action button is
+  coloured (red when it deletes), the way out is plain, and Enter goes to the
+  safer of the two. The unsaved-estimate, unsaved-item and catalog-restore
+  prompts and the About window use it too.
+- Replace the plain system input boxes with a styled prompt for the list
+  note, the backup password and the typed DELETE step, whose button stays off
+  until the word is typed.
+- Use Title Case for command buttons and menu commands, and one name for each
+  command and column: `Estimate History...`, `Back Up Item Catalog...`,
+  `Restore Item Catalog...`, `Purity (%)`, and `voucher · note` for a bar's
+  source.
+- Show dates as dd/mm/yyyy everywhere on screen, including Last saved and the
+  voucher-range confirmation.
+- Give Delete Row, Delete Estimate and Delete Item one look, and make buttons
+  that cannot be used look switched off.
+- Sales Reports: Day/Month applies at once, the totals caption names the
+  opened day, month or item, item names take the spare width, the first
+  column is headed Date or Month, and the extra ranges sit under More Ranges.
+- Estimate History keeps Search in view in a narrow window, groups Today,
+  This Month and All Dates, and shows its count as plain text.
+- Settings opens at a size that suits its pages, each page needs only its own
+  width, Printing is laid out like the other pages, and the default preview
+  zoom is entered as a percentage.
+- In a narrow print preview, show some buttons as icons instead of pushing
+  More and Close out of view.
+- Add Alt+R for Sales Reports. The estimate table's right-click menu matches
+  the More menu, with Undo, and the totals' right-click menu says what it does.
+- Item Master opens sorted A to Z, says what to fix above the buttons and
+  outlines the field concerned.
+- The optimal-list dialog reports a reversed range under the two weights and
+  shows weights to two decimals. Silver Bar History shows Clear Filters only
+  while a filter is set.
+
+### Fixed
+
+- Stop the estimate table's header cutting off the tails of letters at the
+  default text size.
+- Stop the first toast of a session being cut in half, and clear a toast when
+  the screen changes.
+- Open the History menu with Alt+S; Alt+I already opens the Item Master.
+- Keep the fields and buttons of the sign-in and first-run windows in place
+  when a message appears, and show that message once.
+- Fit the estimate side panel in the smallest window without a scrollbar.
+- Fit `Landscape` in the print preview's orientation box and show the Print
+  button's icon in white.
+- Say `1 silver bar created`, not `1 silver bar(s) created`.
+
+## [4.06] - 2026-10-10
+
+### Changed
+
+- Set the application and Windows executable version to 4.06.
+- Reorganise the menus so each destination appears once: File (New, Save,
+  Print, Exit), View (screens, with a mark on the open one), Tools, History
+  and Help. Estimate Actions shows its shortcuts.
+- Replace the plain shortcut list with a grouped Keyboard Shortcuts window (F1)
+  shared with Silver Bars.
+- Report a saved estimate in a brief toast instead of a message box before the
+  print preview. Deleted rows, restored rows and item changes use the same toast,
+  so these outcomes are now visible on screen.
+- Delete an estimate row without asking; Ctrl+Shift+D undoes it. Deleting the
+  only row clears it.
+- Ask before saving item rows that have no gross weight.
+- Name the action on every destructive confirmation, default to Cancel, and
+  require typing DELETE for Delete All Estimates as for Delete All Data.
+- Show item, sign-in, first-run and optimal-list mistakes beside the field
+  instead of in message boxes; show what is still missing while passwords are
+  typed.
+- Label wage figures **Labour** throughout the screens (`Net Labour`, `Labour
+  Type`, `Labour Rate`), matching `Lbr` on printed slips.
+- Rebuild Settings: one log detail level instead of four checkboxes, a Refresh
+  Now button for live rates, a clickable print preview, described backup and
+  delete actions with the last backup time, and page titles that match the
+  sidebar.
+- Estimate History opens wide enough for every column, offers Today and This
+  month, shows one count, and names the date, total and note of the estimate
+  before deleting it.
+- Sales Reports can export the table shown to CSV (Ctrl+E), offer more date
+  ranges, and draw the fine-weight bar behind the figure.
+- Move printer, page and print-font setup into the print preview's More menu.
+- Darken input and button outlines and the primary button's hover colour for
+  contrast, and keep drop-down and spin arrows inside their fields.
+- Set minimum window sizes that keep the estimate table and side panel usable.
+
+### Fixed
+
+- Stop the Return and Silver Bar mode labels being clipped in the side panel.
+- Fit the Code and Type columns to their contents when rows are filled in by a
+  lookup or a mode change.
+- Correct the About box's copyright line and add the licence and source.
+- Make counts agree with their nouns (`1 bar`, `1 item`, `1 day`).
+- Use the rupee sign for the last-balance amount on printed slips.
+
+## [4.05] - 2026-10-10
+
+### Changed
+
+- Redesign the Silver Bar workspace, history and optimal-list dialog: available
+  bars stay visible beside the current list, with a status pill, big totals
+  strip, issued-list banner with Reopen (Ctrl+R) and a grouped F1 shortcuts
+  dialog. History gains a Lists/Bars switch, filter chips and a side panel for
+  the opened list.
+- Redesign the Sales reports tab with a one-row filter bar, Day/Month switch,
+  Sales and Returns totals cards, a clickable breadcrumb with Backspace to go
+  back, and a subtotal row that follows the last table row.
+- Give the Estimate table the full window height. With totals beside the table,
+  the voucher fields, entry mode (Regular / Return / Silver Bar), live rate and
+  actions move into a 320px side panel, and Save, Print, New and the status
+  badge dock in the menu bar.
+- Set the application and Windows executable version to 4.05.
+
+### Fixed
+
+- Recalculate estimate totals from every row on each change, so draft restores
+  and failed-load restores no longer leave stale totals and one error no longer
+  freezes the on-screen totals.
+- Keep estimate row numbers 1-based and in step with position after rows are
+  added, removed or replaced, so save and preview errors name the right row.
+- Stop the live-rate refresh recursing until `RecursionError` when the service
+  is unavailable.
+- Finish a pending restore that was interrupted after the file swap instead of
+  refusing to start with "Pending restore target is missing or corrupt".
+- Check optimal silver-bar lists against their real fine weight, so a list can
+  no longer exceed the requested maximum.
+- Free the Settings, Silver Bar, optimal-list and print-font dialogs after they
+  close, and stop the Settings live-rate status timer.
+
+### Removed
+
+- Unused silver-bar persistence, UI, print and service code, along with the tests
+  that covered only that code.
 
 ## [4.04] - 2026-10-06
 

@@ -2,10 +2,10 @@ from decimal import Decimal
 
 import pytest
 from PySide6.QtCore import QDate, Qt
-from PySide6.QtWidgets import QMessageBox
 
 from silverestimate.domain.sales_report import SalesReportResult, SalesWeights
-from silverestimate.ui.sales_report import SalesReportWidget
+from silverestimate.ui.models.sales_report_table_model import format_period
+from silverestimate.ui.sales_report import WEIGHT_WIDTH, SalesReportWidget
 from tests.factories import regular_item
 from tests.sales_report_support import report_database, save_report_estimate
 
@@ -112,7 +112,9 @@ def test_invalid_empty_failed_and_stale_results_do_not_show_old_totals(
     previous_generation = widget._load_runner.generation
     widget.date_from.setDate(QDate(2026, 11, 1))
     widget.refresh_button.click()
-    assert "From date" in widget.status_label.text()
+    # Each message is shown once, in the middle of the empty table.
+    assert "From date" in widget._empty_state.text()
+    assert widget.status_label.text() == ""
     widget._loaded(
         previous_generation, SalesReportResult((), SalesWeights(sale_net=Decimal(999)))
     )
@@ -123,30 +125,110 @@ def test_invalid_empty_failed_and_stale_results_do_not_show_old_totals(
     widget.refresh_button.click()
     qtbot.waitUntil(lambda: not widget._loading)
     assert widget.total_labels[0].text() == "0.00 g"
-    assert "No sales" in widget.status_label.text()
+    assert "No sales" in widget._empty_state.title_label.text()
+    assert widget.status_label.text() == ""
     widget._failed(widget._load_runner.generation, RuntimeError("temporary error"))
-    assert "temporary error" in widget.status_label.text()
+    assert "temporary error" in widget._empty_state.text()
     assert widget.total_labels[0].text() == "—"
 
 
 def test_open_saved_report_voucher_protects_unsaved_entry(
-    qtbot, tmp_path, make_estimate_widget, monkeypatch
+    qtbot, tmp_path, make_estimate_widget, confirmations
 ):
     with report_database(tmp_path) as db:
         widget = make_estimate_widget(db)
         widget.note_edit.setText("Unsaved draft")
         widget._mark_unsaved()
         old_voucher = widget.voucher_edit.text()
-        monkeypatch.setattr(
-            QMessageBox, "question", lambda *args: QMessageBox.StandardButton.Cancel
-        )
+        confirmations.always("Cancel")
         assert not widget.open_saved_estimate("2")
         assert widget.note_edit.text() == "Unsaved draft"
         assert widget.voucher_edit.text() == old_voucher
-        monkeypatch.setattr(
-            QMessageBox, "question", lambda *args: QMessageBox.StandardButton.Discard
-        )
+        confirmations.always("Discard")
         assert widget.open_saved_estimate("2")
         assert widget.voucher_edit.text() == "2"
         assert not widget.has_unsaved_changes()
         widget.stop_background_work()
+
+
+def test_export_writes_the_table_shown_with_its_totals(
+    sales_screen, qtbot, tmp_path, monkeypatch
+):
+    widget, _db = sales_screen
+    assert not widget.export_button.isEnabled()
+    load_range(qtbot, widget)
+    assert widget.export_button.isEnabled()
+    target = tmp_path / "report.csv"
+    monkeypatch.setattr(
+        "silverestimate.ui.sales_report.QFileDialog.getSaveFileName",
+        lambda *_args, **_kwargs: (str(target), "CSV (*.csv)"),
+    )
+
+    widget.export_button.click()
+
+    lines = target.read_text(encoding="utf-8-sig").splitlines()
+    assert lines[0] == (
+        "Date,Sale Net (g),Sale Fine (g),Return Net (g),Return Fine (g)"
+    )
+    assert len(lines) == widget.model.rowCount() + 2
+    assert lines[-1] == "Total,18.00,18.68,6.00,6.77"
+    assert str(target) in widget.status_label.text()
+
+
+@pytest.mark.parametrize(
+    ("name", "today", "expected"),
+    [
+        ("last_7_days", (2026, 10, 10), ((2026, 10, 4), (2026, 10, 10))),
+        ("last_month", (2026, 3, 31), ((2026, 2, 1), (2026, 2, 28))),
+        ("last_month", (2026, 1, 15), ((2025, 12, 1), (2025, 12, 31))),
+        ("this_fy", (2026, 10, 10), ((2026, 4, 1), (2026, 10, 10))),
+        ("this_fy", (2026, 2, 10), ((2025, 4, 1), (2026, 2, 10))),
+        ("last_fy", (2026, 10, 10), ((2025, 4, 1), (2026, 3, 31))),
+        ("last_fy", (2026, 2, 10), ((2024, 4, 1), (2025, 3, 31))),
+    ],
+)
+def test_preset_date_ranges(name, today, expected):
+    start, end = SalesReportWidget.preset_range(name, QDate(*today))
+    assert (start, end) == (QDate(*expected[0]), QDate(*expected[1]))
+
+
+def test_breadcrumb_count_agrees_with_one_row(sales_screen, qtbot):
+    widget, _db = sales_screen
+    widget.date_from.setDate(QDate(2026, 9, 30))
+    widget.date_to.setDate(QDate(2026, 9, 30))
+    widget.refresh_button.click()
+    qtbot.waitUntil(lambda: not widget._loading)
+    assert widget.model.rowCount() == 1
+    assert "1 day with sales or returns" in widget.breadcrumb.text()
+
+
+def test_grouping_applies_at_once_and_the_caption_follows_the_drill_down(
+    sales_screen, qtbot
+):
+    from PySide6.QtWidgets import QHeaderView
+
+    widget, _db = sales_screen
+    load_range(qtbot, widget)
+    assert widget.model.headerData(0, Qt.Orientation.Horizontal) == "Date"
+    assert " to " in widget.scope_label.text()
+
+    # No second step: choosing Month regroups the report straight away.
+    widget.grouping.setCurrentIndex(1)
+    qtbot.waitUntil(lambda: not widget._loading and widget.model.rowCount() > 0)
+    assert widget.model.headerData(0, Qt.Orientation.Horizontal) == "Month"
+
+    month = widget.model.rows[0].key
+    open_row(qtbot, widget, month)
+    # The totals beside the caption are for this month, so it names the month.
+    assert widget.scope_label.text() == f"{format_period(month)} · all items"
+    assert widget.scope_label.toolTip().startswith("Report dates:")
+
+    # In the item view the name takes the spare width, not the figures.
+    header = widget.table.horizontalHeader()
+    assert header.sectionResizeMode(1) == QHeaderView.ResizeMode.Stretch
+    assert header.sectionResizeMode(0) == QHeaderView.ResizeMode.Fixed
+    assert header.sectionSize(widget.model.weight_offset) == WEIGHT_WIDTH
+
+    code = widget.model.rows[0].key
+    open_row(qtbot, widget, code)
+    assert widget.scope_label.text() == f"{format_period(month)} · item {code}"

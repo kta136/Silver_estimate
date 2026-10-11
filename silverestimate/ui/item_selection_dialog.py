@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from silverestimate.ui.models import ItemSelectionRecord, ItemSelectionTableModel
+from silverestimate.ui.models.item_master_table_model import WAGE_TYPE_LABELS
 from silverestimate.ui.modern_components import polish_dense_table
 from silverestimate.ui.shared_screen_theme import build_management_screen_stylesheet
 from silverestimate.ui.window_sizing import resize_to_available_screen
@@ -213,14 +214,14 @@ class ItemSelectionDialog(QDialog):
         self.detail_purity.setObjectName("ItemSelectionValueLabel")
         grid.addWidget(self.detail_purity, 2, 1)
 
-        type_label = QLabel("Wage Type")
+        type_label = QLabel("Labour Type")
         type_label.setObjectName("ItemSelectionFieldLabel")
         grid.addWidget(type_label, 3, 0)
         self.detail_wage_type = QLabel("-")
         self.detail_wage_type.setObjectName("ItemSelectionValueLabel")
         grid.addWidget(self.detail_wage_type, 3, 1)
 
-        rate_label = QLabel("Lbr")
+        rate_label = QLabel("Labour Rate")
         rate_label.setObjectName("ItemSelectionFieldLabel")
         grid.addWidget(rate_label, 4, 0)
         self.detail_wage_rate = QLabel("-")
@@ -381,7 +382,8 @@ class ItemSelectionDialog(QDialog):
         self.select_button.setEnabled(not no_results)
 
         if no_results:
-            self.hint_label.setText("No matches. Try fewer letters or check spelling.")
+            # The line above the buttons already says nothing matched.
+            self.hint_label.setText("Esc: Cancel  Ctrl+F: Search")
             self._clear_detail_panel()
         else:
             if self._results_truncated:
@@ -414,18 +416,18 @@ class ItemSelectionDialog(QDialog):
         self.detail_code.setText(record.code)
         self.detail_name.setText(record.name)
         self.detail_purity.setText(f"{record.purity:.2f}")
-        self.detail_wage_type.setText(record.wage_type)
+        self.detail_wage_type.setText(
+            WAGE_TYPE_LABELS.get(str(record.wage_type), str(record.wage_type))
+        )
         self.detail_wage_rate.setText(f"{record.wage_rate:.2f}")
 
     def _accept_if_selected(self) -> None:
         if self._selected_record() is None:
-            self.hint_label.setText("No matches. Try fewer letters or check spelling.")
             return
         self.accept()
 
     def _accept_top_result(self) -> None:
         if not self._filtered_items:
-            self.hint_label.setText("No matches. Try fewer letters or check spelling.")
             return
 
         if self._current_row() < 0:

@@ -5,6 +5,10 @@ from .theme_tokens import (
     CARD_BORDER_SOFT,
     DANGER_BG,
     DANGER_BORDER,
+    DANGER_TEXT,
+    DISABLED_BG,
+    DISABLED_BORDER,
+    DISABLED_TEXT,
     FIELD_TEXT,
     FOCUS_RING,
     HEADER_BG,
@@ -12,6 +16,7 @@ from .theme_tokens import (
     INPUT_BORDER,
     PAGE_BG,
     PRIMARY_BG,
+    PRIMARY_BG_DISABLED,
     PRIMARY_BG_HOVER,
     SELECTION_BG,
     SURFACE_BG,
@@ -117,6 +122,11 @@ def build_management_screen_stylesheet(
                 background-color: {PRIMARY_BG_HOVER};
                 border-color: {PRIMARY_BG_HOVER};
             }}
+            QPushButton#{primary_button}:disabled {{
+                background-color: {PRIMARY_BG_DISABLED};
+                border-color: {PRIMARY_BG_DISABLED};
+                color: #f2f8f8;
+            }}
             """
         )
 
@@ -132,6 +142,11 @@ def build_management_screen_stylesheet(
                 background-color: #eef2f7;
                 border-color: #94a3b8;
             }}
+            QPushButton#{secondary_button}:disabled {{
+                background-color: {DISABLED_BG};
+                border-color: {DISABLED_BORDER};
+                color: {DISABLED_TEXT};
+            }}
             """
         )
 
@@ -139,13 +154,18 @@ def build_management_screen_stylesheet(
         rules.append(
             f"""
             QPushButton#{danger_button} {{
-                color: #b91c1c;
+                color: {DANGER_TEXT};
                 background-color: {DANGER_BG};
                 border: 1px solid {DANGER_BORDER};
             }}
             QPushButton#{danger_button}:hover {{
                 background-color: #ffe4e6;
                 border-color: #fb7185;
+            }}
+            QPushButton#{danger_button}:disabled {{
+                background-color: {DISABLED_BG};
+                border-color: {DISABLED_BORDER};
+                color: {DISABLED_TEXT};
             }}
             """
         )
@@ -183,9 +203,9 @@ def build_management_screen_stylesheet(
             QComboBox::drop-down {{
                 background-color: {HEADER_BG};
                 border-left: 1px solid {INPUT_BORDER};
-                border-top-right-radius: 6px;
-                border-bottom-right-radius: 6px;
-                subcontrol-origin: border;
+                border-top-right-radius: 5px;
+                border-bottom-right-radius: 5px;
+                subcontrol-origin: padding;
                 subcontrol-position: top right;
                 width: 30px;
             }}
@@ -214,6 +234,16 @@ def build_management_screen_stylesheet(
             QDateTimeEdit {{
                 padding-right: 30px;
             }}
+            QDateEdit::drop-down,
+            QDateTimeEdit::drop-down {{
+                background-color: {HEADER_BG};
+                border-left: 1px solid {INPUT_BORDER};
+                border-top-right-radius: 5px;
+                border-bottom-right-radius: 5px;
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 26px;
+            }}
             QSpinBox::up-button,
             QDoubleSpinBox::up-button,
             QDateEdit::up-button,
@@ -221,8 +251,8 @@ def build_management_screen_stylesheet(
             QDateTimeEdit::up-button {{
                 background-color: {HEADER_BG};
                 border-left: 1px solid {INPUT_BORDER};
-                border-top-right-radius: 8px;
-                subcontrol-origin: border;
+                border-top-right-radius: 5px;
+                subcontrol-origin: padding;
                 subcontrol-position: top right;
                 width: 26px;
             }}
@@ -233,8 +263,8 @@ def build_management_screen_stylesheet(
             QDateTimeEdit::down-button {{
                 background-color: {HEADER_BG};
                 border-left: 1px solid {INPUT_BORDER};
-                border-bottom-right-radius: 8px;
-                subcontrol-origin: border;
+                border-bottom-right-radius: 5px;
+                subcontrol-origin: padding;
                 subcontrol-position: bottom right;
                 width: 26px;
             }}

@@ -167,6 +167,8 @@ artifacts/
 /tmp/
 /output/
 # Curated visual references already tracked under output/ remain versioned.
+# Temporary screenshot-capture script, its output and scratch bundles.
+/screenshots/
 
 # Project database artifacts
 # Ignore all database files while keeping the folder via .gitkeep

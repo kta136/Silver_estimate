@@ -14,10 +14,8 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QPushButton,
     QTableView,
     QToolButton,
@@ -28,7 +26,8 @@ from silverestimate.domain.numeric_policy import fixed_decimal
 from silverestimate.domain.silver_bar_workspace import BarListSnapshot
 from silverestimate.persistence.repository_results import RepositoryResult
 
-from .display_formatting import format_display_date
+from .display_formatting import count_label, format_display_date
+from .message_dialogs import ask, ask_text, confirm_destructive
 from .models.silver_bar_entry_model import SilverBarEntryModel
 from .modern_components import TableEmptyStateOverlay
 from .screen_widgets import KeyHintButton, StatusPill, TotalsStrip, repolish
@@ -132,7 +131,7 @@ class SilverBarDialog(QDialog):
         self.edit_note_button.setEnabled(self.editable)
         issued = bool(self.snapshot and self.snapshot.issued)
         self.print_list_button.setEnabled(has_bars and not self._busy)
-        self.print_list_button.setText("Reprint" if issued else "Print && issue")
+        self.print_list_button.setText("Reprint" if issued else "Print && Issue")
         self.issued_banner.setVisible(issued)
         self.reopen_button.setEnabled(issued and not self._busy)
         self.available_card.setVisible(not issued)
@@ -219,7 +218,10 @@ class SilverBarDialog(QDialog):
         self.list_totals_label.set_values(
             (str(bars), weight_text, fine_text),
             empty=bars == 0,
-            summary=f"{bars} bars · Total weight {weight_text} · Total fine {fine_text}",
+            summary=(
+                f"{count_label(bars, 'bar')} · Total weight {weight_text} · "
+                f"Total fine {fine_text}"
+            ),
         )
         self.list_totals_label.set_accent(bars > 0)
 
@@ -240,7 +242,7 @@ class SilverBarDialog(QDialog):
         self._list_print_controller.invalidate()
         self.weight_search_edit.clear()
         self.list_bars_model.clear_rows()
-        self._set_header("New list", "new", "Not saved yet")
+        self._set_header("New List", "new", "Not saved yet")
         self.list_info_label.setToolTip(
             "Saved automatically when you add the first bar"
         )
@@ -248,7 +250,7 @@ class SilverBarDialog(QDialog):
         self.update_note_hint("")
         self._set_totals(0, 0, 0)
         self.load_more_button.hide()
-        self.set_status("Enter Add · Tab List · Delete Remove · F1 Help")
+        self.set_status("")
         self._update_actions()
         self.focus_weight()
 
@@ -271,7 +273,7 @@ class SilverBarDialog(QDialog):
         )
         created = format_display_date(snapshot.details.get("creation_date"))
         issued = format_display_date(snapshot.details.get("issued_date"))
-        meta = [f"{len(snapshot.bars)} bars"]
+        meta = [count_label(len(snapshot.bars), "bar")]
         if created:
             meta.append(f"Created {created}")
         if issued:
@@ -379,7 +381,7 @@ class SilverBarDialog(QDialog):
                 )
             self._load_controller.cancel_search()
             self.set_status(
-                f"Removed {len(ids)} bar(s) · Saved. Bars are available again."
+                f"Removed {count_label(len(ids), 'bar')} · Saved. Available again."
             )
 
     def open_list(self, list_id: int) -> None:
@@ -404,7 +406,7 @@ class SilverBarDialog(QDialog):
 
     def update_note_hint(self, note: str) -> None:
         shown = note if len(note) <= 40 else note[:39] + "…"
-        self.edit_note_button.setText((shown or "+ Add note").replace("&", "&&"))
+        self.edit_note_button.setText((shown or "+ Add Note").replace("&", "&&"))
         self.edit_note_button.setToolTip(f"{note or 'No note'}\nEdit list note · F2")
         self.edit_note_button.setAccessibleName(f"List note: {note or 'No note'}")
 
@@ -412,15 +414,14 @@ class SilverBarDialog(QDialog):
         snapshot = self.snapshot
         if self._busy or snapshot is None or not snapshot.issued:
             return
-        answer = QMessageBox.question(
+        if not ask(
             self,
-            "Reopen issued list",
-            f"Reopen {snapshot.details['list_identifier']} for editing?\n\n"
-            "The bars will stay in this list, and the list will be active again.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Cancel,
-        )
-        if answer != QMessageBox.StandardButton.Yes:
+            title="Reopen Issued List",
+            heading=f"Reopen {snapshot.details['list_identifier']} for editing?",
+            detail="The bars stay in this list, and the list becomes active again.",
+            action_label="Reopen List",
+            default_to_cancel=True,
+        ):
             return
         if not self.db_manager.reactivate_silver_bar_list(snapshot.list_id):
             self.set_status(
@@ -435,10 +436,16 @@ class SilverBarDialog(QDialog):
         existing = (
             self.snapshot.details.get("list_note") if self.snapshot else self.draft_note
         )
-        note, ok = QInputDialog.getText(
-            self, "List note", "Note:", QLineEdit.EchoMode.Normal, str(existing or "")
+        note = ask_text(
+            self,
+            title="List Note",
+            heading="Note for this list",
+            detail="Shown beside the list number and printed on the list.",
+            text=str(existing or ""),
+            placeholder="Who the bars are for, or what they are for",
+            action_label="Save Note",
         )
-        if ok:
+        if note is not None:
             if self.current_list_id is None:
                 self.draft_note = note.strip()
                 self.update_note_hint(self.draft_note)
@@ -453,15 +460,12 @@ class SilverBarDialog(QDialog):
     def clear_current_list(self) -> None:
         if self.current_list_id is None or not self.editable:
             return
-        if (
-            QMessageBox.question(
-                self,
-                "Clear list",
-                "Remove all bars from this list? They will become available again.",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
-                QMessageBox.StandardButton.Cancel,
-            )
-            != QMessageBox.StandardButton.Yes
+        if not confirm_destructive(
+            self,
+            title="Clear List",
+            heading="Remove every bar from this list?",
+            detail="The bars become available again. The list itself is kept.",
+            action_label="Clear List",
         ):
             return
         if self.accept_change(self.db_manager.remove_list_bars(self.current_list_id)):
@@ -471,15 +475,12 @@ class SilverBarDialog(QDialog):
     def delete_selected_list(self) -> None:
         if self.current_list_id is None or not self.editable:
             return
-        if (
-            QMessageBox.question(
-                self,
-                "Delete list",
-                "Delete this list and release its bars?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
-                QMessageBox.StandardButton.Cancel,
-            )
-            != QMessageBox.StandardButton.Yes
+        if not confirm_destructive(
+            self,
+            title="Delete List",
+            heading="Delete this list?",
+            detail="Its bars become available again. This cannot be undone.",
+            action_label="Delete List",
         ):
             return
         result = self.db_manager.delete_active_list(self.current_list_id)

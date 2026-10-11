@@ -25,8 +25,6 @@ def test_initial_state(toolbar):
     assert toolbar.mode_indicator_label.text() == "Mode: Regular"
     assert toolbar.mode_index() == 0
     assert toolbar.mode_buttons.checkedButton().text() == "Regular"
-    assert toolbar.layout().indexOf(toolbar.mode_selector) >= 0
-    assert toolbar.layout().indexOf(toolbar.unsaved_badge) >= 0
     assert toolbar.mode_indicator_label.property("modeState") == "regular"
     assert toolbar.status_message_label.text() == ""
 
@@ -107,33 +105,45 @@ def test_mode_buttons_emit_selection_and_follow_set_mode_index(toolbar, qtbot):
     assert received == []
 
 
-def test_panel_layout_keeps_fields_and_drops_released_badge(toolbar):
-    badge = toolbar.release_unsaved_badge()
-    toolbar.set_panel_layout(True)
-
+def test_card_holds_the_fields_and_leaves_badge_and_mode_switch_to_the_owner(
+    toolbar,
+):
     layout = toolbar.layout()
-    assert toolbar.is_panel_layout()
-    assert toolbar.property("placement") == "panel"
-    assert layout.indexOf(badge) < 0
     for widget in (
         toolbar.date_edit,
         toolbar.silver_rate_spin,
         toolbar.note_edit,
     ):
         assert layout.indexOf(widget) >= 0
-    # The side panel places the mode switch outside the voucher card.
+    # The status badge goes beside Save, the mode switch below the card.
+    assert layout.indexOf(toolbar.unsaved_badge) < 0
     assert layout.indexOf(toolbar.mode_selector) < 0
-    assert toolbar.voucher_label.text() == "Voucher"
+    assert [
+        label.text()
+        for label in (
+            toolbar.voucher_label,
+            toolbar.date_label,
+            toolbar.rate_label,
+            toolbar.note_label,
+        )
+    ] == ["Voucher", "Date", "Rate ₹/g", "Note"]
 
-    toolbar.set_panel_layout(False)
-    assert toolbar.property("placement") == "row"
-    assert toolbar.layout().indexOf(toolbar.note_edit) >= 0
-    assert toolbar.voucher_label.text() == "Voucher:"
+
+def test_rate_companion_sits_beside_the_rate_field(toolbar, qtbot):
+    from PySide6.QtWidgets import QLabel
+
+    live_rate = QLabel("128.40")
+    toolbar.set_rate_companion(live_rate)
+    toolbar.resize(320, toolbar.sizeHint().height())
+    toolbar.show()
+    qtbot.wait(10)
+
+    assert live_rate.parent() is toolbar
+    assert live_rate.isVisible()
+    assert live_rate.x() > toolbar.silver_rate_spin.geometry().right()
 
 
-def test_panel_mode_labels_shorten_to_fit_the_switch(toolbar, qtbot):
-    toolbar.release_unsaved_badge()
-    toolbar.set_panel_layout(True)
+def test_mode_labels_shorten_to_fit_the_switch(toolbar, qtbot):
     selector = toolbar.mode_selector
     toolbar.show()
     selector.show()
@@ -141,18 +151,26 @@ def test_panel_mode_labels_shorten_to_fit_the_switch(toolbar, qtbot):
     def texts():
         return [button.text() for button in toolbar.mode_buttons.buttons()]
 
+    def assert_no_label_is_clipped():
+        for button in toolbar.mode_buttons.buttons():
+            assert button.width() >= button.sizeHint().width(), button.text()
+
     selector.resize(600, 30)
     qtbot.wait(10)
-    assert texts() == ["Regular", "Return  Ctrl+R", "Bar  Ctrl+B"]
+    assert texts() == ["Regular", "Return  Ctrl+R", "Silver Bar  Ctrl+B"]
+    assert_no_label_is_clipped()
 
-    # Too narrow for the shortcuts: the switch shortens its labels instead of
-    # widening the side panel.
+    # Too narrow for the shortcuts: the switch drops them (they stay in the
+    # tooltips) instead of clipping a label or widening the side panel.
     hinted = sum(button.sizeHint().width() for button in toolbar.mode_buttons.buttons())
     selector.resize(hinted - 20, 30)
     qtbot.wait(10)
-    assert texts()[1] == "Return"
-    assert "Ctrl" not in "".join(texts())
+    assert texts() == ["Regular", "Return", "Silver Bar"]
+    assert_no_label_is_clipped()
     assert selector.minimumSizeHint().width() < hinted
 
-    toolbar.set_panel_layout(False)
-    assert texts() == ["Regular", "Return", "Silver Bar"]
+    # Narrower still: only then is "Silver Bar" shortened.
+    plain = sum(button.sizeHint().width() for button in toolbar.mode_buttons.buttons())
+    selector.resize(plain - 10, 30)
+    qtbot.wait(10)
+    assert texts() == ["Regular", "Return", "Bar"]

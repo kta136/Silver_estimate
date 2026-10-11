@@ -1,34 +1,21 @@
 """Compact deletion confirmation shared by entry and history."""
 
-from html import escape
-
-from PySide6.QtWidgets import QMessageBox
-
-from .confirmation_layout import polish_confirmation
+from .message_dialogs import confirm_destructive
 
 
-def confirm_estimate_deletion(parent, voucher_no: str) -> bool:
-    dialog = QMessageBox(parent)
-    dialog.setWindowTitle("Delete Estimate")
-    dialog.setText(f"<b>Delete estimate {escape(voucher_no)}?</b>")
-    dialog.setInformativeText(
-        "This estimate will be permanently deleted. This action cannot be undone."
+def confirm_estimate_deletion(parent, voucher_no: str, summary: str = "") -> bool:
+    """Confirm deleting one estimate.
+
+    ``summary`` identifies the estimate beyond its number (date, total, note)
+    so the user can see they picked the right one.
+    """
+    detail = "This estimate will be permanently deleted. This action cannot be undone."
+    if summary:
+        detail = f"{summary}\n\n{detail}"
+    return confirm_destructive(
+        parent,
+        title="Delete Estimate",
+        heading=f"Delete estimate {voucher_no}?",
+        detail=detail,
+        action_label="Delete Estimate",
     )
-    dialog.setStandardButtons(
-        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel
-    )
-    cancel = dialog.button(QMessageBox.StandardButton.Cancel)
-    delete = dialog.button(QMessageBox.StandardButton.Yes)
-    delete.setText("Delete Estimate")
-    delete.setStyleSheet(
-        "QPushButton { background: #c72735; color: white; border: 1px solid #c72735; "
-        "border-radius: 5px; padding: 8px 16px; }"
-        "QPushButton:hover { background: #a91e2c; }"
-    )
-    dialog.setDefaultButton(QMessageBox.StandardButton.Cancel)
-    dialog.setEscapeButton(cancel)
-    polish_confirmation(dialog)
-    try:
-        return dialog.exec() == QMessageBox.StandardButton.Yes
-    finally:
-        dialog.deleteLater()

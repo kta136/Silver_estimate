@@ -268,7 +268,8 @@ class HistorySilverBarsTableModel(_BaseSilverBarTableModel):
         if column == 1:
             voucher_no = payload.get("estimate_voucher_no") or "N/A"
             note = payload.get("estimate_note") or ""
-            return f"{voucher_no} ({note})" if note else str(voucher_no)
+            # Same form as the Silver Bars window: voucher · note.
+            return f"{voucher_no} · {note}" if note else str(voucher_no)
         if column == 2:
             return self._format_float(payload.get("weight"), WEIGHT_PLACES)
         if column == 3:
@@ -331,7 +332,7 @@ class HistorySilverBarsTableModel(_BaseSilverBarTableModel):
         if column == 1:
             voucher_no = row.get("estimate_voucher_no") or "N/A"
             note = row.get("estimate_note") or ""
-            return f"{voucher_no} ({note})" if note else str(voucher_no)
+            return f"{voucher_no} · {note}" if note else str(voucher_no)
         if column == 2:
             return self._format_float(row.get("weight"), WEIGHT_PLACES)
         if column == 3:

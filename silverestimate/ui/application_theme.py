@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Protocol
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFont, QPalette
 
 from .theme_tokens import (
@@ -310,9 +311,9 @@ QComboBox:disabled {{
 QComboBox::drop-down {{
     background-color: {HEADER_BG};
     border-left: 1px solid {INPUT_BORDER};
-    border-top-right-radius: 8px;
-    border-bottom-right-radius: 8px;
-    subcontrol-origin: border;
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+    subcontrol-origin: padding;
     subcontrol-position: top right;
     width: 30px;
 }}
@@ -530,8 +531,8 @@ QTimeEdit::up-button,
 QDateTimeEdit::up-button {{
     background-color: {HEADER_BG};
     border-left: 1px solid {INPUT_BORDER};
-    border-top-right-radius: 8px;
-    subcontrol-origin: border;
+    border-top-right-radius: 5px;
+    subcontrol-origin: padding;
     subcontrol-position: top right;
     width: 26px;
 }}
@@ -543,9 +544,20 @@ QTimeEdit::down-button,
 QDateTimeEdit::down-button {{
     background-color: {HEADER_BG};
     border-left: 1px solid {INPUT_BORDER};
-    border-bottom-right-radius: 8px;
-    subcontrol-origin: border;
+    border-bottom-right-radius: 5px;
+    subcontrol-origin: padding;
     subcontrol-position: bottom right;
+    width: 26px;
+}}
+
+QDateEdit::drop-down,
+QDateTimeEdit::drop-down {{
+    background-color: {HEADER_BG};
+    border-left: 1px solid {INPUT_BORDER};
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
     width: 26px;
 }}
 
@@ -699,6 +711,25 @@ def apply_application_font(app: ApplicationThemeTarget, font: QFont) -> None:
         set_font(font, widget_class)
 
 
+def force_light_color_scheme(
+    app: ApplicationThemeTarget, logger: logging.Logger | None = None
+) -> None:
+    """Keep what Qt draws for the window frame dark-on-light, like the theme.
+
+    With the menu bar in the title bar, Qt draws the minimise, maximise and
+    close buttons over it, in white when Windows is in dark mode.
+    """
+    style_hints = getattr(app, "styleHints", None)
+    light = getattr(getattr(Qt, "ColorScheme", None), "Light", None)
+    if not callable(style_hints) or light is None:
+        return
+    try:
+        style_hints().setColorScheme(light)
+    except Exception as exc:
+        if logger:
+            logger.debug("Failed to force the light colour scheme: %s", exc)
+
+
 def apply_light_application_theme(
     app: ApplicationThemeTarget,
     logger: logging.Logger | None = None,
@@ -706,6 +737,8 @@ def apply_light_application_theme(
     force_fusion: bool = True,
 ) -> None:
     """Apply the strict light palette and QSS to a QApplication-like object."""
+
+    force_light_color_scheme(app, logger)
 
     if force_fusion:
         try:

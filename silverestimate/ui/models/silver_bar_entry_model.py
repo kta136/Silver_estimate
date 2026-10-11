@@ -11,7 +11,7 @@ from silverestimate.ui.models.silver_bar_table_models import _BaseSilverBarTable
 class SilverBarEntryModel(_BaseSilverBarTableModel):
     HEADERS = [
         "Weight (g)",
-        "Purity %",
+        "Purity (%)",
         "Fine (g)",
         "Voucher / note",
         "Bar #",

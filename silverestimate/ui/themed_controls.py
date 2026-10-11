@@ -20,6 +20,8 @@ from PySide6.QtWidgets import (
 from .theme_tokens import HEADER_TEXT, TEXT_MUTED
 
 ArrowDirection = Literal["up", "down"]
+# Matches the width of ``QDateEdit::drop-down`` in the stylesheets.
+DATE_DROP_DOWN_WIDTH = 26
 
 
 def _control_arrow_color(widget) -> QColor:
@@ -115,6 +117,16 @@ def _paint_combo_arrow(widget) -> None:
     painter.end()
 
 
+def _paint_date_popup_arrow(widget) -> None:
+    """A calendar date field opens a calendar, so it shows one down arrow."""
+    width = max(22, min(DATE_DROP_DOWN_WIDTH, widget.height()))
+    rect = QRect(max(0, widget.width() - width), 0, width, widget.height())
+    painter = QPainter(widget)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    _draw_arrow(painter, rect, "down", _control_arrow_color(widget))
+    painter.end()
+
+
 class ThemedSpinBox(QSpinBox):
     """Spin box that redraws visible up/down arrows after QSS styling."""
 
@@ -132,11 +144,18 @@ class ThemedDoubleSpinBox(QDoubleSpinBox):
 
 
 class ThemedDateEdit(QDateEdit):
-    """Date edit that redraws visible up/down arrows after QSS styling."""
+    """Date edit that redraws its arrows after QSS styling.
+
+    With a calendar popup the field behaves like a drop-down and gets a
+    single down arrow; otherwise it keeps the up/down pair.
+    """
 
     def paintEvent(self, event: QPaintEvent) -> None:
         super().paintEvent(event)
-        _paint_spinbox_arrows(self)
+        if self.calendarPopup():
+            _paint_date_popup_arrow(self)
+        else:
+            _paint_spinbox_arrows(self)
 
 
 class ThemedComboBox(QComboBox):

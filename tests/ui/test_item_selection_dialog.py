@@ -178,7 +178,7 @@ def test_selection_updates_detail_panel(qtbot, sample_items):
     qtbot.waitUntil(lambda: dialog.detail_code.text() == "AXAD", timeout=1000)
     assert dialog.detail_name.text() == "Roadline Anklet"
     assert dialog.detail_purity.text() == "80.00"
-    assert dialog.detail_wage_type.text() == "WT"
+    assert dialog.detail_wage_type.text() == "Per gram"
     assert dialog.detail_wage_rate.text() == "9.75"
 
 

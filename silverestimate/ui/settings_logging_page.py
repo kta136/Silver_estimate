@@ -28,7 +28,9 @@ from silverestimate.infrastructure.settings import (
     as_settings_store,
 )
 
-from .themed_controls import ThemedSpinBox
+from .display_formatting import count_label
+from .message_dialogs import confirm_destructive
+from .themed_controls import ThemedComboBox, ThemedSpinBox
 
 LOGGER = logging.getLogger(__name__)
 
@@ -161,13 +163,17 @@ class SettingsLoggingController:
             return LogCleanupResult(
                 succeeded=True,
                 removed_count=removed_count,
-                message=f"Successfully removed {removed_count} old log file(s).",
+                message=(
+                    f"Removed {count_label(removed_count, 'old log file')}."
+                    if removed_count
+                    else "There were no old log files to remove."
+                ),
             )
         except Exception as exc:
             LOGGER.error("Manual log cleanup failed: %s", exc, exc_info=True)
             return LogCleanupResult(
                 succeeded=False,
-                message=f"An error occurred during log cleanup: {exc}",
+                message=f"The old log files could not be removed. Details: {exc}",
             )
 
     def open_logs_folder(self) -> DiagnosticsActionResult:
@@ -206,6 +212,57 @@ class SettingsLoggingController:
         self._settings.set(SettingsKey.LOGGING_CLEANUP_DAYS, state.cleanup_days)
 
 
+# The four stored flags as three levels a person can choose between.
+LOG_LEVEL_PRESETS: tuple[tuple[str, str, str, dict[str, bool]], ...] = (
+    (
+        "errors",
+        "Errors only",
+        "Records problems only. Smallest log files.",
+        {
+            "debug_mode": False,
+            "enable_info": False,
+            "enable_critical": True,
+            "enable_debug": False,
+        },
+    ),
+    (
+        "normal",
+        "Normal (recommended)",
+        "Records problems and the main actions, such as saves and backups.",
+        {
+            "debug_mode": False,
+            "enable_info": True,
+            "enable_critical": True,
+            "enable_debug": True,
+        },
+    ),
+    (
+        "detailed",
+        "Detailed, for troubleshooting",
+        "Records every step. Use while chasing a problem; files grow quickly.",
+        {
+            "debug_mode": True,
+            "enable_info": True,
+            "enable_critical": True,
+            "enable_debug": True,
+        },
+    ),
+)
+_CUSTOM_LEVEL = "custom"
+
+
+def log_level_for(state: LoggingSettingsState) -> str:
+    """Return the preset matching ``state``, or ``custom`` when none does."""
+    for key, _label, _description, flags in LOG_LEVEL_PRESETS:
+        if all(getattr(state, name) == value for name, value in flags.items()):
+            return key
+    # Without debug mode the debug-detail flag has no effect, so it does not
+    # decide the level.
+    if not state.debug_mode and state.enable_critical:
+        return "normal" if state.enable_info else "errors"
+    return _CUSTOM_LEVEL
+
+
 class LoggingSettingsPage(QWidget):
     """Own logging controls and diagnostics actions."""
 
@@ -218,16 +275,15 @@ class LoggingSettingsPage(QWidget):
     ) -> None:
         super().__init__(parent)
         self._controller = controller
+        self._custom_flags: dict[str, bool] = {}
         self._build_ui(controller.load_state())
 
     def state(self) -> LoggingSettingsState:
+        flags = self._flags_for(str(self.level_combo.currentData()))
         return LoggingSettingsState(
-            debug_mode=self.debug_mode_checkbox.isChecked(),
-            enable_info=self.enable_info_checkbox.isChecked(),
-            enable_critical=self.enable_critical_checkbox.isChecked(),
-            enable_debug=self.enable_debug_checkbox.isChecked(),
             auto_cleanup=self.auto_cleanup_checkbox.isChecked(),
             cleanup_days=self.cleanup_days_spin.value(),
+            **flags,
         )
 
     def apply(self) -> LoggingSettingsState:
@@ -242,6 +298,18 @@ class LoggingSettingsPage(QWidget):
         self._load_to_ui(self._controller.default_state())
         self.changed.emit()
 
+    def set_level(self, key: str) -> None:
+        """Choose a detail level by its key (``errors``, ``normal``, ``detailed``)."""
+        index = self.level_combo.findData(key)
+        if index >= 0:
+            self.level_combo.setCurrentIndex(index)
+
+    def _flags_for(self, key: str) -> dict[str, bool]:
+        for preset, _label, _description, flags in LOG_LEVEL_PRESETS:
+            if preset == key:
+                return dict(flags)
+        return dict(self._custom_flags)
+
     def _build_ui(self, state: LoggingSettingsState) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -251,8 +319,8 @@ class LoggingSettingsPage(QWidget):
         title.setObjectName("SettingsTitleLabel")
         layout.addWidget(title)
         description = QLabel(
-            "Choose what gets recorded and how long logs are kept. "
-            "Changes take effect when settings are applied."
+            "Logs help find the cause of a problem. Choose how much is recorded "
+            "and how long the files are kept."
         )
         description.setWordWrap(True)
         description.setObjectName("SettingsMutedDescription")
@@ -264,49 +332,34 @@ class LoggingSettingsPage(QWidget):
         layout.addStretch()
 
         self._load_to_ui(state)
-        for checkbox in (
-            self.debug_mode_checkbox,
-            self.enable_info_checkbox,
-            self.enable_critical_checkbox,
-            self.enable_debug_checkbox,
-            self.auto_cleanup_checkbox,
-        ):
-            checkbox.toggled.connect(self._emit_changed)
+        self.level_combo.currentIndexChanged.connect(self._level_changed)
+        self.auto_cleanup_checkbox.toggled.connect(self._emit_changed)
         self.cleanup_days_spin.valueChanged.connect(self._emit_changed)
+        self.cleanup_days_spin.valueChanged.connect(self._sync_days_suffix)
         self.auto_cleanup_checkbox.toggled.connect(self.cleanup_days_spin.setEnabled)
-        self.debug_mode_checkbox.toggled.connect(self.enable_debug_checkbox.setEnabled)
-        self.enable_debug_checkbox.setEnabled(self.debug_mode_checkbox.isChecked())
 
     def _create_log_levels_group(self) -> QGroupBox:
         group = QGroupBox("Recording")
         layout = QVBoxLayout(group)
         layout.setSpacing(8)
 
-        self.enable_info_checkbox = QCheckBox("Normal events (INFO)")
-        self.enable_info_checkbox.setToolTip(
-            "Log normal application events (INFO level)"
-        )
-        layout.addWidget(self.enable_info_checkbox)
+        row = QHBoxLayout()
+        level_label = QLabel("Detail level:")
+        row.addWidget(level_label)
+        self.level_combo = ThemedComboBox()
+        self.level_combo.setAccessibleName("Log detail level")
+        for key, label, _description, _flags in LOG_LEVEL_PRESETS:
+            self.level_combo.addItem(label, key)
+        self._polish_field(self.level_combo, width=280)
+        level_label.setBuddy(self.level_combo)
+        row.addWidget(self.level_combo)
+        row.addStretch()
+        layout.addLayout(row)
 
-        self.enable_critical_checkbox = QCheckBox("Errors and critical events")
-        self.enable_critical_checkbox.setToolTip("Log errors and critical issues")
-        layout.addWidget(self.enable_critical_checkbox)
-
-        self.debug_mode_checkbox = QCheckBox("Debug mode")
-        layout.addWidget(self.debug_mode_checkbox)
-        self.enable_debug_checkbox = QCheckBox("Debug details")
-        self.enable_debug_checkbox.setToolTip(
-            "Log detailed debug information (only when Debug Mode is enabled)"
-        )
-        layout.addWidget(self.enable_debug_checkbox)
-
-        description = QLabel(
-            "You can enable or disable specific log levels. Critical logs are "
-            "recommended for troubleshooting."
-        )
-        description.setWordWrap(True)
-        description.setObjectName("SettingsMutedDescription")
-        layout.addWidget(description)
+        self.level_description = QLabel("")
+        self.level_description.setWordWrap(True)
+        self.level_description.setObjectName("SettingsMutedDescription")
+        layout.addWidget(self.level_description)
         return group
 
     def _create_cleanup_group(self) -> QGroupBox:
@@ -314,7 +367,7 @@ class LoggingSettingsPage(QWidget):
         layout = QVBoxLayout(group)
         layout.setSpacing(8)
 
-        self.auto_cleanup_checkbox = QCheckBox("Automatically Delete Old Logs")
+        self.auto_cleanup_checkbox = QCheckBox("Delete old logs automatically")
         self.auto_cleanup_checkbox.setToolTip(
             "Automatically delete log files older than the specified number of days"
         )
@@ -331,8 +384,7 @@ class LoggingSettingsPage(QWidget):
         layout.addLayout(days_layout)
 
         description = QLabel(
-            "Automatic cleanup helps manage disk space by removing old log files. "
-            "Cleanup occurs at midnight each day."
+            "Older log files are removed at midnight each day while the app is open."
         )
         description.setWordWrap(True)
         description.setObjectName("SettingsMutedDescription")
@@ -340,16 +392,18 @@ class LoggingSettingsPage(QWidget):
         return group
 
     def _create_utilities_group(self) -> QGroupBox:
-        group = QGroupBox("Maintenance")
+        group = QGroupBox("Log files")
         layout = QHBoxLayout(group)
         layout.setSpacing(10)
 
-        self.manual_cleanup_button = QPushButton("Clean Up Logs Now…")
-        self.manual_cleanup_button.setToolTip("Manually delete old log files")
+        self.manual_cleanup_button = QPushButton("Delete Old Logs Now...")
+        self.manual_cleanup_button.setToolTip(
+            "Delete log files older than the number of days above"
+        )
         self.manual_cleanup_button.clicked.connect(self._confirm_manual_cleanup)
         layout.addWidget(self.manual_cleanup_button)
 
-        self.open_logs_button = QPushButton("Open Logs Folder…")
+        self.open_logs_button = QPushButton("Open Logs Folder")
         self.open_logs_button.setToolTip(
             "Open the folder containing application log files"
         )
@@ -359,25 +413,57 @@ class LoggingSettingsPage(QWidget):
         return group
 
     def _load_to_ui(self, state: LoggingSettingsState) -> None:
-        self.debug_mode_checkbox.setChecked(state.debug_mode)
-        self.enable_info_checkbox.setChecked(state.enable_info)
-        self.enable_critical_checkbox.setChecked(state.enable_critical)
-        self.enable_debug_checkbox.setChecked(state.enable_debug)
+        key = log_level_for(state)
+        custom_index = self.level_combo.findData(_CUSTOM_LEVEL)
+        if key == _CUSTOM_LEVEL:
+            # Keep a hand-edited combination until the user picks a level.
+            self._custom_flags = {
+                "debug_mode": state.debug_mode,
+                "enable_info": state.enable_info,
+                "enable_critical": state.enable_critical,
+                "enable_debug": state.enable_debug,
+            }
+            if custom_index < 0:
+                self.level_combo.addItem("Custom (keep current)", _CUSTOM_LEVEL)
+        elif custom_index >= 0:
+            self.level_combo.removeItem(custom_index)
+        self.set_level(key)
+        self._sync_level_description()
         self.auto_cleanup_checkbox.setChecked(state.auto_cleanup)
         self.cleanup_days_spin.setValue(state.cleanup_days)
         self.cleanup_days_spin.setEnabled(state.auto_cleanup)
+        self._sync_days_suffix()
+
+    def _level_changed(self, *_args: object) -> None:
+        self._sync_level_description()
+        self.changed.emit()
+
+    def _sync_level_description(self) -> None:
+        key = str(self.level_combo.currentData())
+        text = next(
+            (
+                description
+                for preset, _label, description, _flags in LOG_LEVEL_PRESETS
+                if preset == key
+            ),
+            "Keeps the combination already saved for this PC.",
+        )
+        self.level_description.setText(text)
+
+    def _sync_days_suffix(self, *_args: object) -> None:
+        self.cleanup_days_spin.setSuffix(
+            " day" if self.cleanup_days_spin.value() == 1 else " days"
+        )
 
     def _confirm_manual_cleanup(self) -> None:
         days = self.cleanup_days_spin.value()
-        reply = QMessageBox.question(
+        if not confirm_destructive(
             self,
-            "Confirm Log Cleanup",
-            f"This will permanently delete log files older than {days} day(s)."
-            "\n\nContinue?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if reply != QMessageBox.StandardButton.Yes:
+            title="Delete Old Logs",
+            heading=f"Delete log files older than {count_label(days, 'day')}?",
+            detail="The files are removed permanently.",
+            action_label="Delete Old Logs",
+        ):
             return
 
         self.setCursor(QCursor(Qt.CursorShape.WaitCursor))
@@ -388,13 +474,13 @@ class LoggingSettingsPage(QWidget):
         if result.succeeded:
             QMessageBox.information(
                 self,
-                "Log Cleanup Complete",
+                "Old Logs Deleted",
                 result.message,
             )
         else:
             QMessageBox.critical(
                 self,
-                "Log Cleanup Failed",
+                "Logs Not Deleted",
                 result.message,
             )
 
@@ -403,7 +489,7 @@ class LoggingSettingsPage(QWidget):
         if not result.succeeded:
             QMessageBox.critical(
                 self,
-                "Open Logs Folder",
+                "Logs Folder Not Opened",
                 result.message,
             )
 
@@ -430,9 +516,11 @@ def _open_logs_folder() -> bool:
 __all__ = [
     "DiagnosticsActionResult",
     "LogCleanupResult",
+    "LOG_LEVEL_PRESETS",
     "LoggingSettingsActions",
     "LoggingSettingsPage",
     "LoggingSettingsState",
     "SettingsLoggingController",
     "default_logging_settings_actions",
+    "log_level_for",
 ]

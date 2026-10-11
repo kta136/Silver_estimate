@@ -380,7 +380,7 @@ def _last_balance_metrics(
         ),
         EstimatePrintMetric(
             "Amount",
-            f"Rs. {_amount(header.last_balance_amount, decimals=2)}",
+            f"₹ {_amount(header.last_balance_amount, decimals=2)}",
         ),
     )
 

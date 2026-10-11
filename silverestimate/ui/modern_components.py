@@ -108,7 +108,11 @@ class RecordInspector(QFrame):
         self.setMaximumWidth(380)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
-        heading = QLabel(title.upper())
+        heading = QLabel(title)
+        heading.setObjectName("RecordInspectorHeading")
+        heading.setStyleSheet(
+            "QLabel#RecordInspectorHeading { color: #526176; font-weight: 700; }"
+        )
         layout.addWidget(heading)
         self._fields = QVBoxLayout()
         self._fields.setSpacing(12)
@@ -138,13 +142,12 @@ class RecordInspector(QFrame):
         for title, value in items:
             row = QWidget()
             row.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
-            layout = (
-                QVBoxLayout(row)
-                if title in {"Note", "Name", "Voucher No"}
-                else QHBoxLayout(row)
-            )
+            # Only free text that may run long gets its own line; every
+            # other field is one label-and-value row.
+            layout = QVBoxLayout(row) if title in {"Note", "Name"} else QHBoxLayout(row)
             layout.setContentsMargins(0, 0, 0, 0)
             label, content = QLabel(title), QLabel(str(value))
+            label.setStyleSheet("color: #526176;")
             content.setWordWrap(True)
             content.setTextInteractionFlags(
                 Qt.TextInteractionFlag.TextSelectableByMouse

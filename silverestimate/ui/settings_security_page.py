@@ -124,7 +124,12 @@ class SecuritySettingsPage(QWidget):
         title = QLabel("Security")
         title.setObjectName("SettingsTitleLabel")
         main_layout.addWidget(title)
-        main_layout.addWidget(QLabel("Current password"))
+        form_group = QGroupBox("Change passwords")
+        form_layout = QVBoxLayout(form_group)
+        form_layout.setSpacing(10)
+        main_layout.addWidget(form_group)
+        outer_layout, main_layout = main_layout, form_layout
+        main_layout.addWidget(QLabel("Current main password"))
         main_layout.addWidget(self.current_password_input)
         columns = QHBoxLayout()
         for label, fields in (
@@ -150,26 +155,25 @@ class SecuritySettingsPage(QWidget):
             columns.addWidget(group)
         main_layout.addLayout(columns)
         main_layout.addWidget(self.show_passwords_checkbox)
-        main_layout.addWidget(
-            QLabel(
-                "Use at least 8 characters. Main and recovery passwords must differ."
-            )
+        requirements = QLabel(
+            "Use at least 8 characters. Main and recovery passwords must differ."
         )
-        note = QLabel(
-            "Changes take effect when you choose Change passwords, independently of Apply."
-        )
-        note.setWordWrap(True)
-        main_layout.addWidget(note)
+        requirements.setObjectName("SettingsMutedDescription")
+        main_layout.addWidget(requirements)
+        # The button sits with its own form and says when it acts, so it
+        # is not mistaken for part of Apply / Save & Close below.
         actions = QHBoxLayout()
-        actions.addStretch()
         self.change_password_button.setObjectName("SettingsPrimaryButton")
         self.change_password_button.setStyleSheet("QPushButton { color: white; }")
         actions.addWidget(self.change_password_button)
-        clear = QPushButton("Clear fields")
+        clear = QPushButton("Clear Fields")
         clear.clicked.connect(self._clear_fields)
         actions.addWidget(clear)
+        note = QLabel("Takes effect at once. Apply is not needed.")
+        note.setObjectName("SettingsMutedDescription")
+        actions.addWidget(note, 1)
         main_layout.addLayout(actions)
-        main_layout.addStretch()
+        outer_layout.addStretch()
 
     def _clear_fields(self):
         for field in self._password_fields().values():

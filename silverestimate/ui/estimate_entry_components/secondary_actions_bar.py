@@ -1,4 +1,4 @@
-"""Secondary actions bar component for estimate entry."""
+"""Secondary actions for estimate entry: their buttons, shortcuts and signals."""
 
 from __future__ import annotations
 
@@ -7,11 +7,9 @@ from typing import Optional
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QBoxLayout,
-    QFrame,
+    QAbstractButton,
     QHBoxLayout,
     QLabel,
-    QLayout,
     QPushButton,
     QSizePolicy,
     QToolButton,
@@ -23,16 +21,12 @@ from silverestimate.ui.icons import get_icon
 
 
 class SecondaryActionsBar(QWidget):
-    """Complete secondary actions bar with all estimate entry controls.
+    """Owns the estimate screen's secondary actions.
 
-    This component provides:
-    - Delete Row button
-    - Return mode and Silver Bar mode toggles
-    - Last Balance button
-    - Estimate History button
-    - Manage Silver Bars button
-    - Delete Estimate button
-    - Live Silver Rate display with refresh button
+    It creates the buttons, the live-rate field and the keyboard shortcuts, and
+    relays them as signals. The side panel shows the buttons and the field;
+    this widget itself is never shown, and only keeps the two entry-mode
+    toggles, which the mode switch and the shortcuts drive.
     """
 
     # Signals
@@ -49,7 +43,7 @@ class SecondaryActionsBar(QWidget):
         *,
         shortcut_parent: Optional[QWidget] = None,
     ):
-        """Initialize the secondary actions bar.
+        """Initialize the secondary actions.
 
         Args:
             parent: Optional parent widget.
@@ -64,82 +58,31 @@ class SecondaryActionsBar(QWidget):
         self._connect_signals()
 
     def _setup_ui(self) -> None:
-        """Set up the user interface with compact spacing."""
-        self.setObjectName("SecondaryActionStrip")
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-
-        layout = QHBoxLayout(self)
-        layout.setSpacing(0)
-        layout.setContentsMargins(4, 4, 4, 4)
-        self._main_layout = layout
-
-        self._left_actions_layout = QHBoxLayout()
-        self._left_actions_layout.setSpacing(3)
-        self._left_actions_layout.setContentsMargins(0, 0, 0, 0)
-        layout.addLayout(self._left_actions_layout)
-
-        layout.addStretch(1)
-
-        self._right_actions_layout = QHBoxLayout()
-        self._right_actions_layout.setSpacing(4)
-        self._right_actions_layout.setContentsMargins(0, 0, 0, 0)
-        layout.addLayout(self._right_actions_layout)
-
-        # Delete Row button
-        self.delete_row_button = QPushButton()
+        self.delete_row_button = QPushButton("Delete Row", self)
         self.delete_row_button.setObjectName("DeleteRowButton")
-        self.delete_row_button.setIcon(
-            get_icon("delete_row", widget=self, color="#dc2626")
-        )
-        self._configure_icon_button(self.delete_row_button, label="Delete Row")
+        self.delete_row_button.setAccessibleName("Delete Row")
         self.delete_row_button.setToolTip(
             "Delete the currently selected row\n"
             "Keyboard: Ctrl+D\n"
             "Removes the active row from the estimate\n"
             "Cannot be undone"
         )
-        self._left_actions_layout.addWidget(self.delete_row_button)
-        self._left_actions_layout.addWidget(self._create_divider())
 
-        # Return mode toggle
-        self.return_toggle_button = QPushButton()
+        # The entry-mode toggles hold the state; the mode switch shows it.
+        self.return_toggle_button = QPushButton(self)
         self.return_toggle_button.setObjectName("ReturnModeButton")
-        self.return_toggle_button.setIcon(
-            get_icon("return_mode", widget=self, color="#007f89")
-        )
-        self._configure_icon_button(self.return_toggle_button, label="Return")
-        self.return_toggle_button.setToolTip(
-            "Toggle Return Item entry mode for new rows\n"
-            "Keyboard: Ctrl+R\n"
-            "New rows will be marked as Return items\n"
-            "Affects calculations and item type"
-        )
+        self.return_toggle_button.setAccessibleName("Return")
         self.return_toggle_button.setCheckable(True)
-        self._left_actions_layout.addWidget(self.return_toggle_button)
 
-        # Silver bar mode toggle
-        self.silver_bar_toggle_button = QPushButton()
+        self.silver_bar_toggle_button = QPushButton(self)
         self.silver_bar_toggle_button.setObjectName("SilverBarModeButton")
-        self.silver_bar_toggle_button.setIcon(
-            get_icon("bar_mode", widget=self, color="#007f89")
-        )
-        self._configure_icon_button(self.silver_bar_toggle_button, label="Bar Mode")
-        self.silver_bar_toggle_button.setToolTip(
-            "Toggle Silver Bar entry mode for new rows\n"
-            "Keyboard: Ctrl+B\n"
-            "New rows will be marked as Silver Bar items\n"
-            "Cannot use both Return and Silver Bar modes"
-        )
+        self.silver_bar_toggle_button.setAccessibleName("Bar Mode")
         self.silver_bar_toggle_button.setCheckable(True)
-        self._left_actions_layout.addWidget(self.silver_bar_toggle_button)
 
-        self._left_actions_layout.addWidget(self._create_divider())
-
-        # Last Balance button
-        self.last_balance_button = QToolButton()
+        self.last_balance_button = QToolButton(self)
         self.last_balance_button.setObjectName("BalanceButton")
-        self.last_balance_button.setIcon(get_icon("balance", widget=self))
-        self._configure_icon_button(self.last_balance_button, label="Balance")
+        self.last_balance_button.setText("Last Balance")
+        self.last_balance_button.setAccessibleName("Balance")
         self.last_balance_button.setToolTip(
             "Add Last Balance to this estimate\n"
             "Adds previous unpaid balance\n"
@@ -147,13 +90,11 @@ class SecondaryActionsBar(QWidget):
             "Will show dialog if multiple balances available"
         )
         self.last_balance_button.setAutoRaise(True)
-        self._left_actions_layout.addWidget(self.last_balance_button)
 
-        # Estimate history button
-        self.history_button = QToolButton()
+        self.history_button = QToolButton(self)
         self.history_button.setObjectName("HistoryButton")
-        self.history_button.setIcon(get_icon("history", widget=self))
-        self._configure_icon_button(self.history_button, label="History")
+        self.history_button.setText("History  Ctrl+H")
+        self.history_button.setAccessibleName("History")
         self.history_button.setToolTip(
             "View, load, or print past estimates\n"
             "Keyboard: Ctrl+H\n"
@@ -161,13 +102,11 @@ class SecondaryActionsBar(QWidget):
             "Double-click to load an estimate"
         )
         self.history_button.setAutoRaise(True)
-        self._left_actions_layout.addWidget(self.history_button)
 
-        # Manage Silver Bars button
-        self.silver_bars_button = QToolButton()
+        self.silver_bars_button = QToolButton(self)
         self.silver_bars_button.setObjectName("BarListButton")
-        self.silver_bars_button.setIcon(get_icon("silver_bars", widget=self))
-        self._configure_icon_button(self.silver_bars_button, label="Bar List")
+        self.silver_bars_button.setText("Silver Bars")
+        self.silver_bars_button.setAccessibleName("Bar List")
         self.silver_bars_button.setToolTip(
             "View and manage silver bar inventory\n"
             "Add, edit, or assign silver bars\n"
@@ -175,17 +114,54 @@ class SecondaryActionsBar(QWidget):
             "Manage bar transfers"
         )
         self.silver_bars_button.setAutoRaise(True)
-        self._left_actions_layout.addWidget(self.silver_bars_button)
 
-        # Live rate value with compact refresh/time controls.
-        self.live_rate_container = QWidget()
+        self.delete_estimate_button = QToolButton(self)
+        self.delete_estimate_button.setObjectName("DeleteEstimateButton")
+        self.delete_estimate_button.setText("Delete Estimate")
+        self.delete_estimate_button.setAccessibleName("Delete Estimate")
+        self.delete_estimate_button.setToolTip(
+            "Delete the currently loaded estimate\n"
+            "Permanently removes estimate from database\n"
+            "Only enabled when estimate is loaded\n"
+            "Cannot be undone - use with caution"
+        )
+        self.delete_estimate_button.setEnabled(False)
+        self.delete_estimate_button.setAutoRaise(False)
+
+        for button in (
+            self.delete_row_button,
+            self.last_balance_button,
+            self.history_button,
+            self.silver_bars_button,
+            self.delete_estimate_button,
+        ):
+            self.fit_panel_button(button)
+
+        self._setup_live_rate_field()
+
+    @staticmethod
+    def fit_panel_button(button: QAbstractButton) -> None:
+        """Size a text button for the side panel's two-column grid."""
+        if isinstance(button, QToolButton):
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        button.setMinimumSize(0, 30)
+        # Two equal buttons share each row; never let them push the side
+        # panel wider than its splitter pane.
+        button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+
+    def _setup_live_rate_field(self) -> None:
+        """Build the live rate: "Live rate  2 min ago" over "128.40  [refresh]".
+
+        It is the height of a labelled form field and sits beside the rate.
+        """
+        self.live_rate_container = QWidget(self)
         self.live_rate_container.setObjectName("LiveRateCard")
         self.live_rate_container.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
 
-        self.live_rate_title_label = QLabel("Live silver rate")
-        self.live_rate_title_label.setObjectName("LiveRateTitle")
+        self.live_rate_title_label = QLabel("Live rate")
+        self.live_rate_title_label.setObjectName("VoucherFieldLabel")
 
         self.live_rate_value_label = QLabel("Loading…")
         self.live_rate_value_label.setObjectName("LiveRateValue")
@@ -205,9 +181,6 @@ class SecondaryActionsBar(QWidget):
         self.refresh_rate_button.setIcon(
             get_icon("refresh", widget=self, color="#007f89")
         )
-        self._configure_icon_button(
-            self.refresh_rate_button, label="Refresh Silver Rate"
-        )
         self.refresh_rate_button.setIconSize(QSize(14, 14))
         self.refresh_rate_button.setFixedSize(QSize(28, 24))
         self.refresh_rate_button.setSizePolicy(
@@ -224,165 +197,22 @@ class SecondaryActionsBar(QWidget):
         self.live_rate_meta_label.setMaximumWidth(125)
         self.live_rate_meta_label.setWordWrap(False)
         self.live_rate_meta_label.setAlignment(
-            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
 
-        self._live_rate_compact = False
-        self._apply_live_rate_layout()
-
-        self._right_actions_layout.addWidget(self.live_rate_container)
-        self.live_rate_divider = self._create_divider()
-        self._right_actions_layout.addWidget(self.live_rate_divider)
-
-        # Delete estimate button (isolated on the far right as destructive action)
-        self.delete_estimate_button = QToolButton()
-        self.delete_estimate_button.setObjectName("DeleteEstimateButton")
-        self.delete_estimate_button.setIcon(
-            get_icon("delete_estimate", widget=self, color="#dc2626")
-        )
-        self._configure_icon_button(
-            self.delete_estimate_button,
-            label="Delete Estimate",
-        )
-        self.delete_estimate_button.setToolTip(
-            "Delete the currently loaded estimate\n"
-            "Permanently removes estimate from database\n"
-            "Only enabled when estimate is loaded\n"
-            "Cannot be undone - use with caution"
-        )
-        self.delete_estimate_button.setEnabled(False)
-        self.delete_estimate_button.setAutoRaise(False)
-        self._right_actions_layout.addWidget(self.delete_estimate_button)
-
-    def set_live_rate_compact(self, compact: bool) -> None:
-        """Lay the live-rate card out as one field (side panel) or a card."""
-        compact = bool(compact)
-        if compact == self._live_rate_compact:
-            return
-        self._live_rate_compact = compact
-        self._apply_live_rate_layout()
-
-    def _apply_live_rate_layout(self) -> None:
-        card = self.live_rate_container
-        old_layout = card.layout()
-        if old_layout is not None:
-            self._empty_layout(old_layout)
-            # Re-home the old layout so a new one can be installed on the card.
-            QWidget().setLayout(old_layout)
-
-        card.setProperty("placement", "field" if self._live_rate_compact else "card")
-        title, value = self.live_rate_title_label, self.live_rate_value_label
-        button, meta = self.refresh_rate_button, self.live_rate_meta_label
-        if self._live_rate_compact:
-            # "Live rate   2 min ago" over "128.40  [refresh]", the height of a
-            # labelled form field.
-            title.setText("Live rate")
-            title.setObjectName("VoucherFieldLabel")
-            value.setMinimumWidth(0)
-            meta.setAlignment(
-                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-            )
-            layout: QBoxLayout = QVBoxLayout(card)
-            layout.setContentsMargins(0, 0, 0, 0)
-            layout.setSpacing(2)
-            top = QHBoxLayout()
-            top.setSpacing(4)
-            top.addWidget(title)
-            top.addWidget(meta, 1)
-            bottom = QHBoxLayout()
-            bottom.setSpacing(4)
-            bottom.addWidget(value, 1)
-            bottom.addWidget(button)
-            layout.addLayout(top)
-            layout.addLayout(bottom)
-        else:
-            title.setText("Live silver rate")
-            title.setObjectName("LiveRateTitle")
-            value.setMinimumWidth(110)
-            meta.setAlignment(
-                Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
-            )
-            layout = QHBoxLayout(card)
-            layout.setContentsMargins(6, 3, 6, 3)
-            layout.setSpacing(6)
-            text_stack = QVBoxLayout()
-            text_stack.setContentsMargins(0, 0, 0, 0)
-            text_stack.setSpacing(0)
-            text_stack.addWidget(title, 0, Qt.AlignmentFlag.AlignVCenter)
-            text_stack.addWidget(value, 1, Qt.AlignmentFlag.AlignVCenter)
-            layout.addLayout(text_stack, 1)
-            refresh_stack = QVBoxLayout()
-            refresh_stack.setContentsMargins(0, 0, 0, 0)
-            refresh_stack.setSpacing(1)
-            refresh_stack.addWidget(button, 0, Qt.AlignmentFlag.AlignHCenter)
-            refresh_stack.addWidget(meta)
-            layout.addLayout(refresh_stack, 0)
-        for widget in (card, title):
-            widget.style().unpolish(widget)
-            widget.style().polish(widget)
-        layout.activate()
-
-    @classmethod
-    def _empty_layout(cls, layout: QLayout) -> None:
-        while layout.count():
-            item = layout.takeAt(0)
-            child = item.layout()
-            if child is not None:
-                cls._empty_layout(child)
-
-    def show_live_rate_in_header(self, show_divider: bool = True) -> None:
-        """Ensure live-rate card is attached in the header action strip."""
-        layout = getattr(self, "_right_actions_layout", None)
-        if not isinstance(layout, QHBoxLayout):
-            return
-        if getattr(self, "live_rate_container", None) is None:
-            return
-        if getattr(self, "live_rate_divider", None) is None:
-            return
-        if getattr(self, "delete_estimate_button", None) is None:
-            return
-
-        self.live_rate_container.setSizePolicy(
-            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
-        )
-        insert_index = layout.indexOf(self.delete_estimate_button)
-        if insert_index < 0:
-            insert_index = layout.count()
-
-        if layout.indexOf(self.live_rate_container) == -1:
-            layout.insertWidget(insert_index, self.live_rate_container)
-            insert_index += 1
-        if layout.indexOf(self.live_rate_divider) == -1:
-            layout.insertWidget(insert_index, self.live_rate_divider)
-
-        self.live_rate_divider.setVisible(bool(show_divider))
-
-    def _create_divider(self) -> QFrame:
-        """Create a vertical divider line.
-
-        Returns:
-            QFrame configured as a vertical line divider
-        """
-        divider = QFrame()
-        divider.setFrameShape(QFrame.Shape.VLine)
-        divider.setFrameShadow(QFrame.Shadow.Sunken)
-        divider.setFixedHeight(18)
-        return divider
-
-    @staticmethod
-    def _configure_icon_button(
-        button: QPushButton | QToolButton,
-        *,
-        label: str,
-    ) -> None:
-        button.setAccessibleName(label)
-        if button.icon().isNull():
-            button.setText(label)
-            button.setProperty("iconOnly", False)
-            return
-        button.setText("")
-        button.setProperty("iconOnly", True)
-        button.setIconSize(QSize(18, 18))
+        layout = QVBoxLayout(self.live_rate_container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        top = QHBoxLayout()
+        top.setSpacing(4)
+        top.addWidget(self.live_rate_title_label)
+        top.addWidget(self.live_rate_meta_label, 1)
+        bottom = QHBoxLayout()
+        bottom.setSpacing(4)
+        bottom.addWidget(self.live_rate_value_label, 1)
+        bottom.addWidget(self.refresh_rate_button)
+        layout.addLayout(top)
+        layout.addLayout(bottom)
 
     def _setup_shortcuts(self) -> None:
         """Set up keyboard shortcuts.

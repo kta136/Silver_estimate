@@ -91,6 +91,8 @@ class MainWindow(QMainWindow):
         self._shell_shown_logged = False
         self._closing = False
         self._taskbar_icon_handle: int | None = None
+        self._menu_in_title_bar = False
+        self._caption = ""
         self._pending_status_message: Optional[tuple[str, int, str]] = None
         self.item_master_widget = None
         self.sales_report_widget: Optional["SalesReportWidget"] = None
@@ -182,13 +184,36 @@ class MainWindow(QMainWindow):
             services_ready_ms,
         )
 
-    def _configure_window_shell(self) -> None:
+    def _merge_menus_into_title_bar(self) -> None:
+        """Put the menus in the title bar where Windows and Qt allow it."""
+        from silverestimate.ui import title_bar
+
+        self._menu_in_title_bar = title_bar.merge_menu_into_title_bar(self)
+        if self._menu_in_title_bar:
+            self.setMenuBar(title_bar.TitleMenuBar(self))
+
+    def _configure_caption(self) -> None:
         from silverestimate.infrastructure.app_constants import APP_TITLE
+        from silverestimate.ui.title_bar import BLANK_TITLE
+
+        self._caption = APP_TITLE
+        if not self._menu_in_title_bar:
+            self.setWindowTitle(f"{APP_TITLE}[*]")
+            return
+        # The menus take the place of the title; the taskbar keeps the name.
+        self.setWindowTitle(BLANK_TITLE)
+        self.setAccessibleName(APP_TITLE)
+        self._sync_native_caption()
+
+    def _configure_window_shell(self) -> None:
         from silverestimate.infrastructure.paths import get_asset_path
         from silverestimate.infrastructure.windows_integration import apply_taskbar_icon
         from silverestimate.services.settings_service import SettingsService
 
         self.settings_service = self.settings_service or SettingsService()
+
+        # Window flags are set before anything below asks for the native window.
+        self._merge_menus_into_title_bar()
 
         try:
             icon_path = get_asset_path("assets", "icons", "silverestimate.ico")
@@ -208,7 +233,7 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             self.logger.debug("Failed to apply window icon: %s", exc)
 
-        self.setWindowTitle(f"{APP_TITLE}[*]")
+        self._configure_caption()
 
         default_font = QFont("Arial", 8)
         try:
@@ -222,8 +247,15 @@ class MainWindow(QMainWindow):
         self._root_layout = QVBoxLayout(self.central_widget)
         self.stack = QStackedWidget(self.central_widget)
         self._root_layout.addWidget(self.stack)
+        self.stack.currentChanged.connect(self._clear_toast)
 
         self._configure_loading_page()
+
+        # Below this the estimate table needs sideways scrolling and the side
+        # panel's buttons are cut off. It still fits a 1366x768 display.
+        from silverestimate.ui.window_sizing import set_usable_minimum_size
+
+        set_usable_minimum_size(self, width=1280, height=680)
 
         self._geometry_restored = False
         try:
@@ -265,8 +297,31 @@ class MainWindow(QMainWindow):
         loading_page.deleteLater()
         self._loading_page = None
 
+    def _sync_native_caption(self) -> None:
+        """Give the taskbar and Alt+Tab the name the title bar no longer shows."""
+        if not self._menu_in_title_bar:
+            return
+        from silverestimate.ui.title_bar import set_native_caption
+
+        marker = "*" if self.isWindowModified() else ""
+        try:
+            set_native_caption(self, f"{self._caption}{marker}")
+        except Exception as exc:
+            self.logger.debug("Failed to set the taskbar caption: %s", exc)
+
+    def setWindowModified(self, modified: bool) -> None:
+        """Mark unsaved work in the caption, wherever the caption is shown."""
+        if not self._menu_in_title_bar:
+            super().setWindowModified(modified)
+            return
+        # Qt would write its blank title over the taskbar caption, and warn
+        # that the title has no [*] placeholder.
+        self.setAttribute(Qt.WidgetAttribute.WA_WindowModified, bool(modified))
+        self._sync_native_caption()
+
     def showEvent(self, event) -> None:
         super().showEvent(event)
+        self._sync_native_caption()
         if self._shell_shown_logged:
             return
         self._shell_shown_logged = True
@@ -387,6 +442,30 @@ class MainWindow(QMainWindow):
 
     def _handle_flush_done(self) -> None:
         QTimer.singleShot(0, lambda: self.estimate_widget.show_inline_status("", 0))
+
+    def show_toast(
+        self, message: str, timeout: int = 3000, level: str = "info"
+    ) -> None:
+        """Show an outcome briefly over the bottom of the window."""
+        toast = getattr(self, "status_toast", None)
+        if toast is None:
+            from silverestimate.ui.status_toast import StatusToast
+
+            toast = StatusToast(self.central_widget)
+            self.status_toast = toast
+        try:
+            toast.show_message(message, timeout, level)
+        except RuntimeError as exc:
+            self.logger.debug("Failed to show status toast: %s", exc)
+
+    def _clear_toast(self, *_args) -> None:
+        """A message about one screen does not follow the user to the next."""
+        toast = getattr(self, "status_toast", None)
+        if toast is not None:
+            try:
+                toast.clear_message()
+            except RuntimeError as exc:
+                self.logger.debug("Failed to clear status toast: %s", exc)
 
     def show_status_message(
         self, message: str, timeout: int = 3000, level: str = "info"

@@ -126,6 +126,19 @@ def _load_offscreen_preview_fonts(app):
 
 
 @pytest.fixture(autouse=True)
+def keep_test_console_attached(monkeypatch):
+    """Stop the app hiding and detaching the console of the test run itself.
+
+    Closing the main window does both. Once the run has no console, every
+    process a later test starts opens a terminal window of its own.
+    """
+    monkeypatch.setattr(
+        "silverestimate.infrastructure.windows_integration.hide_console_window",
+        lambda *args, **kwargs: None,
+    )
+
+
+@pytest.fixture(autouse=True)
 def load_preview_fonts_for_qt_tests(request):
     if "qtbot" in request.fixturenames or "qapp" in request.fixturenames:
         _load_offscreen_preview_fonts(request.getfixturevalue("qapp"))
@@ -137,6 +150,79 @@ def flush_qt_deferred_deletes():
     yield
     if QCoreApplication.instance() is not None:
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
+def _confirmation_summary(dialog) -> str:
+    return f"{dialog.windowTitle()}: {dialog.text()}"
+
+
+@pytest.fixture(autouse=True)
+def confirmations(monkeypatch, request):
+    """Answer confirmation dialogs without showing a window.
+
+    A test names the button to press with ``confirmations.answer("Delete Item")``
+    (or ``answer("Cancel")``), or ``confirmations.always("Discard")`` to change
+    the answer part-way through; every dialog shown is recorded in
+    ``confirmations.shown``. A dialog nobody answered fails the test instead of
+    blocking the run on a modal window.
+
+    Text prompts are answered with ``confirmations.type_text("DELETE")``;
+    ``type_text(None)`` backs out of the prompt. Each prompt is recorded in
+    ``confirmations.prompts``.
+    """
+
+    class _Confirmations:
+        def __init__(self):
+            self.shown = []
+            self.prompts = []
+            self._answers = []
+            self._typed = []
+
+        def answer(self, *labels):
+            self._answers.extend(labels)
+
+        def always(self, label):
+            """From now on press ``label`` in every dialog."""
+            self._answers[:] = [label]
+
+        def type_text(self, *texts):
+            self._typed.extend(texts)
+
+        def always_type(self, text):
+            """From now on type ``text`` into every prompt (None backs out)."""
+            self._typed[:] = [text]
+
+        def _run_prompt(self, dialog):
+            summary = f"{dialog.windowTitle()}: {dialog.input.accessibleName()}"
+            self.prompts.append(summary)
+            if not self._typed:
+                raise AssertionError(f"Unanswered text prompt: {summary}")
+            text = self._typed.pop(0) if len(self._typed) > 1 else self._typed[0]
+            if text is None:
+                return False
+            dialog.input.setText(text)
+            return dialog.action_button.isEnabled()
+
+        def _run(self, dialog):
+            summary = _confirmation_summary(dialog)
+            self.shown.append(summary)
+            if not self._answers:
+                raise AssertionError(f"Unanswered confirmation dialog: {summary}")
+            label = self._answers.pop(0) if len(self._answers) > 1 else self._answers[0]
+            buttons = {button.text(): button for button in dialog.buttons()}
+            assert label in buttons, (summary, sorted(buttons))
+            buttons[label].click()
+
+    recorder = _Confirmations()
+    # Smoke tests drive the real windows and close each dialog themselves.
+    if "/tests/smoke/" not in request.node.path.as_posix():
+        monkeypatch.setattr(
+            "silverestimate.ui.message_dialogs._run_dialog", recorder._run
+        )
+        monkeypatch.setattr(
+            "silverestimate.ui.message_dialogs._run_prompt", recorder._run_prompt
+        )
+    return recorder
 
 
 @pytest.fixture()

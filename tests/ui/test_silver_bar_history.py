@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
+from PySide6.QtWidgets import QApplication, QDialog
 
 from silverestimate.domain.silver_bar_workspace import BarListSnapshot
 from silverestimate.ui.print_manager import PrintManager
@@ -77,7 +77,7 @@ def test_enter_active_list_returns_it_for_editing(history, qtbot):
 
 
 def test_issued_details_reprint_and_reopen_use_selected_identity(
-    history, qtbot, monkeypatch
+    history, qtbot, monkeypatch, confirmations
 ):
     dialog, db, _, issued = history
     select_list(dialog, issued.list_id)
@@ -96,9 +96,7 @@ def test_issued_details_reprint_and_reopen_use_selected_identity(
     qtbot.waitUntil(lambda: dialog.detail_status.text() == "List reprinted.")
     assert captured[0].document.bars[1].purity == 125.5
     assert db.get_silver_bar_list_snapshot(issued.list_id).issued
-    monkeypatch.setattr(
-        QMessageBox, "question", lambda *a: QMessageBox.StandardButton.Yes
-    )
+    confirmations.answer("Reopen List")
     qtbot.keyClick(
         dialog.list_bars_table, Qt.Key.Key_R, Qt.KeyboardModifier.ControlModifier
     )
@@ -108,13 +106,15 @@ def test_issued_details_reprint_and_reopen_use_selected_identity(
     assert all(bar["status"] == "Assigned" for bar in reopened.bars)
 
 
-def test_reopen_cancel_preserves_issued_state(history, qtbot, monkeypatch):
+def test_reopen_cancel_preserves_issued_state(history, qtbot, confirmations):
     dialog, db, _, issued = history
     open_issued(qtbot, dialog, issued)
-    monkeypatch.setattr(
-        QMessageBox, "question", lambda *a: QMessageBox.StandardButton.Cancel
-    )
+    confirmations.answer("Cancel")
     dialog.reactivate_list()
+    assert confirmations.shown == [
+        f"Reopen Issued List: <b>Reopen {issued.details['list_identifier']} "
+        "for editing?</b>"
+    ]
     assert dialog.selected_list_id is None
     assert db.get_silver_bar_list_snapshot(issued.list_id).issued
     assert dialog.isVisible()
@@ -261,3 +261,29 @@ def test_unified_history_screenshots(history, qtbot, qt_application_state):
     assert dialog.height() == 520
     # Narrow windows move the status chips to their own row.
     assert dialog.bars_table.height() > 280
+
+
+def test_clear_filters_shows_only_while_a_filter_is_set(history, qtbot):
+    dialog, *_ = history
+    assert not dialog.clear_button.isVisible()
+
+    dialog.list_state_combo.setCurrentText("Issued")
+    qtbot.waitUntil(lambda: dialog.clear_button.isVisible())
+
+    dialog.clear_filters()
+    assert not dialog.clear_button.isVisible()
+    assert dialog.list_state_combo.currentIndex() == 0
+
+
+def test_bar_history_writes_voucher_and_note_like_the_workspace(history, qtbot):
+    dialog, db, *_ = history
+    dialog.view_combo.setCurrentIndex(1)
+    qtbot.waitUntil(lambda: dialog.bars_model.rowCount() > 0 and not dialog._loading[1])
+
+    assert dialog.bars_model.HEADERS[3] == "Purity (%)"
+    texts = [
+        dialog.bars_model.display_value(row, 1)
+        for row in range(dialog.bars_model.rowCount())
+    ]
+    # "voucher · note", never "voucher (note)".
+    assert all("(" not in text for text in texts)

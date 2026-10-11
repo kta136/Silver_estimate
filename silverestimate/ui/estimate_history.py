@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import logging
-import os
 import threading
 import time
 from collections.abc import Callable
@@ -32,7 +31,12 @@ from silverestimate.infrastructure.latest_request_runner import (
 from silverestimate.infrastructure.paged_load_state import PagedLoadState
 from silverestimate.infrastructure.sqlite_worker import cancellable_sqlite_connection
 from silverestimate.persistence.estimates_repository import fetch_estimate_history_page
-from silverestimate.ui.display_formatting import format_display_date, format_rupees
+from silverestimate.ui.display_formatting import (
+    count_label,
+    format_display_date,
+    format_rate,
+    format_rupees,
+)
 from silverestimate.ui.estimate_deletion_dialog import confirm_estimate_deletion
 from silverestimate.ui.models import EstimateHistoryRow, EstimateHistoryTableModel
 from silverestimate.ui.modern_components import (
@@ -44,11 +48,15 @@ from silverestimate.ui.modern_components import (
 from silverestimate.ui.toolbar_overflow import ToolbarOverflow
 
 from .icons import get_icon
+from .message_dialogs import with_details
 from .preview_build_worker import PreviewBuildController
 from .print_manager import PrintManager
 from .shared_screen_theme import build_management_screen_stylesheet
 from .themed_controls import ThemedDateEdit
-from .window_sizing import resize_to_available_screen
+from .window_sizing import resize_to_available_screen, set_usable_minimum_size
+
+# Narrower than this, the filter row drops its heading to keep Search in view.
+FULL_FILTER_WIDTH = 1180
 
 
 @dataclass(frozen=True)
@@ -112,11 +120,13 @@ class EstimateHistoryDialog(QDialog):
     def init_ui(self):
         """Set up the user interface."""
         self.setWindowTitle("Estimate History")
-        self.setMinimumSize(760, 420)
+        # Wide enough for every column, Grand Total included, beside the
+        # details panel.
+        set_usable_minimum_size(self, width=1000, height=540)
         resize_to_available_screen(
             self,
-            preferred_width=1120,
-            preferred_height=640,
+            preferred_width=1280,
+            preferred_height=680,
         )
         self.setObjectName("EstimateHistoryDialog")
         self.setStyleSheet(
@@ -141,12 +151,9 @@ class EstimateHistoryDialog(QDialog):
 
                 }
                 QLabel#HistorySummaryLabel {
-                    background-color: __HEADER_BG__;
-                    border: 1px solid __CARD_BORDER__;
-                    border-radius: 6px;
                     color: __FIELD_TEXT__;
                     font-weight: 600;
-                    padding: 5px 10px;
+                    padding: 5px 2px;
                 }
                 QLabel#HistoryTitleLabel {
                     font-size: 13pt;
@@ -161,8 +168,8 @@ class EstimateHistoryDialog(QDialog):
                     padding: 1px 6px;
                 }
                 QDateEdit {
-                    min-width: 120px;
-                    max-width: 138px;
+                    min-width: 112px;
+                    max-width: 126px;
                 }
                 QHeaderView::section {
                     background-color: __HEADER_BG__;
@@ -200,6 +207,8 @@ class EstimateHistoryDialog(QDialog):
         filter_layout.setContentsMargins(12, 7, 12, 7)
         filter_layout.setSpacing(6)
         filter_layout.addWidget(header_label)
+        # The window title says the same; this goes first when room is short.
+        self._filter_title = header_label
 
         from_label = QLabel("From")
         from_label.setObjectName("HistoryFieldLabel")
@@ -209,8 +218,8 @@ class EstimateHistoryDialog(QDialog):
         self.date_from.setDisplayFormat("dd/MM/yyyy")
         first_estimate_date = self._resolve_first_estimate_date()
         self.date_from.setDate(first_estimate_date)
-        self.date_from.setMinimumWidth(124)
-        self.date_from.setMaximumWidth(138)
+        self.date_from.setMinimumWidth(116)
+        self.date_from.setMaximumWidth(126)
         filter_layout.addWidget(self.date_from)
 
         to_label = QLabel("To")
@@ -220,17 +229,34 @@ class EstimateHistoryDialog(QDialog):
         self.date_to.setCalendarPopup(True)
         self.date_to.setDisplayFormat("dd/MM/yyyy")
         self.date_to.setDate(QDate.currentDate())
-        self.date_to.setMinimumWidth(124)
-        self.date_to.setMaximumWidth(138)
+        self.date_to.setMinimumWidth(116)
+        self.date_to.setMaximumWidth(126)
         filter_layout.addWidget(self.date_to)
 
-        voucher_label = QLabel("Voucher No")
+        for text, tip, handler in (
+            ("Today", "Show today's estimates", self._show_today),
+            ("This Month", "Show this month's estimates", self._show_this_month),
+        ):
+            quick = QPushButton(text)
+            quick.setObjectName("HistorySecondaryButton")
+            quick.setToolTip(tip)
+            quick.clicked.connect(handler)
+            filter_layout.addWidget(quick)
+        self.clear_filters_button = QPushButton("All Dates")
+        self.clear_filters_button.setObjectName("HistorySecondaryButton")
+        self.clear_filters_button.setToolTip(
+            "Clear the voucher search and show every saved estimate"
+        )
+        self.clear_filters_button.clicked.connect(self._clear_filters)
+        filter_layout.addWidget(self.clear_filters_button)
+
+        voucher_label = QLabel("Voucher")
         voucher_label.setObjectName("HistoryFieldLabel")
         filter_layout.addWidget(voucher_label)
         self.voucher_search = QLineEdit()
         self.voucher_search.setPlaceholderText("Search voucher...")
         self.voucher_search.setClearButtonEnabled(True)
-        self.voucher_search.setMinimumWidth(160)
+        self.voucher_search.setMinimumWidth(120)
         self.voucher_search.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
@@ -246,11 +272,10 @@ class EstimateHistoryDialog(QDialog):
 
         self.results_summary_label = QLabel("Loading estimates...")
         self.results_summary_label.setObjectName("HistorySummaryLabel")
-        self.results_summary_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.results_summary_label.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
         self.results_summary_label.setMinimumWidth(150)
-        self.clear_filters_button = QPushButton("Clear")
-        self.clear_filters_button.clicked.connect(self._clear_filters)
-        filter_layout.addWidget(self.clear_filters_button)
 
         layout.addWidget(ToolbarOverflow(filter_card))
 
@@ -263,14 +288,18 @@ class EstimateHistoryDialog(QDialog):
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         header.setStretchLastSection(False)
-        self.estimates_table.setColumnWidth(0, 92)
-        self.estimates_table.setColumnWidth(1, 104)
-        self.estimates_table.setColumnWidth(3, 112)
-        self.estimates_table.setColumnWidth(4, 94)
-        self.estimates_table.setColumnWidth(5, 94)
-        self.estimates_table.setColumnWidth(6, 94)
-        self.estimates_table.setColumnWidth(7, 118)
-        self.estimates_table.setColumnWidth(8, 142)
+        # The note takes the spare width; the rest fit their figures.
+        for column, width in (
+            (0, 124),
+            (1, 98),
+            (3, 104),
+            (4, 92),
+            (5, 88),
+            (6, 88),
+            (7, 104),
+            (8, 132),
+        ):
+            self.estimates_table.setColumnWidth(column, width)
 
         # Table properties
         self.estimates_table.setEditTriggers(
@@ -316,9 +345,10 @@ class EstimateHistoryDialog(QDialog):
         self.selected_details_strip.setObjectName("HistoryDetailsStrip")
         workspace.addWidget(self.selected_details_strip)
 
+        # The footer's summary already gives the count; a second status
+        # line repeating it stays out of the layout.
         self.bottom_status_strip = BottomStatusStrip(self)
-        self.bottom_status_strip.set_left_items(["Rows: 0"])
-        layout.addWidget(self.bottom_status_strip)
+        self.bottom_status_strip.hide()
 
         actions_card = QFrame(self)
         actions_card.setObjectName("HistoryActionCard")
@@ -349,12 +379,13 @@ class EstimateHistoryDialog(QDialog):
 
         button_layout.addStretch(1)
 
-        self.load_more_button = QPushButton("Load more")
+        self.load_more_button = QPushButton("Load More")
         self.load_more_button.setObjectName("HistorySecondaryButton")
         self.load_more_button.setVisible(False)
         self.load_more_button.clicked.connect(lambda: self.load_estimates(append=True))
         button_layout.addWidget(self.load_more_button)
-        self.paging_scope_label = QLabel("Sort: loaded rows")
+        self.paging_scope_label = QLabel("")
+        self.paging_scope_label.setObjectName("HistorySubtitleLabel")
         button_layout.addWidget(self.paging_scope_label)
 
         self.close_button = QPushButton("Close")
@@ -365,9 +396,9 @@ class EstimateHistoryDialog(QDialog):
 
         button_layout.insertWidget(0, self.results_summary_label)
         for button, label in (
-            (self.open_button, "Open estimate"),
-            (self.print_button, "Print estimate"),
-            (self.delete_button, "Delete estimate"),
+            (self.open_button, "Open Estimate"),
+            (self.print_button, "Print Estimate"),
+            (self.delete_button, "Delete Estimate"),
         ):
             button.setText(label)
             self.selected_details_strip.action_layout.addWidget(button)
@@ -375,6 +406,25 @@ class EstimateHistoryDialog(QDialog):
 
         self._update_results_summary()
         self._update_selected_details()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        # Below this width the filter row would need sideways scrolling
+        # to reach Search; its heading only repeats the window title.
+        self._filter_title.setVisible(self.width() >= FULL_FILTER_WIDTH)
+
+    def _show_range(self, start: QDate, end: QDate) -> None:
+        self.date_from.setDate(start)
+        self.date_to.setDate(end)
+        self.load_estimates()
+
+    def _show_today(self) -> None:
+        today = QDate.currentDate()
+        self._show_range(today, today)
+
+    def _show_this_month(self) -> None:
+        today = QDate.currentDate()
+        self._show_range(QDate(today.year(), today.month(), 1), today)
 
     def _clear_filters(self) -> None:
         self.voucher_search.clear()
@@ -408,6 +458,7 @@ class EstimateHistoryDialog(QDialog):
         elif not self._history_page_state.has_more:
             return
         self.results_summary_label.setText("Loading estimates...")
+        self._loading = True
         started_at = time.perf_counter()
 
         # Start threaded load and return early to keep UI responsive
@@ -477,7 +528,11 @@ class EstimateHistoryDialog(QDialog):
     def _handle_load_error(self, _generation: int, error: object) -> None:
         if self._closing or _generation != self._load_runner.generation:
             return
-        QMessageBox.warning(self, "Load Error", str(error))
+        QMessageBox.warning(
+            self,
+            "Estimates Not Loaded",
+            with_details("The saved estimates could not be loaded.", error),
+        )
 
     def _populate_table(
         self,
@@ -564,12 +619,8 @@ class EstimateHistoryDialog(QDialog):
             return
         try:
             self.search_button.setEnabled(True)
-            if hasattr(self, "open_button"):
-                self.open_button.setEnabled(True)
-            if hasattr(self, "print_button"):
-                self.print_button.setEnabled(True)
-            if hasattr(self, "delete_button"):
-                self.delete_button.setEnabled(True)
+            self._loading = False
+            self._sync_action_buttons()
             self.load_more_button.setEnabled(True)
         except Exception as exc:
             self.logger.debug("Failed to re-enable history action buttons: %s", exc)
@@ -580,29 +631,33 @@ class EstimateHistoryDialog(QDialog):
         )
         total = self._history_page_state.total
         if loaded <= 0:
-            text = "No estimates found"
+            # The empty table already says nothing matched.
+            text = ""
         elif total is None:
             text = f"{loaded} estimates loaded"
-        elif total == 1 and loaded == 1:
-            text = "1 of 1 estimate"
+        elif loaded >= total:
+            text = count_label(total, "estimate")
         else:
             text = f"{loaded} of {total} estimates"
 
-        if self.voucher_search.text().strip():
-            text += " match current filters"
-        else:
-            text += " in current date range"
+        if text:
+            text += (
+                " matching the voucher search"
+                if self.voucher_search.text().strip()
+                else " in these dates"
+            )
         self.results_summary_label.setText(text)
         text_width = self.results_summary_label.fontMetrics().horizontalAdvance(text)
         self.results_summary_label.setMinimumWidth(max(150, text_width + 24))
-        self.paging_scope_label.setText(
-            "Sort: loaded rows"
-            + (
-                " · Display limit reached; narrow filters"
-                if self._history_page_state.limit_reached
-                else ""
-            )
-        )
+        # Sorting only reorders what is on screen, which matters only
+        # while part of the result is still unloaded.
+        scope = ""
+        if self._history_page_state.limit_reached:
+            scope = "Display limit reached. Narrow the dates or search."
+        elif total is not None and 0 < loaded < total:
+            scope = "Sorting covers the rows shown. Load more to include the rest."
+        self.paging_scope_label.setText(scope)
+        self.paging_scope_label.setVisible(bool(scope))
         self._update_bottom_status(loaded)
 
     def _update_selected_details(self) -> None:
@@ -611,6 +666,7 @@ class EstimateHistoryDialog(QDialog):
             return
         selection_model = self.estimates_table.selectionModel()
         selected_rows = selection_model.selectedRows() if selection_model else []
+        self._sync_action_buttons()
         if not selected_rows:
             strip.setVisible(True)
             strip.set_items([("Voucher No", "-"), ("Date", "-"), ("Grand Total", "-")])
@@ -628,11 +684,11 @@ class EstimateHistoryDialog(QDialog):
                 ("Voucher No", payload.voucher_no),
                 ("Date", format_display_date(payload.date)),
                 ("Note", payload.note or "-"),
-                ("Silver rate", format_rupees(payload.silver_rate)),
-                ("Gross", f"{fixed_decimal(payload.total_gross, WEIGHT_PLACES)}g"),
-                ("Net Wt", f"{fixed_decimal(payload.total_net, WEIGHT_PLACES)}g"),
-                ("Net Fine", f"{fixed_decimal(payload.net_fine, WEIGHT_PLACES)}g"),
-                ("Net Wage", format_rupees(payload.net_wage)),
+                ("Silver rate", format_rate(payload.silver_rate)),
+                ("Gross", f"{fixed_decimal(payload.total_gross, WEIGHT_PLACES)} g"),
+                ("Net Wt", f"{fixed_decimal(payload.total_net, WEIGHT_PLACES)} g"),
+                ("Net Fine", f"{fixed_decimal(payload.net_fine, WEIGHT_PLACES)} g"),
+                ("Net Labour", format_rupees(payload.net_wage)),
                 ("Grand Total", format_rupees(payload.grand_total)),
             ]
         )
@@ -645,14 +701,38 @@ class EstimateHistoryDialog(QDialog):
         total = self.estimates_model.rowCount() if row_count is None else int(row_count)
         selection_model = self.estimates_table.selectionModel()
         selected = len(selection_model.selectedRows()) if selection_model else 0
-        try:
-            user = os.environ.get("USERNAME") or os.environ.get("USER") or "-"
-        except Exception:
-            user = "-"
         strip.set_left_items([f"Rows: {total}"])
-        strip.set_right_items(
-            [f"{selected} row selected", "Last Saved: -", f"User: {user}"]
+        strip.set_right_items([f"{selected} row selected"])
+
+    def _sync_action_buttons(self) -> None:
+        """Open, Print and Delete need a selected estimate and no load running."""
+        selection_model = self.estimates_table.selectionModel()
+        ready = bool(
+            not getattr(self, "_loading", False)
+            and selection_model is not None
+            and selection_model.selectedRows()
         )
+        for name in ("open_button", "print_button", "delete_button"):
+            button = getattr(self, name, None)
+            if button is not None:
+                button.setEnabled(ready)
+
+    def _selected_summary(self) -> str:
+        """Date, total and note of the selected estimate, for confirmations."""
+        selection_model = self.estimates_table.selectionModel()
+        selected_rows = selection_model.selectedRows() if selection_model else []
+        if not selected_rows:
+            return ""
+        payload = self.estimates_model.row_payload(selected_rows[0].row())
+        if payload is None:
+            return ""
+        parts = [
+            format_display_date(payload.date),
+            f"Grand total {format_rupees(payload.grand_total)}",
+        ]
+        if payload.note:
+            parts.append(payload.note)
+        return " · ".join(part for part in parts if part)
 
     def _cancel_active_loads(self) -> None:
         self._load_runner.shutdown()
@@ -694,7 +774,7 @@ class EstimateHistoryDialog(QDialog):
         self.selected_voucher = self.get_selected_voucher()
         if not self.selected_voucher:
             QMessageBox.warning(
-                self, "Selection Error", "Please select an estimate first."
+                self, "No Estimate Selected", "Select an estimate in the list first."
             )
             return
 
@@ -705,7 +785,7 @@ class EstimateHistoryDialog(QDialog):
         voucher_no = self.get_selected_voucher()
         if not voucher_no:
             QMessageBox.warning(
-                self, "Selection Error", "Please select an estimate first."
+                self, "No Estimate Selected", "Select an estimate in the list first."
             )
             return
 
@@ -748,30 +828,29 @@ class EstimateHistoryDialog(QDialog):
         voucher_no = self.get_selected_voucher()
         if not voucher_no:
             QMessageBox.warning(
-                self, "Selection Error", "Please select an estimate to delete."
+                self, "No Estimate Selected", "Select an estimate in the list first."
             )
             return
 
-        if confirm_estimate_deletion(self, voucher_no):
+        if confirm_estimate_deletion(self, voucher_no, self._selected_summary()):
             try:
                 success = self.db_manager.delete_single_estimate(voucher_no)
                 if success:
-                    QMessageBox.information(
-                        self,
-                        "Success",
-                        f"Estimate '{voucher_no}' deleted successfully.",
-                    )
-                    self.load_estimates()  # Refresh the list
+                    # The estimate leaving the list is the confirmation.
+                    self.load_estimates()
                 else:
                     QMessageBox.warning(
                         self,
-                        "Delete Error",
-                        getattr(self.db_manager, "last_error", None)
-                        or f"Estimate '{voucher_no}' could not be deleted (might already be deleted).",
+                        "Estimate Not Deleted",
+                        with_details(
+                            f"Estimate {voucher_no} could not be deleted. "
+                            "It may already have been removed.",
+                            getattr(self.db_manager, "last_error", None),
+                        ),
                     )
             except Exception as e:
                 QMessageBox.critical(
                     self,
-                    "Error",
-                    f"An unexpected error occurred during deletion: {str(e)}",
+                    "Estimate Not Deleted",
+                    with_details(f"Estimate {voucher_no} could not be deleted.", e),
                 )

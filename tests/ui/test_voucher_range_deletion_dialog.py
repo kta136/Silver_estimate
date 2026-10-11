@@ -50,25 +50,31 @@ def dialog(qtbot):
     return view
 
 
-def test_defaults_preview_confirmation_and_result(dialog, monkeypatch):
+def test_defaults_preview_confirmation_and_result(dialog, monkeypatch, confirmations):
     assert dialog.date_from.date() == dialog.date_to.date() == QDate.currentDate()
     assert not dialog.voucher_from.text() and not dialog.voucher_to.text()
     assert not dialog.delete_button.isEnabled()
     dialog.preview_button.click()
     assert dialog.model.rowCount() == 2
     assert "Eligible: 1" in dialog.summary.text()
-    confirmations = []
+    # The button and the question both say how many will go.
+    assert dialog.delete_button.text() == "Delete 1 Voucher..."
+    from silverestimate.ui import voucher_range_deletion_dialog as module
 
-    def confirm(*args):
-        confirmations.append(args)
-        return QMessageBox.StandardButton.Yes
-
-    monkeypatch.setattr(QMessageBox, "warning", confirm)
+    details = []
+    ask = module.confirm_destructive
+    monkeypatch.setattr(
+        module,
+        "confirm_destructive",
+        lambda parent, **kwargs: details.append(kwargs) or ask(parent, **kwargs),
+    )
+    confirmations.answer("Delete 1 Voucher")
     dialog.delete_button.click()
-    message = confirmations[0][2]
-    assert "1 vouchers and 2 associated silver bars" in message
-    assert "Keep 1 protected" in message and "unsaved edits" in message
-    assert confirmations[0][-1] == QMessageBox.StandardButton.Cancel
+    message = details[0]["detail"]
+    assert details[0]["heading"] == "Permanently delete 1 voucher?"
+    assert "1 voucher and 2 silver bars will be removed" in message
+    assert "1 protected voucher will be kept" in message
+    assert "unsaved edits" in message
     assert len(dialog.controller.deletions) == 1
     assert (
         "Deleted: 1" in dialog.summary.text() and "Skipped: 1" in dialog.summary.text()
@@ -78,11 +84,9 @@ def test_defaults_preview_confirmation_and_result(dialog, monkeypatch):
     assert not dialog.delete_button.isEnabled()
 
 
-def test_cancel_does_not_delete_or_invalidate_review(dialog, monkeypatch):
+def test_cancel_does_not_delete_or_invalidate_review(dialog, confirmations):
     dialog.preview_button.click()
-    monkeypatch.setattr(
-        QMessageBox, "warning", lambda *a: QMessageBox.StandardButton.Cancel
-    )
+    confirmations.answer("Cancel")
     dialog.delete_button.click()
     assert not dialog.controller.deletions
     assert dialog.delete_button.isEnabled()
@@ -110,16 +114,25 @@ def test_numeric_validation_and_preview(dialog, monkeypatch):
     monkeypatch.setattr(QMessageBox, "warning", lambda *a: warnings.append(a))
     dialog.mode.setCurrentIndex(1)
     dialog.preview_button.click()
-    assert warnings and not dialog.controller.previews
+    # What to correct is said in the dialog, in plain words, with no box.
+    assert not warnings and not dialog.controller.previews
+    assert dialog.summary.text() == "Enter the first and the last voucher number."
+    assert dialog.summary.property("problem") is True
     dialog.voucher_from.setText("00010")
     dialog.voucher_to.setText("2")
     dialog.preview_button.click()
-    assert len(warnings) == 2 and not dialog.controller.previews
+    assert not warnings and not dialog.controller.previews
+    assert dialog.summary.text() == "From must not be after To."
+    dialog.voucher_to.setText("1x")
+    dialog.preview_button.click()
+    assert "whole numbers" in dialog.summary.text()
+    assert "nonnegative" not in dialog.summary.text()
     dialog.voucher_to.setText("10")
     dialog.preview_button.click()
     assert dialog.controller.previews == [
         VoucherDeletionRange("voucher", "00010", "10")
     ]
+    assert dialog.summary.property("problem") is False
 
 
 @pytest.mark.parametrize(
@@ -132,13 +145,11 @@ def test_empty_or_all_protected_preview_cannot_delete(dialog, rows):
     assert dialog.model.rowCount() == len(rows)
 
 
-def test_stale_preview_requires_preview_again(dialog, monkeypatch):
+def test_stale_preview_requires_preview_again(dialog, confirmations):
     dialog.controller.result = VoucherDeletionResult(
         False, stale=True, message="Preview again"
     )
-    monkeypatch.setattr(
-        QMessageBox, "warning", lambda *a: QMessageBox.StandardButton.Yes
-    )
+    confirmations.answer("Delete 1 Voucher")
     dialog.preview_button.click()
     dialog.delete_button.click()
     assert dialog._preview is None and not dialog.delete_button.isEnabled()
@@ -146,11 +157,9 @@ def test_stale_preview_requires_preview_again(dialog, monkeypatch):
 
 
 def test_deletion_error_is_visible_and_not_retryable_without_review(
-    dialog, monkeypatch
+    dialog, monkeypatch, confirmations
 ):
-    monkeypatch.setattr(
-        QMessageBox, "warning", lambda *a: QMessageBox.StandardButton.Yes
-    )
+    confirmations.answer("Delete 1 Voucher")
     errors = []
     monkeypatch.setattr(QMessageBox, "critical", lambda *a: errors.append(a))
 

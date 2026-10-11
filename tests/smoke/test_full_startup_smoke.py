@@ -104,6 +104,12 @@ class _MessageBoxStub:
         return QMessageBox.StandardButton.Ok
 
 
+def _answer_confirmation(dialog) -> None:
+    buttons = {button.text(): button for button in dialog.buttons()}
+    discard = buttons.get("Discard")
+    (discard or dialog.button(QMessageBox.StandardButton.Yes)).click()
+
+
 class _StubLiveRateController:
     def __init__(self, *, parent, widget_getter, status_callback, logger=None, **_):
         self.parent = parent
@@ -221,13 +227,12 @@ def smoke_environment(monkeypatch, settings_stub, tmp_path, qt_application_state
     for message_box_target in (
         "silverestimate.ui.print_preview_output.QMessageBox",
         "silverestimate.ui.settings_dialog.QMessageBox",
-        "silverestimate.ui.silver_bar_history.QMessageBox",
-        "silverestimate.ui.silver_bar_management.QMessageBox",
     ):
         monkeypatch.setattr(message_box_target, _MessageBoxStub)
+    # Stand in for the user at the app's own confirmations: discard
+    # unsaved work when that is offered, otherwise agree.
     monkeypatch.setattr(
-        "silverestimate.controllers.navigation_controller.QMessageBox",
-        _MessageBoxStub,
+        "silverestimate.ui.message_dialogs._run_dialog", _answer_confirmation
     )
     monkeypatch.setattr(
         "silverestimate.services.navigation_service.QMessageBox",
@@ -902,7 +907,7 @@ def test_history_menu_opens_real_dialog_and_loads_selected_estimate(
         history_action = next(
             action
             for action in window.findChildren(QAction)
-            if action.text() == "Estimate &History"
+            if action.text().startswith("&Estimate History...")
         )
         timer.timeout.connect(choose_estimate)
         timer.start(10)

@@ -26,14 +26,18 @@ def test_setup_dialog_omits_reset_action_and_keeps_secondary_fields(qtbot):
     qtbot.addWidget(dialog)
     try:
         assert dialog.ok_button.text() == "Create Passwords"
+        assert dialog.cancel_button.text() == "Exit"
         assert not hasattr(dialog, "reset_button")
-        assert dialog.password_help_label.objectName() == "LoginHelpLabel"
-        assert "two different passwords" in dialog.password_help_label.text()
-        assert dialog.confirm_main_password_label.text() == "Confirm Main Password:"
+        # One explanation covers both rules; it is not said twice.
+        assert not hasattr(dialog, "password_help_label")
+        requirements = dialog.password_requirements_label.text()
+        assert "two different passwords" in requirements
+        assert "at least 8 characters" in requirements
+        assert dialog.password_label.text() == "Main Password"
+        assert dialog.confirm_main_password_label.text() == "Confirm Main Password"
         assert dialog.confirm_main_password_input.isClearButtonEnabled() is True
-        assert "at least 8 characters" in dialog.password_requirements_label.text()
-        assert dialog.backup_password_label.text() == "Recovery Password:"
-        assert dialog.confirm_password_label.text() == "Confirm Recovery Password:"
+        assert dialog.backup_password_label.text() == "Recovery Password"
+        assert dialog.confirm_password_label.text() == "Confirm Recovery Password"
         assert dialog.backup_password_input.isClearButtonEnabled() is True
         assert dialog.confirm_password_input.isClearButtonEnabled() is True
     finally:
@@ -66,21 +70,83 @@ def test_login_dialog_show_passwords_toggle_updates_echo_modes(qtbot):
 def test_setup_dialog_requires_main_password_confirmation(qtbot, monkeypatch):
     dialog = LoginDialog(is_setup=True)
     qtbot.addWidget(dialog)
-    warnings = []
+    dialog.show()
+    boxes = []
     monkeypatch.setattr(
-        "silverestimate.ui.login_dialog.QMessageBox.warning",
-        lambda *args: warnings.append(args),
+        "PySide6.QtWidgets.QMessageBox.warning",
+        lambda *args: boxes.append(args),
     )
     try:
         dialog.password_input.setText("main-password")
         dialog.confirm_main_password_input.setText("different-password")
         dialog.backup_password_input.setText("recovery-password")
         dialog.confirm_password_input.setText("recovery-password")
+        # While typing, the dialog says what is still missing.
+        assert dialog.progress_label.text() == (
+            "Still needed: Main passwords do not match."
+        )
 
         dialog._handle_ok()
 
-        assert warnings
-        assert "Main passwords do not match" in warnings[-1][2]
+        # The mistake is explained in the dialog, on the field to fix.
+        assert boxes == []
+        assert dialog.error_label.isVisible()
+        assert dialog.error_label.text() == "Main passwords do not match."
+        # Once, not twice: the progress line steps aside for the error.
+        assert not dialog.progress_label.isVisible()
+        assert dialog.focusWidget() is dialog.confirm_main_password_input
+        assert dialog.result() == 0
+
+        dialog.confirm_main_password_input.setText("main-password")
+        assert not dialog.error_label.isVisible()
+        assert dialog.progress_label.isVisible()
+        assert dialog.progress_label.text() == "Both passwords are ready."
+    finally:
+        dialog.deleteLater()
+
+
+def test_messages_do_not_move_the_fields_or_buttons(qtbot):
+    for is_setup in (True, False):
+        dialog = LoginDialog(is_setup=is_setup)
+        qtbot.addWidget(dialog)
+        dialog.show()
+        qtbot.wait(20)
+        before = (dialog.password_input.geometry(), dialog.ok_button.geometry())
+
+        dialog._handle_ok()
+        qtbot.wait(20)
+
+        assert dialog.error_label.isVisible()
+        assert (
+            dialog.password_input.geometry(),
+            dialog.ok_button.geometry(),
+        ) == before
+
+
+def test_wiping_needs_the_word_typed(qtbot, confirmations):
+    dialog = LoginDialog(is_setup=False)
+    qtbot.addWidget(dialog)
+    confirmations.answer("Wipe All Data")
+
+    # Anything but the word leaves the action switched off.
+    confirmations.type_text("delet")
+    dialog._handle_reset_request()
+    assert not dialog.was_reset_requested()
+
+    confirmations.always_type("delete")
+    dialog._handle_reset_request()
+    assert dialog.was_reset_requested()
+    assert confirmations.prompts[-1].startswith("Wipe All Data")
+
+
+def test_sign_in_explains_an_empty_password_in_place(qtbot):
+    dialog = LoginDialog(is_setup=False)
+    qtbot.addWidget(dialog)
+    dialog.show()
+    try:
+        assert dialog.cancel_button.text() == "Exit"
+        dialog._handle_ok()
+        assert dialog.error_label.text() == "Enter your password."
         assert dialog.result() == 0
     finally:
         dialog.deleteLater()

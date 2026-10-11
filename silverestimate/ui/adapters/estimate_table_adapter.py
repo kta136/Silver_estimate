@@ -132,7 +132,12 @@ class EstimateTableAdapter:
             owner.logger.error(
                 "Error populating row %s: %s", row_index + 1, exc, exc_info=True
             )
-            QMessageBox.critical(owner, "Error", f"Error populating row: {exc}")
+            QMessageBox.critical(
+                owner,
+                "Item Not Filled In",
+                f"Row {row_index + 1} could not be filled in from the item."
+                f"\n\nDetails: {exc}",
+            )
             owner._status(f"Error populating row {row_index + 1}", 4000)
         finally:
             table.blockSignals(False)

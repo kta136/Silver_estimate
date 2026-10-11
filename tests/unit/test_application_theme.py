@@ -161,6 +161,38 @@ def test_apply_light_application_theme_sets_stub_app_palette_and_qss():
     )
 
 
+def test_light_theme_asks_qt_for_dark_on_light_window_buttons():
+    from PySide6.QtCore import Qt
+
+    class StyleHints:
+        scheme = None
+
+        def setColorScheme(self, scheme):
+            self.scheme = scheme
+
+    class StubApp:
+        def __init__(self):
+            self.hints = StyleHints()
+
+        def styleHints(self):
+            return self.hints
+
+        def setStyle(self, style):
+            pass
+
+        def setPalette(self, palette):
+            pass
+
+        def setStyleSheet(self, stylesheet):
+            pass
+
+    app = StubApp()
+
+    apply_light_application_theme(app)
+
+    assert app.hints.scheme == Qt.ColorScheme.Light
+
+
 def test_apply_light_application_theme_allows_headless_widget_instantiation(
     qt_application_state,
 ):

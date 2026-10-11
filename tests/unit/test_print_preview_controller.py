@@ -159,12 +159,10 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
     assert "Show facing pages" not in action_texts
     assert "Show overview of all pages" not in action_texts
 
+    # Setup actions are named in the More menu, not icon-only buttons here.
     expected_toolbar_actions = [
         "Print",
         "Export PDF",
-        "Printer Setup",
-        "Page Setup",
-        "Print Font",
         "Fit Width",
         "Fit Page",
         "Zoom Out",
@@ -215,9 +213,6 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
     export_action = next(
         action for action in toolbar.actions() if action.text() == "Export PDF"
     )
-    font_action = next(
-        action for action in toolbar.actions() if action.text() == "Print Font"
-    )
     orientation_combo = preview.findChild(QComboBox, "PreviewOrientationCombo")
     orientation_action = next(
         action
@@ -237,8 +232,7 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
     assert ordered_actions.index(orientation_action) < ordered_actions.index(
         tunch_action
     )
-    assert ordered_actions.index(tunch_action) < ordered_actions.index(font_action)
-    assert ordered_actions.index(font_action) < ordered_actions.index(fit_width_action)
+    assert ordered_actions.index(tunch_action) < ordered_actions.index(fit_width_action)
     assert toolbar.actions().index(more_action) > toolbar.actions().index(
         fit_width_action
     )
@@ -257,6 +251,7 @@ def test_preview_toolbar_uses_single_custom_icon_set(qtbot):
     expected_menu_actions = [
         "Printer Setup",
         "Page Setup",
+        "Print Font",
         "Single Page",
         "Facing Pages",
         "All Pages",
@@ -294,7 +289,8 @@ def test_silver_bar_preview_exposes_print_font_without_format_controls(qtbot):
 
     toolbar = preview.findChild(QToolBar)
     assert toolbar is not None
-    action_texts = [action.text() for action in toolbar.actions() if action.text()]
+    more_menu = toolbar.findChild(QToolButton, "PreviewMoreButton").menu()
+    action_texts = [action.text() for action in more_menu.actions()]
     assert "Print Font" in action_texts
     assert preview.findChild(QComboBox, "PreviewFormatCombo") is None
     assert preview.findChild(QCheckBox, "PreviewTunchCheckbox") is None
@@ -843,3 +839,47 @@ def test_preview_returns_only_physical_print_outcome(
     monkeypatch.setattr(PrintPreviewDialog, "exec", execute)
     outcome = controller.open_preview(_estimate_payload())
     assert outcome.status is expected
+
+
+def test_narrow_preview_drops_captions_instead_of_hiding_buttons(qtbot):
+    controller = PrintPreviewController(
+        printer=QPrinter(),
+        render_document=lambda *args: None,
+        get_print_font=lambda: QFont("Arial", 8),
+        persist_print_font=lambda _font: None,
+    )
+    preview = PrintPreviewDialog(controller._printer)
+    qtbot.addWidget(preview)
+    controller._toolbar_builder.build(
+        _preview_session(preview, _estimate_payload()), None
+    )
+    toolbar = preview.toolbar
+    compactor = preview.toolbar_compactor
+    full_width = toolbar.sizeHint().width()
+
+    def styles():
+        return {
+            action.text(): toolbar.widgetForAction(action).toolButtonStyle()
+            for action in toolbar.actions()
+            if action.text()
+        }
+
+    assert compactor.compact_width < full_width
+    assert not compactor.compact
+
+    compactor.sync(full_width - 1)
+    assert compactor.compact
+    compact = styles()
+    for text in ("Export PDF", "Fit Width", "Fit Page", "Close"):
+        assert compact[text] == Qt.ToolButtonStyle.ToolButtonIconOnly
+    # The two that matter most keep their words.
+    assert compact["Print"] == Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+    assert toolbar.minimumWidth() <= compactor.compact_width
+
+    compactor.sync(full_width + 1)
+    assert not compactor.compact
+    assert styles()["Export PDF"] == Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+
+    orientation = preview.findChild(QComboBox, "PreviewOrientationCombo")
+    # Sized to its longest entry: a fixed width used to cut "Landscape".
+    assert orientation.sizeAdjustPolicy() == QComboBox.SizeAdjustPolicy.AdjustToContents

@@ -15,7 +15,14 @@ from tests.ui.test_item_master import _StubDbManager
 from tests.ui.test_settings_dialog import _make_main_window
 
 
-def test_deletion_escape_cancels_and_the_action_caption_fits(qtbot, qt_app):
+def test_deletion_escape_cancels_and_the_action_caption_fits(
+    qtbot, qt_app, monkeypatch
+):
+    # Show the real dialog: this test checks its buttons and the Escape key.
+    monkeypatch.setattr(
+        "silverestimate.ui.message_dialogs._run_dialog", lambda dialog: dialog.exec()
+    )
+
     def cancel():
         dialog = qt_app.activeModalWidget()
         assert isinstance(dialog, QMessageBox)
@@ -32,7 +39,7 @@ def test_deletion_escape_cancels_and_the_action_caption_fits(qtbot, qt_app):
     assert not confirm_estimate_deletion(None, "100")
 
 
-def test_catalog_cancel_keeps_edits_and_discard_restores_record(qtbot, monkeypatch):
+def test_catalog_cancel_keeps_edits_and_discard_restores_record(qtbot, confirmations):
     catalog = ItemMasterWidget(
         _StubDbManager(), types.SimpleNamespace(show_status_message=lambda *_: None)
     )
@@ -41,16 +48,12 @@ def test_catalog_cancel_keeps_edits_and_discard_restores_record(qtbot, monkeypat
     original = catalog.name_edit.text()
     original_code = catalog.code_edit.text()
     catalog.name_edit.setText("Changed name")
-    monkeypatch.setattr(
-        QMessageBox, "question", lambda *_: QMessageBox.StandardButton.Cancel
-    )
+    confirmations.always("Cancel")
     catalog.items_table.selectRow(1)
     assert catalog.code_edit.text() == original_code
     assert catalog.name_edit.text() == "Changed name"
     assert not catalog.confirm_discard_edits()
-    monkeypatch.setattr(
-        QMessageBox, "question", lambda *_: QMessageBox.StandardButton.Discard
-    )
+    confirmations.always("Discard")
     assert catalog.confirm_discard_edits()
     assert catalog.name_edit.text() == original
     assert not catalog.dirty_label.text()
@@ -83,7 +86,6 @@ def test_preview_changes_are_staged_and_footer_buttons_work(
         apply_table_font_size=lambda _: True,
         apply_breakdown_font_size=lambda _: True,
         apply_final_calc_font_size=lambda _: True,
-        apply_totals_position=lambda _: True,
     )
     dialog = SettingsDialog(_make_main_window(estimate))
     qtbot.addWidget(dialog)

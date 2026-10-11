@@ -7,9 +7,8 @@ from typing import Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence
-from PySide6.QtWidgets import QMenuBar, QMessageBox
+from PySide6.QtWidgets import QMenuBar
 
-from silverestimate.infrastructure.app_constants import APP_VERSION
 from silverestimate.ui.icons import get_icon
 
 
@@ -53,15 +52,13 @@ class NavigationController:
         return self._navigation_service.show_sales_report()
 
     def show_about(self):
-        QMessageBox.about(
-            self._main_window,
-            "About Silver Estimation App",
-            "Silver Estimation App\n\n"
-            f"Version {APP_VERSION}\n\n"
-            "A comprehensive tool for managing silver estimations, "
-            "item inventory, and silver bars.\n\n"
-            "c 2023-2025 Silver Estimation App",
-        )
+        from silverestimate.ui.about_dialog import AboutDialog
+
+        dialog = AboutDialog(self._main_window)
+        try:
+            dialog.exec()
+        finally:
+            dialog.deleteLater()
 
     def refresh_live_rate(self):
         controller = getattr(self._main_window, "live_rate_controller", None)
@@ -69,24 +66,20 @@ class NavigationController:
             controller.refresh_now()
 
     def show_keyboard_shortcuts(self):
-        QMessageBox.information(
-            self._main_window,
-            "Keyboard Shortcuts",
-            "Estimate entry\n\n"
-            "Ctrl+S — Save estimate and open print preview\n"
-            "Ctrl+P — Print preview\n"
-            "Ctrl+N — New estimate\n"
-            "Ctrl+H — Estimate history\n"
-            "Ctrl+D — Delete current row\n"
-            "Ctrl+R — Toggle Return mode\n"
-            "Ctrl+B — Toggle Silver Bar mode\n"
-            "Page Up / Page Down — Move through rows\n"
-            "Enter / Tab — Confirm field and move forward\n\n"
-            "Navigation\n\n"
-            "Alt+E — Estimate entry\n"
-            "Alt+I — Item Master\n"
-            "F1 — Keyboard shortcuts",
-        )
+        from silverestimate.ui.shortcuts_dialog import ShortcutsDialog
+
+        dialog = ShortcutsDialog(parent=self._main_window)
+        try:
+            dialog.exec()
+        finally:
+            dialog.deleteLater()
+
+    def new_estimate(self):
+        widget = getattr(self._main_window, "estimate_widget", None)
+        if widget is None:
+            return
+        self.show_estimate()
+        widget.clear_form()
 
     def delete_all_data(self):
         return self._commands.delete_all_data()
@@ -99,160 +92,136 @@ class NavigationController:
 
     # --- Builders ------------------------------------------------------
 
+    def _action(self, text: str, *, icon: str = "", tip: str = "") -> QAction:
+        action = QAction(text, self._main_window)
+        if icon:
+            action.setIcon(get_icon(icon, widget=self._main_window))
+        if tip:
+            action.setStatusTip(tip)
+        return action
+
     def _build_menu_bar(self) -> None:
-        menu_bar: QMenuBar = self._main_window.menuBar()
+        """Build the menus; each destination appears in exactly one of them."""
+        window = self._main_window
+        menu_bar: QMenuBar = window.menuBar()
 
+        # --- File: what you do to the open estimate -----------------------
         file_menu = menu_bar.addMenu("&File")
+        # Ctrl+N belongs to the estimate screen's own shortcut, so the menu
+        # shows the key without registering it a second time.
+        new_action = self._action("&New Estimate\tCtrl+N", icon="new")
+        new_action.triggered.connect(self.new_estimate)
+        file_menu.addAction(new_action)
 
-        estimate_action = QAction("&Estimate Entry", self._main_window)
-        estimate_action.setIcon(get_icon("estimate_entry", widget=self._main_window))
-        estimate_action.setShortcut("Alt+E")
-        estimate_action.triggered.connect(self.show_estimate)
-        file_menu.addAction(estimate_action)
-
-        item_master_action = QAction("&Item Master", self._main_window)
-        item_master_action.setIcon(get_icon("item_master", widget=self._main_window))
-        item_master_action.setShortcut("Alt+I")
-        item_master_action.triggered.connect(self.show_item_master)
-        file_menu.addAction(item_master_action)
-
-        file_menu.addSeparator()
-
-        save_action = QAction("&Save", self._main_window)
-        save_action.setIcon(get_icon("save", widget=self._main_window))
+        save_action = self._action("&Save", icon="save")
         save_action.setShortcut(QKeySequence.StandardKey.Save)
         save_action.setShortcutContext(Qt.ShortcutContext.WindowShortcut)
-        save_action.triggered.connect(self._main_window.commands.save_estimate)
+        save_action.triggered.connect(window.commands.save_estimate)
         file_menu.addAction(save_action)
 
-        print_action = QAction("&Print", self._main_window)
-        print_action.setIcon(get_icon("print", widget=self._main_window))
+        print_action = self._action("&Print", icon="print")
         print_action.setShortcut(QKeySequence.StandardKey.Print)
         print_action.setShortcutContext(Qt.ShortcutContext.WindowShortcut)
-        print_action.triggered.connect(self._main_window.commands.print_estimate)
+        print_action.triggered.connect(window.commands.print_estimate)
         file_menu.addAction(print_action)
 
         file_menu.addSeparator()
-
-        exit_action = QAction("E&xit", self._main_window)
-        exit_action.setIcon(get_icon("exit", widget=self._main_window))
+        exit_action = self._action("E&xit", icon="exit")
         exit_action.setShortcut(QKeySequence.StandardKey.Quit)
-        exit_action.triggered.connect(self._main_window.close)
+        exit_action.triggered.connect(window.close)
         file_menu.addAction(exit_action)
 
+        # --- View: the screens; a mark shows which one is open ------------
+        # No icons here: an icon takes the place of the mark in a menu.
+        view_menu = menu_bar.addMenu("&View")
+        screens = QActionGroup(window)
+        screens.setExclusive(True)
+
+        view_estimate_action = self._action("&Estimate Entry")
+        view_estimate_action.setShortcut("Alt+E")
+        view_item_master_action = self._action("&Item Master")
+        view_item_master_action.setShortcut("Alt+I")
+        view_sales_report_action = self._action(
+            "Sales &Reports",
+            tip="Daily, monthly and item-wise sale and return weights",
+        )
+        view_sales_report_action.setShortcut("Alt+R")
+        for action, slot in (
+            (view_estimate_action, self.show_estimate),
+            (view_item_master_action, self.show_item_master),
+            (view_sales_report_action, self.show_sales_report),
+        ):
+            action.setCheckable(True)
+            screens.addAction(action)
+            action.triggered.connect(slot)
+            view_menu.addAction(action)
+        view_estimate_action.setChecked(True)
+
+        # --- Tools: windows that open over the current screen -------------
         tools_menu = menu_bar.addMenu("&Tools")
-        estimate = getattr(self._main_window, "estimate_widget", None)
+        estimate = getattr(window, "estimate_widget", None)
         estimate_menu = getattr(estimate, "estimate_tools_menu", None)
         if estimate_menu is not None:
             tools_menu.addMenu(estimate_menu)
             tools_menu.addSeparator()
 
-        silver_bars_action = QAction(
-            "Open &Silver Bar Management Dialog...", self._main_window
-        )
-        silver_bars_action.setIcon(get_icon("silver_bars", widget=self._main_window))
-        silver_bars_action.setStatusTip(
-            "Add, view, transfer, or assign silver bars to lists"
+        silver_bars_action = self._action(
+            "&Silver Bars...",
+            icon="silver_bars",
+            tip="Build, print and issue silver bar lists",
         )
         silver_bars_action.triggered.connect(self.show_silver_bars)
         tools_menu.addAction(silver_bars_action)
 
-        silver_history_action = QAction("Silver Bar &History", self._main_window)
-        silver_history_action.setIcon(
-            get_icon("silver_history", widget=self._main_window)
-        )
-        silver_history_action.setStatusTip(
-            "View history of all silver bars and issued lists"
-        )
-        silver_history_action.triggered.connect(self.show_silver_bar_history)
-        tools_menu.addAction(silver_history_action)
-
         tools_menu.addSeparator()
-
-        settings_action = QAction("&Settings...", self._main_window)
-        settings_action.setIcon(get_icon("settings", widget=self._main_window))
-        settings_action.setStatusTip("Configure application settings")
-        settings_action.triggered.connect(self._main_window.show_settings_dialog)
+        settings_action = self._action(
+            "Se&ttings...", icon="settings", tip="Configure the application"
+        )
+        settings_action.triggered.connect(window.show_settings_dialog)
         tools_menu.addAction(settings_action)
 
-        refresh_rate_action = QAction("Refresh Live Rate Now", self._main_window)
-        refresh_rate_action.setIcon(get_icon("refresh", widget=self._main_window))
-        refresh_rate_action.setStatusTip(
-            "Fetch the latest live silver rate immediately"
+        refresh_rate_action = self._action(
+            "&Refresh Live Rate",
+            icon="refresh",
+            tip="Fetch the latest live silver rate now",
         )
         refresh_rate_action.triggered.connect(self.refresh_live_rate)
         tools_menu.addAction(refresh_rate_action)
-        self._main_window.refresh_rate_action = refresh_rate_action
+        window.refresh_rate_action = refresh_rate_action
 
-        view_menu = menu_bar.addMenu("&View")
-        view_group = QActionGroup(self._main_window)
-        view_group.setExclusive(True)
-
-        view_estimate_action = QAction("&Estimate Entry", self._main_window)
-        view_estimate_action.setIcon(
-            get_icon("estimate_entry", widget=self._main_window)
+        # --- History: saved records ----------------------------------------
+        # Alt+S, not Alt+I: that key already opens the Item Master.
+        history_menu = menu_bar.addMenu("Hi&story")
+        history_action = self._action(
+            "&Estimate History...\tCtrl+H",
+            icon="history",
+            tip="Find, open, print or delete saved estimates",
         )
-        view_estimate_action.setCheckable(True)
-        view_item_master_action = QAction("&Item Master", self._main_window)
-        view_item_master_action.setIcon(
-            get_icon("item_master", widget=self._main_window)
-        )
-        view_item_master_action.setCheckable(True)
-        view_sales_report_action = QAction("Sales &Reports", self._main_window)
-        view_sales_report_action.setIcon(get_icon("history", widget=self._main_window))
-        view_sales_report_action.setCheckable(True)
-        view_silver_bars_action = QAction("Open &Silver Bars Dialog", self._main_window)
-        view_silver_bars_action.setIcon(
-            get_icon("silver_bars", widget=self._main_window)
-        )
-        view_silver_bars_action.setCheckable(True)
-
-        view_group.addAction(view_estimate_action)
-        view_group.addAction(view_item_master_action)
-        view_group.addAction(view_sales_report_action)
-        view_group.addAction(view_silver_bars_action)
-
-        view_estimate_action.setChecked(True)
-
-        view_estimate_action.triggered.connect(self.show_estimate)
-        view_item_master_action.triggered.connect(self.show_item_master)
-        view_sales_report_action.triggered.connect(self.show_sales_report)
-        view_silver_bars_action.triggered.connect(self.show_silver_bars)
-
-        view_menu.addAction(view_estimate_action)
-        view_menu.addAction(view_item_master_action)
-        view_menu.addAction(view_sales_report_action)
-        view_menu.addAction(view_silver_bars_action)
-
-        reports_menu = menu_bar.addMenu("&Reports")
-        sales_report_action = QAction("&Sales Reports", self._main_window)
-        sales_report_action.setIcon(get_icon("history", widget=self._main_window))
-        sales_report_action.setStatusTip(
-            "View daily, monthly and item-wise sale and return weights"
-        )
-        sales_report_action.triggered.connect(self.show_sales_report)
-        reports_menu.addAction(sales_report_action)
-        history_action = QAction("Estimate &History", self._main_window)
-        history_action.setIcon(get_icon("history", widget=self._main_window))
         history_action.triggered.connect(self.show_estimate_history)
-        reports_menu.addAction(history_action)
+        history_menu.addAction(history_action)
+        silver_history_action = self._action(
+            "&Silver Bar History...",
+            icon="silver_history",
+            tip="Every silver bar and issued list",
+        )
+        silver_history_action.triggered.connect(self.show_silver_bar_history)
+        history_menu.addAction(silver_history_action)
 
+        # --- Help -------------------------------------------------------------
         help_menu = menu_bar.addMenu("&Help")
-        shortcuts_action = QAction("&Keyboard Shortcuts", self._main_window)
+        shortcuts_action = self._action("&Keyboard Shortcuts")
         shortcuts_action.setShortcut("F1")
         shortcuts_action.triggered.connect(self.show_keyboard_shortcuts)
         help_menu.addAction(shortcuts_action)
         help_menu.addSeparator()
-        about_action = QAction("&About", self._main_window)
-        about_action.setIcon(get_icon("about", widget=self._main_window))
+        about_action = self._action("&About", icon="about")
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
 
-        # Synchronization handles for NavigationService
-        self._main_window._menu_estimate_action = estimate_action
-        self._main_window._menu_item_master_action = item_master_action
-        self._main_window._menu_silver_action = silver_bars_action
-        self._main_window._view_estimate_action = view_estimate_action
-        self._main_window._view_item_master_action = view_item_master_action
-        self._main_window._view_sales_report_action = view_sales_report_action
-        self._main_window._view_silver_bars_action = view_silver_bars_action
+        # Handles NavigationService uses to mark the open screen.
+        window._menu_estimate_action = view_estimate_action
+        window._menu_item_master_action = view_item_master_action
+        window._menu_silver_action = silver_bars_action
+        window._view_estimate_action = view_estimate_action
+        window._view_item_master_action = view_item_master_action
+        window._view_sales_report_action = view_sales_report_action

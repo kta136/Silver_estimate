@@ -51,7 +51,7 @@ def test_item_master_table_model_loads_rows_and_sorts_text_and_numeric_columns()
     assert model.data(model.index(0, 0), Qt.ItemDataRole.DisplayRole) == "B2"
     assert model.data(model.index(0, 2), Qt.ItemDataRole.DisplayRole) == ""
     assert model.data(model.index(1, 2), Qt.ItemDataRole.DisplayRole) == "92 + loss"
-    assert model.data(model.index(1, 3), Qt.ItemDataRole.DisplayRole) == "92.5"
+    assert model.data(model.index(1, 3), Qt.ItemDataRole.DisplayRole) == "92.50"
 
     model.sort(2, Qt.SortOrder.AscendingOrder)
     assert model.row_payload(0)["code"] == "A1"

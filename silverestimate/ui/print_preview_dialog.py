@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from PySide6.QtCore import QObject
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtPrintSupport import QPrinter, QPrintPreviewWidget
 from PySide6.QtWidgets import (
@@ -37,6 +38,8 @@ class PrintPreviewDialog(QDialog):
         self.primary_toolbar = QToolBar(self)
         self.primary_toolbar.setObjectName("PrintPreviewToolbar")
         self.toolbar = self.primary_toolbar
+        # Set by the toolbar builder; drops button captions in a narrow window.
+        self.toolbar_compactor: QObject | None = None
         layout.addWidget(ToolbarOverflow(self.primary_toolbar))
 
         self.preview_widget = QPrintPreviewWidget(printer, self)

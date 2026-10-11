@@ -35,11 +35,16 @@ from silverestimate.ui.estimate_table_formatting import format_indian_number
 from .estimate_entry_logic.constants import COL_CODE, COL_GROSS
 from .estimate_entry_theme import refresh_widget_style
 from .item_selection_dialog import ItemSelectionDialog
+from .message_dialogs import ask, ask_save_discard, with_details
 from .preview_build_worker import PreviewBuildController
 from .themed_controls import ThemedDoubleSpinBox
 
 if TYPE_CHECKING:
     from .estimate_entry import EstimateEntryWidget
+
+
+# Pairs with Ctrl+D (delete row). Ctrl+Z belongs to the open cell editor.
+ROW_UNDO_SHORTCUT = "Ctrl+Shift+D"
 
 
 class EstimateEntryWorkflowController:
@@ -56,8 +61,10 @@ class EstimateEntryWorkflowController:
             was_dirty = self.host.has_unsaved_changes()
             before = self.host.item_table.get_model().get_all_rows()
             if not commit():
-                self.host._status(
-                    "Finish or correct the current cell before continuing.", 5000
+                self.host._notify(
+                    "Finish or correct the highlighted cell first.",
+                    5000,
+                    level="warning",
                 )
                 return False
             if (
@@ -88,7 +95,7 @@ class EstimateEntryWorkflowController:
         self.host._mark_unsaved()
         self.host.item_table.setCurrentCell(row_index, COL_CODE)
         self._update_row_undo_action()
-        self.host._status("Deleted row restored.", 3000)
+        self.host._notify("Deleted row restored.", 3000)
         return True
 
     def _parent_widget(self):
@@ -127,10 +134,16 @@ class EstimateEntryWorkflowController:
                     self.host.set_voucher_number(
                         getattr(self.host, "_active_voucher_no", voucher_no)
                     )
-                    self.host._status("Could not load the selected estimate.", 4000)
+                    self.host._notify(
+                        f"Estimate {voucher_no} could not be opened.",
+                        5000,
+                        level="error",
+                    )
             else:
-                self.host._status(
-                    f"Estimate {voucher_no} not found. Current entry kept.", 4000
+                self.host._notify(
+                    f"No estimate {voucher_no}. Your current entry was kept.",
+                    5000,
+                    level="warning",
                 )
                 active_voucher = getattr(self.host, "_active_voucher_no", voucher_no)
                 self.host.set_voucher_number(active_voucher)
@@ -139,7 +152,11 @@ class EstimateEntryWorkflowController:
             self.host.set_voucher_number(
                 getattr(self.host, "_active_voucher_no", voucher_no)
             )
-            self.host._status(f"Error loading estimate: {exc}", 4000)
+            self.host._notify(
+                f"Estimate {voucher_no} could not be opened: {exc}",
+                6000,
+                level="error",
+            )
 
     def safe_load_estimate(self):
         if self.host._loading_estimate or self.host.initializing:
@@ -176,15 +193,20 @@ class EstimateEntryWorkflowController:
         voucher_no = self.host.voucher_edit.text().strip()
         if not voucher_no:
             QMessageBox.warning(
-                self._parent_widget(), "Input Error", "Voucher number is required."
+                self._parent_widget(),
+                "Voucher Number Needed",
+                "Enter a voucher number before saving.",
             )
+            self.host.voucher_edit.setFocus()
             return False
 
         if not self.host.presenter:
             return False
 
-        self.host._status(f"Saving estimate {voucher_no}...", 2000)
         self._update_view_model_snapshot()
+        if not self._confirm_rows_without_weight():
+            return False
+        self.host._status(f"Saving estimate {voucher_no}...", 2000)
 
         service = EstimateEntryPersistenceService(
             self.host.view_model.as_save_snapshot()
@@ -202,10 +224,10 @@ class EstimateEntryWorkflowController:
             if outcome.success:
                 self._refresh_saved_line_metadata(voucher_no)
                 self.host._last_saved_status = datetime.now().strftime(
-                    "%d-%m-%Y %I:%M %p"
+                    "%d/%m/%Y %I:%M %p"
                 )
-                if hasattr(self.host, "refresh_bottom_status"):
-                    self.host.refresh_bottom_status()
+                if hasattr(self.host, "refresh_status_line"):
+                    self.host.refresh_status_line()
                 self.host._status(outcome.message, 5000)
                 self._clear_row_undo()
                 self.host._active_voucher_no = voucher_no
@@ -214,27 +236,62 @@ class EstimateEntryWorkflowController:
                     self.host._set_unsaved(False, force=True)
                 else:
                     self.host._set_unsaved(False, force=True)
-                    QMessageBox.information(
-                        self._parent_widget(), "Success", outcome.message
-                    )
                     self.print_estimate()
                     self.clear_form(confirm=False)
+                    # No message box: a brief toast names the saved voucher
+                    # while the preview opens and the form clears.
+                    self.host._notify(outcome.message, 5000)
                 return True
             else:
                 message = outcome.message
                 if outcome.error_detail and outcome.error_detail not in message:
                     message = f"{message}\n\n{outcome.error_detail}"
-                QMessageBox.critical(self._parent_widget(), "Save Error", message)
+                QMessageBox.critical(
+                    self._parent_widget(), "Estimate Not Saved", message
+                )
                 self.host._status(outcome.message, 5000)
                 self._focus_invalid_row(getattr(preparation, "row_errors", {}))
         except SaveValidationError as exc:
-            QMessageBox.warning(self._parent_widget(), "Invalid Estimate", str(exc))
+            QMessageBox.warning(
+                self._parent_widget(), "Check the Estimate Rows", str(exc)
+            )
             self._focus_invalid_row(exc.row_errors)
         except Exception as exc:
             self.host.logger.error(
                 "Failed to save estimate %s: %s", voucher_no, exc, exc_info=True
             )
-            QMessageBox.critical(self._parent_widget(), "Save Error", str(exc))
+            QMessageBox.critical(
+                self._parent_widget(),
+                "Estimate Not Saved",
+                with_details("The estimate could not be saved.", exc),
+            )
+        return False
+
+    def _confirm_rows_without_weight(self) -> bool:
+        """Ask before saving item rows whose gross weight was left at zero."""
+        rows = [
+            index + 1
+            for index, row in enumerate(self.host.view_model.rows())
+            if not row.is_empty() and row.gross <= 0
+        ]
+        if not rows:
+            return True
+        listed = ", ".join(str(number) for number in rows[:8])
+        if len(rows) > 8:
+            listed += f" and {len(rows) - 8} more"
+        subject = f"Row {listed} has" if len(rows) == 1 else f"Rows {listed} have"
+        if ask(
+            self._parent_widget(),
+            title="Rows Without Weight",
+            heading=f"{subject} no gross weight.",
+            detail="Save the estimate anyway?",
+            action_label="Save Anyway",
+            cancel_label="Go Back",
+            default_to_cancel=True,
+        ):
+            return True
+        self.host.item_table.setCurrentCell(rows[0] - 1, COL_GROSS)
+        self.host.item_table.setFocus()
         return False
 
     def _confirm_unsaved(self, action: str, *, save_voucher: str | None = None) -> bool:
@@ -242,24 +299,23 @@ class EstimateEntryWorkflowController:
             return False
         if not self.host.has_unsaved_changes():
             return True
-        reply = QMessageBox.question(
+        reply = ask_save_discard(
             self._parent_widget(),
-            "Unsaved Estimate",
-            f"Save the current estimate before {action}?",
-            QMessageBox.StandardButton.Save
-            | QMessageBox.StandardButton.Discard
-            | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Cancel,
+            title="Unsaved Estimate",
+            heading=f"Save this estimate before {action}?",
+            detail="It has changes that are not saved yet.",
         )
-        if reply == QMessageBox.StandardButton.Discard:
+        if reply == "discard":
             recovery = getattr(self.host, "draft_recovery", None)
             if recovery is not None and not recovery.discard_current():
-                self.host._status(
-                    "Could not discard the recovery copy. Please retry.", 5000
+                self.host._notify(
+                    "The recovery copy could not be discarded. Try again.",
+                    5000,
+                    level="error",
                 )
                 return False
             return True
-        if reply != QMessageBox.StandardButton.Save:
+        if reply != "save":
             return False
         if save_voucher:
             self.host.set_voucher_number(save_voucher)
@@ -297,24 +353,39 @@ class EstimateEntryWorkflowController:
             self.host.item_table.setCurrentCell(min(row_errors) - 1, COL_CODE)
             self.host.item_table.setFocus()
 
+    def _estimate_summary(self) -> str:
+        """Date and total of the open estimate, for confirmations."""
+        parts = []
+        date_edit = getattr(self.host, "date_edit", None)
+        if date_edit is not None:
+            parts.append(date_edit.date().toString("dd/MM/yyyy"))
+        total = getattr(self.host, "grand_total_label", None)
+        if total is not None and total.text().strip():
+            parts.append(f"Grand total {total.text().strip()}")
+        return " · ".join(parts)
+
     def delete_current_estimate(self):
         voucher_no = self.host.voucher_edit.text().strip()
         if not voucher_no:
             return
 
         if (
-            confirm_estimate_deletion(self._parent_widget(), voucher_no)
+            confirm_estimate_deletion(
+                self._parent_widget(), voucher_no, self._estimate_summary()
+            )
             and self.host.presenter
         ):
             if self.host.presenter.delete_estimate(voucher_no):
-                self.host._status(f"Estimate {voucher_no} deleted.", 3000)
+                self.host._notify(f"Estimate {voucher_no} deleted.", 3000)
                 self.clear_form(confirm=False)
             else:
                 QMessageBox.warning(
                     self._parent_widget(),
-                    "Error",
-                    getattr(self.host.db_manager, "last_error", None)
-                    or "Could not delete estimate.",
+                    "Estimate Not Deleted",
+                    with_details(
+                        f"Estimate {voucher_no} could not be deleted.",
+                        getattr(self.host.db_manager, "last_error", None),
+                    ),
                 )
 
     def print_estimate(self):
@@ -456,16 +527,6 @@ class EstimateEntryWorkflowController:
 
     def _sync_mode_controls(self) -> None:
         if self.host.return_mode:
-            self.host.return_toggle_button.setProperty("modeState", "return")
-        else:
-            self.host.return_toggle_button.setProperty("modeState", "idle")
-
-        if self.host.silver_bar_mode:
-            self.host.silver_bar_toggle_button.setProperty("modeState", "silver_bar")
-        else:
-            self.host.silver_bar_toggle_button.setProperty("modeState", "idle")
-
-        if self.host.return_mode:
             self.host.mode_indicator_label.setText("Mode: Return Items")
             self.host.mode_indicator_label.setProperty("modeState", "return")
         elif self.host.silver_bar_mode:
@@ -475,12 +536,11 @@ class EstimateEntryWorkflowController:
             self.host.mode_indicator_label.setText("Mode: Regular")
             self.host.mode_indicator_label.setProperty("modeState", "regular")
 
-        refresh_widget_style(self.host.return_toggle_button)
-        refresh_widget_style(self.host.silver_bar_toggle_button)
         refresh_widget_style(self.host.mode_indicator_label)
 
     def _finalize_mode_change(self) -> None:
         self.host.table_controller._get_table_adapter().refresh_empty_row_type()
+        self.host.layout_controller.grow_columns_to_content()
         self.host.focus_on_empty_row(update_visuals=True)
         self.host.view_model.set_modes(
             return_mode=self.host.return_mode,
@@ -492,38 +552,34 @@ class EstimateEntryWorkflowController:
         row = self.host.item_table.currentRow()
         if row < 0:
             return
-        if self.host.item_table.rowCount() <= 1:
-            QMessageBox.warning(
-                self._parent_widget(), "Error", "Cannot delete the only row."
-            )
+        rows = self.host.item_table.get_all_rows()
+        # Nothing was entered on the entry row; keep it in place.
+        if (
+            row < len(rows)
+            and rows[row].is_empty()
+            and (self.host.item_table.rowCount() <= 1 or row == len(rows) - 1)
+        ):
+            self.host._notify("This row is already empty.", 3000)
             return
-
-        reply = QMessageBox.question(
-            self._parent_widget(),
-            "Delete Row",
-            f"Delete row {row + 1}?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
+        # No confirmation: the deletion can be undone until the estimate is
+        # saved or cleared.
+        if row < len(rows):
+            self._deleted_rows.append((row, rows[row]))
+            del self._deleted_rows[:-20]
+            self._update_row_undo_action()
+        self.host.item_table.delete_row(row)
+        self.host.totals_controller.calculate_totals()
+        self.host._mark_unsaved()
+        self.host._notify(
+            f"Row {row + 1} deleted. Press {ROW_UNDO_SHORTCUT} to undo.", 5000
         )
-        if reply == QMessageBox.StandardButton.Yes:
-            rows = self.host.item_table.get_all_rows()
-            if row < len(rows):
-                self._deleted_rows.append((row, rows[row]))
-                del self._deleted_rows[:-20]
-                self._update_row_undo_action()
-            self.host.item_table.delete_row(row)
-            self.host.totals_controller.calculate_totals()
-            self.host._mark_unsaved()
-            self.host._status(
-                "Row deleted. Undo Last Row Deletion is available in Tools.", 5000
-            )
-            if self.host.item_table.rowCount() == 0:
-                self.host.table_controller.add_empty_row()
+        if self.host.item_table.rowCount() == 0:
+            self.host.table_controller.add_empty_row()
 
-            new_row = min(row, self.host.item_table.rowCount() - 1)
-            QTimer.singleShot(
-                0, lambda: self.host.item_table.setCurrentCell(new_row, COL_CODE)
-            )
+        new_row = min(row, self.host.item_table.rowCount() - 1)
+        QTimer.singleShot(
+            0, lambda: self.host.item_table.setCurrentCell(new_row, COL_CODE)
+        )
 
     def prompt_item_selection(self, code: str) -> Optional[Dict]:
         dialog = ItemSelectionDialog(
@@ -570,14 +626,22 @@ class EstimateEntryWorkflowController:
         try:
             loaded = presenter.load_estimate(voucher_no)
             if loaded is None:
-                self.host._status(f"Estimate {voucher_no} not found.", 4000)
+                self.host._notify(
+                    f"No estimate {voucher_no}. Your current entry was kept.",
+                    5000,
+                    level="warning",
+                )
                 return False
             return self.apply_loaded_estimate(loaded)
         except Exception as exc:
             self.host.logger.warning(
                 "Could not open report voucher %s: %s", voucher_no, exc
             )
-            self.host._status(f"Could not open estimate {voucher_no}: {exc}", 5000)
+            self.host._notify(
+                f"Estimate {voucher_no} could not be opened: {exc}",
+                6000,
+                level="error",
+            )
             return False
 
     def show_silver_bar_management(self) -> None:
@@ -595,6 +659,7 @@ class EstimateEntryWorkflowController:
         self.host.silver_rate_spin.setValue(rate)
         if hasattr(self.host, "note_edit"):
             self.host.note_edit.setText(note)
+            self.host.note_edit.setCursorPosition(0)
         self.host.last_balance_silver = silver
         self.host.last_balance_amount = amount
         self.host._estimate_loaded = was_loaded
@@ -668,6 +733,7 @@ class EstimateEntryWorkflowController:
             self.host.silver_rate_spin.setValue(loaded.silver_rate)
             if hasattr(self.host, "note_edit"):
                 self.host.note_edit.setText(loaded.note or "")
+                self.host.note_edit.setCursorPosition(0)
 
             self.host.last_balance_silver = loaded.last_balance_silver
             self.host.last_balance_amount = loaded.last_balance_amount
@@ -825,7 +891,11 @@ class EstimateEntryWorkflowController:
         )
         if preparation.skipped_rows:
             skipped = ", ".join(str(row) for row in preparation.skipped_rows)
-            self.host._status(f"Preview skipped invalid rows: {skipped}", 5000)
+            self.host._notify(
+                f"Left out of the preview, rows with errors: {skipped}",
+                6000,
+                level="warning",
+            )
 
         item_codes = [
             item.code

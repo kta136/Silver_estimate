@@ -11,20 +11,27 @@ from PySide6.QtCore import (
     Qt,
 )
 
+from silverestimate.domain.numeric_policy import (
+    MONEY_PLACES,
+    PURITY_PLACES,
+    fixed_decimal,
+)
 from silverestimate.ui.models.table_sorting import insert_model_rows, sort_model_rows
+
+WAGE_TYPE_LABELS = {"PC": "Per piece", "WT": "Per gram"}
 
 
 class ItemMasterTableModel(QAbstractTableModel):
     """Expose catalog items to the item-master table view."""
 
-    HEADERS = ["Code", "Name", "Tunch", "Purity (%)", "Wage Type", "Lbr"]
+    HEADERS = ["Code", "Name", "Tunch", "Purity (%)", "Labour Type", "Labour Rate"]
     HEADER_TOOLTIPS = [
         "Item Code",
         "Item Name",
         "Optional Tunch text",
         "Default Purity",
-        "Default Wage Calc Type",
-        "Default Lbr",
+        "How labour is charged: per gram or per piece",
+        "Default labour rate",
     ]
     _NUMERIC_COLUMNS = {3, 5}
 
@@ -130,7 +137,14 @@ class ItemMasterTableModel(QAbstractTableModel):
         if value is None:
             return ""
         if key == "wage_type":
-            return {"PC": "Per piece", "WT": "Per gram"}.get(str(value), str(value))
+            return WAGE_TYPE_LABELS.get(str(value), str(value))
+        # Two decimals, like the same figures on the estimate screen.
+        places = {"purity": PURITY_PLACES, "wage_rate": MONEY_PLACES}.get(key)
+        if places is not None:
+            try:
+                return fixed_decimal(value, places)
+            except ArithmeticError, TypeError, ValueError:
+                return str(value)
         return str(value)
 
     def sort_key_value(self, payload: dict[str, Any], column: int) -> Any:

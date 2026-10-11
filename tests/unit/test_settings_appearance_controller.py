@@ -49,7 +49,6 @@ def _recording_actions(
         apply_table_font_size=lambda value: record("table", value),
         apply_breakdown_font_size=lambda value: record("breakdown", value),
         apply_final_calc_font_size=lambda value: record("final", value),
-        apply_totals_position=lambda value: record("position", value),
     )
 
 
@@ -62,7 +61,8 @@ def test_load_state_normalizes_invalid_and_out_of_range_values() -> None:
             "ui/table_font_size": 99,
             "ui/breakdown_font_size": -4,
             "ui/final_calc_font_size": "huge",
-            "ui/estimate_totals_position": "sideways",
+            # Left over from versions that could move the totals panel.
+            "ui/estimate_totals_position": "bottom",
         }
     )
     controller = SettingsAppearanceController(
@@ -75,7 +75,6 @@ def test_load_state_normalizes_invalid_and_out_of_range_values() -> None:
         table_font_size=16,
         breakdown_font_size=7,
         final_calc_font_size=16,
-        totals_position="right",
     )
 
 
@@ -91,7 +90,6 @@ def test_apply_state_uses_narrow_actions_then_persists_typed_values() -> None:
         table_font_size=12,
         breakdown_font_size=11,
         final_calc_font_size=18,
-        totals_position="bottom",
     )
 
     controller.apply_state(state)
@@ -101,7 +99,6 @@ def test_apply_state_uses_narrow_actions_then_persists_typed_values() -> None:
         ("table", 12),
         ("breakdown", 11),
         ("final", 18),
-        ("position", "bottom"),
     ]
     assert settings.values == {
         "ui/font_family": "Segoe UI",
@@ -113,7 +110,6 @@ def test_apply_state_uses_narrow_actions_then_persists_typed_values() -> None:
         "ui/table_font_size": 12,
         "ui/breakdown_font_size": 11,
         "ui/final_calc_font_size": 18,
-        "ui/estimate_totals_position": "bottom",
     }
 
 

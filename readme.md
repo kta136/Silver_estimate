@@ -1,4 +1,4 @@
-# Silver Estimation App - v4.04
+# Silver Estimation App - v4.07
 
 A Windows desktop application built with PySide6 and a local SQLCipher database
 for managing silver sales estimates, item-wise entries, silver-bar inventory,
@@ -7,7 +7,7 @@ returns, and print-ready outputs.
 [![Python](https://img.shields.io/badge/Python-3.14+-blue.svg)](https://www.python.org/)
 [![PySide6](https://img.shields.io/badge/PySide6-6.11-green.svg)](https://doc.qt.io/qtforpython-6/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE)
-[![Source Version](https://img.shields.io/badge/source-v4.04-orange.svg)](CHANGELOG.md#404---2026-10-06)
+[![Source Version](https://img.shields.io/badge/source-v4.07-orange.svg)](CHANGELOG.md#407---2026-10-10)
 [![Latest Release](https://img.shields.io/github/v/release/kta136/Silver_estimate?label=stable%20release)](https://github.com/kta136/Silver_estimate/releases/latest)
 [![PR Validation](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/pr-validation.yml)
 [![Main Validation](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml/badge.svg)](https://github.com/kta136/Silver_estimate/actions/workflows/main-validation.yml)
@@ -24,7 +24,7 @@ returns, and print-ready outputs.
 - [Download latest stable release](https://github.com/kta136/Silver_estimate/releases/latest)
 - [Documentation index](DOCS/README.md)
 - [Changelog](CHANGELOG.md)
-- [v4.04 changelog](CHANGELOG.md#404---2026-10-06)
+- [v4.07 changelog](CHANGELOG.md#407---2026-10-10)
 - [Deployment guide](DOCS/deployment-guide.md)
 
 > The source tree can be ahead of the latest packaged release. Use the release
@@ -185,7 +185,7 @@ is not opened, rewritten, or deleted automatically.
 - Paths: DB path via `DB_PATH` in `silverestimate/infrastructure/app_constants.py`
 - Printing: Fonts and sizes configurable via Settings dialog
 - UI: The app forces Qt's Fusion-style light palette/QSS during startup and uses non-native dialogs where needed so Windows dark mode does not leak into file dialogs
-- Environment: only `SILVER_APP_DEBUG`, `SILVER_APP_LOG_DIR`, and `SILVER_SHOW_CONSOLE` are runtime controls; see `.env.example`.
+- Environment: only `SILVER_APP_DEBUG`, `SILVER_APP_LOG_DIR`, `SILVER_SHOW_CONSOLE`, and `SILVER_CLASSIC_TITLE_BAR` are runtime controls; see `.env.example`.
 
 ## Development
 
@@ -245,13 +245,13 @@ uv run pre-commit run --all-files
 
 ### Build Locally (Windows)
 - Prereqs: Python 3.14+, PowerShell
-- Fast validated Windows iteration: `scripts\build_windows_local.cmd -Fast` (outputs `dist/SilverEstimate-v4.04-fast.exe`)
+- Fast validated Windows iteration: `scripts\build_windows_local.cmd -Fast` (outputs `dist/SilverEstimate-v4.07-fast.exe`)
 - Standard one-file build: `uv run nox -s build`
 - Inspectable standalone build: `uv run nox -s build_standalone standalone_artifact_smoke`
 - Clean one-file rebuild: `uv run nox -s build_clean artifact_smoke`
 - Validated local Windows build: `scripts\build_windows_local.cmd` (safe when the workspace path contains spaces)
 - Local builds print stage durations and save `artifacts/local-build/build-timings[-suffix].json`. `-Fast` disables link-time optimization for development; use the default command for releases.
-- Validated local output: `dist/SilverEstimate-v4.04.exe`. Nox builds also produce `dist/SilverEstimate.exe` and `dist/SilverEstimate-v4.04-win64.zip` on Windows.
+- Validated local output: `dist/SilverEstimate-v4.07.exe`. Nox builds also produce `dist/SilverEstimate.exe` and `dist/SilverEstimate-v4.07-win64.zip` on Windows.
 - Release/CI builds use Qt's `pyside6-deploy`, the committed `pysidedeploy.spec`, and locked Nuitka 4.2.1
 - Packaged releases are Windows-only; macOS/Linux are untested development environments.
 
@@ -305,6 +305,23 @@ Copyright (C) 2023-2026 Silver Estimation App
 ---
 
 ## Version History (highlights)
+
+### v4.07 (2026-10-10)
+- Puts the menus in the title bar, beside the window's own buttons, so the estimate table gains a row
+- Keeps the estimate side panel on the right; the `Totals position` setting and the bottom layout are gone
+- Gives every confirmation and prompt one look, shows load and save problems in a toast, and uses one name and capitalisation for each command
+- Applies Day/Month at once in Sales Reports, keeps Search and the preview's More and Close in view in narrow windows, and fits each Settings page to its own width
+- Fixes clipped table header letters, the half-hidden first toast, the Alt+I menu clash and the side panel scrollbar in the smallest window
+
+### v4.06 (2026-10-10)
+- Reorganises menus and keyboard shortcuts, refreshes Settings, and adds brief save and edit notifications
+- Improves deletion confirmations, row undo, history filters, and Sales Reports CSV export
+- Fixes clipped labels, table column sizing, and printed last-balance currency formatting
+
+### v4.05 (2026-10-10)
+- Redesigns the Silver Bar workspace, history and optimal-list dialog, and the Sales reports tab
+- Gives the Estimate table the full window height, with a 320px side panel for voucher fields, mode and totals
+- Fixes stale estimate totals, row numbering, interrupted restores and optimal-list weight limits
 
 ### v4.04 (2026-10-06)
 - Shows available silver bars automatically without entering a weight

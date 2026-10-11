@@ -5,11 +5,9 @@ from PySide6.QtCore import QDate, QEventLoop, QSize, Qt, QTimer
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
     QDialog,
-    QHBoxLayout,
     QHeaderView,
     QLineEdit,
     QMessageBox,
-    QSizePolicy,
     QWidget,
 )
 
@@ -646,51 +644,20 @@ def test_apply_loaded_estimate_preserves_pieces(
     )
 
 
-def test_totals_position_switching_and_persistence(
+def test_totals_panel_stays_right_of_the_table(
     make_estimate_widget, qt_app, fake_db, settings_stub
 ):
+    from silverestimate.infrastructure.settings import get_app_settings
+
+    # Older versions could move the panel; a saved choice no longer applies.
+    get_app_settings().setValue("ui/estimate_totals_position", "bottom")
     widget = make_estimate_widget(fake_db)
     splitter = widget._content_splitter
-    assert splitter.orientation() == Qt.Orientation.Horizontal
-    original_sidebar = widget.totals_panel
-    assert widget._totals_panel_sidebar is original_sidebar
-    assert widget._totals_panel_bottom is None
 
-    widget.layout_controller._apply_totals_position("left")
     assert splitter.orientation() == Qt.Orientation.Horizontal
-    assert splitter.widget(0) is widget.totals_panel
-    assert widget.totals_panel is original_sidebar
-    assert (
-        widget.layout_controller._settings().value(
-            "ui/estimate_totals_position", type=str
-        )
-        == "left"
-    )
-
-    widget.layout_controller.apply_totals_position("bottom")
-    assert splitter.orientation() == Qt.Orientation.Vertical
+    assert splitter.widget(0) is widget.item_table
     assert splitter.widget(1) is widget.totals_panel
-    assert widget.totals_panel is not original_sidebar
-    assert widget._totals_panel_sidebar is None
-    assert widget._totals_panel_bottom is widget.totals_panel
-    assert (
-        widget.layout_controller._settings().value(
-            "ui/estimate_totals_position", type=str
-        )
-        == "bottom"
-    )
-
-    widget.layout_controller.apply_totals_position("right")
-    assert splitter.orientation() == Qt.Orientation.Horizontal
-    assert splitter.widget(1) is widget.totals_panel
-    assert widget._totals_panel_sidebar is widget.totals_panel
-    assert widget._totals_panel_bottom is None
-    assert (
-        widget.layout_controller._settings().value(
-            "ui/estimate_totals_position", type=str
-        )
-        == "right"
-    )
+    assert not hasattr(widget.layout_controller, "apply_totals_position")
 
 
 @pytest.fixture(params=[False, True], ids=["default-theme", "application-theme"])
@@ -699,7 +666,7 @@ def entry_theme(qt_application_state, request):
         apply_light_application_theme(qt_application_state)
 
 
-def test_live_rate_card_moves_between_sidebar_and_header(
+def test_live_rate_sits_beside_the_silver_rate(
     make_estimate_widget, qt_app, fake_db, entry_theme
 ):
     widget = make_estimate_widget(fake_db)
@@ -710,60 +677,34 @@ def test_live_rate_card_moves_between_sidebar_and_header(
     toolbar = widget.toolbar
     live_rate_card = widget.secondary_actions.live_rate_container
 
-    def assert_beside_silver_rate():
-        # Beside the table the live rate is a field next to the silver rate.
-        assert live_rate_card.parent() is toolbar
-        assert toolbar.layout().indexOf(live_rate_card) >= 0
-        assert live_rate_card.property("placement") == "field"
-        assert widget.secondary_actions.live_rate_divider.isHidden()
-        assert widget.secondary_actions.live_rate_title_label.text() == "Live rate"
-        rate_spin = toolbar.silver_rate_spin
-        card_top = live_rate_card.mapTo(toolbar, live_rate_card.rect().topLeft())
-        spin_top = rate_spin.mapTo(toolbar, rate_spin.rect().topLeft())
-        assert card_top.x() > spin_top.x() + rate_spin.width() - 2
-        assert widget.refresh_rate_button.width() <= 38
-        assert widget.live_rate_value_label.width() >= (
-            widget.live_rate_value_label.fontMetrics().horizontalAdvance("₹ 128.40 /g")
+    # The live rate is a field next to the silver rate.
+    assert live_rate_card.parent() is toolbar
+    assert toolbar.layout().indexOf(live_rate_card) >= 0
+    assert widget.secondary_actions.live_rate_title_label.text() == "Live rate"
+    rate_spin = toolbar.silver_rate_spin
+    card_top = live_rate_card.mapTo(toolbar, live_rate_card.rect().topLeft())
+    spin_top = rate_spin.mapTo(toolbar, rate_spin.rect().topLeft())
+    assert card_top.x() > spin_top.x() + rate_spin.width() - 2
+    assert widget.refresh_rate_button.width() <= 38
+    assert widget.live_rate_value_label.width() >= (
+        widget.live_rate_value_label.fontMetrics().horizontalAdvance("₹ 128.40 /g")
+    )
+    assert (
+        widget.live_rate_value_label.geometry().top()
+        > widget.secondary_actions.live_rate_title_label.geometry().bottom()
+    )
+    assert (
+        abs(
+            widget.live_rate_value_label.geometry().center().y()
+            - widget.refresh_rate_button.geometry().center().y()
         )
-        assert (
-            widget.live_rate_value_label.geometry().top()
-            > widget.secondary_actions.live_rate_title_label.geometry().bottom()
-        )
-        assert (
-            abs(
-                widget.live_rate_value_label.geometry().center().y()
-                - widget.refresh_rate_button.geometry().center().y()
-            )
-            <= 2
-        )
-        assert widget.refresh_rate_button.iconSize() == QSize(14, 14)
-        assert (
-            widget.live_rate_value_label.font().pointSize() == widget.font().pointSize()
-        )
-
-    assert_beside_silver_rate()
-
-    widget.layout_controller._apply_totals_position("bottom")
-    qt_app.processEvents()
-
-    assert live_rate_card.parent() is widget.secondary_actions
-    assert live_rate_card.property("placement") == "card"
-    assert not widget.secondary_actions.live_rate_divider.isHidden()
-    assert live_rate_card.sizePolicy().horizontalPolicy() == QSizePolicy.Policy.Fixed
-    assert widget.secondary_actions.live_rate_title_label.text() == "Live silver rate"
-    card_layout = live_rate_card.layout()
-    assert isinstance(card_layout, QHBoxLayout)
-    # The refresh button sits over its timestamp at the card's right edge.
-    refresh_stack = card_layout.itemAt(1).layout()
-    assert refresh_stack.indexOf(widget.refresh_rate_button) == 0
-    assert refresh_stack.indexOf(widget.live_rate_meta_label) == 1
-
-    widget.layout_controller._apply_totals_position("right")
-    qt_app.processEvents()
-    assert_beside_silver_rate()
+        <= 2
+    )
+    assert widget.refresh_rate_button.iconSize() == QSize(14, 14)
+    assert widget.live_rate_value_label.font().pointSize() == widget.font().pointSize()
 
 
-def test_compact_header_preserves_table_viewport_height(
+def test_side_panel_holds_voucher_fields_and_status_line(
     make_estimate_widget, qt_app, fake_db
 ):
     widget = make_estimate_widget(fake_db)
@@ -771,14 +712,11 @@ def test_compact_header_preserves_table_viewport_height(
     widget.show()
     qt_app.processEvents()
 
-    header_container = _find_named_widget(widget, "EstimateHeaderContainer")
-    assert header_container is not None
-    assert header_container.height() <= 60
-    # Beside the table, the voucher fields and mode switch live in the side panel.
+    # The voucher fields and mode switch live in the side panel.
     assert widget.toolbar.parent() is widget.totals_panel._sidebar_top_host
-    assert widget.toolbar.is_panel_layout()
+    assert widget.toolbar.isVisible()
     assert widget.toolbar.mode_selector.isVisible()
-    assert widget.bottom_status_strip.isHidden()
+    assert _find_named_widget(widget, "EstimateHeaderContainer") is None
     shortcuts = widget.sidebar_status_label.text()
     # Save/Print shortcuts show on their buttons; the status line keeps F1.
     for label in ("Rows:", "Last saved:", "F1 Shortcuts"):
@@ -786,22 +724,10 @@ def test_compact_header_preserves_table_viewport_height(
     assert widget.save_button.text() == "Save  Ctrl+S"
     for stale_label in ("F2:", "Ins:", "Del:", "F9:"):
         assert stale_label not in shortcuts
+    # Above the table there is only the Save/Print/New strip, and only
+    # because this widget has no main-window menu bar to put it in.
+    assert widget.command_strip.isVisible()
     assert widget.item_table.viewport().height() >= 680
-
-    # With totals at the bottom the fields return to a header row.
-    widget.layout_controller._apply_totals_position("bottom")
-    qt_app.processEvents()
-    assert widget.toolbar.parent() is header_container
-    assert not widget.toolbar.is_panel_layout()
-    assert widget.toolbar.isVisible()
-    assert widget.bottom_status_strip.isVisible()
-    assert "Ctrl+S Save" in widget.bottom_status_strip._left.text()
-
-    widget.layout_controller._apply_totals_position("left")
-    qt_app.processEvents()
-    assert widget.toolbar.parent() is widget.totals_panel._sidebar_top_host
-    assert widget.toolbar.isVisible()
-    assert widget.bottom_status_strip.isHidden()
 
 
 def test_mode_buttons_switch_entry_mode_and_follow_shortcuts(
@@ -840,9 +766,6 @@ def test_totals_section_order_sync_and_persistence(
     assert widget.layout_controller._settings().value(
         "ui/estimate_totals_section_order", type=str
     ) == ",".join(expected_order)
-
-    widget.layout_controller._apply_totals_position("bottom")
-    assert widget.totals_panel.section_order() == expected_order
 
     widget_loaded = make_estimate_widget(fake_db)
     assert widget_loaded.totals_panel.section_order() == expected_order
@@ -922,7 +845,7 @@ def test_non_autofit_persists_fixed_column_widths_only(
     assert tokens[COL_ITEM_NAME] == -1
 
     widget_reloaded = make_estimate_widget(fake_db)
-    assert widget_reloaded.item_table.columnWidth(COL_ITEM_NAME) >= 180
+    assert widget_reloaded.item_table.columnWidth(COL_ITEM_NAME) >= 120
     assert widget_reloaded.item_table.columnWidth(COL_CODE) == 137
 
 
@@ -1067,3 +990,25 @@ def test_totals_recalc_is_debounced(make_estimate_widget, qt_app, qtbot, fake_db
     qtbot.waitUntil(lambda: len(calls) == 1, timeout=500)
 
     assert len(calls) == 1
+
+
+def test_table_header_fits_its_labels_at_every_text_size(make_estimate_widget, fake_db):
+    from PySide6.QtGui import QFont, QFontMetrics
+
+    widget = make_estimate_widget(fake_db)
+    header = widget.item_table.horizontalHeader()
+    for size in (9, 11, 14, 16):
+        assert widget.layout_controller.apply_table_font_size(size)
+        bold = QFont(header.font())
+        bold.setBold(True)
+        # 4 px above and below the label, and the bottom border.
+        assert header.height() >= QFontMetrics(bold).height() + 9
+
+
+def test_right_click_menu_offers_the_same_undo_as_the_more_menu(
+    make_estimate_widget, fake_db
+):
+    widget = make_estimate_widget(fake_db)
+
+    assert widget.item_table.undo_row_action is widget.command_undo_row_action
+    assert not widget.item_table.undo_row_action.isEnabled()

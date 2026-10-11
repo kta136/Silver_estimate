@@ -13,6 +13,7 @@ from silverestimate.ui.settings_data_page import (
     DataManagementActions,
     DataManagementPage,
     SettingsDataController,
+    format_backup_time,
 )
 
 
@@ -105,7 +106,8 @@ def test_backup_timestamp_changes_only_after_success(
     assert calls[0][1] != threading.get_ident()
     stamp = settings.get_text(SettingsKey.BACKUP_LAST_VALIDATED_UTC)
     assert (stamp != "previous") is succeeded
-    assert stamp in page.backup_status_label.text()
+    # The label shows the stored UTC stamp as a local date and time.
+    assert format_backup_time(stamp) in page.backup_status_label.text()
     assert not page._maintenance_active
 
 
@@ -128,7 +130,7 @@ def test_controller_does_not_report_failed_maintenance_as_success():
 
 
 def test_real_settings_backup_restore_round_trip(
-    qtbot, settings_stub, tmp_path, monkeypatch
+    qtbot, settings_stub, tmp_path, monkeypatch, confirmations
 ):
     from silverestimate.persistence.database_manager import DatabaseManager
 
@@ -145,7 +147,7 @@ def test_real_settings_backup_restore_round_trip(
     monkeypatch.setattr(
         f"{module}.QFileDialog.getOpenFileName", lambda *a: (str(backup), "")
     )
-    monkeypatch.setattr(f"{module}.QInputDialog.getText", lambda *a: ("password", True))
+    confirmations.type_text("password")
     monkeypatch.setattr(
         f"{module}.QMessageBox.information", lambda *a: messages.append(a[1])
     )
@@ -160,7 +162,7 @@ def test_real_settings_backup_restore_round_trip(
         db.conn.commit()
         page._stage_database_restore()
         assert db.conn.execute("SELECT name FROM items").fetchone()[0] == "After"
-        assert messages == ["Encrypted Backup Created", "Restore Staged"]
+        assert messages == ["Backup Created", "Restore Ready"]
     finally:
         db.close()
     reopened = DatabaseManager(str(path), "password", device_secret=b"S" * 32)

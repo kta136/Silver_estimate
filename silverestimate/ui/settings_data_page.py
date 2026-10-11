@@ -11,20 +11,34 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QGroupBox,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
-    QLineEdit,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
 from silverestimate.infrastructure.settings import SettingsKey, get_app_settings
+from silverestimate.ui.display_formatting import format_local_timestamp
 from silverestimate.ui.maintenance_progress import MaintenanceProgressDialog
+from silverestimate.ui.message_dialogs import ask_text
 
 LOGGER = logging.getLogger(__name__)
 DATABASE_BACKUP_FILTER = "Silver Estimate Encrypted Backup (*.sedbbackup)"
+ACTION_BUTTON_WIDTH = 240
+
+
+def format_backup_time(stamp: str | None) -> str:
+    """Return the stored backup time in local time, or ``""`` when there is none."""
+    return format_local_timestamp(stamp)
+
+
+def with_restart_note(message: str) -> str:
+    """Say plainly that a checked restore is applied at the next start."""
+    note = "The backup was checked. Restart the app to load its data."
+    message = (message or "").strip()
+    return f"{note}\n\n{message}" if message and note not in message else note
 
 
 class DatabaseMaintenanceGateway(Protocol):
@@ -193,22 +207,48 @@ class DataManagementPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
 
-        description = QLabel(
-            "<b>WARNING:</b> These actions permanently delete data and cannot "
-            "be undone. Ensure you have backups if necessary."
-        )
-        description.setWordWrap(True)
-        description.setObjectName("SettingsWarningLabel")
-        title = QLabel("Backups")
+        title = QLabel("Data & Backups")
         title.setObjectName("SettingsTitleLabel")
         layout.addWidget(title)
-        layout.addWidget(self._create_item_backup_group())
         layout.addWidget(self._create_database_backup_group())
-        danger = QGroupBox("DANGER ZONE")
-        danger.setStyleSheet("QGroupBox { border: 1px solid #ff9ca4; color: #cf2434; }")
-        danger_layout = QVBoxLayout(danger)
-        danger_layout.addWidget(description)
-        self.delete_range_button = QPushButton("Delete Vouchers by Range…")
+        layout.addWidget(self._create_item_backup_group())
+        layout.addWidget(self._create_danger_group())
+        layout.addStretch()
+
+    @staticmethod
+    def _action_row(button: QPushButton, description: str) -> QHBoxLayout:
+        """A button sized to its label with what it does written beside it."""
+        row = QHBoxLayout()
+        row.setSpacing(12)
+        button.setMinimumWidth(ACTION_BUTTON_WIDTH)
+        button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        row.addWidget(button)
+        label = QLabel(description)
+        label.setObjectName("SettingsMutedDescription")
+        label.setWordWrap(True)
+        row.addWidget(label, 1)
+        return row
+
+    def _create_danger_group(self) -> QGroupBox:
+        danger = QGroupBox("Delete data")
+        danger.setObjectName("SettingsDangerGroup")
+        danger.setStyleSheet(
+            "QGroupBox#SettingsDangerGroup { border: 1px solid #ff9ca4; color: #cf2434; }"
+        )
+        layout = QVBoxLayout(danger)
+        layout.setSpacing(10)
+        warning = QLabel(
+            "These actions permanently delete data and cannot be undone. "
+            "Back up the database first."
+        )
+        warning.setWordWrap(True)
+        warning.setObjectName("SettingsDangerNote")
+        warning.setStyleSheet(
+            "QLabel#SettingsDangerNote { color: #991b1b; font-weight: 600; }"
+        )
+        layout.addWidget(warning)
+
+        self.delete_range_button = QPushButton("Delete Vouchers by Range...")
         self.delete_range_button.setObjectName("SettingsDangerButton")
         self.delete_range_button.setToolTip(
             "Preview and delete vouchers by date or voucher number range.\n"
@@ -220,21 +260,18 @@ class DataManagementPage(QWidget):
                 "Delete Vouchers by Range",
             )
         )
-        danger_layout.addWidget(self.delete_range_button)
-        danger_layout.addLayout(self._create_delete_actions())
-        layout.addWidget(danger)
-        layout.addStretch()
-
-    def _create_delete_actions(self) -> QHBoxLayout:
-        layout = QHBoxLayout()
-        layout.setSpacing(10)
+        layout.addLayout(
+            self._action_row(
+                self.delete_range_button,
+                "Preview the vouchers in a date or number range, then delete them.",
+            )
+        )
 
         self.delete_estimates_button = QPushButton("Delete All Estimates...")
         self.delete_estimates_button.setObjectName("SettingsDangerButton")
         self.delete_estimates_button.setToolTip(
-            "Remove all estimate records\n"
-            "Keeps item master and silver bar data intact\n"
-            "Requires confirmation"
+            "Remove every estimate\nKeeps the item catalog\n"
+            "Requires typing DELETE to confirm"
         )
         self.delete_estimates_button.clicked.connect(
             lambda: self._run_command(
@@ -242,9 +279,14 @@ class DataManagementPage(QWidget):
                 "Delete All Estimates",
             )
         )
-        layout.addWidget(self.delete_estimates_button)
+        layout.addLayout(
+            self._action_row(
+                self.delete_estimates_button,
+                "Removes every estimate. The item catalog is kept.",
+            )
+        )
 
-        self.delete_all_data_button = QPushButton("DELETE ALL DATA")
+        self.delete_all_data_button = QPushButton("Delete All Data...")
         self.delete_all_data_button.setObjectName("SettingsDangerButton")
         self.delete_all_data_button.setToolTip(
             "Reset all application data\n"
@@ -257,15 +299,39 @@ class DataManagementPage(QWidget):
                 "Delete All Data",
             )
         )
-        layout.addWidget(self.delete_all_data_button)
-        return layout
+        layout.addLayout(
+            self._action_row(
+                self.delete_all_data_button,
+                "Removes estimates, items, silver bars and lists.",
+            )
+        )
+        return danger
 
     def _create_item_backup_group(self) -> QGroupBox:
         group = QGroupBox("Item catalog")
         layout = QVBoxLayout(group)
         layout.setSpacing(10)
 
-        self.restore_item_backup_button = QPushButton("Restore catalog")
+        self.create_item_backup_button = QPushButton("Back Up Item Catalog...")
+        self.create_item_backup_button.setToolTip(
+            "Create a native Silver Estimate item catalog backup file\n"
+            "Format: .seitems.json\n"
+            "Round-trip safe for future imports"
+        )
+        self.create_item_backup_button.clicked.connect(
+            lambda: self._run_command(
+                self._controller.create_item_catalog_backup,
+                "Create Item Backup",
+            )
+        )
+        layout.addLayout(
+            self._action_row(
+                self.create_item_backup_button,
+                "Saves every item to a file you can restore or move to another PC.",
+            )
+        )
+
+        self.restore_item_backup_button = QPushButton("Restore Item Catalog...")
         self.restore_item_backup_button.setToolTip(
             "Restore a native Silver Estimate item catalog backup\n"
             "Format: .seitems.json\n"
@@ -278,53 +344,43 @@ class DataManagementPage(QWidget):
                 "Restore Item Backup",
             )
         )
-        layout.addWidget(self.restore_item_backup_button)
-
-        self.create_item_backup_button = QPushButton("Create catalog backup")
-        self.create_item_backup_button.setToolTip(
-            "Create a native Silver Estimate item catalog backup file\n"
-            "Format: .seitems.json\n"
-            "Round-trip safe for future imports"
-        )
-        self.create_item_backup_button.clicked.connect(
-            lambda: self._run_command(
-                self._controller.create_item_catalog_backup,
-                "Create Item Backup",
+        layout.addLayout(
+            self._action_row(
+                self.restore_item_backup_button,
+                "Updates and adds items from a catalog backup file.",
             )
         )
-        layout.addWidget(self.create_item_backup_button)
         return group
 
     def _create_database_backup_group(self) -> QGroupBox:
-        group = QGroupBox("Encrypted Database Backup")
+        group = QGroupBox("Database backup")
         layout = QVBoxLayout(group)
-        recovery = QLabel(
-            "Backups require this installation's original device secret and the "
-            "main password used when the backup was created. They cannot be "
-            "restored on another PC. Losing or resetting Windows credentials "
-            "or the device secret can make backups unusable. Keep a separate "
-            "copy of the archive; it cannot recover data if the device secret "
-            "is lost. Backups include saved data and any preserved draft recovery copy.",
-            group,
-        )
-        recovery.setWordWrap(True)
-        layout.addWidget(recovery)
+        layout.setSpacing(10)
         self.backup_status_label = QLabel(group)
         self.backup_status_label.setWordWrap(True)
+        self.backup_status_label.setObjectName("SettingsBackupStatus")
         self._refresh_backup_status()
         layout.addWidget(self.backup_status_label)
 
-        self.create_database_backup_button = QPushButton(
-            "Create Encrypted Database Backup..."
+        self.create_database_backup_button = QPushButton("Back Up Database...")
+        self.create_database_backup_button.setObjectName("SettingsPrimaryButton")
+        self.create_database_backup_button.setStyleSheet(
+            "QPushButton { color: white; }"
         )
         self.create_database_backup_button.setToolTip(
             "Create a validated .sedbbackup containing only SQLCipher-encrypted data"
         )
         self.create_database_backup_button.clicked.connect(self._create_database_backup)
-        layout.addWidget(self.create_database_backup_button)
+        layout.addLayout(
+            self._action_row(
+                self.create_database_backup_button,
+                "Saves all estimates, items and silver bars to one encrypted file, "
+                "including any unfinished-estimate recovery copy.",
+            )
+        )
 
         self.restore_database_backup_button = QPushButton(
-            "Stage Encrypted Database Restore..."
+            "Restore Database from Backup..."
         )
         self.restore_database_backup_button.setToolTip(
             "Validate and stage an encrypted restore; activation requires restart"
@@ -332,15 +388,40 @@ class DataManagementPage(QWidget):
         self.restore_database_backup_button.clicked.connect(
             self._stage_database_restore
         )
-        layout.addWidget(self.restore_database_backup_button)
+        layout.addLayout(
+            self._action_row(
+                self.restore_database_backup_button,
+                "Checks a backup file now and replaces the current data the next "
+                "time the app starts.",
+            )
+        )
+
+        limits = QLabel(
+            "A backup opens only on this PC, with the main password that was in "
+            "use when it was made.\n"
+            "If this PC's Windows credentials are reset or lost, its backups "
+            "cannot be opened. Keep a copy of the backup file somewhere else as "
+            "well.",
+            group,
+        )
+        limits.setObjectName("SettingsMutedDescription")
+        limits.setWordWrap(True)
+        layout.addWidget(limits)
         return group
 
     def _refresh_backup_status(self) -> None:
         stamp = get_app_settings().get_text(SettingsKey.BACKUP_LAST_VALIDATED_UTC)
+        backed_up = format_backup_time(stamp)
         self.backup_status_label.setText(
-            f"Last successful backup and validation (UTC): {stamp}"
-            if stamp
-            else "No successful database backup recorded on this installation."
+            f"Last backup: {backed_up}"
+            if backed_up
+            else "No database backup has been made on this PC yet."
+        )
+        # A missing backup is the one state here worth drawing the eye to.
+        self.backup_status_label.setStyleSheet(
+            "QLabel#SettingsBackupStatus { font-weight: 600; }"
+            if backed_up
+            else "QLabel#SettingsBackupStatus { color: #9a3412; font-weight: 600; }"
         )
 
     def _run_maintenance(
@@ -390,11 +471,11 @@ class DataManagementPage(QWidget):
             self._refresh_backup_status()
             QMessageBox.information(
                 self,
-                "Encrypted Backup Created",
+                "Backup Created",
                 result.message,
             )
         else:
-            QMessageBox.critical(self, "Backup Error", result.message)
+            QMessageBox.critical(self, "Backup Not Created", result.message)
 
     def _stage_database_restore(self) -> None:
         path, _selected_filter = QFileDialog.getOpenFileName(
@@ -405,13 +486,18 @@ class DataManagementPage(QWidget):
         )
         if not path:
             return
-        password, accepted = QInputDialog.getText(
+        password = ask_text(
             self,
-            "Backup Password",
-            "Enter the main password that protected this backup:",
-            QLineEdit.EchoMode.Password,
+            title="Backup Password",
+            heading="Main password of this backup",
+            detail=(
+                "Enter the main password that was in use when the backup was "
+                "made. It can differ from today's password."
+            ),
+            action_label="Check Backup",
+            password=True,
         )
-        if not accepted:
+        if password is None:
             return
         controller = self._controller.for_worker()
         result = self._run_maintenance(
@@ -419,9 +505,13 @@ class DataManagementPage(QWidget):
             "Validating and Staging Restore",
         )
         if result.succeeded:
-            QMessageBox.information(self, "Restore Staged", result.message)
+            QMessageBox.information(
+                self,
+                "Restore Ready",
+                with_restart_note(result.message),
+            )
         else:
-            QMessageBox.critical(self, "Restore Error", result.message)
+            QMessageBox.critical(self, "Backup Not Restored", result.message)
 
     def _run_command(
         self,

@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QDate, QEvent, QObject, Qt, Signal
+from PySide6.QtCore import QDate, QEvent, QLocale, QObject, Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QButtonGroup,
-    QDateEdit,
     QDoubleSpinBox,
     QGridLayout,
     QHBoxLayout,
@@ -17,21 +16,25 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from silverestimate.ui.themed_controls import ThemedDateEdit
+
 MODE_LABELS = ("Regular", "Return", "Silver Bar")
 MODE_SHORTCUT_HINTS = ("", "Ctrl+R", "Ctrl+B")
-# The side panel has room for the shortcuts but not for "Silver Bar" as well.
-PANEL_MODE_LABELS = ("Regular", "Return  Ctrl+R", "Bar  Ctrl+B")
-# Fallbacks for a narrow side panel or a large font, widest first.
-NARROW_MODE_LABELS = (MODE_LABELS, ("Regular", "Return", "Bar"))
+# Mode-switch labels, widest first; the switch shows the first set that fits.
+# The shortcuts are also in each button's tooltip, so the full mode name wins
+# over the hint when there is not room for both.
+PANEL_MODE_LABELS = (
+    ("Regular", "Return  Ctrl+R", "Silver Bar  Ctrl+B"),
+    MODE_LABELS,
+    ("Regular", "Return", "Bar"),
+)
 
 
 class VoucherToolbar(QWidget):
-    """Voucher metadata fields and the entry-mode switch.
+    """Voucher fields, laid out as the card at the top of the side panel.
 
-    The same widgets are laid out as one row (header placement) or as a compact
-    grid (side-panel placement); ``set_panel_layout`` switches between them.
-    In the side panel the mode switch is left out so the owner can place it
-    below the card.
+    The entry-mode switch and the status badge are created here and placed by
+    the owner: the switch below this card, the badge beside Save.
     Action buttons are in separate PrimaryActionsBar and SecondaryActionsBar components.
     """
 
@@ -52,14 +55,11 @@ class VoucherToolbar(QWidget):
         self.setObjectName("VoucherToolbar")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self._panel_layout = False
-        self._owns_unsaved_badge = True
         self._rate_companion: QWidget | None = None
         self._setup_ui()
         self._connect_signals()
 
     def _setup_ui(self) -> None:
-        """Create the fields once; layouts only arrange them."""
         self.unsaved_badge = QLabel("", self)
         self.unsaved_badge.setObjectName("UnsavedBadge")
         self.unsaved_badge.setAccessibleName("Unsaved Changes Indicator")
@@ -98,11 +98,14 @@ class VoucherToolbar(QWidget):
             button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             button.setAccessibleName(f"{label} mode")
             button.setToolTip(f"{label} items ({hint})" if hint else "Regular items")
-            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            # The buttons share whatever width the side panel has and their
+            # labels shorten to fit, so the switch never widens the panel.
+            button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
             self.mode_buttons.addButton(button, index)
             mode_layout.addWidget(button)
         self.mode_buttons.button(0).setChecked(True)
         self.mode_selector.installEventFilter(self)
+        self._fit_mode_labels()
 
         self.status_message_label = QLabel("")
         self.status_message_label.setObjectName("EstimateStatusLabel")
@@ -124,7 +127,7 @@ class VoucherToolbar(QWidget):
         self.load_button.setToolTip("Load estimate (Enter)")
 
         self.date_label = self._field_label("Date")
-        self.date_edit = QDateEdit()
+        self.date_edit = ThemedDateEdit()
         self.date_edit.setObjectName("EstimateDateEdit")
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDate(QDate.currentDate())
@@ -136,6 +139,11 @@ class VoucherToolbar(QWidget):
         self.silver_rate_spin.setObjectName("SilverRateSpin")
         self.silver_rate_spin.setRange(0, 1000000)
         self.silver_rate_spin.setDecimals(2)
+        # Group digits the Indian way, like the totals beside this field.
+        self.silver_rate_spin.setLocale(
+            QLocale(QLocale.Language.English, QLocale.Country.India)
+        )
+        self.silver_rate_spin.setGroupSeparatorShown(True)
         self.silver_rate_spin.setValue(0.0)
         self.silver_rate_spin.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         self.silver_rate_spin.setToolTip("Estimate silver rate in rupees per gram")
@@ -147,7 +155,7 @@ class VoucherToolbar(QWidget):
         self.note_edit.setPlaceholderText("Customer, instructions...")
         self.note_edit.setToolTip("Customer name or optional estimate instructions")
 
-        self._apply_layout()
+        self._build_layout()
 
     @staticmethod
     def _field_label(text: str) -> QLabel:
@@ -155,59 +163,12 @@ class VoucherToolbar(QWidget):
         label.setObjectName("VoucherFieldLabel")
         return label
 
-    def release_unsaved_badge(self) -> QLabel:
-        """Hand the status badge to another container (the menu-bar strip)."""
-        if self._owns_unsaved_badge:
-            self._owns_unsaved_badge = False
-            self._apply_layout()
-        return self.unsaved_badge
-
-    def is_panel_layout(self) -> bool:
-        return self._panel_layout
-
-    def set_panel_layout(self, panel: bool) -> None:
-        """Arrange the fields as a side-panel grid (True) or a single row."""
-        panel = bool(panel)
-        if panel == self._panel_layout:
-            return
-        self._panel_layout = panel
-        self._apply_layout()
-
-    def _apply_layout(self) -> None:
-        old_layout = self.layout()
-        if old_layout is not None:
-            while old_layout.count():
-                old_layout.takeAt(0)
-            # Re-home the old layout so a new one can be installed on self.
-            QWidget().setLayout(old_layout)
-
-        self.setProperty("placement", "panel" if self._panel_layout else "row")
-        # In the panel the buttons share whatever width the panel has and the
-        # labels shorten to fit, so the switch never widens the panel.
-        policy = (
-            QSizePolicy.Policy.Ignored
-            if self._panel_layout
-            else QSizePolicy.Policy.Expanding
-        )
-        for button in self.mode_buttons.buttons():
-            button.setSizePolicy(policy, QSizePolicy.Policy.Fixed)
-        self._fit_mode_labels()
-        if self._panel_layout:
-            self._build_panel_layout()
-        else:
-            self._build_row_layout()
-        self.style().unpolish(self)
-        self.style().polish(self)
-
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if watched is self.mode_selector and event.type() == QEvent.Type.Resize:
             self._fit_mode_labels()
         return super().eventFilter(watched, event)
 
     def _fit_mode_labels(self) -> None:
-        if not self._panel_layout:
-            self._set_mode_labels(MODE_LABELS)
-            return
         layout = self.mode_selector.layout()
         margins = layout.contentsMargins()
         available = (
@@ -216,14 +177,16 @@ class VoucherToolbar(QWidget):
             - margins.right()
             - layout.spacing() * (len(MODE_LABELS) - 1)
         )
-        candidates = (PANEL_MODE_LABELS, *NARROW_MODE_LABELS)
-        for labels in candidates:
+        buttons = self.mode_buttons.buttons()
+        for labels in PANEL_MODE_LABELS:
             self._set_mode_labels(labels)
-            needed = sum(
-                button.sizeHint().width() for button in self.mode_buttons.buttons()
-            )
-            if needed <= available:
-                return
+            hints = [button.sizeHint().width() for button in buttons]
+            if sum(hints) <= available:
+                break
+        # Share the width in proportion to each label, so a long label is not
+        # clipped while a short one has room to spare.
+        for index, hint in enumerate(hints):
+            layout.setStretch(index, max(1, hint))
 
     def _set_mode_labels(self, labels: tuple[str, ...]) -> None:
         for index, text in enumerate(labels):
@@ -231,52 +194,12 @@ class VoucherToolbar(QWidget):
             if button.text() != text:
                 button.setText(text)
 
-    def _build_row_layout(self) -> None:
-        layout = QHBoxLayout(self)
-        layout.setSpacing(5)
-        layout.setContentsMargins(0, 0, 0, 0)
-        for label, text in (
-            (self.voucher_label, "Voucher:"),
-            (self.date_label, "Date:"),
-            (self.rate_label, "Rate ₹/g:"),
-            (self.note_label, "Note:"),
-        ):
-            label.setText(text)
-        self.voucher_edit.setMaximumWidth(96)
-        self.date_edit.setMaximumWidth(156)
-        self.silver_rate_spin.setMaximumWidth(116)
-        self.note_edit.setMinimumWidth(160)
-
-        if self._owns_unsaved_badge:
-            layout.addWidget(self.unsaved_badge)
-        layout.addWidget(self.mode_selector)
-        layout.addWidget(self.voucher_label)
-        layout.addWidget(self.voucher_edit)
-        layout.addWidget(self.load_button)
-        layout.addWidget(self.date_label)
-        layout.addWidget(self.date_edit)
-        layout.addWidget(self.rate_label)
-        layout.addWidget(self.silver_rate_spin)
-        layout.addWidget(self.note_label)
-        layout.addWidget(self.note_edit, 1)
-
-    def _build_panel_layout(self) -> None:
+    def _build_layout(self) -> None:
         layout = QGridLayout(self)
+        self._grid = layout
         layout.setContentsMargins(8, 7, 8, 8)
         layout.setHorizontalSpacing(8)
         layout.setVerticalSpacing(2)
-        for label, text in (
-            (self.voucher_label, "Voucher"),
-            (self.date_label, "Date"),
-            (self.rate_label, "Rate ₹/g"),
-            (self.note_label, "Note"),
-        ):
-            label.setText(text)
-        unbounded = 16777215
-        self.voucher_edit.setMaximumWidth(unbounded)
-        self.date_edit.setMaximumWidth(unbounded)
-        self.silver_rate_spin.setMaximumWidth(unbounded)
-        self.note_edit.setMinimumWidth(0)
 
         voucher_row = QHBoxLayout()
         voucher_row.setContentsMargins(0, 0, 0, 0)
@@ -290,21 +213,20 @@ class VoucherToolbar(QWidget):
         layout.addWidget(self.date_edit, 1, 1)
         layout.addWidget(self.rate_label, 2, 0)
         layout.addWidget(self.silver_rate_spin, 3, 0)
-        if self._rate_companion is not None:
-            layout.addWidget(self._rate_companion, 2, 1, 2, 1)
-            self._rate_companion.show()
         layout.addWidget(self.note_label, 4, 0, 1, 2)
         layout.addWidget(self.note_edit, 5, 0, 1, 2)
         layout.setColumnStretch(0, 1)
         layout.setColumnStretch(1, 1)
 
-    def set_rate_companion(self, widget: QWidget | None) -> None:
-        """Show ``widget`` (the live rate) beside the rate field in the panel."""
+    def set_rate_companion(self, widget: QWidget) -> None:
+        """Show ``widget`` (the live rate) beside the rate field."""
         if widget is self._rate_companion:
             return
+        if self._rate_companion is not None:
+            self._grid.removeWidget(self._rate_companion)
         self._rate_companion = widget
-        if self._panel_layout:
-            self._apply_layout()
+        self._grid.addWidget(widget, 2, 1, 2, 1)
+        widget.show()
 
     def _connect_signals(self) -> None:
         """Connect internal widget signals."""
@@ -312,7 +234,14 @@ class VoucherToolbar(QWidget):
         self.voucher_edit.textChanged.connect(self.voucher_number_changed.emit)
         self.date_edit.dateChanged.connect(self.date_changed.emit)
         self.note_edit.textChanged.connect(self.note_changed.emit)
+        self.note_edit.textChanged.connect(self._sync_note_tooltip)
         self.mode_buttons.idClicked.connect(self.mode_selected.emit)
+
+    def _sync_note_tooltip(self, text: str) -> None:
+        """Show the whole note on hover; the field is narrower than a long one."""
+        self.note_edit.setToolTip(
+            text.strip() or "Customer name or optional estimate instructions"
+        )
 
     # Public methods for data access
 

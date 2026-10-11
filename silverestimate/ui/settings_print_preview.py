@@ -13,6 +13,8 @@ from .estimate_print_document import EstimatePrintDocument
 from .estimate_print_renderer import EstimatePrintRenderer
 from .print_page_settings import PrintPageSettings, apply_print_page_settings_to_printer
 
+ZOOM_FACTOR = 2
+
 
 class SettingsPrintPreview(QLabel):
     def __init__(self, parent=None):
@@ -24,6 +26,11 @@ class SettingsPrintPreview(QLabel):
             "background: #eef0f2; border: 1px solid #d9dde2; padding: 12px;"
         )
         self._image = QPixmap()
+        # A whole page is too small to read at this size, so a click enlarges
+        # the top of the page and another click shows the whole page again.
+        self._zoomed = False
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._sync_tooltip()
 
     def render_preferences(self, state, font: QFont) -> None:
         document = EstimatePrintDocument.from_mapping(
@@ -97,12 +104,51 @@ class SettingsPrintPreview(QLabel):
         super().resizeEvent(event)
         self._fit()
 
+    def is_zoomed(self) -> bool:
+        return self._zoomed
+
+    def set_zoomed(self, zoomed: bool) -> None:
+        self._zoomed = bool(zoomed)
+        self._sync_tooltip()
+        self._fit()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and not self._image.isNull():
+            self.set_zoomed(not self._zoomed)
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def _sync_tooltip(self) -> None:
+        self.setToolTip(
+            "Click to show the whole page"
+            if self._zoomed
+            else "Click to enlarge the top of the page"
+        )
+
     def _fit(self) -> None:
-        if not self._image.isNull():
+        if self._image.isNull():
+            return
+        area = self.size() - QSize(28, 28)
+        if not self._zoomed:
             self.setPixmap(
                 self._image.scaled(
-                    self.size() - QSize(28, 28),
+                    area,
                     Qt.AspectRatioMode.KeepAspectRatio,
                     Qt.TransformationMode.SmoothTransformation,
                 )
             )
+            return
+        # Twice the fitted width, cropped to the area from the page's top left.
+        enlarged = self._image.scaledToWidth(
+            max(1, area.width() * ZOOM_FACTOR),
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self.setPixmap(
+            enlarged.copy(
+                0,
+                0,
+                min(enlarged.width(), max(1, area.width())),
+                min(enlarged.height(), max(1, area.height())),
+            )
+        )

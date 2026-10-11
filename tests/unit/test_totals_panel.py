@@ -166,12 +166,9 @@ def test_decimal_formatting(panel):
     assert panel.net_wage_label.text() == "1,234.56"
 
 
-@pytest.mark.parametrize("layout_mode", ["horizontal", "sidebar"])
-def test_grand_total_area_has_independent_font_size(qtbot, layout_mode):
+def test_grand_total_area_has_independent_font_size(panel):
     from PySide6.QtWidgets import QLabel
 
-    panel = TotalsPanel(layout_mode=layout_mode)
-    qtbot.addWidget(panel)
     panel.set_breakdown_font_size(11)
     panel.set_final_calc_font_size(16)
     panel.set_breakdown_font_size(12)
@@ -187,7 +184,7 @@ def test_grand_total_area_has_independent_font_size(qtbot, layout_mode):
 
 
 def test_sidebar_section_order_can_be_reordered(qtbot, qt_app):
-    panel = TotalsPanel(layout_mode="sidebar")
+    panel = TotalsPanel()
     qtbot.addWidget(panel)
     panel.set_section_order(["silver_bar", "return", "totals", "regular"])
 
@@ -207,7 +204,7 @@ def test_sidebar_section_order_can_be_reordered(qtbot, qt_app):
 
 
 def test_sidebar_rows_moved_emits_section_order_signal(qtbot, qt_app):
-    panel = TotalsPanel(layout_mode="sidebar")
+    panel = TotalsPanel()
     qtbot.addWidget(panel)
     emissions = []
     panel.section_order_changed.connect(lambda order: emissions.append(order))
@@ -225,7 +222,7 @@ def test_sidebar_rows_moved_emits_section_order_signal(qtbot, qt_app):
 
 
 def test_sidebar_swap_requested_swaps_card_positions(qtbot, qt_app):
-    panel = TotalsPanel(layout_mode="sidebar")
+    panel = TotalsPanel()
     qtbot.addWidget(panel)
     emissions = []
     panel.section_order_changed.connect(lambda order: emissions.append(order))
@@ -255,7 +252,7 @@ def test_sidebar_swap_requested_swaps_card_positions(qtbot, qt_app):
 
 
 def test_sidebar_swap_requested_keeps_final_calc_pinned(qtbot, qt_app):
-    panel = TotalsPanel(layout_mode="sidebar")
+    panel = TotalsPanel()
     qtbot.addWidget(panel)
     original_order = panel.section_order()
 
@@ -265,7 +262,7 @@ def test_sidebar_swap_requested_keeps_final_calc_pinned(qtbot, qt_app):
 
 
 def test_sidebar_rows_moved_keeps_all_cards_visible(qtbot, qt_app):
-    panel = TotalsPanel(layout_mode="sidebar")
+    panel = TotalsPanel()
     qtbot.addWidget(panel)
     panel.show()
     qt_app.processEvents()
@@ -280,7 +277,7 @@ def test_sidebar_rows_moved_keeps_all_cards_visible(qtbot, qt_app):
 
 
 def test_sidebar_items_are_not_drop_targets(qtbot, qt_app):
-    panel = TotalsPanel(layout_mode="sidebar")
+    panel = TotalsPanel()
     qtbot.addWidget(panel)
     for idx in range(panel._summary_sections_list.count()):
         item = panel._summary_sections_list.item(idx)
@@ -289,7 +286,7 @@ def test_sidebar_items_are_not_drop_targets(qtbot, qt_app):
 
 
 def test_sidebar_final_calc_item_is_not_draggable(qtbot, qt_app):
-    panel = TotalsPanel(layout_mode="sidebar")
+    panel = TotalsPanel()
     qtbot.addWidget(panel)
     first_item = panel._summary_sections_list.item(0)
     assert first_item is not None
@@ -298,7 +295,7 @@ def test_sidebar_final_calc_item_is_not_draggable(qtbot, qt_app):
 
 
 def test_sidebar_cards_resize_with_available_width(qtbot, qt_app):
-    panel = TotalsPanel(layout_mode="sidebar")
+    panel = TotalsPanel()
     qtbot.addWidget(panel)
     panel.resize(520, 760)
     panel.show()

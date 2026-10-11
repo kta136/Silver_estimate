@@ -48,6 +48,7 @@ class EstimateColumnSpec:
     blank_zero_editor: bool = False
     recalculates_row: bool = False
     auto_advance_after_edit: bool = False
+    tooltip: str = ""
 
 
 ESTIMATE_TABLE_COLUMN_SPECS: Final[tuple[EstimateColumnSpec, ...]] = (
@@ -68,7 +69,7 @@ ESTIMATE_TABLE_COLUMN_SPECS: Final[tuple[EstimateColumnSpec, ...]] = (
         "Item Name",
         editor_type=EDITOR_TEXT,
         default_width=200,
-        min_width=180,
+        min_width=120,
         max_width=1200,
         stretch=True,
     ),
@@ -116,11 +117,11 @@ ESTIMATE_TABLE_COLUMN_SPECS: Final[tuple[EstimateColumnSpec, ...]] = (
     EstimateColumnSpec(
         COL_PURITY,
         "purity",
-        "Purity %",
+        "Purity (%)",
         precision=PURITY_PLACES,
         editor_type=EDITOR_NUMERIC,
-        default_width=86,
-        min_width=80,
+        default_width=96,
+        min_width=92,
         max_width=160,
         navigation_order=3,
         auto_edit=True,
@@ -133,6 +134,7 @@ ESTIMATE_TABLE_COLUMN_SPECS: Final[tuple[EstimateColumnSpec, ...]] = (
         "Lbr",
         precision=MONEY_PLACES,
         editor_type=EDITOR_NUMERIC,
+        tooltip="Labour rate (₹ per gram, or per piece)",
         default_width=64,
         min_width=64,
         max_width=92,
@@ -159,6 +161,7 @@ ESTIMATE_TABLE_COLUMN_SPECS: Final[tuple[EstimateColumnSpec, ...]] = (
         "wage_amount",
         "Lbr Amt",
         precision=MONEY_PLACES,
+        tooltip="Labour amount (₹)",
         editable=False,
         editor_type=EDITOR_NUMERIC,
         default_width=84,
@@ -182,8 +185,9 @@ ESTIMATE_TABLE_COLUMN_SPECS: Final[tuple[EstimateColumnSpec, ...]] = (
         "Type",
         editable=False,
         editor_type=EDITOR_READ_ONLY,
-        default_width=76,
-        min_width=70,
+        # Wide enough for "Silver Bar", the longest type, at the default size.
+        default_width=92,
+        min_width=88,
         max_width=180,
     ),
 )
@@ -232,6 +236,11 @@ def column_count() -> int:
 def header_for_column(column: int) -> str | None:
     spec = get_column_spec(column)
     return spec.header if spec is not None else None
+
+
+def tooltip_for_column(column: int) -> str | None:
+    spec = get_column_spec(column)
+    return spec.tooltip or None if spec is not None else None
 
 
 def precision_for_column(column: int) -> int | None:

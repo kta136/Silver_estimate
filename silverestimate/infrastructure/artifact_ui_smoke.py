@@ -43,7 +43,7 @@ def verify_artifact_ui_fonts(app: QApplication) -> dict[str, int]:
     table.setProperty("denseTable", True)
     set_table_font(table, QFont("Segoe UI", 14))
     content.addWidget(table)
-    totals = TotalsPanel(layout_mode="sidebar")
+    totals = TotalsPanel()
     content.addWidget(totals)
     totals.set_breakdown_font_size(9)
     totals.set_final_calc_font_size(12)

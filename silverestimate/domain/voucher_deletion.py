@@ -11,7 +11,7 @@ def numeric_voucher_key(value: str) -> tuple[int, str]:
     """Compare arbitrary-size decimal identifiers without integer coercion."""
     value = value.strip()
     if not value or not value.isascii() or not value.isdecimal():
-        raise ValueError("Voucher numbers must be nonnegative whole numbers.")
+        raise ValueError("Voucher numbers must be whole numbers, such as 105.")
     normalized = value.lstrip("0") or "0"
     return len(normalized), normalized
 
@@ -41,7 +41,7 @@ class VoucherDeletionRange:
         else:
             raise ValueError("Choose a date or voucher number range.")
         if reversed_range:
-            raise ValueError("From must be less than or equal to To.")
+            raise ValueError("From must not be after To.")
 
     @property
     def description(self) -> str:

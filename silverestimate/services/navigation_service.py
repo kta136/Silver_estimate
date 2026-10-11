@@ -7,6 +7,8 @@ from typing import Optional
 
 from PySide6.QtWidgets import QMessageBox
 
+from silverestimate.ui.message_dialogs import with_details
+
 
 class NavigationService:
     """Handle main-window navigation, lazy view creation, and dialogs."""
@@ -26,7 +28,7 @@ class NavigationService:
             self._logger.error("Cannot show estimate: estimate_widget is not available")
             QMessageBox.critical(
                 self.main_window,
-                "Error",
+                "Estimate Entry Unavailable",
                 "Estimate entry is not available. Please restart the application.",
             )
             return
@@ -55,8 +57,8 @@ class NavigationService:
                 )
                 QMessageBox.critical(
                     self.main_window,
-                    "Error",
-                    f"Item master could not be initialized: {exc}",
+                    "Item Master Unavailable",
+                    with_details("Item Master could not be opened.", exc),
                 )
                 return
         if not self._switch_widget(widget):
@@ -85,8 +87,8 @@ class NavigationService:
             )
             QMessageBox.critical(
                 self.main_window,
-                "Error",
-                f"Silver Bar Management could not be opened: {exc}",
+                "Silver Bars Unavailable",
+                with_details("Silver Bars could not be opened.", exc),
             )
 
     def show_sales_report(self) -> None:
@@ -106,7 +108,11 @@ class NavigationService:
                 self._logger.error(
                     "Could not open sales report: %s", exc, exc_info=True
                 )
-                QMessageBox.critical(self.main_window, "Sales Reports", str(exc))
+                QMessageBox.critical(
+                    self.main_window,
+                    "Sales Reports Unavailable",
+                    with_details("Sales Reports could not be opened.", exc),
+                )
                 return
         already_current = self.stack and self.stack.currentWidget() is widget
         if not self._switch_widget(widget):
@@ -146,8 +152,8 @@ class NavigationService:
             )
             QMessageBox.critical(
                 self.main_window,
-                "Error",
-                f"Failed to open Silver Bar History: {exc}",
+                "Silver Bar History Unavailable",
+                with_details("Silver Bar History could not be opened.", exc),
             )
 
     def show_estimate_history(self) -> None:
@@ -158,7 +164,7 @@ class NavigationService:
             )
             QMessageBox.critical(
                 self.main_window,
-                "Error",
+                "Estimate Entry Unavailable",
                 "Estimate entry is not available. Please restart the application.",
             )
             return
@@ -167,7 +173,7 @@ class NavigationService:
             if not callable(show_history):
                 QMessageBox.critical(
                     self.main_window,
-                    "Error",
+                    "Estimate History Unavailable",
                     "Estimate history cannot be opened from this view.",
                 )
                 return
@@ -177,8 +183,8 @@ class NavigationService:
             self._logger.error("Error opening estimate history: %s", exc, exc_info=True)
             QMessageBox.critical(
                 self.main_window,
-                "Load Error",
-                f"Failed to open estimate history: {exc}",
+                "Estimate History Unavailable",
+                with_details("Estimate history could not be opened.", exc),
             )
 
     # --- Helpers -------------------------------------------------------
@@ -204,8 +210,8 @@ class NavigationService:
             self._logger.error("Database connection is not available")
             QMessageBox.critical(
                 self.main_window,
-                "Error",
-                "Database connection is not available. Please restart the application.",
+                "Database Unavailable",
+                "The database is not available. Please restart the application.",
             )
             return False
         return True

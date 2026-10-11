@@ -55,11 +55,11 @@ def validate_item(  # noqa: PLR0913 - stable public field-by-field validation AP
     if purity_value < MIN_PURITY:
         raise ItemValidationError("Purity cannot be negative.")
 
-    wage_rate_value = _finite_number(wage_rate, "Lbr")
+    wage_rate_value = _finite_number(wage_rate, "Labour rate")
     if wage_rate_value < MIN_WAGE_RATE:
-        raise ItemValidationError("Lbr cannot be negative.")
+        raise ItemValidationError("Labour rate cannot be negative.")
     if wage_rate_value > MAX_WAGE_RATE:
-        raise ItemValidationError(f"Lbr must be <= {MAX_WAGE_RATE:,.0f}.")
+        raise ItemValidationError(f"Labour rate must be <= {MAX_WAGE_RATE:,.0f}.")
 
     tunch_value = str(tunch).strip() if tunch is not None else ""
 

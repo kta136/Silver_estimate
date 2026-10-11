@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
 )
@@ -26,7 +27,6 @@ from .settings_appearance_page import (
     AppearanceSettingsActions,
     AppearanceSettingsPage,
     SettingsAppearanceController,
-    TotalsPosition,
 )
 from .settings_data_page import (
     DataManagementActions,
@@ -60,6 +60,11 @@ from .theme_tokens import (
     TEXT_MUTED,
     TEXT_STRONG,
 )
+from .window_sizing import set_usable_minimum_size
+
+# Room for the widest page, Printing, with its sample page beside it.
+PREFERRED_WIDTH = 1180
+PREFERRED_HEIGHT = 740
 
 
 def _coerce_int_setting(value: object, default: int) -> int:
@@ -81,7 +86,8 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.main_window = main_window_ref  # Store reference to main window
         self.setWindowTitle("Application Settings")
-        self.setMinimumSize(760, 420)
+        # Below this the pages lose their previews and second columns.
+        set_usable_minimum_size(self, width=900, height=520)
         self.setObjectName("SettingsDialog")
         self.setStyleSheet(
             build_management_screen_stylesheet(
@@ -272,7 +278,7 @@ class SettingsDialog(QDialog):
         # Build pages list
         page_defs = [
             (
-                "User Interface",
+                "Appearance",
                 get_icon("user_interface", widget=self),
                 self._create_ui_tab(),
             ),
@@ -356,10 +362,12 @@ class SettingsDialog(QDialog):
         )
 
         # Add Restore Defaults button
-        restore_btn = QPushButton("Restore Defaults…")
+        restore_btn = QPushButton("Restore All Defaults")
         restore_btn.setObjectName("SettingsSecondaryButton")
         restore_btn.setToolTip(
-            "Reset all settings to default values\nWill not affect saved estimates or data\nChanges take effect when applied"
+            "Reset Appearance, Live Rates, Printing and Logging on every page\n"
+            "Estimates, items, backups and passwords are not touched\n"
+            "Nothing is saved until you choose Apply or Save & Close"
         )
         self.buttonBox.addButton(restore_btn, QDialogButtonBox.ButtonRole.ResetRole)
         restore_btn.clicked.connect(self._restore_defaults)
@@ -425,6 +433,7 @@ class SettingsDialog(QDialog):
         footer.addWidget(self.buttonBox)
         layout.addLayout(footer)
         self.setLayout(layout)
+        self._fit_pages_to_current()
         self._resize_to_available_screen()
         self._sync_page_scrollbar()
 
@@ -446,7 +455,26 @@ class SettingsDialog(QDialog):
         if 0 <= index < self.pages.count():
             self.pages.setCurrentIndex(index)
             self.settings.set(SettingsKey.UI_SETTINGS_LAST_TAB, index)
+        self._fit_pages_to_current()
         QTimer.singleShot(0, self._sync_page_scrollbar)
+
+    def _fit_pages_to_current(self) -> None:
+        """Let only the open page decide how much room the page area needs.
+
+        A stack is as wide as its widest page. That made every page scroll
+        sideways once the window was narrower than the Appearance page,
+        cutting off text that would have wrapped.
+        """
+        current = self.pages.currentWidget()
+        for index in range(self.pages.count()):
+            page = self.pages.widget(index)
+            policy = (
+                QSizePolicy.Policy.Preferred
+                if page is current
+                else QSizePolicy.Policy.Ignored
+            )
+            page.setSizePolicy(policy, policy)
+        self.pages.updateGeometry()
 
     def _sync_page_scrollbar(self) -> None:
         if not hasattr(self, "pages") or not hasattr(self, "page_scroll"):
@@ -484,8 +512,16 @@ class SettingsDialog(QDialog):
         """Create the independently owned DDA live-rate page."""
         page = LiveRatesSettingsPage(self.settings, self)
         page.changed.connect(self._mark_dirty)
+        page.refresh_requested.connect(self._refresh_live_rate_now)
         self._live_rates_page = page
         return page
+
+    def _refresh_live_rate_now(self) -> None:
+        controller = getattr(self.main_window, "live_rate_controller", None)
+        refresh = getattr(controller, "refresh_now", None)
+        if callable(refresh):
+            refresh()
+            self._refresh_rate_status()
 
     def _create_print_tab(self):
         """Create the independently owned printing page."""
@@ -541,11 +577,6 @@ class SettingsDialog(QDialog):
                 value,
                 "final calculation font size",
             ),
-            apply_totals_position=lambda value: self._apply_estimate_layout_value(
-                "apply_totals_position",
-                value,
-                "totals panel position",
-            ),
         )
 
     def _apply_print_font(self, font: FontSettings) -> None:
@@ -554,7 +585,7 @@ class SettingsDialog(QDialog):
     def _apply_estimate_layout_value(
         self,
         method_name: str,
-        value: int | TotalsPosition,
+        value: int,
         label: str,
     ) -> object:
         widget = getattr(self.main_window, "estimate_widget", None)
@@ -572,11 +603,11 @@ class SettingsDialog(QDialog):
         return result
 
     def _resize_to_available_screen(self) -> None:
-        """Keep the settings dialog usable at larger Windows scale factors."""
+        """Open at a size that suits the pages and always fits the screen."""
         screen = self.screen()
         available = screen.availableGeometry()
-        target_width = min(1500, available.width() - 40)
-        target_height = min(920, available.height() - 40)
+        target_width = min(PREFERRED_WIDTH, available.width() - 40)
+        target_height = min(PREFERRED_HEIGHT, available.height() - 40)
         self.resize(target_width, target_height)
 
     # --- Apply/Save/Accept/Reject ---
@@ -629,7 +660,9 @@ class SettingsDialog(QDialog):
             return True
         except Exception as e:
             QMessageBox.critical(
-                self, "Error Applying Settings", f"Could not apply settings: {e}"
+                self,
+                "Settings Not Applied",
+                f"The settings could not be applied.\n\nDetails: {e}",
             )
             logger.error("Error applying settings:", exc_info=True)
             self._dirty = True

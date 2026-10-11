@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Literal, cast
+from typing import Callable
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
@@ -12,13 +12,11 @@ from PySide6.QtWidgets import (
     QBoxLayout,
     QCheckBox,
     QDialog,
-    QFontComboBox,
     QFormLayout,
     QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QLineEdit,
     QPushButton,
     QSizePolicy,
     QTableWidget,
@@ -36,15 +34,12 @@ from silverestimate.services.settings_service import FontSettings
 
 from .appearance import set_table_font
 from .custom_font_dialog import CustomFontDialog
-from .themed_controls import ThemedComboBox, ThemedSpinBox
-
-TotalsPosition = Literal["left", "right", "bottom"]
+from .themed_controls import ThemedComboBox, ThemedFontComboBox, ThemedSpinBox
 
 DEFAULT_PRINT_FONT = FontSettings(family="Arial", size=8.0, bold=False)
 DEFAULT_TABLE_FONT_SIZE = 11
 DEFAULT_BREAKDOWN_FONT_SIZE = 11
 DEFAULT_FINAL_CALC_FONT_SIZE = 16
-DEFAULT_TOTALS_POSITION: TotalsPosition = "right"
 
 
 @dataclass(frozen=True)
@@ -58,7 +53,6 @@ class AppearanceSettingsState:
     table_font_size: int = DEFAULT_TABLE_FONT_SIZE
     breakdown_font_size: int = DEFAULT_BREAKDOWN_FONT_SIZE
     final_calc_font_size: int = DEFAULT_FINAL_CALC_FONT_SIZE
-    totals_position: TotalsPosition = DEFAULT_TOTALS_POSITION
 
 
 @dataclass(frozen=True)
@@ -69,7 +63,6 @@ class AppearanceSettingsActions:
     apply_table_font_size: Callable[[int], object]
     apply_breakdown_font_size: Callable[[int], object]
     apply_final_calc_font_size: Callable[[int], object]
-    apply_totals_position: Callable[[TotalsPosition], object]
 
 
 class SettingsAppearanceController:
@@ -99,15 +92,6 @@ class SettingsAppearanceController:
         bold = self._settings.get_bool(
             SettingsKey.FONT_BOLD,
             default_font.bold,
-        )
-        totals_position_value = self._settings.get_text(
-            SettingsKey.UI_ESTIMATE_TOTALS_POSITION,
-            DEFAULT_TOTALS_POSITION,
-        )
-        totals_position = (
-            cast(TotalsPosition, totals_position_value)
-            if totals_position_value in {"left", "right", "bottom"}
-            else DEFAULT_TOTALS_POSITION
         )
         return AppearanceSettingsState(
             interface_font=self._settings.get_text(
@@ -140,7 +124,6 @@ class SettingsAppearanceController:
                 minimum=8,
                 maximum=20,
             ),
-            totals_position=totals_position,
         )
 
     def apply_state(self, state: AppearanceSettingsState) -> None:
@@ -160,10 +143,6 @@ class SettingsAppearanceController:
         self._require_accepted(
             self._actions.apply_final_calc_font_size(state.final_calc_font_size),
             "final calculation font size",
-        )
-        self._require_accepted(
-            self._actions.apply_totals_position(state.totals_position),
-            "totals panel position",
         )
 
         from .appearance import apply_interface_appearance
@@ -188,10 +167,6 @@ class SettingsAppearanceController:
         self._settings.set(
             SettingsKey.UI_FINAL_CALC_FONT_SIZE,
             state.final_calc_font_size,
-        )
-        self._settings.set(
-            SettingsKey.UI_ESTIMATE_TOTALS_POSITION,
-            state.totals_position,
         )
 
     @staticmethod
@@ -232,13 +207,15 @@ class SettingsAppearanceController:
             raise ValueError(
                 "Final calculation font size must be between 8 and 20 points."
             )
-        if state.totals_position not in {"left", "right", "bottom"}:
-            raise ValueError("Totals panel position is invalid.")
 
     @staticmethod
     def _require_accepted(result: object, label: str) -> None:
         if result is False:
             raise RuntimeError(f"Estimate view rejected {label}.")
+
+
+# Narrower than this, the sample totals go under the sample table.
+STACK_PREVIEW_BELOW = 820
 
 
 class AppearanceSettingsPage(QWidget):
@@ -259,9 +236,6 @@ class AppearanceSettingsPage(QWidget):
         self._build_ui(state)
 
     def state(self) -> AppearanceSettingsState:
-        totals_position = self.totals_position_combo.currentData()
-        if totals_position not in {"left", "right", "bottom"}:
-            totals_position = DEFAULT_TOTALS_POSITION
         return AppearanceSettingsState(
             interface_font=self.interface_font_combo.currentFont().family(),
             row_density=self.density_combo.currentData(),
@@ -270,7 +244,6 @@ class AppearanceSettingsPage(QWidget):
             table_font_size=self.table_font_size_spin.value(),
             breakdown_font_size=self.breakdown_font_size_spin.value(),
             final_calc_font_size=self.final_calc_font_size_spin.value(),
-            totals_position=cast(TotalsPosition, totals_position),
         )
 
     def apply(self) -> AppearanceSettingsState:
@@ -293,19 +266,18 @@ class AppearanceSettingsPage(QWidget):
         title.setObjectName("SettingsTitleLabel")
         heading.addWidget(title)
         heading.addStretch()
-        link = QPushButton("Print fonts →")
-        link.setFlat(True)
-        link.clicked.connect(self.print_settings_requested.emit)
-        heading.addWidget(link)
         layout.addLayout(heading)
-        layout.addWidget(QLabel("Adjust text and spacing."))
+        intro = QLabel("Text and spacing on screen. The print font is under Printing.")
+        intro.setObjectName("SettingsMutedDescription")
+        layout.addWidget(intro)
         content = QHBoxLayout()
         controls = QWidget()
         controls.setMaximumWidth(340)
         form_layout = QFormLayout(controls)
         self._configure_form(form_layout)
-        form_layout.addRow(QLabel("Typography"))
-        self.interface_font_combo = QFontComboBox()
+        form_layout.addRow(self._section_label("Text"))
+        self.interface_font_combo = ThemedFontComboBox()
+        self._polish_field(self.interface_font_combo, width=260)
         form_layout.addRow("Interface font:", self.interface_font_combo)
         # Retain the report font controls, but mount them on the Printing page.
         self.print_font_controls = QWidget()
@@ -314,19 +286,11 @@ class AppearanceSettingsPage(QWidget):
         )
         self.print_font_controls.hide()
         self._add_font_size_controls(form_layout)
-        form_layout.addRow(QLabel("Table layout"))
+        form_layout.addRow(self._section_label("Estimate table"))
         self.density_combo = ThemedComboBox()
         self.density_combo.addItem("Compact", "compact")
         self.density_combo.addItem("Comfortable", "comfortable")
         form_layout.addRow("Row density:", self.density_combo)
-        self._add_totals_position_control(form_layout)
-        focus = QLineEdit("RING001")
-        focus.setReadOnly(True)
-        focus.setStyleSheet("border: 1px solid #007f89; padding: 6px;")
-        form_layout.addRow("Focus preview:", focus)
-        selection = QLabel("Selected row")
-        selection.setStyleSheet("background: #e0f2f3; min-height: 28px;")
-        form_layout.addRow("Selection preview:", selection)
         self.alternating_checkbox = QCheckBox("Use alternating row backgrounds")
         form_layout.addRow(self.alternating_checkbox)
         content.addWidget(controls)
@@ -342,7 +306,6 @@ class AppearanceSettingsPage(QWidget):
         self.interface_font_combo.currentFontChanged.connect(self._emit_changed)
         self.density_combo.currentIndexChanged.connect(self._emit_changed)
         self.alternating_checkbox.toggled.connect(self._emit_changed)
-        self.totals_position_combo.currentIndexChanged.connect(self._emit_changed)
         self._update_preview()
 
     def _add_print_font_controls(
@@ -350,7 +313,7 @@ class AppearanceSettingsPage(QWidget):
         form_layout: QFormLayout,
         font: FontSettings,
     ) -> None:
-        self.print_font_button = QPushButton("Configure font…")
+        self.print_font_button = QPushButton("Configure Font...")
         self.print_font_button.setMinimumWidth(130)
         self.print_font_button.setSizePolicy(
             QSizePolicy.Policy.Fixed,
@@ -374,9 +337,9 @@ class AppearanceSettingsPage(QWidget):
         font_layout.setSpacing(10)
         font_layout.addWidget(self.print_font_label, 1)
         font_layout.addWidget(self.print_font_button)
-        form_layout.addRow("Print Font:", font_layout)
+        form_layout.addRow("Print font:", font_layout)
 
-        self.print_font_sample = QLabel("RING001  Silver Ring    9.500 g    ₹ 2,375")
+        self.print_font_sample = QLabel("RING001  Silver Ring    9.50 g    ₹ 2,375")
         self.print_font_sample.setToolTip(
             "Live preview of the selected report font\n"
             "Shows print-like text as it will appear in reports\n"
@@ -404,7 +367,7 @@ class AppearanceSettingsPage(QWidget):
         self.breakdown_font_size_spin.setToolTip(
             "Text size for Regular/Return/Silver Bar totals\n"
             "Range: 7–16 points\n"
-            "Controls left-side totals display\n"
+            "Controls the totals table in the side panel\n"
             "Should match or be smaller than table font"
         )
         self.breakdown_font_size_spin.setSuffix(" pt")
@@ -416,7 +379,7 @@ class AppearanceSettingsPage(QWidget):
         self.final_calc_font_size_spin.setToolTip(
             "Text size for the entire Grand Total area\n"
             "Range: 8–20 points\n"
-            "Includes headings, net fine weight, net wage, and grand total\n"
+            "Includes headings, net fine weight, net labour, and grand total\n"
             "Can be larger for emphasis"
         )
         self.final_calc_font_size_spin.setSuffix(" pt")
@@ -425,19 +388,6 @@ class AppearanceSettingsPage(QWidget):
             "Grand total text:",
             self.final_calc_font_size_spin,
         )
-
-    def _add_totals_position_control(self, form_layout: QFormLayout) -> None:
-        self.totals_position_combo = ThemedComboBox()
-        self.totals_position_combo.addItem("Right Side", "right")
-        self.totals_position_combo.addItem("Left Side", "left")
-        self.totals_position_combo.addItem("Bottom", "bottom")
-        self.totals_position_combo.setToolTip(
-            "Choose where totals/final calculation appears.\n"
-            "Right/Left preserves maximum table height.\n"
-            "Bottom uses footer area and can reduce visible rows."
-        )
-        self._polish_field(self.totals_position_combo, width=260)
-        form_layout.addRow("Totals position:", self.totals_position_combo)
 
     def _load_to_ui(self, state: AppearanceSettingsState) -> None:
         self.interface_font_combo.setCurrentFont(QFont(state.interface_font))
@@ -450,9 +400,6 @@ class AppearanceSettingsPage(QWidget):
         self.table_font_size_spin.setValue(state.table_font_size)
         self.breakdown_font_size_spin.setValue(state.breakdown_font_size)
         self.final_calc_font_size_spin.setValue(state.final_calc_font_size)
-        totals_index = self.totals_position_combo.findData(state.totals_position)
-        if totals_index >= 0:
-            self.totals_position_combo.setCurrentIndex(totals_index)
         self._update_font_sample()
 
     def _show_print_font_dialog(self) -> None:
@@ -500,6 +447,17 @@ class AppearanceSettingsPage(QWidget):
         form_layout.setFieldGrowthPolicy(
             QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
         )
+
+    @staticmethod
+    def _section_label(text: str) -> QLabel:
+        """A heading for a group of rows in the form."""
+        label = QLabel(text)
+        label.setObjectName("SettingsSectionLabel")
+        label.setStyleSheet(
+            "QLabel#SettingsSectionLabel { color: #0f172a; font-weight: 700; "
+            "padding-top: 4px; }"
+        )
+        return label
 
     @staticmethod
     def _polish_field(widget: QWidget, *, width: int) -> None:
@@ -560,10 +518,12 @@ class AppearanceSettingsPage(QWidget):
         self.preview_content = QBoxLayout(QBoxLayout.Direction.LeftToRight)
         self.preview_content.addWidget(table, 1)
         preview_layout.addLayout(self.preview_content, 1)
-        preview.setMinimumWidth(600)
+        # Narrow enough to sit beside the controls in a small window; the
+        # sample totals then move under the table (see _arrange_preview).
+        preview.setMinimumWidth(280)
 
         grand_total = QLabel(
-            "Grand Total     Net Fine 145.800g   |   Net Wages ₹15,500.00\nFinal   ₹1,24,850.00"
+            "Net Fine 145.80 g   |   Net Labour ₹15,500.00\nGrand Total   ₹1,24,850.00"
         )
         self.preview_total = grand_total
         grand_total.setObjectName("SettingsGrandTotalPreview")
@@ -596,23 +556,31 @@ class AppearanceSettingsPage(QWidget):
             QFont(font.family(), self.final_calc_font_size_spin.value())
         )
         self.preview_total.setText(
-            f"Grand Total<br><br>Net Fine<br>145.800 g<br><br>Net Wages<br>₹15,500.00<br><br>"
+            f"Net Fine<br>145.80 g<br><br>Net Labour<br>₹15,500.00<br><br>Grand Total<br>"
             f'<span style="font-size:{self.final_calc_font_size_spin.value()}pt; font-weight:600;">₹1,24,850.00</span>'
         )
-        position = self.totals_position_combo.currentData()
-        self.preview_content.setDirection(
-            {
-                "right": QBoxLayout.Direction.LeftToRight,
-                "left": QBoxLayout.Direction.RightToLeft,
-                "bottom": QBoxLayout.Direction.TopToBottom,
-            }[position]
-        )
-        self.preview_total.setMaximumWidth(16777215 if position == "bottom" else 210)
-        self.preview_total.setMinimumWidth(180)
+        self._arrange_preview()
         self.preview_table.horizontalHeader().setFixedHeight(
             max(28, self.preview_table.fontMetrics().height() + 10)
         )
         self.preview_table.scrollToTop()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._arrange_preview()
+
+    def _arrange_preview(self) -> None:
+        """Place the sample totals beside the table, or under it when narrow."""
+        if not hasattr(self, "preview_total"):
+            return
+        stacked = self.width() < STACK_PREVIEW_BELOW
+        self.preview_content.setDirection(
+            QBoxLayout.Direction.TopToBottom
+            if stacked
+            else QBoxLayout.Direction.LeftToRight
+        )
+        self.preview_total.setMaximumWidth(16777215 if stacked else 210)
+        self.preview_total.setMinimumWidth(0 if stacked else 180)
 
 
 __all__ = [
@@ -620,5 +588,4 @@ __all__ = [
     "AppearanceSettingsPage",
     "AppearanceSettingsState",
     "SettingsAppearanceController",
-    "TotalsPosition",
 ]

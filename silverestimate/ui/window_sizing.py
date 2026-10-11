@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QWidget
 
+# Height of a window's title bar and frame, which sit outside its minimum size.
+TITLE_BAR_ALLOWANCE = 40
+
 
 def resize_to_available_screen(
     widget: QWidget,
@@ -23,3 +26,18 @@ def resize_to_available_screen(
     target_width = min(preferred_width, max(widget.minimumWidth(), max_width))
     target_height = min(preferred_height, max(widget.minimumHeight(), max_height))
     widget.resize(target_width, target_height)
+
+
+def set_usable_minimum_size(widget: QWidget, *, width: int, height: int) -> None:
+    """Set a minimum size the window stays usable at, never beyond the screen.
+
+    A minimum larger than the desktop would push part of the window off-screen
+    on a small or heavily scaled display, so it is capped to the space there,
+    less the room a maximized window's title bar takes.
+    """
+
+    available = widget.screen().availableGeometry()
+    widget.setMinimumSize(
+        max(1, min(width, available.width())),
+        max(1, min(height, available.height() - TITLE_BAR_ALLOWANCE)),
+    )

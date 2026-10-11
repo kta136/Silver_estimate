@@ -34,7 +34,6 @@ class SettingsKey(StrEnum):
     UI_TABLE_FONT_SIZE = "ui/table_font_size"
     UI_BREAKDOWN_FONT_SIZE = "ui/breakdown_font_size"
     UI_FINAL_CALC_FONT_SIZE = "ui/final_calc_font_size"
-    UI_ESTIMATE_TOTALS_POSITION = "ui/estimate_totals_position"
     UI_ESTIMATE_TOTALS_SECTION_ORDER = "ui/estimate_totals_section_order"
     UI_ESTIMATE_TABLE_AUTOFIT_MODE = "ui/estimate_table_autofit_mode"
     UI_ESTIMATE_TABLE_COLUMN_WIDTHS = "ui/estimate_table_column_widths"
@@ -374,7 +373,6 @@ def _migrate_to_v2(backend: RawSettingsBackend) -> None:
         SettingsKey.UI_FINAL_CALC_FONT_SIZE: 16,
         SettingsKey.UI_ROW_DENSITY: "compact",
         SettingsKey.UI_ALTERNATING_ROWS: True,
-        SettingsKey.UI_ESTIMATE_TOTALS_POSITION: "right",
     }
     for key, value in defaults.items():
         backend.setValue(str(key), value)

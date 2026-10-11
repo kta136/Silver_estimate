@@ -4,10 +4,22 @@ PAGE_BG = "#f7f8fa"
 SURFACE_BG = "#ffffff"
 CARD_BORDER = "#d9dde2"
 CARD_BORDER_SOFT = "#e1e4e8"
-INPUT_BORDER = "#ccd0d6"
+# 3:1 against white, the page and header fills, so fields and buttons keep a
+# visible outline (WCAG 1.4.11).
+INPUT_BORDER = "#8490a0"
 PRIMARY_BG = "#007f89"
-PRIMARY_BG_HOVER = "#00939d"
-PRIMARY_BG_PRESSED = "#006670"
+# Hover and pressed darken the fill, so the white label gains contrast.
+PRIMARY_BG_HOVER = "#006f78"
+PRIMARY_BG_PRESSED = "#005d66"
+# A button that cannot be used right now: washed out, so it reads as off
+# at a glance rather than only by its faded icon.
+PRIMARY_BG_DISABLED = "#a9cdd1"
+DISABLED_BG = "#eef0f3"
+DISABLED_BORDER = "#d9dde2"
+DISABLED_TEXT = "#8a94a3"
+# Text of a button that deletes something but is not the dialog's red
+# confirm button.
+DANGER_TEXT = "#b91c1c"
 DANGER_BG = "#fff1f2"
 DANGER_BORDER = "#ff9ca4"
 SELECTION_BG = "#e0f2f3"
@@ -45,6 +57,11 @@ def apply_theme_tokens(stylesheet: str) -> str:
         "__PRIMARY_BG__": PRIMARY_BG,
         "__PRIMARY_BG_HOVER__": PRIMARY_BG_HOVER,
         "__PRIMARY_BG_PRESSED__": PRIMARY_BG_PRESSED,
+        "__PRIMARY_BG_DISABLED__": PRIMARY_BG_DISABLED,
+        "__DISABLED_BG__": DISABLED_BG,
+        "__DISABLED_BORDER__": DISABLED_BORDER,
+        "__DISABLED_TEXT__": DISABLED_TEXT,
+        "__DANGER_TEXT__": DANGER_TEXT,
         "__DANGER_BG__": DANGER_BG,
         "__DANGER_BORDER__": DANGER_BORDER,
         "__SELECTION_BG__": SELECTION_BG,

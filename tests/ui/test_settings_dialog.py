@@ -71,14 +71,15 @@ def test_settings_dialog_uses_visible_arrow_controls(qtbot, qt_app, settings_stu
         apply_table_font_size=lambda size: True,
         apply_breakdown_font_size=lambda size: True,
         apply_final_calc_font_size=lambda size: True,
-        apply_totals_position=lambda value: True,
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
     qtbot.addWidget(dialog)
     try:
         assert isinstance(dialog.appearance_page.table_font_size_spin, ThemedSpinBox)
         assert isinstance(dialog.print_page.preview_zoom_spin, ThemedDoubleSpinBox)
-        assert isinstance(dialog.appearance_page.totals_position_combo, ThemedComboBox)
+        assert isinstance(dialog.appearance_page.density_combo, ThemedComboBox)
+        # The totals panel has one place, beside the table; nothing to choose.
+        assert not hasattr(dialog.appearance_page, "totals_position_combo")
         assert isinstance(dialog.print_page.printer_combo, ThemedComboBox)
         assert not hasattr(dialog.print_page, "estimate_format_combo")
         assert [
@@ -114,7 +115,6 @@ def test_settings_accept_does_not_close_when_apply_fails(
         apply_table_font_size=lambda size: True,
         apply_breakdown_font_size=lambda size: True,
         apply_final_calc_font_size=lambda size: True,
-        apply_totals_position=lambda value: True,
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
     qtbot.addWidget(dialog)
@@ -131,7 +131,6 @@ def test_settings_dialog_stops_rate_poll_when_closed(qtbot, qt_app, settings_stu
         apply_table_font_size=lambda size: True,
         apply_breakdown_font_size=lambda size: True,
         apply_final_calc_font_size=lambda size: True,
-        apply_totals_position=lambda value: True,
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
     qtbot.addWidget(dialog)
@@ -160,7 +159,6 @@ def test_settings_apply_persists_print_preferences(
         apply_table_font_size=lambda size: True,
         apply_breakdown_font_size=lambda size: True,
         apply_final_calc_font_size=lambda size: True,
-        apply_totals_position=lambda value: True,
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
     qtbot.addWidget(dialog)
@@ -206,7 +204,6 @@ def test_settings_dialog_uses_defaults_for_invalid_print_settings(
         apply_table_font_size=lambda size: True,
         apply_breakdown_font_size=lambda size: True,
         apply_final_calc_font_size=lambda size: True,
-        apply_totals_position=lambda value: True,
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
     qtbot.addWidget(dialog)
@@ -240,7 +237,6 @@ def test_settings_dialog_preserves_portrait_orientation(
         apply_table_font_size=lambda size: True,
         apply_breakdown_font_size=lambda size: True,
         apply_final_calc_font_size=lambda size: True,
-        apply_totals_position=lambda value: True,
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
     qtbot.addWidget(dialog)
@@ -272,9 +268,6 @@ def test_settings_apply_persists_ui_preferences(
         apply_final_calc_font_size=lambda size: (
             applied.setdefault("final", size) or True
         ),
-        apply_totals_position=lambda value: (
-            applied.setdefault("position", value) or True
-        ),
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
     qtbot.addWidget(dialog)
@@ -282,21 +275,13 @@ def test_settings_apply_persists_ui_preferences(
         dialog.appearance_page.table_font_size_spin.setValue(12)
         dialog.appearance_page.breakdown_font_size_spin.setValue(11)
         dialog.appearance_page.final_calc_font_size_spin.setValue(18)
-        dialog.appearance_page.totals_position_combo.setCurrentIndex(
-            dialog.appearance_page.totals_position_combo.findData("bottom")
-        )
 
         assert dialog.apply_settings() is True
         assert settings.value("ui/table_font_size") == 12
         assert settings.value("ui/breakdown_font_size") == 11
         assert settings.value("ui/final_calc_font_size") == 18
-        assert settings.value("ui/estimate_totals_position") == "bottom"
-        assert applied == {
-            "table": 12,
-            "breakdown": 11,
-            "final": 18,
-            "position": "bottom",
-        }
+        assert not settings.contains("ui/estimate_totals_position")
+        assert applied == {"table": 12, "breakdown": 11, "final": 18}
     finally:
         dialog.deleteLater()
 
@@ -334,9 +319,6 @@ def test_settings_save_appearance_on_real_estimate_screen(
     page.table_font_size_spin.setValue(13)
     page.breakdown_font_size_spin.setValue(12)
     page.final_calc_font_size_spin.setValue(18)
-    page.totals_position_combo.setCurrentIndex(
-        page.totals_position_combo.findData("bottom")
-    )
     page.density_combo.setCurrentIndex(page.density_combo.findData("comfortable"))
     page.alternating_checkbox.setChecked(False)
 
@@ -350,12 +332,10 @@ def test_settings_save_appearance_on_real_estimate_screen(
     assert settings.value("ui/table_font_size") == 13
     assert settings.value("ui/breakdown_font_size") == 12
     assert settings.value("ui/final_calc_font_size") == 18
-    assert settings.value("ui/estimate_totals_position") == "bottom"
     assert estimate.item_table.font().pointSize() == 13
     assert not estimate.item_table.alternatingRowColors()
-    assert estimate._breakdown_font_size == 12
-    assert estimate._final_calc_font_size == 18
-    assert estimate._totals_position == "bottom"
+    assert estimate.totals_panel.total_fine_label.font().pointSize() == 12
+    assert estimate.totals_panel.grand_total_label.font().pointSize() == 18
 
     reopened = SettingsDialog(main_window_ref=main_window)
     qtbot.addWidget(reopened)
@@ -366,7 +346,9 @@ def test_settings_save_appearance_on_real_estimate_screen(
     assert estimate.item_table.font().pointSize() == 13
     reloaded_estimate = make_estimate_widget(fake_db)
     assert reloaded_estimate.item_table.font().pointSize() == 13
-    assert reloaded_estimate._totals_position == "bottom"
+    reloaded_panel = reloaded_estimate.totals_panel
+    assert reloaded_panel.total_fine_label.font().pointSize() == 12
+    assert reloaded_panel.grand_total_label.font().pointSize() == 18
 
 
 def test_apply_stays_visible_and_reenables_after_repeated_text_changes(
@@ -394,17 +376,14 @@ def test_apply_stays_visible_and_reenables_after_repeated_text_changes(
     dialog.show()
     apply_button = dialog.buttonBox.button(QDialogButtonBox.StandardButton.Apply)
     page = dialog.appearance_page
-    for size, totals_size, final_size, position in (
-        (12, 10, 16, "right"),
-        (14, 11, 18, "left"),
-        (11, 12, 20, "bottom"),
+    for size, totals_size, final_size in (
+        (12, 10, 16),
+        (14, 11, 18),
+        (11, 12, 20),
     ):
         page.table_font_size_spin.setValue(size)
         page.breakdown_font_size_spin.setValue(totals_size)
         page.final_calc_font_size_spin.setValue(final_size)
-        page.totals_position_combo.setCurrentIndex(
-            page.totals_position_combo.findData(position)
-        )
         qt_application_state.processEvents()
         assert apply_button.isVisible()
         assert apply_button.isEnabled()
@@ -441,22 +420,20 @@ def test_settings_apply_persists_logging_preferences(
         apply_table_font_size=lambda size: True,
         apply_breakdown_font_size=lambda size: True,
         apply_final_calc_font_size=lambda size: True,
-        apply_totals_position=lambda value: True,
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
     qtbot.addWidget(dialog)
     try:
         page = dialog.logging_page
-        page.debug_mode_checkbox.setChecked(True)
-        page.enable_info_checkbox.setChecked(False)
-        page.enable_critical_checkbox.setChecked(True)
-        page.enable_debug_checkbox.setChecked(True)
+        assert page.level_combo.currentData() == "normal"
+        page.set_level("detailed")
         page.auto_cleanup_checkbox.setChecked(True)
         page.cleanup_days_spin.setValue(30)
+        assert page.cleanup_days_spin.suffix() == " days"
 
         assert dialog.apply_settings() is True
         assert settings.value("logging/debug_mode") is True
-        assert settings.value("logging/enable_info") is False
+        assert settings.value("logging/enable_info") is True
         assert settings.value("logging/enable_critical") is True
         assert settings.value("logging/enable_debug") is True
         assert settings.value("logging/auto_cleanup") is True
@@ -484,7 +461,6 @@ def test_settings_apply_can_clear_default_printer(
         apply_table_font_size=lambda size: True,
         apply_breakdown_font_size=lambda size: True,
         apply_final_calc_font_size=lambda size: True,
-        apply_totals_position=lambda value: True,
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
     qtbot.addWidget(dialog)
@@ -507,7 +483,6 @@ def test_settings_dialog_uses_defaults_for_invalid_ui_preferences(
     settings.setValue("ui/table_font_size", "invalid")
     settings.setValue("ui/breakdown_font_size", None)
     settings.setValue("ui/final_calc_font_size", "huge")
-    settings.setValue("ui/estimate_totals_position", "sideways")
 
     monkeypatch.setattr(
         "silverestimate.ui.settings_print_controller.QPrinterInfo.availablePrinters",
@@ -518,7 +493,6 @@ def test_settings_dialog_uses_defaults_for_invalid_ui_preferences(
         apply_table_font_size=lambda size: True,
         apply_breakdown_font_size=lambda size: True,
         apply_final_calc_font_size=lambda size: True,
-        apply_totals_position=lambda value: True,
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
     qtbot.addWidget(dialog)
@@ -526,7 +500,6 @@ def test_settings_dialog_uses_defaults_for_invalid_ui_preferences(
         assert dialog.appearance_page.table_font_size_spin.value() == 11
         assert dialog.appearance_page.breakdown_font_size_spin.value() == 11
         assert dialog.appearance_page.final_calc_font_size_spin.value() == 16
-        assert dialog.appearance_page.totals_position_combo.currentData() == "right"
     finally:
         dialog.deleteLater()
 
@@ -535,7 +508,7 @@ def test_settings_apply_calls_estimate_layout_controller(
     qtbot, qt_app, monkeypatch, settings_stub
 ):
     _MessageBoxStub.reset()
-    calls = {"table": 0, "breakdown": 0, "final": 0, "position": 0}
+    calls = {"table": 0, "breakdown": 0, "final": 0}
 
     estimate_widget = types.SimpleNamespace(
         apply_table_font_size=lambda size: (
@@ -546,9 +519,6 @@ def test_settings_apply_calls_estimate_layout_controller(
         ),
         apply_final_calc_font_size=lambda size: (
             calls.__setitem__("final", calls["final"] + 1) or True
-        ),
-        apply_totals_position=lambda value: (
-            calls.__setitem__("position", calls["position"] + 1) or True
         ),
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
@@ -561,7 +531,6 @@ def test_settings_apply_calls_estimate_layout_controller(
         assert calls["table"] == 1
         assert calls["breakdown"] == 1
         assert calls["final"] == 1
-        assert calls["position"] == 1
         assert not _MessageBoxStub.critical_calls
     finally:
         dialog.deleteLater()
@@ -596,7 +565,6 @@ def test_password_change_uses_auth_service_and_preserves_keyring_names(
         apply_table_font_size=lambda size: True,
         apply_breakdown_font_size=lambda size: True,
         apply_final_calc_font_size=lambda size: True,
-        apply_totals_position=lambda value: True,
     )
     dialog = SettingsDialog(
         main_window_ref=_make_main_window(estimate_widget, db=_DatabaseStub())
@@ -644,5 +612,112 @@ def test_password_change_uses_auth_service_and_preserves_keyring_names(
         assert _MessageBoxStub.information_calls
         assert not _MessageBoxStub.critical_calls
         assert not _MessageBoxStub.warning_calls
+    finally:
+        dialog.deleteLater()
+
+
+def test_logging_level_presets_round_trip_the_stored_flags():
+    from silverestimate.ui.settings_logging_page import (
+        LOG_LEVEL_PRESETS,
+        LoggingSettingsState,
+        log_level_for,
+    )
+
+    for key, _label, _description, flags in LOG_LEVEL_PRESETS:
+        assert log_level_for(LoggingSettingsState(**flags)) == key
+    assert log_level_for(LoggingSettingsState()) == "normal"
+    # The debug-detail flag does nothing without debug mode.
+    assert (
+        log_level_for(LoggingSettingsState(enable_info=False, enable_debug=True))
+        == "errors"
+    )
+    # Errors switched off cannot be offered as a level, so it is kept as is.
+    assert log_level_for(LoggingSettingsState(enable_critical=False)) == "custom"
+
+
+def test_logging_page_keeps_a_custom_combination_until_a_level_is_chosen(
+    qtbot, settings_stub
+):
+    del settings_stub
+    from silverestimate.ui.settings_logging_page import (
+        LoggingSettingsActions,
+        LoggingSettingsPage,
+        SettingsLoggingController,
+    )
+
+    settings = get_app_settings()
+    settings.setValue("logging/enable_critical", False)
+    settings.setValue("logging/cleanup_days", 1)
+    controller = SettingsLoggingController(
+        settings,
+        LoggingSettingsActions(
+            reconfigure=lambda: True, cleanup=lambda days: 0, open_logs_folder=bool
+        ),
+    )
+    page = LoggingSettingsPage(controller)
+    qtbot.addWidget(page)
+
+    assert page.level_combo.currentData() == "custom"
+    assert page.state().enable_critical is False
+    assert page.cleanup_days_spin.suffix() == " day"
+    page.set_level("normal")
+    assert page.state().enable_critical is True
+
+
+def test_each_settings_page_needs_only_its_own_width(qtbot, qt_app, settings_stub):
+    del qt_app, settings_stub
+    from PySide6.QtWidgets import QSizePolicy
+
+    from silverestimate.ui.settings_dialog import PREFERRED_HEIGHT, PREFERRED_WIDTH
+
+    estimate_widget = types.SimpleNamespace(
+        apply_table_font_size=lambda size: True,
+        apply_breakdown_font_size=lambda size: True,
+        apply_final_calc_font_size=lambda size: True,
+    )
+    dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
+    qtbot.addWidget(dialog)
+    try:
+        # Not nearly the whole screen for a few fields.
+        assert dialog.width() <= PREFERRED_WIDTH
+        assert dialog.height() <= PREFERRED_HEIGHT
+        for index in range(dialog.pages.count()):
+            dialog.sidebar.setCurrentRow(index)
+            current = dialog.pages.currentWidget()
+            for other in range(dialog.pages.count()):
+                page = dialog.pages.widget(other)
+                expected = (
+                    QSizePolicy.Policy.Preferred
+                    if page is current
+                    else QSizePolicy.Policy.Ignored
+                )
+                assert page.sizePolicy().horizontalPolicy() == expected
+            # A wide page elsewhere no longer forces this one to scroll sideways.
+            assert (
+                dialog.pages.minimumSizeHint().width()
+                == current.minimumSizeHint().width()
+            )
+    finally:
+        dialog.deleteLater()
+
+
+def test_default_zoom_is_entered_as_a_percentage(qtbot, qt_app, settings_stub):
+    del qt_app, settings_stub
+    estimate_widget = types.SimpleNamespace(
+        apply_table_font_size=lambda size: True,
+        apply_breakdown_font_size=lambda size: True,
+        apply_final_calc_font_size=lambda size: True,
+    )
+    dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
+    qtbot.addWidget(dialog)
+    try:
+        spin = dialog.print_page.preview_zoom_spin
+        spin.setValue(1.25)
+        # Shown the way the print preview shows it; stored as a factor.
+        assert spin.text() == "125 %"
+        assert spin.value() == 1.25
+        assert spin.valueFromText("80 %") == 0.8
+        # The row is headed "Margins (mm)"; the boxes hold the number alone.
+        assert dialog.print_page.margin_left_spin.suffix() == ""
     finally:
         dialog.deleteLater()

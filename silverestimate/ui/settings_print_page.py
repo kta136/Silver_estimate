@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QValidator
 from PySide6.QtWidgets import (
     QFormLayout,
     QFrame,
@@ -20,6 +21,36 @@ from .settings_print_controller import (
     SettingsPrintController,
 )
 from .themed_controls import ThemedComboBox, ThemedDoubleSpinBox, ThemedSpinBox
+
+
+class ZoomPercentSpinBox(ThemedDoubleSpinBox):
+    """Hold a zoom factor (1.25) and show it as a percentage (125 %).
+
+    The print preview shows its zoom as a percentage, so the default
+    for it is entered the same way.
+    """
+
+    def textFromValue(self, value: float) -> str:
+        return str(round(value * 100))
+
+    def valueFromText(self, text: str) -> float:
+        try:
+            return int(self._digits(text)) / 100
+        except ValueError:
+            return self.value()
+
+    def validate(self, text: str, pos: int):
+        digits = self._digits(text)
+        if not digits:
+            return QValidator.State.Intermediate, text, pos
+        if not digits.isdigit() or int(digits) / 100 > self.maximum():
+            return QValidator.State.Invalid, text, pos
+        if int(digits) / 100 < self.minimum():
+            return QValidator.State.Intermediate, text, pos
+        return QValidator.State.Acceptable, text, pos
+
+    def _digits(self, text: str) -> str:
+        return text.replace(self.suffix(), "").replace("%", "").strip()
 
 
 class PrintSettingsPage(QWidget):
@@ -62,9 +93,21 @@ class PrintSettingsPage(QWidget):
         )
 
     def _build_ui(self) -> None:
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        title = QLabel("Printing")
+        title.setObjectName("SettingsTitleLabel")
+        outer.addWidget(title)
+        intro = QLabel(
+            "Printer, paper, margins and the print font. The sample page "
+            "follows your choices."
+        )
+        intro.setObjectName("SettingsMutedDescription")
+        intro.setWordWrap(True)
+        outer.addWidget(intro)
+        layout = QHBoxLayout()
         layout.setSpacing(12)
+        outer.addLayout(layout, 1)
         form = QFormLayout()
         self._configure_form(form)
 
@@ -75,14 +118,24 @@ class PrintSettingsPage(QWidget):
         from .settings_print_preview import SettingsPrintPreview
 
         self.controls = QWidget()
-        self.controls.setMaximumWidth(440)
+        self.controls.setMaximumWidth(460)
         self.controls_layout = QVBoxLayout(self.controls)
-        self.controls_layout.addWidget(QLabel("Printer & paper"))
+        self.controls_layout.setContentsMargins(0, 0, 0, 0)
+        section = QLabel("Printer and paper")
+        section.setStyleSheet("font-weight: 700;")
+        self.controls_layout.addWidget(section)
         self.controls_layout.addLayout(form)
         self.controls_layout.addStretch()
         layout.addWidget(self.controls)
+        preview_column = QVBoxLayout()
+        preview_column.setSpacing(4)
+        # Above the page, so it stays visible however short the window is.
+        preview_hint = QLabel("Sample estimate. Click the page to enlarge it.")
+        preview_hint.setObjectName("SettingsMutedDescription")
+        preview_column.addWidget(preview_hint)
         self.preview = SettingsPrintPreview(self)
-        layout.addWidget(self.preview, 1)
+        preview_column.addWidget(self.preview, 1)
+        layout.addLayout(preview_column, 1)
         self._preview_timer = QTimer(self)
         self._preview_timer.setSingleShot(True)
         self._preview_timer.setInterval(150)
@@ -117,8 +170,9 @@ class PrintSettingsPage(QWidget):
             self.margin_bottom_spin,
         ):
             spin.setRange(0, 50)
-            spin.setSuffix(" mm")
-            self._polish_field(spin, width=115)
+            # No unit in the box: the row is headed "Margins (mm)", and the
+            # suffix did not fit beside the arrows.
+            self._polish_field(spin, width=92)
             spin.valueChanged.connect(self._emit_changed)
 
         margins_layout.setHorizontalSpacing(12)
@@ -150,13 +204,13 @@ class PrintSettingsPage(QWidget):
         form.addRow(margins_layout)
 
     def _add_print_target_controls(self, form: QFormLayout) -> None:
-        self.preview_zoom_spin = ThemedDoubleSpinBox()
+        self.preview_zoom_spin = ZoomPercentSpinBox()
         self.preview_zoom_spin.setRange(0.1, 5.0)
-        self.preview_zoom_spin.setSingleStep(0.1)
+        self.preview_zoom_spin.setSingleStep(0.05)
         self.preview_zoom_spin.setDecimals(2)
-        self.preview_zoom_spin.setSuffix(" x")
+        self.preview_zoom_spin.setSuffix(" %")
         self.preview_zoom_spin.setToolTip(
-            "Default zoom factor for print preview (e.g., 1.0 = 100%, 1.25 = 125%)"
+            "Zoom the print preview opens at, from 10 % to 500 %"
         )
         self._polish_field(self.preview_zoom_spin, width=160)
         self.preview_zoom_spin.valueChanged.connect(self._emit_changed)
@@ -167,14 +221,17 @@ class PrintSettingsPage(QWidget):
         self._polish_field(self.printer_combo, width=320)
         self._controller.refresh_printer_list(self.printer_combo)
         self.printer_combo.currentIndexChanged.connect(self._emit_changed)
-        form.addRow("Default Printer:", self.printer_combo)
+        # A long printer name is cut by the field; hovering shows all of it.
+        self.printer_combo.currentTextChanged.connect(self.printer_combo.setToolTip)
+        self.printer_combo.setToolTip(self.printer_combo.currentText())
+        form.addRow("Default printer:", self.printer_combo)
 
         self.page_size_combo = ThemedComboBox()
         self.page_size_combo.addItems(["A4", "A5", "Letter", "Legal"])
         self.page_size_combo.setToolTip("Default page size for printing")
         self._polish_field(self.page_size_combo, width=240)
         self.page_size_combo.currentIndexChanged.connect(self._emit_changed)
-        form.addRow("Page Size:", self.page_size_combo)
+        form.addRow("Page size:", self.page_size_combo)
 
         self.orientation_combo = ThemedComboBox()
         self.orientation_combo.addItems(["Portrait", "Landscape"])
@@ -192,7 +249,7 @@ class PrintSettingsPage(QWidget):
         form.setHorizontalSpacing(12)
         form.setVerticalSpacing(12)
         form.setLabelAlignment(
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
         form.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
@@ -207,4 +264,4 @@ class PrintSettingsPage(QWidget):
         )
 
 
-__all__ = ["PrintSettingsPage"]
+__all__ = ["PrintSettingsPage", "ZoomPercentSpinBox"]

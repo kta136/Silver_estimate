@@ -44,7 +44,6 @@ def test_startup_and_apply_keep_controls_headers_and_totals_consistent(
             apply_table_font_size=controller.apply_table_font_size,
             apply_breakdown_font_size=controller.apply_breakdown_font_size,
             apply_final_calc_font_size=controller.apply_final_calc_font_size,
-            apply_totals_position=lambda _position: True,
         ),
     )
     appearance.apply_state(AppearanceSettingsState())

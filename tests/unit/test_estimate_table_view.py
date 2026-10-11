@@ -227,10 +227,11 @@ def test_context_menu_actions_have_icons(table_view, monkeypatch):
 
     table_view._show_context_menu(table_view.rect().center())
 
+    # The names and shortcuts match the More menu and the menu bar.
     assert [text for text, _icon in captured["actions"] if text] == [
+        "Delete Current Row\tCtrl+D",
+        "Estimate History...\tCtrl+H",
         "Reset Column Layout",
-        "Delete Current Row",
-        "Open Estimate History",
     ]
     for text, icon in captured["actions"]:
         if text:

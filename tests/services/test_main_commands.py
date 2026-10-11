@@ -58,6 +58,9 @@ class _MessageBoxInstanceStub:
     def setDefaultButton(self, button):
         self.default_button = button
 
+    def button(self, _which):
+        return None
+
     def exec(self):
         return type(self).return_value
 
@@ -196,9 +199,31 @@ def _install_stubs(monkeypatch):
     _InputDialogStub.next_result = ("", False)
     _CheckBoxStub.checked = False
     monkeypatch.setattr(main_commands, "QMessageBox", _MessageBoxStub)
+
+    def confirm(*args, **kwargs):
+        # The named confirmation answers the way the old warning box did.
+        _MessageBoxStub.warning_calls.append((args, kwargs))
+        return _MessageBoxStub.return_warning == _MessageBoxStub.Yes
+
+    monkeypatch.setattr(main_commands, "confirm_destructive", confirm)
+
+    def typed(*args, **kwargs):
+        # The typed second step answers the way the old input box did.
+        text, ok = _InputDialogStub.next_result
+        return bool(ok) and text.strip().upper() == "DELETE"
+
+    monkeypatch.setattr(main_commands, "confirm_by_typing", typed)
+
+    def ask_option(*args, **kwargs):
+        _MessageBoxInstanceStub.instances.append(kwargs)
+        confirmed = _MessageBoxInstanceStub.return_value == _MessageBoxStub.Yes
+        return confirmed, confirmed and _CheckBoxStub.checked
+
+    monkeypatch.setattr(main_commands, "ask_with_option", ask_option)
+    monkeypatch.setattr(
+        main_commands.MainCommands, "_dialog_parent", lambda self: self.main_window
+    )
     monkeypatch.setattr(main_commands, "QFileDialog", _FileDialogStub)
-    monkeypatch.setattr(main_commands, "QInputDialog", _InputDialogStub)
-    monkeypatch.setattr(main_commands, "QCheckBox", _CheckBoxStub)
     monkeypatch.setattr(main_commands, "QThread", _ThreadStub)
     monkeypatch.setattr(main_commands, "_ItemCatalogExportWorker", _WorkerStub)
 
@@ -347,7 +372,11 @@ def test_delete_all_data_success_refreshes_views(monkeypatch):
     commands.delete_all_data()
 
     assert actions == ["drop", "setup", "load_items", ("clear_form", False)]
-    assert any(args[1] == "Success" for args in _MessageBoxStub.information_calls)
+    assert any(
+        args[1] == "All Data Deleted" for args in _MessageBoxStub.information_calls
+    )
+    # The confirmation names the action instead of asking Yes or Cancel.
+    assert _MessageBoxStub.warning_calls[0][1]["action_label"] == "Delete All Data"
 
 
 def test_delete_all_data_cancelled_at_warning(monkeypatch):
@@ -377,9 +406,11 @@ def test_delete_all_data_cancelled_on_text_prompt(monkeypatch):
 
     commands = _make_commands(db_manager=_DB())
 
-    commands.delete_all_data()
+    outcome = commands.delete_all_data()
 
-    assert any(args[1] == "Cancelled" for args in _MessageBoxStub.information_calls)
+    assert outcome.status is main_commands.MainCommandStatus.CANCELLED
+    # Cancelling is the user's own choice; it needs no "Cancelled" message.
+    assert _MessageBoxStub.information_calls == []
 
 
 def test_delete_all_data_handles_drop_tables_failure(monkeypatch):
@@ -515,6 +546,7 @@ def test_restore_item_catalog_handles_import_failure(monkeypatch):
 def test_delete_all_estimates_clears_form(monkeypatch):
     _install_stubs(monkeypatch)
     _MessageBoxStub.return_warning = _MessageBoxStub.Yes
+    _InputDialogStub.next_result = ("delete", True)
 
     class _DB:
         def delete_all_estimates(self):
@@ -534,12 +566,15 @@ def test_delete_all_estimates_clears_form(monkeypatch):
     commands.delete_all_estimates()
 
     assert clear_calls == [False]
-    assert any(args[1] == "Success" for args in _MessageBoxStub.information_calls)
+    assert any(
+        args[1] == "All Estimates Deleted" for args in _MessageBoxStub.information_calls
+    )
 
 
 def test_delete_all_estimates_handles_database_failure(monkeypatch):
     _install_stubs(monkeypatch)
     _MessageBoxStub.return_warning = _MessageBoxStub.Yes
+    _InputDialogStub.next_result = ("delete", True)
 
     class _DB:
         def delete_all_estimates(self):
@@ -555,6 +590,7 @@ def test_delete_all_estimates_handles_database_failure(monkeypatch):
 def test_delete_all_estimates_handles_clear_form_exception(monkeypatch):
     _install_stubs(monkeypatch)
     _MessageBoxStub.return_warning = _MessageBoxStub.Yes
+    _InputDialogStub.next_result = ("delete", True)
 
     class _DB:
         def delete_all_estimates(self):
@@ -571,7 +607,9 @@ def test_delete_all_estimates_handles_clear_form_exception(monkeypatch):
 
     commands.delete_all_estimates()
 
-    assert any(args[1] == "Success" for args in _MessageBoxStub.information_calls)
+    assert any(
+        args[1] == "All Estimates Deleted" for args in _MessageBoxStub.information_calls
+    )
 
 
 def test_create_item_catalog_backup_starts_worker(monkeypatch):
@@ -625,7 +663,8 @@ def test_start_item_catalog_export_worker_rejects_duplicate(monkeypatch):
     )
 
     assert any(
-        args[1] == "Catalog Backup" for args in _MessageBoxStub.information_calls
+        args[1] == "Catalog Backup Running"
+        for args in _MessageBoxStub.information_calls
     )
 
 
@@ -647,7 +686,8 @@ def test_start_item_catalog_export_worker_wires_thread_and_cleanup(monkeypatch):
 
     worker.finished.emit(7)
     assert any(
-        args[1] == "Export Successful" for args in _MessageBoxStub.information_calls
+        args[1] == "Catalog Backed Up" and "7 items" in args[2]
+        for args in _MessageBoxStub.information_calls
     )
     assert thread.quit_called is True
 
@@ -665,7 +705,11 @@ def test_on_item_catalog_export_failed_shows_error(monkeypatch):
     commands._on_item_catalog_export_failed("bad export")
 
     assert _MessageBoxStub.critical_calls == [
-        (commands.main_window, "Export Failed", "bad export")
+        (
+            commands.main_window,
+            "Catalog Not Backed Up",
+            "The item catalog backup could not be created.\n\nDetails: bad export",
+        )
     ]
 
 
@@ -701,3 +745,21 @@ def test_refresh_views_after_data_reset_tolerates_view_failures(monkeypatch):
     commands._refresh_views_after_data_reset()
 
     assert calls == ["item_master", ("estimate_widget", False)]
+
+
+def test_delete_all_estimates_needs_the_typed_word(monkeypatch):
+    _install_stubs(monkeypatch)
+    _MessageBoxStub.return_warning = _MessageBoxStub.Yes
+    _InputDialogStub.next_result = ("yes", True)
+
+    class _DB:
+        def delete_all_estimates(self):
+            raise AssertionError("should not be called")
+
+    commands = _make_commands(db_manager=_DB())
+
+    outcome = commands.delete_all_estimates()
+
+    assert outcome.status is main_commands.MainCommandStatus.CANCELLED
+    assert _MessageBoxStub.warning_calls[0][1]["action_label"] == "Delete All Estimates"
+    assert _MessageBoxStub.information_calls == []

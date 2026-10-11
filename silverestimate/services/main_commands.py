@@ -8,13 +8,19 @@ from enum import Enum, auto
 from typing import Optional, cast
 
 from PySide6.QtCore import QObject, QThread, Signal
-from PySide6.QtWidgets import QCheckBox, QFileDialog, QInputDialog, QMessageBox
+from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from silverestimate.persistence.database_protocols import (
     MainCommandsDatabase,
     ReadConnectionFactory,
 )
 from silverestimate.ui.database_maintenance import run_database_maintenance
+from silverestimate.ui.message_dialogs import (
+    ask_with_option,
+    confirm_by_typing,
+    confirm_destructive,
+    with_details,
+)
 
 
 class MainCommandStatus(Enum):
@@ -94,11 +100,17 @@ class MainCommands:
                     self._refresh_sales_report()
             else:
                 QMessageBox.information(
-                    self.main_window, "Save", "Estimate view is not available."
+                    self.main_window,
+                    "Estimate Entry Unavailable",
+                    "Open Estimate Entry to save an estimate.",
                 )
         except Exception as exc:
             self.logger.error("Save action failed: %s", exc, exc_info=True)
-            QMessageBox.critical(self.main_window, "Save Error", str(exc))
+            QMessageBox.critical(
+                self.main_window,
+                "Estimate Not Saved",
+                with_details("The estimate could not be saved.", exc),
+            )
 
     def print_estimate(self) -> None:
         try:
@@ -107,11 +119,17 @@ class MainCommands:
                 widget.print_estimate()
             else:
                 QMessageBox.information(
-                    self.main_window, "Print", "Estimate view is not available."
+                    self.main_window,
+                    "Estimate Entry Unavailable",
+                    "Open Estimate Entry to print an estimate.",
                 )
         except Exception as exc:
             self.logger.error("Print action failed: %s", exc, exc_info=True)
-            QMessageBox.critical(self.main_window, "Print Error", str(exc))
+            QMessageBox.critical(
+                self.main_window,
+                "Estimate Not Printed",
+                with_details("The print preview could not be opened.", exc),
+            )
 
     # --- Data management ------------------------------------------------
     def delete_all_data(self) -> MainCommandOutcome:
@@ -121,35 +139,29 @@ class MainCommands:
                 "Database connection is not available.",
             )
 
-        reply = QMessageBox.warning(
-            self.main_window,
-            "CONFIRM DELETE ALL DATA",
-            "Are you absolutely sure you want to delete ALL data?\n"
-            "This includes all items, estimates, silver bars, and lists.\n"
-            "THIS ACTION CANNOT BE UNDONE.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Cancel,
-        )
-        if reply != QMessageBox.StandardButton.Yes:
-            return MainCommandOutcome(MainCommandStatus.CANCELLED)
-
-        text, ok = QInputDialog.getText(
-            self.main_window,
-            "Type DELETE to Confirm",
-            "This will permanently erase ALL data.\n\nType DELETE to proceed:",
-        )
-        if not ok or text.strip().upper() != "DELETE":
-            QMessageBox.information(
-                self.main_window, "Cancelled", "Delete all data cancelled."
-            )
+        if not confirm_destructive(
+            self._dialog_parent(),
+            title="Delete All Data",
+            heading="Delete all data?",
+            detail=(
+                "Every item, estimate, silver bar and list will be removed. "
+                "This cannot be undone.\n\n"
+                "Back up the database first if you may need any of it."
+            ),
+            action_label="Delete All Data",
+        ) or not self._typed_delete(
+            "Delete All Data",
+            "Type DELETE to delete all data",
+            "Delete All Data",
+        ):
             return MainCommandOutcome(MainCommandStatus.CANCELLED)
 
         try:
             if not self.db.drop_tables():
                 QMessageBox.critical(
                     self.main_window,
-                    "Error",
-                    "Failed to delete all data (dropping tables failed).",
+                    "Data Not Deleted",
+                    "The data could not be deleted. Nothing was changed.",
                 )
                 return MainCommandOutcome(
                     MainCommandStatus.FAILED,
@@ -158,10 +170,10 @@ class MainCommands:
 
             self.db.setup_database()
             self._refresh_views_after_data_reset()
-            message = "All data has been deleted successfully."
+            message = "All data has been deleted."
             QMessageBox.information(
                 self.main_window,
-                "Success",
+                "All Data Deleted",
                 message,
             )
             return MainCommandOutcome(MainCommandStatus.SUCCESS, message)
@@ -169,8 +181,8 @@ class MainCommands:
             self.logger.error("Error deleting all data: %s", exc, exc_info=True)
             QMessageBox.critical(
                 self.main_window,
-                "Error",
-                f"Failed to delete all data: {exc}",
+                "Data Not Deleted",
+                with_details("The data could not be deleted.", exc),
             )
             return MainCommandOutcome(
                 MainCommandStatus.FAILED,
@@ -203,31 +215,22 @@ class MainCommands:
         if not file_path:
             return MainCommandOutcome(MainCommandStatus.CANCELLED)
 
-        message_box = QMessageBox(self.main_window)
-        message_box.setIcon(QMessageBox.Icon.Question)
-        message_box.setWindowTitle("Restore Item Catalog Backup")
-        message_box.setText(
-            "This restores a native Silver Estimate item catalog backup."
+        confirmed, replace_existing = ask_with_option(
+            self._dialog_parent(),
+            title="Restore Item Catalog",
+            heading="Restore the item catalog from this backup?",
+            detail=(
+                "Items in the backup are added, and items with the same code "
+                "are updated. Items that are not in the backup are kept.\n\n"
+                "Tick the box to remove those as well. Estimate rows that used "
+                "a removed item keep their figures but lose the link to the "
+                "item."
+            ),
+            option_label="Also remove items that are not in the backup",
+            action_label="Restore Catalog",
         )
-        message_box.setInformativeText(
-            "Existing item codes from the file will be updated.\n"
-            "New item codes from the file will be added.\n"
-            "Items not present in the file will be kept unless you enable full replace.\n\n"
-            "If full replace removes item codes that older estimates still reference,\n"
-            "those estimate rows will lose their item-code link.\n\n"
-            "Continue?"
-        )
-        replace_checkbox = QCheckBox(
-            "Replace the entire current item master with this backup"
-        )
-        message_box.setCheckBox(replace_checkbox)
-        message_box.setStandardButtons(
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel
-        )
-        message_box.setDefaultButton(QMessageBox.StandardButton.Cancel)
-        if message_box.exec() != QMessageBox.StandardButton.Yes:
+        if not confirmed:
             return MainCommandOutcome(MainCommandStatus.CANCELLED)
-        replace_existing = replace_checkbox.isChecked()
 
         self._catalog_import_active = True
         try:
@@ -244,7 +247,7 @@ class MainCommands:
             QMessageBox.critical(
                 self.main_window,
                 "Restore Failed",
-                str(exc),
+                with_details("The item catalog could not be restored.", exc),
             )
             return MainCommandOutcome(MainCommandStatus.FAILED, str(exc))
         finally:
@@ -260,7 +263,7 @@ class MainCommands:
                 )
 
         message = (
-            "Item catalog backup restored successfully.\n\n"
+            "Item catalog restored.\n\n"
             f"Total records: {summary['total']}\n"
             f"Inserted: {summary['inserted']}\n"
             f"Updated: {summary['updated']}\n"
@@ -300,8 +303,8 @@ class MainCommands:
         if not callable(connection_factory):
             QMessageBox.critical(
                 self.main_window,
-                "Export Failed",
-                "Encrypted database connection not available.",
+                "Catalog Not Backed Up",
+                "The database is not available. Please restart the application.",
             )
             return MainCommandOutcome(
                 MainCommandStatus.FAILED,
@@ -342,23 +345,29 @@ class MainCommands:
                 "Database connection is not available.",
             )
 
-        reply = QMessageBox.warning(
-            self.main_window,
-            "Confirm Delete All Estimates",
-            "Are you absolutely sure you want to delete ALL estimates?\n"
-            "This action cannot be undone.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Cancel,
-        )
-        if reply != QMessageBox.StandardButton.Yes:
+        if not confirm_destructive(
+            self._dialog_parent(),
+            title="Delete All Estimates",
+            heading="Delete every estimate?",
+            detail=(
+                "All saved estimates will be removed. The item catalog is "
+                "kept. This cannot be undone.\n\n"
+                "Back up the database first if you may need them."
+            ),
+            action_label="Delete All Estimates",
+        ) or not self._typed_delete(
+            "Delete All Estimates",
+            "Type DELETE to delete every estimate",
+            "Delete All Estimates",
+        ):
             return MainCommandOutcome(MainCommandStatus.CANCELLED)
 
         try:
             if self.db.delete_all_estimates():
-                message = "All estimates have been deleted successfully."
+                message = "All estimates have been deleted."
                 QMessageBox.information(
                     self.main_window,
-                    "Success",
+                    "All Estimates Deleted",
                     message,
                 )
                 widget = getattr(self.main_window, "estimate_widget", None)
@@ -371,24 +380,22 @@ class MainCommands:
                         )
                 return MainCommandOutcome(MainCommandStatus.SUCCESS, message)
             else:
-                message = "Failed to delete all estimates (database error)."
+                message = "The estimates could not be deleted. Nothing was changed."
                 QMessageBox.critical(
                     self.main_window,
-                    "Error",
+                    "Estimates Not Deleted",
                     message,
                 )
                 return MainCommandOutcome(MainCommandStatus.FAILED, message)
         except Exception as exc:
             self.logger.error("Error deleting all estimates: %s", exc, exc_info=True)
+            message = with_details("The estimates could not be deleted.", exc)
             QMessageBox.critical(
                 self.main_window,
-                "Error",
-                f"An unexpected error occurred: {exc}",
+                "Estimates Not Deleted",
+                message,
             )
-            return MainCommandOutcome(
-                MainCommandStatus.FAILED,
-                f"An unexpected error occurred: {exc}",
-            )
+            return MainCommandOutcome(MainCommandStatus.FAILED, message)
 
     def _start_item_catalog_export_worker(
         self,
@@ -400,7 +407,7 @@ class MainCommands:
             message = "A catalog backup is already in progress."
             QMessageBox.information(
                 self.main_window,
-                "Catalog Backup",
+                "Catalog Backup Running",
                 message,
             )
             return MainCommandOutcome(MainCommandStatus.CANCELLED, message)
@@ -429,26 +436,45 @@ class MainCommands:
     def _on_item_catalog_export_finished(self, exported_count: int) -> None:
         QMessageBox.information(
             self.main_window,
-            "Export Successful",
-            "Item catalog backup created successfully.\n\n"
-            f"Records written: {exported_count}",
+            "Catalog Backed Up",
+            f"Item catalog backup created with {exported_count} items.",
         )
 
     def _on_item_catalog_export_failed(self, message: str) -> None:
-        QMessageBox.critical(self.main_window, "Export Failed", message)
+        QMessageBox.critical(
+            self.main_window,
+            "Catalog Not Backed Up",
+            with_details("The item catalog backup could not be created.", message),
+        )
 
     def _clear_item_catalog_export_worker(self) -> None:
         self._catalog_export_worker = None
         self._catalog_export_thread = None
 
     # --- Helpers --------------------------------------------------------
+    def _dialog_parent(self):
+        """The open dialog (Settings) if there is one, else the main window."""
+        from PySide6.QtWidgets import QApplication
+
+        return QApplication.activeModalWidget() or self.main_window
+
+    def _typed_delete(self, title: str, heading: str, action_label: str) -> bool:
+        """Second step for mass deletion: the user types the word DELETE."""
+        return confirm_by_typing(
+            self._dialog_parent(),
+            title=title,
+            heading=heading,
+            detail="This is the last step. It cannot be undone.",
+            action_label=action_label,
+        )
+
     def _ensure_db(self) -> bool:
         if not self.db:
             self.logger.error("Database connection is not available")
             QMessageBox.critical(
                 self.main_window,
-                "Error",
-                "Database connection is not available. Please restart the application.",
+                "Database Unavailable",
+                "The database is not available. Please restart the application.",
             )
             return False
         return True

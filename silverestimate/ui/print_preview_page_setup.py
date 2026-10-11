@@ -59,12 +59,13 @@ class PrintPreviewPageSetupController:
     ) -> ThemedComboBox:
         combo = ThemedComboBox(preview)
         combo.setObjectName("PreviewOrientationCombo")
-        combo.setMinimumWidth(88)
-        combo.setMaximumWidth(94)
         combo.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         combo.setToolTip("Choose paper orientation for this preview")
         combo.addItem("Portrait", QPageLayout.Orientation.Portrait)
         combo.addItem("Landscape", QPageLayout.Orientation.Landscape)
+        # Sized by the style to its longest entry and the drop-down arrow; a
+        # fixed 94 px cut the word to "Landscap".
+        combo.setSizeAdjustPolicy(combo.SizeAdjustPolicy.AdjustToContents)
         current = self._printer.pageLayout().orientation()
         index = combo.findData(current)
         combo.setCurrentIndex(index if index >= 0 else 0)

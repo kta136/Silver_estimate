@@ -201,7 +201,7 @@ def test_estimate_modern_layout_rounds_summary_amounts_to_whole_rupees(
     assert "1.23" in total_line
     assert "100.24" in total_line
 
-    assert "Silver: 0.27 g | Amount: Rs. 50.54" in rendered
+    assert "Silver: 0.27 g | Amount: ₹ 50.54" in rendered
     assert "Total Fine Weight (g): 1.50" in final_line
     assert "Total Lbr Amt (₹): 151" in rendered
     assert "Silver Value (₹): 15" in rendered

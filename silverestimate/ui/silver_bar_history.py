@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLineEdit,
-    QMessageBox,
     QSizePolicy,
     QStackedWidget,
     QTableView,
@@ -33,7 +32,8 @@ from silverestimate.persistence.silver_bars_snapshot_repository import (
     SilverBarsSnapshotRepository,
 )
 
-from .display_formatting import format_display_date
+from .display_formatting import count_label, format_display_date
+from .message_dialogs import ask
 from .models.silver_bar_entry_model import SilverBarEntryModel
 from .models.silver_bar_history_models import (
     SilverBarHistoryModel,
@@ -243,7 +243,7 @@ class SilverBarHistoryDialog(QDialog):
         self.refresh_button = self._button("Refresh", self.refresh, "Refresh", "F5")
         row.addWidget(self.refresh_button)
         self.close_button = self._button(
-            "Back to list", self._close_history, "Close history", "Esc"
+            "Back to List", self._close_history, "Close history", "Esc"
         )
         row.addWidget(self.close_button)
         return header
@@ -256,7 +256,7 @@ class SilverBarHistoryDialog(QDialog):
         self.filters = QStackedWidget()
         row.addWidget(self.filters, 1)
         self._build_filters()
-        self.clear_button = self._button("Clear filters", self.clear_filters)
+        self.clear_button = self._button("Clear Filters", self.clear_filters)
         self.clear_button.setObjectName("LinkButton")
         row.addWidget(self.clear_button)
         return bar
@@ -347,7 +347,7 @@ class SilverBarHistoryDialog(QDialog):
         self.bars_table = self._table(
             self.bars_model,
             "No bars match your search.",
-            {0: 60, 2: 92, 3: 80, 4: 88, 5: 130, 6: 132, 7: 96},
+            {0: 60, 2: 92, 3: 92, 4: 88, 5: 130, 6: 132, 7: 96},
             stretch=1,
         )
         self.bars_table.setItemDelegateForColumn(
@@ -365,7 +365,7 @@ class SilverBarHistoryDialog(QDialog):
         self.status_label.setWordWrap(True)
         footer.addWidget(self.status_label, 1)
         self.load_more_button = self._button(
-            "Load more", self.load_more, "Down on the last row also loads more"
+            "Load More", self.load_more, "Down on the last row also loads more"
         )
         footer.addWidget(self.load_more_button)
         self.open_button = self._button(
@@ -440,7 +440,7 @@ class SilverBarHistoryDialog(QDialog):
         self.detail_status = label("", "Muted")
         self.detail_status.setWordWrap(True)
         status_row.addWidget(self.detail_status, 1)
-        self.detail_more_button = self._button("Load more", self.load_more_details)
+        self.detail_more_button = self._button("Load More", self.load_more_details)
         status_row.addWidget(self.detail_more_button)
         layout.addLayout(status_row)
         actions = QHBoxLayout()
@@ -456,7 +456,7 @@ class SilverBarHistoryDialog(QDialog):
             "Preview / PDF / printer settings · Ctrl+Shift+P",
         )
         self.reactivate_button = self._button(
-            "Reopen for editing", self.reactivate_list, "Reopen list", "Ctrl+R"
+            "Reopen for Editing", self.reactivate_list, "Reopen list", "Ctrl+R"
         )
         actions.addWidget(self.reprint_button)
         actions.addWidget(self.preview_button)
@@ -690,8 +690,21 @@ class SilverBarHistoryDialog(QDialog):
             else:
                 control.setCurrentIndex(0)
             control.blockSignals(False)
+        self._update_actions()
         self.refresh()
         self.focus_search()
+
+    def _filters_active(self) -> bool:
+        if self.view_combo.currentIndex() == 0:
+            return bool(
+                self.list_search_edit.text().strip()
+                or self.list_state_combo.currentIndex()
+            )
+        return bool(
+            self.voucher_edit.text().strip()
+            or self.weight_edit.text().strip()
+            or self.status_combo.currentIndex()
+        )
 
     def _selected_list_id(self):
         table = self.tables.currentWidget()
@@ -701,6 +714,7 @@ class SilverBarHistoryDialog(QDialog):
 
     def _update_actions(self, *_):
         self.view_combo.setEnabled(not self._busy)
+        self.clear_button.setVisible(self._filters_active())
         index = self.view_combo.currentIndex()
         state = self._lists_page_state if index == 0 else self._bars_page_state
         self.open_button.setEnabled(
@@ -711,7 +725,7 @@ class SilverBarHistoryDialog(QDialog):
         loaded = self.snapshot is not None and not self._busy
         self.reactivate_button.setEnabled(loaded)
         issued = bool(self.snapshot and self.snapshot.issued)
-        self.reactivate_button.setText("Reopen for editing" if issued else "Edit list")
+        self.reactivate_button.setText("Reopen for Editing" if issued else "Edit List")
         self.reprint_button.setEnabled(
             loaded and issued and bool(self.snapshot.bars if self.snapshot else ())
         )
@@ -758,7 +772,10 @@ class SilverBarHistoryDialog(QDialog):
         fine = f"{fixed_decimal(snapshot.fine_weight, 2)} g"
         self.list_totals_label.set_values(
             (str(len(snapshot.bars)), weight, fine),
-            summary=f"{len(snapshot.bars)} bars · Weight {weight} · Fine {fine}",
+            summary=(
+                f"{count_label(len(snapshot.bars), 'bar')} · Weight {weight} · "
+                f"Fine {fine}"
+            ),
         )
         self._message(
             "Read only · Ctrl+P Reprint · Ctrl+R Reopen"
@@ -821,14 +838,16 @@ class SilverBarHistoryDialog(QDialog):
             return
         snapshot = self.snapshot
         if snapshot.issued:
-            answer = QMessageBox.question(
+            if not ask(
                 self,
-                "Reopen issued list",
-                f"Reopen {snapshot.details['list_identifier']} for editing?\n\nThe bars will stay in this list, and the list will be active again.",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
-                QMessageBox.StandardButton.Cancel,
-            )
-            if answer != QMessageBox.StandardButton.Yes:
+                title="Reopen Issued List",
+                heading=(f"Reopen {snapshot.details['list_identifier']} for editing?"),
+                detail=(
+                    "The bars stay in this list, and the list becomes active again."
+                ),
+                action_label="Reopen List",
+                default_to_cancel=True,
+            ):
                 return
             if not self.db_manager.reactivate_silver_bar_list(snapshot.list_id):
                 self._message(

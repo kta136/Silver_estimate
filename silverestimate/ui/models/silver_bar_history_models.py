@@ -17,7 +17,7 @@ class SilverBarHistoryModel(HistorySilverBarsTableModel):
         "Bar #",
         "Voucher / note",
         "Weight (g)",
-        "Purity %",
+        "Purity (%)",
         "Fine (g)",
         "Status",
         "List",

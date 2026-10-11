@@ -50,6 +50,9 @@ class EstimateTableView(QTableView):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.host_widget = None
+        # The screen's shared undo action, so the right-click menu shows the
+        # same wording, shortcut and enabled state as the More menu.
+        self.undo_row_action: QAction | None = None
         self._layout_resize_timer = QTimer(self)
         self._layout_resize_timer.setSingleShot(True)
         self._layout_resize_timer.timeout.connect(self._resize_columns)
@@ -173,22 +176,27 @@ class EstimateTableView(QTableView):
     def _show_context_menu(self, position) -> None:
         menu = QMenu(self)
 
-        reset_action = QAction("Reset Column Layout", self)
-        reset_action.setIcon(get_icon("reset_layout", widget=self))
-        reset_action.triggered.connect(self.column_layout_reset_requested.emit)
-        menu.addAction(reset_action)
-
-        menu.addSeparator()
-
-        delete_action = QAction("Delete Current Row", self)
+        # Same names and shortcuts as the More menu and the menu bar.
+        delete_action = QAction("Delete Current Row\tCtrl+D", menu)
         delete_action.setIcon(get_icon("delete_row", widget=self, color="#dc2626"))
         delete_action.triggered.connect(self._delete_current_row)
         menu.addAction(delete_action)
+        if self.undo_row_action is not None:
+            menu.addAction(self.undo_row_action)
 
-        history_action = QAction("Open Estimate History", self)
+        menu.addSeparator()
+
+        history_action = QAction("Estimate History...\tCtrl+H", menu)
         history_action.setIcon(get_icon("history", widget=self))
         history_action.triggered.connect(self.history_requested.emit)
         menu.addAction(history_action)
+
+        menu.addSeparator()
+
+        reset_action = QAction("Reset Column Layout", menu)
+        reset_action.setIcon(get_icon("reset_layout", widget=self))
+        reset_action.triggered.connect(self.column_layout_reset_requested.emit)
+        menu.addAction(reset_action)
 
         menu.exec(self.viewport().mapToGlobal(position))
 

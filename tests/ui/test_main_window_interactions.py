@@ -1,12 +1,12 @@
 import logging
+import sys
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QWidget
 
 from silverestimate.infrastructure.app_constants import APP_TITLE
 from silverestimate.ui.estimate_entry_logic.constants import (
@@ -34,6 +34,20 @@ def test_close_stops_recovery_before_closing_database(main_window_fixture):
     assert database.closed
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows consoles only")
+def test_closing_the_window_leaves_the_test_run_its_console(main_window_fixture):
+    import ctypes
+
+    # A process with no console reports code page 0. Without a console, each
+    # process a later test starts would open a terminal window of its own.
+    kernel32 = ctypes.windll.kernel32
+    attached = kernel32.GetConsoleCP()
+
+    main_window_fixture["window"].close()
+
+    assert kernel32.GetConsoleCP() == attached
+
+
 def test_sales_report_navigation_reuses_view_and_stops_reader_before_close(
     main_window_fixture, qtbot, tmp_path, monkeypatch
 ):
@@ -53,7 +67,7 @@ def test_sales_report_navigation_reuses_view_and_stops_reader_before_close(
         action = next(
             action
             for action in window.findChildren(QAction)
-            if action.text() == "&Sales Reports"
+            if action.text() == "Sales &Reports"
         )
         action.trigger()
         report = window.sales_report_widget
@@ -110,9 +124,11 @@ def test_estimate_actions_dock_in_menu_bar_only_while_estimate_shows(
         assert menu_bar.cornerWidget(Qt.Corner.TopRightCorner) is strip
         assert estimate.save_button.isVisible()
         assert estimate.unsaved_badge.parent() is strip
-        # Side-panel layout: nothing is left above the item table.
-        header = estimate.findChild(QWidget, "EstimateHeaderContainer")
-        assert not header.isVisibleTo(estimate)
+        # Nothing is left above the item table.
+        assert estimate.layout().indexOf(strip) < 0
+        qtbot.waitUntil(
+            lambda: estimate.item_table.mapTo(estimate, QPoint(0, 0)).y() <= 6
+        )
         assert estimate.toolbar.isVisible()
 
         window.show_sales_report()
@@ -150,8 +166,8 @@ def test_estimate_tools_and_shortcut_help_remain_reachable_from_menu(
     assert shortcut_action.shortcut().toString() == "F1"
     captured = []
     monkeypatch.setattr(
-        "silverestimate.controllers.navigation_controller.QMessageBox.information",
-        lambda parent, title, text: captured.append((title, text)),
+        "silverestimate.ui.shortcuts_dialog.ShortcutsDialog.exec",
+        lambda dialog: captured.append((dialog.windowTitle(), dialog.text())),
     )
     shortcut_action.trigger()
     assert captured[0][0] == "Keyboard Shortcuts"
@@ -159,11 +175,15 @@ def test_estimate_tools_and_shortcut_help_remain_reachable_from_menu(
         "Ctrl+N",
         "Ctrl+H",
         "Ctrl+D",
+        "Ctrl+Shift+D",
         "Ctrl+R",
         "Ctrl+B",
         "Page Up",
+        "F5",
+        "Ctrl+E",
         "Alt+E",
         "Alt+I",
+        "Alt+R",
     ):
         assert shortcut in captured[0][1]
 
@@ -341,6 +361,72 @@ def main_window_fixture(qtbot, qt_app, settings_stub, monkeypatch):
         StubLiveRateController.instances.clear()
 
 
+@pytest.fixture
+def menus_in_title_bar(monkeypatch):
+    """Build the window as Windows does, and record its taskbar captions."""
+    from silverestimate.ui import title_bar
+
+    captions = []
+    monkeypatch.setattr(title_bar, "supported", lambda: True)
+    monkeypatch.setattr(
+        title_bar, "set_native_caption", lambda _window, text: captions.append(text)
+    )
+    return captions
+
+
+def test_menus_in_title_bar_replace_the_window_title(
+    menus_in_title_bar, main_window_fixture, qtbot
+):
+    from silverestimate.ui import title_bar
+
+    captions = menus_in_title_bar
+    window = main_window_fixture["window"]
+    bar = window.menuBar()
+
+    assert isinstance(bar, title_bar.TitleMenuBar)
+    assert window.windowFlags() & Qt.WindowType.ExpandedClientAreaHint
+    assert [action.text() for action in bar.actions()][0] == "&File"
+    # Qt would draw the title over the menus; the taskbar keeps the name.
+    assert window.windowTitle() == title_bar.BLANK_TITLE
+    assert window.accessibleName() == APP_TITLE
+    assert captions[-1] == APP_TITLE
+
+    window.estimate_widget._set_unsaved(True, force=True)
+    assert window.isWindowModified()
+    assert captions[-1] == f"{APP_TITLE}*"
+    window.estimate_widget._set_unsaved(False, force=True)
+    assert not window.isWindowModified()
+    assert captions[-1] == APP_TITLE
+
+    # Save, Print and New stop short of the window's own buttons.
+    strip = window.estimate_widget.command_strip
+    window.show()
+    qtbot.waitUntil(strip.isVisible)
+    assert bar.cornerWidget(Qt.Corner.TopRightCorner) is strip
+    margins = strip.layout().contentsMargins()
+    assert margins.right() == 4 + bar.caption_buttons_width()
+    assert strip.minimumHeight() == bar.row_height()
+    buttons = window.estimate_widget.primary_actions
+    buttons_end = buttons.mapTo(bar, buttons.rect().topRight()).x()
+    assert buttons_end <= bar.width() - bar.caption_buttons_width()
+
+
+def test_ordinary_title_bar_keeps_the_strip_at_the_window_edge(
+    main_window_fixture, qtbot
+):
+    from silverestimate.ui.title_bar import TitleMenuBar
+
+    window = main_window_fixture["window"]
+    strip = window.estimate_widget.command_strip
+    window.show()
+    qtbot.waitUntil(strip.isVisible)
+
+    assert not isinstance(window.menuBar(), TitleMenuBar)
+    assert strip.layout().contentsMargins().right() == 4
+    window.estimate_widget._set_unsaved(True, force=True)
+    assert window.isWindowModified()
+
+
 def test_main_window_startup_sets_up_estimate_view(main_window_fixture, qt_app, qtbot):
     context = main_window_fixture
     window = context["window"]
@@ -360,10 +446,27 @@ def test_main_window_startup_sets_up_estimate_view(main_window_fixture, qt_app, 
     # Main navigation wired (menu action created by controller).
     assert hasattr(window, "_menu_estimate_action")
     assert window._menu_estimate_action is not None
-    assert not window._menu_estimate_action.icon().isNull()
-    assert not window._menu_item_master_action.icon().isNull()
+    # Screens carry a mark for the open one, so they have no icon to hide it.
+    assert window._menu_estimate_action.isCheckable()
+    assert window._menu_estimate_action.isChecked()
+    assert window._menu_estimate_action.icon().isNull()
     assert not window._menu_silver_action.icon().isNull()
     assert not window.refresh_rate_action.icon().isNull()
+    # Every destination appears in exactly one menu.
+    labels = [
+        action.text().split("	")[0].replace("&", "")
+        for menu_action in window.menuBar().actions()
+        for action in menu_action.menu().actions()
+        if not action.isSeparator() and action.menu() is None
+    ]
+    assert len(labels) == len(set(labels)), labels
+    assert [a.text() for a in window.menuBar().actions()] == [
+        "&File",
+        "&View",
+        "&Tools",
+        "Hi&story",
+        "&Help",
+    ]
     file_actions = {action.text(): action for action in window.findChildren(QAction)}
     assert file_actions["&Save"].shortcutContext() == Qt.ShortcutContext.WindowShortcut
     assert file_actions["&Print"].shortcutContext() == Qt.ShortcutContext.WindowShortcut
@@ -372,13 +475,15 @@ def test_main_window_startup_sets_up_estimate_view(main_window_fixture, qt_app, 
     assert not widget.save_button.icon().isNull()
     assert not widget.print_button.icon().isNull()
     assert not widget.clear_button.icon().isNull()
-    assert not widget.delete_row_button.icon().isNull()
-    assert not widget.return_toggle_button.icon().isNull()
-    assert not widget.silver_bar_toggle_button.icon().isNull()
-    assert not widget.history_button.icon().isNull()
-    assert not widget.last_balance_button.icon().isNull()
-    assert not widget.silver_bars_button.icon().isNull()
-    assert not widget.delete_estimate_button.icon().isNull()
+    # The side panel's buttons are text only.
+    for button in (
+        widget.delete_row_button,
+        widget.history_button,
+        widget.last_balance_button,
+        widget.silver_bars_button,
+        widget.delete_estimate_button,
+    ):
+        assert button.icon().isNull()
 
     assert widget.save_button.text() == "Save  Ctrl+S"
     assert widget.print_button.text() == "Print"
@@ -519,3 +624,32 @@ def test_user_entry_updates_totals_and_view_model(main_window_fixture, qtbot):
 
     # No extra voucher generation during interactions.
     assert db.generate_calls == 1
+
+
+def test_saved_and_deleted_outcomes_are_shown_in_a_toast(main_window_fixture, qtbot):
+    window = main_window_fixture["window"]
+    window.show()
+    qtbot.waitUntil(window.isVisible)
+
+    window.estimate_widget._notify("Estimate '7' saved successfully.", 5000)
+
+    toast = window.status_toast
+    assert toast.isVisible()
+    assert toast.text() == "Estimate '7' saved successfully."
+    # Routine progress is not turned into a toast.
+    window.estimate_widget._status("Preparing print preview...", 2000)
+    assert toast.text() == "Estimate '7' saved successfully."
+    window.close()
+
+
+def test_a_toast_does_not_follow_the_user_to_another_screen(main_window_fixture, qtbot):
+    window = main_window_fixture["window"]
+    window.show()
+    qtbot.waitUntil(window.isVisible)
+
+    window.estimate_widget._notify("Row 3 deleted.", 5000)
+    assert window.status_toast.isVisible()
+
+    window.stack.currentChanged.emit(window.stack.currentIndex())
+    assert not window.status_toast.isVisible()
+    window.close()

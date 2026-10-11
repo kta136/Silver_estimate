@@ -13,8 +13,8 @@ this checklist concentrates on the real desktop experience.
   opens in front after authentication.
 - Check the estimate screen at 100%, 125%, 150% and 200% Windows display scaling.
   Inspect text, table editors, menus, totals, tooltips and dialog buttons for clipping.
-- Resize the window and switch totals positions. Confirm all totals remain visible
-  and the table has usable space; reopen to check saved layout preferences.
+- Resize the window. Confirm all totals remain visible in the side panel and
+  the table has usable space; reopen to check saved layout preferences.
 
 ## Keyboard entry and displayed values
 

@@ -30,8 +30,8 @@ def validate_estimate_item(
         ("poly", "Poly weight"),
         ("net_wt", "Net weight"),
         ("purity", "Purity"),
-        ("wage_rate", "Lbr"),
-        ("wage", "Lbr Amt"),
+        ("wage_rate", "Labour rate"),
+        ("wage", "Labour amount"),
         ("fine", "Fine weight"),
     ):
         value = finite_number(item.get(field, 0), label)

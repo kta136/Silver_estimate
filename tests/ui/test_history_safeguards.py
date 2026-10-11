@@ -135,7 +135,7 @@ def test_saved_entry_and_history_totals_include_both_balances(
     [("Cancel", True), ("Discard", True), ("Save", True), ("Save", False)],
 )
 def test_history_choice_preserves_or_saves_draft_before_replacing(
-    qtbot, history_db, make_estimate_widget, monkeypatch, choice, valid
+    qtbot, history_db, make_estimate_widget, monkeypatch, confirmations, choice, valid
 ):
     widget = make_estimate_widget(history_db)
     _draft(widget)
@@ -153,13 +153,7 @@ def test_history_choice_preserves_or_saves_draft_before_replacing(
             setattr(dialog, "selected_voucher", "TARGET") or QDialog.DialogCode.Accepted
         ),
     )
-    prompts = []
-
-    def choose(*args):
-        prompts.append(args)
-        return getattr(QMessageBox.StandardButton, choice)
-
-    monkeypatch.setattr(QMessageBox, "question", choose)
+    confirmations.always(choice)
     for method in ("information", "warning", "critical"):
         monkeypatch.setattr(
             QMessageBox, method, lambda *args: QMessageBox.StandardButton.Ok
@@ -171,7 +165,9 @@ def test_history_choice_preserves_or_saves_draft_before_replacing(
 
     widget.show_history()
 
-    assert len(prompts) == 1
+    # Asked once, by name: Save, Discard or Cancel.
+    assert len(confirmations.shown) == 1
+    assert confirmations.shown[0].startswith("Unsaved Estimate")
     if choice == "Cancel" or not valid:
         assert widget.note_edit.text() == "Keep the draft"
         assert widget.voucher_edit.text() == "DRAFT"
@@ -408,7 +404,7 @@ def test_queued_preview_cannot_open_after_history_closes(
 
 @pytest.mark.parametrize("failure", ["database", "inventory"])
 def test_history_save_failure_keeps_draft_and_rolls_back_header_and_inventory(
-    qtbot, history_db, make_estimate_widget, monkeypatch, failure
+    qtbot, history_db, make_estimate_widget, monkeypatch, confirmations, failure
 ):
     widget = make_estimate_widget(history_db)
     _draft(widget)
@@ -427,9 +423,7 @@ def test_history_save_failure_keeps_draft_and_rolls_back_header_and_inventory(
             setattr(dialog, "selected_voucher", "TARGET") or QDialog.DialogCode.Accepted
         ),
     )
-    monkeypatch.setattr(
-        QMessageBox, "question", lambda *args: QMessageBox.StandardButton.Save
-    )
+    confirmations.always("Save")
     messages = []
     monkeypatch.setattr(QMessageBox, "critical", lambda *args: messages.append(args[2]))
     if failure == "database":
@@ -469,8 +463,13 @@ def test_inventory_failure_keeps_normal_save_draft_and_retry_commits_everything(
     monkeypatch.setattr(workflow, "print_estimate", lambda: printed.append(True))
     monkeypatch.setattr(workflow, "clear_form", lambda **kwargs: cleared.append(True))
     monkeypatch.setattr(QMessageBox, "critical", lambda *args: errors.append(args[2]))
+    # Success is reported in the status line, not in a message box.
     monkeypatch.setattr(
-        QMessageBox, "information", lambda *args: successes.append(args[2])
+        widget,
+        "_status",
+        lambda message, *_: (
+            successes.append(message) if "saved successfully" in message else None
+        ),
     )
     history_db.conn.execute("""CREATE TRIGGER fail_save BEFORE INSERT ON silver_bars
         BEGIN SELECT RAISE(ABORT, 'Injected inventory failure'); END""")
@@ -484,7 +483,7 @@ def test_inventory_failure_keeps_normal_save_draft_and_retry_commits_everything(
     history_db.conn.execute("DROP TRIGGER fail_save")
     assert workflow.save_estimate() is True
     assert printed == cleared == [True]
-    assert len(successes) == 1
+    assert successes
     saved = history_db.get_estimate_by_voucher("DRAFT")
     bars = _bars_for(history_db, "DRAFT")
     assert len(bars) == 1
@@ -493,17 +492,15 @@ def test_inventory_failure_keeps_normal_save_draft_and_retry_commits_everything(
 
 
 def test_canceling_history_does_not_prompt_to_replace_the_draft(
-    qtbot, history_db, make_estimate_widget, monkeypatch
+    qtbot, history_db, make_estimate_widget, monkeypatch, confirmations
 ):
     widget = make_estimate_widget(history_db)
     _draft(widget)
     monkeypatch.setattr(
         EstimateHistoryDialog, "exec", lambda dialog: QDialog.DialogCode.Rejected
     )
-    prompts = []
-    monkeypatch.setattr(QMessageBox, "question", lambda *args: prompts.append(args))
     widget.show_history()
-    assert not prompts
+    assert not confirmations.shown
     assert widget.voucher_edit.text() == "DRAFT"
     assert widget.has_unsaved_changes()
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)

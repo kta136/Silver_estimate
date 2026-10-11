@@ -45,6 +45,8 @@ SALE_TEXT = INFO_TEXT
 RETURN_TEXT = WARNING_TEXT
 ZERO_TEXT = "#94a3b8"
 DATA_BAR = "#7cc3c8"
+# Pale enough to sit behind dark figures without hurting their contrast.
+DATA_BAR_FILL = "#cfe9eb"
 
 SCREEN_QSS = """
 QFrame#ScreenCard {
@@ -115,7 +117,7 @@ QPushButton#SegmentButton:checked {
     border: 1px solid __CARD_BORDER__;
 }
 QPushButton#SegmentButton:disabled { color: #94a3b8; }
-QPushButton#ChipButton {
+QPushButton#ChipButton, QToolButton#ChipButton {
     background: __SURFACE_BG__;
     border: 1px solid __INPUT_BORDER__;
     border-radius: 14px;
@@ -124,7 +126,19 @@ QPushButton#ChipButton {
     padding: 4px 14px;
     min-height: 20px;
 }
-QPushButton#ChipButton:hover { border-color: #94a3b8; }
+/* Room for the arrow that says the chip opens a list. */
+QToolButton#ChipButton { padding-right: 24px; }
+QToolButton#ChipButton::menu-indicator {
+    subcontrol-origin: padding;
+    subcontrol-position: right center;
+    right: 9px;
+}
+QPushButton#ChipButton:hover, QToolButton#ChipButton:hover { border-color: #94a3b8; }
+QPushButton#ChipButton:disabled, QToolButton#ChipButton:disabled {
+    background: __DISABLED_BG__;
+    border-color: __DISABLED_BORDER__;
+    color: __DISABLED_TEXT__;
+}
 QPushButton#ChipButton:checked {
     background: __PRIMARY_BG__;
     border-color: __PRIMARY_BG__;
@@ -512,6 +526,10 @@ class TableTotalsFooter(QWidget):
         self._first = first
         self.update()
 
+    def values(self) -> dict[int, str]:
+        """The totals by column, as shown."""
+        return dict(self._values)
+
     def clear(self) -> None:
         self._values = {}
         self.update()
@@ -554,6 +572,9 @@ class TableTotalsFooter(QWidget):
 class WeightBarDelegate(QStyledItemDelegate):
     """Draws a weight with zeros muted, and optionally a share-of-largest bar.
 
+    The bar is a tinted band behind the figure, anchored to the right like
+    the number itself, so it never crosses the digits.
+
     Item colours are painted here because the screen stylesheet overrides the
     model's foreground colour.
     """
@@ -580,6 +601,7 @@ class WeightBarDelegate(QStyledItemDelegate):
             style.drawControl(
                 QStyle.ControlElement.CE_ItemViewItem, item, painter, item.widget
             )
+        self._paint_bar(painter, option, index)
         zero = text.strip() in {"0", "0.00", "0.000"}
         painter.save()
         painter.setPen(QColor(ZERO_TEXT if zero else TEXT_STRONG))
@@ -590,7 +612,6 @@ class WeightBarDelegate(QStyledItemDelegate):
             text,
         )
         painter.restore()
-        self._paint_bar(painter, option, index)
 
     def _paint_bar(
         self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex
@@ -604,14 +625,16 @@ class WeightBarDelegate(QStyledItemDelegate):
         if value <= 0:
             return
         share = min(1.0, value / self._maximum)
-        rect = option.rect.adjusted(10, 0, -10, 0)
-        width = max(2, int(rect.width() * share))
+        rect = option.rect.adjusted(4, 4, -4, -4)
+        width = max(3, int(rect.width() * share))
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(DATA_BAR))
+        painter.setBrush(QColor(DATA_BAR_FILL))
         painter.drawRoundedRect(
-            QRect(rect.right() - width, rect.bottom() - 5, width, 3), 1.5, 1.5
+            QRect(rect.right() - width + 1, rect.top(), width, rect.height()),
+            3,
+            3,
         )
         painter.restore()
 

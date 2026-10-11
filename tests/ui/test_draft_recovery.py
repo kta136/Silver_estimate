@@ -149,25 +149,24 @@ def test_original_save_flow_removes_copy_and_failed_save_keeps_it(
     assert history_db.draft_repository.load() is not None
     history_db.conn.execute("DROP TRIGGER fail_draft_save")
     events = []
-    monkeypatch.setattr(QMessageBox, "information", lambda *a: events.append("success"))
+    # Saving goes straight to the preview; no message box interrupts it.
+    monkeypatch.setattr(QMessageBox, "information", lambda *a: events.append("box"))
     monkeypatch.setattr(
         widget.workflow_controller, "print_estimate", lambda: events.append("preview")
     )
     assert widget.workflow_controller.save_estimate()
-    assert events == ["success", "preview"]
+    assert events == ["preview"]
     assert widget.voucher_edit.text() != "DRAFT"
     assert history_db.draft_repository.load() is None
 
 
 def test_discard_then_close_does_not_recreate_copy(
-    history_db, make_estimate_widget, monkeypatch
+    history_db, make_estimate_widget, confirmations
 ):
     widget = make_estimate_widget(history_db)
     _draft(widget)
     assert widget.draft_recovery.flush()
-    monkeypatch.setattr(
-        QMessageBox, "question", lambda *a: QMessageBox.StandardButton.Discard
-    )
+    confirmations.always("Discard")
     widget.close()
     assert history_db.draft_repository.load() is None
     assert not widget.draft_recovery.flush()
@@ -234,14 +233,12 @@ def test_invalid_recovery_is_rejected_before_applying(
 
 
 def test_exit_discard_cannot_be_recreated_by_a_queued_timer(
-    history_db, make_estimate_widget, monkeypatch
+    history_db, make_estimate_widget, confirmations
 ):
     widget = make_estimate_widget(history_db)
     _draft(widget)
     assert widget.draft_recovery.flush()
-    monkeypatch.setattr(
-        QMessageBox, "question", lambda *a: QMessageBox.StandardButton.Discard
-    )
+    confirmations.always("Discard")
     assert widget.workflow_controller.confirm_exit()
     assert not widget.draft_recovery.flush()
     assert history_db.draft_repository.load() is None

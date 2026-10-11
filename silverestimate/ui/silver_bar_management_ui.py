@@ -132,11 +132,11 @@ class SilverBarManagementUiBuilder:
         outer.setSpacing(8)
         h.header_top_row = QHBoxLayout()
         h.header_top_row.setSpacing(10)
-        h.list_info_label = label("New list", "ScreenTitle", bar)
+        h.list_info_label = label("New List", "ScreenTitle", bar)
         h.header_top_row.addWidget(h.list_info_label)
         h.list_state_pill = StatusPill(bar)
         h.header_top_row.addWidget(h.list_state_pill)
-        h.edit_note_button = KeyHintButton("Add note", "F2", bar)
+        h.edit_note_button = KeyHintButton("Add Note", "F2", bar)
         h.edit_note_button.setObjectName("LinkButton")
         h.edit_note_button.setCursor(Qt.CursorShape.PointingHandCursor)
         h.edit_note_button.clicked.connect(lambda _=False: h.edit_list_note())
@@ -147,10 +147,10 @@ class SilverBarManagementUiBuilder:
         actions.setContentsMargins(0, 0, 0, 0)
         actions.setSpacing(8)
         h.new_list_button = self.button(
-            "New list", h.create_new_list, "Start a new list", "Ctrl+N"
+            "New List", h.create_new_list, "Start a new list", "Ctrl+N"
         )
         h.generate_optimal_button = self.button(
-            "Optimal list",
+            "Optimal List",
             h.generate_optimal_list,
             "Build a list that fits a target fine weight",
             "Ctrl+G",
@@ -175,12 +175,14 @@ class SilverBarManagementUiBuilder:
         h.more_button.setToolTip("More actions · Alt+M · Keyboard help: F1")
         h.more_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         menu = QMenu(h.more_button)
-        menu.addAction("Print &preview  Ctrl+Shift+P", h.preview_selected_list)
-        h.export_action = menu.addAction("&Export CSV", h.export_current_list_to_csv)
-        h.clear_action = menu.addAction("&Clear list", h.clear_current_list)
-        h.delete_action = menu.addAction("&Delete list", h.delete_selected_list)
+        menu.addAction("Print &Preview...\tCtrl+Shift+P", h.preview_selected_list)
+        h.export_action = menu.addAction("&Export CSV...", h.export_current_list_to_csv)
+        # The two that undo work sit apart from the harmless ones.
         menu.addSeparator()
-        menu.addAction("Keyboard &help  F1", h.show_keyboard_help)
+        h.clear_action = menu.addAction("&Clear List...", h.clear_current_list)
+        h.delete_action = menu.addAction("&Delete List...", h.delete_selected_list)
+        menu.addSeparator()
+        menu.addAction("Keyboard &Shortcuts\tF1", h.show_keyboard_help)
         h.more_button.setMenu(menu)
         actions.addWidget(h.more_button)
         divider = QFrame(h.header_actions)
@@ -188,7 +190,7 @@ class SilverBarManagementUiBuilder:
         divider.setFixedSize(1, 26)
         actions.addWidget(divider)
         h.print_list_button = self.button(
-            "Print && issue",
+            "Print && Issue",
             h.print_selected_list,
             "Print, issue, and start a new list",
             "Ctrl+P",
@@ -216,7 +218,7 @@ class SilverBarManagementUiBuilder:
         h.issued_banner_label.setWordWrap(True)
         row.addWidget(h.issued_banner_label, 1)
         h.reopen_button = self.button(
-            "Reopen for editing",
+            "Reopen for Editing",
             h.reopen_issued_list,
             "Make this list active again so it can be changed",
             "Ctrl+R",
@@ -297,10 +299,10 @@ class SilverBarManagementUiBuilder:
         buttons = QHBoxLayout()
         buttons.addStretch(1)
         h.show_all_bars_button = self.button(
-            "Show all bars", h.show_all_available, "Clear the weight filter", "Esc"
+            "Show All Bars", h.show_all_available, "Clear the weight filter", "Esc"
         )
         h.find_in_history_button = self.button(
-            "Find in history", h.open_history, "Search every bar", "Ctrl+H"
+            "Find in History", h.open_history, "Search every bar", "Ctrl+H"
         )
         buttons.addWidget(h.show_all_bars_button)
         buttons.addWidget(h.find_in_history_button)
@@ -338,7 +340,7 @@ class SilverBarManagementUiBuilder:
         hint_row.setContentsMargins(0, 0, 14, 0)
         h.list_hint = self.hint("Del remove selected    Shift+Tab available bars")
         hint_row.addWidget(h.list_hint, 1)
-        h.load_more_button = self.button("Load more", h.load_more_list_rows)
+        h.load_more_button = self.button("Load More", h.load_more_list_rows)
         h.load_more_button.hide()
         hint_row.addWidget(h.load_more_button)
         layout.addLayout(hint_row)
@@ -388,7 +390,7 @@ class SilverBarManagementUiBuilder:
         table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         header = table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-        for column, width in ((0, 84), (1, 70), (2, 76), (4, 50)):
+        for column, width in ((0, 84), (1, 86), (2, 76), (4, 50)):
             table.setColumnWidth(column, width)
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         polish_dense_table(

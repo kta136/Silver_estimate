@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QFormLayout,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
     QPushButton,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -32,8 +34,11 @@ class LiveRatesSettingsPage(QWidget):
     """Own live-rate controls, persistence, and enable-state synchronization."""
 
     changed = Signal()
+    refresh_requested = Signal()
 
-    def __init__(self, settings: SettingsStore, parent: QWidget | None = None) -> None:
+    def __init__(  # noqa: PLR0915 - declarative page layout
+        self, settings: SettingsStore, parent: QWidget | None = None
+    ) -> None:
         super().__init__(parent)
         self._settings = as_settings_store(settings)
         layout = QVBoxLayout(self)
@@ -43,38 +48,75 @@ class LiveRatesSettingsPage(QWidget):
         title = QLabel("Live Rates")
         title.setObjectName("SettingsTitleLabel")
         layout.addWidget(title)
-        group = QGroupBox("Current Live Rates")
-        form = QFormLayout(group)
-        form.setContentsMargins(16, 16, 16, 16)
+        group = QGroupBox("Current rate")
+        group_layout = QVBoxLayout(group)
+        group_layout.setContentsMargins(16, 16, 16, 16)
+        group_layout.setSpacing(12)
+        form = QFormLayout()
         form.setHorizontalSpacing(18)
         form.setVerticalSpacing(12)
 
         self.rate_value = QLabel("Not updated")
+        self.rate_value.setObjectName("SettingsValueLabel")
         self.rate_status = QLabel("Waiting for connection")
         form.addRow("Provider", QLabel("DDA Agra Mohar"))
-        form.addRow("Live silver rate", self.rate_value)
+        form.addRow("Silver rate", self.rate_value)
         form.addRow("Status", self.rate_status)
-        state = self.load_state()
-        self.live_enabled_checkbox = QCheckBox("Show live rate in estimate entry")
-        self.live_enabled_checkbox.setChecked(state.visible)
-        form.addRow("Live Rate:", self.live_enabled_checkbox)
+        group_layout.addLayout(form)
+        refresh_row = QHBoxLayout()
+        self.refresh_button = QPushButton("Refresh Now")
+        self.refresh_button.setToolTip("Fetch the latest live silver rate now")
+        self.refresh_button.clicked.connect(self.refresh_requested.emit)
+        refresh_row.addWidget(self.refresh_button)
+        refresh_row.addStretch()
+        group_layout.addLayout(refresh_row)
+        layout.addWidget(group)
 
-        self.automatic_checkbox = QCheckBox("Update automatically")
+        state = self.load_state()
+        options = QGroupBox("Options")
+        options_layout = QVBoxLayout(options)
+        options_layout.setContentsMargins(16, 16, 16, 16)
+        options_layout.setSpacing(10)
+        self.live_enabled_checkbox = QCheckBox(
+            "Show the live rate on the estimate screen"
+        )
+        self.live_enabled_checkbox.setChecked(state.visible)
+        options_layout.addWidget(self.live_enabled_checkbox)
+        self.automatic_checkbox = QCheckBox("Keep it up to date automatically")
         self.automatic_checkbox.setChecked(state.automatic)
-        form.addRow("Automatic:", self.automatic_checkbox)
+        options_layout.addWidget(self.automatic_checkbox)
+        layout.addWidget(options)
 
         hint = QLabel(
             "Uses the public customer finalRate for item ID "
             "cmomws5tw000004i5k5t6yrnw. SSE is primary; anonymous HTTPS polls "
             "every 10 seconds only while disconnected."
         )
+        hint.setObjectName("SettingsMutedDescription")
         hint.setWordWrap(True)
-        layout.addWidget(group)
-        technical = QPushButton("Technical details")
+        # A disclosure arrow, not a full-width button, for the rarely needed
+        # connection details.
+        technical = QToolButton()
+        technical.setText("Technical details")
         technical.setCheckable(True)
-        technical.toggled.connect(hint.setVisible)
+        technical.setAutoRaise(True)
+        technical.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        technical.setArrowType(Qt.ArrowType.RightArrow)
+        technical.setStyleSheet(
+            "QToolButton { border: none; background: transparent; }"
+        )
+
+        def show_details(visible: bool) -> None:
+            hint.setVisible(visible)
+            technical.setArrowType(
+                Qt.ArrowType.DownArrow if visible else Qt.ArrowType.RightArrow
+            )
+
+        technical.toggled.connect(show_details)
+        self.technical_button = technical
+        self.technical_details = hint
         hint.hide()
-        layout.addWidget(technical)
+        layout.addWidget(technical, 0, Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(hint)
         layout.addStretch()
 

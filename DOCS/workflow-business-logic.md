@@ -23,6 +23,10 @@ Net Wage = Regular Wage - Return Wage - Silver Bar Wage (usually 0)
 Grand Total = (Net Fine × Silver Rate) + Net Wage + Last Balance Amount
 ```
 
+On screen and on printed slips the wage figures are labelled **Labour**
+(`Lbr`, `Lbr Amt`, `Net Labour`, `Labour Type`, `Labour Rate`). The code and
+database keep the `wage_*` names.
+
 ### 2. Item Management Workflow
 
 #### Item Creation
@@ -125,11 +129,15 @@ Existing lists, bar IDs, source estimate links, and transfer history are preserv
 
 ### Sales Reports
 
-- Open **Reports → Sales Reports** (also available under View). Every saved
-  estimate counts as a sale; drafts do not appear.
+- Open **View → Sales Reports** (Alt+R). Every saved estimate counts as a
+  sale; drafts do not appear.
 - The date range defaults to Today, can be edited with inclusive From/To dates,
   and uses the estimate's entered date. Day-wise and month-wise grouping are
-  available, along with Today and This month shortcuts.
+  available, along with Today, This Month and More Ranges. A date shortcut or
+  the Day/Month switch applies at once; typed dates and item codes apply with
+  View Report (F5).
+- The totals caption names what the figures cover: the date range, or the
+  day, month or item that was opened.
 - Sale net/fine weights and return net/fine weights appear in four separate
   columns. Return weights are not subtracted from sales. Silver-bar lines and
   carried balances are excluded. Reports are on-screen only.
@@ -140,7 +148,7 @@ Existing lists, bar IDs, source estimate links, and transfer history are preserv
   items remain reportable through their saved snapshots.
 - Sum recorded line weights using decimal arithmetic and display grams to two
   decimals; do not recalculate historical fine weights or cap purity at 100%.
-- Reopening the report or selecting View report reads current saved data,
+- Reopening the report or selecting View Report reads current saved data,
   reflecting edited, backdated and deleted estimates. Opening a contributing
   voucher uses the existing unsaved-entry confirmation.
 
@@ -211,6 +219,26 @@ Calculation precision policy:
 - Auto-add row on last column completion
 - Code field triggers lookup on exit
 
+### 6. Window Title Bar
+- On Windows the menus sit in the title bar, with Save, Print and New to
+  their right on the estimate screen and the window's minimise, maximise and
+  close buttons at the end (`silverestimate/ui/title_bar.py`).
+- The bar does not show the application's name. The taskbar and Alt+Tab show
+  it, with a `*` while the estimate has unsaved changes; the version is in
+  Help > About.
+- The empty part of the bar drags the window; a double-click there maximises
+  or restores it.
+- Other systems, and `SILVER_CLASSIC_TITLE_BAR=true`, keep the ordinary title
+  bar with the name and version in it and the menus below.
+
+### 7. Estimate Side Panel
+- The side panel is always on the right of the estimate table. It holds the
+  voucher fields with the live rate, the Regular/Return/Silver Bar switch,
+  the totals, the action buttons and a status line (rows, last saved, F1).
+- Its place is not a setting. Its width can be dragged, and the order of the
+  Regular, Return and Silver Bar rows is changed from the totals' right-click
+  menu.
+
 ## Error Handling
 
 ### 1. Input Validation
@@ -250,6 +278,22 @@ Calculation precision policy:
 - Load with validation
 - Save with recalculation
 - Print with formatting
+
+### 4. Dialogs and wording
+- A confirmation names its action (`Delete Item`, not `Yes`). The action
+  button is coloured, red when it deletes; the way out is plain; Enter goes
+  to the safer of the two. Confirmations carry their own style, so they look
+  the same from every screen (`silverestimate/ui/message_dialogs.py`).
+- Unsaved work is offered as Save, Discard or Cancel, with Enter on Cancel.
+- Deleting all data or all estimates needs a second step: typing DELETE. The
+  button stays off until the word is typed.
+- An outcome that needs no decision (saved, deleted, not found, a cell left
+  unfinished) appears in a brief toast at the bottom of the window. It clears
+  itself, and when the screen changes.
+- A mistake in a form is explained beside the field, which is outlined.
+- Command buttons and menu commands use Title Case, with `...` when a window
+  opens first. Options, filters, captions and messages use sentence case.
+- Dates are written dd/mm/yyyy on screen.
 
 ## Performance Considerations
 
@@ -333,18 +377,26 @@ New, voucher loading, History selection and exit offer Save/Discard/Cancel when
 there are unsaved changes. A failed save cancels the requested transition.
 Voucher loading saves the current entry under its active voucher identity;
 missing targets and failed loads retain the current entry rather than relabelling
-its rows. Active cell edits are committed before save/preview/transition checks.
+its rows, and a toast says so. Active cell edits are committed before
+save/preview/transition checks; a cell left with an unfinished value stops the
+action and a toast asks for it to be finished first.
 
 Entry preview titles distinguish an unsaved draft from a saved estimate, including
 after changing print format or Tunch visibility. This label is preview UI metadata;
 the printed estimate layout is unchanged. Print continues to preview current
 entry data without requiring a separate save.
 
-Tools → Undo Last Row Deletion restores the most recently deleted row, including
+Delete Row (Ctrl+D) removes the current row without asking, because the
+deletion can be undone. Deleting the only row clears it and leaves a fresh
+entry row. Undo Last Row Deletion (Ctrl+Shift+D, also under Tools → Estimate
+Actions) restores the most recently deleted row, including
 its line identity, historical snapshot fields and recorded precision, without
 reverting other row edits. Up to 20 row deletions are retained in memory. A
 successful save, New or successful load clears that undo history. This provides
 session-only row undo. Encrypted recovery of the unfinished entry is described below.
+
+Saving asks first when an item row has no gross weight, naming the rows, and
+offers **Save Anyway** or **Go Back**. Zero-weight rows remain valid.
 
 ### Encrypted unfinished-estimate recovery
 
@@ -352,12 +404,15 @@ Entry checks for changes every two seconds and stores one recovery copy inside
 its encrypted database. It captures headers, balances, modes, row snapshots and
 raw text in an unfinished cell without closing the editor. This is recovery
 storage; estimates, inventory and the existing Save/print/clear flow are unchanged.
-The footer shows the last successful capture time. Unchanged entries do not write.
+The status badge's tooltip shows the last successful capture time; the side
+panel's footer names the recovery state only when it needs attention.
+Unchanged entries do not write.
 
-After restarting, opening Entry offers **Restore**, **Discard** or **Cancel**.
+After restarting, opening Entry offers **Restore & continue**, **Discard recovery
+copy** or **Decide Later**, with the copy's time shown in local time.
 Restore resumes editing; it does not save or print the estimate. Discard deletes
-only the recovery copy. Cancel keeps it and pauses new captures until it is
-resolved through **Tools → Recover Unfinished Estimate**. An existing dirty entry
+only the recovery copy. Decide Later keeps it and pauses new captures until it is
+resolved through **Tools → Estimate Actions → Recover Unfinished Estimate**. An existing dirty entry
 must pass the usual Save/Discard/Cancel guard before restoration replaces it.
 
 A successful estimate save removes its matching recovery copy in the same
@@ -377,6 +432,7 @@ Manual verification on a disposable installation: enter regular/return/bar rows,
 balances and a note; leave a weight editor containing `12.`; wait for Captured in
 the footer, terminate the process and restart. Restore should retain the unfinished
 text and totals without creating an estimate or changing inventory. Repeat with
-Cancel, then resolve through Tools, and with Discard. Verify ordinary Save still
-shows success, opens preview and clears for the next entry, with no recovery offer
-for the saved entry on restart.
+Decide Later, then resolve through Tools, and with Discard. Verify ordinary Save
+still opens preview and clears for the next entry, reports the saved voucher in
+a brief toast without a message box, and makes no recovery offer for the saved
+entry on restart.

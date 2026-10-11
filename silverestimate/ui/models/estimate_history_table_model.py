@@ -13,7 +13,11 @@ from PySide6.QtCore import (
 )
 
 from silverestimate.domain.numeric_policy import WEIGHT_PLACES
-from silverestimate.ui.display_formatting import format_display_date, format_rupees
+from silverestimate.ui.display_formatting import (
+    format_display_date,
+    format_rate,
+    format_rupees,
+)
 from silverestimate.ui.estimate_table_formatting import format_indian_number
 from silverestimate.ui.models.table_sorting import insert_model_rows, sort_model_rows
 
@@ -42,7 +46,7 @@ class EstimateHistoryTableModel(QAbstractTableModel):
         "Total Gross",
         "Total Net",
         "Net Fine",
-        "Net Wage",
+        "Net Labour",
         "Grand Total",
     ]
     _RIGHT_ALIGN_COLUMNS = {3, 4, 5, 6, 7, 8}
@@ -151,7 +155,7 @@ class EstimateHistoryTableModel(QAbstractTableModel):
         if column == 2:
             return row.note
         if column == 3:
-            return format_rupees(row.silver_rate)
+            return format_rate(row.silver_rate)
         if column == 4:
             return format_indian_number(row.total_gross, WEIGHT_PLACES)
         if column == 5:

@@ -5,7 +5,7 @@ Halfway values round away from zero. Loading a saved value does not quantize it.
 """
 
 from collections.abc import Iterable
-from decimal import ROUND_HALF_UP, Decimal, localcontext
+from decimal import MAX_PREC, ROUND_HALF_UP, Decimal, localcontext
 
 WEIGHT_PLACES = 2
 MONEY_PLACES = 2
@@ -35,9 +35,17 @@ def fixed_decimal(value: float | int | str | Decimal, places: int) -> str:
     return format(quantize(value, places), f".{places}f")
 
 
+def decimal_sum(values: Iterable[float | int | str | Decimal]) -> Decimal:
+    """Add values exactly, so that rounding the sum is the only rounding."""
+    numbers = [decimal_value(value) for value in values]
+    with localcontext() as context:
+        context.prec = MAX_PREC
+        return sum(numbers, Decimal(0))
+
+
 def sum_values(values: Iterable[float]) -> float:
     """Add recorded values without imposing a new precision on historical rows."""
-    return float(sum((decimal_value(value) for value in values), Decimal(0)))
+    return float(decimal_sum(values))
 
 
 def net_weight(gross: float, poly: float) -> float:

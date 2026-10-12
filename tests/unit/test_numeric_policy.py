@@ -1,8 +1,14 @@
 """Business examples for decimal precision and halfway rounding."""
 
+from decimal import Decimal
+
 import pytest
 
-from silverestimate.domain.numeric_policy import fixed_decimal, sum_values
+from silverestimate.domain.numeric_policy import (
+    decimal_sum,
+    fixed_decimal,
+    sum_values,
+)
 from silverestimate.services.estimate_calculator import (
     compute_fine_weight,
     compute_net_weight,
@@ -47,3 +53,10 @@ def test_line_rounding_happens_before_aggregation():
 def test_aggregation_does_not_quantize_historical_values():
     assert sum_values((1.23456, 2.34567)) == 3.58023
     assert sum_values((0.1, 0.2, -0.3)) == 0
+
+
+def test_decimal_sum_keeps_every_digit():
+    assert decimal_sum((1e20, 0.004999999999999999)) == Decimal(
+        "100000000000000000000.004999999999999999"
+    )
+    assert decimal_sum(()) == 0

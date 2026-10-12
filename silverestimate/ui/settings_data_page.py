@@ -196,7 +196,9 @@ class DataManagementPage(QWidget):
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
+        # Tight enough that the page fits the dialog on a 1366x768 screen
+        # without a scrollbar.
+        layout.setSpacing(6)
 
         title = QLabel("Data & Backups")
         title.setObjectName("SettingsTitleLabel")
@@ -227,7 +229,8 @@ class DataManagementPage(QWidget):
             "QGroupBox#SettingsDangerGroup { border: 1px solid #ff9ca4; color: #cf2434; }"
         )
         layout = QVBoxLayout(danger)
-        layout.setSpacing(10)
+        layout.setContentsMargins(12, 4, 12, 6)
+        layout.setSpacing(4)
         warning = QLabel(
             "These actions permanently delete data and cannot be undone. "
             "Back up the database first."
@@ -301,7 +304,8 @@ class DataManagementPage(QWidget):
     def _create_item_backup_group(self) -> QGroupBox:
         group = QGroupBox("Item catalog")
         layout = QVBoxLayout(group)
-        layout.setSpacing(10)
+        layout.setContentsMargins(12, 4, 12, 6)
+        layout.setSpacing(4)
 
         self.create_item_backup_button = QPushButton("Back Up Item Catalog...")
         self.create_item_backup_button.setToolTip(
@@ -346,7 +350,8 @@ class DataManagementPage(QWidget):
     def _create_database_backup_group(self) -> QGroupBox:
         group = QGroupBox("Database backup")
         layout = QVBoxLayout(group)
-        layout.setSpacing(10)
+        layout.setContentsMargins(12, 4, 12, 6)
+        layout.setSpacing(4)
         self.backup_status_label = QLabel(group)
         self.backup_status_label.setWordWrap(True)
         self.backup_status_label.setObjectName("SettingsBackupStatus")
@@ -365,8 +370,8 @@ class DataManagementPage(QWidget):
         layout.addLayout(
             self._action_row(
                 self.create_database_backup_button,
-                "Saves all estimates, items and silver bars to one encrypted file, "
-                "including any unfinished-estimate recovery copy.",
+                "Saves all estimates, items, silver bars and any unfinished "
+                "estimate to one encrypted file.",
             )
         )
 
@@ -388,11 +393,9 @@ class DataManagementPage(QWidget):
         )
 
         limits = QLabel(
-            "A backup opens only on this PC, with the main password that was in "
-            "use when it was made.\n"
-            "If this PC's Windows credentials are reset or lost, its backups "
-            "cannot be opened. Keep a copy of the backup file somewhere else as "
-            "well.",
+            "A backup opens only on this PC, with the main password in use when "
+            "it was made. If this PC's Windows credentials are reset or lost, it "
+            "cannot be opened, so keep a copy of the file somewhere else too.",
             group,
         )
         limits.setObjectName("SettingsMutedDescription")

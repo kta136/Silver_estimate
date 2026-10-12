@@ -308,6 +308,48 @@ def test_catalog_command_runs_import_on_worker_and_refreshes_on_ui(
         assert not refreshed
 
 
+@pytest.mark.parametrize("fails", [False, True])
+def test_catalog_backup_runs_export_on_worker_and_reports_on_ui(
+    qtbot, database, tmp_path, monkeypatch, fails
+):
+    owner = threading.get_ident()
+    folder = tmp_path / "missing" if fails else tmp_path
+    path = folder / "items.seitems.json"
+    host = QWidget()
+    qtbot.addWidget(host)
+    monkeypatch.setattr(
+        main_commands.QFileDialog, "getSaveFileName", lambda *a: (str(path), "")
+    )
+    messages = []
+    for method in ("information", "critical"):
+        monkeypatch.setattr(
+            QMessageBox,
+            method,
+            lambda *args: messages.append((args[1], threading.get_ident())),
+        )
+    from silverestimate.services import item_catalog_transfer as transfer
+
+    export = transfer.export_item_catalog_rows
+    worker_ids = []
+
+    def observed_export(rows, file_path):
+        worker_ids.append(threading.get_ident())
+        return export(rows, file_path)
+
+    monkeypatch.setattr(transfer, "export_item_catalog_rows", observed_export)
+    commands = main_commands.MainCommands(host, database)
+    assert commands.create_item_catalog_backup().succeeded
+    qtbot.waitUntil(lambda: commands._catalog_export_thread is None, timeout=10_000)
+    assert worker_ids and worker_ids[0] != owner
+    # A message box opened on the worker thread freezes the window.
+    title = "Catalog Not Backed Up" if fails else "Catalog Backed Up"
+    assert messages == [(title, owner)]
+    if not fails:
+        assert [item["code"] for item in transfer.load_item_catalog_file(path)] == [
+            "OLD"
+        ]
+
+
 def test_owner_release_failure_unwinds_without_running_operation(
     qtbot, database, monkeypatch
 ):

@@ -9,11 +9,11 @@ from PySide6.QtWidgets import QDialog
 from .silver_bar_optimization import find_optimal_combination
 
 if TYPE_CHECKING:
-    from .silver_bar_management import SilverBarDialog
+    from .silver_bar_management import SilverBarWidget
 
 
 class SilverBarOptimizationController:
-    def __init__(self, host: SilverBarDialog) -> None:
+    def __init__(self, host: SilverBarWidget) -> None:
         self.host = host
 
     def generate_optimal_list(self, dialog_cls) -> None:

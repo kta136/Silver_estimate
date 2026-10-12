@@ -80,27 +80,60 @@ class NavigationController:
             view=getattr(self._main_window, "_view_item_master_action", None),
         )
 
-    def show_silver_bars(self) -> None:
+    def show_silver_bars(self, list_id: int | None = None) -> None:
+        """Open the Silver Bars screen, building it only now.
+
+        It is discarded again when the user leaves it, so it holds nothing
+        (no searches, no loaded bars) while another screen is open.
+        """
         if not self._ensure_db():
             return
-        try:
-            from silverestimate.ui.silver_bar_management import SilverBarDialog
-
-            self._logger.info("Opening Silver Bar Management dialog")
-            dialog = SilverBarDialog(self._db, self._main_window)
+        widget = self._silver_bar_widget()
+        created = widget is None
+        if widget is None:
             try:
-                dialog.exec()
-            finally:
-                dialog.deleteLater()
-        except Exception as exc:
-            self._logger.error(
-                "Failed to open Silver Bar Management: %s", exc, exc_info=True
-            )
-            QMessageBox.critical(
-                self._main_window,
-                "Silver Bars Unavailable",
-                with_details("Silver Bars could not be opened.", exc),
-            )
+                from silverestimate.ui.silver_bar_management import SilverBarWidget
+
+                self._logger.info("Creating the Silver Bars screen on demand...")
+                widget = SilverBarWidget(self._db, self._main_window)
+                widget.close_requested.connect(self.show_estimate)
+                self._main_window.silver_bar_widget = widget
+                if self._stack:
+                    self._stack.addWidget(widget)
+            except Exception as exc:
+                self._logger.error("Failed to open Silver Bars: %s", exc, exc_info=True)
+                self._discard_silver_bars()
+                QMessageBox.critical(
+                    self._main_window,
+                    "Silver Bars Unavailable",
+                    with_details("Silver Bars could not be opened.", exc),
+                )
+                return
+        if not self._switch_widget(widget):
+            if created:
+                self._discard_silver_bars()
+            return
+        self._sync_actions(
+            view=getattr(self._main_window, "_view_silver_bars_action", None)
+        )
+        if list_id is not None:
+            widget.open_list(list_id)
+
+    def _silver_bar_widget(self):
+        return getattr(self._main_window, "silver_bar_widget", None)
+
+    def _discard_silver_bars(self) -> None:
+        """Close the Silver Bars screen and let go of it."""
+        widget = self._silver_bar_widget()
+        if widget is None:
+            return
+        self._main_window.silver_bar_widget = None
+        try:
+            widget.shutdown()
+        finally:
+            if self._stack:
+                self._stack.removeWidget(widget)
+            widget.deleteLater()
 
     def show_sales_report(self) -> None:
         if not self._ensure_db():
@@ -151,12 +184,7 @@ class NavigationController:
             selected_list_id = dialog.selected_list_id
             dialog.deleteLater()
             if selected_list_id is not None:
-                from silverestimate.ui.silver_bar_management import SilverBarDialog
-
-                workspace = SilverBarDialog(self._db, self._main_window)
-                workspace.open_list(selected_list_id)
-                workspace.exec()
-                workspace.deleteLater()
+                self.show_silver_bars(list_id=selected_list_id)
         except Exception as exc:
             self._logger.error(
                 "Error opening Silver Bar History: %s", exc, exc_info=True
@@ -200,12 +228,21 @@ class NavigationController:
 
     # --- Screen-switching helpers --------------------------------------
     def _switch_widget(self, widget) -> bool:
-        if self._stack:
-            current = self._stack.currentWidget()
+        if not self._stack:
+            return True
+        current = self._stack.currentWidget()
+        leaving = current is not widget
+        silver_bars = self._silver_bar_widget()
+        if leaving:
             guard = getattr(current, "confirm_discard_edits", None)
-            if current is not widget and callable(guard) and not guard():
+            if callable(guard) and not guard():
                 return False
-            self._stack.setCurrentWidget(widget)
+            busy = silver_bars is not None and not silver_bars.can_close()
+            if busy and current is silver_bars:
+                return False
+        self._stack.setCurrentWidget(widget)
+        if leaving and current is silver_bars:
+            self._discard_silver_bars()
         return True
 
     def _sync_actions(self, *, nav=None, menu=None, view=None) -> None:
@@ -243,7 +280,26 @@ class NavigationController:
         if controller:
             controller.refresh_now()
 
+    def _open_silver_bars(self):
+        """The Silver Bars screen, when it is the one on show."""
+        widget = self._silver_bar_widget()
+        if widget is not None and self._stack and self._stack.currentWidget() is widget:
+            return widget
+        return None
+
+    def print_open_screen(self) -> None:
+        """File > Print prints what is on show: the list, or else the estimate."""
+        silver_bars = self._open_silver_bars()
+        if silver_bars is not None:
+            silver_bars.print_selected_list()
+        else:
+            self._commands.print_estimate()
+
     def show_keyboard_shortcuts(self):
+        silver_bars = self._open_silver_bars()
+        if silver_bars is not None:
+            silver_bars.show_keyboard_help()
+            return
         from silverestimate.ui.shortcuts_dialog import ShortcutsDialog
 
         dialog = ShortcutsDialog(parent=self._main_window)
@@ -300,7 +356,7 @@ class NavigationController:
         print_action = self._action("&Print", icon="print")
         print_action.setShortcut(QKeySequence.StandardKey.Print)
         print_action.setShortcutContext(Qt.ShortcutContext.WindowShortcut)
-        print_action.triggered.connect(window.commands.print_estimate)
+        print_action.triggered.connect(self.print_open_screen)
         file_menu.addAction(print_action)
 
         file_menu.addSeparator()
@@ -324,14 +380,21 @@ class NavigationController:
             tip="Daily, monthly and item-wise sale and return weights",
         )
         view_sales_report_action.setShortcut("Alt+R")
+        view_silver_bars_action = self._action(
+            "Silver &Bars",
+            tip="Build, print and issue silver bar lists",
+        )
+        view_silver_bars_action.setShortcut("Alt+B")
         for action, slot in (
             (view_estimate_action, self.show_estimate),
             (view_item_master_action, self.show_item_master),
             (view_sales_report_action, self.show_sales_report),
+            (view_silver_bars_action, self.show_silver_bars),
         ):
             action.setCheckable(True)
             screens.addAction(action)
-            action.triggered.connect(slot)
+            # triggered passes "checked", which no screen takes as an argument.
+            action.triggered.connect(lambda _checked=False, show=slot: show())
             view_menu.addAction(action)
         view_estimate_action.setChecked(True)
 
@@ -343,15 +406,6 @@ class NavigationController:
             tools_menu.addMenu(estimate_menu)
             tools_menu.addSeparator()
 
-        silver_bars_action = self._action(
-            "&Silver Bars...",
-            icon="silver_bars",
-            tip="Build, print and issue silver bar lists",
-        )
-        silver_bars_action.triggered.connect(self.show_silver_bars)
-        tools_menu.addAction(silver_bars_action)
-
-        tools_menu.addSeparator()
         settings_action = self._action(
             "Se&ttings...", icon="settings", tip="Configure the application"
         )
@@ -399,7 +453,7 @@ class NavigationController:
         # Handles used to mark the open screen.
         window._menu_estimate_action = view_estimate_action
         window._menu_item_master_action = view_item_master_action
-        window._menu_silver_action = silver_bars_action
         window._view_estimate_action = view_estimate_action
         window._view_item_master_action = view_item_master_action
         window._view_sales_report_action = view_sales_report_action
+        window._view_silver_bars_action = view_silver_bars_action

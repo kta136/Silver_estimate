@@ -1,8 +1,16 @@
 """The menu bar that sits in the window's title bar on Windows."""
 
+import ctypes
+
 from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
 from PySide6.QtGui import QFont, QMouseEvent
-from PySide6.QtWidgets import QMainWindow, QPushButton, QWidget
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QWidget,
+)
 
 from silverestimate.ui import title_bar
 from silverestimate.ui.title_bar import TitleMenuBar
@@ -41,14 +49,10 @@ def test_ordinary_title_bar_is_kept_where_qt_cannot_draw_the_buttons(qt_app, qtb
     assert window.windowFlags() == flags
 
 
-def test_menus_move_into_the_title_bar_on_windows(qt_app, monkeypatch):
-    # Windows 10 and 11 alike: Qt draws the buttons on both.
-    _on_windows(monkeypatch)
-    assert title_bar.supported()
-
-
 def test_environment_switch_keeps_the_ordinary_title_bar(qt_app, monkeypatch):
     _on_windows(monkeypatch)
+    # Windows 10 and 11 alike: Qt draws the buttons on both.
+    assert title_bar.supported()
     for value in ("true", "1", "YES"):
         monkeypatch.setenv(title_bar.CLASSIC_TITLE_BAR_ENV, value)
         assert not title_bar.supported()
@@ -157,3 +161,110 @@ def test_bar_and_its_corner_widget_match_the_caption_buttons(
     font.setPixelSize(40)
     bar.setFont(font)
     assert bar._item_padding == title_bar.ITEM_PADDING
+
+
+class _FakeUser32:
+    """Windows calls the hit test makes; screen and window coordinates agree."""
+
+    def ScreenToClient(self, _hwnd, _point) -> int:  # noqa: N802
+        return 1
+
+    def GetDpiForWindow(self, _hwnd) -> int:  # noqa: N802
+        return 96
+
+    def GetSystemMetricsForDpi(self, _metric, _dpi) -> int:  # noqa: N802
+        return 4
+
+
+def _window_with_menus_and_buttons(qtbot):
+    window = QMainWindow()
+    qtbot.addWidget(window)
+    bar = TitleMenuBar(window)
+    window.setMenuBar(bar)
+    menu = bar.addMenu("&File")
+    menu.addAction("Example")
+    strip = QWidget()
+    row = QHBoxLayout(strip)
+    row.setContentsMargins(0, 0, 0, 0)
+    status = QLabel("Ready")
+    save = QPushButton("Save")
+    locked = QPushButton("Print")
+    locked.setEnabled(False)
+    for widget in (status, save, locked):
+        row.addWidget(widget)
+    bar.setCornerWidget(strip, Qt.Corner.TopRightCorner)
+    window.resize(900, 500)
+    window.show()
+    qtbot.waitExposed(window)
+    return window, bar, menu, status, save, locked
+
+
+def _centre(bar: TitleMenuBar, widget: QWidget) -> QPoint:
+    return widget.mapTo(bar, widget.rect().center())
+
+
+def _screen_position(point: QPoint) -> int:
+    return (point.y() << 16) | point.x()
+
+
+def test_menus_and_buttons_take_the_click_and_the_rest_drags_the_window(qt_app, qtbot):
+    _, bar, menu, status, save, locked = _window_with_menus_and_buttons(qtbot)
+    item = bar.actionGeometry(menu.menuAction())
+
+    assert bar.takes_click_at(item.center())
+    assert bar.takes_click_at(_centre(bar, save))
+    # A button that is switched off, a label and the empty stretch all drag.
+    assert not bar.takes_click_at(_centre(bar, locked))
+    assert not bar.takes_click_at(_centre(bar, status))
+    assert not bar.takes_click_at(QPoint(item.right() + 60, bar.height() // 2))
+    assert not bar.takes_click_at(QPoint(title_bar.ICON_SPACE // 2, bar.height() // 2))
+
+
+def test_windows_is_answered_for_menus_and_buttons_only(qt_app, qtbot, monkeypatch):
+    # Qt 6.11 would deliver a press here twice; the second closes the menu.
+    window, bar, menu, _, save, _ = _window_with_menus_and_buttons(qtbot)
+    monkeypatch.setattr(title_bar, "_user32", _FakeUser32)
+    hwnd = int(window.internalWinId())
+    item = bar.actionGeometry(menu.menuAction())
+    on_item = _screen_position(item.center())
+    assert item.center().y() >= title_bar.resize_border(window) == 8
+
+    assert bar.native_hit_test(hwnd, on_item) == title_bar.HTCLIENT
+    assert (
+        bar.native_hit_test(hwnd, _screen_position(_centre(bar, save)))
+        == title_bar.HTCLIENT
+    )
+    # Qt decides for the stretch that drags the window, and for other windows.
+    empty = QPoint(item.right() + 60, bar.height() // 2)
+    assert bar.native_hit_test(hwnd, _screen_position(empty)) is None
+    assert bar.native_hit_test(hwnd + 1, on_item) is None
+
+    # The top edge resizes the window until it is maximised.
+    top_edge = _screen_position(QPoint(item.center().x(), 2))
+    assert bar.native_hit_test(hwnd, top_edge) == title_bar.HTTOP
+    window.showMaximized()
+    qtbot.waitUntil(window.isMaximized)
+    edge_item = bar.actionGeometry(menu.menuAction())
+    top_edge = _screen_position(QPoint(edge_item.center().x(), 2))
+    assert bar.native_hit_test(hwnd, top_edge) == title_bar.HTCLIENT
+
+
+def test_only_the_hit_test_message_is_answered(qt_app, qtbot, monkeypatch):
+    window, bar, menu, _, _, _ = _window_with_menus_and_buttons(qtbot)
+    monkeypatch.setattr(title_bar, "_user32", _FakeUser32)
+    centre = bar.actionGeometry(menu.menuAction()).center()
+    message = title_bar._NativeMessage(
+        int(window.internalWinId()),
+        title_bar.WM_NCHITTEST,
+        0,
+        _screen_position(centre),
+    )
+    address = ctypes.addressof(message)
+    hit_test = bar._click_hit_test
+
+    assert hit_test.nativeEventFilter(b"windows_generic_MSG", address) == (
+        True,
+        title_bar.HTCLIENT,
+    )
+    message.message = 0x0200  # a mouse move
+    assert hit_test.nativeEventFilter(b"windows_generic_MSG", address) == (False, 0)

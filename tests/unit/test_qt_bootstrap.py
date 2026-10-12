@@ -1,49 +1,40 @@
 from __future__ import annotations
 
+import pytest
+
 from silverestimate.infrastructure import qt_bootstrap
 
 
-def test_disable_windows_dark_mode_sets_default_when_env_missing() -> None:
+@pytest.mark.parametrize(
+    "platform, configured, expected",
+    [
+        pytest.param("win32", None, "windows:darkmode=0", id="sets-default-when-unset"),
+        pytest.param(
+            "linux", "windows:darkmode=2", "windows:darkmode=2", id="noop-off-windows"
+        ),
+        pytest.param("win32", "offscreen", "offscreen", id="keeps-offscreen"),
+        pytest.param(
+            "win32",
+            "windows:fontengine=freetype,darkmode=2",
+            "windows:fontengine=freetype,darkmode=0",
+            id="replaces-existing-darkmode",
+        ),
+        pytest.param(
+            "win32",
+            "windows:fontengine=freetype,menus=native,darkmode=1",
+            "windows:fontengine=freetype,menus=native,darkmode=0",
+            id="keeps-other-options",
+        ),
+    ],
+)
+def test_disable_windows_dark_mode(platform, configured, expected) -> None:
     environ: dict[str, str] = {}
+    if configured is not None:
+        environ[qt_bootstrap.QT_QPA_PLATFORM] = configured
 
-    qt_bootstrap.disable_windows_dark_mode(environ=environ, platform="win32")
+    qt_bootstrap.disable_windows_dark_mode(environ=environ, platform=platform)
 
-    assert environ[qt_bootstrap.QT_QPA_PLATFORM] == "windows:darkmode=0"
-
-
-def test_disable_windows_dark_mode_is_noop_outside_windows() -> None:
-    environ = {qt_bootstrap.QT_QPA_PLATFORM: "windows:darkmode=2"}
-
-    qt_bootstrap.disable_windows_dark_mode(environ=environ, platform="linux")
-
-    assert environ[qt_bootstrap.QT_QPA_PLATFORM] == "windows:darkmode=2"
-
-
-def test_disable_windows_dark_mode_preserves_offscreen_platform() -> None:
-    environ = {qt_bootstrap.QT_QPA_PLATFORM: "offscreen"}
-
-    qt_bootstrap.disable_windows_dark_mode(environ=environ, platform="win32")
-
-    assert environ[qt_bootstrap.QT_QPA_PLATFORM] == "offscreen"
-
-
-def test_disable_windows_dark_mode_replaces_existing_darkmode() -> None:
-    environ = {qt_bootstrap.QT_QPA_PLATFORM: "windows:fontengine=freetype,darkmode=2"}
-
-    qt_bootstrap.disable_windows_dark_mode(environ=environ, platform="win32")
-
-    assert (
-        environ[qt_bootstrap.QT_QPA_PLATFORM]
-        == "windows:fontengine=freetype,darkmode=0"
-    )
-
-
-def test_windows_platform_parser_preserves_non_darkmode_options() -> None:
-    platform = "windows:fontengine=freetype,menus=native,darkmode=1"
-
-    parsed = qt_bootstrap.windows_platform_without_dark_mode(platform)
-
-    assert parsed == "windows:fontengine=freetype,menus=native,darkmode=0"
+    assert environ[qt_bootstrap.QT_QPA_PLATFORM] == expected
 
 
 def test_set_pass_through_high_dpi_rounding_policy_uses_available_policy() -> None:

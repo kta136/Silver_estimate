@@ -12,9 +12,17 @@ import math
 import os
 from typing import Any
 
-from PySide6.QtCore import QEvent, QSize, Qt
+from PySide6.QtCore import (
+    QAbstractNativeEventFilter,
+    QCoreApplication,
+    QEvent,
+    QPoint,
+    QSize,
+    Qt,
+)
 from PySide6.QtGui import QGuiApplication, QMouseEvent, QShowEvent
-from PySide6.QtWidgets import QMenuBar, QWidget
+from PySide6.QtWidgets import QAbstractButton, QMenuBar, QWidget
+from shiboken6 import isValid
 
 # Set to true to keep the ordinary title bar.
 CLASSIC_TITLE_BAR_ENV = "SILVER_CLASSIC_TITLE_BAR"
@@ -40,6 +48,26 @@ BAR_BORDER = 1
 SM_CYCAPTION = 4
 SM_CXSIZEFRAME = 32
 SM_CXPADDEDBORDER = 92
+
+# The question Windows asks before every mouse message, and two answers.
+WM_NCHITTEST = 0x0084
+HTCLIENT = 1
+HTTOP = 12
+
+
+class _NativeMessage(ctypes.Structure):
+    """The start of a Windows MSG: the window, the message and its values."""
+
+    _fields_ = (
+        ("hwnd", ctypes.c_void_p),
+        ("message", ctypes.c_uint),
+        ("wParam", ctypes.c_size_t),
+        ("lParam", ctypes.c_ssize_t),
+    )
+
+
+class _NativePoint(ctypes.Structure):
+    _fields_ = (("x", ctypes.c_long), ("y", ctypes.c_long))
 
 
 def _user32() -> Any | None:
@@ -112,6 +140,55 @@ def set_native_caption(window: QWidget, text: str) -> None:
     user32.SetWindowTextW(ctypes.c_void_p(hwnd), ctypes.c_wchar_p(text))
 
 
+def resize_border(window: QWidget) -> int:
+    """Thickness, in device pixels, of the edge that resizes the window."""
+    user32 = _user32()
+    hwnd = int(window.internalWinId())
+    if user32 is None or not hwnd:
+        return 0
+    dpi = user32.GetDpiForWindow(ctypes.c_void_p(hwnd))
+    if not dpi:
+        return 0
+    return sum(
+        int(user32.GetSystemMetricsForDpi(metric, dpi))
+        for metric in (SM_CXSIZEFRAME, SM_CXPADDEDBORDER)
+    )
+
+
+class _ClickHitTest(QAbstractNativeEventFilter):
+    """Tells Windows which parts of the bar take a click themselves.
+
+    Qt 6.11 asks the window about a press in the title bar by delivering
+    the press once as a question (accept it, or the window is dragged) and
+    then again as the click. A menu opens on the first and closes on the
+    second. Answering for the menus and buttons before Qt asks leaves one
+    press per click; Qt still decides for the stretch that drags the window.
+    """
+
+    def __init__(self, bar: TitleMenuBar) -> None:
+        super().__init__()
+        self._bar = bar
+
+    def nativeEventFilter(self, _event_type: Any, message: Any) -> Any:
+        try:
+            native = _NativeMessage.from_address(int(message))
+            if native.message != WM_NCHITTEST or not isValid(self._bar):
+                return False, 0
+            answer = self._bar.native_hit_test(native.hwnd or 0, native.lParam)
+        except Exception:
+            # A mistake here must never stop the window's own messages.
+            return False, 0
+        if answer is None:
+            return False, 0
+        return True, answer
+
+
+def _stop_answering(hit_test: _ClickHitTest) -> None:
+    application = QCoreApplication.instance()
+    if application is not None:
+        application.removeNativeEventFilter(hit_test)
+
+
 class _IconSpace(QWidget):
     """Keeps the menus clear of the window icon Qt draws over the bar."""
 
@@ -130,6 +207,13 @@ class TitleMenuBar(QMenuBar):
         self._item_padding = 0
         self.setCornerWidget(_IconSpace(self), Qt.Corner.TopLeftCorner)
         self._match_title_height()
+        hit_test = _ClickHitTest(self)
+        self._click_hit_test = hit_test
+        application = QCoreApplication.instance()
+        if application is not None:
+            application.installNativeEventFilter(hit_test)
+            # Not a method of the bar: it runs while the bar is going away.
+            self.destroyed.connect(lambda *_: _stop_answering(hit_test))
 
     def caption_buttons_width(self) -> int:
         """Width to keep clear at the right end for the caption buttons."""
@@ -164,6 +248,46 @@ class TitleMenuBar(QMenuBar):
         super().showEvent(event)
         # Only a window that exists can say which display's scale it uses.
         self._match_title_height()
+
+    def takes_click_at(self, position: QPoint) -> bool:
+        """True over a menu or a button; False where a press drags the window."""
+        if self.actionAt(position) is not None:
+            return True
+        child = self.childAt(position)
+        while child is not None and child is not self:
+            if isinstance(child, QAbstractButton):
+                return child.isEnabled()
+            child = child.parentWidget()
+        return False
+
+    def native_hit_test(self, hwnd: int, screen_position: int) -> int | None:
+        """Answer Windows for a point over a menu or button; None asks Qt."""
+        user32 = _user32()
+        window = self.window()
+        if (
+            user32 is None
+            or not self.isVisible()
+            or hwnd != int(window.internalWinId())
+        ):
+            return None
+        point = _NativePoint(
+            ctypes.c_short(screen_position & 0xFFFF).value,
+            ctypes.c_short((screen_position >> 16) & 0xFFFF).value,
+        )
+        if not user32.ScreenToClient(ctypes.c_void_p(hwnd), ctypes.byref(point)):
+            return None
+        scale = max(window.devicePixelRatioF(), 1.0)
+        position = self.mapFrom(
+            window, QPoint(int(point.x // scale), int(point.y // scale))
+        )
+        if not self.rect().contains(position) or not self.takes_click_at(position):
+            return None
+        # The top edge still resizes a window that is not maximised.
+        if not (
+            window.isMaximized() or window.isFullScreen()
+        ) and point.y < resize_border(window):
+            return HTTOP
+        return HTCLIENT
 
     def _on_empty_stretch(self, event: QMouseEvent) -> bool:
         return self.actionAt(event.position().toPoint()) is None

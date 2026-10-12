@@ -82,7 +82,7 @@ See also: `DOCS/project-architecture.md`.
 - Return processing and last balance handling
 
 ### Security
-- Encrypted database: machine-bound SQLCipher 4.17.x with a raw key derived from the password, the in-file salt, and a 256-bit device secret held in local-machine Windows Credential Manager
+- Encrypted database: machine-bound SQLCipher 4 format with a raw key derived from the password, the in-file salt, and a 256-bit device secret held in local-machine Windows Credential Manager
 - Machine-bound `.sedbbackup` full-database backup and restart-activated restore; `.seitems.json` catalog exports remain plaintext by request
 - Password hashing: Argon2 with hashes stored in Windows Credential Manager
 - Secure settings store: non-sensitive preferences via QSettings
@@ -150,7 +150,7 @@ First run notes:
 
 ## Security
 
-- Encryption: bundled and hash-verified SQLCipher 4.17.x for CPython 3.14 x64, machine-bound Argon2id raw keys, and encrypted database/WAL/journal pages
+- Encryption: SQLCipher 4 file format through `apsw-sqlite3mc` (SQLite3 Multiple Ciphers), machine-bound Argon2id raw keys, and encrypted database/WAL/journal pages
 - Passwords: direct Argon2id hashing with `argon2-cffi`; current PHC hashes are persisted in Windows Credential Manager
 - Files: one permanent encrypted DB at `<EXE folder>/database/estimation.db` (ignored in Git); WAL/SHM and recovery journals can exist temporarily
 - Device binding: copying the DB or a new `.sedbbackup` to another PC does not make it openable, even with the correct password
@@ -205,7 +205,7 @@ uv run nox -s audit
 ## Testing
 
 - Tests live under `tests/` and use pytest with the `pytest-qt` PySide6 backend.
-- Local smoke command: `pytest -v tests/test_security.py tests/services/test_auth_service.py`
+- Local smoke command: `pytest -v tests/unit/test_encryption.py tests/services/test_auth_service.py`
 - Full startup UI smoke with screenshots: `uv run nox -s smoke_ui`
   - Creates an isolated encrypted test database with fixed smoke passwords.
   - Captures opt-in Qt screenshots under `artifacts/smoke-ui/`.

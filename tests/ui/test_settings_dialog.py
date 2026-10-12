@@ -1,18 +1,26 @@
 import types
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, QRect, QSize, Qt
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QDialog, QDialogButtonBox, QTableWidget
+from PySide6.QtWidgets import (
+    QBoxLayout,
+    QDialog,
+    QDialogButtonBox,
+    QFrame,
+    QTableWidget,
+)
 
-from silverestimate.infrastructure.settings import get_app_settings
+from silverestimate.infrastructure.settings import SettingsKey, get_app_settings
 from silverestimate.security import credential_store
+from silverestimate.ui.application_theme import apply_light_application_theme
 from silverestimate.ui.settings_dialog import SettingsDialog
 from silverestimate.ui.themed_controls import (
     ThemedComboBox,
     ThemedDoubleSpinBox,
     ThemedSpinBox,
 )
+from tests.smoke.test_full_startup_smoke import _configure_smoke_font
 
 
 class _MessageBoxStub:
@@ -248,27 +256,26 @@ def test_settings_apply_persists_ui_preferences(
 ):
     del qt_app, settings_stub
     settings = get_app_settings()
+    _MessageBoxStub.reset()
     monkeypatch.setattr(
         "silverestimate.ui.settings_print_controller.QPrinterInfo.availablePrinters",
         lambda: [],
     )
-    monkeypatch.setattr(
-        "silverestimate.infrastructure.logger.reconfigure_logging", lambda: None
-    )
 
-    applied = {}
+    applied = []
     estimate_widget = types.SimpleNamespace(
-        apply_table_font_size=lambda size: applied.setdefault("table", size) or True,
+        apply_table_font_size=lambda size: applied.append(("table", size)) or True,
         apply_breakdown_font_size=lambda size: (
-            applied.setdefault("breakdown", size) or True
+            applied.append(("breakdown", size)) or True
         ),
-        apply_final_calc_font_size=lambda size: (
-            applied.setdefault("final", size) or True
-        ),
+        apply_final_calc_font_size=lambda size: applied.append(("final", size)) or True,
     )
     dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
     qtbot.addWidget(dialog)
     try:
+        monkeypatch.setattr(
+            "silverestimate.ui.settings_dialog.QMessageBox", _MessageBoxStub
+        )
         dialog.appearance_page.table_font_size_spin.setValue(12)
         dialog.appearance_page.breakdown_font_size_spin.setValue(11)
         dialog.appearance_page.final_calc_font_size_spin.setValue(18)
@@ -278,7 +285,9 @@ def test_settings_apply_persists_ui_preferences(
         assert settings.value("ui/breakdown_font_size") == 11
         assert settings.value("ui/final_calc_font_size") == 18
         assert not settings.contains("ui/estimate_totals_position")
-        assert applied == {"table": 12, "breakdown": 11, "final": 18}
+        # Each size reaches the estimate screen once, with the value chosen.
+        assert sorted(applied) == [("breakdown", 11), ("final", 18), ("table", 12)]
+        assert not _MessageBoxStub.critical_calls
     finally:
         dialog.deleteLater()
 
@@ -498,38 +507,6 @@ def test_settings_dialog_uses_defaults_for_invalid_ui_preferences(
         dialog.deleteLater()
 
 
-def test_settings_apply_calls_estimate_layout_controller(
-    qtbot, qt_app, monkeypatch, settings_stub
-):
-    _MessageBoxStub.reset()
-    calls = {"table": 0, "breakdown": 0, "final": 0}
-
-    estimate_widget = types.SimpleNamespace(
-        apply_table_font_size=lambda size: (
-            calls.__setitem__("table", calls["table"] + 1) or True
-        ),
-        apply_breakdown_font_size=lambda size: (
-            calls.__setitem__("breakdown", calls["breakdown"] + 1) or True
-        ),
-        apply_final_calc_font_size=lambda size: (
-            calls.__setitem__("final", calls["final"] + 1) or True
-        ),
-    )
-    dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
-    qtbot.addWidget(dialog)
-    try:
-        monkeypatch.setattr(
-            "silverestimate.ui.settings_dialog.QMessageBox", _MessageBoxStub
-        )
-        assert dialog.apply_settings() is True
-        assert calls["table"] == 1
-        assert calls["breakdown"] == 1
-        assert calls["final"] == 1
-        assert not _MessageBoxStub.critical_calls
-    finally:
-        dialog.deleteLater()
-
-
 def test_password_change_uses_auth_service_and_preserves_keyring_names(
     qtbot,
     qt_app,
@@ -667,3 +644,189 @@ def test_default_zoom_is_entered_as_a_percentage(qtbot, qt_app, settings_stub):
         assert dialog.print_page.margin_left_spin.suffix() == ""
     finally:
         dialog.deleteLater()
+
+
+def _settings_dialog_as_opened_on_1366x768(
+    qtbot, qt_application_state, size=(1180, 688)
+):
+    """The dialog at its real size there: 1180x688, in the app's own font."""
+    _configure_smoke_font(qt_application_state)
+    apply_light_application_theme(qt_application_state)
+    estimate_widget = types.SimpleNamespace(
+        apply_table_font_size=lambda size: True,
+        apply_breakdown_font_size=lambda size: True,
+        apply_final_calc_font_size=lambda size: True,
+    )
+    dialog = SettingsDialog(main_window_ref=_make_main_window(estimate_widget))
+    qtbot.addWidget(dialog)
+    dialog.resize(*size)
+    dialog.show()
+    qtbot.waitUntil(dialog.isVisible)
+    return dialog
+
+
+def test_every_page_fits_without_a_scrollbar_at_the_size_it_opens_on_1366x768(
+    qtbot, qt_application_state, settings_stub
+):
+    # Printing and Data & Backups used to scroll, which put "Delete All Data"
+    # and the print sample below the fold.
+    del settings_stub
+    dialog = _settings_dialog_as_opened_on_1366x768(qtbot, qt_application_state)
+    try:
+        for index in range(dialog.sidebar.count()):
+            dialog.sidebar.setCurrentRow(index)
+            qtbot.wait(60)
+            page = dialog.pages.currentWidget()
+            viewport_height = dialog.page_scroll.viewport().height()
+            assert not dialog.page_scroll.verticalScrollBar().isVisible(), index
+            assert page.minimumSizeHint().height() <= viewport_height, index
+            assert page.height() <= viewport_height, index
+    finally:
+        dialog.deleteLater()
+
+
+def test_print_margin_boxes_stay_clear_of_the_page_sketch(
+    qtbot, qt_application_state, settings_stub
+):
+    del settings_stub
+    dialog = _settings_dialog_as_opened_on_1366x768(qtbot, qt_application_state)
+    try:
+        dialog.sidebar.setCurrentRow(2)
+        qtbot.wait(80)
+        page = dialog.print_page
+        sketch = next(
+            frame
+            for frame in page.findChildren(QFrame)
+            if frame.size() == QSize(84, 72)
+        )
+        sketch_rect = QRect(sketch.mapTo(page, QPoint(0, 0)), sketch.size())
+        spins = (
+            page.margin_top_spin,
+            page.margin_left_spin,
+            page.margin_right_spin,
+            page.margin_bottom_spin,
+        )
+        for spin in spins:
+            spin_rect = QRect(spin.mapTo(page, QPoint(0, 0)), spin.size())
+            assert not sketch_rect.intersects(spin_rect), spin
+        # Top above the sketch, Bottom below it, Left and Right either side.
+        assert page.margin_top_spin.geometry().bottom() < sketch.geometry().top() + 40
+        top = page.margin_top_spin.mapTo(page, QPoint(0, 0)).y()
+        bottom = page.margin_bottom_spin.mapTo(page, QPoint(0, 0)).y()
+        assert top < sketch_rect.top() < sketch_rect.bottom() < bottom + 1
+        assert page.margin_left_spin.mapTo(page, QPoint(0, 0)).x() < sketch_rect.left()
+        assert (
+            page.margin_right_spin.mapTo(page, QPoint(0, 0)).x() > sketch_rect.right()
+        )
+    finally:
+        dialog.deleteLater()
+
+
+def test_appearance_preview_shows_every_column_at_the_real_dialog_width(
+    qtbot, qt_application_state, settings_stub
+):
+    del settings_stub
+    dialog = _settings_dialog_as_opened_on_1366x768(qtbot, qt_application_state)
+    try:
+        page = dialog.appearance_page
+        table = page.preview_table
+        qtbot.wait(80)
+
+        assert not table.horizontalScrollBar().isVisible()
+        header = table.horizontalHeader()
+        for column in range(table.columnCount()):
+            title = table.horizontalHeaderItem(column).text()
+            assert header.sectionSize(column) >= (
+                header.fontMetrics().horizontalAdvance(title)
+            ), title
+        # Beside the table at this width there is no room: the sample totals
+        # sit under it, as one row.
+        assert page.preview_content.direction() == QBoxLayout.Direction.TopToBottom
+        assert "Grand Total" in page.preview_total.text()
+    finally:
+        dialog.deleteLater()
+
+
+@pytest.mark.parametrize("size", [(1180, 688), (1180, 648)])
+def test_a_page_is_never_cut_off_without_a_scrollbar(
+    qtbot, qt_application_state, settings_stub, size
+):
+    # 1180x648 is the size on a 1600x900 screen at 125% (1280x688 usable). The
+    # scrollbar used to be decided by the page's minimum size hint, while the
+    # scroll area enforced the taller height-for-width, so the bottom 10 px of
+    # every page were trimmed with no way to reach them.
+    del settings_stub
+    dialog = _settings_dialog_as_opened_on_1366x768(qtbot, qt_application_state, size)
+    try:
+        for index in range(dialog.sidebar.count()):
+            dialog.sidebar.setCurrentRow(index)
+            qtbot.wait(60)
+            viewport = dialog.page_scroll.viewport()
+            bar = dialog.page_scroll.verticalScrollBar()
+            assert bar.isVisible() or dialog.pages.height() <= viewport.height(), index
+            # With room for it, no page needs one.
+            assert not bar.isVisible(), index
+    finally:
+        dialog.deleteLater()
+
+
+def test_no_window_height_cuts_a_page_without_a_scrollbar(
+    qtbot, qt_application_state, settings_stub
+):
+    # Between the height a page can squeeze into and the height the scroll area
+    # really asks for (the tallest page's height at this width) the page used
+    # to be trimmed with no scrollbar. Every height from 600 to 700 must give
+    # either the whole page or a scrollbar.
+    del settings_stub
+    dialog = _settings_dialog_as_opened_on_1366x768(
+        qtbot, qt_application_state, (1180, 700)
+    )
+    try:
+        dialog.sidebar.setCurrentRow(3)
+        bar = dialog.page_scroll.verticalScrollBar()
+        scrollbar_seen = False
+        for height in range(600, 701, 4):
+            dialog.resize(1180, height)
+            qtbot.wait(40)
+            viewport = dialog.page_scroll.viewport()
+            assert bar.isVisible() or dialog.pages.height() <= viewport.height(), height
+            scrollbar_seen = scrollbar_seen or bar.isVisible()
+        # The shortest windows do need one.
+        assert scrollbar_seen
+    finally:
+        dialog.deleteLater()
+
+
+def test_preview_changes_are_staged_and_footer_buttons_work(
+    qtbot, settings_stub, monkeypatch
+):
+    estimate = types.SimpleNamespace(
+        apply_table_font_size=lambda _: True,
+        apply_breakdown_font_size=lambda _: True,
+        apply_final_calc_font_size=lambda _: True,
+    )
+    dialog = SettingsDialog(_make_main_window(estimate))
+    qtbot.addWidget(dialog)
+    dialog.resize(1366, 768)
+    dialog.show()
+    settings = get_app_settings()
+    before = settings.get_int(SettingsKey.UI_TABLE_FONT_SIZE, 11)
+    page = dialog.appearance_page
+    page.table_font_size_spin.setValue(13)
+    page.density_combo.setCurrentIndex(1)
+    page.alternating_checkbox.setChecked(False)
+    assert page.preview_table.font().pointSize() == 13
+    assert not page.preview_table.alternatingRowColors()
+    assert settings.get_int(SettingsKey.UI_TABLE_FONT_SIZE, 11) == before
+    calls = []
+    monkeypatch.setattr(dialog, "apply_settings", lambda: calls.append("saved") or True)
+    save = dialog.buttonBox.button(QDialogButtonBox.StandardButton.Ok)
+    cancel = dialog.buttonBox.button(QDialogButtonBox.StandardButton.Cancel)
+    apply = dialog.buttonBox.button(QDialogButtonBox.StandardButton.Apply)
+    # Qt owns button placement so theme/font refreshes keep the footer visible.
+    for button in (cancel, apply, save):
+        assert dialog.buttonBox.isAncestorOf(button)
+        assert button.isVisible()
+    qtbot.mouseClick(save, Qt.MouseButton.LeftButton)
+    assert calls == ["saved"]
+    assert dialog.result() == dialog.DialogCode.Accepted

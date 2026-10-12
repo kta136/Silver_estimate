@@ -2,8 +2,6 @@ import logging
 import sys
 import types
 
-from PySide6.QtWidgets import QDialog
-
 from silverestimate.controllers.navigation_controller import NavigationController
 
 
@@ -28,6 +26,7 @@ class _StackStub:
     def __init__(self):
         self.current = None
         self.added = []
+        self.removed = []
 
     def setCurrentWidget(self, widget):
         self.current = widget
@@ -37,6 +36,9 @@ class _StackStub:
 
     def addWidget(self, widget):
         self.added.append(widget)
+
+    def removeWidget(self, widget):
+        self.removed.append(widget)
 
 
 class _MessageBoxRecorder:
@@ -147,48 +149,128 @@ def test_show_item_master_failure_shows_message(monkeypatch):
     assert stack.current is None
 
 
-def test_show_silver_bars_lazy_creation(monkeypatch):
-    stack = _StackStub()
-    message_box = _MessageBoxRecorder()
+class _SignalStub:
+    def __init__(self):
+        self.callbacks = []
+
+    def connect(self, callback):
+        self.callbacks.append(callback)
+
+    def emit(self):
+        for callback in list(self.callbacks):
+            callback()
+
+
+class _SilverBarsStub:
+    """Stands in for the real screen and records how it is built and released."""
+
+    instances = []
+
+    def __init__(self, db, main_window):
+        self.db = db
+        self.main_window = main_window
+        self.close_requested = _SignalStub()
+        self.busy = False
+        self.events = []
+        type(self).instances.append(self)
+
+    def can_close(self):
+        return not self.busy
+
+    def shutdown(self):
+        self.events.append("shutdown")
+
+    def deleteLater(self):
+        self.events.append("deleteLater")
+
+    def print_selected_list(self):
+        self.events.append("print")
+
+    def show_keyboard_help(self):
+        self.events.append("help")
+
+
+def _silver_bars_setup(monkeypatch):
+    _SilverBarsStub.instances = []
+    module = types.SimpleNamespace(SilverBarWidget=_SilverBarsStub)
+    monkeypatch.setitem(sys.modules, "silverestimate.ui.silver_bar_management", module)
     monkeypatch.setattr(
         "silverestimate.controllers.navigation_controller.QMessageBox",
-        message_box,
+        _MessageBoxRecorder(),
     )
-
-    created = {}
-    exec_calls = []
-
-    class _SilverBarDialog:
-        def __init__(self, db, main_window):
-            created["db"] = db
-            created["main_window"] = main_window
-
-        def exec(self):
-            exec_calls.append("exec")
-            return QDialog.DialogCode.Accepted
-
-        def deleteLater(self):
-            exec_calls.append("deleteLater")
-
-    module = types.SimpleNamespace(SilverBarDialog=_SilverBarDialog)
-    monkeypatch.setitem(sys.modules, "silverestimate.ui.silver_bar_management", module)
-
+    stack = _StackStub()
+    estimate = object()
     main_window = types.SimpleNamespace(
         db=object(),
-        nav_silver_action=_ActionStub(),
-        _menu_silver_action=_ActionStub(),
+        estimate_widget=estimate,
+        silver_bar_widget=None,
+        _view_estimate_action=_ActionStub(),
         _view_silver_bars_action=_ActionStub(),
     )
-
+    commands = types.SimpleNamespace(printed=[])
+    commands.print_estimate = lambda: commands.printed.append("estimate")
     service = _navigation(main_window, stack, "test-silver")
+    service._commands = commands
+    return service, main_window, stack, estimate, commands
+
+
+def test_silver_bars_are_built_only_when_opened(monkeypatch):
+    service, main_window, stack, estimate, _ = _silver_bars_setup(monkeypatch)
+    service.show_estimate()
+
+    # Nothing of the screen exists until the user asks for it.
+    assert _SilverBarsStub.instances == []
+    assert main_window.silver_bar_widget is None
+
     service.show_silver_bars()
 
-    assert not hasattr(main_window, "silver_bar_widget")
-    assert stack.current is None
-    assert stack.added == []
-    assert created["db"] is main_window.db
-    assert exec_calls == ["exec", "deleteLater"]
-    assert message_box.calls == []
+    (screen,) = _SilverBarsStub.instances
+    assert screen.db is main_window.db
+    assert screen.main_window is main_window
+    assert main_window.silver_bar_widget is screen
+    assert stack.added == [screen]
+    assert stack.current is screen
+    assert main_window._view_silver_bars_action.checked is True
+
+    # Opening it again shows the same screen; it is not built twice.
+    service.show_silver_bars()
+    assert len(_SilverBarsStub.instances) == 1
+    assert stack.added == [screen]
+
+
+def test_silver_bars_cannot_be_left_while_a_print_is_under_way(monkeypatch):
+    service, main_window, stack, estimate, _ = _silver_bars_setup(monkeypatch)
+    service.show_silver_bars()
+    (screen,) = _SilverBarsStub.instances
+    screen.busy = True
+
+    service.show_estimate()
+
+    assert stack.current is screen
+    assert main_window.silver_bar_widget is screen
+    assert screen.events == []
+
+    screen.busy = False
+    service.show_estimate()
+    assert stack.current is estimate
+    assert screen.events == ["shutdown", "deleteLater"]
+
+
+def test_print_and_help_go_to_the_open_silver_bars_screen(monkeypatch):
+    service, main_window, stack, estimate, commands = _silver_bars_setup(monkeypatch)
+
+    # On any other screen File > Print still prints the estimate.
+    service.show_estimate()
+    service.print_open_screen()
+    assert commands.printed == ["estimate"]
+
+    service.show_silver_bars()
+    (screen,) = _SilverBarsStub.instances
+    service.print_open_screen()
+    service.show_keyboard_shortcuts()
+
+    assert commands.printed == ["estimate"]
+    assert screen.events == ["print", "help"]
 
 
 def test_show_silver_bars_requires_database(monkeypatch):
@@ -199,11 +281,7 @@ def test_show_silver_bars_requires_database(monkeypatch):
         message_box,
     )
 
-    main_window = types.SimpleNamespace(
-        nav_silver_action=_ActionStub(),
-        _menu_silver_action=_ActionStub(),
-        _view_silver_bars_action=_ActionStub(),
-    )
+    main_window = types.SimpleNamespace(_view_silver_bars_action=_ActionStub())
 
     service = _navigation(main_window, stack, "test-silver-db")
     service._db = None

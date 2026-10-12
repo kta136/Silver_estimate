@@ -288,25 +288,32 @@ class ItemMasterWidget(QWidget):
         form_vbox.addLayout(wage_row)
         form_vbox.addSpacing(4)
 
-        # Primary action — swaps between Add and Save depending on mode
+        # Primary action (it swaps between Add and Save) and Cancel share a
+        # row; one above the other they made the form too tall for a
+        # 1280x720 screen, so its Delete button scrolled out of view.
+        self._form_buttons = QWidget()
+        form_buttons = QHBoxLayout(self._form_buttons)
+        form_buttons.setContentsMargins(0, 0, 0, 0)
+        form_buttons.setSpacing(8)
         self.add_button = QPushButton("Add Item")
         self.add_button.setObjectName("ItemMasterPrimaryButton")
         self.add_button.setToolTip("Add these details as a new item.")
         self.add_button.clicked.connect(self.add_item)
-        form_vbox.addWidget(self.add_button)
+        form_buttons.addWidget(self.add_button, 1)
 
         self.update_button = QPushButton("Save Changes")
         self.update_button.setObjectName("ItemMasterPrimaryButton")
         self.update_button.setToolTip("Save changes to the selected item.")
         self.update_button.clicked.connect(self.update_item)
         self.update_button.setVisible(False)
-        form_vbox.addWidget(self.update_button)
+        form_buttons.addWidget(self.update_button, 1)
 
         self.clear_button = QPushButton("Clear")
         self.clear_button.setObjectName("ItemMasterSecondaryButton")
         self.clear_button.setToolTip("Clear fields and deselect the current item.")
         self.clear_button.clicked.connect(self.clear_form)
-        form_vbox.addWidget(self.clear_button)
+        form_buttons.addWidget(self.clear_button)
+        form_vbox.addWidget(self._form_buttons)
 
         # Separator
         sep = QFrame()
@@ -432,7 +439,7 @@ class ItemMasterWidget(QWidget):
         header_row.addWidget(close)
         self.dirty_label = QLabel("")
         self.dirty_label.setVisible(False)
-        form_vbox.insertWidget(form_vbox.indexOf(self.add_button), self.dirty_label)
+        form_vbox.insertWidget(form_vbox.indexOf(self._form_buttons), self.dirty_label)
         self.form_error_label = QLabel("")
         self.form_error_label.setObjectName("ItemMasterFormError")
         self.form_error_label.setWordWrap(True)
@@ -758,6 +765,10 @@ class ItemMasterWidget(QWidget):
         self.tunch_edit.setText(tunch_str)
         self.purity_edit.setText(purity_str)
         self.wage_rate_edit.setText(wage_rate_str)
+        # setText leaves the cursor at the end, which scrolls a long name or
+        # tunch so that only its tail shows; show the start.
+        for field in (self.code_edit, self.name_edit, self.tunch_edit):
+            field.setCursorPosition(0)
 
         index = self.wage_type_combo.findData(wage_type)
         self.wage_type_combo.setCurrentIndex(index if index >= 0 else 0)

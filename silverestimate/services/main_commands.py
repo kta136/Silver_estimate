@@ -75,8 +75,12 @@ class _ItemCatalogExportWorker(QObject):
         self.finished.emit(count)
 
 
-class MainCommands:
-    """Encapsulate high-level commands triggered from the main window."""
+class MainCommands(QObject):
+    """Encapsulate high-level commands triggered from the main window.
+
+    A QObject so that signals from worker threads reach its handlers on the UI
+    thread; a plain object's handler runs on the sending object's thread.
+    """
 
     def __init__(
         self,
@@ -84,6 +88,7 @@ class MainCommands:
         db_manager: DatabaseManager,
         logger: Optional[logging.Logger] = None,
     ) -> None:
+        super().__init__()
         self.main_window = main_window
         self.db = db_manager
         self.logger = logger or logging.getLogger(__name__)

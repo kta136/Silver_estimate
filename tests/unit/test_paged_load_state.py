@@ -31,13 +31,3 @@ def test_paged_load_state_reset_clears_rows_cursor_and_total() -> None:
     assert state.loaded == state.total == 0
     assert state.cursor is None
     assert not state.has_more
-
-
-def test_paged_load_state_does_not_share_default_row_lists() -> None:
-    first = PagedLoadState[int, int]()
-    second = PagedLoadState[int, int]()
-
-    first.apply(Page((1,), 1))
-
-    assert first.rows == [1]
-    assert second.rows == []

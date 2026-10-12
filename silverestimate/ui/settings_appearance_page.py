@@ -214,8 +214,10 @@ class SettingsAppearanceController:
             raise RuntimeError(f"Estimate view rejected {label}.")
 
 
-# Narrower than this, the sample totals go under the sample table.
-STACK_PREVIEW_BELOW = 820
+# Narrower than this, the sample totals go under the sample table: beside it
+# (1180x688 is the size the dialog opens at on a 1366x768 screen) the table
+# would be too narrow to show its columns.
+STACK_PREVIEW_BELOW = 1000
 
 
 class AppearanceSettingsPage(QWidget):
@@ -513,7 +515,7 @@ class AppearanceSettingsPage(QWidget):
         )
         table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        table.selectRow(14)
+        table.selectRow(2)
         table.setMinimumHeight(240)
         self.preview_content = QBoxLayout(QBoxLayout.Direction.LeftToRight)
         self.preview_content.addWidget(table, 1)
@@ -555,10 +557,8 @@ class AppearanceSettingsPage(QWidget):
         self.preview_total.setFont(
             QFont(font.family(), self.final_calc_font_size_spin.value())
         )
-        self.preview_total.setText(
-            f"Net Fine<br>145.80 g<br><br>Net Labour<br>₹15,500.00<br><br>Grand Total<br>"
-            f'<span style="font-size:{self.final_calc_font_size_spin.value()}pt; font-weight:600;">₹1,24,850.00</span>'
-        )
+        # The text depends on the grand total size; _arrange_preview sets it.
+        self._preview_total_html = ""
         self._arrange_preview()
         self.preview_table.horizontalHeader().setFixedHeight(
             max(28, self.preview_table.fontMetrics().height() + 10)
@@ -569,11 +569,34 @@ class AppearanceSettingsPage(QWidget):
         super().resizeEvent(event)
         self._arrange_preview()
 
+    def _preview_total_markup(self, stacked: bool) -> str:
+        """The sample totals: a column beside the table, a row under it."""
+        grand = (
+            f'<span style="font-size:{self.final_calc_font_size_spin.value()}pt; '
+            'font-weight:600;">₹1,24,850.00</span>'
+        )
+        if stacked:
+            return (
+                '<table width="100%" cellspacing="0" cellpadding="3"><tr>'
+                "<td>Net Fine<br>145.80 g</td>"
+                "<td>Net Labour<br>₹15,500.00</td>"
+                f"<td>Grand Total<br>{grand}</td>"
+                "</tr></table>"
+            )
+        return (
+            "Net Fine<br>145.80 g<br><br>Net Labour<br>₹15,500.00<br><br>"
+            f"Grand Total<br>{grand}"
+        )
+
     def _arrange_preview(self) -> None:
         """Place the sample totals beside the table, or under it when narrow."""
         if not hasattr(self, "preview_total"):
             return
         stacked = self.width() < STACK_PREVIEW_BELOW
+        html = self._preview_total_markup(stacked)
+        if html != getattr(self, "_preview_total_html", ""):
+            self._preview_total_html = html
+            self.preview_total.setText(html)
         self.preview_content.setDirection(
             QBoxLayout.Direction.TopToBottom
             if stacked

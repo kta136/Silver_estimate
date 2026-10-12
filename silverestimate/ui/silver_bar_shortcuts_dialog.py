@@ -13,7 +13,7 @@ SHORTCUT_GROUPS: ShortcutGroups = (
             ("Ctrl+F", "Weight filter and available bars"),
             ("↑ ↓", "Choose a bar"),
             ("Enter", "Add the bar and save"),
-            ("Esc", "Hide bars, clear the weight, then close"),
+            ("Esc", "Hide bars, clear the weight, then go back"),
         ),
     ),
     (
@@ -30,7 +30,7 @@ SHORTCUT_GROUPS: ShortcutGroups = (
         (
             ("Ctrl+P", "Print, issue, and start a new list"),
             ("Ctrl+Shift+P", "Preview, PDF, printer settings"),
-            ("Alt+I", "Retry issuing without printing again"),
+            ("Ctrl+I", "Retry issuing without printing again"),
         ),
     ),
     (

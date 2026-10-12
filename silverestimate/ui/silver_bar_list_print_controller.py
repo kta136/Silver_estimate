@@ -13,11 +13,11 @@ from .preview_build_worker import PreviewBuildController
 from .print_preview_output import PrintOutputOutcome
 
 if TYPE_CHECKING:
-    from .silver_bar_management import SilverBarDialog
+    from .silver_bar_management import SilverBarWidget
 
 
 class SilverBarListPrintController:
-    def __init__(self, host: SilverBarDialog) -> None:
+    def __init__(self, host: SilverBarWidget) -> None:
         self.host = host
         self.printed: BarListSnapshot | None = None
         self._preview_builder: PreviewBuildController | None = None
@@ -132,7 +132,7 @@ class SilverBarListPrintController:
                 self.invalidate()
             h.set_status(
                 f"Printed, but not issued: {result.failure.message}"
-                + (" Alt+I retries without printing again." if self.printed else ""),
+                + (" Ctrl+I retries without printing again." if self.printed else ""),
                 error=True,
             )
             h._update_actions()

@@ -710,7 +710,7 @@ def test_full_startup_smoke_with_seeded_database_and_screenshots(
         from silverestimate.ui.silver_bar_history import SilverBarHistoryDialog
         from silverestimate.ui.silver_bar_management import (
             OptimalListDialog,
-            SilverBarDialog,
+            SilverBarWidget,
         )
 
         settings_dialog = SettingsDialog(main_window_ref=window, parent=window)
@@ -753,23 +753,23 @@ def test_full_startup_smoke_with_seeded_database_and_screenshots(
         assert item_selection_dialog.items_model.rowCount() >= 1
         assert item_selection_dialog.detail_code.text() == "RING001"
 
-        silver_bar_dialog = SilverBarDialog(reopened_db, parent=window)
-        qtbot.addWidget(silver_bar_dialog)
-        open_dialogs.append(silver_bar_dialog)
+        silver_bar_screen = SilverBarWidget(reopened_db)
+        qtbot.addWidget(silver_bar_screen)
+        open_dialogs.append(silver_bar_screen)
         _show_and_capture_dialog(
-            silver_bar_dialog,
+            silver_bar_screen,
             qtbot=qtbot,
             capture=smoke_capture,
             filename="10-silver-bar-management.png",
             width=1200,
             height=760,
         )
-        _populate_silver_bar_management_dialog(silver_bar_dialog, reopened_db)
-        assert silver_bar_dialog.weight_search_edit.isEnabled()
-        assert silver_bar_dialog.list_bars_model.rowCount() >= 1
-        smoke_capture(silver_bar_dialog, "10-silver-bar-management.png")
+        _populate_silver_bar_management_dialog(silver_bar_screen, reopened_db)
+        assert silver_bar_screen.weight_search_edit.isEnabled()
+        assert silver_bar_screen.list_bars_model.rowCount() >= 1
+        smoke_capture(silver_bar_screen, "10-silver-bar-management.png")
 
-        optimal_dialog = OptimalListDialog(parent=silver_bar_dialog)
+        optimal_dialog = OptimalListDialog(parent=silver_bar_screen)
         qtbot.addWidget(optimal_dialog)
         open_dialogs.append(optimal_dialog)
         _show_and_capture_dialog(
@@ -813,7 +813,7 @@ def test_full_startup_smoke_with_seeded_database_and_screenshots(
                 window=window,
                 history=history_dialog,
                 settings=settings_dialog,
-                inventory=silver_bar_dialog,
+                inventory=silver_bar_screen,
                 silver_history=silver_history_dialog,
                 font_dialog=font_dialog,
                 item_selection=item_selection_dialog,

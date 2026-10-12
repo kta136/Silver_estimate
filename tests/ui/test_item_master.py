@@ -1,9 +1,10 @@
-import sqlite3
 import types
 
 from PySide6.QtCore import QItemSelectionModel, Qt
 
+from silverestimate.ui.application_theme import apply_light_application_theme
 from silverestimate.ui.item_master import ItemMasterWidget
+from tests.smoke.test_full_startup_smoke import _configure_smoke_font
 
 
 class _StubDbManager:
@@ -149,51 +150,6 @@ def test_item_master_accepts_numeric_and_text_tunch_above_100(qtbot, monkeypatch
     assert saved[0][1]["tunch"] == "125.50% + loss"
 
 
-def test_item_master_async_snapshot_load_populates_rows(qtbot, tmp_path):
-    db_path = tmp_path / "items.sqlite"
-    conn = sqlite3.connect(db_path)
-    try:
-        conn.execute(
-            """
-            CREATE TABLE items (
-                code TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                purity REAL DEFAULT 0,
-                wage_type TEXT DEFAULT 'WT',
-                wage_rate REAL DEFAULT 0,
-                tunch TEXT
-            )
-            """
-        )
-        conn.executemany(
-            "INSERT INTO items "
-            "(code, name, purity, wage_type, wage_rate, tunch) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            [
-                ("ITM001", "Ring", 92.5, "WT", 10.0, None),
-                ("ITM002", "Anklet", 80.0, "PC", 5.0, "87 + loss"),
-            ],
-        )
-        conn.commit()
-    finally:
-        conn.close()
-
-    db = _StubDbManager()
-    db.temp_db_path = str(db_path)
-
-    widget = ItemMasterWidget(db)
-    qtbot.addWidget(widget)
-    try:
-        qtbot.waitUntil(lambda: widget.items_model.rowCount() == 2, timeout=2000)
-        assert {widget.items_model.row_payload(i)["code"] for i in range(2)} == {
-            "ITM001",
-            "ITM002",
-        }
-    finally:
-        widget.close()
-        widget.deleteLater()
-
-
 def test_item_master_explains_a_mistake_beside_the_form(qtbot, monkeypatch):
     db = _StubDbManager()
     widget = ItemMasterWidget(db)
@@ -283,10 +239,9 @@ def test_item_master_marks_the_field_and_keeps_its_buttons_in_place(qtbot):
     try:
         layout = widget._form_panel.layout()
         # What to fix is said above the buttons, so they never move.
-        assert layout.indexOf(widget.form_error_label) < layout.indexOf(
-            widget.add_button
-        )
-        assert layout.indexOf(widget.dirty_label) < layout.indexOf(widget.add_button)
+        buttons = widget._form_buttons
+        assert layout.indexOf(widget.form_error_label) < layout.indexOf(buttons)
+        assert layout.indexOf(widget.dirty_label) < layout.indexOf(buttons)
         # Nothing typed yet: no empty line holds the buttons apart.
         assert not widget.dirty_label.isVisible()
 
@@ -304,18 +259,91 @@ def test_item_master_marks_the_field_and_keeps_its_buttons_in_place(qtbot):
         widget.deleteLater()
 
 
-def test_item_master_unsaved_prompt_names_its_choices(qtbot, confirmations):
-    widget = ItemMasterWidget(_StubDbManager())
+def test_item_master_unsaved_prompt_keeps_edits_on_cancel_and_restores_on_discard(
+    qtbot, confirmations
+):
+    widget = ItemMasterWidget(
+        _StubDbManager(), types.SimpleNamespace(show_status_message=lambda *_: None)
+    )
     qtbot.addWidget(widget)
     widget.items_table.selectRow(0)
     original = widget.name_edit.text()
+    original_code = widget.code_edit.text()
     widget.name_edit.setText("Changed")
 
     confirmations.always("Cancel")
+    widget.items_table.selectRow(1)
+    assert widget.code_edit.text() == original_code
+    assert widget.name_edit.text() == "Changed"
     assert not widget.confirm_discard_edits()
     assert widget.name_edit.text() == "Changed"
 
     confirmations.always("Discard")
     assert widget.confirm_discard_edits()
     assert widget.name_edit.text() == original
+    assert not widget.dirty_label.text()
     assert confirmations.shown[-1].startswith("Unsaved Item Changes")
+
+
+def test_a_long_item_name_shows_its_start_in_the_form(qtbot):
+    long_name = "Very Long Descriptive Jewellery Item Name Number 7 With Extra Words"
+    db = _StubDbManager()
+    db._rows[0]["name"] = long_name
+    main_window = types.SimpleNamespace(show_status_message=lambda *_args: None)
+    widget = ItemMasterWidget(db, main_window)
+    qtbot.addWidget(widget)
+    widget.resize(1280, 640)
+    widget.show()
+    try:
+        index = widget.items_model.index(0, 0)
+        widget.items_table.setCurrentIndex(index)
+        widget.items_table.selectionModel().select(
+            index,
+            QItemSelectionModel.SelectionFlag.ClearAndSelect
+            | QItemSelectionModel.SelectionFlag.Rows,
+        )
+        widget.on_item_selected()
+
+        assert widget.name_edit.text() == long_name
+        # setText leaves the cursor at the end, so only the tail would show.
+        assert widget.name_edit.cursorPosition() == 0
+    finally:
+        widget.deleteLater()
+
+
+def test_the_form_fits_a_1280x720_screen_without_scrolling(qtbot, qt_application_state):
+    _configure_smoke_font(qt_application_state)
+    apply_light_application_theme(qt_application_state)
+    widget = ItemMasterWidget(
+        _StubDbManager(),
+        types.SimpleNamespace(show_status_message=lambda *_args: None),
+    )
+    qtbot.addWidget(widget)
+    # Offscreen the menu bar is inside the window; on Windows it is in the
+    # title bar, so this is a little stricter than the real thing.
+    widget.resize(1280, 629)
+    widget.show()
+    qtbot.waitUntil(widget.isVisible)
+    index = widget.items_model.index(0, 0)
+    widget.items_table.setCurrentIndex(index)
+    widget.items_table.selectionModel().select(
+        index,
+        QItemSelectionModel.SelectionFlag.ClearAndSelect
+        | QItemSelectionModel.SelectionFlag.Rows,
+    )
+    widget.on_item_selected()
+    qtbot.wait(60)
+
+    form_scroll = widget._form_panel.parentWidget().parentWidget()
+    assert not form_scroll.verticalScrollBar().isVisible()
+    assert widget.update_button.isVisible()
+    assert widget.delete_button.isVisible()
+    bottom = widget.delete_button.mapTo(
+        widget, widget.delete_button.rect().bottomLeft()
+    )
+    assert bottom.y() < widget.height()
+    # Save and Cancel are one row, so the primary action stays beside Cancel.
+    assert widget.update_button.geometry().y() == widget.clear_button.geometry().y()
+    assert (
+        widget.update_button.geometry().right() < widget.clear_button.geometry().left()
+    )

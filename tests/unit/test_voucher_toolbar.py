@@ -29,12 +29,6 @@ def test_initial_state(toolbar):
     assert toolbar.status_message_label.text() == ""
 
 
-def test_set_voucher_number(toolbar):
-    """Test setting voucher number."""
-    toolbar.set_voucher_number("EST001")
-    assert toolbar.voucher_edit.text() == "EST001"
-
-
 def test_show_unsaved_badge(toolbar):
     """Test showing/hiding unsaved badge."""
     # Show the toolbar to ensure visibility changes work
@@ -60,37 +54,6 @@ def test_load_clicked_signal(toolbar):
 
     toolbar.load_button.click()
     assert len(signal_received) == 1
-
-
-def test_voucher_number_changed_signal(toolbar):
-    """Test that voucher number changes emit signal."""
-    values = []
-    toolbar.voucher_number_changed.connect(lambda v: values.append(v))
-
-    toolbar.voucher_edit.setText("EST001")
-    assert len(values) > 0
-    assert values[-1] == "EST001"
-
-
-def test_date_changed_signal(toolbar):
-    """Test that date changes emit signal."""
-    dates = []
-    toolbar.date_changed.connect(lambda d: dates.append(d))
-
-    test_date = QDate(2024, 1, 15)
-    toolbar.date_edit.setDate(test_date)
-    assert len(dates) > 0
-    assert dates[-1] == test_date
-
-
-def test_note_changed_signal(toolbar):
-    """Test that note changes emit signal."""
-    values = []
-    toolbar.note_changed.connect(lambda v: values.append(v))
-
-    toolbar.note_edit.setText("Test")
-    assert len(values) > 0
-    assert values[-1] == "Test"
 
 
 def test_mode_buttons_emit_selection_and_follow_set_mode_index(toolbar, qtbot):

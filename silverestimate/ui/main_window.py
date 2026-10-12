@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from silverestimate.persistence.database_manager import DatabaseManager
     from silverestimate.services.settings_service import SettingsService
     from silverestimate.ui.sales_report import SalesReportWidget
+    from silverestimate.ui.silver_bar_management import SilverBarWidget
 
     MainWindowRuntimeBuilder = Callable[..., MainWindowRuntime]
 else:
@@ -76,7 +77,8 @@ class MainWindow(QMainWindow):
         self._pending_status_message: Optional[tuple[str, int, str]] = None
         self.item_master_widget = None
         self.sales_report_widget: Optional["SalesReportWidget"] = None
-        self.silver_bar_widget = None
+        # Exists only while the Silver Bars screen is open.
+        self.silver_bar_widget: Optional["SilverBarWidget"] = None
         self.live_rate_controller: Optional["LiveRateController"] = None
 
         self._configure_window_shell()
@@ -454,6 +456,7 @@ class MainWindow(QMainWindow):
         self._closing = True
         self._stop_entry_background_work()
         self._stop_report_background_work()
+        self._stop_silver_bar_background_work()
         self.logger.info("Application closing")
         try:
             settings_service = self.settings_service
@@ -502,6 +505,11 @@ class MainWindow(QMainWindow):
     def _stop_report_background_work(self):
         if self.sales_report_widget is not None:
             self.sales_report_widget.shutdown_workers()
+
+    def _stop_silver_bar_background_work(self):
+        # Only open while the user is on that screen; see NavigationController.
+        if self.silver_bar_widget is not None:
+            self.silver_bar_widget.shutdown()
 
     def show_settings_dialog(self):
         """Show the centralized settings dialog."""

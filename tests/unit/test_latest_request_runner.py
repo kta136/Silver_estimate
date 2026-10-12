@@ -1,17 +1,14 @@
-import sqlite3
 import threading
-import time
-from contextlib import closing
 
 import pytest
 from PySide6.QtCore import QThread
 from PySide6.QtWidgets import QApplication
+from shiboken6 import delete
 
 from silverestimate.infrastructure.latest_request_runner import (
     LatestRequestRunner,
     RequestCancelledError,
 )
-from silverestimate.infrastructure.sqlite_worker import cancellable_sqlite_connection
 
 
 def test_latest_request_replaces_pending_and_rejects_stale_results(qtbot):
@@ -70,34 +67,40 @@ def test_shutdown_cooperatively_cancels_active_request():
         runner.submit("late")
 
 
-def test_sqlite_worker_progress_handler_interrupts_query(tmp_path):
-    database_path = tmp_path / "cancel.sqlite"
-    with closing(sqlite3.connect(database_path)) as connection:
-        connection.execute("CREATE TABLE values_table(value INTEGER)")
-        connection.executemany(
-            "INSERT INTO values_table(value) VALUES (?)",
-            ((value,) for value in range(2000)),
-        )
-        connection.commit()
+def test_a_runner_deleted_after_shutdown_is_not_an_error_for_its_worker(monkeypatch):
+    # The worker checks that its request is still current and emits a moment
+    # later. Shut down without waiting and deleted in that gap, the emit used to
+    # raise "Signal source has been deleted" in the worker thread.
+    started, release = threading.Event(), threading.Event()
+    errors = []
+    monkeypatch.setattr(threading, "excepthook", lambda args: errors.append(args))
 
-    cancel_event = threading.Event()
+    def work(request, cancel_event):
+        started.set()
+        release.wait(5)
+        return request
 
-    def connection_factory(event):
-        connection = sqlite3.connect(database_path)
-        connection.set_progress_handler(lambda: int(event.is_set()), 1)
-        return connection
+    runner = LatestRequestRunner(work, name="test-deleted")
+    thread = runner._thread
+    runner.submit(1)
+    assert started.wait(2)
+    # The check has already passed by the time the owner goes away.
+    monkeypatch.setattr(runner, "_is_current", lambda generation: True)
+    monkeypatch.setattr(runner, "_is_current_locked", lambda generation: True)
+    runner.shutdown(timeout=0)
+    delete(runner)
+    release.set()
+    thread.join(5)
 
-    with cancellable_sqlite_connection(
-        connection_factory, cancel_event, progress_opcodes=1
-    ) as connection:
-        cancel_event.set()
-        started_at = time.perf_counter()
-        try:
-            connection.execute(
-                "SELECT SUM(a.value * b.value) FROM values_table a, values_table b"
-            ).fetchone()
-        except sqlite3.OperationalError as exc:
-            assert "interrupted" in str(exc).lower()
-        else:
-            raise AssertionError("Expected SQLite query cancellation.")
-        assert time.perf_counter() - started_at < 1.0
+    assert not thread.is_alive()
+    assert errors == []
+
+
+def test_a_deleted_runner_that_was_never_shut_down_still_reports_the_error():
+    runner = LatestRequestRunner(lambda request, cancel: request, name="test-live")
+    try:
+        delete(runner)
+        with pytest.raises(RuntimeError):
+            runner._emit("result", 1, "value")
+    finally:
+        runner._shutdown = True

@@ -1,9 +1,11 @@
 """The confirmations and prompts every screen shares."""
 
 import pytest
-from PySide6.QtWidgets import QDialog, QLineEdit, QWidget
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import QDialog, QLineEdit, QMessageBox, QWidget
 
 from silverestimate.ui import message_dialogs
+from silverestimate.ui.estimate_deletion_dialog import confirm_estimate_deletion
 from silverestimate.ui.message_dialogs import (
     BUTTON_ROLE,
     TextPromptDialog,
@@ -220,3 +222,27 @@ def test_mass_deletion_goes_on_only_with_the_word(
         )
         is confirmed
     )
+
+
+def test_deletion_escape_cancels_and_the_action_caption_fits(
+    qtbot, qt_app, monkeypatch
+):
+    # Show the real dialog: this test checks its buttons and the Escape key.
+    monkeypatch.setattr(
+        "silverestimate.ui.message_dialogs._run_dialog", lambda dialog: dialog.exec()
+    )
+
+    def cancel():
+        dialog = qt_app.activeModalWidget()
+        assert isinstance(dialog, QMessageBox)
+        button = dialog.button(QMessageBox.StandardButton.Yes)
+        assert (
+            button.fontMetrics().horizontalAdvance(button.text()) < button.width() - 20
+        )
+        assert dialog.defaultButton() is dialog.button(
+            QMessageBox.StandardButton.Cancel
+        )
+        qtbot.keyClick(dialog, Qt.Key.Key_Escape)
+
+    QTimer.singleShot(0, cancel)
+    assert not confirm_estimate_deletion(None, "100")

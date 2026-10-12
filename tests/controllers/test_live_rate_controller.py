@@ -250,20 +250,6 @@ def test_refresh_failure_does_not_call_back_into_widget():
     assert controller._manual_refresh is False
 
 
-def test_refresh_reports_unavailable_without_stream_or_widget_fallback():
-    controller, _, status = _build_controller(
-        settings={"rates/live_enabled": True},
-        widget=types.SimpleNamespace(),
-    )
-    controller._stream_factory = lambda **_kwargs: (_ for _ in ()).throw(
-        RuntimeError("unavailable")
-    )
-
-    controller.refresh_now()
-
-    assert status[-1] == ("Live rate refresh unavailable", 3000, "warning")
-
-
 def test_display_uses_final_rate_item_id_and_sse_source():
     widget = _WidgetStub()
     controller, _, _ = _build_controller(

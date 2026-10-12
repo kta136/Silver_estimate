@@ -184,6 +184,7 @@ def test_estimate_tools_and_shortcut_help_remain_reachable_from_menu(
         "Alt+E",
         "Alt+I",
         "Alt+R",
+        "Alt+B",
     ):
         assert shortcut in captured[0][1]
 
@@ -414,7 +415,6 @@ def test_main_window_startup_sets_up_estimate_view(main_window_fixture, qt_app, 
     assert window._menu_estimate_action.isCheckable()
     assert window._menu_estimate_action.isChecked()
     assert window._menu_estimate_action.icon().isNull()
-    assert not window._menu_silver_action.icon().isNull()
     assert not window.refresh_rate_action.icon().isNull()
     # Every destination appears in exactly one menu.
     labels = [

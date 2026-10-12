@@ -348,10 +348,6 @@ class EstimateTableView(QTableView):
         current_index = self.currentIndex()
         return current_index.row() if current_index.isValid() else -1
 
-    def get_current_column(self) -> int:
-        current_index = self.currentIndex()
-        return current_index.column() if current_index.isValid() else -1
-
     def currentRow(self) -> int:
         return self.get_current_row()
 

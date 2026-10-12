@@ -1,4 +1,4 @@
-"""The About window: name, version, licence and a link to the source."""
+"""The About window: name, version and licence."""
 
 from __future__ import annotations
 
@@ -18,18 +18,15 @@ from silverestimate.infrastructure.paths import get_asset_path
 
 from .message_dialogs import ROLE_PRIMARY, dialog_stylesheet, set_button_role
 
-PROJECT_URL = "https://github.com/kta136/Silver_estimate"
-
 _STYLE = """
 QDialog#AboutDialog { background-color: #f7f8fa; }
 QLabel#AboutName { font-size: 14pt; font-weight: 700; }
 QLabel#AboutVersion, QLabel#AboutNotice { color: #475569; }
-QLabel#AboutLink a { color: #006d77; }
 """
 
 
 class AboutDialog(QDialog):
-    """Say what the app is, under which licence, and where its source lives."""
+    """Say what the app is and under which licence it is shared."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -67,32 +64,20 @@ class AboutDialog(QDialog):
         text.addSpacing(8)
         text.addWidget(
             self._label(
-                "© 2023–2026 Silver Estimation App. Free software under "
-                "the GNU General Public License v3.0 only, with no warranty.",
+                "© 2023–2026 Silver Estimation App. Free software under the GNU "
+                "General Public License v3.0 only, with no warranty.",
                 "AboutNotice",
                 wrap=True,
             )
         )
         text.addWidget(
             self._label(
-                "Built with Qt (PySide6, LGPL) and other open-source components. "
-                "LICENSE and THIRD_PARTY_NOTICES.md are supplied with the app.",
+                "Uses Qt (LGPL) and other open-source software. See LICENSE and "
+                "THIRD_PARTY_NOTICES.md.",
                 "AboutNotice",
                 wrap=True,
             )
         )
-        text.addSpacing(8)
-        # One unbroken, clickable line: an address split across two lines can
-        # be neither read nor copied reliably.
-        self.link_label = self._label(
-            f'Source code: <a href="{PROJECT_URL}">{PROJECT_URL}</a>', "AboutLink"
-        )
-        self.link_label.setTextFormat(Qt.TextFormat.RichText)
-        self.link_label.setOpenExternalLinks(True)
-        self.link_label.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextBrowserInteraction
-        )
-        text.addWidget(self.link_label)
         top.addLayout(text, 1)
         outer.addLayout(top)
 
@@ -121,4 +106,4 @@ class AboutDialog(QDialog):
         )
 
 
-__all__ = ["PROJECT_URL", "AboutDialog"]
+__all__ = ["AboutDialog"]

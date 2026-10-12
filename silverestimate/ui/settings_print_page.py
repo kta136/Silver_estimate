@@ -7,7 +7,6 @@ from PySide6.QtGui import QValidator
 from PySide6.QtWidgets import (
     QFormLayout,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QSizePolicy,
@@ -158,7 +157,7 @@ class PrintSettingsPage(QWidget):
             )
 
     def _add_margin_controls(self, form: QFormLayout) -> None:
-        margins_layout = QGridLayout()
+        margins_layout = QVBoxLayout()
         self.margin_left_spin = ThemedSpinBox()
         self.margin_top_spin = ThemedSpinBox()
         self.margin_right_spin = ThemedSpinBox()
@@ -175,33 +174,50 @@ class PrintSettingsPage(QWidget):
             self._polish_field(spin, width=92)
             spin.valueChanged.connect(self._emit_changed)
 
-        margins_layout.setHorizontalSpacing(12)
-        margins_layout.setVerticalSpacing(4)
-        margins_layout.addWidget(
-            QLabel("Top"), 0, 1, alignment=Qt.AlignmentFlag.AlignCenter
-        )
-        margins_layout.addWidget(self.margin_top_spin, 1, 1)
+        # Each box carries its caption beside it: short enough to leave room
+        # for the rest of this page on a 1366x768 screen. Plain box layouts,
+        # because a grid row would not keep the page sketch clear of the
+        # Bottom box.
+        margins_layout.setSpacing(6)
         page = QFrame()
-        page.setFixedSize(100, 92)
+        page.setFixedSize(84, 72)
         page.setStyleSheet("QFrame { background: white; border: 1px solid #8b929a; }")
         inside = QFrame(page)
-        inside.setGeometry(10, 10, 80, 72)
+        inside.setGeometry(8, 8, 68, 56)
         inside.setStyleSheet("border: 1px dashed #b9bfc5;")
-        margins_layout.addWidget(page, 3, 1, alignment=Qt.AlignmentFlag.AlignCenter)
-        for column, label, spin in (
-            (0, "Left", self.margin_left_spin),
-            (2, "Right", self.margin_right_spin),
-        ):
-            side = QVBoxLayout()
-            side.addWidget(QLabel(label))
-            side.addWidget(spin)
-            margins_layout.addLayout(side, 3, column)
-        margins_layout.addWidget(
-            QLabel("Bottom"), 4, 1, alignment=Qt.AlignmentFlag.AlignCenter
+        middle = QHBoxLayout()
+        middle.setSpacing(12)
+        middle.addLayout(self._captioned("Left", self.margin_left_spin, width=40))
+        middle.addWidget(page)
+        middle.addLayout(self._captioned("Right", self.margin_right_spin, width=40))
+        margins_layout.addLayout(
+            self._centered(self._captioned("Top", self.margin_top_spin))
         )
-        margins_layout.addWidget(self.margin_bottom_spin, 5, 1)
+        margins_layout.addLayout(middle)
+        margins_layout.addLayout(
+            self._centered(self._captioned("Bottom", self.margin_bottom_spin))
+        )
         form.addRow(QLabel("Margins (mm)"))
         form.addRow(margins_layout)
+
+    @staticmethod
+    def _captioned(caption: str, spin: QWidget, *, width: int = 0) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setSpacing(6)
+        label = QLabel(caption)
+        if width:
+            label.setMinimumWidth(width)
+        row.addWidget(label)
+        row.addWidget(spin)
+        return row
+
+    @staticmethod
+    def _centered(content: QHBoxLayout) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.addStretch(1)
+        row.addLayout(content)
+        row.addStretch(1)
+        return row
 
     def _add_print_target_controls(self, form: QFormLayout) -> None:
         self.preview_zoom_spin = ZoomPercentSpinBox()
@@ -247,7 +263,7 @@ class PrintSettingsPage(QWidget):
     def _configure_form(form: QFormLayout) -> None:
         form.setContentsMargins(0, 0, 0, 0)
         form.setHorizontalSpacing(12)
-        form.setVerticalSpacing(12)
+        form.setVerticalSpacing(10)
         form.setLabelAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )

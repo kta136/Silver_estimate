@@ -453,6 +453,7 @@ QWidget#VoucherToolbar QDoubleSpinBox {
 QWidget#PrimaryActionStrip QPushButton, QPushButton#VoucherLoadButton {
  background: __SURFACE_BG__; color: #173744; border-color: __INPUT_BORDER__; padding: 4px 8px; min-height: 26px;
 }
+QWidget#VoucherToolbar QPushButton#VoucherLoadButton { padding: 3px 8px; min-height: 24px; }
 QWidget#PrimaryActionStrip QPushButton#SavePrimaryButton {
  background: #007f83; border-color: #007f83; color: __SURFACE_BG__;
 }
@@ -474,7 +475,7 @@ QWidget#EstimateCommandStrip QWidget#PrimaryActionStrip QPushButton {
  min-height: 18px; padding: 1px 9px;
 }
 QWidget#EstimateCommandStrip QLabel#UnsavedBadge { padding: 2px 8px; border-radius: 9px; }
-QLabel#SidebarStatusText { color: __TEXT_MUTED__; font-size: 9pt; padding-top: 4px; }
+QLabel#EstimateStatusLine { color: __TEXT_MUTED__; font-size: 9pt; padding: 0 2px 2px 2px; }
 QLabel#MetricLabel[categoryKind="return"], QLabel#MetricValue[categoryKind="return"] {
  background: __INFO_BG__; color: __INFO_TEXT__;
 }

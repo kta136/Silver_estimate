@@ -289,13 +289,6 @@ def workflow_host(qt_app, monkeypatch):  # noqa: ARG001
     host.deleteLater()
 
 
-def test_format_currency_preserves_paise_and_uses_indian_grouping(workflow_host):
-    _host, controller = workflow_host
-    assert controller._format_currency("oops") == "oops"
-    assert controller._format_currency(1234.4) == "₹ 1,234.40"
-    assert controller._format_currency(-10.125) == "₹ -10.13"
-
-
 def test_generate_voucher_delegates_and_resets_loaded_state(workflow_host):
     host, controller = workflow_host
     calls = []

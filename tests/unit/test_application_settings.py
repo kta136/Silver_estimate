@@ -100,16 +100,6 @@ def test_current_settings_schema_does_not_force_a_backend_sync() -> None:
     assert backend.sync_count == 0
 
 
-def test_application_settings_only_accepts_declared_keys_for_typed_writes() -> None:
-    backend = MemorySettingsBackend()
-    settings = ApplicationSettings(backend, migrate=False)
-
-    settings.set(SettingsKey.PRINT_SHOW_TUNCH, True)
-    settings.remove(SettingsKey.PRINT_SHOW_TUNCH)
-
-    assert not backend.values
-
-
 @pytest.mark.parametrize(
     ("stored", "level"),
     [

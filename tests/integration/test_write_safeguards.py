@@ -227,14 +227,9 @@ def test_reference_guard_protects_legacy_lowercase_catalog_code(db):
 
 
 @pytest.mark.parametrize("state", ["Assigned", "Issued", "Returned to stock"])
-@pytest.mark.parametrize("with_command_repository", [False, True])
-def test_estimate_deletion_preserves_allocated_bars_and_transfer_history(
-    db, state, with_command_repository
-):
+def test_estimate_deletion_preserves_allocated_bars_and_transfer_history(db, state):
     assert _save(db)
     commands = SilverBarCommandRepository(db)
-    if with_command_repository:
-        db.silver_bar_command_repo = commands
     bar = insert_silver_bar(db, "1", 5, 99.9)
     bar_list = commands.add_bars_to_list([bar], note="Protected").unwrap()
     if state == "Issued":

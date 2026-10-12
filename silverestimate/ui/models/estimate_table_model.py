@@ -339,6 +339,16 @@ class EstimateTableModel(QAbstractTableModel):
             and orientation == Qt.Orientation.Horizontal
         ):
             return tooltip_for_column(section)
+        if (
+            role == Qt.ItemDataRole.TextAlignmentRole
+            and orientation == Qt.Orientation.Horizontal
+        ):
+            # Each heading sits over its data: figures right, labels left.
+            if section in self._NUMERIC_COLUMNS:
+                return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            if section == COL_TYPE:
+                return Qt.AlignmentFlag.AlignCenter
+            return Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         if role != Qt.ItemDataRole.DisplayRole:
             return None
 

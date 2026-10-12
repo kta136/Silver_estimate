@@ -469,11 +469,13 @@ class SettingsDialog(QDialog):
             return
         try:
             current = self.pages.currentWidget()
-            viewport_height = self.page_scroll.viewport().height()
+            viewport = self.page_scroll.viewport()
             needs_scrollbar = (
                 current is not None
-                and viewport_height > 0
-                and current.sizeHint().height() > viewport_height
+                and viewport.height() > 0
+                # What the page needs at least, not what it would like: a page
+                # that can squeeze into the window does not need a scrollbar.
+                and self._page_height_needed(viewport.width()) > viewport.height()
             )
             self.page_scroll.setVerticalScrollBarPolicy(
                 Qt.ScrollBarPolicy.ScrollBarAsNeeded
@@ -482,6 +484,18 @@ class SettingsDialog(QDialog):
             )
         except RuntimeError:
             return
+
+    def _page_height_needed(self, width: int) -> int:
+        """The height the scroll area will actually give the page container.
+
+        For a stack whose pages wrap their text that is the tallest page's
+        height at this width, shown or not; the minimum size hint is smaller,
+        and judging by it left the bottom of a page cut off with no scrollbar.
+        """
+        height = self.pages.minimumSizeHint().height()
+        if self.pages.hasHeightForWidth():
+            height = max(height, self.pages.heightForWidth(width))
+        return height
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

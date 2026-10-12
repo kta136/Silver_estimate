@@ -2,6 +2,8 @@ import logging
 import types
 from typing import Any
 
+import pytest
+
 from silverestimate.services import main_commands
 
 
@@ -236,21 +238,45 @@ def _make_commands(main_window=None, db_manager=None):
     )
 
 
-def test_save_estimate_invokes_widget(monkeypatch):
+_ESTIMATE_COMMANDS = ("save_estimate", "print_estimate")
+
+
+@pytest.mark.parametrize("command", _ESTIMATE_COMMANDS)
+def test_estimate_command_invokes_widget(monkeypatch, command):
+    _install_stubs(monkeypatch)
+    calls = []
+    widget = types.SimpleNamespace(**{command: lambda: calls.append(command)})
+    commands = _make_commands(types.SimpleNamespace(estimate_widget=widget))
+
+    getattr(commands, command)()
+
+    assert calls == [command]
+    assert _MessageBoxStub.information_calls == []
+
+
+@pytest.mark.parametrize("command", _ESTIMATE_COMMANDS)
+def test_estimate_command_shows_info_when_widget_missing(monkeypatch, command):
+    _install_stubs(monkeypatch)
+    commands = _make_commands(types.SimpleNamespace())
+
+    getattr(commands, command)()
+
+    assert _MessageBoxStub.information_calls
+
+
+@pytest.mark.parametrize("command", _ESTIMATE_COMMANDS)
+def test_estimate_command_handles_errors(monkeypatch, command):
     _install_stubs(monkeypatch)
 
-    calls = []
+    def fail():
+        raise RuntimeError("boom")
 
-    class _EstimateWidget:
-        def save_estimate(self):
-            calls.append("save")
+    widget = types.SimpleNamespace(**{command: fail})
+    commands = _make_commands(types.SimpleNamespace(estimate_widget=widget))
 
-    commands = _make_commands(types.SimpleNamespace(estimate_widget=_EstimateWidget()))
+    getattr(commands, command)()
 
-    commands.save_estimate()
-
-    assert calls == ["save"]
-    assert _MessageBoxStub.information_calls == []
+    assert _MessageBoxStub.critical_calls
 
 
 def test_save_and_data_reset_refresh_visible_sales_reports(monkeypatch):
@@ -272,71 +298,6 @@ def test_save_and_data_reset_refresh_visible_sales_reports(monkeypatch):
     report.isVisible = lambda: False
     commands.save_estimate()
     assert refreshed == [True, True]
-
-
-def test_save_estimate_shows_info_when_missing(monkeypatch):
-    _install_stubs(monkeypatch)
-
-    commands = _make_commands(types.SimpleNamespace())
-
-    commands.save_estimate()
-
-    assert _MessageBoxStub.information_calls
-
-
-def test_save_estimate_handles_errors(monkeypatch):
-    _install_stubs(monkeypatch)
-
-    class _EstimateWidget:
-        def save_estimate(self):
-            raise RuntimeError("boom")
-
-    commands = _make_commands(types.SimpleNamespace(estimate_widget=_EstimateWidget()))
-
-    commands.save_estimate()
-
-    assert _MessageBoxStub.critical_calls
-
-
-def test_print_estimate_invokes_widget(monkeypatch):
-    _install_stubs(monkeypatch)
-
-    calls = []
-
-    class _EstimateWidget:
-        def print_estimate(self):
-            calls.append("print")
-
-    commands = _make_commands(types.SimpleNamespace(estimate_widget=_EstimateWidget()))
-
-    commands.print_estimate()
-
-    assert calls == ["print"]
-    assert _MessageBoxStub.information_calls == []
-
-
-def test_print_estimate_shows_info_when_missing(monkeypatch):
-    _install_stubs(monkeypatch)
-
-    commands = _make_commands(types.SimpleNamespace())
-
-    commands.print_estimate()
-
-    assert _MessageBoxStub.information_calls
-
-
-def test_print_estimate_handles_errors(monkeypatch):
-    _install_stubs(monkeypatch)
-
-    class _EstimateWidget:
-        def print_estimate(self):
-            raise RuntimeError("boom")
-
-    commands = _make_commands(types.SimpleNamespace(estimate_widget=_EstimateWidget()))
-
-    commands.print_estimate()
-
-    assert _MessageBoxStub.critical_calls
 
 
 def test_delete_all_data_success_refreshes_views(monkeypatch):

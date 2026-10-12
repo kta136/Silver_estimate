@@ -107,7 +107,10 @@ class RecordInspector(QFrame):
         self.setMinimumWidth(260)
         self.setMaximumWidth(380)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
+        # Snug enough that a short window still shows every field and button
+        # without a scrollbar.
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(6)
         heading = QLabel(title)
         heading.setObjectName("RecordInspectorHeading")
         heading.setStyleSheet(
@@ -115,7 +118,7 @@ class RecordInspector(QFrame):
         )
         layout.addWidget(heading)
         self._fields = QVBoxLayout()
-        self._fields.setSpacing(12)
+        self._fields.setSpacing(8)
         self._fields.setAlignment(Qt.AlignmentFlag.AlignTop)
         body = QWidget()
         body.setObjectName("RecordInspectorBody")
@@ -126,10 +129,12 @@ class RecordInspector(QFrame):
         scroll = QScrollArea()
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setWidgetResizable(True)
+        # The fields wrap, so only height ever needs to scroll.
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setWidget(body)
         layout.addWidget(scroll, 1)
         self.action_layout = QVBoxLayout()
-        self.action_layout.setSpacing(10)
+        self.action_layout.setSpacing(8)
         layout.addLayout(self.action_layout)
 
     def set_items(self, items: Iterable[tuple[str, object]]) -> None:
@@ -160,9 +165,14 @@ class RecordInspector(QFrame):
                     Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
                 )
             if title in {"Grand Total", "Total"}:
+                # Padding is the layout's margin: written as a style it would
+                # also pad each label in the row, widening it by 28 px.
+                row.setObjectName("RecordInspectorTotal")
                 row.setStyleSheet(
-                    "background: #007f89; border-radius: 5px; padding: 7px;"
+                    "QWidget#RecordInspectorTotal { background: #007f89; "
+                    "border-radius: 5px; }"
                 )
+                layout.setContentsMargins(8, 6, 8, 6)
                 label.setStyleSheet("color: white; font-weight: bold;")
                 content.setStyleSheet("color: white; font-weight: bold;")
             self._fields.addWidget(row)

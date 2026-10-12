@@ -1,4 +1,4 @@
-"""Keyboard-first silver bar workspace; saved lists reserve bars automatically."""
+"""Keyboard-first silver bar screen; saved lists reserve bars automatically."""
 
 from __future__ import annotations
 
@@ -6,11 +6,10 @@ import csv
 import logging
 from typing import Any
 
-from PySide6.QtCore import QEvent, QObject, QSignalBlocker, Qt, QTimer
+from PySide6.QtCore import QEvent, QObject, QSignalBlocker, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QKeyEvent
 from PySide6.QtWidgets import (
     QApplication,
-    QDialog,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -34,8 +33,10 @@ from .screen_widgets import KeyHintButton, StatusPill, TotalsStrip, repolish
 from .silver_bar_list_print_controller import SilverBarListPrintController
 from .silver_bar_load_controller import SilverBarLoadController
 from .silver_bar_management_ui import (
-    COMPACT_HEADER_WIDTH,
     COMPACT_TABLE_WIDTH,
+    HEADER_SIDE_MARGINS,
+    ISSUED_VIEW_MAX_WIDTH,
+    UNLIMITED_WIDTH,
     SilverBarManagementUiBuilder,
 )
 from .silver_bar_optimal_dialog import OptimalListDialog
@@ -43,7 +44,16 @@ from .silver_bar_optimization_controller import SilverBarOptimizationController
 from .silver_bar_shortcuts_dialog import SilverBarShortcutsDialog
 
 
-class SilverBarDialog(QDialog):
+class SilverBarWidget(QWidget):
+    """The silver bar workspace, a screen of the main window.
+
+    It is built when the user opens it and discarded when they leave it
+    (see ``NavigationController``), so nothing of it loads or runs until it
+    is wanted. ``close_requested`` asks the window to go back.
+    """
+
+    close_requested = Signal()
+
     weight_search_edit: QLineEdit
     suggestions_table: QTableView
     suggestions_model: SilverBarEntryModel
@@ -61,12 +71,15 @@ class SilverBarDialog(QDialog):
     available_empty_body: QLabel
     show_all_bars_button: QPushButton
     find_in_history_button: QPushButton
+    close_button: QPushButton
     list_card: QFrame
     list_hint: QLabel
     issued_banner: QFrame
     issued_banner_label: QLabel
     reopen_button: QPushButton
     header_actions: QWidget
+    banner_row: QHBoxLayout
+    panes_layout: QHBoxLayout
     header_top_row: QHBoxLayout
     header_bottom_row: QHBoxLayout
     header_bottom: QWidget
@@ -135,6 +148,7 @@ class SilverBarDialog(QDialog):
         self.issued_banner.setVisible(issued)
         self.reopen_button.setEnabled(issued and not self._busy)
         self.available_card.setVisible(not issued)
+        self._fit_issued_view(issued)
         self.list_hint.setText(
             "Read only" if issued else "Del remove selected    Shift+Tab available bars"
         )
@@ -151,6 +165,21 @@ class SilverBarDialog(QDialog):
         )
         self.retry_issue_button.setEnabled(self.editable)
 
+    def _fit_issued_view(self, issued: bool) -> None:
+        """Centre an issued list at a readable width; others share the screen."""
+        width = ISSUED_VIEW_MAX_WIDTH if issued else UNLIMITED_WIDTH
+        for widget, layout, stretch in (
+            (self.list_card, self.panes_layout, 1),
+            (self.issued_banner, self.banner_row, 100),
+        ):
+            widget.setMaximumWidth(width)
+            first, last = 0, layout.count() - 1
+            # The widget outweighs the spacers until it reaches its maximum;
+            # the width beyond that goes to the spacers, equally.
+            layout.setStretch(layout.indexOf(widget), 100 if issued else stretch)
+            layout.setStretch(first, 1 if issued else 0)
+            layout.setStretch(last, 1 if issued else 0)
+
     def focus_weight(self, *, announce: bool = False) -> None:
         if self._closed:
             return
@@ -163,8 +192,8 @@ class SilverBarDialog(QDialog):
             self.list_bars_table.setFocus()
 
     def run_shortcut(self, callback) -> None:
-        modal = QApplication.activeModalWidget()
-        if modal is None or modal is self:
+        # A dialog open over the screen owns the keyboard.
+        if QApplication.activeModalWidget() is None:
             callback()
 
     def position_suggestions(self) -> None:
@@ -195,10 +224,19 @@ class SilverBarDialog(QDialog):
         for table in (self.suggestions_table, self.list_bars_table):
             table.setColumnHidden(4, narrow)
 
+    def _header_width_needed(self) -> int:
+        """Width the title, state, note and every action need on one row."""
+        widgets = [self.list_info_label, self.edit_note_button, self.header_actions]
+        if not self.list_state_pill.isHidden():
+            widgets.append(self.list_state_pill)
+        spacing = self.header_top_row.spacing() * len(widgets)
+        margins = HEADER_SIDE_MARGINS
+        return sum(w.sizeHint().width() for w in widgets) + spacing + margins
+
     def _arrange_header(self) -> None:
         if not hasattr(self, "header_actions"):
             return
-        compact = self.width() < COMPACT_HEADER_WIDTH
+        compact = self._header_width_needed() > self.width()
         target = self.header_bottom_row if compact else self.header_top_row
         if target.indexOf(self.header_actions) >= 0:
             return
@@ -211,6 +249,7 @@ class SilverBarDialog(QDialog):
         self.list_info_label.setText(title)
         self.list_state_pill.set_state(state, state_text)
         self.list_state_pill.setVisible(bool(state_text))
+        self._arrange_header()
 
     def _set_totals(self, bars: int, weight, fine) -> None:
         weight_text = f"{fixed_decimal(weight, 2)} g"
@@ -409,6 +448,7 @@ class SilverBarDialog(QDialog):
         self.edit_note_button.setText((shown or "+ Add Note").replace("&", "&&"))
         self.edit_note_button.setToolTip(f"{note or 'No note'}\nEdit list note · F2")
         self.edit_note_button.setAccessibleName(f"List note: {note or 'No note'}")
+        self._arrange_header()
 
     def reopen_issued_list(self) -> None:
         snapshot = self.snapshot
@@ -546,7 +586,7 @@ class SilverBarDialog(QDialog):
             return
         from .silver_bar_history import SilverBarHistoryDialog
 
-        history = SilverBarHistoryDialog(self.db_manager, self)
+        history = SilverBarHistoryDialog(self.db_manager, self, from_list_screen=True)
         history.exec()
         chosen = history.selected_list_id
         history.deleteLater()
@@ -631,13 +671,19 @@ class SilverBarDialog(QDialog):
                 return True
         return super().eventFilter(watched, event)
 
-    def accept(self) -> None:
-        # A stray Enter must never activate QDialog's default close behavior.
-        return
+    # --- Leaving the screen ------------------------------------------------
 
-    def reject(self) -> None:
+    def can_close(self) -> bool:
+        """False while a print or save is under way."""
+        return not self._busy
+
+    def request_close(self) -> None:
+        if self.can_close():
+            self.close_requested.emit()
+
+    def handle_escape(self) -> None:
+        """Esc takes back one step at a time and only then leaves the screen."""
         if self._busy:
-            super().reject()
             return
         if (
             self.suggestions_panel.isVisible()
@@ -650,15 +696,22 @@ class SilverBarDialog(QDialog):
                 self.weight_search_edit.clear()
             self._load_controller.cancel_search()
         else:
-            super().reject()
+            self.request_close()
 
-    def done(self, result: int) -> None:
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.key() == Qt.Key.Key_Escape and not event.modifiers():
+            self.handle_escape()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def shutdown(self) -> None:
+        """Stop every search and print job; safe to call more than once."""
         if not self._closed:
             self._closed = True
             self._load_controller.shutdown()
             self._list_print_controller.shutdown()
-        super().done(result)
 
     def closeEvent(self, event) -> None:
-        self.done(QDialog.DialogCode.Rejected)
-        event.accept()
+        self.shutdown()
+        super().closeEvent(event)

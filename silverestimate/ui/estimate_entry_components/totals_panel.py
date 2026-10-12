@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast
 
 from PySide6.QtCore import QEvent, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QFont, QFontMetrics
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QBoxLayout,
@@ -174,6 +175,7 @@ class TotalsPanel(QWidget):
         self._sidebar_size_sync_timer.setInterval(0)
         self._sidebar_size_sync_timer.timeout.connect(self._sync_sidebar_item_sizes)
         self._summary_tables: list[QTableWidget] = []
+        self._final_calc_font_size: int | None = None
         self._setup_ui()
 
     def _normalize_section_order(self, order) -> list[str]:
@@ -220,12 +222,11 @@ class TotalsPanel(QWidget):
         if breakdown_size and breakdown_size > 0:
             snapshot["breakdown_size"] = int(breakdown_size)
 
-        final_size = None
-        for attr_name in ("grand_total_label",):
-            label = getattr(self, attr_name, None)
+        final_size = self._final_calc_font_size
+        if not final_size:
+            label = getattr(self, "grand_total_label", None)
             if isinstance(label, QLabel):
                 final_size = label.font().pointSize()
-                break
         if final_size and final_size > 0:
             snapshot["final_size"] = int(final_size)
 
@@ -302,13 +303,13 @@ class TotalsPanel(QWidget):
         table.setRowCount(
             len(self._category_keys) * {"matrix": 1, "groups": 2, "details": 4}[mode]
         )
-        headers = ["Gross (g)", "Net (g)", "Fine (g)"]
+        headers = ["Gross", "Net", "Fine"]
         table.setHorizontalHeaderLabels(
             ["", *headers]
             if mode == "matrix"
             else headers
             if mode == "groups"
-            else ["", "Weight (g)"]
+            else ["", "Weight"]
         )
         for index, key in enumerate(self._category_keys):
             caption, definitions = self._SECTION_DEFINITIONS[key]
@@ -349,8 +350,7 @@ class TotalsPanel(QWidget):
         table = self.category_table
         metrics = table.fontMetrics()
         widths = [
-            metrics.horizontalAdvance(text) + 12
-            for text in ("Gross (g)", "Net (g)", "Fine (g)")
+            metrics.horizontalAdvance(text) + 12 for text in ("Gross", "Net", "Fine")
         ]
         caption_width = 0
         rows_per_category = {"matrix": 1, "groups": 2, "details": 4}[
@@ -610,6 +610,7 @@ class TotalsPanel(QWidget):
             if card.property("sectionKind") == self._FINAL_SECTION_KEY:
                 # Reserve the actual painted text width before choosing a layout.
                 # Large totals must reflow instead of being squeezed by QFormLayout.
+                self._shrink_grand_total_to_fit(target_width)
                 for label in (
                     self.grand_total_label,
                     self.net_fine_label,
@@ -643,16 +644,67 @@ class TotalsPanel(QWidget):
                 )
             for table in card.findChildren(QTableWidget):
                 self._fit_summary_table(table)
-            card.layout().activate()
-            hint = card.sizeHint()
-            item.setSizeHint(QSize(target_width, hint.height()))
+            card_layout = card.layout()
+            card_layout.activate()
+            # A row that wraps (a long value under its caption) is taller than
+            # the size hint, which does not know the card's width.
+            height = card.sizeHint().height()
+            if card_layout.hasHeightForWidth():
+                height = max(height, card_layout.totalHeightForWidth(target_width))
+            item.setSizeHint(QSize(target_width, height))
+        # From the size hints just set, not sizeHintForRow(), which still
+        # reports the old heights until the list has laid itself out again.
         self._summary_sections_list.setFixedHeight(
             sum(
-                self._summary_sections_list.sizeHintForRow(i) + 4
+                (
+                    0
+                    if self._summary_sections_list.item(i).isHidden()
+                    else self._summary_sections_list.item(i).sizeHint().height()
+                )
+                + 4
                 for i in range(self._summary_sections_list.count())
             )
             + 8
         )
+
+    # The grand total is shown smaller than the chosen size, down to this,
+    # before it gives up the caption's line.
+    _GRAND_TOTAL_MIN_POINT_SIZE = 11
+
+    def _shrink_grand_total_to_fit(self, card_width: int) -> None:
+        """Keep the grand total on the caption's line while it can be read.
+
+        A large or negative total (₹ -10,00,000.00) outgrows the side panel
+        at the chosen size. Stacking it under the caption costs a line of
+        height, which pushes the panel's buttons out of a short window, so
+        the value gets smaller first and only stacks if even that is too wide.
+        """
+        label = self.grand_total_label
+        base = self._final_calc_font_size or label.font().pointSize()
+        if base <= 0:
+            return
+        margins = self._grand_total_header_layout.contentsMargins()
+        spare = (
+            card_width
+            - margins.left()
+            - margins.right()
+            - self._grand_total_header_layout.spacing()
+            - self._grand_total_caption.sizeHint().width()
+        )
+        floor = min(base, self._GRAND_TOTAL_MIN_POINT_SIZE)
+        size = base
+        while size > floor:
+            font = QFont(label.font())
+            font.setPointSize(size)
+            font.setBold(True)
+            if QFontMetrics(font).horizontalAdvance(label.text()) + 2 <= spare:
+                break
+            size -= 1
+        font = QFont(label.font())
+        font.setPointSize(size)
+        font.setBold(True)
+        if font.pointSize() != label.font().pointSize():
+            label.setFont(font)
 
     def _rebuild_sidebar_section_cards(self) -> None:
         snapshot = self._snapshot_display_state()
@@ -742,10 +794,12 @@ class TotalsPanel(QWidget):
         scroll.setWidget(contents)
         outer.addWidget(scroll)
         main_layout = QVBoxLayout(contents)
+        self._contents_layout = main_layout
         main_layout.setContentsMargins(4, 4, 4, 4)
-        # Tight enough that the whole panel fits the smallest window (680 px
-        # high) with no scrollbar.
-        main_layout.setSpacing(6)
+        # Tight enough that the whole panel fits the smallest window (a
+        # maximized one on a 1280x720 screen) with no scrollbar and a little to
+        # spare.
+        main_layout.setSpacing(4)
 
         self._sidebar_top_host = QWidget()
         self._sidebar_top_layout = QVBoxLayout(self._sidebar_top_host)
@@ -785,11 +839,11 @@ class TotalsPanel(QWidget):
         self.sidebar_actions_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addWidget(self.sidebar_actions_host)
         main_layout.addStretch(1)
-        self.sidebar_footer_host = QWidget(self)
-        self.sidebar_footer_layout = QVBoxLayout(self.sidebar_footer_host)
-        self.sidebar_footer_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.addWidget(self.sidebar_footer_host)
         self._rebuild_sidebar_section_cards()
+
+    def content_minimum_width(self) -> int:
+        """The narrowest the panel can be without cutting off its contents."""
+        return self._contents_layout.minimumSize().width()
 
     def set_sidebar_top_widgets(self, widgets: list[QWidget]) -> None:
         """Attach widgets, top to bottom, above the sidebar summary cards."""
@@ -927,6 +981,7 @@ class TotalsPanel(QWidget):
         Args:
             size: Font point size
         """
+        self._final_calc_font_size = int(size)
         for label in self.findChildren(QLabel):
             if label.property("sectionKind") != self._FINAL_SECTION_KEY:
                 continue

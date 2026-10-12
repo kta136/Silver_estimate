@@ -8,7 +8,7 @@ from silverestimate.domain.silver_bar_workspace import BarListSnapshot
 from silverestimate.ui.print_manager import PrintManager
 from silverestimate.ui.print_preview_output import PrintOutputOutcome, PrintOutputStatus
 from silverestimate.ui.silver_bar_history import SilverBarHistoryDialog
-from silverestimate.ui.silver_bar_management import SilverBarDialog
+from silverestimate.ui.silver_bar_management import SilverBarWidget
 from tests.silver_bar_workspace_support import seed_workspace_db
 
 
@@ -186,7 +186,7 @@ def test_workspace_open_and_history_use_same_browser(
 ):
     browser, db, active, _ = history
     browser.hide()
-    workspace = SilverBarDialog(db)
+    workspace = SilverBarWidget(db)
     qtbot.addWidget(workspace)
     opened = []
 
@@ -275,13 +275,52 @@ def test_clear_filters_shows_only_while_a_filter_is_set(history, qtbot):
 
 def test_bar_history_writes_voucher_and_note_like_the_workspace(history, qtbot):
     dialog, db, *_ = history
+    db.conn.execute("UPDATE estimates SET note = 'Shop A' WHERE voucher_no = '1'")
+    db.conn.commit()
     dialog.view_combo.setCurrentIndex(1)
     qtbot.waitUntil(lambda: dialog.bars_model.rowCount() > 0 and not dialog._loading[1])
 
     assert dialog.bars_model.HEADERS[3] == "Purity (%)"
-    texts = [
+    texts = {
         dialog.bars_model.display_value(row, 1)
         for row in range(dialog.bars_model.rowCount())
-    ]
+    }
     # "voucher · note", never "voucher (note)".
-    assert all("(" not in text for text in texts)
+    assert texts == {"1 · Shop A"}
+
+
+def test_the_button_says_close_unless_it_goes_back_to_a_list(history, qtbot):
+    _, db, _, _ = history
+
+    from_menu = SilverBarHistoryDialog(db)
+    qtbot.addWidget(from_menu)
+    from_list = SilverBarHistoryDialog(db, from_list_screen=True)
+    qtbot.addWidget(from_list)
+    try:
+        assert from_menu.close_button.text() == "Close"
+        assert from_list.close_button.text() == "Back to List"
+    finally:
+        from_menu.close()
+        from_list.close()
+
+
+def test_history_opened_from_the_list_screen_goes_back_to_it(
+    history, qtbot, monkeypatch
+):
+    _, db, _, _ = history
+    workspace = SilverBarWidget(db)
+    qtbot.addWidget(workspace)
+    seen = []
+
+    def watch(dialog):
+        seen.append(dialog.close_button.text())
+        dialog.done(QDialog.DialogCode.Rejected)
+        return QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(SilverBarHistoryDialog, "exec", watch)
+    try:
+        workspace.open_history()
+    finally:
+        workspace.shutdown()
+
+    assert seen == ["Back to List"]

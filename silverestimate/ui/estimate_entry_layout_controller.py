@@ -42,6 +42,7 @@ from .estimate_entry_logic.column_specs import (
     column_width_limits,
     columns_for_editor_type,
     default_column_widths,
+    is_shrinkable_column,
     is_stretch_column,
 )
 from .estimate_entry_theme import ESTIMATE_ENTRY_STYLESHEET
@@ -66,11 +67,25 @@ _RECOVERY_NOTICES = {
 }
 
 
+# Width the side panel opens at, and the least it is ever given. It can be
+# more than this when its contents need it: see _panel_minimum_width.
+PANEL_DEFAULT_WIDTH = 320
+PANEL_MIN_WIDTH = 280
+# A stretching header section ends 2 px short of the viewport's edge.
+STRETCH_MARGIN = 2
+
+
 class EstimateEntryLayoutController:
     """Own layout wiring, the side panel, and persisted UI preferences."""
 
     def __init__(self, host: EstimateEntryWidget) -> None:
         self.host = host
+        # The width a shrinkable column (Type) would like, which is not always
+        # the width it is shown at: in a narrow table it gives up room.
+        self._preferred_widths: dict[int, int] = {}
+        # The width the user chose for the side panel (the default until then).
+        # The panel narrows below it when the table needs the room.
+        self._panel_preferred_width = PANEL_DEFAULT_WIDTH
 
     def _setup_ui(self):
         self.host.setObjectName("EstimateEntryRoot")
@@ -128,14 +143,30 @@ class EstimateEntryLayoutController:
         self.host.item_table.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
-        self.host._content_splitter.addWidget(self.host.item_table)
+
+        # The row count and save state sit under the table. In the side panel
+        # they cost a line of height it needs for the fields, totals and
+        # buttons: on a 1280x720 screen they were what scrolled out of view.
+        table_column = QWidget()
+        table_column_layout = QVBoxLayout(table_column)
+        table_column_layout.setContentsMargins(0, 0, 0, 0)
+        table_column_layout.setSpacing(2)
+        table_column_layout.addWidget(self.host.item_table, 1)
+        status = QLabel(table_column)
+        status.setObjectName("EstimateStatusLine")
+        # Never widens the column: a long notice is cut rather than the table.
+        status.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        table_column_layout.addWidget(status)
+        self.host.status_line_label = status
+        self.host._content_splitter.addWidget(table_column)
 
         # The side panel: voucher fields, totals and actions, right of the table.
         self.host.totals_panel = self._create_totals_panel()
         self.host._content_splitter.addWidget(self.host.totals_panel)
         self.host._content_splitter.setStretchFactor(0, 1)
         self.host._content_splitter.setStretchFactor(1, 0)
-        self.host._content_splitter.setSizes([1060, 320])
+        self.host._content_splitter.setSizes([1060, PANEL_DEFAULT_WIDTH])
+        self.host._content_splitter.splitterMoved.connect(self._keep_columns_whole)
 
         layout.addWidget(self.host._content_splitter, 1)
 
@@ -218,16 +249,9 @@ class EstimateEntryLayoutController:
             grid.addWidget(button, index // 2, index % 2)
             button.show()
 
-        status = QLabel(self.host)
-        status.setObjectName("SidebarStatusText")
-        status.setWordWrap(True)
-        self.host.sidebar_status_label = status
         self.host.sidebar_actions = actions
-        panel = self.host.totals_panel
-        panel.sidebar_actions_layout.addWidget(actions)
-        panel.sidebar_footer_layout.addWidget(status)
+        self.host.totals_panel.sidebar_actions_layout.addWidget(actions)
         actions.show()
-        status.show()
 
     def _place_voucher_fields(self) -> None:
         """Put the voucher fields, live rate and mode switch atop the side panel."""
@@ -337,9 +361,7 @@ class EstimateEntryLayoutController:
         balance.triggered.connect(self.host.secondary_actions.last_balance_clicked.emit)
         menu.addAction(balance)
 
-        bars = QAction(
-            get_icon("silver_bars", widget=self.host), "Silver Bars...", menu
-        )
+        bars = QAction(get_icon("silver_bars", widget=self.host), "Silver Bars", menu)
         bars.triggered.connect(self.host.secondary_actions.silver_bars_clicked.emit)
         menu.addAction(bars)
 
@@ -375,7 +397,7 @@ class EstimateEntryLayoutController:
         return menu
 
     def _update_status_line(self) -> None:
-        """Show the row count, last save and any recovery notice in the side panel."""
+        """Show the row count, last save and any recovery notice under the table."""
         try:
             rows = self.host.item_table.rowCount()
         except Exception:
@@ -384,7 +406,7 @@ class EstimateEntryLayoutController:
         recovery = self.host.draft_recovery
         recovery_status = str(recovery.status) if recovery is not None else ""
         # Routine auto-recovery states stay in the tooltips; only a state the
-        # user has to act on takes room in the side panel.
+        # user has to act on takes room in the status line.
         notice = _RECOVERY_NOTICES.get(recovery_status)
         tooltip = "Current estimate status"
         if recovery_status:
@@ -392,13 +414,13 @@ class EstimateEntryLayoutController:
         badge = getattr(self.host, "unsaved_badge", None)
         if badge is not None and isValid(badge):
             badge.setToolTip(tooltip)
-        sidebar_status = getattr(self.host, "sidebar_status_label", None)
-        if sidebar_status is not None and isValid(sidebar_status):
-            sidebar_items = [f"Rows: {rows}", f"Last saved: {last_saved}"]
+        status_line = getattr(self.host, "status_line_label", None)
+        if status_line is not None and isValid(status_line):
+            items = [f"Rows: {rows}", f"Last saved: {last_saved}"]
             if notice:
-                sidebar_items.append(notice)
-            sidebar_status.setText(" · ".join([*sidebar_items, "F1 Shortcuts"]))
-            sidebar_status.setToolTip(tooltip)
+                items.append(notice)
+            status_line.setText(" · ".join([*items, "F1 Shortcuts"]))
+            status_line.setToolTip(tooltip)
 
     def refresh_status_line(self) -> None:
         self._update_status_line()
@@ -569,10 +591,87 @@ class EstimateEntryLayoutController:
     def _create_totals_panel(self) -> TotalsPanel:
         panel = TotalsPanel()
         panel.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
-        panel.setMinimumWidth(280)
+        panel.setMinimumWidth(PANEL_MIN_WIDTH)
         panel.setMaximumWidth(440)
         panel.section_order_changed.connect(self._on_totals_section_order_changed)
         return panel
+
+    def _minimum_table_width(self) -> int:
+        """The least width the table can have with no number cut off or scrolled.
+
+        The item name and Type may shrink to their minimums; every other column
+        keeps the width it has.
+        """
+        table = self.host.item_table
+        limits = self._column_width_limits()
+        autofit = self.host._auto_fit_columns_by_content
+        # Row numbers, frame and scrollbar: whatever the viewport is not.
+        width = table.width() - table.viewport().width()
+        if not autofit:
+            width += STRETCH_MARGIN
+        for column in range(table.columnCount()):
+            if table.isColumnHidden(column):
+                continue
+            if not autofit and (
+                is_stretch_column(column) or is_shrinkable_column(column)
+            ):
+                width += limits[column][0]
+            else:
+                width += table.columnWidth(column)
+        return width
+
+    def _panel_minimum_width(self) -> int:
+        """The narrowest the side panel can be without cutting off its contents.
+
+        Below this its fields and buttons are clipped, so the divider and the
+        table's need for room both stop here.
+        """
+        panel = self.host.totals_panel
+        minimum = max(PANEL_MIN_WIDTH, panel.content_minimum_width())
+        minimum = min(minimum, panel.maximumWidth())
+        if panel.minimumWidth() != minimum:
+            panel.setMinimumWidth(minimum)
+        return minimum
+
+    def _fit_panel_to_table(self) -> None:
+        """Narrow the side panel, down to its minimum, when the table needs room.
+
+        It goes back to the width the user chose as soon as there is room again.
+        """
+        splitter = self.host._content_splitter
+        panel = self.host.totals_panel
+        left, right = splitter.sizes()
+        total = left + right
+        if total <= 0 or not splitter.isVisible():
+            return
+        wanted = max(
+            self._panel_minimum_width(),
+            min(
+                self._panel_preferred_width,
+                panel.maximumWidth(),
+                total - self._minimum_table_width(),
+            ),
+        )
+        if wanted != right:
+            splitter.setSizes([total - wanted, wanted])
+
+    def _keep_columns_whole(self, *_args) -> None:
+        """Stop the divider where the table would start cutting a number.
+
+        Widening the side panel takes the room from the table. The item name
+        and Type give way first, so the panel can grow until both are at their
+        minimums. Past that, numbers were cut off and a scrollbar appeared.
+        """
+        splitter = self.host._content_splitter
+        left, right = splitter.sizes()
+        total = left + right
+        widest = max(self._panel_minimum_width(), total - self._minimum_table_width())
+        if right > widest:
+            right = widest
+            splitter.setSizes([total - widest, widest])
+        if right != self._panel_preferred_width:
+            self._panel_preferred_width = right
+            self.host._column_save_timer.start()
 
     def connect_signals(self, skip_load_estimate: bool = False):
         if not skip_load_estimate:
@@ -654,11 +753,25 @@ class EstimateEntryLayoutController:
         stretch_column = next(
             col for col in range(table.columnCount()) if is_stretch_column(col)
         )
-        minimum = self._column_width_limits()[stretch_column][0]
-        remaining = table.viewport().width() - sum(
+        limits = self._column_width_limits()
+        minimum = limits[stretch_column][0]
+        shrinkable = [col for col in widths if is_shrinkable_column(col)]
+        for col in shrinkable:
+            self._preferred_widths[col] = self._bounded_column_width(col, widths[col])
+        viewport = table.viewport().width()
+        fixed = sum(
             self._bounded_column_width(col, widths[col])
             for col in range(table.columnCount())
-            if col != stretch_column and col in widths
+            if col != stretch_column and col in widths and col not in shrinkable
+        )
+        # The item name gives up room first, down to its minimum. Only then
+        # do the shrinkable columns, each down to its own.
+        room = viewport - fixed - minimum - STRETCH_MARGIN
+        for col in shrinkable:
+            widths[col] = max(limits[col][0], min(self._preferred_widths[col], room))
+            room -= widths[col]
+        remaining = (
+            viewport - fixed - sum(widths[col] for col in shrinkable) - STRETCH_MARGIN
         )
         self.host._programmatic_resizing = True
         try:
@@ -705,7 +818,16 @@ class EstimateEntryLayoutController:
         hint_width = table.sizeHintForColumn(column) + 2
         target_width = max(min_width, min(max_width, max(header_width, hint_width)))
         current_width = table.columnWidth(column)
+        shrinkable = is_shrinkable_column(column) and not (
+            self.host._auto_fit_columns_by_content
+        )
+        if shrinkable:
+            current_width = self._preferred_widths.get(column, current_width)
         if target_width <= current_width:
+            return
+        if shrinkable:
+            self._preferred_widths[column] = int(target_width)
+            self._auto_stretch_item_name()
             return
 
         self.host._programmatic_resizing = True
@@ -806,12 +928,13 @@ class EstimateEntryLayoutController:
             self.host._programmatic_resizing = False
 
     def _save_column_widths_setting(self):
+        self._save_panel_width_setting()
         if self.host._auto_fit_columns_by_content:
             return
         try:
             widths = [
                 str(
-                    self.host.item_table.columnWidth(i)
+                    self._preferred_widths.get(i, self.host.item_table.columnWidth(i))
                     if not is_stretch_column(i)
                     else -1
                 )
@@ -824,7 +947,30 @@ class EstimateEntryLayoutController:
         except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
             self.host.logger.debug("Failed to save column widths setting: %s", exc)
 
+    def _save_panel_width_setting(self) -> None:
+        try:
+            self._settings().set(
+                SettingsKey.UI_ESTIMATE_PANEL_WIDTH, self._panel_preferred_width
+            )
+        except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
+            self.host.logger.debug("Failed to save side panel width: %s", exc)
+
+    def _load_panel_width_setting(self) -> None:
+        """Open the side panel at the width the user last gave it."""
+        panel = self.host.totals_panel
+        width = self._settings().get_int(
+            SettingsKey.UI_ESTIMATE_PANEL_WIDTH,
+            PANEL_DEFAULT_WIDTH,
+            minimum=self._panel_minimum_width(),
+            maximum=panel.maximumWidth(),
+        )
+        self._panel_preferred_width = width
+        splitter = self.host._content_splitter
+        total = sum(splitter.sizes())
+        splitter.setSizes([total - width, width])
+
     def _load_column_widths_setting(self):
+        self._load_panel_width_setting()
         if self._is_continuous_column_autofit_enabled():
             self.host._programmatic_resizing = True
             try:
@@ -869,6 +1015,8 @@ class EstimateEntryLayoutController:
                 self.host._programmatic_resizing = False
             return
 
+        if is_shrinkable_column(idx):
+            self._preferred_widths[idx] = bounded_width
         self.host._column_save_timer.start()
 
     def _auto_stretch_item_name(self):
@@ -877,8 +1025,9 @@ class EstimateEntryLayoutController:
         table = getattr(self.host, "item_table", None)
         if table is None or not isValid(table):
             return
+        self._fit_panel_to_table()
         current_widths = {
-            col: table.columnWidth(col)
+            col: self._preferred_widths.get(col, table.columnWidth(col))
             for col in range(table.columnCount())
             if not is_stretch_column(col)
         }

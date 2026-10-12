@@ -166,27 +166,13 @@ class DatabaseRepositoryFacadeMixin:
     def get_silver_bars(
         self,
         status=None,
-        weight_query=None,
         estimate_voucher_no=None,
         unassigned_only=False,
-        weight_tolerance=0.001,
-        min_purity=None,
-        max_purity=None,
-        date_range=None,
-        limit=None,
-        offset=0,
     ):
         return self.silver_bar_query_repo.get_silver_bars(
             status=status,
-            weight_query=weight_query,
             estimate_voucher_no=estimate_voucher_no,
             unassigned_only=unassigned_only,
-            weight_tolerance=weight_tolerance,
-            min_purity=min_purity,
-            max_purity=max_purity,
-            date_range=date_range,
-            limit=limit,
-            offset=offset,
         )
 
 

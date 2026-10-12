@@ -127,52 +127,6 @@ def test_ctrl_h_opens_estimate_history_once(make_estimate_widget, qt_app, fake_d
     assert history_calls == [True]
 
 
-def test_widget_calculates_totals(make_estimate_widget, qt_app, fake_db):
-    widget = make_estimate_widget(fake_db)
-    table = _set_row(
-        widget,
-        0,
-        regular_item(gross=10, poly=1, purity=92.5, wage_rate=10),
-    )
-
-    assert float(table.get_cell_text(0, COL_NET_WT)) == pytest.approx(9.00)
-    expected_fine = (10 - 1) * (92.5 / 100.0)
-    # Using larger tolerance due to rounding issues (8.325 -> 8.33)
-    assert float(table.get_cell_text(0, COL_FINE_WT)) == pytest.approx(
-        expected_fine, abs=0.01
-    )
-    assert float(table.get_cell_text(0, COL_WAGE_AMT)) == pytest.approx(90.0)
-
-    assert float(widget.total_gross_label.text()) == pytest.approx(10.0)
-    assert float(widget.total_net_label.text()) == pytest.approx(9.0)
-    assert float(widget.total_fine_label.text()) == pytest.approx(8.325, abs=0.01)
-
-
-def test_widget_multi_row_totals(make_estimate_widget, qt_app, fake_db):
-    widget = make_estimate_widget(fake_db)
-
-    _set_row(widget, 0, regular_item(gross=10, poly=1, purity=92.5, wage_rate=10))
-
-    widget.workflow_controller.toggle_return_mode()
-    _set_row(widget, 1, return_item(gross=2.5, poly=0.5, purity=80, wage_rate=0))
-    widget.workflow_controller.toggle_return_mode()
-
-    widget.workflow_controller.toggle_silver_bar_mode()
-    _set_row(widget, 2, silver_bar_item(gross=3.0, poly=0.0, purity=99.9, wage_rate=0))
-    widget.workflow_controller.toggle_silver_bar_mode()
-
-    table = widget.item_table
-    widget.totals_controller.calculate_totals()
-
-    assert table.get_cell_text(0, COL_TYPE) == "Regular"
-    assert table.get_cell_text(1, COL_TYPE) == "Return"
-    assert table.get_cell_text(2, COL_TYPE) == "Silver Bar"
-
-    assert float(widget.total_gross_label.text()) == pytest.approx(10.0)
-    assert float(widget.return_gross_label.text()) == pytest.approx(2.5)
-    assert float(widget.bar_gross_label.text()) == pytest.approx(3.0)
-
-
 def test_row_edit_applies_totals_without_recalc_schedule(
     make_estimate_widget, qt_app, fake_db
 ):
@@ -228,6 +182,10 @@ def test_totals_multi_row_mixed_categories(
         silver_bar_item(gross=3.0, poly=0.0, purity=99.9, wage_rate=2.0),
     )
     widget.workflow_controller.toggle_silver_bar_mode()
+
+    assert widget.item_table.get_cell_text(0, COL_TYPE) == "Regular"
+    assert widget.item_table.get_cell_text(1, COL_TYPE) == "Return"
+    assert widget.item_table.get_cell_text(2, COL_TYPE) == "Silver Bar"
 
     widget.item_table.set_cell_text(0, COL_GROSS, "11.0")
     widget.table_controller.handle_cell_changed(0, COL_GROSS)
@@ -655,7 +613,7 @@ def test_totals_panel_stays_right_of_the_table(
     splitter = widget._content_splitter
 
     assert splitter.orientation() == Qt.Orientation.Horizontal
-    assert splitter.widget(0) is widget.item_table
+    assert splitter.widget(0) is widget.item_table.parentWidget()
     assert splitter.widget(1) is widget.totals_panel
     assert not hasattr(widget.layout_controller, "apply_totals_position")
 
@@ -717,7 +675,7 @@ def test_side_panel_holds_voucher_fields_and_status_line(
     assert widget.toolbar.isVisible()
     assert widget.toolbar.mode_selector.isVisible()
     assert _find_named_widget(widget, "EstimateHeaderContainer") is None
-    shortcuts = widget.sidebar_status_label.text()
+    shortcuts = widget.status_line_label.text()
     # Save/Print shortcuts show on their buttons; the status line keeps F1.
     for label in ("Rows:", "Last saved:", "F1 Shortcuts"):
         assert label in shortcuts
@@ -845,7 +803,10 @@ def test_non_autofit_persists_fixed_column_widths_only(
     assert tokens[COL_ITEM_NAME] == -1
 
     widget_reloaded = make_estimate_widget(fake_db)
-    assert widget_reloaded.item_table.columnWidth(COL_ITEM_NAME) >= 120
+    name_minimum = widget_reloaded.layout_controller._column_width_limits()[
+        COL_ITEM_NAME
+    ][0]
+    assert widget_reloaded.item_table.columnWidth(COL_ITEM_NAME) >= name_minimum
     assert widget_reloaded.item_table.columnWidth(COL_CODE) == 137
 
 

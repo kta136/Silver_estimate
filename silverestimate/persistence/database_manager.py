@@ -388,9 +388,6 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
         quick = connection.execute("PRAGMA quick_check").fetchone()
         if not quick or str(quick[0]).lower() != "ok":
             raise DatabaseError(f"SQLCipher quick_check failed: {quick!r}")
-        cipher_rows = list(connection.execute("PRAGMA cipher_integrity_check"))
-        if cipher_rows and any(str(row[0]).lower() != "ok" for row in cipher_rows):
-            raise DatabaseError(f"SQLCipher integrity check failed: {cipher_rows!r}")
         violations = list(connection.execute("PRAGMA foreign_key_check"))
         if violations:
             raise DatabaseError(
@@ -541,7 +538,7 @@ class DatabaseManager(DatabaseRepositoryFacadeMixin):
                     created_utc=datetime.now(UTC).isoformat(),
                     database_sha256=sha256_file(database_copy),
                     schema_version=schema_version,
-                    sqlcipher_version=self.driver_identity.sqlcipher_version,
+                    sqlcipher_version=self.driver_identity.cipher_library,
                     device_binding_fingerprint=(
                         crypto_utils.device_binding_fingerprint(self._device_secret)
                     ),

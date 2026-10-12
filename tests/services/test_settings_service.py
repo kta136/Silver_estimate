@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from silverestimate.services import settings_service
 
 
@@ -47,43 +49,41 @@ def _build_service(monkeypatch, values):
     return settings_service.SettingsService()
 
 
-def test_restore_geometry_returns_false_when_qt_restore_fails(monkeypatch):
-    service = _build_service(
-        monkeypatch,
-        {"ui/main_geometry": b"bad-bytes", "ui/main_state": b"bad-state"},
-    )
-    window = _WindowStub(geometry_result=False, state_result=False)
+@pytest.mark.parametrize(
+    "stored, geometry_result, state_result, restored, state_calls",
+    [
+        pytest.param(
+            {"ui/main_geometry": b"bad-bytes", "ui/main_state": b"bad-state"},
+            False,
+            False,
+            False,
+            [b"bad-state"],
+            id="neither-restores",
+        ),
+        pytest.param(
+            {"ui/main_geometry": b"ok-geometry"},
+            True,
+            False,
+            True,
+            [],
+            id="geometry-restores",
+        ),
+        pytest.param(
+            {"ui/main_geometry": b"bad-geometry", "ui/main_state": b"ok-state"},
+            False,
+            True,
+            True,
+            [b"ok-state"],
+            id="state-restores",
+        ),
+    ],
+)
+def test_restore_geometry_reports_whether_anything_was_restored(
+    monkeypatch, stored, geometry_result, state_result, restored, state_calls
+):
+    service = _build_service(monkeypatch, stored)
+    window = _WindowStub(geometry_result=geometry_result, state_result=state_result)
 
-    restored = service.restore_geometry(window)
-
-    assert restored is False
-    assert window.geometry_calls == [b"bad-bytes"]
-    assert window.state_calls == [b"bad-state"]
-
-
-def test_restore_geometry_returns_true_when_geometry_restores(monkeypatch):
-    service = _build_service(
-        monkeypatch,
-        {"ui/main_geometry": b"ok-geometry"},
-    )
-    window = _WindowStub(geometry_result=True, state_result=False)
-
-    restored = service.restore_geometry(window)
-
-    assert restored is True
-    assert window.geometry_calls == [b"ok-geometry"]
-    assert window.state_calls == []
-
-
-def test_restore_geometry_returns_true_when_state_restores(monkeypatch):
-    service = _build_service(
-        monkeypatch,
-        {"ui/main_geometry": b"bad-geometry", "ui/main_state": b"ok-state"},
-    )
-    window = _WindowStub(geometry_result=False, state_result=True)
-
-    restored = service.restore_geometry(window)
-
-    assert restored is True
-    assert window.geometry_calls == [b"bad-geometry"]
-    assert window.state_calls == [b"ok-state"]
+    assert service.restore_geometry(window) is restored
+    assert window.geometry_calls == [stored["ui/main_geometry"]]
+    assert window.state_calls == state_calls

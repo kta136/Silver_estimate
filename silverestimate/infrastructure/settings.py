@@ -35,6 +35,7 @@ class SettingsKey(StrEnum):
     UI_ESTIMATE_TOTALS_SECTION_ORDER = "ui/estimate_totals_section_order"
     UI_ESTIMATE_TABLE_AUTOFIT_MODE = "ui/estimate_table_autofit_mode"
     UI_ESTIMATE_TABLE_COLUMN_WIDTHS = "ui/estimate_table_column_widths"
+    UI_ESTIMATE_PANEL_WIDTH = "ui/estimate_panel_width"
 
     PRINT_MARGINS = "print/margins"
     PRINT_DEFAULT_PRINTER = "print/default_printer"

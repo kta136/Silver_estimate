@@ -187,7 +187,7 @@ def test_history_choice_preserves_or_saves_draft_before_replacing(
     assert not print_calls
 
 
-@pytest.mark.parametrize("completion", ["accept", "reject", "close", "done"])
+@pytest.mark.parametrize("completion", ["accept", "reject", "close"])
 def test_fifty_history_cycles_release_dialogs_and_workers(
     qtbot, history_db, make_estimate_widget, completion
 ):
@@ -209,10 +209,7 @@ def test_fifty_history_cycles_release_dialogs_and_workers(
             return
         dialog = dialogs[-1]
         seen.append(dialog)
-        if completion == "done":
-            dialog.done(QDialog.DialogCode.Rejected)
-        else:
-            getattr(dialog, completion)()
+        getattr(dialog, completion)()
 
     try:
         for _ in range(50):

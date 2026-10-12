@@ -173,6 +173,11 @@ def test_production_database_access_is_confined_to_sqlcipher_broker() -> None:
         if "import sqlite3" in _source_text(path)
     ]
     assert not imports
+    assert [
+        path.relative_to(root).as_posix()
+        for path in (root / "silverestimate").rglob("*.py")
+        if "import apsw\n" in _source_text(path)
+    ] == ["silverestimate/persistence/apsw_dbapi.py"]
 
     removed = (
         "database_lifecycle.py",

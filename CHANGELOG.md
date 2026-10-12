@@ -1,5 +1,157 @@
 # Changelog
 
+## [4.10] - 2026-10-12
+
+### Changed
+
+- Shorter headings in the estimate table, to leave more room for Item Name:
+  the weight headings lose "(g)" (Gross, Poly, Net, Fine, and Gross, Net,
+  Fine in the side panel's totals), Purity (%) is now "%", Pieces is "Pc",
+  and Lbr Amt is "Lbr", the same as the labour rate heading: hover over a
+  heading to see which is which. The "%" column is narrower. Printouts,
+  reports and other screens keep their headings.
+
+### Fixed
+
+- Fix the estimate screen on a 1280 x 720 screen, such as a remote desktop
+  session or a 1600 x 900 screen at 125%. Its side panel scrolled, so the
+  bottom of it was cut off, and widening the panel cut off table columns.
+  - The line with the row count, last save and F1 hint moved from the
+    foot of the side panel to under the table. The panel now fits a
+    maximized window there with a few pixels to spare, and the Load button
+    is as tall as the voucher field beside it.
+  - Item Name and Type now give way when the table is short of room, so
+    Gross, Net, Fine and every other number stay whole. Item Name narrows
+    first, down to 100 px, then Type, down to 64 px. Type goes back to its
+    width as soon as there is room again, and the width it prefers is what
+    is saved.
+  - The side panel can be widened (up to 440 px) until Item Name and Type
+    are both at their minimum, and the divider stops there instead of
+    cutting a number or adding a scrollbar. On a narrow window the panel
+    narrows, down to what its fields and buttons need (about 296 px), before
+    the table scrolls, and goes back to your width when the room returns.
+    Before, dragging it below 296 px cut off its fields.
+  - The width you give the side panel is remembered.
+
+### Dependencies and tooling
+
+- Replace the self-built SQLCipher wheel with `apsw-sqlite3mc` from PyPI
+  (SQLite 3.53.4 with SQLite3 Multiple Ciphers). The database file format
+  is unchanged and nothing is converted: this build opens existing
+  databases and backups as they are, and a build with the previous engine
+  can still open a database or backup that this build has written.
+  - The engine no longer contains OpenSSL, whose 3.6 series loses support
+    on 1 November 2026. Updating the engine is now a lock-file change. The
+    vendored wheel, its build script and workflow, and the two CI steps
+    that checked it are removed.
+  - `silverestimate/persistence/apsw_dbapi.py` gives the engine the
+    `sqlite3` interface the repositories use. A connection that is not
+    encrypting in the SQLCipher 4 format is refused.
+  - Backup, restore and password change copy the database with SQLite's
+    backup interface in place of `sqlcipher_export()`.
+  - Database validation no longer runs `PRAGMA cipher_integrity_check`,
+    which this engine does not have. A damaged or altered page still
+    fails its check when it is read, and the quick check reads every page
+    in use.
+  - The tests keep a database written by v4.08 and must open it, so an
+    engine update that could not read the format fails them.
+
+## [4.09] - 2026-10-11
+
+### Changed
+
+- Redesign the Sign In and Create Passwords windows: a teal strip with the
+  logo, name and version beside the form. Create Passwords now sets the
+  main and recovery passwords side by side, so it is 840 x 453 instead of
+  540 x 728 and fits a 1366 x 768 screen, even with Windows scaled to 125%.
+  On 1366 x 768 the old window was too tall, so the note under the main
+  password lost its last line and the status line was squeezed.
+- New logo: a silver bar with the rupee sign engraved in it, on a teal tile.
+  It is the icon of the exe, the taskbar, the windows, About and Sign In.
+  Up to 32 px it is a plain bar, so it stays clear in the taskbar and title
+  bar. The master is `assets/icons/silverestimate.svg`;
+  `python scripts/build_app_icon.py` redraws the icon from it. The Sign In
+  strip is now deep teal so the logo stands out, and no longer says
+  "Your estimates are encrypted on this PC". The Create Passwords tooltip
+  on the main password box no longer says "This password encrypts your
+  data" either.
+- Shorten the About window to the name, version, what the app does and two
+  short licence notices, and remove the link to the source code on GitHub.
+- Silver Bars is now a screen in the View menu (Alt+B), beside Estimate
+  Entry, Item Master and Sales Reports, instead of a window opened from
+  Tools. It is built only when you open it and closed when you leave it, so
+  nothing of it loads or runs in the meantime. Leave by choosing another
+  screen, pressing Close, or pressing Esc once the weight box is clear; it
+  stays open while a list is printing. A list picked in Silver Bar History
+  opens in the same screen.
+  - File > Print and F1 now act on the open screen: on Silver Bars they print
+    the list and show its shortcuts. Retrying an issue moved from Alt+I,
+    which opens Item Master, to Ctrl+I.
+
+### Fixed
+
+- Fix several windows that were too tall for a 1366 x 768 screen, which
+  cuts the usable height to about 700 px:
+  - Estimate History: the Selected Estimate panel needed about 20 px more
+    than it got, so it grew two scrollbars and cut off the voucher number,
+    date and amounts. It is now more compact and never scrolls sideways.
+  - Settings: Printing and Data & Backups scrolled, which left Delete All
+    Data and the print sample below the fold. Every page now fits. The
+    margins editor is more compact, and the Appearance preview puts the
+    sample totals under the table so all its columns show. A page gets a
+    scrollbar only when it cannot squeeze into the window.
+- Fix gaps on 1600 x 900 screens, and on 1280 x 720 (a 1600 x 900 screen
+  with Windows scaled to 125%):
+  - Every table heading now sits over its data: figures are right-aligned
+    like the numbers below them and labels are left-aligned, instead of
+    every heading being centred over left-aligned text.
+  - Estimate History opens larger on a big screen (up to 1440 x 800), and
+    its Selected Estimate panel fits at 1280 x 720 without a scrollbar
+    over the voucher number, date and amounts. The Grand Total row no
+    longer pads each label, which had made the row too tall.
+  - Item Master: Add, Update and Clear now sit on one row, so the whole
+    form, with Delete, fits at 1280 x 720 without scrolling.
+  - Settings > Data & Backups fits at 1280 x 720. Its two long paragraphs
+    are shorter, and a page's scrollbar now appears whenever the page is
+    taller than the window needs, not only at the page's smallest size
+    (between the two heights the bottom of a page was cut off with no way
+    to reach it).
+  - Sales Reports keeps its filters and report to a 1340 px width, centred.
+    On a wide screen the five columns had ended up a thousand pixels from
+    the dates they belong to.
+  - An issued Silver Bars list is a centred 1000 px column for the same
+    reason.
+  - The button at the foot of Silver Bar History says Close, and Back to
+    List only when it was opened from the Silver Bars screen (before, it
+    always said Back to List, even when there was no list to go back to).
+    The window also opens larger on a big screen.
+- Editing a weight of 1000 g or more in the estimate table no longer
+  scrolls its first digit out of view (1239.567 read 239.567). The editor
+  grows to the left to show everything typed.
+- A large total (₹10 crore or more) or a negative one (-₹10 lakh or less)
+  no longer drops the Grand Total under its caption, which pushed the side
+  panel's buttons out of a short window. The amount shrinks, down to 11 pt,
+  to stay beside the caption. Where a value still has to wrap, its card is
+  now as tall as it needs, so the Net Fine and Net Labour rows no longer
+  overlap, and the panel's height settles again when the numbers get small.
+- A background search that finished just as its window was closed could
+  leave an error in the log ("Signal source has been deleted"). It is now
+  ignored, since nothing is waiting for the result.
+- The Silver Bars weight box no longer says "Showing all bars" while the
+  list beside it says the bars are hidden.
+- Status pills in Silver Bar History keep a clear line above and below them
+  and sit in the middle of the row.
+- The two columns in the Keyboard Shortcuts window start at the same
+  height, and Item Master shows the start of a long name, not its end.
+- Clicking File, View, Tools, History or Help with the mouse opens the
+  menu again. Since 4.07 put the menus in the title bar, a click made the
+  menu appear and close at once: Qt 6.11 delivers a press in the title
+  bar twice, first to ask whether the window should be dragged instead,
+  then as the click. The bar now tells Windows itself that its menus and
+  buttons take the click, so it arrives once. The keyboard, the More
+  button and dragging the window by the empty part of the bar were not
+  affected and work as before.
+
 ## [4.08] - 2026-10-11
 
 ### Dependencies and tooling

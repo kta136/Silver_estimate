@@ -684,10 +684,11 @@ class StatusPillDelegate(QStyledItemDelegate):
         metrics = QFontMetrics(font)
         label_text = f"● {text}"
         width = metrics.horizontalAdvance(label_text) + 18
-        height = metrics.height() + 6
+        # Leave a clear line above and below it, whatever the row height.
+        height = min(metrics.height() + 6, option.rect.height() - 4)
         rect = QRect(
             option.rect.left() + 8,
-            option.rect.center().y() - height // 2,
+            option.rect.top() + (option.rect.height() - height) // 2,
             min(width, option.rect.width() - 12),
             height,
         )

@@ -63,6 +63,9 @@ COMPACT_FILTER_WIDTH = 1150
 # Item view: the code and the four figures keep a fixed width, so the
 # item's name gets all the room that is left.
 ITEM_CODE_WIDTH = 170
+# Wider than this the filters and the report stop growing and are centred.
+MAX_CONTENT_WIDTH = 1340
+SIDE_MARGIN = 18
 WEIGHT_WIDTH = 160
 # Height of the row that holds each filter's control.
 FILTER_ROW_HEIGHT = 38
@@ -138,6 +141,8 @@ class SalesReportWidget(QWidget):
         body.addLayout(self._build_totals())
         body.addWidget(self._build_table_card(), 1)
         layout.addLayout(body, 1)
+        self._body_layout = body
+        self._header_layout = self._filters_layout
         refresh = QAction(self)
         refresh.setShortcut(QKeySequence(Qt.Key.Key_F5))
         refresh.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
@@ -156,6 +161,7 @@ class SalesReportWidget(QWidget):
         layout = QVBoxLayout(header)
         layout.setContentsMargins(18, 10, 18, 10)
         layout.setSpacing(6)
+        self._filters_layout = layout
         title_row = QHBoxLayout()
         title_row.setSpacing(14)
         title_row.addWidget(label("Sales Reports", "ScreenTitle"))
@@ -244,6 +250,21 @@ class SalesReportWidget(QWidget):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._arrange_filters()
+        self._centre_content()
+
+    def _centre_content(self) -> None:
+        """Keep the filters and the report to one readable width.
+
+        The report has few columns. Stretched across a 1600 px screen, each
+        figure ends up a long way from the date it belongs to, so beyond
+        MAX_CONTENT_WIDTH the extra width goes to the margins, equally on both
+        sides, for the filters and the report alike.
+        """
+        side = max(SIDE_MARGIN, (self.width() - MAX_CONTENT_WIDTH) // 2)
+        for layout in (self._header_layout, self._body_layout):
+            margins = layout.contentsMargins()
+            if margins.left() != side:
+                layout.setContentsMargins(side, margins.top(), side, margins.bottom())
 
     def _arrange_filters(self):
         """Below 1150 px the grouping, item code and button move to a second row."""

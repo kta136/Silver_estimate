@@ -43,6 +43,7 @@ class EstimateColumnSpec:
     min_width: int = 60
     max_width: int = 700
     stretch: bool = False
+    shrinks: bool = False
     navigation_order: int | None = None
     auto_edit: bool = False
     blank_zero_editor: bool = False
@@ -69,14 +70,14 @@ ESTIMATE_TABLE_COLUMN_SPECS: Final[tuple[EstimateColumnSpec, ...]] = (
         "Item Name",
         editor_type=EDITOR_TEXT,
         default_width=200,
-        min_width=120,
+        min_width=100,
         max_width=1200,
         stretch=True,
     ),
     EstimateColumnSpec(
         COL_GROSS,
         "gross",
-        "Gross (g)",
+        "Gross",
         precision=WEIGHT_PLACES,
         editor_type=EDITOR_NUMERIC,
         default_width=78,
@@ -91,7 +92,7 @@ ESTIMATE_TABLE_COLUMN_SPECS: Final[tuple[EstimateColumnSpec, ...]] = (
     EstimateColumnSpec(
         COL_POLY,
         "poly",
-        "Poly (g)",
+        "Poly",
         precision=WEIGHT_PLACES,
         editor_type=EDITOR_NUMERIC,
         default_width=74,
@@ -106,7 +107,7 @@ ESTIMATE_TABLE_COLUMN_SPECS: Final[tuple[EstimateColumnSpec, ...]] = (
     EstimateColumnSpec(
         COL_NET_WT,
         "net_weight",
-        "Net (g)",
+        "Net",
         precision=WEIGHT_PLACES,
         editable=False,
         editor_type=EDITOR_NUMERIC,
@@ -117,11 +118,12 @@ ESTIMATE_TABLE_COLUMN_SPECS: Final[tuple[EstimateColumnSpec, ...]] = (
     EstimateColumnSpec(
         COL_PURITY,
         "purity",
-        "Purity (%)",
+        "%",
         precision=PURITY_PLACES,
         editor_type=EDITOR_NUMERIC,
-        default_width=96,
-        min_width=92,
+        tooltip="Purity (%)",
+        default_width=72,
+        min_width=64,
         max_width=160,
         navigation_order=3,
         auto_edit=True,
@@ -146,9 +148,10 @@ ESTIMATE_TABLE_COLUMN_SPECS: Final[tuple[EstimateColumnSpec, ...]] = (
     EstimateColumnSpec(
         COL_PIECES,
         "pieces",
-        "Pieces",
+        "Pc",
         precision=0,
         editor_type=EDITOR_NUMERIC,
+        tooltip="Pieces",
         default_width=56,
         min_width=52,
         max_width=64,
@@ -159,7 +162,7 @@ ESTIMATE_TABLE_COLUMN_SPECS: Final[tuple[EstimateColumnSpec, ...]] = (
     EstimateColumnSpec(
         COL_WAGE_AMT,
         "wage_amount",
-        "Lbr Amt",
+        "Lbr",
         precision=MONEY_PLACES,
         tooltip="Labour amount (₹)",
         editable=False,
@@ -171,7 +174,7 @@ ESTIMATE_TABLE_COLUMN_SPECS: Final[tuple[EstimateColumnSpec, ...]] = (
     EstimateColumnSpec(
         COL_FINE_WT,
         "fine_weight",
-        "Fine (g)",
+        "Fine",
         precision=WEIGHT_PLACES,
         editable=False,
         editor_type=EDITOR_NUMERIC,
@@ -186,9 +189,12 @@ ESTIMATE_TABLE_COLUMN_SPECS: Final[tuple[EstimateColumnSpec, ...]] = (
         editable=False,
         editor_type=EDITOR_READ_ONLY,
         # Wide enough for "Silver Bar", the longest type, at the default size.
+        # In a narrow table it gives way after the item name, down to the
+        # minimum, where "Silver Bar" is cut short.
         default_width=92,
-        min_width=88,
+        min_width=64,
         max_width=180,
+        shrinks=True,
     ),
 )
 
@@ -208,6 +214,9 @@ ROW_RECALCULATION_COLUMNS: Final = frozenset(
 )
 STRETCH_COLUMNS: Final = frozenset(
     spec.index for spec in ESTIMATE_TABLE_COLUMN_SPECS if spec.stretch
+)
+SHRINKABLE_COLUMNS: Final = frozenset(
+    spec.index for spec in ESTIMATE_TABLE_COLUMN_SPECS if spec.shrinks
 )
 NAVIGATION_COLUMNS: Final = tuple(
     spec.index
@@ -272,6 +281,11 @@ def column_uses_blank_zero_editor(column: int) -> bool:
 
 def is_stretch_column(column: int) -> bool:
     return column in STRETCH_COLUMNS
+
+
+def is_shrinkable_column(column: int) -> bool:
+    """A fixed-width column that narrows, after the stretch column, to save room."""
+    return column in SHRINKABLE_COLUMNS
 
 
 def columns_for_editor_type(

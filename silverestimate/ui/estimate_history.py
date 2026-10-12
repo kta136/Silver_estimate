@@ -121,10 +121,13 @@ class EstimateHistoryDialog(QDialog):
         # Wide enough for every column, Grand Total included, beside the
         # details panel.
         set_usable_minimum_size(self, width=1000, height=540)
+        # Taller and wider when the screen allows it; the margin is small
+        # enough that the selected-estimate panel fits at 1280x720 too.
         resize_to_available_screen(
             self,
-            preferred_width=1280,
-            preferred_height=680,
+            preferred_width=1440,
+            preferred_height=800,
+            margin=48,
         )
         self.setObjectName("EstimateHistoryDialog")
         self.setStyleSheet(

@@ -163,18 +163,55 @@ def test_import_item_catalog_rejects_duplicate_codes_in_file(tmp_path):
         import_item_catalog(db, str(path))
 
 
-def test_load_item_catalog_file_rejects_wrong_format(tmp_path):
-    path = tmp_path / "catalog.seitems.json"
-    path.write_text(
-        json.dumps(
-            {"format": "wrong.format", "version": ITEM_CATALOG_VERSION, "items": []}
-        ),
-        encoding="utf-8",
+def _catalog_json(**overrides) -> str:
+    return json.dumps(
+        {
+            "format": ITEM_CATALOG_FORMAT,
+            "version": ITEM_CATALOG_VERSION,
+            "items": [],
+            **overrides,
+        }
     )
 
-    with pytest.raises(
-        ItemCatalogTransferError, match="Unsupported catalog file format"
-    ):
+
+@pytest.mark.parametrize(
+    "content, message",
+    [
+        pytest.param(
+            _catalog_json(format="wrong.format"),
+            "Unsupported catalog file format",
+            id="wrong-format",
+        ),
+        pytest.param(
+            _catalog_json(version=99),
+            "Unsupported catalog file version",
+            id="wrong-version",
+        ),
+        pytest.param("{not-json", "not valid JSON", id="malformed-json"),
+        pytest.param(
+            _catalog_json(
+                items=[
+                    {
+                        "code": "BAD001",
+                        "name": "Bad",
+                        "purity": -0.01,
+                        "wage_type": "WT",
+                        "wage_rate": 10.0,
+                    }
+                ]
+            ),
+            "Invalid catalog item 1",
+            id="invalid-domain-data",
+        ),
+        pytest.param(None, "Catalog file not found", id="missing-file"),
+    ],
+)
+def test_load_item_catalog_file_rejects_unusable_files(tmp_path, content, message):
+    path = tmp_path / "catalog.seitems.json"
+    if content is not None:
+        path.write_text(content, encoding="utf-8")
+
+    with pytest.raises(ItemCatalogTransferError, match=message):
         load_item_catalog_file(str(path))
 
 
@@ -211,62 +248,12 @@ def test_load_item_catalog_file_accepts_v1_with_blank_tunch(tmp_path):
     ]
 
 
-def test_load_item_catalog_file_rejects_wrong_version(tmp_path):
-    path = tmp_path / "catalog.seitems.json"
-    path.write_text(
-        json.dumps({"format": ITEM_CATALOG_FORMAT, "version": 99, "items": []}),
-        encoding="utf-8",
-    )
-
-    with pytest.raises(
-        ItemCatalogTransferError, match="Unsupported catalog file version"
-    ):
-        load_item_catalog_file(str(path))
-
-
-def test_load_item_catalog_file_rejects_malformed_json(tmp_path):
-    path = tmp_path / "catalog.seitems.json"
-    path.write_text("{not-json", encoding="utf-8")
-
-    with pytest.raises(ItemCatalogTransferError, match="not valid JSON"):
-        load_item_catalog_file(str(path))
-
-
-def test_load_item_catalog_file_rejects_invalid_domain_data(tmp_path):
-    path = tmp_path / "catalog.seitems.json"
-    path.write_text(
-        json.dumps(
-            {
-                "format": ITEM_CATALOG_FORMAT,
-                "version": ITEM_CATALOG_VERSION,
-                "items": [
-                    {
-                        "code": "BAD001",
-                        "name": "Bad",
-                        "purity": -0.01,
-                        "wage_type": "WT",
-                        "wage_rate": 10.0,
-                    }
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    with pytest.raises(ItemCatalogTransferError, match="Invalid catalog item 1"):
-        load_item_catalog_file(str(path))
-
-
-def test_load_item_catalog_file_rejects_missing_file(tmp_path):
-    missing_path = tmp_path / "missing.seitems.json"
-
-    with pytest.raises(ItemCatalogTransferError, match="Catalog file not found"):
-        load_item_catalog_file(str(missing_path))
-
-
-def test_ensure_catalog_file_suffix_appends_native_suffix_for_plain_json_name():
-    assert ensure_catalog_file_suffix("backup.json") == "backup.json.seitems.json"
-
-
-def test_ensure_catalog_file_suffix_preserves_native_suffix():
-    assert ensure_catalog_file_suffix("backup.seitems.json") == "backup.seitems.json"
+@pytest.mark.parametrize(
+    "name, expected",
+    [
+        ("backup.json", "backup.json.seitems.json"),
+        ("backup.seitems.json", "backup.seitems.json"),
+    ],
+)
+def test_ensure_catalog_file_suffix_adds_the_native_suffix_once(name, expected):
+    assert ensure_catalog_file_suffix(name) == expected

@@ -1,11 +1,13 @@
 from contextlib import suppress
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QDialog,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -14,17 +16,27 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from silverestimate.infrastructure.app_constants import APP_TITLE
+from silverestimate.infrastructure.app_constants import APP_NAME, APP_VERSION
+from silverestimate.infrastructure.paths import get_asset_path
 from silverestimate.infrastructure.windows_integration import bring_window_to_front
 
 from .message_dialogs import confirm_by_typing, confirm_destructive
 from .shared_screen_theme import build_management_screen_stylesheet
-from .window_sizing import resize_to_available_screen
+
+BRAND_PANEL_WIDTH = 200
+BRAND_ICON_SIZE = 96
+# The setup form holds two columns of fields, so it is wider than sign-in.
+SIGN_IN_FORM_WIDTH = 400
+SETUP_FORM_WIDTH = 640
 
 
 class LoginDialog(QDialog):
     """
     Dialog for user authentication (login) and initial password setup.
+
+    A brand strip on the left and the form on the right. Setup puts the main
+    and recovery passwords side by side so the whole dialog stays well inside
+    a 1366x768 screen, even with Windows scaled to 125%.
     """
 
     MIN_PASSWORD_LENGTH = 8
@@ -36,11 +48,10 @@ class LoginDialog(QDialog):
         self.setModal(True)  # Ensure user interacts with this dialog first
         self.setObjectName("LoginDialog")
         self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
-        self.setMinimumWidth(420 if not self.is_setup else 440)
         self.setStyleSheet(
             build_management_screen_stylesheet(
                 root_selector="QDialog#LoginDialog",
-                card_names=["LoginPanelFrame", "LoginDangerCard"],
+                card_names=["LoginDangerCard"],
                 title_label="LoginTitleLabel",
                 subtitle_label="LoginSubtitleLabel",
                 field_label="LoginFieldLabel",
@@ -49,17 +60,29 @@ class LoginDialog(QDialog):
                 danger_button="LoginDangerButton",
                 input_selectors=["QLineEdit"],
                 extra_rules="""
-                QFrame#LoginPanelFrame {
+                QWidget#LoginForm {
                     background-color: __SURFACE_BG__;
-                    border: 1px solid __CARD_BORDER__;
-                    border-radius: 8px;
                 }
-                QLabel#LoginSubtitleLabel {
-
+                QFrame#LoginBrandPanel {
+                    background-color: qlineargradient(
+                        x1: 0, y1: 0, x2: 0, y2: 1,
+                        stop: 0 #0a4852, stop: 1 #052a31
+                    );
+                    border: none;
                 }
-                QLabel#LoginAppLabel {
-                    color: __TEXT_MUTED__;
+                QFrame#LoginBrandPanel QLabel {
+                    color: #ffffff;
+                    background: transparent;
+                }
+                QLabel#LoginBrandName {
+                    font-size: 15pt;
+                    font-weight: 700;
+                }
+                QLabel#LoginBrandVersion {
                     font-weight: 600;
+                }
+                QLabel#LoginTitleLabel {
+                    font-size: 16pt;
                 }
                 QLabel#LoginErrorLabel {
                     color: #b91c1c;
@@ -72,17 +95,19 @@ class LoginDialog(QDialog):
                     color: #166534;
                     font-weight: 600;
                 }
+                QLabel#LoginCapsLabel {
+                    color: #9a3412;
+                    font-weight: 600;
+                }
                 QLabel#LoginRequirementsLabel {
                     background-color: __HEADER_BG__;
                     border: 1px solid __CARD_BORDER_SOFT__;
                     border-radius: 8px;
                     color: __FIELD_TEXT__;
-
-                    padding: 7px 9px;
+                    padding: 7px 10px;
                 }
                 QCheckBox#LoginShowPasswords {
                     color: __FIELD_TEXT__;
-
                     spacing: 8px;
                 }
                 QCheckBox#LoginShowPasswords::indicator {
@@ -110,7 +135,6 @@ class LoginDialog(QDialog):
                 }
                 QPushButton#LoginForgotButton {
                     color: __PRIMARY_BG__;
-
                     font-weight: 600;
                     text-align: left;
                     border: none;
@@ -123,17 +147,15 @@ class LoginDialog(QDialog):
                 }
                 QLabel#LoginDangerTitle {
                     color: #991b1b;
-
                     font-weight: 700;
                 }
                 QLabel#LoginDangerBody {
                     color: #7f1d1d;
-
                 }
                 QFrame#LoginDangerCard {
                     background-color: __DANGER_BG__;
                     border: 1px solid __DANGER_BORDER__;
-                    border-radius: 12px;
+                    border-radius: 8px;
                 }
                 """,
             )
@@ -143,47 +165,34 @@ class LoginDialog(QDialog):
         self._backup_password = str()  # Only used in setup mode
         self.reset_requested = False  # Add flag to track reset request
         self._startup_activation_pending = True
+        self._form_width = SETUP_FORM_WIDTH if is_setup else SIGN_IN_FORM_WIDTH
 
         self._setup_ui()
-        width = 540 if self.is_setup else 460
-        layout = self.layout()
-        # A wrapped label reports a taller size hint than it needs at this
-        # width; asking the layout for the height at the real width avoids
-        # a blank band above the buttons.
-        height = (
-            layout.totalHeightForWidth(width)
-            if layout is not None and layout.hasHeightForWidth()
-            else self.sizeHint().height()
-        )
-        resize_to_available_screen(
-            self,
-            preferred_width=width,
-            preferred_height=height + 12,
-        )
         self._connect_signals()
+        self._fit_to_content()
 
-        # Prevent closing via the 'X' button if desired, force use of buttons
+    # -- layout ---------------------------------------------------------
 
     def _setup_ui(self):
         """Create the UI elements for the dialog."""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 18, 18, 18)
-        layout.setSpacing(0)
+        root = QHBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        root.addWidget(self._build_brand_panel())
 
-        panel = QFrame(self)
-        panel.setObjectName("LoginPanelFrame")
-        panel_layout = QVBoxLayout(panel)
-        panel_layout.setContentsMargins(20, 20, 20, 20)
-        panel_layout.setSpacing(12)
-        layout.addWidget(panel)
-
-        app_label = QLabel(APP_TITLE)
-        app_label.setObjectName("LoginAppLabel")
-        panel_layout.addWidget(app_label)
+        form = QWidget(self)
+        form.setObjectName("LoginForm")
+        form.setFixedWidth(self._form_width)
+        root.addWidget(form)
+        form_layout = QVBoxLayout(form)
+        self._form_layout = form_layout
+        form_layout.setContentsMargins(28, 28, 28, 24)
+        form_layout.setSpacing(0)
 
         title_label = QLabel("Create Passwords" if self.is_setup else "Sign In")
         title_label.setObjectName("LoginTitleLabel")
-        panel_layout.addWidget(title_label)
+        form_layout.addWidget(title_label)
+        form_layout.addSpacing(3)
 
         subtitle_label = QLabel(
             "Set a main password and a secondary recovery password."
@@ -192,78 +201,13 @@ class LoginDialog(QDialog):
         )
         subtitle_label.setObjectName("LoginSubtitleLabel")
         subtitle_label.setWordWrap(True)
-        panel_layout.addWidget(subtitle_label)
+        form_layout.addWidget(subtitle_label)
+        form_layout.addSpacing(16)
 
-        self.password_label = QLabel("Main Password" if self.is_setup else "Password")
-        self.password_label.setObjectName("LoginFieldLabel")
-        self.password_input = QLineEdit()
-        self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.password_input.setClearButtonEnabled(True)
-        self.password_input.setPlaceholderText(
-            "Enter your main password"
-            if not self.is_setup
-            else "Create a strong main password"
-        )
         if self.is_setup:
-            self.password_input.setToolTip(
-                "Enter your main password for database access\nThis password encrypts your data\nChoose a strong, memorable password"
-            )
+            self._build_setup_fields(form, form_layout)
         else:
-            self.password_input.setToolTip(
-                "Enter your password to access the application\nPress Enter to login\nUse Reset button if password is forgotten"
-            )
-        panel_layout.addWidget(self.password_label)
-        panel_layout.addWidget(self.password_input)
-
-        if self.is_setup:
-            self.confirm_main_password_label = QLabel("Confirm Main Password")
-            self.confirm_main_password_label.setObjectName("LoginFieldLabel")
-            self.confirm_main_password_input = QLineEdit()
-            self.confirm_main_password_input.setEchoMode(QLineEdit.EchoMode.Password)
-            self.confirm_main_password_input.setClearButtonEnabled(True)
-            self.confirm_main_password_input.setPlaceholderText(
-                "Re-enter the main password"
-            )
-            self.confirm_main_password_input.setToolTip(
-                "Re-enter the main password exactly to prevent setup lockout"
-            )
-            panel_layout.addWidget(self.confirm_main_password_label)
-            panel_layout.addWidget(self.confirm_main_password_input)
-
-            self.password_requirements_label = QLabel(
-                "Use two different passwords of at least 8 characters each. "
-                "The main password opens the database; the recovery password "
-                "is for emergency access. Store it safely."
-            )
-            self.password_requirements_label.setObjectName("LoginRequirementsLabel")
-            self.password_requirements_label.setWordWrap(True)
-            panel_layout.addWidget(self.password_requirements_label)
-
-            self.backup_password_label = QLabel("Recovery Password")
-            self.backup_password_label.setObjectName("LoginFieldLabel")
-            self.backup_password_input = QLineEdit()
-            self.backup_password_input.setEchoMode(QLineEdit.EchoMode.Password)
-            self.backup_password_input.setClearButtonEnabled(True)
-            self.backup_password_input.setPlaceholderText("Create a recovery password")
-            self.backup_password_input.setToolTip(
-                "Enter a different recovery password\nMust be different from main password\nUsed for emergency access and data management"
-            )
-            panel_layout.addWidget(self.backup_password_label)
-            panel_layout.addWidget(self.backup_password_input)
-
-            self.confirm_password_label = QLabel("Confirm Recovery Password")
-            self.confirm_password_label.setObjectName("LoginFieldLabel")
-            self.confirm_password_input = QLineEdit()
-            self.confirm_password_input.setEchoMode(QLineEdit.EchoMode.Password)
-            self.confirm_password_input.setClearButtonEnabled(True)
-            self.confirm_password_input.setPlaceholderText(
-                "Re-enter the recovery password"
-            )
-            self.confirm_password_input.setToolTip(
-                "Re-enter the recovery password to confirm\nMust match exactly\nEnsures password was typed correctly"
-            )
-            panel_layout.addWidget(self.confirm_password_label)
-            panel_layout.addWidget(self.confirm_password_input)
+            self._build_sign_in_fields(form_layout)
 
         self.show_passwords_checkbox = QCheckBox(
             "Show passwords" if self.is_setup else "Show password"
@@ -273,17 +217,19 @@ class LoginDialog(QDialog):
         visibility_row.addWidget(self.show_passwords_checkbox)
         visibility_row.addStretch()
         self.caps_lock_label = QLabel("Caps Lock is on")
-        self.caps_lock_label.setStyleSheet("color: #9a3412;")
+        self.caps_lock_label.setObjectName("LoginCapsLabel")
         visibility_row.addWidget(self.caps_lock_label)
         self.caps_lock_label.hide()
         self._caps_timer = QTimer(self)
         self._caps_timer.timeout.connect(self._update_caps_lock)
         self._caps_timer.start(250)
-        panel_layout.addLayout(visibility_row)
+        form_layout.addSpacing(10)
+        form_layout.addLayout(visibility_row)
+        form_layout.addSpacing(6)
 
         # One reserved place for what is still missing or wrong. The fields
         # and buttons keep their position whether or not it has text.
-        status_host = QWidget(panel)
+        status_host = QWidget(form)
         status_layout = QVBoxLayout(status_host)
         status_layout.setContentsMargins(0, 0, 0, 0)
         status_layout.setSpacing(0)
@@ -301,9 +247,8 @@ class LoginDialog(QDialog):
         status_host.setMinimumHeight(
             self.fontMetrics().lineSpacing() * (2 if self.is_setup else 1) + 8
         )
-        panel_layout.addWidget(status_host)
-        # Spare height collects here instead of spreading between fields.
-        panel_layout.addStretch(1)
+        form_layout.addWidget(status_host)
+        form_layout.addSpacing(8)
 
         button_layout = QHBoxLayout()
         button_layout.setSpacing(10)
@@ -328,10 +273,10 @@ class LoginDialog(QDialog):
             "Exit without logging in\nApplication will close\nNo data will be accessed or modified"
         )
 
+        button_layout.addStretch(1)
         button_layout.addWidget(self.cancel_button)
         button_layout.addWidget(self.ok_button)
-        button_layout.setAlignment(Qt.AlignmentFlag.AlignRight)
-        panel_layout.addLayout(button_layout)
+        form_layout.addLayout(button_layout)
 
         if not self.is_setup:
             forgot_link = QPushButton("Need help?")
@@ -340,13 +285,12 @@ class LoginDialog(QDialog):
             forgot_link.setAccessibleName("Show password recovery options")
             forgot_link.setFlat(True)
             button_layout.insertWidget(0, forgot_link)
-            button_layout.insertStretch(1)
 
-            danger_card = QFrame(panel)
-            danger_card.setObjectName("LoginDangerCard")
-            danger_card.setVisible(False)
-            danger_layout = QVBoxLayout(danger_card)
-            danger_layout.setContentsMargins(18, 16, 18, 16)
+            self._danger_card = QFrame(form)
+            self._danger_card.setObjectName("LoginDangerCard")
+            self._danger_card.setVisible(False)
+            danger_layout = QVBoxLayout(self._danger_card)
+            danger_layout.setContentsMargins(16, 14, 16, 14)
             danger_layout.setSpacing(8)
 
             danger_title = QLabel("Trouble signing in?")
@@ -372,11 +316,171 @@ class LoginDialog(QDialog):
             danger_action_layout.addWidget(self.reset_button)
             danger_action_layout.addStretch()
             danger_layout.addLayout(danger_action_layout)
-            panel_layout.addWidget(danger_card)
+            form_layout.addSpacing(12)
+            form_layout.addWidget(self._danger_card)
 
-            forgot_link.clicked.connect(
-                lambda: danger_card.setVisible(not danger_card.isVisible())
-            )
+            forgot_link.clicked.connect(self._toggle_recovery_options)
+
+    def _build_brand_panel(self) -> QFrame:
+        panel = QFrame(self)
+        panel.setObjectName("LoginBrandPanel")
+        panel.setFixedWidth(BRAND_PANEL_WIDTH)
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(22, 24, 22, 24)
+        layout.setSpacing(0)
+        centered = Qt.AlignmentFlag.AlignHCenter
+        layout.addStretch(1)
+
+        icon_label = QLabel(panel)
+        icon_label.setObjectName("LoginBrandIcon")
+        icon_label.setFixedSize(BRAND_ICON_SIZE, BRAND_ICON_SIZE)
+        icon_label.setAccessibleName(f"{APP_NAME} logo")
+        pixmap = self._brand_pixmap()
+        if pixmap is not None:
+            icon_label.setPixmap(pixmap)
+            icon_label.setScaledContents(True)
+        layout.addWidget(icon_label, 0, centered)
+        layout.addSpacing(18)
+
+        name_label = QLabel(APP_NAME, panel)
+        name_label.setObjectName("LoginBrandName")
+        name_label.setWordWrap(True)
+        name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(name_label)
+        layout.addSpacing(4)
+
+        version_label = QLabel(f"Version {APP_VERSION}", panel)
+        version_label.setObjectName("LoginBrandVersion")
+        version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(version_label)
+        layout.addStretch(1)
+        return panel
+
+    def _brand_pixmap(self) -> QPixmap | None:
+        with suppress(Exception):
+            path = get_asset_path("assets", "icons", "silverestimate.ico")
+            if path.exists():
+                pixmap = QIcon(str(path)).pixmap(
+                    QSize(BRAND_ICON_SIZE, BRAND_ICON_SIZE)
+                )
+                if not pixmap.isNull():
+                    return pixmap
+        return None
+
+    def _password_field(
+        self, label: str, placeholder: str, tooltip: str
+    ) -> tuple[QLabel, QLineEdit]:
+        label_widget = QLabel(label)
+        label_widget.setObjectName("LoginFieldLabel")
+        field = QLineEdit()
+        field.setEchoMode(QLineEdit.EchoMode.Password)
+        field.setClearButtonEnabled(True)
+        field.setPlaceholderText(placeholder)
+        field.setToolTip(tooltip)
+        field.setAccessibleName(label)
+        label_widget.setBuddy(field)
+        return label_widget, field
+
+    def _build_sign_in_fields(self, form_layout: QVBoxLayout) -> None:
+        self.password_label, self.password_input = self._password_field(
+            "Password",
+            "Enter your main password",
+            "Enter your password to access the application\nPress Enter to login\nUse Reset button if password is forgotten",
+        )
+        form_layout.addWidget(self.password_label)
+        form_layout.addSpacing(4)
+        form_layout.addWidget(self.password_input)
+
+    def _build_setup_fields(self, form: QWidget, form_layout: QVBoxLayout) -> None:
+        """Main password on the left, recovery password on the right."""
+        self.password_label, self.password_input = self._password_field(
+            "Main Password",
+            "Create a main password",
+            "Enter your main password for database access\nChoose a strong, memorable password",
+        )
+        (
+            self.confirm_main_password_label,
+            self.confirm_main_password_input,
+        ) = self._password_field(
+            "Confirm Main Password",
+            "Re-enter the main password",
+            "Re-enter the main password exactly to prevent setup lockout",
+        )
+        self.backup_password_label, self.backup_password_input = self._password_field(
+            "Recovery Password",
+            "Create a recovery password",
+            "Enter a different recovery password\nMust be different from main password\nUsed for emergency access and data management",
+        )
+        (
+            self.confirm_password_label,
+            self.confirm_password_input,
+        ) = self._password_field(
+            "Confirm Recovery Password",
+            "Re-enter the recovery password",
+            "Re-enter the recovery password to confirm\nMust match exactly\nEnsures password was typed correctly",
+        )
+
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(20)
+        grid.setVerticalSpacing(4)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        grid.addWidget(self.password_label, 0, 0)
+        grid.addWidget(self.password_input, 1, 0)
+        grid.addWidget(self.backup_password_label, 0, 1)
+        grid.addWidget(self.backup_password_input, 1, 1)
+        grid.setRowMinimumHeight(2, 8)
+        grid.addWidget(self.confirm_main_password_label, 3, 0)
+        grid.addWidget(self.confirm_main_password_input, 4, 0)
+        grid.addWidget(self.confirm_password_label, 3, 1)
+        grid.addWidget(self.confirm_password_input, 4, 1)
+        form_layout.addLayout(grid)
+        form_layout.addSpacing(14)
+
+        self.password_requirements_label = QLabel(
+            "Use two different passwords of at least 8 characters each. "
+            "The main password opens the database; the recovery password "
+            "is for emergency access. Store it safely."
+        )
+        self.password_requirements_label.setObjectName("LoginRequirementsLabel")
+        self.password_requirements_label.setWordWrap(True)
+        form_layout.addWidget(self.password_requirements_label)
+
+        # Tab walks down each column in the order the passwords are typed.
+        previous: QWidget = self.password_input
+        for field in (
+            self.confirm_main_password_input,
+            self.backup_password_input,
+            self.confirm_password_input,
+        ):
+            QWidget.setTabOrder(previous, field)
+            previous = field
+
+    def _fit_to_content(self) -> None:
+        """Size the dialog to its content, never clipping wrapped text.
+
+        The width is fixed by the design; the height is what the layout needs
+        at that width, so a wrapped label always gets all of its lines.
+        """
+        layout = self.layout()
+        if layout is None:
+            return
+        # Hiding a widget only queues the relayout; measure what is shown now.
+        self._form_layout.invalidate()
+        layout.invalidate()
+        layout.activate()
+        width = BRAND_PANEL_WIDTH + self._form_width
+        height = (
+            layout.totalHeightForWidth(width)
+            if layout.hasHeightForWidth()
+            else layout.sizeHint().height()
+        )
+        self.setFixedSize(width, height)
+
+    def _toggle_recovery_options(self) -> None:
+        self._danger_card.setVisible(not self._danger_card.isVisible())
+        self._fit_to_content()
 
     def _update_caps_lock(self):
         import sys

@@ -114,10 +114,10 @@ class LatestRequestRunner(QObject, Generic[RequestT, ResultT]):
                 pass
             except Exception as exc:
                 if not cancel_event.is_set() and self._is_current(generation):
-                    self.failed.emit(generation, exc)
+                    self._emit("failed", generation, exc)
             else:
                 if not cancel_event.is_set() and self._is_current(generation):
-                    self.result.emit(generation, value)
+                    self._emit("result", generation, value)
             finally:
                 should_emit_settled = False
                 with self._condition:
@@ -125,7 +125,22 @@ class LatestRequestRunner(QObject, Generic[RequestT, ResultT]):
                         self._active_cancel = None
                     should_emit_settled = self._is_current_locked(generation)
                 if should_emit_settled:
-                    self.settled.emit(generation)
+                    self._emit("settled", generation)
 
     def _is_current_locked(self, generation: int) -> bool:
         return not self._shutdown and generation == self._generation
+
+    def _emit(self, signal_name: str, *args: object) -> None:
+        """Emit from the worker thread, tolerating an owner deleted just now.
+
+        The worker checks that its request is still wanted and emits a moment
+        later. A runner shut down without waiting (``timeout=0``) can be
+        deleted in between; nobody is listening then, so that is not an error.
+        """
+        try:
+            getattr(self, signal_name).emit(*args)
+        except RuntimeError:
+            with self._condition:
+                shut_down = self._shutdown
+            if not shut_down:
+                raise

@@ -126,9 +126,11 @@ def _load_details(request: tuple[Callable, int], cancel: threading.Event):
 
 
 class SilverBarHistoryDialog(QDialog):
-    def __init__(self, db_manager, parent=None):
+    def __init__(self, db_manager, parent=None, *, from_list_screen: bool = False):
         super().__init__(parent)
         self.db_manager = db_manager
+        # Opened from the Silver Bars screen, closing returns to its list.
+        self._from_list_screen = from_list_screen
         self.selected_list_id: int | None = None
         self.snapshot: BarListSnapshot | None = None
         self._closed = False
@@ -171,7 +173,9 @@ class SilverBarHistoryDialog(QDialog):
         self.setWindowTitle("Silver Bar History")
         self.setObjectName("SilverBarHistoryDialog")
         self.setMinimumSize(760, 520)
-        resize_to_available_screen(self, preferred_width=1120, preferred_height=760)
+        resize_to_available_screen(
+            self, preferred_width=1280, preferred_height=820, margin=48
+        )
         self.setStyleSheet(
             build_management_screen_stylesheet(
                 root_selector="QDialog#SilverBarHistoryDialog",
@@ -243,7 +247,10 @@ class SilverBarHistoryDialog(QDialog):
         self.refresh_button = self._button("Refresh", self.refresh, "Refresh", "F5")
         row.addWidget(self.refresh_button)
         self.close_button = self._button(
-            "Back to List", self._close_history, "Close history", "Esc"
+            "Back to List" if self._from_list_screen else "Close",
+            self._close_history,
+            "Close history",
+            "Esc",
         )
         row.addWidget(self.close_button)
         return header

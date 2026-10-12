@@ -228,6 +228,9 @@ Calculation precision policy:
   Help > About.
 - The empty part of the bar drags the window; a double-click there maximises
   or restores it.
+- The bar answers Windows' hit test for its menus and buttons itself. Left
+  to Qt 6.11, a press in the title bar reaches a widget twice (a question,
+  then the click), which opens a menu and closes it again.
 - Other systems, and `SILVER_CLASSIC_TITLE_BAR=true`, keep the ordinary title
   bar with the name and version in it and the menus below.
 

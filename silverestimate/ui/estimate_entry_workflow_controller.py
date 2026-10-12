@@ -31,7 +31,6 @@ from silverestimate.services.estimate_entry_persistence import (
     SaveValidationError,
 )
 from silverestimate.ui.estimate_deletion_dialog import confirm_estimate_deletion
-from silverestimate.ui.estimate_table_formatting import format_indian_number
 
 from .estimate_entry_logic.constants import COL_CODE, COL_GROSS
 from .estimate_entry_theme import refresh_widget_style
@@ -99,12 +98,6 @@ class EstimateEntryWorkflowController:
 
     def _parent_widget(self):
         return self.host
-
-    def _format_currency(self, value):
-        try:
-            return f"₹ {format_indian_number(value, MONEY_PLACES)}"
-        except Exception:
-            return str(value)
 
     def generate_voucher(self):
         if self.host.presenter:

@@ -213,3 +213,25 @@ def test_summary_footer_uses_full_width_four_metric_block(monkeypatch) -> None:
     assert page_width == 300.0
     assert y == 24.0
     assert dark_title is True
+
+
+def test_grand_total_rounds_like_the_estimate_screen() -> None:
+    # A historical wage just under the half paisa. Adding the carried amount to
+    # it as a float gave 5000.495, printed as 5,001; the screen shows 5,000.49.
+    estimate_data = deepcopy(multi_section_print_estimate())
+    estimate_data["header"].update(
+        silver_rate=100.0,
+        last_balance_silver=0,
+        last_balance_amount=5000.0,
+    )
+    item = estimate_data["items"][0]
+    item.update(fine=0.0, wage=0.4949999999999999)
+    estimate_data["items"] = [item]
+
+    layout = EstimatePrintRenderer().build_modern_layout(
+        EstimatePrintDocument.from_mapping(estimate_data)
+    )
+
+    metrics = {metric.label: metric.value for metric in layout.final_metrics}
+    assert metrics["Total Lbr Amt (₹)"] == "5,000"
+    assert metrics["GRAND TOTAL (₹)"] == "5,000"

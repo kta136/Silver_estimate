@@ -1,7 +1,7 @@
 from decimal import ROUND_HALF_UP, Decimal
 
 import pytest
-from hypothesis import given
+from hypothesis import example, given
 from hypothesis import strategies as st
 
 from silverestimate.domain.estimate_models import CategoryTotals
@@ -37,6 +37,20 @@ _category_totals = st.builds(
     silver_rate=_signed,
     last_balance_silver=_signed,
     last_balance_amount=_signed,
+)
+# The exact total is -2147512334.3449995984544512; its nearest float prints as
+# -2147512334.345 and would round to the wrong paisa.
+@example(
+    overall_gross=0.0,
+    overall_poly=0.0,
+    regular=CategoryTotals(gross=0.0, net=0.0, fine=0.0, wage=0.0),
+    returns=CategoryTotals(gross=0.0, net=0.0, fine=0.0, wage=0.0),
+    silver_bars=CategoryTotals(
+        gross=0.0, net=0.0, fine=62236.8125, wage=1.8462485999334604
+    ),
+    silver_rate=34505.5,
+    last_balance_silver=0.0,
+    last_balance_amount=1.2212490014790092,
 )
 def test_build_totals_result_preserves_core_invariants(
     overall_gross,

@@ -316,27 +316,18 @@ def _complete_layout(
     returns = totals_by_key.get("return_goods", _zero_totals())
     returned_bars = totals_by_key.get("return_silver_bars", _zero_totals())
 
-    net_fine = sum_values(
-        (
-            regular.fine,
-            -bars.fine,
-            -returns.fine,
-            -returned_bars.fine,
-            header.last_balance_silver,
-        )
-    )
-    net_wage = sum_values(
-        (
-            regular.wage,
-            -bars.wage,
-            -returns.wage,
-            -returned_bars.wage,
-            header.last_balance_amount,
-        )
-    )
+    fine = sum_values((regular.fine, -bars.fine, -returns.fine, -returned_bars.fine))
+    wage = sum_values((regular.wage, -bars.wage, -returns.wage, -returned_bars.wage))
+    net_fine = sum_values((fine, header.last_balance_silver))
+    net_wage = sum_values((wage, header.last_balance_amount))
     silver_cost = silver_value(net_fine, header.silver_rate)
+    # The carried balances go in separately, as on screen, so both round alike.
     total_cost = calculate_grand_total(
-        net_fine=net_fine, net_wage=net_wage, silver_rate=header.silver_rate
+        net_fine=fine,
+        net_wage=wage,
+        silver_rate=header.silver_rate,
+        last_balance_silver=header.last_balance_silver,
+        last_balance_amount=header.last_balance_amount,
     )
 
     last_balance = _last_balance_metrics(header)

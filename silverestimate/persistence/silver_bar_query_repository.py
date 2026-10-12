@@ -15,7 +15,6 @@ from typing import (
     List,
     Optional,
     Sequence,
-    Tuple,
     cast,
 )
 
@@ -244,15 +243,8 @@ class SilverBarQueryRepository(SilverBarRepositoryBase):
         self,
         *,
         status: Optional[str] = None,
-        weight_query: Optional[float] = None,
         estimate_voucher_no: Optional[str] = None,
         unassigned_only: bool = False,
-        weight_tolerance: float = 0.001,
-        min_purity: Optional[float] = None,
-        max_purity: Optional[float] = None,
-        date_range: Optional[Tuple[Optional[str], Optional[str]]] = None,
-        limit: Optional[int] = None,
-        offset: int = 0,
     ) -> list[SilverBarRow]:
         cursor = self._cursor
         if not cursor:
@@ -267,52 +259,12 @@ class SilverBarQueryRepository(SilverBarRepositoryBase):
         if status:
             query += " AND sb.status = ?"
             params.append(status)
-        if weight_query is not None:
-            try:
-                target = float(weight_query)
-                tol = 0.001 if weight_tolerance is None else float(weight_tolerance)
-                query += " AND sb.weight BETWEEN ? AND ?"
-                params.extend([target - tol, target + tol])
-            except ValueError:
-                self._logger.warning(
-                    "Invalid weight query '%s'. Ignoring weight filter.", weight_query
-                )
         if estimate_voucher_no:
             query += " AND sb.estimate_voucher_no LIKE ?"
             params.append(f"%{estimate_voucher_no}%")
         if unassigned_only:
             query += " AND sb.list_id IS NULL"
-        if min_purity is not None:
-            try:
-                query += " AND sb.purity >= ?"
-                params.append(float(min_purity))
-            except TypeError, ValueError:
-                pass
-        if max_purity is not None:
-            try:
-                query += " AND sb.purity <= ?"
-                params.append(float(max_purity))
-            except TypeError, ValueError:
-                pass
-        if (
-            date_range
-            and isinstance(date_range, (tuple, list))
-            and len(date_range) == 2
-        ):
-            start_iso, end_iso = date_range
-            if start_iso:
-                query += " AND sb.date_added >= ?"
-                params.append(start_iso)
-            if end_iso:
-                query += " AND sb.date_added <= ?"
-                params.append(end_iso)
         query += " ORDER BY sb.date_added DESC, sb.bar_id DESC"
-        if isinstance(limit, int) and limit > 0:
-            query += " LIMIT ?"
-            params.append(int(limit))
-            if isinstance(offset, int) and offset > 0:
-                query += " OFFSET ?"
-                params.append(int(offset))
         try:
             cursor.execute(query, params)
             return cast(list[SilverBarRow], cursor.fetchall())

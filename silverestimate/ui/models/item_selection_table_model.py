@@ -56,6 +56,16 @@ class ItemSelectionTableModel(QAbstractTableModel):
         orientation: Qt.Orientation,
         role: int = Qt.ItemDataRole.DisplayRole,
     ) -> Any:
+        if orientation == Qt.Orientation.Horizontal and role == (
+            Qt.ItemDataRole.TextAlignmentRole
+        ):
+            # Each heading sits over its data: figures right, labels left.
+            side = (
+                Qt.AlignmentFlag.AlignRight
+                if section == 2
+                else Qt.AlignmentFlag.AlignLeft
+            )
+            return side | Qt.AlignmentFlag.AlignVCenter
         if role != Qt.ItemDataRole.DisplayRole:
             return None
         if orientation == Qt.Orientation.Horizontal and 0 <= section < len(

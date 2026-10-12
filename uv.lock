@@ -3,6 +3,41 @@ revision = 3
 requires-python = "==3.14.*"
 
 [[package]]
+name = "apsw-sqlite3mc"
+version = "3.53.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/01/49/a19b56671e67b0683a8fd3ad7460bb5f5543c8c22f79e4de74a2fa82746c/apsw_sqlite3mc-3.53.4.0.tar.gz", hash = "sha256:dacf4108a4ba3c43e0a8a4d2829bd308c2313c84d63c5e3ba389bebb5b9a40de", size = 4321895, upload-time = "2026-07-26T21:13:20.559Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a5/d2/2a9a72a78cf8bd22cef651ab8627019d574694ffdb56675ca5ec8763a75a/apsw_sqlite3mc-3.53.4.0-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:cca2faa7d7537021e07d2e4c3fa2efa51aaac7233bf8387b5afaf3f577e4c560", size = 3613670, upload-time = "2026-07-26T21:12:23.687Z" },
+    { url = "https://files.pythonhosted.org/packages/94/b3/7887e2c27155704695f63bef9f0013636146b5bfc8289c9922b9ce4cd848/apsw_sqlite3mc-3.53.4.0-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:b55b9e8a7edfbd44adccfff48c81e2f420c9615b0b968b310ae0a10fc25ec84a", size = 3353383, upload-time = "2026-07-26T21:12:25.557Z" },
+    { url = "https://files.pythonhosted.org/packages/66/76/a178e768b44fd9b041058e809425bf6854bf373db321be8105ec98f6a3e3/apsw_sqlite3mc-3.53.4.0-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:61cd12b859ac8d21b4adcda1639c1d0dcf89b07e3177b14507cd16a69828edb6", size = 3876392, upload-time = "2026-07-26T21:12:27.45Z" },
+    { url = "https://files.pythonhosted.org/packages/58/45/974bd4173cd8c45dea367a689b7f404b0c1583cd200b0434a0cb72fc40a3/apsw_sqlite3mc-3.53.4.0-cp314-cp314-manylinux_2_28_armv7l.manylinux_2_31_armv7l.whl", hash = "sha256:465ef4fb17bb7707a5b3358f51002bb170c38aa646eba66ccf7733adfd74e99e", size = 3714728, upload-time = "2026-07-26T21:12:29.805Z" },
+    { url = "https://files.pythonhosted.org/packages/b0/9a/d1ab0354218033b0fd17272fd09fe932d218cc1239449aeecdbf96d49e4b/apsw_sqlite3mc-3.53.4.0-cp314-cp314-manylinux_2_28_i686.whl", hash = "sha256:d04bf892a636826d45ed98d72194c8c6b476e36ef5120312cde8ea7f3429b801", size = 4359084, upload-time = "2026-07-26T21:12:32.036Z" },
+    { url = "https://files.pythonhosted.org/packages/53/b3/fade190df90253a068dac228e8646984006cc59c17ec77d283c2743d8cbe/apsw_sqlite3mc-3.53.4.0-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:be9a7643c4bb52c39887ea0b2764c4d2618a11e709dd84e3003fb6c3072953a4", size = 4121216, upload-time = "2026-07-26T21:12:34.059Z" },
+    { url = "https://files.pythonhosted.org/packages/d0/79/e2f9e462ae27a62585898567490db09fb27d729fd0209ba2e79a60cf4c89/apsw_sqlite3mc-3.53.4.0-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:3de3660734ff460afe3910ed31931c7b11bbc9b6b3766c04df65266392e3cd45", size = 3897413, upload-time = "2026-07-26T21:12:36.728Z" },
+    { url = "https://files.pythonhosted.org/packages/6e/1b/cb71680cd7c7273a39a663a52ca216218a4da3f16c6c496dec40ee26ed60/apsw_sqlite3mc-3.53.4.0-cp314-cp314-musllinux_1_2_armv7l.whl", hash = "sha256:14de239dc2e71dd5b93f5349434b863886a4879daac975db21e6ecd031a6ee78", size = 3678049, upload-time = "2026-07-26T21:12:38.611Z" },
+    { url = "https://files.pythonhosted.org/packages/de/37/2beba37952a8d789f830ad229e7d7514e8db63d7a41bb698f5ac1625e01e/apsw_sqlite3mc-3.53.4.0-cp314-cp314-musllinux_1_2_i686.whl", hash = "sha256:b64c68d33685cd4e4ef39731458f45cb1525666815494b916b696ebb5f00bcd1", size = 4386506, upload-time = "2026-07-26T21:12:40.767Z" },
+    { url = "https://files.pythonhosted.org/packages/c9/e4/5e42612af816171077df0f167ada722821d12a178b96eb28149a3ebf7635/apsw_sqlite3mc-3.53.4.0-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:16259364fc3de5c0288544d88065644c2e98b66bab4414f44ff5ee351058b8ab", size = 4143761, upload-time = "2026-07-26T21:12:43.069Z" },
+    { url = "https://files.pythonhosted.org/packages/ed/76/8049d68f3c73b20e9b66b434a427f5876cad7e1cc559aebc8b3a8f00645d/apsw_sqlite3mc-3.53.4.0-cp314-cp314-pyemscripten_2026_0_wasm32.whl", hash = "sha256:f4593646d217b88cce0442ed33708b6c71803ab1bed2d54ea5dd0fda40ebbe22", size = 2222466, upload-time = "2026-07-26T21:12:44.982Z" },
+    { url = "https://files.pythonhosted.org/packages/a4/1b/67fe802ec4ff0909ca7edb39b7d4bc79e809ca5ae8fa980493ec1f9c0980/apsw_sqlite3mc-3.53.4.0-cp314-cp314-win32.whl", hash = "sha256:e94dbbdc1aeed47d2acb53d4e489ab6cc47cabd4ae1462f019bbf1de42d824fd", size = 3247046, upload-time = "2026-07-26T21:12:47.068Z" },
+    { url = "https://files.pythonhosted.org/packages/a0/5d/05a46828f73d596f921a181ca73928f30665a146c4a194d2bcc2fa5ff7dd/apsw_sqlite3mc-3.53.4.0-cp314-cp314-win_amd64.whl", hash = "sha256:998e7be3abc205628e6b94e676fdbcfb5f5251e58a112bea942ee121fa7b70cc", size = 3741957, upload-time = "2026-07-26T21:12:49.23Z" },
+    { url = "https://files.pythonhosted.org/packages/e1/23/b36ab4f8ee2684ed6aa10c966af1bce1960d5b93011002257f7dce1c7cc6/apsw_sqlite3mc-3.53.4.0-cp314-cp314-win_arm64.whl", hash = "sha256:eb88e8dcc79270b55177f186456db9f6e9554c3e519dd00e38b20bda2b1d167d", size = 3205252, upload-time = "2026-07-26T21:12:51.087Z" },
+    { url = "https://files.pythonhosted.org/packages/f9/57/2a85e9e7f2783bc133e055a02e00d2c7b9f09dbded5dabc27d7737cb1cdb/apsw_sqlite3mc-3.53.4.0-cp314-cp314t-macosx_10_15_x86_64.whl", hash = "sha256:73922fbf8bd1b5244ad85fbbcbbcd09b0b8890f676a12ee127492a76d1e19ada", size = 3621256, upload-time = "2026-07-26T21:12:52.958Z" },
+    { url = "https://files.pythonhosted.org/packages/3a/2e/6a1c50a8c23b96033f1c730ded2a78e33ef35669108c64d312678742ec09/apsw_sqlite3mc-3.53.4.0-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:2b91c81648b580f7322c93099c9cfc5db55fcf886ee05af1056323b05076778e", size = 3365231, upload-time = "2026-07-26T21:12:54.934Z" },
+    { url = "https://files.pythonhosted.org/packages/0c/1a/343f34d381c142759e524b2e07ff15b7402f0e4d39013070aae9b6fb2168/apsw_sqlite3mc-3.53.4.0-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:bfa1bfcfbbdea0afbc18967bc154e6e054cc937605648ac6ecec7fceb7b3a557", size = 3856713, upload-time = "2026-07-26T21:12:56.915Z" },
+    { url = "https://files.pythonhosted.org/packages/c7/56/3135408bf7c6b9f4d3ac7bdf1a089b5432f0b1a0972320fc8b80999c5823/apsw_sqlite3mc-3.53.4.0-cp314-cp314t-manylinux_2_28_armv7l.manylinux_2_31_armv7l.whl", hash = "sha256:07e11b3c68d9d858e4480033760c81076ce2cf49eefaeeaa5584ce08728f1a4d", size = 3691458, upload-time = "2026-07-26T21:12:58.945Z" },
+    { url = "https://files.pythonhosted.org/packages/81/05/8e60f0d4984373695ed1ac3d9e1b3d5256865d1fb3b697380c1f2ada4eea/apsw_sqlite3mc-3.53.4.0-cp314-cp314t-manylinux_2_28_i686.whl", hash = "sha256:a515a1182adecace702bebdb43041da121d6e65f41a4e316dbf74b0eaf1848aa", size = 4329394, upload-time = "2026-07-26T21:13:01.333Z" },
+    { url = "https://files.pythonhosted.org/packages/fd/ef/ccca4c7ced4843cb2da9b7687c22d1f6882895e49315ecbd20b64f4405f7/apsw_sqlite3mc-3.53.4.0-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:29f555cbfbbad11b7e0b2bed8f8abf6ce076969d900655a570151b132932c0c3", size = 4090503, upload-time = "2026-07-26T21:13:03.517Z" },
+    { url = "https://files.pythonhosted.org/packages/b8/9e/9f33067b1f92bfdd038509a787b0982749b60c4c969d00453f06151c8d60/apsw_sqlite3mc-3.53.4.0-cp314-cp314t-musllinux_1_2_aarch64.whl", hash = "sha256:eb0ebd530f64714346d7286199bfdbe0e9228a169aef19ab928670b07aa80512", size = 3878687, upload-time = "2026-07-26T21:13:05.721Z" },
+    { url = "https://files.pythonhosted.org/packages/db/f6/337dc26f9e4b73bde1738d6a6c56f527c0ed2de6ed49706f98d386b8c61d/apsw_sqlite3mc-3.53.4.0-cp314-cp314t-musllinux_1_2_armv7l.whl", hash = "sha256:0f33c43445b6749a0cf9c91199c6010957e14666cdc5df0c39a8b7d67c15c3b7", size = 3654059, upload-time = "2026-07-26T21:13:07.789Z" },
+    { url = "https://files.pythonhosted.org/packages/38/03/c11764abbe7e26c980c4ea8a9b998e9208e43e05f44cfa7cac2d33952fce/apsw_sqlite3mc-3.53.4.0-cp314-cp314t-musllinux_1_2_i686.whl", hash = "sha256:c8dbb76d403564934c92d73b6d9f823f31ee6ef7b0a8117511b571e4e054b719", size = 4355615, upload-time = "2026-07-26T21:13:09.873Z" },
+    { url = "https://files.pythonhosted.org/packages/38/39/71a2d4b88d5277e7b7bec80bbf0fdab89f6172fe14e5fa18fe88815dc4a8/apsw_sqlite3mc-3.53.4.0-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:a79050977434e387fe40c466e6f819f3e7958fbea11253169e8e7d2e50a168d6", size = 4116520, upload-time = "2026-07-26T21:13:11.787Z" },
+    { url = "https://files.pythonhosted.org/packages/cf/48/be116c5f45e0b1a0097cdcab3cf699a42750b33a4d0702267bc8f2499e84/apsw_sqlite3mc-3.53.4.0-cp314-cp314t-win32.whl", hash = "sha256:cd33139fa411669567c104d7daa8851fe35637ee40e0e8eef81cd9a6cf99dd15", size = 3253042, upload-time = "2026-07-26T21:13:13.927Z" },
+    { url = "https://files.pythonhosted.org/packages/4f/46/5641155921834318ac49b6250faef83691bb58c24fc12de30750829c14d8/apsw_sqlite3mc-3.53.4.0-cp314-cp314t-win_amd64.whl", hash = "sha256:00b7631352b9f5af14b25090fe804e1550e741a75a42efa8800f7b9cbedcde10", size = 3747606, upload-time = "2026-07-26T21:13:16.161Z" },
+    { url = "https://files.pythonhosted.org/packages/3a/68/70cf7c76f05b42dc4bb02c36a2a2f9f314b71c6c1a52dc27c56a3b29355d/apsw_sqlite3mc-3.53.4.0-cp314-cp314t-win_arm64.whl", hash = "sha256:4477896674020dae1d7e7251b8178f7421ba8de168aa74312abc3d71472e3ade", size = 3207191, upload-time = "2026-07-26T21:13:18.391Z" },
+]
+
+[[package]]
 name = "argcomplete"
 version = "3.7.0"
 source = { registry = "https://pypi.org/simple" }
@@ -831,9 +866,9 @@ wheels = [
 name = "silverestimate"
 source = { editable = "." }
 dependencies = [
+    { name = "apsw-sqlite3mc" },
     { name = "argon2-cffi" },
     { name = "pyside6" },
-    { name = "sqlcipher3", marker = "sys_platform == 'win32'" },
 ]
 
 [package.optional-dependencies]
@@ -851,6 +886,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "apsw-sqlite3mc", specifier = ">=3.53.4.0,<4" },
     { name = "argon2-cffi", specifier = ">=25.1.0,<26" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.167.1" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=2.3.1" },
@@ -861,7 +897,6 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.1.1" },
     { name = "pytest-qt", marker = "extra == 'dev'", specifier = ">=4.5.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.16.6" },
-    { name = "sqlcipher3", marker = "sys_platform == 'win32'", path = "vendor/sqlcipher/sqlcipher3-0.6.2+silverestimate.4.17.0.1-cp314-cp314-win_amd64.whl" },
     { name = "zstandard", marker = "extra == 'dev'", specifier = "==0.25.0" },
 ]
 provides-extras = ["dev"]
@@ -873,14 +908,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/e8/c4/ba2f8066cceb6f23394729afe52f3bf7adec04bf9ed2c820b39e19299111/sortedcontainers-2.4.0.tar.gz", hash = "sha256:25caa5a06cc30b6b83d11423433f65d1f9d76c4c6a0c90e3379eaa43b9bfdb88", size = 30594, upload-time = "2021-05-16T22:03:42.897Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/32/46/9cb0e58b2deb7f82b84065f37f3bffeb12413f947f9388e4cac22c4621ce/sortedcontainers-2.4.0-py2.py3-none-any.whl", hash = "sha256:a163dcaede0f1c021485e957a39245190e74249897e2ae4b2aa38595db237ee0", size = 29575, upload-time = "2021-05-16T22:03:41.177Z" },
-]
-
-[[package]]
-name = "sqlcipher3"
-version = "0.6.2+silverestimate.4.17.0.1"
-source = { path = "vendor/sqlcipher/sqlcipher3-0.6.2+silverestimate.4.17.0.1-cp314-cp314-win_amd64.whl" }
-wheels = [
-    { filename = "sqlcipher3-0.6.2+silverestimate.4.17.0.1-cp314-cp314-win_amd64.whl", hash = "sha256:3edf46a000bde887b311e08f55a418bd4b089896fe2e875a09bacedfb4628702" },
 ]
 
 [[package]]

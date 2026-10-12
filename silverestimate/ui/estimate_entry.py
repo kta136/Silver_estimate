@@ -161,7 +161,7 @@ class EstimateEntryWidget(QWidget):
         return self.workflow_controller.apply_loaded_estimate(loaded)
 
     sidebar_actions: QWidget
-    sidebar_status_label: QLabel
+    status_line_label: QLabel
     command_strip: QWidget
     estimate_more_button: QToolButton
 

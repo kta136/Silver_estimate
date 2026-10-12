@@ -1,3 +1,4 @@
+import shutil
 import threading
 from pathlib import Path
 
@@ -25,6 +26,30 @@ from silverestimate.persistence.storage_metadata import (
 
 DEVICE_SECRET = b"S" * 32
 FOREIGN_DEVICE_SECRET = b"F" * 32
+# A schema-v10 database created by release 4.08, whose engine was SQLCipher 4.17.0.
+SQLCIPHER_4_17_DATABASE = Path(__file__).parent / "data" / "sqlcipher-4.17.db"
+
+
+def test_database_written_by_sqlcipher_4_17_opens_with_its_password(tmp_path):
+    path = tmp_path / "estimation.db"
+    shutil.copyfile(SQLCIPHER_4_17_DATABASE, path)
+    manager = DatabaseManager(
+        str(path), "fixture-password", device_secret=FOREIGN_DEVICE_SECRET
+    )
+    try:
+        assert manager.open_status is DatabaseOpenStatus.OPENED
+        DatabaseManager.validate_database(manager.conn)
+        row = manager.conn.execute(
+            "SELECT name, purity, tunch FROM items WHERE code = 'SQLC417'"
+        ).fetchone()
+        assert tuple(row) == ("Written by SQLCipher 4.17", 125.5, "99+ टंच")
+        manager.conn.execute("UPDATE items SET purity = 130.25 WHERE code = 'SQLC417'")
+        manager.conn.commit()
+    finally:
+        manager.close()
+    assert path.read_bytes()[:16] == SQLCIPHER_4_17_DATABASE.read_bytes()[:16]
+    with pytest.raises(DatabaseAuthenticationError):
+        DatabaseManager(str(path), "wrong", device_secret=FOREIGN_DEVICE_SECRET)
 
 
 def test_live_database_wal_and_rollback_journal_hide_plaintext_canary(tmp_path):
@@ -207,13 +232,26 @@ def test_interrupted_rekey_target_is_never_selected_by_filename(tmp_path):
     assert not path.with_suffix(".rekey.json").exists()
 
 
-def test_unexpected_runtime_series_is_rejected_without_test_override(
-    tmp_path, monkeypatch
-):
-    monkeypatch.setattr(database_driver, "EXPECTED_SQLCIPHER_SERIES", "9.99.")
-    with pytest.raises(DriverUnavailableError, match="9.99"):
+def test_connection_keyed_with_another_cipher_is_rejected(tmp_path, monkeypatch):
+    def key_with_the_library_default_cipher(connection, raw_key, database_salt):
+        literal = database_driver._quote_raw_key(raw_key, database_salt)
+        connection.execute(f"PRAGMA key = {literal}")
+
+    monkeypatch.setattr(
+        database_driver, "_apply_key", key_with_the_library_default_cipher
+    )
+    with pytest.raises(DriverUnavailableError, match="SQLCipher format 4 required"):
         DatabaseManager(
             str(tmp_path / "strict.db"),
             "password",
             device_secret=DEVICE_SECRET,
         )
+
+
+def test_unkeyed_connection_is_rejected(tmp_path):
+    connection = database_driver.require_driver().connect(tmp_path / "plain.db")
+    try:
+        with pytest.raises(DriverUnavailableError, match="encryption is not active"):
+            database_driver.verify_driver(connection)
+    finally:
+        connection.close()

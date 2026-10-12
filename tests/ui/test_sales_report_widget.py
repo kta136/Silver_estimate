@@ -232,3 +232,21 @@ def test_grouping_applies_at_once_and_the_caption_follows_the_drill_down(
     code = widget.model.rows[0].key
     open_row(qtbot, widget, code)
     assert widget.scope_label.text() == f"{format_period(month)} · item {code}"
+
+
+def test_a_wide_screen_gets_wider_margins_not_wider_columns(sales_screen, qtbot):
+    widget, _db = sales_screen
+
+    widget.resize(1100, 700)
+    qtbot.wait(30)
+    narrow = widget._body_layout.contentsMargins()
+    assert (narrow.left(), narrow.right()) == (18, 18)
+
+    widget.resize(1600, 800)
+    qtbot.wait(30)
+    wide = widget._body_layout.contentsMargins()
+    header = widget._header_layout.contentsMargins()
+    # (1600 - 1340) / 2 on each side, for the filters as much as the report.
+    assert (wide.left(), wide.right()) == (130, 130)
+    assert (header.left(), header.right()) == (130, 130)
+    assert widget.table.width() <= 1340

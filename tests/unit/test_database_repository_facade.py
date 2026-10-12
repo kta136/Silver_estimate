@@ -126,9 +126,7 @@ def test_silver_bar_facade_delegates_keyword_arguments():
     assert facade.add_bars_to_list([3, 4], note="Test List") == 17
     assert facade.get_silver_bars(
         status="In Stock",
-        weight_query="10",
-        limit=5,
-        offset=2,
+        unassigned_only=True,
     ) == ["bars"]
     assert facade.silver_bar_command_repo.calls == [
         ("add_bars_to_list", ([3, 4], None, "Test List"))
@@ -138,15 +136,8 @@ def test_silver_bar_facade_delegates_keyword_arguments():
             "get_silver_bars",
             {
                 "status": "In Stock",
-                "weight_query": "10",
                 "estimate_voucher_no": None,
-                "unassigned_only": False,
-                "weight_tolerance": 0.001,
-                "min_purity": None,
-                "max_purity": None,
-                "date_range": None,
-                "limit": 5,
-                "offset": 2,
+                "unassigned_only": True,
             },
         ),
     ]

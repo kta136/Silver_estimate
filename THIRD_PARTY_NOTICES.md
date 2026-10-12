@@ -5,25 +5,15 @@ source for each release is published with that release. This notice summarizes
 the principal redistributed runtime components; `uv.lock` is the complete
 machine-readable inventory of the Python packages.
 
-## SQLCipher Community Edition 4.17.0
+## apsw-sqlite3mc: APSW, SQLite3 Multiple Ciphers, and SQLite
 
-Copyright Zetetic LLC and contributors. Licensed under a BSD-style license.
-Pinned tag object: `f9788efa8ac4dfed75c03e4756b1666a1d0845da`;
-peeled commit: `810db22f575ee7cf94ea96a3e91622b5fcece3dc`.
-Source and license: <https://github.com/sqlcipher/sqlcipher>.
-
-## sqlcipher3 0.6.2
-
-Copyright Charles Leifer and contributors. Licensed under the MIT License.
-Pinned source revision: `14fc2632676b20011e0bba64fdda49763a2dd2ec`.
-Source and license: <https://github.com/coleifer/sqlcipher3>.
-
-## OpenSSL 3.6.0
-
-Copyright The OpenSSL Project Authors. Licensed under Apache-2.0.
-Pinned tag object: `f52b9f81a985dc1e45b28cd7b5671feb32815b83`;
-peeled commit: `7b371d80d959ec9ab4139d09d78e83c090de9779`.
-Source and license: <https://github.com/openssl/openssl>.
+The encrypted database engine is the `apsw-sqlite3mc` wheel from PyPI.
+APSW: copyright Roger Binns, licensed under the zlib license.
+SQLite3 Multiple Ciphers: copyright Ulrich Telle, licensed under the MIT
+License. SQLite is in the public domain.
+Sources and licenses: <https://github.com/utelle/apsw-sqlite3mc>,
+<https://github.com/rogerbinns/apsw>, and
+<https://github.com/utelle/SQLite3MultipleCiphers>.
 
 ## PySide6 6.11.2, Shiboken6 6.11.2, and Qt 6.11.2
 

@@ -11,7 +11,11 @@ from silverestimate.persistence.repository_results import (
 from silverestimate.persistence.silver_bar_query_repository import (
     SilverBarsSnapshotRepository,
 )
-from silverestimate.ui.silver_bar_management import SilverBarDialog
+from silverestimate.ui.silver_bar_load_controller import (
+    HIDDEN_BARS_PLACEHOLDER,
+    SHOWING_BARS_PLACEHOLDER,
+)
+from silverestimate.ui.silver_bar_management import SilverBarWidget
 from tests.factories import insert_silver_bar
 from tests.silver_bar_workspace_support import bar_list_count, seed_workspace_db
 
@@ -19,13 +23,13 @@ from tests.silver_bar_workspace_support import bar_list_count, seed_workspace_db
 @pytest.fixture
 def workspace(qtbot, tmp_path, settings_stub):
     db = seed_workspace_db(tmp_path)
-    dialog = SilverBarDialog(db)
+    dialog = SilverBarWidget(db)
     qtbot.addWidget(dialog)
     dialog.show()
     dialog.activateWindow()
     qtbot.waitUntil(dialog.weight_search_edit.hasFocus)
     yield dialog, db
-    dialog.done(0)
+    dialog.shutdown()
     db.close()
 
 
@@ -159,23 +163,6 @@ def test_stale_search_cannot_add_previous_weight(workspace, qtbot):
     assert dialog.snapshot.bars[0]["weight"] == 85.25
 
 
-def test_error_keeps_input_and_does_not_create_list(workspace, qtbot, monkeypatch):
-    dialog, db = workspace
-    monkeypatch.setattr(
-        db,
-        "add_bars_to_list",
-        lambda *a: RepositoryResult.failed(
-            RepositoryFailureKind.STORAGE, "Disk unavailable"
-        ),
-    )
-    dialog.weight_search_edit.setText("40")
-    qtbot.keyClick(dialog.weight_search_edit, Qt.Key.Key_Return)
-    qtbot.waitUntil(lambda: "Disk unavailable" in dialog.status_label.text())
-    assert dialog.weight_search_edit.text() == "40"
-    assert dialog.current_list_id is None
-    assert bar_list_count(db) == 0
-
-
 def test_invalid_and_unmatched_input_do_not_add(workspace, qtbot):
     dialog, _ = workspace
     for text in ("nan", "-10", "%", "1000"):
@@ -201,20 +188,38 @@ def test_auto_repeated_enter_never_adds_another_bar(workspace, qtbot, prefix):
     assert dialog.snapshot is None
 
 
-def test_escape_dismisses_then_clears_then_closes(workspace, qtbot):
+def test_escape_dismisses_then_clears_then_asks_to_go_back(workspace, qtbot):
     dialog, _ = workspace
+    closes = []
+    dialog.close_requested.connect(lambda: closes.append(True))
     dialog.weight_search_edit.setText("40")
     qtbot.waitUntil(lambda: dialog.suggestions_panel.isVisible())
     qtbot.keyClick(dialog.weight_search_edit, Qt.Key.Key_Escape)
     assert not dialog.suggestions_panel.isVisible()
-    assert dialog.isVisible()
+    assert closes == []
     qtbot.keyClick(dialog.weight_search_edit, Qt.Key.Key_Escape)
     assert dialog.weight_search_edit.text() == ""
     qtbot.wait(150)
     assert not dialog.suggestions_panel.isVisible()
+    assert closes == []
     qtbot.keyClick(dialog.weight_search_edit, Qt.Key.Key_Escape)
-    assert not dialog.isVisible()
-    assert dialog._load_controller.shutdown_called
+    assert closes == [True]
+
+
+def test_escape_and_close_do_nothing_while_a_print_is_under_way(workspace, qtbot):
+    dialog, _ = workspace
+    closes = []
+    dialog.close_requested.connect(lambda: closes.append(True))
+    dialog._busy = True
+    try:
+        dialog.handle_escape()
+        dialog.close_button.click()
+        assert not dialog.can_close()
+        assert closes == []
+    finally:
+        dialog._busy = False
+    dialog.close_button.click()
+    assert closes == [True]
 
 
 def test_note_edit_saves_and_invalidates_print_confirmation(
@@ -341,7 +346,9 @@ def test_blank_search_failure_can_retry_without_typing(workspace, qtbot, monkeyp
     assert "Read failed" not in dialog.status_label.text()
 
 
-def test_failure_can_retry_with_same_input_and_no_mouse(workspace, qtbot, monkeypatch):
+def test_failed_add_keeps_input_creates_no_list_and_enter_retries(
+    workspace, qtbot, monkeypatch
+):
     dialog, db = workspace
     original = db.add_bars_to_list
     monkeypatch.setattr(
@@ -352,6 +359,9 @@ def test_failure_can_retry_with_same_input_and_no_mouse(workspace, qtbot, monkey
     dialog.weight_search_edit.setText("40")
     qtbot.keyClick(dialog.weight_search_edit, Qt.Key.Key_Return)
     qtbot.waitUntil(lambda: "Try again" in dialog.status_label.text())
+    assert dialog.weight_search_edit.text() == "40"
+    assert dialog.current_list_id is None
+    assert bar_list_count(db) == 0
     monkeypatch.setattr(db, "add_bars_to_list", original)
     qtbot.keyClick(dialog.weight_search_edit, Qt.Key.Key_Return)
     qtbot.waitUntil(lambda: dialog.snapshot is not None)
@@ -404,3 +414,21 @@ def test_keyboard_workspace_layout(workspace, qtbot, qt_application_state, tmp_p
     wait_for_available(qtbot, dialog, [1, 2, 3, 4])
     assert dialog.suggestions_panel.isVisible()
     assert dialog.grab().save(str(tmp_path / "silver-bar-default-bars.png"))
+
+
+def test_weight_box_never_says_all_bars_are_showing_while_they_are_hidden(
+    workspace, qtbot
+):
+    dialog, _ = workspace
+    wait_for_available(qtbot, dialog, [6, 1, 2, 3, 7, 5, 4])
+    assert dialog.weight_search_edit.placeholderText() == SHOWING_BARS_PLACEHOLDER
+
+    dialog._load_controller.cancel_search(dismiss=True)
+
+    # The list says "Available bars hidden"; the box beside it must agree.
+    assert dialog.weight_search_edit.placeholderText() == HIDDEN_BARS_PLACEHOLDER
+    assert "Showing" not in dialog.weight_search_edit.placeholderText()
+
+    dialog._load_controller.schedule_search("")
+    wait_for_available(qtbot, dialog, [6, 1, 2, 3, 7, 5, 4])
+    assert dialog.weight_search_edit.placeholderText() == SHOWING_BARS_PLACEHOLDER

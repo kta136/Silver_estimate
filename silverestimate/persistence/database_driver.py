@@ -6,6 +6,7 @@ standard-library sqlite3 module is intentionally not imported here.
 
 from __future__ import annotations
 
+import functools
 import logging
 import threading
 import time
@@ -16,15 +17,18 @@ from pathlib import Path
 from typing import Any, Iterator, TypeAlias
 
 try:
-    from sqlcipher3 import dbapi2 as dbapi
+    from silverestimate.persistence import apsw_dbapi
 except ImportError as exc:  # pragma: no cover - exercised by package smoke tests
-    dbapi = None
+    dbapi: Any = None
     _IMPORT_ERROR: BaseException | None = exc
 else:
+    dbapi = apsw_dbapi
     _IMPORT_ERROR = None
 
 
-EXPECTED_SQLCIPHER_SERIES = "4.17."
+# SQLite3 Multiple Ciphers reads and writes the SQLCipher 4 file format.
+EXPECTED_CIPHER = "sqlcipher"
+EXPECTED_SQLCIPHER_FORMAT = 4
 EXPECTED_TEMP_STORE = "TEMP_STORE=2"
 EXPECTED_THREADSAFE = "THREADSAFE=1"
 DEFAULT_CACHE_KIB = 20_000
@@ -32,7 +36,7 @@ SQLCIPHER_SALT_BYTES = 16
 
 
 class DriverUnavailableError(RuntimeError):
-    """The controlled SQLCipher runtime is missing or has the wrong build."""
+    """The encrypted SQLite runtime is missing or is not encrypting as required."""
 
 
 class DatabaseAuthenticationError(RuntimeError):
@@ -62,17 +66,34 @@ else:  # Import-safe aliases allow startup to report a typed package failure.
 
 @dataclass(frozen=True)
 class DriverIdentity:
-    sqlcipher_version: str
+    cipher_library: str
     sqlite_version: str
-    crypto_provider: str
     compile_options: frozenset[str]
+
+
+@functools.cache
+def _cipher_library() -> str:
+    """Name the cipher build, or fail when APSW was built without one.
+
+    Plain APSW ignores the key pragmas and would create a plaintext database.
+    """
+    probe = dbapi.connect(":memory:")
+    try:
+        return str(probe.execute("SELECT sqlite3mc_version()").fetchone()[0])
+    except dbapi.OperationalError as exc:
+        raise DriverUnavailableError(
+            "The installed APSW build has no SQLite3 Multiple Ciphers support"
+        ) from exc
+    finally:
+        probe.close()
 
 
 def require_driver() -> Any:
     if dbapi is None:
         raise DriverUnavailableError(
-            "The controlled sqlcipher3 runtime is not installed"
+            "The apsw-sqlite3mc runtime is not installed"
         ) from _IMPORT_ERROR
+    _cipher_library()
     return dbapi
 
 
@@ -93,32 +114,41 @@ def _pragma_scalar(connection: Connection, pragma: str) -> str:
 
 
 def verify_driver(connection: Connection) -> DriverIdentity:
-    """Fail closed when the loaded extension differs from the controlled build."""
-    cipher_version = _pragma_scalar(connection, "cipher_version")
+    """Fail closed unless this keyed connection encrypts in the SQLCipher format."""
+    cipher = _pragma_scalar(connection, "cipher")
+    cipher_format = _pragma_scalar(connection, "legacy")
+    # Only a connection with an attached codec reports a key salt.
+    key_salt = connection.execute(
+        "SELECT sqlite3mc_codec_data('cipher_salt')"
+    ).fetchone()[0]
     sqlite_version = str(connection.execute("SELECT sqlite_version()").fetchone()[0])
-    provider = _pragma_scalar(connection, "cipher_provider")
-    status = _pragma_scalar(connection, "cipher_status")
     options = frozenset(
         str(row[0]) for row in connection.execute("PRAGMA compile_options")
     )
     errors: list[str] = []
-    if not cipher_version:
-        errors.append("codec/cipher_version unavailable")
-    elif not cipher_version.startswith(EXPECTED_SQLCIPHER_SERIES):
+    if cipher != EXPECTED_CIPHER or cipher_format != str(EXPECTED_SQLCIPHER_FORMAT):
         errors.append(
-            f"SQLCipher {EXPECTED_SQLCIPHER_SERIES}x required; loaded {cipher_version}"
+            f"SQLCipher format {EXPECTED_SQLCIPHER_FORMAT} required; "
+            f"connection uses {cipher or 'no cipher'} format {cipher_format or '?'}"
         )
-    if status not in {"1", "true", "on"}:
-        errors.append(f"cipher_status is not enabled ({status or 'missing'})")
+    if not key_salt:
+        errors.append("encryption is not active")
     if EXPECTED_TEMP_STORE not in options:
         errors.append(f"missing {EXPECTED_TEMP_STORE}")
     if EXPECTED_THREADSAFE not in options:
         errors.append(f"missing {EXPECTED_THREADSAFE}")
-    if not provider:
-        errors.append("crypto provider unavailable")
     if errors:
         raise DriverUnavailableError("Invalid SQLCipher runtime: " + "; ".join(errors))
-    return DriverIdentity(cipher_version, sqlite_version, provider, options)
+    return DriverIdentity(_cipher_library(), sqlite_version, options)
+
+
+def _apply_key(
+    connection: Connection, raw_key: bytes, database_salt: bytes | None
+) -> None:
+    # The library's own default cipher is not SQLCipher, so select it first.
+    connection.execute(f"PRAGMA cipher = '{EXPECTED_CIPHER}'")
+    connection.execute(f"PRAGMA legacy = {EXPECTED_SQLCIPHER_FORMAT}")
+    connection.execute(f"PRAGMA key = {_quote_raw_key(raw_key, database_salt)}")
 
 
 def configure_connection(
@@ -130,7 +160,7 @@ def configure_connection(
     authenticate: bool = True,
 ) -> DriverIdentity:
     """Key, authenticate, and harden one connection in the required order."""
-    connection.execute(f"PRAGMA key = {_quote_raw_key(raw_key, database_salt)}")
+    _apply_key(connection, raw_key, database_salt)
     try:
         identity = verify_driver(connection)
         if authenticate:
@@ -334,18 +364,14 @@ def export_database(
     target_key: bytes,
     *,
     target_salt: bytes | None = None,
-    schema: str = "silver_export",
 ) -> None:
     """Copy the open source into a different-key SQLCipher database."""
-    target = str(Path(target_path).resolve()).replace("'", "''")
-    source.execute(
-        f"ATTACH DATABASE '{target}' AS {schema} "
-        f"KEY {_quote_raw_key(target_key, target_salt)}"
-    )
+    target = require_driver().connect(Path(target_path).resolve())
     try:
-        source.execute(f"SELECT sqlcipher_export('{schema}')").fetchone()
+        _apply_key(target, target_key, target_salt)
+        source.backup(target)
     finally:
-        source.execute(f"DETACH DATABASE {schema}")
+        target.close()
 
 
 __all__ = [

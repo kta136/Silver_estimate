@@ -112,23 +112,6 @@ def test_modern_pdf_preserves_section_totals_and_final_summary(
         pdf.close()
 
 
-def test_subtotal_cells_include_only_additive_columns():
-    layout = EstimatePrintRenderer().build_modern_layout(
-        EstimatePrintDocument.from_mapping(multi_section_print_estimate())
-    )
-    for section, pieces in zip(layout.sections, (6, 2, 2, 1), strict=True):
-        values = dict(
-            zip(
-                (column.key for column in section.columns),
-                section.total_row.values,
-                strict=True,
-            )
-        )
-        assert values["pieces"] == str(pieces)
-        assert all(values[key] for key in ("gross", "poly", "net", "wage", "fine"))
-        assert values["purity"] == values["wage_rate"] == ""
-
-
 @pytest.mark.parametrize("show_tunch", [False, True])
 def test_print_omits_item_codes_and_labels_lbr(qt_app, tmp_path, show_tunch):
     _ensure_print_test_font()

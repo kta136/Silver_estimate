@@ -40,9 +40,6 @@ class VoucherToolbar(QWidget):
 
     # Signals
     load_clicked = Signal()
-    voucher_number_changed = Signal(str)
-    date_changed = Signal(QDate)
-    note_changed = Signal(str)
     mode_selected = Signal(int)
 
     def __init__(self, parent=None):
@@ -197,7 +194,7 @@ class VoucherToolbar(QWidget):
     def _build_layout(self) -> None:
         layout = QGridLayout(self)
         self._grid = layout
-        layout.setContentsMargins(8, 7, 8, 8)
+        layout.setContentsMargins(8, 6, 8, 6)
         layout.setHorizontalSpacing(8)
         layout.setVerticalSpacing(2)
 
@@ -231,9 +228,6 @@ class VoucherToolbar(QWidget):
     def _connect_signals(self) -> None:
         """Connect internal widget signals."""
         self.load_button.clicked.connect(self.load_clicked.emit)
-        self.voucher_edit.textChanged.connect(self.voucher_number_changed.emit)
-        self.date_edit.dateChanged.connect(self.date_changed.emit)
-        self.note_edit.textChanged.connect(self.note_changed.emit)
         self.note_edit.textChanged.connect(self._sync_note_tooltip)
         self.mode_buttons.idClicked.connect(self.mode_selected.emit)
 
@@ -253,14 +247,6 @@ class VoucherToolbar(QWidget):
         button = self.mode_buttons.button(int(index))
         if button is not None and not button.isChecked():
             button.setChecked(True)
-
-    def set_voucher_number(self, number: str) -> None:
-        """Set the voucher number.
-
-        Args:
-            number: The voucher number to display
-        """
-        self.voucher_edit.setText(number)
 
     def show_unsaved_badge(self, show: bool) -> None:
         """Show or hide the unsaved changes badge.

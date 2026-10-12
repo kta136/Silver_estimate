@@ -67,6 +67,14 @@ class ItemMasterTableModel(QAbstractTableModel):
             return None
         if role == Qt.ItemDataRole.DisplayRole:
             return self.HEADERS[section]
+        if role == Qt.ItemDataRole.TextAlignmentRole:
+            # Each heading sits over its data: figures right, labels left.
+            side = (
+                Qt.AlignmentFlag.AlignRight
+                if section in self._NUMERIC_COLUMNS
+                else Qt.AlignmentFlag.AlignLeft
+            )
+            return side | Qt.AlignmentFlag.AlignVCenter
         if role == Qt.ItemDataRole.ToolTipRole:
             return self.HEADER_TOOLTIPS[section]
         return None

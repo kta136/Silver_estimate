@@ -429,8 +429,19 @@ def test_preview_print_font_dialog_persists_selection_and_refreshes(
     assert preview.repaint_calls == 0
 
 
-def test_preview_uses_fit_width_when_zoom_is_not_saved(qt_app, settings_stub):
+@pytest.mark.parametrize(
+    "saved_zoom, zoom_mode",
+    [
+        pytest.param(None, QPrintPreviewWidget.ZoomMode.FitToWidth, id="fit-width"),
+        pytest.param(1.75, QPrintPreviewWidget.ZoomMode.CustomZoom, id="saved-zoom"),
+    ],
+)
+def test_preview_opens_at_the_saved_zoom_or_fits_the_width(
+    qt_app, settings_stub, saved_zoom, zoom_mode
+):
     del qt_app, settings_stub
+    if saved_zoom is not None:
+        get_app_settings().setValue("print/preview_zoom", saved_zoom)
     controller = PrintPreviewController(
         printer=QPrinter(),
         render_document=lambda *args: None,
@@ -439,23 +450,8 @@ def test_preview_uses_fit_width_when_zoom_is_not_saved(qt_app, settings_stub):
 
     controller._preferences.apply_initial_zoom(preview_widget)
 
-    assert preview_widget.zoom_modes == [QPrintPreviewWidget.ZoomMode.FitToWidth]
-    assert preview_widget.zoom_factor is None
-
-
-def test_preview_uses_saved_custom_zoom_when_available(qt_app, settings_stub):
-    del qt_app, settings_stub
-    get_app_settings().setValue("print/preview_zoom", 1.75)
-    controller = PrintPreviewController(
-        printer=QPrinter(),
-        render_document=lambda *args: None,
-    )
-    preview_widget = _PreviewWidgetStub()
-
-    controller._preferences.apply_initial_zoom(preview_widget)
-
-    assert preview_widget.zoom_modes == [QPrintPreviewWidget.ZoomMode.CustomZoom]
-    assert preview_widget.zoom_factor == 1.75
+    assert preview_widget.zoom_modes == [zoom_mode]
+    assert preview_widget.zoom_factor == saved_zoom
 
 
 def test_focus_preview_activates_dialog_and_document_view():

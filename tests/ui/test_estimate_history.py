@@ -1,7 +1,8 @@
 from types import SimpleNamespace
 
-from PySide6.QtCore import QItemSelectionModel
-from PySide6.QtWidgets import QFrame
+import pytest
+from PySide6.QtCore import QItemSelectionModel, Qt
+from PySide6.QtWidgets import QFrame, QLabel, QScrollArea, QWidget
 
 from silverestimate.domain.pagination import Page
 from silverestimate.ui.estimate_history import EstimateHistoryDialog
@@ -51,26 +52,22 @@ def _build_harness():
     return harness
 
 
-def test_loading_done_re_enables_buttons_in_finally_path():
+@pytest.mark.parametrize(
+    "has_selection", [True, False], ids=["estimate-selected", "nothing-selected"]
+)
+def test_loading_done_re_enables_buttons_and_row_actions_need_a_selection(
+    has_selection,
+):
     harness = _build_harness()
+    if not has_selection:
+        harness.selected = []
     EstimateHistoryDialog._loading_done(harness, 2)
 
     assert harness.search_button.enabled is True
-    assert harness.open_button.enabled is True
-    assert harness.print_button.enabled is True
-    assert harness.delete_button.enabled is True
     assert harness.load_more_button.enabled is True
-
-
-def test_row_actions_stay_disabled_until_an_estimate_is_selected():
-    harness = _build_harness()
-    harness.selected = []
-    EstimateHistoryDialog._loading_done(harness, 2)
-
-    assert harness.search_button.enabled is True
-    assert harness.open_button.enabled is False
-    assert harness.print_button.enabled is False
-    assert harness.delete_button.enabled is False
+    assert harness.open_button.enabled is has_selection
+    assert harness.print_button.enabled is has_selection
+    assert harness.delete_button.enabled is has_selection
 
 
 def test_populate_table_uses_model_rows_and_selection_lookup(qtbot, monkeypatch):
@@ -201,3 +198,89 @@ def test_filter_row_keeps_search_in_view_and_says_nothing_twice(qtbot, monkeypat
     finally:
         dialog.close()
         dialog.deleteLater()
+
+
+@pytest.mark.parametrize("size", [(1280, 664), (1216, 624)])
+def test_details_panel_needs_no_scrollbar_at_the_size_it_opens_on_1366x768(
+    qtbot, monkeypatch, size
+):
+    # On a 1366x768 screen the dialog opens 1280x664, a taskbar and a title
+    # bar short of 768. The selected-estimate panel used to need about 20 px
+    # more, so it grew two scrollbars and cut off the voucher number, the
+    # date and the amounts.
+    monkeypatch.setattr(EstimateHistoryDialog, "load_estimates", lambda self: None)
+    dialog = EstimateHistoryDialog(_DialogDbStub(), main_window_ref=None)
+    qtbot.addWidget(dialog)
+    try:
+        # 1280x664 is the size on a 1366x768 screen, 1216x624 the size on a
+        # 1600x900 one with Windows at 125% (1280x688 usable).
+        dialog.resize(*size)
+        dialog.show()
+        qtbot.waitUntil(lambda: dialog.isVisible(), timeout=1000)
+        dialog.selected_details_strip.set_items(
+            [
+                ("Voucher No", "2"),
+                ("Date", "16/01/2026"),
+                ("Note", "Smoke estimate two"),
+                ("Silver rate", "₹ 75,250.00"),
+                ("Gross", "20.00 g"),
+                ("Net Wt", "18.75 g"),
+                ("Net Fine", "19.06 g"),
+                ("Net Labour", "₹ 6,094.00"),
+                ("Grand Total", "₹ 14,40,170.88"),
+            ]
+        )
+        qtbot.wait(50)
+
+        scroll = dialog.selected_details_strip.findChild(QScrollArea)
+        assert scroll is not None
+        assert not scroll.verticalScrollBar().isVisible()
+        # Nothing is wider than the room it has: the Grand Total row used to
+        # carry 28 px of padding that pushed its amount out of view.
+        assert scroll.widget().width() <= scroll.viewport().width()
+        total = scroll.widget().findChild(QWidget, "RecordInspectorTotal")
+        assert total is not None
+        for label in total.findChildren(QLabel):
+            # A label's size hint includes any style padding: this is the text
+            # and nothing more (the row's padding is its layout margin).
+            text = label.fontMetrics().horizontalAdvance(label.text())
+            assert label.sizeHint().width() <= text + 8, label.text()
+        amount = total.findChildren(QLabel)[-1]
+        assert amount.mapTo(scroll.viewport(), amount.rect().topRight()).x() <= (
+            scroll.viewport().width()
+        )
+        assert amount.fontMetrics().horizontalAdvance(amount.text()) <= amount.width()
+        assert scroll.horizontalScrollBarPolicy() == (
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        for button in (
+            dialog.open_button,
+            dialog.print_button,
+            dialog.delete_button,
+        ):
+            assert button.isVisible()
+            assert button.geometry().bottom() < dialog.selected_details_strip.height()
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+
+
+def test_history_opens_larger_on_big_screens_and_leaves_room_on_small_ones(
+    qtbot, monkeypatch
+):
+    asked = {}
+    monkeypatch.setattr(EstimateHistoryDialog, "load_estimates", lambda self: None)
+    monkeypatch.setattr(
+        "silverestimate.ui.estimate_history.resize_to_available_screen",
+        lambda widget, **kwargs: asked.update(kwargs),
+    )
+
+    dialog = EstimateHistoryDialog(_DialogDbStub(), main_window_ref=None)
+    qtbot.addWidget(dialog)
+
+    # Capped to the screen on a small one; this much where there is room.
+    assert asked["preferred_width"] >= 1400
+    assert asked["preferred_height"] >= 780
+    # 48 px, not 64: on a 1280x688 screen that is the 16 px that stop the
+    # selected-estimate panel needing a scrollbar.
+    assert asked["margin"] <= 48

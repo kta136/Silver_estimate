@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#14a9b4"/>
+      <stop offset="1" stop-color="#00525c"/>
+    </linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="top" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#d3dbe2"/>
+    </linearGradient>
+    <linearGradient id="front" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d4dbe2"/>
+      <stop offset="0.55" stop-color="#aab5c0"/>
+      <stop offset="1" stop-color="#7d8a98"/>
+    </linearGradient>
+    <radialGradient id="floor" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#00262b" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#00262b" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="58" fill="url(#tile)"/>
+  <path d="M66 8 H190 A58 58 0 0 1 248 66 V120 Q128 150 8 120 V66 A58 58 0 0 1 66 8 Z"
+        fill="url(#gloss)"/>
+  <ellipse cx="128" cy="198" rx="100" ry="10" fill="url(#floor)"/>
+  <g transform="translate(128 128) scale(1.0) translate(-128 -128)">
+    <g stroke-linejoin="round" stroke-linecap="round">
+      <path d="M44 188 L66 114 H190 L212 188 Z" fill="url(#front)" stroke="#8f9ba8" stroke-width="10"/>
+      <path d="M88 64 H168 L190 114 H66 Z" fill="url(#top)" stroke="#e9eef2" stroke-width="10"/>
+      <path d="M44 188 L66 114 H190 L212 188 Z" fill="url(#front)"/>
+      <path d="M88 64 H168 L190 114 H66 Z" fill="url(#top)"/>
+    </g>
+    <path d="M70 114 H186" stroke="#8793a0" stroke-opacity="0.55" stroke-width="2" fill="none"/>
+    <path d="M62 120.5 H194" stroke="#ffffff" stroke-opacity="0.55" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M98 72 H140 L122 106 H82 Z" fill="#ffffff" fill-opacity="0.5"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(0 2.2)" stroke="#ffffff" stroke-opacity="0.55" stroke-width="8">
+      <path d="M113 132 H147 M113 144 H147 M113 132 H131 A11.5 11.5 0 0 1 131 155 H115 L141 176"/>
+    </g>
+    <g stroke="#0a4f59" stroke-width="8">
+      <path d="M113 132 H147 M113 144 H147 M113 132 H131 A11.5 11.5 0 0 1 131 155 H115 L141 176"/>
+    </g>
+  </g>
+  </g>
+  <path d="M190 56 L194 68 L206 72 L194 76 L190 88 L186 76 L174 72 L186 68 Z"
+        fill="#ffffff" fill-opacity="0.95"/>
+  <path d="M214 94 L216 100 L222 102 L216 104 L214 110 L212 104 L206 102 L212 100 Z"
+        fill="#ffffff" fill-opacity="0.8"/>
+</svg>

@@ -159,9 +159,9 @@ The active format is machine-bound SQLCipher. `DatabaseManager` reads SQLCipher'
 16-byte in-file salt, derives an Argon2id password key, combines it with a random
 256-bit device secret from local-machine Windows Credential Manager, and passes the final raw 32-byte key to
 `SqlCipherConnectionBroker`. Every connection is keyed before reading
-`sqlite_master`, verifies the controlled driver, authenticates the database,
-and then applies foreign keys, WAL, `synchronous=FULL`, memory-only temporary
-storage, the application cache size, and `mmap_size=0`.
+`sqlite_master`, verifies that it encrypts in that format, authenticates the
+database, and then applies foreign keys, WAL, `synchronous=FULL`, memory-only
+temporary storage, the application cache size, and `mmap_size=0`.
 
 Worker APIs carry a connection factory, never a database path or raw key.
 Maintenance mode blocks new readers and cancels/drains current readers before

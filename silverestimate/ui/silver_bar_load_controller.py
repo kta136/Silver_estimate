@@ -18,7 +18,12 @@ from silverestimate.persistence.silver_bar_query_repository import (
 )
 
 if TYPE_CHECKING:
-    from .silver_bar_management import SilverBarDialog
+    from .silver_bar_management import SilverBarWidget
+
+
+# What the weight box says about the list beside it, so the two never disagree.
+SHOWING_BARS_PLACEHOLDER = "Showing all bars. Type a weight, e.g. 40"
+HIDDEN_BARS_PLACEHOLDER = "Bars hidden. Type a weight, or press Ctrl+F"
 
 
 @dataclass(frozen=True)
@@ -41,7 +46,7 @@ def _load_list(request: tuple[Callable, int], cancel: threading.Event):
 
 
 class SilverBarLoadController:
-    def __init__(self, host: SilverBarDialog) -> None:
+    def __init__(self, host: SilverBarWidget) -> None:
         self.host = host
         self.timer = QTimer(host)
         self.timer.setSingleShot(True)
@@ -81,6 +86,7 @@ class SilverBarLoadController:
                 "Available bars hidden",
                 "Press Ctrl+F or click the weight box to show them again.",
             )
+            self.host.weight_search_edit.setPlaceholderText(HIDDEN_BARS_PLACEHOLDER)
 
     def schedule_search(self, text: str, *, announce: bool = True) -> None:
         self.cancel_search()
@@ -95,6 +101,7 @@ class SilverBarLoadController:
             return
         self.dismissed = False
         self.announce_results = announce
+        self.host.weight_search_edit.setPlaceholderText(SHOWING_BARS_PLACEHOLDER)
         self.host.set_available_message(
             f"Finding bars that start with {self.prefix}…"
             if self.prefix

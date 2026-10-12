@@ -265,19 +265,6 @@ def test_handle_item_code_cancel_selection_reports_not_found(presenter_fixtures)
     assert view.status_messages[-1] == "Item 'MISSING' not found."
 
 
-def test_save_estimate_success_adds_new_bar(presenter_fixtures):
-    presenter, view, repo = presenter_fixtures
-    payload = _Make_sample_payload()
-    repo.save_result = EstimateSaveResult(True, bars_added=1)
-
-    outcome = presenter.save_estimate(payload)
-
-    assert outcome.success
-    assert outcome.bars_added == 1
-    assert "saved successfully" in outcome.message
-    assert repo.save_calls
-
-
 def test_save_estimate_passes_bar_identity_in_the_single_atomic_save(
     presenter_fixtures,
 ):
@@ -289,6 +276,7 @@ def test_save_estimate_passes_bar_identity_in_the_single_atomic_save(
 
     assert outcome.success
     assert outcome.bars_added == 1
+    assert "saved successfully" in outcome.message
     assert len(repo.save_calls) == 1
     bar = next(item for item in repo.save_calls[0]["returns"] if item["is_silver_bar"])
     assert (bar["net_wt"], bar["purity"], bar["line_key"]) == (2.0, 99.0, "line-bar")

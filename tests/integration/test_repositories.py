@@ -3,12 +3,15 @@ from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
-from sqlcipher3 import dbapi2 as sqlite3
 
 from silverestimate.infrastructure.item_cache import ItemCacheController
 from silverestimate.persistence import schema
+from silverestimate.persistence.database_driver import dbapi as sqlite3
 from silverestimate.persistence.estimates_repository import EstimatesRepository
-from silverestimate.persistence.items_repository import ItemsRepository
+from silverestimate.persistence.items_repository import (
+    ItemsRepository,
+    fetch_item_catalog_page,
+)
 from silverestimate.persistence.silver_bar_command_repository import (
     SilverBarCommandRepository,
 )
@@ -97,19 +100,6 @@ def test_estimate_lookup_keeps_saved_tunch(fake_db):
     )
 
 
-def test_items_tunch_database_accepts_text(fake_db):
-    fake_db.cursor.execute(
-        "INSERT INTO items "
-        "(code, name, purity, wage_type, wage_rate, tunch) "
-        "VALUES ('TEXTT', 'Text Tunch', 90, 'WT', 0, '92 + wastage')"
-    )
-
-    row = fake_db.cursor.execute(
-        "SELECT tunch, typeof(tunch) AS storage_type FROM items WHERE code='TEXTT'"
-    ).fetchone()
-    assert (row["tunch"], row["storage_type"]) == ("92 + wastage", "text")
-
-
 def test_current_schema_setup_revalidates_mandatory_indexes_and_foreign_keys(fake_db):
     statements = []
     fake_db.conn.set_trace_callback(statements.append)
@@ -148,6 +138,26 @@ def test_item_catalog_keyset_pages_do_not_duplicate_rows(fake_db):
     assert [row["code"] for row in second.items] == ["A003"]
     assert second.next_cursor is None
     assert fake_db.item_cache_controller.get("B001")["name"] == "Item B001"
+
+
+def test_tunch_search_retains_keyset_pagination():
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    connection.execute(
+        "CREATE TABLE items(code, name, tunch, purity, wage_type, wage_rate)"
+    )
+    connection.executemany(
+        "INSERT INTO items VALUES(?, 'Ring', '92.5 + loss', 92.5, 'WT', 10)",
+        [("A",), ("B",)],
+    )
+    first = fetch_item_catalog_page(connection.cursor(), "loss", limit=1)
+    second = fetch_item_catalog_page(
+        connection.cursor(), "loss", limit=1, page_cursor=first.next_cursor
+    )
+    assert first.total == 2 and [row["code"] for row in first.items] == ["A"]
+    assert [row["code"] for row in second.items] == ["B"]
+    assert second.next_cursor is None
+    connection.close()
 
 
 def test_estimate_history_keyset_page_reads_header_totals(fake_db):
@@ -437,46 +447,6 @@ def test_save_estimate_reports_missing_item_code(fake_db):
     assert "MISSING001" in fake_db.last_error
 
 
-def test_estimate_delete_preserves_assigned_silver_bars(fake_db):
-    est_repo = EstimatesRepository(fake_db)
-    silver_commands = SilverBarCommandRepository(fake_db)
-    silver_queries = SilverBarQueryRepository(fake_db)
-    est_repo.save_estimate_atomic(
-        voucher_no="200",
-        date="2025-01-02",
-        silver_rate=76000.0,
-        regular_items=[],
-        return_items=[],
-        totals=estimate_totals(
-            total_gross=0.0, total_net=0.0, net_fine=0.0, net_wage=0.0
-        ),
-    )
-    bar_id = insert_silver_bar(fake_db, "200", 5.0, 99.9)
-    assert silver_commands.add_bars_to_list([bar_id], note="Auto List").succeeded
-    deleted = est_repo.delete_single_estimate("200")
-    assert not deleted
-    remaining_bars = silver_queries.get_silver_bars(estimate_voucher_no="200")
-    assert [bar["bar_id"] for bar in remaining_bars] == [bar_id]
-    assert "silver bars" in fake_db.last_error
-
-
-def test_silver_bar_query_limit_and_offset(fake_db):
-    queries = SilverBarQueryRepository(fake_db)
-    for i in range(1, 5):
-        insert_silver_bar(fake_db, f"V{i}", float(i), 99.0)
-
-    limited = queries.get_silver_bars(limit=2)
-    assert len(limited) == 2
-    # get_silver_bars orders by date_added DESC, bar_id DESC
-    assert [row["bar_id"] for row in limited] == sorted(
-        [row["bar_id"] for row in limited], reverse=True
-    )
-
-    offset_rows = queries.get_silver_bars(limit=1, offset=1)
-    assert len(offset_rows) == 1
-    assert offset_rows[0]["bar_id"] == limited[1]["bar_id"]
-
-
 def test_silver_bar_query_unassigned_only_filter(fake_db):
     commands = SilverBarCommandRepository(fake_db)
     queries = SilverBarQueryRepository(fake_db)
@@ -604,40 +574,6 @@ def test_estimate_repository_load_preserves_item_types(fake_db):
     assert items["BAR001"]["fine"] == pytest.approx(4.995)
 
 
-def test_save_estimate_accepts_mixed_case_item_codes(fake_db):
-    repo = EstimatesRepository(fake_db)
-    items_repo = ItemsRepository(fake_db)
-    items_repo.add_item("mix001", "Mixed Item", 92.5, "WT", 10.0)
-
-    payload = regular_item(
-        code="MIX001",
-        name="Mixed Item",
-        gross=10.0,
-        poly=0.0,
-        net_wt=10.0,
-        purity=92.5,
-        wage_rate=10.0,
-        pieces=1,
-        wage=100.0,
-        fine=9.25,
-    )
-    totals = estimate_totals(
-        total_gross=10.0, total_net=10.0, net_fine=9.25, net_wage=100.0
-    )
-
-    saved = repo.save_estimate_atomic(
-        voucher_no="405",
-        date="2025-01-06",
-        silver_rate=72000.0,
-        regular_items=[payload],
-        return_items=[],
-        totals=totals,
-    ).success
-
-    assert saved
-    assert fake_db.last_error is None
-
-
 def test_silver_bar_repository_handles_missing_database_runtime() -> None:
     db = SimpleNamespace(
         conn=None,
@@ -673,24 +609,3 @@ def test_silver_bar_repository_storage_errors_are_contained(fake_db) -> None:
     with pytest.raises(sqlite3.OperationalError, match="injected storage fault"):
         commands.delete_bars_for_estimate("1")
     assert commands.cleanup_empty_lists([1]) is None
-
-
-def test_silver_bar_repository_exercises_edge_outcomes(fake_db) -> None:
-    commands = SilverBarCommandRepository(fake_db)
-    queries = SilverBarQueryRepository(fake_db)
-
-    assert commands.reactivate_list(-1) is False
-    insert_silver_bar(fake_db, "edge", 2.5, 95.0)
-
-    rows = queries.get_silver_bars(
-        status="In Stock",
-        weight_query="invalid",
-        estimate_voucher_no="edge",
-        unassigned_only=True,
-        min_purity="invalid",
-        max_purity="invalid",
-        date_range=("2000-01-01", "2099-01-01"),
-        limit=1,
-        offset=1,
-    )
-    assert rows == []

@@ -33,30 +33,34 @@ from .screen_widgets import (
     label,
 )
 from .shared_screen_theme import build_management_screen_stylesheet
-from .window_sizing import resize_to_available_screen
+from .silver_bar_load_controller import SHOWING_BARS_PLACEHOLDER
 
 if TYPE_CHECKING:
-    from .silver_bar_management import SilverBarDialog
+    from .silver_bar_management import SilverBarWidget
 
-# Below this width the action buttons move under the list title.
-COMPACT_HEADER_WIDTH = 1040
+# Left and right margin of the header bar. When the title, state, note and
+# actions need more than the screen's width, the actions drop to a second row.
+HEADER_SIDE_MARGINS = 32
 # Below this width both bar tables hide the bar number column.
 COMPACT_TABLE_WIDTH = 900
+# An issued list has no second pane. Across a wide screen its few columns end
+# up a thousand pixels apart, so the banner and the list stay this wide.
+ISSUED_VIEW_MAX_WIDTH = 1000
+UNLIMITED_WIDTH = 16777215  # Qt's QWIDGETSIZE_MAX
 
 
 class SilverBarManagementUiBuilder:
-    def __init__(self, host: SilverBarDialog) -> None:
+    def __init__(self, host: SilverBarWidget) -> None:
         self.host = host
 
     def init_ui(self) -> None:
         h = self.host
-        h.setWindowTitle("Silver Bar Management")
-        h.setObjectName("SilverBarManagementDialog")
-        h.setMinimumSize(760, 520)
-        resize_to_available_screen(h, preferred_width=1180, preferred_height=760)
+        h.setObjectName("SilverBarManagementScreen")
+        # A plain widget paints a style sheet's background only on request.
+        h.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         h.setStyleSheet(
             build_management_screen_stylesheet(
-                root_selector="QDialog#SilverBarManagementDialog",
+                root_selector="QWidget#SilverBarManagementScreen",
                 card_names=[],
                 title_label="SilverBarTitle",
                 subtitle_label="SilverBarSubtitle",
@@ -89,28 +93,42 @@ class SilverBarManagementUiBuilder:
         body_layout = QVBoxLayout(body)
         body_layout.setContentsMargins(14, 12, 14, 12)
         body_layout.setSpacing(12)
-        body_layout.addWidget(self._issued_banner())
+        # Spacers either side of the banner and of the panes. They take no
+        # room until an issued list is open; then the list is held to a readable
+        # width and they share what is left, which centres it (an alignment
+        # flag would instead shrink the widget to its preferred width).
+        banner_row = QHBoxLayout()
+        banner_row.setContentsMargins(0, 0, 0, 0)
+        banner_row.addStretch(0)
+        banner_row.addWidget(self._issued_banner(), 100)
+        banner_row.addStretch(0)
+        h.banner_row = banner_row
+        body_layout.addLayout(banner_row)
         panes = QHBoxLayout()
+        h.panes_layout = panes
         panes.setSpacing(12)
+        panes.addStretch(0)
         panes.addWidget(self._available_card(), 1)
         panes.addWidget(self._list_card(), 1)
+        panes.addStretch(0)
         body_layout.addLayout(panes, 1)
         layout.addWidget(body, 1)
         layout.addWidget(self._footer())
         QWidget.setTabOrder(h.weight_search_edit, h.list_bars_table)
         QWidget.setTabOrder(h.list_bars_table, h.print_list_button)
+        # Ctrl+P and F1 belong to the main window's File > Print and Help
+        # menus, which hand them to this screen while it is open; a second
+        # shortcut on the same key would leave both of them dead.
         for keys, callback in (
             ("Ctrl+N", h.create_new_list),
             ("Ctrl+O", h.open_saved_list),
             ("Ctrl+F", lambda: h.focus_weight(announce=True)),
             ("F2", h.edit_list_note),
-            ("Ctrl+P", h.print_selected_list),
             ("Ctrl+Shift+P", h.preview_selected_list),
             ("Ctrl+G", h.generate_optimal_list),
             ("Ctrl+H", h.open_history),
             ("Ctrl+R", h.reopen_issued_list),
-            ("F1", h.show_keyboard_help),
-            ("Alt+I", h.retry_issue),
+            ("Ctrl+I", h.retry_issue),
         ):
             action = QAction(h)
             action.setShortcut(QKeySequence(keys))
@@ -159,7 +177,7 @@ class SilverBarManagementUiBuilder:
             "History", h.open_saved_list, "Lists and bar history · Ctrl+O", "Ctrl+H"
         )
         h.retry_issue_button = self.button(
-            "Issue", h.retry_issue, "Retry issuing without printing again", "Alt+I"
+            "Issue", h.retry_issue, "Retry issuing without printing again", "Ctrl+I"
         )
         h.retry_issue_button.hide()
         for button in (
@@ -197,6 +215,8 @@ class SilverBarManagementUiBuilder:
         )
         h.print_list_button.setObjectName("SilverBarPrimaryButton")
         actions.addWidget(h.print_list_button)
+        h.close_button = self.button("Close", h.request_close, "Back to the estimate")
+        actions.addWidget(h.close_button)
         h.header_top_row.addWidget(h.header_actions)
         outer.addLayout(h.header_top_row)
         h.header_bottom = QWidget(bar)
@@ -249,9 +269,7 @@ class SilverBarManagementUiBuilder:
         h.weight_search_edit.setAccessibleName(
             "Filter available bars by weight in grams"
         )
-        h.weight_search_edit.setPlaceholderText(
-            "Showing all bars. Type a weight, e.g. 40"
-        )
+        h.weight_search_edit.setPlaceholderText(SHOWING_BARS_PLACEHOLDER)
         h.weight_search_edit.setToolTip(
             "↑/↓ choose, Enter adds · Type a weight to filter (optional) · "
             "Ctrl+F shows bars"

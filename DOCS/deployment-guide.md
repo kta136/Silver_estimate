@@ -100,17 +100,16 @@ explicitly been made writable.
 
 The canonical configuration is `pysidedeploy.spec`. It selects the Windows
 platform, icon/SVG/image, widget, print-support, network, and Windows TLS
-components; embeds required assets and notices; forces the dynamic SQLCipher
-imports; includes the direct `argon2-cffi` password service; and excludes
+components; embeds required assets and notices; includes the `apsw` database
+engine and the direct `argon2-cffi` password service; and excludes
 unused Qt/QML/media plugins. The committed compiler selection lets Nuitka use
 its supported Windows toolchain.
 
 ## Continuous integration
 
 `.github/workflows/validation.yml` runs on every push to `main` and on pull
-requests. On `windows-latest` it syncs the locked environment, verifies the
-committed SQLCipher wheel and the installed runtime, and runs Ruff, mypy and
-the complete non-smoke test suite. A last `pip-audit` step lists advisories
+requests. On `windows-latest` it syncs the locked environment and runs Ruff,
+mypy and the complete non-smoke test suite. A last `pip-audit` step lists advisories
 for the locked runtime packages without failing the run.
 
 CI does not build, sign or publish the executable. Builds are made locally
@@ -126,7 +125,7 @@ release requirements. It is not compared with the retired M0 PyQt6 executable.
 
 ## Manual release smoke
 
-Before promoting a stable release, verify the committed SQLCipher 4.17.x wheel against its recorded SHA-256 and native inventory, probe the installed and frozen runtimes, reject plaintext and unsupported schemas, exercise local two-file-to-machine-bound migration, prove that a copied DB and backup fail under a foreign device secret, exercise encrypted backup/restore and copy-switch password rotation with injected interruption, and verify estimate/paging/rate/print workflows. Rebuilding the native wheel is required only when deliberately replacing the bundled dependency.
+Before promoting a stable release, sign in to a copy of a live database with the frozen executable, reject plaintext and unsupported schemas, exercise local two-file-to-machine-bound migration, prove that a copied DB and backup fail under a foreign device secret, exercise encrypted backup/restore and copy-switch password rotation with injected interruption, and verify estimate/paging/rate/print workflows.
 
 Normal runtime database files, WAL, and journals are SQLCipher encrypted. Production devices should still use Windows device encryption/BitLocker and a trusted account because SQLCipher does not protect live process memory, hibernation, or a compromised user.
 

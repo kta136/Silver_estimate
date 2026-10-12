@@ -453,16 +453,15 @@ def test_preview_print_font_change_updates_manager_and_persists(
     assert settings.value("font/bold") is True
 
 
-def test_leftover_layout_preference_still_prints_modern_pdf(
+def test_direct_estimate_painter_writes_readable_pdf(
     qt_app,
     settings_stub,
     tmp_path,
 ):
     del qt_app, settings_stub
-    get_app_settings().setValue("print/estimate_layout", "classic")
     font = QFont("Courier New", 7)
     manager = PrintManager(_DbStub(), print_font=font)
-    output_path = tmp_path / "fallback-estimate-direct.pdf"
+    output_path = tmp_path / "modern-estimate-direct.pdf"
 
     _render_estimate_pdf(manager, multi_section_print_estimate(), output_path)
     pages, document = _pdf_pages(output_path)
@@ -479,29 +478,6 @@ def test_leftover_layout_preference_still_prints_modern_pdf(
     assert "Gross (g)" in rendered
     assert "/Doz." not in rendered
     assert "GOODS NOT RETURNABLE" not in rendered
-
-
-def test_direct_estimate_painter_writes_pdf(qt_app, settings_stub, tmp_path):
-    del qt_app, settings_stub
-    font = QFont("Courier New", 7)
-    manager = PrintManager(_DbStub(), print_font=font)
-    payload = manager.build_estimate_preview_payload(
-        "EST-PARITY-001",
-        estimate_data=multi_section_print_estimate(),
-    )
-    assert payload is not None
-    assert isinstance(payload.document, EstimatePrintDocument)
-
-    output_path = tmp_path / "modern-estimate-direct.pdf"
-    printer = QPrinter(QPrinter.PrinterMode.HighResolution)
-    printer.setPageLayout(manager.printer.pageLayout())
-    printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
-    printer.setOutputFileName(str(output_path))
-
-    manager._render_document(printer, payload.document)
-
-    assert output_path.read_bytes().startswith(b"%PDF-")
-    assert output_path.stat().st_size > 1_000
 
 
 def test_modern_estimate_painter_uses_minimum_bottom_margin(

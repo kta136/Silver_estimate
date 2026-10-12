@@ -13,24 +13,24 @@ from silverestimate.persistence.repository_results import (
 )
 from silverestimate.ui.print_manager import PrintManager
 from silverestimate.ui.print_preview_output import PrintOutputOutcome, PrintOutputStatus
-from silverestimate.ui.silver_bar_management import SilverBarDialog
+from silverestimate.ui.silver_bar_management import SilverBarWidget
 from tests.silver_bar_workspace_support import bar_list_count, seed_workspace_db
 
 
 @pytest.fixture
 def workspace(qtbot, tmp_path, settings_stub):
     db = seed_workspace_db(tmp_path)
-    dialog = SilverBarDialog(db)
+    dialog = SilverBarWidget(db)
     qtbot.addWidget(dialog)
     dialog.show()
     dialog.activateWindow()
     dialog.apply_snapshot(db.add_bars_to_list([1, 6]).unwrap())
     yield dialog, db
-    dialog.done(0)
+    dialog.shutdown()
     db.close()
 
 
-def test_ctrl_p_prints_issues_and_starts_fresh_without_confirmation(
+def test_printing_issues_and_starts_fresh_without_confirmation(
     workspace, qtbot, monkeypatch
 ):
     dialog, db = workspace
@@ -42,9 +42,9 @@ def test_ctrl_p_prints_issues_and_starts_fresh_without_confirmation(
         return PrintOutputOutcome(PrintOutputStatus.SUCCESS)
 
     monkeypatch.setattr(PrintManager, "quick_print", print_payload)
-    qtbot.keyClick(
-        dialog.weight_search_edit, Qt.Key.Key_P, Qt.KeyboardModifier.ControlModifier
-    )
+    # Ctrl+P and File > Print reach this through the main window; see
+    # tests/ui/test_silver_bar_screen.py.
+    dialog.print_selected_list()
     qtbot.waitUntil(lambda: dialog.current_list_id is None)
     qtbot.waitUntil(dialog.weight_search_edit.hasFocus)
     issued = db.get_silver_bar_list_snapshot(list_id)
@@ -196,3 +196,38 @@ def test_modal_child_shortcuts_do_not_change_parent_list(workspace, qtbot):
     qtbot.keyClick(child, Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
     assert dialog.current_list_id == list_id
     child.reject()
+
+
+def test_an_issued_list_is_a_centred_column_on_a_wide_screen(workspace, qtbot):
+    dialog, db = workspace
+    dialog.resize(1600, 800)
+    dialog.show()
+    qtbot.wait(40)
+
+    # Active: two panes share the screen.
+    assert dialog.available_card.isVisible()
+    assert dialog.list_card.maximumWidth() > 1000
+    assert dialog.list_card.width() < 1000
+
+    current = db.get_silver_bar_list_snapshot(dialog.current_list_id)
+    dialog.apply_snapshot(
+        db.issue_printed_list(current.list_id, current.signature).unwrap()
+    )
+    qtbot.wait(40)
+
+    # Issued: one column, no wider than 1000 px, with equal space either side.
+    assert not dialog.available_card.isVisible()
+    assert dialog.issued_banner.isVisible()
+    for widget in (dialog.list_card, dialog.issued_banner):
+        assert widget.width() <= 1000
+        assert widget.width() >= 900
+        left = widget.mapTo(dialog, widget.rect().topLeft()).x()
+        right = dialog.width() - (left + widget.width())
+        assert abs(left - right) <= 2
+
+    # A new list gives the screen back to the two panes.
+    dialog.create_new_list()
+    qtbot.wait(40)
+    assert dialog.available_card.isVisible()
+    assert dialog.list_card.maximumWidth() > 1000
+    assert dialog.list_card.width() < 1000

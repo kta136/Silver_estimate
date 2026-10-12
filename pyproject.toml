@@ -35,11 +35,8 @@ classifiers = [
 dependencies = [
     "PySide6>=6.11.2,<6.12",
     "argon2-cffi>=25.1.0,<26",
-    "sqlcipher3==0.6.2+silverestimate.4.17.0.1; sys_platform == 'win32'",
+    "apsw-sqlite3mc>=3.53.4.0,<4",
 ]
-
-[tool.uv.sources]
-sqlcipher3 = { path = "vendor/sqlcipher/sqlcipher3-0.6.2+silverestimate.4.17.0.1-cp314-cp314-win_amd64.whl" }
 
 [project.optional-dependencies]
 dev = [
@@ -128,18 +125,12 @@ exclude = [
 
 [[tool.mypy.overrides]]
 module = [
-    "sqlcipher3.*",
-]
-ignore_missing_imports = true
-follow_imports = "skip"
-
-[[tool.mypy.overrides]]
-module = [
     "silverestimate.domain.estimate_models",
     "silverestimate.domain.item_validation",
     "silverestimate.infrastructure.app_constants",
     "silverestimate.infrastructure.paths",
     "silverestimate.infrastructure.settings",
+    "silverestimate.persistence.apsw_dbapi",
     "silverestimate.persistence.database_driver",
     "silverestimate.persistence.storage_metadata",
     "silverestimate.persistence.items_repository",

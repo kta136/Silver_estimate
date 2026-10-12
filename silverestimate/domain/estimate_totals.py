@@ -5,6 +5,7 @@ from __future__ import annotations
 from silverestimate.domain.estimate_models import CategoryTotals, TotalsResult
 from silverestimate.domain.numeric_policy import (
     MONEY_PLACES,
+    decimal_sum,
     rounded_value,
     silver_value,
     sum_values,
@@ -21,8 +22,9 @@ def calculate_grand_total(
 ) -> float:
     """Apply carried balances and the rate policy to stored or calculated net totals."""
     metal_value = silver_value(sum_values((net_fine, last_balance_silver)), silver_rate)
+    # Round the exact sum: as a float it can land on a half paisa it never reached.
     return rounded_value(
-        sum_values((metal_value, net_wage, last_balance_amount)), MONEY_PLACES
+        decimal_sum((metal_value, net_wage, last_balance_amount)), MONEY_PLACES
     )
 
 

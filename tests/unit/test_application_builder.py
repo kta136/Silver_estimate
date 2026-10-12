@@ -149,7 +149,23 @@ def _make_builder(
     )
 
 
-def test_run_returns_zero_when_auth_cancelled(tmp_path, stub_qt):
+@pytest.mark.parametrize(
+    "startup_result, expected_exit_code",
+    [
+        pytest.param(StartupResult(status=StartupStatus.CANCELLED), 0, id="cancelled"),
+        pytest.param(
+            StartupResult(status=StartupStatus.WIPED, silent_wipe=False),
+            0,
+            id="data-wiped",
+        ),
+        pytest.param(
+            StartupResult(status=StartupStatus.FAILED, db=None), 1, id="sign-in-failed"
+        ),
+    ],
+)
+def test_run_exits_without_a_window_when_sign_in_does_not_finish(
+    tmp_path, stub_qt, startup_result, expected_exit_code
+):
     stub_app, message_box = stub_qt
     factory_called = {"value": False}
 
@@ -157,15 +173,11 @@ def test_run_returns_zero_when_auth_cancelled(tmp_path, stub_qt):
         factory_called["value"] = True
         return object()
 
-    builder = _make_builder(
-        StartupResult(status=StartupStatus.CANCELLED),
-        main_window_factory,
-        tmp_path,
-    )
+    builder = _make_builder(startup_result, main_window_factory, tmp_path)
 
     exit_code = builder.run()
 
-    assert exit_code == 0
+    assert exit_code == expected_exit_code
     assert factory_called["value"] is False
     assert stub_app.instance_ref.exec_calls == 0
     assert message_box.last_call is None
@@ -205,50 +217,6 @@ def test_log_retention_follows_the_automatic_cleanup_setting(
 
     assert setups[0]["backup_days"] == backup_days
     assert cleaned == cleanups
-
-
-def test_run_returns_zero_when_data_wiped(tmp_path, stub_qt):
-    stub_app, message_box = stub_qt
-    factory_called = {"value": False}
-
-    def main_window_factory(*, db_manager, logger):
-        factory_called["value"] = True
-        return object()
-
-    builder = _make_builder(
-        StartupResult(status=StartupStatus.WIPED, silent_wipe=False),
-        main_window_factory,
-        tmp_path,
-    )
-
-    exit_code = builder.run()
-
-    assert exit_code == 0
-    assert factory_called["value"] is False
-    assert stub_app.instance_ref.exec_calls == 0
-    assert message_box.last_call is None
-
-
-def test_run_returns_error_when_auth_fails(tmp_path, stub_qt):
-    stub_app, message_box = stub_qt
-    factory_called = {"value": False}
-
-    def main_window_factory(*, db_manager, logger):
-        factory_called["value"] = True
-        return object()
-
-    builder = _make_builder(
-        StartupResult(status=StartupStatus.FAILED, db=None),
-        main_window_factory,
-        tmp_path,
-    )
-
-    exit_code = builder.run()
-
-    assert exit_code == 1
-    assert factory_called["value"] is False
-    assert stub_app.instance_ref.exec_calls == 0
-    assert message_box.last_call is None
 
 
 def test_run_initialises_main_window_and_enters_event_loop(tmp_path, stub_qt):

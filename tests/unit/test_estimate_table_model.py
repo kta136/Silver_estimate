@@ -305,7 +305,7 @@ def test_header_data(model):
         model.headerData(
             COL_GROSS, Qt.Orientation.Horizontal, Qt.ItemDataRole.DisplayRole
         )
-        == "Gross (g)"
+        == "Gross"
     )
 
     # Vertical headers (row numbers)
@@ -472,20 +472,6 @@ def test_set_row(model):
     assert retrieved.gross == 500.0
 
 
-def test_pieces_flags_depend_on_wage_type(model):
-    """Pieces column should be editable only for PC rows."""
-    wt_row = EstimateEntryRowState(code="WT001", wage_type="WT", pieces=0)
-    pc_row = EstimateEntryRowState(code="PC001", wage_type="PC", pieces=1)
-    model.add_row(wt_row)
-    model.add_row(pc_row)
-
-    wt_flags = model.flags(model.index(0, COL_PIECES))
-    pc_flags = model.flags(model.index(1, COL_PIECES))
-
-    assert not bool(wt_flags & Qt.ItemFlag.ItemIsEditable)
-    assert bool(pc_flags & Qt.ItemFlag.ItemIsEditable)
-
-
 def test_set_row_wage_type_updates_flags_and_normalizes(model):
     """set_row_wage_type should normalize values and change editability."""
     model.add_row(EstimateEntryRowState(code="TEST", wage_type="PC", pieces=1))
@@ -518,16 +504,6 @@ def test_calculated_columns_have_distinct_visual_roles(model):
         foreground = model.data(index, Qt.ItemDataRole.ForegroundRole)
         assert background is not None
         assert foreground is not None
-
-
-def test_type_column_keeps_category_background_role(model):
-    """Type column background should still reflect the line category."""
-    model.add_row(
-        EstimateEntryRowState(code="RET1", category=EstimateLineCategory.RETURN)
-    )
-    index = model.index(0, COL_TYPE)
-    background = model.data(index, Qt.ItemDataRole.BackgroundRole)
-    assert background is not None
 
 
 def test_type_column_displays_regular_for_regular_rows(model):

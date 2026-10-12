@@ -1,7 +1,10 @@
 import pytest
 
 from silverestimate.domain.estimate_models import CategoryTotals
-from silverestimate.domain.estimate_totals import build_totals_result
+from silverestimate.domain.estimate_totals import (
+    build_totals_result,
+    calculate_grand_total,
+)
 
 
 def test_build_totals_result_combines_categories_balances_and_rate():
@@ -46,3 +49,42 @@ def test_build_totals_result_zero_or_negative_rate_zeroes_value_fields():
     assert totals.net_value_core == pytest.approx(0.0)
     assert totals.net_value == pytest.approx(0.0)
     assert totals.grand_total == pytest.approx(105.0)
+
+
+def test_grand_total_rounds_the_exact_sum_rather_than_its_float():
+    # Found by Hypothesis. Silver value -2147512333.72 plus the wage and the
+    # carried amount is -2147512334.3449995984544512. The nearest float prints
+    # as -2147512334.345, which rounds to the wrong paisa.
+    totals = build_totals_result(
+        overall_gross=0.0,
+        overall_poly=0.0,
+        regular=CategoryTotals(),
+        returns=CategoryTotals(),
+        silver_bars=CategoryTotals(fine=62236.8125, wage=1.8462485999334604),
+        silver_rate=34505.5,
+        last_balance_silver=0.0,
+        last_balance_amount=1.2212490014790092,
+    )
+
+    assert totals.net_value == -2147512333.72
+    assert totals.grand_total == -2147512334.34
+
+
+@pytest.mark.parametrize(
+    "last_balance_amount,expected",
+    [(0.0, 0.61), (5000.0, 5000.61), (-5000.0, -4999.39)],
+)
+def test_grand_total_rounds_a_wage_the_same_way_at_any_size(
+    last_balance_amount, expected
+):
+    # A historical wage just under the half paisa stays under it when a carried
+    # amount makes the total too long for a float to hold.
+    assert (
+        calculate_grand_total(
+            net_fine=0.0,
+            net_wage=0.6149999999999999,
+            silver_rate=0.0,
+            last_balance_amount=last_balance_amount,
+        )
+        == expected
+    )

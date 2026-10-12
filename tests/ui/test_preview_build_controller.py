@@ -12,7 +12,7 @@ from silverestimate.domain.silver_bar_workspace import BarListSnapshot
 from silverestimate.ui.estimate_history import EstimateHistoryDialog
 from silverestimate.ui.preview_build_worker import PreviewBuildController
 from silverestimate.ui.print_payload_builder import PrintPayloadBuilder
-from silverestimate.ui.silver_bar_management import SilverBarDialog
+from silverestimate.ui.silver_bar_management import SilverBarWidget
 from tests.ui.test_history_safeguards import history_db
 
 __all__ = ["history_db"]
@@ -218,7 +218,7 @@ def test_screens_use_shared_worker_and_cancel_on_close(
         owner._start_print_preview_build(print_manager=manager, build_preview=build)
         controller = owner._preview_builder
     else:
-        owner = SilverBarDialog(history_db)
+        owner = SilverBarWidget(history_db)
         qtbot.addWidget(owner)
         owner._list_print_controller._start_list_print_preview_build(
             print_manager=manager,

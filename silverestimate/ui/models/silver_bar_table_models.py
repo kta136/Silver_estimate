@@ -47,6 +47,13 @@ class _BaseSilverBarTableModel(QAbstractTableModel):
         orientation: Qt.Orientation,
         role: int = Qt.ItemDataRole.DisplayRole,
     ) -> Any:
+        if orientation == Qt.Orientation.Horizontal and role == (
+            Qt.ItemDataRole.TextAlignmentRole
+        ):
+            # Each heading sits over its data: figures right, labels left.
+            return self.text_alignment(section) or (
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            )
         if role != Qt.ItemDataRole.DisplayRole:
             return None
         if orientation == Qt.Orientation.Horizontal and 0 <= section < len(

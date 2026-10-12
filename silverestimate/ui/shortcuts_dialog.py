@@ -56,6 +56,7 @@ APP_SHORTCUT_GROUPS: ShortcutGroups = (
             ("Alt+E", "Estimate entry"),
             ("Alt+I", "Item Master"),
             ("Alt+R", "Sales reports"),
+            ("Alt+B", "Silver bars"),
             ("Esc", "Item Master: clear the form"),
             ("F1", "This list (Silver Bars has its own)"),
         ),
@@ -103,7 +104,14 @@ class ShortcutsDialog(QDialog):
         grid.setHorizontalSpacing(36)
         grid.setVerticalSpacing(18)
         for index, (title, rows) in enumerate(groups):
-            grid.addWidget(self._group(title, rows), index // 2, index % 2)
+            # Top-aligned, so the headings of two groups of different length
+            # line up instead of each group centring in its row.
+            grid.addWidget(
+                self._group(title, rows),
+                index // 2,
+                index % 2,
+                Qt.AlignmentFlag.AlignTop,
+            )
         layout.addLayout(grid)
         buttons = QHBoxLayout()
         buttons.addStretch(1)

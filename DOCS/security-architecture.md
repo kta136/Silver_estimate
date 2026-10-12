@@ -41,25 +41,28 @@ longer converted; v4.04 to v4.07 perform that one-time switch.
 
 ## Live SQLCipher boundary
 
-Every production connection is created by `SqlCipherConnectionBroker`. It sets
-the raw key before schema access, requires SQLCipher 4.17.x, `cipher_status=1`, a
-crypto provider, `TEMP_STORE=2`, `THREADSAFE=1`, and codec support, then
-authenticates by reading `sqlite_master`. Connections use foreign keys, WAL,
+Every production connection is created by `SqlCipherConnectionBroker`. It
+selects the SQLCipher 4 format and sets the raw key before schema access,
+requires that the connection reports that format with a codec attached, plus
+`TEMP_STORE=2` and `THREADSAFE=1`, then authenticates by reading
+`sqlite_master`. Connections use foreign keys, WAL,
 `synchronous=FULL`, memory-only temp storage, `mmap_size=0`, and the application
 cache policy. Background work receives a keyed connection factory and a
 cancellation event; UI objects never receive raw key bytes.
 
-Windows installs resolve the committed CPython 3.14 x64 wheel. CI verifies its
-recorded SHA-256 and native inventory plus the installed runtime;
-native recompilation is a manual dependency-update operation, not a per-build
-security requirement.
+The engine is the `apsw-sqlite3mc` wheel from PyPI, pinned by hash in
+`uv.lock`: SQLite with SQLite3 Multiple Ciphers, which carries its own cipher
+code and no OpenSSL. Its own default cipher is not SQLCipher, and plain APSW
+would ignore the key, so the broker refuses both. `apsw_dbapi.py` gives the
+engine the `sqlite3` interface the repositories are written against. The tests
+keep a database written by the earlier SQLCipher 4.17 engine and must open it.
 
 SQLCipher encrypts database-page content and page content written to WAL,
 rollback, and statement journals. WAL/journal headers and SHM coordination
 metadata can still exist, but must not contain application records.
 
-Startup's background preparation still performs every schema, quick-check,
-cipher-integrity and foreign-key validation, including existing journal recovery
+Startup's background preparation still performs every schema, quick-check
+and foreign-key validation, including existing journal recovery
 and transactional upgrades. It closes its worker-owned connection before
 handing back a detached manager. The GUI opens a fresh keyed writer through the
 same broker. A one-use file-stat signature checks the database, WAL and recovery

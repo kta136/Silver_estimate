@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Estimate entry table delegates."""
 
-from PySide6.QtCore import QEvent, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QRect, Qt, QTimer, Signal
 from PySide6.QtGui import QDoubleValidator, QIntValidator
 from PySide6.QtWidgets import QLineEdit, QStyledItemDelegate
 
@@ -19,6 +19,9 @@ class NumericDelegate(QStyledItemDelegate):
 
     reverse_requested = Signal()
     manual_row_navigation_requested = Signal()
+
+    # The editor's border, its side padding and a little room for the caret.
+    _EDITOR_CHROME = 18
 
     @staticmethod
     def _style_editor(editor: QLineEdit) -> None:
@@ -47,6 +50,7 @@ class NumericDelegate(QStyledItemDelegate):
             return editor
 
         editor.installEventFilter(self)
+        editor.textChanged.connect(lambda _text, line=editor: self._fit_editor(line))
         return editor
 
     def setEditorData(self, editor, index):
@@ -113,9 +117,25 @@ class NumericDelegate(QStyledItemDelegate):
 
     def updateEditorGeometry(self, editor, option, index):
         if isinstance(editor, QLineEdit):
-            editor.setGeometry(option.rect)
+            editor.setProperty("cellRect", QRect(option.rect))
+            self._fit_editor(editor)
         else:
             super().updateEditorGeometry(editor, option, index)
+
+    def _fit_editor(self, editor: QLineEdit) -> None:
+        """Keep every typed digit in view.
+
+        Numbers are right aligned, so an editor that outgrows a narrow cell
+        reaches out to the left, over its neighbour, rather than scrolling
+        the leading digit out of sight (1239.567 must not read 239.567).
+        """
+        cell = editor.property("cellRect")
+        if not isinstance(cell, QRect):
+            return
+        needed = editor.fontMetrics().horizontalAdvance(editor.text())
+        width = max(cell.width(), needed + self._EDITOR_CHROME)
+        left = max(0, cell.right() + 1 - width)
+        editor.setGeometry(left, cell.y(), cell.right() + 1 - left, cell.height())
 
     def eventFilter(self, editor, event):
         if event.type() == QEvent.Type.KeyPress and isinstance(editor, QLineEdit):
